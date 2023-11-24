@@ -1,17 +1,33 @@
 <html>
+
 <head>
     <title>Pathfinder</title>
-    <link rel="stylesheet" type="text/css" href="css/style.css">
-    
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.js"></script>
-    
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+    <!-- Include Prism.js CSS for Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css" rel="stylesheet" />
+
+    <!-- Include Prism.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
 
     <script>
-        $(document).ready(function(){
-            $("#search").keyup(function(){
-                var query = $(this).val();
+
+        function escapeHTML(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        $(document).ready(function () {
+            $("#searchButton").click(function () {
+                var query = $("#searchInput").val();
                 // query would be source:main sink:Log.d try to parse and get the source and sink
                 query = query.split(" ");
                 // set sourceMethod and sinkMethod
@@ -31,47 +47,55 @@
                     $.ajax({
                         url: url,
                         method: 'GET',
-                        success: function(data){
-                            // data is json
-                            sourcesinkData = data
-                            var html = "";
-                            // {
-                            //     "isConnected": true,
-                            //     "sourceMethod": "public static void main(String[] args) {\n            System.out.println(\"Hello, World!\");\n\t\t\tint a = 1;\n\t\t\tLog.d(\"TAG\", \"Hello, World!\");\n        }",
-                            //     "sourceLine": 2,
-                            //     "sinkMethod": "Log.d(\"TAG\", \"Hello, World!\")",
-                            //     "sinkLine": 5
-                            // }
-                            if (sourcesinkData.isConnected) {
-                                html += "<li>" + sourcesinkData.sourceMethod + "</li>";
-                                html += "<li>" + sourcesinkData.sinkMethod + "</li>";
-                            } else {
-                                html += "<li>Not connected</li>";
-                            }
-                            $('#search-results').html(html);
-                            $('#search-results').css('display', 'block');
+                        success: function (data) {
+                            displayResults(data);
                         }
                     });
                 } else {
-                    $('#search-results').css('display', 'none');
+                    $("#results").html('<p>Please enter both source and sink methods.</p>');
                 }
             });
-            $(document).on('click', 'li', function(){
-                $('#search').val($(this).text());
-                $('#search-results').css('display', 'none');
-            });
         });
+
+        function displayResults(data) {
+            const resultsDiv = $('#results');
+            resultsDiv.empty();
+
+            const div = document.createElement('div');
+            div.classList.add('p-4', 'border', 'border-gray-300', 'rounded-lg', 'mb-4', 'bg-white', 'shadow-lg');
+
+            const isConnected = data.isConnected ? 'Yes' : 'No';
+            div.innerHTML = `
+                <p><strong>Connection:</strong> ${isConnected}</p>
+                <p><strong>Source Method:</strong></p>
+                <pre><code class="language-java">${escapeHTML(data.sourceMethod)}</code></pre>
+            
+                <p><strong>Source Line:</strong> ${data.sourceLine}</p>
+                <p><strong>Sink Method:</strong></p>
+                <pre><code class="language-java">${escapeHTML(data.sinkMethod)}</code></pre>
+            
+                <p><strong>Sink Line:</strong> ${data.sinkLine}</p>
+            `;
+
+            resultsDiv.append(div);
+            Prism.highlightAll();
+        }
     </script>
 </head>
-<body>
-    <div id="container">
-        <div id="search-box">
-            <form action="http://localhost:8080/source-sink-analysis?sourceMethod=main&sinkMethod=Log.d" method="get">
-                <input type="text" name="q" id="search" placeholder="Search..." autocomplete="off">
-            </form>
-        </div>
-        <div id="search-results">
 
+<body class="bg-gray-100">
+
+    <div class="container mx-auto px-4">
+        <h1 class="text-2xl font-bold text-center my-8">PathFinder Engine</h1>
+
+        <div class="flex justify-center items-center space-x-2">
+            <input type="text" id="searchInput" placeholder="source:main sink:Log.d"
+                class="flex-grow px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <button id="searchButton" class="flex-shrink px-4 py-2 bg-blue-500 text-white rounded-lg">Search</button>
         </div>
+
+        <div id="results" class="mt-8"></div>
     </div>
+</body>
+
 </html>
