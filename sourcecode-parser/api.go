@@ -26,7 +26,15 @@ func startServer(graph *CodeGraph) {
 	
 		result := AnalyzeSourceSinkPatterns(graph, sourceMethod, sinkMethod)
 		// Return the result as JSON
+        // set json content type
+        w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(result)
+    })
+
+    // create a http handler to respond with index.html file content
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        // Read the index.html file from html directory
+        http.ServeFile(w, r, "html/index.html")
     })
 
     http.ListenAndServe(":8080", nil)

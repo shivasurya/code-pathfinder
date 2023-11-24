@@ -1,0 +1,77 @@
+<html>
+<head>
+    <title>Pathfinder</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css">
+    
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.js"></script>
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    <script>
+        $(document).ready(function(){
+            $("#search").keyup(function(){
+                var query = $(this).val();
+                // query would be source:main sink:Log.d try to parse and get the source and sink
+                query = query.split(" ");
+                // set sourceMethod and sinkMethod
+                var sourceMethod = "";
+                var sinkMethod = "";
+                for (var i = 0; i < query.length; i++) {
+                    if (query[i].includes("source:")) {
+                        sourceMethod = query[i].split(":")[1];
+                    } else if (query[i].includes("sink:")) {
+                        sinkMethod = query[i].split(":")[1];
+                    }
+                }
+                // construct url
+                var url = "/source-sink-analysis?sourceMethod=" + sourceMethod + "&sinkMethod=" + sinkMethod;
+
+                if (query != "") {
+                    $.ajax({
+                        url: url,
+                        method: 'GET',
+                        success: function(data){
+                            // data is json
+                            sourcesinkData = data
+                            var html = "";
+                            // {
+                            //     "isConnected": true,
+                            //     "sourceMethod": "public static void main(String[] args) {\n            System.out.println(\"Hello, World!\");\n\t\t\tint a = 1;\n\t\t\tLog.d(\"TAG\", \"Hello, World!\");\n        }",
+                            //     "sourceLine": 2,
+                            //     "sinkMethod": "Log.d(\"TAG\", \"Hello, World!\")",
+                            //     "sinkLine": 5
+                            // }
+                            if (sourcesinkData.isConnected) {
+                                html += "<li>" + sourcesinkData.sourceMethod + "</li>";
+                                html += "<li>" + sourcesinkData.sinkMethod + "</li>";
+                            } else {
+                                html += "<li>Not connected</li>";
+                            }
+                            $('#search-results').html(html);
+                            $('#search-results').css('display', 'block');
+                        }
+                    });
+                } else {
+                    $('#search-results').css('display', 'none');
+                }
+            });
+            $(document).on('click', 'li', function(){
+                $('#search').val($(this).text());
+                $('#search-results').css('display', 'none');
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="container">
+        <div id="search-box">
+            <form action="http://localhost:8080/source-sink-analysis?sourceMethod=main&sinkMethod=Log.d" method="get">
+                <input type="text" name="q" id="search" placeholder="Search..." autocomplete="off">
+            </form>
+        </div>
+        <div id="search-results">
+
+        </div>
+    </div>
+</html>
