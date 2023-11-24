@@ -127,11 +127,17 @@ func extractMethodName(node *sitter.Node, sourceCode []byte) string {
         child := node.Child(i)
 
         // Check if the child node is an identifier (method name)
-		// fmt.Print(child.Type() + " - ")
 		fmt.Print(child.Content(sourceCode) + "\n")
         if child.Type() == "identifier" {
-            methodName = string(child.Content(sourceCode)) // Convert the byte array to string
-            break
+            // parse full method name
+            methodName = child.Content(sourceCode)
+            for j := i + 1; j < int(node.ChildCount()); j++ {
+                child = node.Child(j)
+                if child.Type() == "identifier" {
+                    methodName += "." + child.Content(sourceCode)
+                }
+            }
+            break;
         }
 
         // Recursively call this function if the child is 'method_declaration' or 'method_invocation'
