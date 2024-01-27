@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
@@ -153,6 +156,25 @@ func extractMethodName(node *sitter.Node, sourceCode []byte) string {
 	return methodName
 }
 
+func getFiles(directory string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
+}
+
+func readFile(path string) ([]byte, error) {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
 func main() {
 	// Initialize the parser
 	parser := sitter.NewParser()
@@ -162,6 +184,26 @@ func main() {
 	parser.SetLanguage(java.GetLanguage())
 
 	codeGraph := NewCodeGraph()
+
+	// iterate example-java-project directory for java code files
+	// and parse each file
+	directory := "example-java-project"
+	files, err := getFiles(directory)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, file := range files {
+		sourceCode, err := readFile(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Parse the source code
+		tree := parser.Parse(nil, sourceCode)
+		defer tree.Close()
+
+		//TODO: Merge the tree into a single root node
+		//TODO: normalize the class name without duplication of class, method names
+	}
 
 	// Example Java source code
 	sourceCode := `public class HelloWorld {
@@ -183,7 +225,6 @@ func main() {
 
 	buildGraphFromAST(rootNode, sourceCodeBytes, codeGraph, nil)
 
-	// TODO: Work with the graph (e.g., visualize, analyze)
 	log.Println("Graph built successfully:", codeGraph)
 
 	go startServer(codeGraph)
