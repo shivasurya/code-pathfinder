@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -71,6 +72,7 @@ func (g *CodeGraph) FindNodesByType(nodeType string) []*GraphNode {
 }
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
+	// fmt.Println("Node Type: ", node.Type(), " - ", node.Content(sourceCode))
 	var graphNode *GraphNode
 
 	//fmt.Print(node.Type() + " - ")
@@ -131,7 +133,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte) string {
 		child := node.Child(i)
 
 		// Check if the child node is an identifier (method name)
-		fmt.Print(child.Content(sourceCode) + "\n")
+		// fmt.Print(child.Content(sourceCode) + "\n")
 		if child.Type() == "identifier" {
 			// parse full method name
 			methodName = child.Content(sourceCode)
@@ -160,7 +162,10 @@ func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			files = append(files, path)
+			// append only java files
+			if filepath.Ext(path) == ".java" {
+				files = append(files, path)
+			}
 		}
 		return nil
 	})
@@ -187,7 +192,7 @@ func main() {
 
 	// iterate example-java-project directory for java code files
 	// and parse each file
-	directory := "example-java-project"
+	directory := "example-java-project/android-demo"
 	files, err := getFiles(directory)
 	if err != nil {
 		log.Fatal(err)
@@ -198,36 +203,23 @@ func main() {
 			log.Fatal(err)
 		}
 		// Parse the source code
-		tree := parser.Parse(nil, sourceCode)
+		tree, err := parser.ParseCtx(context.TODO(), nil, []byte(sourceCode))
+		if err != nil {
+			log.Fatal(err)
+		}
 		defer tree.Close()
 
 		//TODO: Merge the tree into a single root node
 		//TODO: normalize the class name without duplication of class, method names
+
+		rootNode := tree.RootNode()
+
+		buildGraphFromAST(rootNode, []byte(sourceCode), codeGraph, nil)
 	}
 
-	// Example Java source code
-	sourceCode := `public class HelloWorld {
-        public static void main(String[] args) {
-            System.out.println("Hello, World!");
-			int a = 1;
-			Log.d("TAG", "Hello, World!");
-        }
-    }`
-
-	sourceCodeBytes := []byte(sourceCode)
-
-	// Parse the source code
-	tree := parser.Parse(nil, []byte(sourceCode))
-	defer tree.Close()
-
-	// Get the root node of the AST
-	rootNode := tree.RootNode()
-
-	buildGraphFromAST(rootNode, sourceCodeBytes, codeGraph, nil)
-
-	log.Println("Graph built successfully:", codeGraph)
-
-	go startServer(codeGraph)
+	//log.Println("Graph built successfully:", codeGraph)
+	log.Println("Graph built successfully")
+	go StartServer(codeGraph)
 
 	select {}
 }

@@ -1,0 +1,45 @@
+# air.toml
+# Root level settings for the Air tool
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Command to build your application
+  cmd = "go build -o ./tmp/main ."
+  # Directory to watch for changes
+  bin = "tmp/main"
+  # Extensions to watch
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  # Directories to exclude from watching
+  exclude_dir = ["assets", "tmp", "vendor"]
+  # Files to exclude from watching
+  exclude_file = []
+  # This command is run before the build command if non-empty
+  pre_build = ""
+  # This command is run after the build command if non-empty
+  post_build = ""
+
+[log]
+  # Log file name, set to "" to disable
+  filename = "air.log"
+  # Log level, can be "debug", "info", "warn", "error", "fatal", "panic"
+  level = "info"
+
+[color]
+  # Enable colors in log
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[http]
+  # Enable sending a request after the build is successful
+  enable = false
+  # URL to which the request is sent
+  url = ""
+  # HTTP method (GET, POST, etc.)
+  method = "GET"
+
+[misc]
+  # Commands to run when air starts
+  clean_on_exit = false

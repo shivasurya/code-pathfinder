@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func startServer(graph *CodeGraph) {
+func StartServer(graph *CodeGraph) {
 	http.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
 		// For simplicity, let's return all nodes. You can add query params to filter nodes.
 		json.NewEncoder(w).Encode(graph.Nodes)
