@@ -67,11 +67,12 @@
 
             const isConnected = data.isConnected ? 'Yes' : 'No';
             div.innerHTML = `
-                <p><strong>Connection:</strong> ${isConnected}</p>
+                <p><strong>Connectivity:</strong> ${isConnected}</p>
                 <p><strong>Source Method:</strong></p>
                 <pre><code class="language-java">${escapeHTML(data.sourceMethod)}</code></pre>
             
                 <p><strong>Source Line:</strong> ${data.sourceLine}</p>
+                <hr>
                 <p><strong>Sink Method:</strong></p>
                 <pre><code class="language-java">${escapeHTML(data.sinkMethod)}</code></pre>
             
