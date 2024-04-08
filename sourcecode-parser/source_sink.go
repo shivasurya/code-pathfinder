@@ -18,7 +18,7 @@ type Result struct {
 	SinkLine     uint32 `json:"sinkLine"`
 }
 
-func DFS(currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool) bool {
+func DFS(graph *CodeGraph, currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool) bool {
 	if currentNode.ID == targetNode.ID {
 		return true // Target node found
 	}
@@ -26,11 +26,20 @@ func DFS(currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool)
 	visited[currentNode.ID] = true
 
 	for _, edge := range currentNode.OutgoingEdges { // Assuming each node has a list of outgoing edges
+		fmt.Println(edge.From.Name, "->", edge.To.Name)
+		fmt.Println(edge.To.OutgoingEdges)
+		fmt.Println(edge.From.ID, "->", edge.To.ID)
 		nextNode := edge.To
+		fmt.Println(visited[nextNode.ID])
 		if !visited[nextNode.ID] {
-			if DFS(nextNode, targetNode, visited) {
+			fmt.Println(graph.Nodes[nextNode.ID])
+			invokedNode := graph.Nodes[nextNode.ID]
+			fmt.Println(invokedNode.ID)
+			fmt.Println(targetNode.ID)
+			if DFS(graph, invokedNode, targetNode, visited) {
 				return true
 			}
+
 		}
 	}
 	return false
@@ -55,7 +64,7 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 
 	// Use DFS to check if sourceNode is connected to sinkNode
 	visited := make(map[string]bool)
-	isConnected := DFS(sourceNode, sinkNode, visited)
+	isConnected := DFS(graph, sourceNode, sinkNode, visited)
 	// Return true if sourceNode is connected to sinkNode as a result of the DFS
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
 }

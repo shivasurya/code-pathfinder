@@ -6,13 +6,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-    <!-- Include Prism.js CSS for Syntax Highlighting -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css" rel="stylesheet" />
-
-    <!-- Include Prism.js Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <!-- and it's easy to individually load additional languages -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
 
     <script>
 
@@ -64,6 +63,8 @@
             const div = document.createElement('div');
             div.classList.add('p-4', 'border', 'border-gray-300', 'rounded-lg', 'mb-4', 'bg-white', 'shadow-lg');
 
+            data.sourceMethod = data.sourceMethod.split('\n').map(line => line.trim()).join('\n');
+
             const isConnected = data.isConnected ? 'Yes' : 'No';
             div.innerHTML = `
                 <p><strong>Connection:</strong> ${isConnected}</p>
@@ -78,7 +79,7 @@
             `;
 
             resultsDiv.append(div);
-            Prism.highlightAll();
+            hljs.highlightAll();
         }
     </script>
 </head>

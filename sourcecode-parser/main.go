@@ -73,24 +73,29 @@ func (g *CodeGraph) FindNodesByType(nodeType string) []*GraphNode {
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
 	// fmt.Println("Node Type: ", node.Type(), " - ", node.Content(sourceCode))
-	var graphNode *GraphNode
 
 	//fmt.Print(node.Type() + " - ")
 	//fmt.Print(node.Content(sourceCode) + "\n")
 
 	switch node.Type() {
 	case "method_declaration":
-		graphNode = createMethodNode(node, sourceCode)
-		graph.AddNode(graphNode)
-		currentContext = graphNode // Update context to the new method
+		methodName, methodId := extractMethodName(node, sourceCode)
+		invokedNode, exists := graph.Nodes[methodId]
+		fmt.Println(graph.Nodes[methodName], methodName, methodId, exists)
+		if !exists || (exists && invokedNode.ID != methodId) {
+			invokedNode = createMethodNode(node, sourceCode)
+		}
+		graph.AddNode(invokedNode)
+		currentContext = invokedNode // Update context to the new method
 
 	case "method_invocation":
-		methodName := extractMethodName(node, sourceCode) // Implement this
-		invokedNode, exists := graph.Nodes[methodName]
-		if !exists {
+		methodName, methodId := extractMethodName(node, sourceCode) // Implement this
+		invokedNode, exists := graph.Nodes[methodId]
+		fmt.Println(graph.Nodes[methodName], methodName, methodId, exists)
+		if !exists || (exists && invokedNode.ID != methodId) {
 			// Create a placeholder node for external or inbuilt method
 			invokedNode = &GraphNode{
-				ID:          methodName,
+				ID:          methodId,
 				Type:        "method_invocation",
 				Name:        methodName,
 				IsExternal:  true,
@@ -113,10 +118,10 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 }
 
 func createMethodNode(node *sitter.Node, sourceCode []byte) *GraphNode {
-	methodName := extractMethodName(node, sourceCode) // Extract the method name
+	methodName, methodId := extractMethodName(node, sourceCode) // Extract the method name
 
 	return &GraphNode{
-		ID:          methodName, // In a real scenario, you would construct a unique ID, possibly using the method signature
+		ID:          methodId, // In a real scenario, you would construct a unique ID, possibly using the method signature
 		Type:        "method_declaration",
 		Name:        methodName,
 		CodeSnippet: string(node.Content(sourceCode)),
@@ -125,37 +130,103 @@ func createMethodNode(node *sitter.Node, sourceCode []byte) *GraphNode {
 	}
 }
 
-func extractMethodName(node *sitter.Node, sourceCode []byte) string {
-	var methodName string
+// write a function to generate unique method id from method name, class name, and package name, parameters, and return type
+func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, parameters []string, returnType string) string {
+	packageName, className := extractPackageAndClassName(node, sourceCode)
+	// Example: Use the node type and its start byte position in the source code to generate a unique ID
+	hashInput := fmt.Sprintf("%s-%s-%s-%s-%s", packageName, className, methodName, parameters, returnType)
+	hash := sha256.Sum256([]byte(hashInput))
+	return hex.EncodeToString(hash[:])
+}
 
-	// Loop through the child nodes to find the method name
+// write a function to get package name and class name from the AST
+func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string) {
+	var packageName, className string
+
+	// Loop through the child nodes to find the package name and class name
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 
-		// Check if the child node is an identifier (method name)
-		// fmt.Print(child.Content(sourceCode) + "\n")
-		if child.Type() == "identifier" {
-			// parse full method name
-			methodName = child.Content(sourceCode)
-			for j := i + 1; j < int(node.ChildCount()); j++ {
-				child = node.Child(j)
-				if child.Type() == "identifier" {
-					methodName += "." + child.Content(sourceCode)
-				}
-			}
-			break
+		// Check if the child node is a package_declaration
+		if child.Type() == "package_declaration" {
+			packageName = child.Content(sourceCode)
 		}
 
-		// Recursively call this function if the child is 'method_declaration' or 'method_invocation'
-		if child.Type() == "method_declaration" || child.Type() == "method_invocation" {
-			methodName = extractMethodName(child, sourceCode)
-			if methodName != "" {
-				break
+		// Check if the child node is a class_declaration
+		if child.Type() == "class_declaration" {
+			className = child.Content(sourceCode)
+		}
+	}
+	return packageName, className
+}
+
+func extractMethodName(node *sitter.Node, sourceCode []byte) (string, string) {
+	var methodId string
+
+	// if the child node is method_declaration, extract method name, modifiers, parameters, and return type
+	var returnType, methodName string
+	var modifiers, parameters []string
+
+	if node.Type() == "method_declaration" {
+		// Iterate over all children of the method_declaration node
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			switch child.Type() {
+			case "modifiers", "marker_annotation", "annotation":
+				// This child is a modifier or annotation, add its content to modifiers
+				modifiers = append(modifiers, child.Content(sourceCode))
+			case "void_type", "type_identifier", "primitive_type":
+				// This child is the return type
+				returnType = child.Content(sourceCode)
+			case "identifier":
+				// This child is the method name
+				methodName = child.Content(sourceCode)
+			case "formal_parameters":
+				// This child represents formal parameters; iterate through its children
+				for j := 0; j < int(child.NamedChildCount()); j++ {
+					param := child.NamedChild(j)
+					parameters = append(parameters, param.Content(sourceCode))
+				}
 			}
 		}
 	}
+
+	// check if type is method_invokacaion
+	// if the child node is method_invocation, extract method name
+	if node.Type() == "method_invocation" {
+
+		for j := 0; j < int(node.ChildCount()); j++ {
+			child := node.Child(j)
+			fmt.Println(child.Type())
+			if child.Type() == "identifier" {
+				if methodName == "" {
+					methodName = child.Content(sourceCode)
+				} else {
+					methodName = methodName + "." + child.Content(sourceCode)
+				}
+			}
+
+			argumentsNode := node.ChildByFieldName("argument_list")
+			// add data type of arguments list
+			if argumentsNode != nil {
+				for k := 0; k < int(argumentsNode.ChildCount()); k++ {
+					argument := argumentsNode.Child(k)
+					parameters = append(parameters, argument.Child(0).Content(sourceCode))
+				}
+			}
+
+		}
+	}
+	//TODO:
+	// the declaration method and invoked method should have same unique ID
+	fmt.Println(returnType)
+	methodId = generateMethodID(node, sourceCode, methodName, parameters, "")
 	fmt.Println(methodName)
-	return methodName
+	fmt.Println(parameters)
+	fmt.Println(methodId)
+	fmt.Println("---------")
+
+	return methodName, methodId
 }
 
 func getFiles(directory string) ([]string, error) {
