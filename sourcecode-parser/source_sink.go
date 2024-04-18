@@ -26,7 +26,7 @@ func DFS(graph *CodeGraph, currentNode *GraphNode, targetNode *GraphNode, visite
 	visited[currentNode.ID] = true
 
 	for _, edge := range currentNode.OutgoingEdges { // Assuming each node has a list of outgoing edges
-		fmt.Println(edge.From.Name, "->", edge.To.Name)
+		fmt.Println(edge.From.Name, "->--", edge.To.Name)
 		fmt.Println(edge.To.OutgoingEdges)
 		fmt.Println(edge.From.ID, "->", edge.To.ID)
 		nextNode := edge.To

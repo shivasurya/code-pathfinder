@@ -2,12 +2,14 @@
 # Root level settings for the Air tool
 root = "."
 tmp_dir = "tmp"
+poll = true
 
 [build]
   # Command to build your application
   cmd = "go build -o ./tmp/main ."
   # Directory to watch for changes
   bin = "tmp/main"
+  include_dir = ["."]
   # Extensions to watch
   include_ext = ["go", "tpl", "tmpl", "html"]
   # Directories to exclude from watching
