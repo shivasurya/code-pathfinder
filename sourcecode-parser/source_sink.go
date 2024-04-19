@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"queryparser"
 )
 
 type SourceSinkPath struct {
@@ -67,4 +68,17 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 	isConnected := DFS(graph, sourceNode, sinkNode, visited)
 	// Return true if sourceNode is connected to sinkNode as a result of the DFS
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
+}
+
+func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
+	result := make([]*GraphNode, 0)
+	if query.Entity == "method" {
+		for _, node := range graph.Nodes {
+			// create array of nodes that match the query
+			if node.Type == "method_declaration" && node.Name == query.Conditions[0].Value {
+				result = append(result, node)
+			}
+		}
+	}
+	return result
 }
