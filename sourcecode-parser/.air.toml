@@ -8,7 +8,7 @@ poll = true
   # Command to build your application
   cmd = "go build -o ./tmp/main ."
   # Directory to watch for changes
-  bin = "tmp/main"
+  bin = "tmp/main /app/example-java-project"
   include_dir = ["."]
   # Extensions to watch
   include_ext = ["go", "tpl", "tmpl", "html"]
