@@ -232,7 +232,7 @@ func readFile(path string) ([]byte, error) {
 	return content, nil
 }
 
-func Initialize(directory string) {
+func Initialize(directory string) *CodeGraph {
 	// Initialize the parser
 	parser := sitter.NewParser()
 	defer parser.Close()
@@ -271,4 +271,5 @@ func Initialize(directory string) {
 	// go StartServer(codeGraph)
 
 	// select {}
+	return codeGraph
 }

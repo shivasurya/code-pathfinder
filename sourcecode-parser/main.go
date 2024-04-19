@@ -11,9 +11,10 @@ import (
 func main() {
 	// accept command line param optional path to source code
 	sourceDirectory := "."
+	graph := NewCodeGraph()
 	if len(os.Args) > 1 {
 		sourceDirectory = os.Args[1]
-		Initialize(sourceDirectory)
+		graph = Initialize(sourceDirectory)
 	}
 	var input string
 	fmt.Print("Path-Finder Query Console: \n>")
@@ -34,6 +35,11 @@ func main() {
 			fmt.Println(err)
 		}
 	} else {
-		fmt.Println(query)
+		entities := QueryEntities(graph, query)
+		fmt.Println("------Query Results------")
+		for _, entity := range entities {
+			fmt.Println(entity.CodeSnippet)
+		}
+		fmt.Println("-------------------")
 	}
 }
