@@ -5,6 +5,7 @@
 # Code Pathfinder 
 Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code.
 
+[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
 </div>
 
 ## Getting Started
