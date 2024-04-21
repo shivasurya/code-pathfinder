@@ -11,6 +11,13 @@ type SourceSinkPath struct {
 	Sink   *GraphNode
 }
 
+var MethodAttribute = map[string]int{
+	"name":       0,
+	"visibility": 1,
+	"returntype": 2,
+	// Add more attributes as needed
+}
+
 type Result struct {
 	IsConnected  bool   `json:"isConnected"`
 	SourceMethod string `json:"sourceMethod"`
@@ -70,13 +77,35 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
 }
 
+func filterConditions(node *GraphNode, conditions []queryparser.Condition) bool {
+	for _, condition := range conditions {
+		switch MethodAttribute[condition.Field] {
+		case 1:
+			fmt.Println(node.Modifier, condition.Value)
+			modifier := node.Modifier
+			if modifier != condition.Value {
+				return false
+			}
+		case 2:
+			returntype := node.ReturnType
+			if returntype != condition.Value {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
+	// declared method query
 	if query.Entity == "method" {
 		for _, node := range graph.Nodes {
 			// create array of nodes that match the query
 			if node.Type == "method_declaration" && node.Name == query.Conditions[0].Value {
-				result = append(result, node)
+				if filterConditions(node, query.Conditions) {
+					result = append(result, node)
+				}
 			}
 		}
 	}

@@ -23,6 +23,8 @@ type GraphNode struct {
 	LineNumber    uint32
 	OutgoingEdges []*GraphEdge
 	IsExternal    bool
+	Modifier      string
+	ReturnType    string
 }
 
 type GraphEdge struct {
@@ -65,6 +67,17 @@ func (g *CodeGraph) FindNodesByType(nodeType string) []*GraphNode {
 	return nodes
 }
 
+func extractVisibilityModifier(modifiers string) string {
+	words := strings.Fields(modifiers)
+	for _, word := range words {
+		switch word {
+		case "public", "private", "protected":
+			return word
+		}
+	}
+	return "" // return an empty string if no visibility modifier is found
+}
+
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
 
 	packageName, className := extractPackageAndClassName(node, sourceCode)
@@ -73,6 +86,17 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	case "method_declaration":
 		methodName, methodId := extractMethodName(node, sourceCode, packageName, className)
 		invokedNode, exists := graph.Nodes[methodId]
+		modifiers := ""
+		ReturnType := ""
+		for i := 0; i < int(node.ChildCount()); i++ {
+			if node.Child(i).Type() == "modifiers" {
+				modifiers = node.Child(i).Content(sourceCode)
+			} else if node.Child(i).Type() == "void_type" || node.Child(i).Type() == "type_identifier" {
+				// get return type of method
+				ReturnType = node.Child(i).Content(sourceCode)
+			}
+		}
+
 		if !exists || (exists && invokedNode.ID != methodId) {
 			invokedNode = &GraphNode{
 				ID:          methodId, // In a real scenario, you would construct a unique ID, possibly using the method signature
@@ -80,6 +104,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				Name:        methodName,
 				CodeSnippet: string(node.Content(sourceCode)),
 				LineNumber:  node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				Modifier:    extractVisibilityModifier(modifiers),
+				ReturnType:  ReturnType,
 				// CodeSnippet and LineNumber are skipped as per the requirement
 			}
 		}
