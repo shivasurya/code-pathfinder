@@ -27,13 +27,3 @@ jobs:
         run: |
           cd sourcecode-parser
           go build -o pathfinder
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.repository.releases_url }}
-          asset_path: ./sourcecode-parser/pathfinder
-          asset_name: pathfinder
-          asset_content_type: application/octet-stream
