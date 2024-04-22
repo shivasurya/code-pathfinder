@@ -3,8 +3,9 @@
 </p>
 
 # Code Pathfinder 
-Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code.
+Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code. Currently, it only supports Java language.
 
+[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
 </div>
 
 ## Getting Started
@@ -19,12 +20,10 @@ Read the [documentation](./README.md), or run `pathfinder --help`.
 
 ## Usage
 
-Currently tested on Mac & Linux. Use `docker-compose` for Windows.
-
 ```bash
 $ cd sourcecode-parser
 
-$ go build -o pathfinder
+$ go build -o pathfinder (or) go run .
 
 $ ./pathfinder /PATH/TO/SOURCE
 
@@ -34,28 +33,30 @@ Path-Finder Query Console:
 FIND method WHERE name = 'onCreate'
 ------Results------
 @Override
-    public void onCreate(SQLiteDatabase db) {
-        db.execSQL(DATABASE_CREATE);
-    }
+public void onCreate(SQLiteDatabase db) {
+    db.execSQL(DATABASE_CREATE);
+}
+-------
 @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_movie_detail);
-        Intent intent = getIntent();
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_movie_detail);
+    Intent intent = getIntent();
 
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        getSupportActionBar().setDisplayShowHomeEnabled(true);
+    getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+    getSupportActionBar().setDisplayShowHomeEnabled(true);
 
-        movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
+    movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
 
-        if (savedInstanceState == null) {
+    if (savedInstanceState == null) {
 
-            movieDetailFragment fragment = new movieDetailFragment();
-            fragment.setMovieData(moviegeneralModal);
-            getSupportFragmentManager().beginTransaction()
-                    .add(R.id.movie_detail_container, fragment)
-                    .commit();
-        }
+        movieDetailFragment fragment = new movieDetailFragment();
+        fragment.setMovieData(moviegeneralModal);
+        getSupportFragmentManager().beginTransaction()
+                .add(R.id.movie_detail_container, fragment)
+                .commit();
+    }
+}
 ------Results------
 ```
 
