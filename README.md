@@ -3,7 +3,7 @@
 </p>
 
 # Code Pathfinder 
-Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code.
+Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code. Currently, it only supports Java language.
 
 [![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
 </div>
@@ -20,12 +20,10 @@ Read the [documentation](./README.md), or run `pathfinder --help`.
 
 ## Usage
 
-Currently tested on Mac & Linux. Use `docker-compose` for Windows.
-
 ```bash
 $ cd sourcecode-parser
 
-$ go build -o pathfinder
+$ go build -o pathfinder (or) go run .
 
 $ ./pathfinder /PATH/TO/SOURCE
 
