@@ -35,6 +35,7 @@ func main() {
 			fmt.Println(err)
 		}
 	} else {
+		fmt.Println(query)
 		entities := QueryEntities(graph, query)
 		fmt.Println("------Query Results------")
 		for _, entity := range entities {

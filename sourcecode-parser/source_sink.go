@@ -77,35 +77,37 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
 }
 
-func filterConditions(node *GraphNode, conditions []queryparser.Condition) bool {
-	for _, condition := range conditions {
-		switch MethodAttribute[condition.Field] {
-		case 1:
-			fmt.Println(node.Modifier, condition.Value)
-			modifier := node.Modifier
-			if modifier != condition.Value {
-				return false
-			}
-		case 2:
-			returntype := node.ReturnType
-			if returntype != condition.Value {
-				return false
-			}
-		}
+type GraphNodeContext struct {
+	Node *GraphNode
+}
+
+// GetValue returns the value of a field in a GraphNode based on the key.
+func (gnc *GraphNodeContext) GetValue(key string) string {
+	fmt.Println(gnc.Node.Modifier)
+	fmt.Println(gnc.Node.ReturnType)
+	fmt.Println(gnc.Node.Name)
+	switch key {
+	case "visibility":
+		return gnc.Node.Modifier
+	case "returntype":
+		return gnc.Node.ReturnType
+	case "name":
+		return gnc.Node.Name
+	// add other cases as necessary for your application
+	default:
+		fmt.Printf("Unsupported attribute key: %s\n", key)
+		return ""
 	}
-	return true
 }
 
 func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
-	// declared method query
-	if query.Entity == "method" {
-		for _, node := range graph.Nodes {
-			// create array of nodes that match the query
-			if node.Type == "method_declaration" && node.Name == query.Conditions[0].Value {
-				if filterConditions(node, query.Conditions) {
-					result = append(result, node)
-				}
+
+	for _, node := range graph.Nodes {
+		if node.Type == "method_declaration" {
+			ctx := GraphNodeContext{Node: node}  // Create a context for each node
+			if query.Conditions.Evaluate(&ctx) { // Use the context in evaluation
+				result = append(result, node)
 			}
 		}
 	}

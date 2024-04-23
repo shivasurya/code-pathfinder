@@ -1,5 +1,7 @@
 package queryparser
 
+import "fmt"
+
 func NewLexer(input string) *Lexer {
 	return &Lexer{input: input}
 }
@@ -31,13 +33,22 @@ func (l *Lexer) NextToken() Token {
 	case '\'':
 		tok.Type = STRING
 		tok.Literal = l.readString()
-	case 0:
-		tok.Literal = ""
+		fmt.Println(tok.Literal)
+	case '(':
+		tok = Token{Type: LPAREN, Literal: string(l.ch)}
+	case ')':
+		tok = Token{Type: RPAREN, Literal: string(l.ch)}
+	case 0: // End of file or input
 		tok.Type = EOF
+		tok.Literal = ""
 	default:
 		if isLetter(l.ch) {
 			tok.Literal = l.readIdentifier()
 			tok.Type = LookupIdent(tok.Literal)
+			return tok
+		} else if l.ch == '"' {
+			tok.Type = STRING
+			tok.Literal = l.readString()
 			return tok
 		} else {
 			tok = Token{Type: ILLEGAL, Literal: string(l.ch)}
@@ -57,14 +68,14 @@ func (l *Lexer) readIdentifier() string {
 }
 
 func (l *Lexer) readString() string {
-	position := l.position + 1
+	startPosition := l.position + 1 // skip the initial quote
 	for {
 		l.readChar()
-		if l.ch == '\'' || l.ch == 0 {
+		if l.ch == '"' || l.ch == '\'' || l.ch == 0 {
 			break
 		}
 	}
-	return l.input[position:l.position]
+	return l.input[startPosition:l.position]
 }
 
 func (l *Lexer) skipWhitespace() {
