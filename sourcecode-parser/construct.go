@@ -16,15 +16,16 @@ import (
 )
 
 type GraphNode struct {
-	ID            string
-	Type          string
-	Name          string
-	CodeSnippet   string
-	LineNumber    uint32
-	OutgoingEdges []*GraphEdge
-	IsExternal    bool
-	Modifier      string
-	ReturnType    string
+	ID              string
+	Type            string
+	Name            string
+	CodeSnippet     string
+	LineNumber      uint32
+	OutgoingEdges   []*GraphEdge
+	IsExternal      bool
+	Modifier        string
+	ReturnType      string
+	MethodArguments []string
 }
 
 type GraphEdge struct {
@@ -88,24 +89,32 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		invokedNode, exists := graph.Nodes[methodId]
 		modifiers := ""
 		ReturnType := ""
+		MethodArguments := []string{}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			if node.Child(i).Type() == "modifiers" {
 				modifiers = node.Child(i).Content(sourceCode)
 			} else if node.Child(i).Type() == "void_type" || node.Child(i).Type() == "type_identifier" {
 				// get return type of method
 				ReturnType = node.Child(i).Content(sourceCode)
+			} else if node.Child(i).Type() == "formal_parameters" {
+				// get method arguments
+				for j := 0; j < int(node.Child(i).NamedChildCount()); j++ {
+					param := node.Child(i).NamedChild(j)
+					MethodArguments = append(MethodArguments, param.Content(sourceCode))
+				}
 			}
 		}
 
 		if !exists || (exists && invokedNode.ID != methodId) {
 			invokedNode = &GraphNode{
-				ID:          methodId, // In a real scenario, you would construct a unique ID, possibly using the method signature
-				Type:        "method_declaration",
-				Name:        methodName,
-				CodeSnippet: string(node.Content(sourceCode)),
-				LineNumber:  node.StartPoint().Row + 1, // Lines start from 0 in the AST
-				Modifier:    extractVisibilityModifier(modifiers),
-				ReturnType:  ReturnType,
+				ID:              methodId, // In a real scenario, you would construct a unique ID, possibly using the method signature
+				Type:            "method_declaration",
+				Name:            methodName,
+				CodeSnippet:     string(node.Content(sourceCode)),
+				LineNumber:      node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				Modifier:        extractVisibilityModifier(modifiers),
+				ReturnType:      ReturnType,
+				MethodArguments: MethodArguments,
 				// CodeSnippet and LineNumber are skipped as per the requirement
 			}
 		}
