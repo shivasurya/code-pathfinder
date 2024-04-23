@@ -102,8 +102,6 @@ func (p *Parser) parseCondition() *Condition {
 	value := p.curToken.Literal
 	p.nextToken() // move past the value
 
-	fmt.Println(field, operator, value)
-
 	return &Condition{Field: field, Operator: operator, Value: value}
 }
 
@@ -169,7 +167,6 @@ func (b *BinaryExpr) Evaluate(ctx EvalContext) bool {
 }
 
 func (c *Condition) Evaluate(ctx EvalContext) bool {
-	fmt.Printf("Evaluating condition: %s %s %s\n", c.Field, c.Operator, c.Value) // Debug output
 	fieldValue := ctx.GetValue(c.Field)
 	switch c.Operator {
 	case "=":

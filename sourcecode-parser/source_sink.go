@@ -83,9 +83,6 @@ type GraphNodeContext struct {
 
 // GetValue returns the value of a field in a GraphNode based on the key.
 func (gnc *GraphNodeContext) GetValue(key string) string {
-	fmt.Println(gnc.Node.Modifier)
-	fmt.Println(gnc.Node.ReturnType)
-	fmt.Println(gnc.Node.Name)
 	switch key {
 	case "visibility":
 		return gnc.Node.Modifier
@@ -104,7 +101,7 @@ func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
 
 	for _, node := range graph.Nodes {
-		if node.Type == "method_declaration" {
+		if node.Type == query.Entity {
 			ctx := GraphNodeContext{Node: node}  // Create a context for each node
 			if query.Conditions.Evaluate(&ctx) { // Use the context in evaluation
 				result = append(result, node)

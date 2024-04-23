@@ -1,7 +1,5 @@
 package queryparser
 
-import "fmt"
-
 func NewLexer(input string) *Lexer {
 	return &Lexer{input: input}
 }
@@ -33,7 +31,6 @@ func (l *Lexer) NextToken() Token {
 	case '\'':
 		tok.Type = STRING
 		tok.Literal = l.readString()
-		fmt.Println(tok.Literal)
 	case '(':
 		tok = Token{Type: LPAREN, Literal: string(l.ch)}
 	case ')':
