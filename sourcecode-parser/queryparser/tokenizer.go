@@ -14,6 +14,8 @@ const (
 	STRING   // String literals
 	KEYWORD  // Keywords such as FIND, WHERE
 	OPERATOR // Operators such as =, INCLUDES, MATCHES
+	LPAREN   // Left parenthesis '('
+	RPAREN
 )
 
 type Token struct {
@@ -28,7 +30,7 @@ type Node interface {
 type Query struct {
 	Operation  string
 	Entity     string
-	Conditions []Condition
+	Conditions Expr
 }
 
 type Condition struct {

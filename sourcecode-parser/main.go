@@ -25,7 +25,7 @@ func main() {
 	if strings.HasPrefix(input, ":quit") {
 		return
 	}
-	fmt.Print(input)
+	fmt.Print("Executing query: " + input)
 	lex := queryparser.NewLexer(input)
 	pars := queryparser.NewParser(lex)
 	query := pars.ParseQuery()

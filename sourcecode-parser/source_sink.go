@@ -11,6 +11,13 @@ type SourceSinkPath struct {
 	Sink   *GraphNode
 }
 
+var MethodAttribute = map[string]int{
+	"name":       0,
+	"visibility": 1,
+	"returntype": 2,
+	// Add more attributes as needed
+}
+
 type Result struct {
 	IsConnected  bool   `json:"isConnected"`
 	SourceMethod string `json:"sourceMethod"`
@@ -70,12 +77,33 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
 }
 
+type GraphNodeContext struct {
+	Node *GraphNode
+}
+
+// GetValue returns the value of a field in a GraphNode based on the key.
+func (gnc *GraphNodeContext) GetValue(key string) string {
+	switch key {
+	case "visibility":
+		return gnc.Node.Modifier
+	case "returntype":
+		return gnc.Node.ReturnType
+	case "name":
+		return gnc.Node.Name
+	// add other cases as necessary for your application
+	default:
+		fmt.Printf("Unsupported attribute key: %s\n", key)
+		return ""
+	}
+}
+
 func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
-	if query.Entity == "method" {
-		for _, node := range graph.Nodes {
-			// create array of nodes that match the query
-			if node.Type == "method_declaration" && node.Name == query.Conditions[0].Value {
+
+	for _, node := range graph.Nodes {
+		if node.Type == query.Entity {
+			ctx := GraphNodeContext{Node: node}  // Create a context for each node
+			if query.Conditions.Evaluate(&ctx) { // Use the context in evaluation
 				result = append(result, node)
 			}
 		}

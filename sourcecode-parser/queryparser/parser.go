@@ -31,6 +31,94 @@ func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 }
 
+func (p *Parser) parseExpression() Expr {
+	expr := p.parseLogicalOr() // Start with the lowest precedence
+	return expr
+}
+
+func (p *Parser) parseLogicalOr() Expr {
+	expr := p.parseLogicalAnd()
+	for p.curToken.Type == KEYWORD && p.peekToken.Literal == "OR" {
+		p.nextToken()
+		right := p.parseLogicalAnd()
+		expr = &BinaryExpr{
+			Left:  expr,
+			Op:    "OR",
+			Right: right,
+		}
+	}
+	return expr
+}
+
+func (p *Parser) parseLogicalAnd() Expr {
+	expr := p.parseGroup()
+	for p.curToken.Type == KEYWORD && p.peekToken.Literal == "AND" {
+		p.nextToken()
+		right := p.parseGroup()
+		expr = &BinaryExpr{
+			Left:  expr,
+			Op:    "AND",
+			Right: right,
+		}
+	}
+	return expr
+}
+
+func (p *Parser) parseGroup() Expr {
+	if p.curToken.Type == LPAREN {
+		p.nextToken()               // Skip '('
+		expr := p.parseExpression() // Parse expression within parentheses
+		if p.curToken.Type != RPAREN {
+			p.peekError(p.curToken.Type)
+			return nil
+		}
+		p.nextToken() // Skip ')'
+		return expr
+	}
+	return p.parseCondition() // Parse a basic condition
+}
+
+func (p *Parser) parseCondition() *Condition {
+	if p.curToken.Type != IDENT {
+		p.peekError(IDENT)
+		return nil
+	}
+
+	field := p.curToken.Literal
+	p.nextToken()
+
+	if p.curToken.Type != OPERATOR {
+		p.peekError(OPERATOR)
+		return nil
+	}
+
+	operator := p.curToken.Literal
+	p.nextToken()
+
+	if p.curToken.Type != STRING && p.curToken.Type != IDENT {
+		p.peekError(STRING)
+		return nil
+	}
+	value := p.curToken.Literal
+	p.nextToken() // move past the value
+
+	return &Condition{Field: field, Operator: operator, Value: value}
+}
+
+type EvalContext interface {
+	GetValue(key string) string // Retrieves a value based on a key, which helps in condition evaluation.
+}
+
+type Expr interface {
+	Evaluate(ctx EvalContext) bool
+}
+
+type BinaryExpr struct {
+	Left  Expr
+	Right Expr
+	Op    string
+}
+
 func (p *Parser) ParseQuery() *Query {
 	// fmt.Printf("Current token: %s\n", p.curToken.Literal) // Debug output
 
@@ -42,7 +130,6 @@ func (p *Parser) ParseQuery() *Query {
 	}
 
 	query.Operation = p.curToken.Literal
-
 	p.nextToken()
 
 	if p.curToken.Type != IDENT {
@@ -59,41 +146,33 @@ func (p *Parser) ParseQuery() *Query {
 	}
 
 	p.nextToken()
-
-	// Process conditions
-	for p.curToken.Type != EOF {
-		if p.curToken.Type != IDENT {
-			p.peekError(IDENT)
-			return nil
-		}
-
-		field := p.curToken.Literal
-		p.nextToken()
-
-		if p.curToken.Type != OPERATOR {
-			p.peekError(OPERATOR)
-			return nil
-		}
-
-		operator := p.curToken.Literal
-		p.nextToken()
-
-		if p.curToken.Type != STRING {
-			p.peekError(STRING)
-			return nil
-		}
-
-		value := p.curToken.Literal
-		cond := Condition{Field: field, Operator: operator, Value: value}
-		query.Conditions = append(query.Conditions, cond)
-
-		p.nextToken() // move to the next part of the condition or EOF
-
-		// Handle AND/OR for multiple conditions
-		if p.curToken.Type == KEYWORD && (p.curToken.Literal == "AND" || p.curToken.Literal == "OR") {
-			p.nextToken() // Continue to next condition
-		}
+	expr := p.parseExpression()
+	if expr == nil {
+		// handle error or invalid expression
+		return nil
 	}
+	query.Conditions = expr
 
 	return query
+}
+
+func (b *BinaryExpr) Evaluate(ctx EvalContext) bool {
+	switch b.Op {
+	case "AND":
+		return b.Left.Evaluate(ctx) && b.Right.Evaluate(ctx)
+	case "OR":
+		return b.Left.Evaluate(ctx) || b.Right.Evaluate(ctx)
+	}
+	return false
+}
+
+func (c *Condition) Evaluate(ctx EvalContext) bool {
+	fieldValue := ctx.GetValue(c.Field)
+	switch c.Operator {
+	case "=":
+		return fieldValue == c.Value
+	case "!=":
+		return fieldValue != c.Value
+	}
+	return false
 }
