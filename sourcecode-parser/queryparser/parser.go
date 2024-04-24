@@ -106,7 +106,7 @@ func (p *Parser) parseCondition() *Condition {
 }
 
 type EvalContext interface {
-	GetValue(key string) string // Retrieves a value based on a key, which helps in condition evaluation.
+	GetValue(key string, val string) string // Retrieves a value based on a key, which helps in condition evaluation.
 }
 
 type Expr interface {
@@ -167,7 +167,7 @@ func (b *BinaryExpr) Evaluate(ctx EvalContext) bool {
 }
 
 func (c *Condition) Evaluate(ctx EvalContext) bool {
-	fieldValue := ctx.GetValue(c.Field)
+	fieldValue := ctx.GetValue(c.Field, c.Value)
 	switch c.Operator {
 	case "=":
 		return fieldValue == c.Value

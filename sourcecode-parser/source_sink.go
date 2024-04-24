@@ -12,9 +12,11 @@ type SourceSinkPath struct {
 }
 
 var MethodAttribute = map[string]int{
-	"name":       0,
-	"visibility": 1,
-	"returntype": 2,
+	"name":         0,
+	"visibility":   1,
+	"returntype":   2,
+	"argumentype":  3,
+	"argumentname": 4,
 	// Add more attributes as needed
 }
 
@@ -82,7 +84,7 @@ type GraphNodeContext struct {
 }
 
 // GetValue returns the value of a field in a GraphNode based on the key.
-func (gnc *GraphNodeContext) GetValue(key string) string {
+func (gnc *GraphNodeContext) GetValue(key string, val string) string {
 	switch key {
 	case "visibility":
 		return gnc.Node.Modifier
@@ -90,7 +92,22 @@ func (gnc *GraphNodeContext) GetValue(key string) string {
 		return gnc.Node.ReturnType
 	case "name":
 		return gnc.Node.Name
-	// add other cases as necessary for your application
+	case "argumentype":
+		// check value in MethodArgumentsType array
+		for i, arg := range gnc.Node.MethodArgumentsType {
+			if arg == val {
+				return gnc.Node.MethodArgumentsType[i]
+			}
+		}
+		return ""
+	case "argumentname":
+		// check value in MethodArgumentsValue array
+		for i, arg := range gnc.Node.MethodArgumentsValue {
+			if arg == val {
+				return gnc.Node.MethodArgumentsValue[i]
+			}
+		}
+		return ""
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""
