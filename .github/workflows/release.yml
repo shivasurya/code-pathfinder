@@ -49,6 +49,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_path: ./sourcecode-parser/pathfinder-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_name: pathfinder-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_content_type: application/octet-stream
