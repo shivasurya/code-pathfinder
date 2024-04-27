@@ -22,10 +22,14 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get dependencies
-        run: go mod download
+        run: |
+          cd sourcecode-parser 
+          go mod download
 
       - name: Build
-        run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o pathfinder-${{ matrix.goos }}-${{ matrix.goarch }} .
+        run: |
+          cd sourcecode-parser
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o pathfinder-${{ matrix.goos }}-${{ matrix.goarch }} .
 
       - name: Create Release
         id: create_release
