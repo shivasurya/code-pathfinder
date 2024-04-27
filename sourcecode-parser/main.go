@@ -16,30 +16,33 @@ func main() {
 		sourceDirectory = os.Args[1]
 		graph = Initialize(sourceDirectory)
 	}
-	var input string
-	fmt.Print("Path-Finder Query Console: \n>")
-	in := bufio.NewReader(os.Stdin)
+	// loop to accept queries
+	for {
+		var input string
+		fmt.Print("Path-Finder Query Console: \n>")
+		in := bufio.NewReader(os.Stdin)
 
-	input, _ = in.ReadString('\n')
-	// if input starts with :quit string
-	if strings.HasPrefix(input, ":quit") {
-		return
-	}
-	fmt.Print("Executing query: " + input)
-	lex := queryparser.NewLexer(input)
-	pars := queryparser.NewParser(lex)
-	query := pars.ParseQuery()
-	if query == nil {
-		fmt.Println("Failed to parse query:")
-		for _, err := range pars.Errors() {
-			fmt.Println(err)
+		input, _ = in.ReadString('\n')
+		// if input starts with :quit string
+		if strings.HasPrefix(input, ":quit") {
+			return
 		}
-	} else {
-		entities := QueryEntities(graph, query)
-		fmt.Println("------Query Results------")
-		for _, entity := range entities {
-			fmt.Println(entity.CodeSnippet)
+		fmt.Print("Executing query: " + input)
+		lex := queryparser.NewLexer(input)
+		pars := queryparser.NewParser(lex)
+		query := pars.ParseQuery()
+		if query == nil {
+			fmt.Println("Failed to parse query:")
+			for _, err := range pars.Errors() {
+				fmt.Println(err)
+			}
+		} else {
+			entities := QueryEntities(graph, query)
+			fmt.Println("------Query Results------")
+			for _, entity := range entities {
+				fmt.Println(entity.CodeSnippet)
+			}
+			fmt.Println("-------------------")
 		}
-		fmt.Println("-------------------")
 	}
 }
