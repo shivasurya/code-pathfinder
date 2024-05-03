@@ -27,6 +27,7 @@ type GraphNode struct {
 	ReturnType           string
 	MethodArgumentsType  []string
 	MethodArgumentsValue []string
+	PackageName          string
 }
 
 type GraphEdge struct {
@@ -148,6 +149,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		if currentContext != nil {
 			graph.AddEdge(currentContext, invokedNode)
 		}
+	case "class_declaration":
+		className := node.ChildByFieldName("name").Content(sourceCode)
+		packageName := ""
+		classNode := &GraphNode{
+			ID:          generateMethodID(node, sourceCode, className, []string{}),
+			Type:        "class_declaration",
+			Name:        className,
+			CodeSnippet: string(node.Content(sourceCode)),
+			LineNumber:  node.StartPoint().Row + 1,
+			PackageName: packageName,
+		}
+		graph.AddNode(classNode)
 	}
 
 	// Recursively process child nodes
@@ -176,23 +189,16 @@ func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, s
 		// Check if the child node is a package_declaration
 		if child.Type() == "package_declaration" {
 			packageName = child.Content(sourceCode)
+			packageName = strings.TrimSpace(packageName)
 		}
 
 		// Check if the child node is a class_declaration
 		if child.Type() == "class_declaration" {
-			// find if child has identiifer node child and get class name
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandChild := child.Child(j)
-				if grandChild.Type() == "identifier" {
-					className = grandChild.Content(sourceCode)
-				}
-			}
+			// find if child has identifier node child and get class name
+			className = child.ChildByFieldName("name").Content(sourceCode)
+			className = strings.TrimSpace(className)
 		}
 	}
-	// trim leading/trailing whitespace from package and class names
-	packageName = strings.TrimSpace(packageName)
-	className = strings.TrimSpace(className)
-
 	return packageName, className
 }
 
