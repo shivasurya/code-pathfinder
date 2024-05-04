@@ -28,6 +28,7 @@ type GraphNode struct {
 	MethodArgumentsType  []string
 	MethodArgumentsValue []string
 	PackageName          string
+	ImportPackage        []string
 }
 
 type GraphEdge struct {
@@ -83,7 +84,8 @@ func extractVisibilityModifier(modifiers string) string {
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
 
-	packageName, className := extractPackageAndClassName(node, sourceCode)
+	packageName, className, importDeclaration := extractPackageAndClassName(node, sourceCode)
+	fmt.Println(importDeclaration)
 
 	switch node.Type() {
 	case "method_declaration":
@@ -153,12 +155,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		className := node.ChildByFieldName("name").Content(sourceCode)
 		packageName := ""
 		classNode := &GraphNode{
-			ID:          generateMethodID(node, sourceCode, className, []string{}),
-			Type:        "class_declaration",
-			Name:        className,
-			CodeSnippet: string(node.Content(sourceCode)),
-			LineNumber:  node.StartPoint().Row + 1,
-			PackageName: packageName,
+			ID:            generateMethodID(node, sourceCode, className, []string{}),
+			Type:          "class_declaration",
+			Name:          className,
+			CodeSnippet:   string(node.Content(sourceCode)),
+			LineNumber:    node.StartPoint().Row + 1,
+			PackageName:   packageName,
+			ImportPackage: importDeclaration,
 		}
 		graph.AddNode(classNode)
 	}
@@ -179,8 +182,9 @@ func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, p
 }
 
 // write a function to get package name and class name from the AST
-func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string) {
+func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string, []string) {
 	var packageName, className string
+	var importDeclarations []string
 
 	// Loop through the child nodes to find the package name and class name
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -198,8 +202,16 @@ func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, s
 			className = child.ChildByFieldName("name").Content(sourceCode)
 			className = strings.TrimSpace(className)
 		}
+
+		if child.Type() == "import_declaration" {
+			// get  scoped_identifier node child and get import declarations
+			importName := child.Content(sourceCode)
+			// remove the semicolon and import keyword and trim the spaces
+			importName = strings.TrimSpace(importName[6 : len(importName)-1])
+			importDeclarations = append(importDeclarations, importName)
+		}
 	}
-	return packageName, className
+	return packageName, className, importDeclarations
 }
 
 func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string, className string) (string, string) {
