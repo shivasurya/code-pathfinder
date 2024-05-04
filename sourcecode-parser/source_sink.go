@@ -21,11 +21,11 @@ var MethodAttribute = map[string]int{
 }
 
 type Result struct {
-	IsConnected  bool   `json:"isConnected"`
-	SourceMethod string `json:"sourceMethod"`
-	SourceLine   uint32 `json:"sourceLine"`
-	SinkMethod   string `json:"sinkMethod"`
-	SinkLine     uint32 `json:"sinkLine"`
+	IsConnected  bool   `json:"is_connected"`
+	SourceMethod string `json:"source_method"`
+	SourceLine   uint32 `json:"source_line"`
+	SinkMethod   string `json:"sink_method"`
+	SinkLine     uint32 `json:"sink_line"`
 }
 
 func DFS(graph *CodeGraph, currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool) bool {
