@@ -29,6 +29,8 @@ type GraphNode struct {
 	MethodArgumentsValue []string
 	PackageName          string
 	ImportPackage        []string
+	SuperClass           string
+	Interface            []string
 }
 
 type GraphEdge struct {
@@ -84,8 +86,7 @@ func extractVisibilityModifier(modifiers string) string {
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
 
-	packageName, className, importDeclaration := extractPackageAndClassName(node, sourceCode)
-	fmt.Println(importDeclaration)
+	packageName, className := extractPackageAndClassName(node, sourceCode)
 
 	switch node.Type() {
 	case "method_declaration":
@@ -154,14 +155,42 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	case "class_declaration":
 		className := node.ChildByFieldName("name").Content(sourceCode)
 		packageName := ""
+		accessModifier := ""
+		superClass := ""
+		implementedInterface := []string{}
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child.Type() == "modifiers" {
+				accessModifier = child.Content(sourceCode)
+			}
+			if child.Type() == "superclass" {
+				for j := 0; j < int(child.ChildCount()); j++ {
+					if child.Child(j).Type() == "type_identifier" {
+						superClass = child.Child(j).Content(sourceCode)
+					}
+				}
+			}
+			if child.Type() == "super_interfaces" {
+				for j := 0; j < int(child.ChildCount()); j++ {
+					// typelist node and then iterate through type_identifier node
+					typeList := child.Child(j)
+					for k := 0; k < int(typeList.ChildCount()); k++ {
+						implementedInterface = append(implementedInterface, typeList.Child(k).Content(sourceCode))
+					}
+				}
+
+			}
+		}
 		classNode := &GraphNode{
-			ID:            generateMethodID(node, sourceCode, className, []string{}),
-			Type:          "class_declaration",
-			Name:          className,
-			CodeSnippet:   string(node.Content(sourceCode)),
-			LineNumber:    node.StartPoint().Row + 1,
-			PackageName:   packageName,
-			ImportPackage: importDeclaration,
+			ID:          generateMethodID(node, sourceCode, className, []string{}),
+			Type:        "class_declaration",
+			Name:        className,
+			CodeSnippet: string(node.Content(sourceCode)),
+			LineNumber:  node.StartPoint().Row + 1,
+			PackageName: packageName,
+			Modifier:    extractVisibilityModifier(accessModifier),
+			SuperClass:  superClass,
+			Interface:   implementedInterface,
 		}
 		graph.AddNode(classNode)
 	}
@@ -182,9 +211,8 @@ func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, p
 }
 
 // write a function to get package name and class name from the AST
-func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string, []string) {
+func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string) {
 	var packageName, className string
-	var importDeclarations []string
 
 	// Loop through the child nodes to find the package name and class name
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -203,15 +231,15 @@ func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, s
 			className = strings.TrimSpace(className)
 		}
 
-		if child.Type() == "import_declaration" {
-			// get  scoped_identifier node child and get import declarations
-			importName := child.Content(sourceCode)
-			// remove the semicolon and import keyword and trim the spaces
-			importName = strings.TrimSpace(importName[6 : len(importName)-1])
-			importDeclarations = append(importDeclarations, importName)
-		}
+		//if child.Type() == "import_declaration" {
+		//	// get  scoped_identifier node child and get import declarations
+		//	importName := child.Content(sourceCode)
+		//	// remove the semicolon and import keyword and trim the spaces
+		//	importName = strings.TrimSpace(importName[6 : len(importName)-1])
+		//	importDeclarations = append(importDeclarations, importName)
+		//}
 	}
-	return packageName, className, importDeclarations
+	return packageName, className
 }
 
 func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string, className string) (string, string) {

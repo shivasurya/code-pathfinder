@@ -108,6 +108,16 @@ func (gnc *GraphNodeContext) GetValue(key string, val string) string {
 			}
 		}
 		return ""
+	case "superclass":
+		return gnc.Node.SuperClass
+	case "interface":
+		// check value in Interface array
+		for i, iface := range gnc.Node.Interface {
+			if iface == val {
+				return gnc.Node.Interface[i]
+			}
+		}
+		return ""
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""
