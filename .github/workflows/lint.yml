@@ -27,3 +27,4 @@ jobs:
         uses: golangci/golangci-lint-action@v5
         with:
           version: latest
+          working-directory: sourcecode-parser
