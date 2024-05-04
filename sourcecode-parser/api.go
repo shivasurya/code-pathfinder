@@ -8,9 +8,12 @@ import (
 )
 
 func StartServer(graph *CodeGraph) {
-	http.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/nodes", func(w http.ResponseWriter, _ *http.Request) {
 		// For simplicity, let's return all nodes. You can add query params to filter nodes.
-		json.NewEncoder(w).Encode(graph.Nodes)
+		err := json.NewEncoder(w).Encode(graph.Nodes)
+		if err != nil {
+			return
+		}
 	})
 
 	http.HandleFunc("/source-sink-analysis", func(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +30,10 @@ func StartServer(graph *CodeGraph) {
 		// Return the result as JSON
 		// set json content type
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		err := json.NewEncoder(w).Encode(result)
+		if err != nil {
+			return
+		}
 	})
 
 	// create a http handler to respond with index.html file content
@@ -36,5 +42,8 @@ func StartServer(graph *CodeGraph) {
 		http.ServeFile(w, r, "html/index.html")
 	})
 
-	http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		return
+	}
 }

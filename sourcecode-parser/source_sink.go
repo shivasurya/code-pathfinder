@@ -21,11 +21,11 @@ var MethodAttribute = map[string]int{
 }
 
 type Result struct {
-	IsConnected  bool   `json:"isConnected"`
-	SourceMethod string `json:"sourceMethod"`
-	SourceLine   uint32 `json:"sourceLine"`
-	SinkMethod   string `json:"sinkMethod"`
-	SinkLine     uint32 `json:"sinkLine"`
+	IsConnected  bool   `json:"is_connected"`
+	SourceMethod string `json:"source_method"`
+	SourceLine   uint32 `json:"source_line"`
+	SinkMethod   string `json:"sink_method"`
+	SinkLine     uint32 `json:"sink_line"`
 }
 
 func DFS(graph *CodeGraph, currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool) bool {
@@ -105,6 +105,16 @@ func (gnc *GraphNodeContext) GetValue(key string, val string) string {
 		for i, arg := range gnc.Node.MethodArgumentsValue {
 			if arg == val {
 				return gnc.Node.MethodArgumentsValue[i]
+			}
+		}
+		return ""
+	case "superclass":
+		return gnc.Node.SuperClass
+	case "interface":
+		// check value in Interface array
+		for i, iface := range gnc.Node.Interface {
+			if iface == val {
+				return gnc.Node.Interface[i]
 			}
 		}
 		return ""

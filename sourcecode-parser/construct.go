@@ -27,6 +27,10 @@ type GraphNode struct {
 	ReturnType           string
 	MethodArgumentsType  []string
 	MethodArgumentsValue []string
+	PackageName          string
+	ImportPackage        []string
+	SuperClass           string
+	Interface            []string
 }
 
 type GraphEdge struct {
@@ -81,28 +85,31 @@ func extractVisibilityModifier(modifiers string) string {
 }
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
-
 	packageName, className := extractPackageAndClassName(node, sourceCode)
 
 	switch node.Type() {
 	case "method_declaration":
-		methodName, methodId := extractMethodName(node, sourceCode, packageName, className)
-		invokedNode, exists := graph.Nodes[methodId]
+		methodName, methodID := extractMethodName(node, sourceCode, packageName, className)
+		invokedNode, exists := graph.Nodes[methodID]
 		modifiers := ""
 		returnType := ""
 		methodArgumentType := []string{}
 		methodArgumentValue := []string{}
 
 		for i := 0; i < int(node.ChildCount()); i++ {
-			if node.Child(i).Type() == "modifiers" {
-				modifiers = node.Child(i).Content(sourceCode)
-			} else if node.Child(i).Type() == "void_type" || node.Child(i).Type() == "type_identifier" {
+			childNode := node.Child(i)
+			childType := childNode.Type()
+
+			switch childType {
+			case "modifiers":
+				modifiers = childNode.Content(sourceCode)
+			case "void_type", "type_identifier":
 				// get return type of method
-				returnType = node.Child(i).Content(sourceCode)
-			} else if node.Child(i).Type() == "formal_parameters" {
+				returnType = childNode.Content(sourceCode)
+			case "formal_parameters":
 				// get method arguments
-				for j := 0; j < int(node.Child(i).NamedChildCount()); j++ {
-					param := node.Child(i).NamedChild(j)
+				for j := 0; j < int(childNode.NamedChildCount()); j++ {
+					param := childNode.NamedChild(j)
 					// get type of argument and add to method arguments
 					paramType := param.Child(0).Content(sourceCode)
 					paramValue := param.Child(1).Content(sourceCode)
@@ -112,12 +119,12 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		if !exists || (exists && invokedNode.ID != methodId) {
+		if !exists || (exists && invokedNode.ID != methodID) {
 			invokedNode = &GraphNode{
-				ID:                   methodId, // In a real scenario, you would construct a unique ID, possibly using the method signature
+				ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
 				Type:                 "method_declaration",
 				Name:                 methodName,
-				CodeSnippet:          string(node.Content(sourceCode)),
+				CodeSnippet:          node.Content(sourceCode),
 				LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				Modifier:             extractVisibilityModifier(modifiers),
 				ReturnType:           returnType,
@@ -130,16 +137,16 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		currentContext = invokedNode // Update context to the new method
 
 	case "method_invocation":
-		methodName, methodId := extractMethodName(node, sourceCode, packageName, className) // Implement this
-		invokedNode, exists := graph.Nodes[methodId]
-		if !exists || (exists && invokedNode.ID != methodId) {
+		methodName, methodID := extractMethodName(node, sourceCode, packageName, className) // Implement this
+		invokedNode, exists := graph.Nodes[methodID]
+		if !exists || (exists && invokedNode.ID != methodID) {
 			// Create a placeholder node for external or inbuilt method
 			invokedNode = &GraphNode{
-				ID:          methodId,
+				ID:          methodID,
 				Type:        "method_invocation",
 				Name:        methodName,
 				IsExternal:  true,
-				CodeSnippet: string(node.Content(sourceCode)),
+				CodeSnippet: node.Content(sourceCode),
 				LineNumber:  node.StartPoint().Row + 1, // Lines start from 0 in the AST
 			}
 			graph.AddNode(invokedNode)
@@ -148,6 +155,46 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		if currentContext != nil {
 			graph.AddEdge(currentContext, invokedNode)
 		}
+	case "class_declaration":
+		className := node.ChildByFieldName("name").Content(sourceCode)
+		packageName := ""
+		accessModifier := ""
+		superClass := ""
+		implementedInterface := []string{}
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child.Type() == "modifiers" {
+				accessModifier = child.Content(sourceCode)
+			}
+			if child.Type() == "superclass" {
+				for j := 0; j < int(child.ChildCount()); j++ {
+					if child.Child(j).Type() == "type_identifier" {
+						superClass = child.Child(j).Content(sourceCode)
+					}
+				}
+			}
+			if child.Type() == "super_interfaces" {
+				for j := 0; j < int(child.ChildCount()); j++ {
+					// typelist node and then iterate through type_identifier node
+					typeList := child.Child(j)
+					for k := 0; k < int(typeList.ChildCount()); k++ {
+						implementedInterface = append(implementedInterface, typeList.Child(k).Content(sourceCode))
+					}
+				}
+			}
+		}
+		classNode := &GraphNode{
+			ID:          generateMethodID(node, sourceCode, className, []string{}),
+			Type:        "class_declaration",
+			Name:        className,
+			CodeSnippet: node.Content(sourceCode),
+			LineNumber:  node.StartPoint().Row + 1,
+			PackageName: packageName,
+			Modifier:    extractVisibilityModifier(accessModifier),
+			SuperClass:  superClass,
+			Interface:   implementedInterface,
+		}
+		graph.AddNode(classNode)
 	}
 
 	// Recursively process child nodes
@@ -157,7 +204,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	}
 }
 
-// write a function to generate unique method id from method name, class name, and package name, parameters, and return type
+// write a function to generate unique method id from method name, class name, and package name, parameters, and return type.
 func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, parameters []string) string {
 	// Example: Use the node type and its start byte position in the source code to generate a unique ID
 	hashInput := fmt.Sprintf("%s-%s", methodName, parameters)
@@ -165,7 +212,7 @@ func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, p
 	return hex.EncodeToString(hash[:])
 }
 
-// write a function to get package name and class name from the AST
+// write a function to get package name and class name from the AST.
 func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string) {
 	var packageName, className string
 
@@ -176,28 +223,21 @@ func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, s
 		// Check if the child node is a package_declaration
 		if child.Type() == "package_declaration" {
 			packageName = child.Content(sourceCode)
+			packageName = strings.TrimSpace(packageName)
 		}
 
 		// Check if the child node is a class_declaration
 		if child.Type() == "class_declaration" {
-			// find if child has identiifer node child and get class name
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandChild := child.Child(j)
-				if grandChild.Type() == "identifier" {
-					className = grandChild.Content(sourceCode)
-				}
-			}
+			// find if child has identifier node child and get class name
+			className = child.ChildByFieldName("name").Content(sourceCode)
+			className = strings.TrimSpace(className)
 		}
 	}
-	// trim leading/trailing whitespace from package and class names
-	packageName = strings.TrimSpace(packageName)
-	className = strings.TrimSpace(className)
-
 	return packageName, className
 }
 
 func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string, className string) (string, string) {
-	var methodId string
+	var methodID string
 
 	// if the child node is method_declaration, extract method name, modifiers, parameters, and return type
 	var methodName string
@@ -227,7 +267,6 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string,
 	// check if type is method_invocation
 	// if the child node is method_invocation, extract method name
 	if node.Type() == "method_invocation" {
-
 		for j := 0; j < int(node.ChildCount()); j++ {
 			child := node.Child(j)
 			if child.Type() == "identifier" {
@@ -249,8 +288,8 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string,
 
 		}
 	}
-	methodId = generateMethodID(node, sourceCode, methodName, parameters)
-	return methodName, methodId
+	methodID = generateMethodID(node, sourceCode, methodName, parameters)
+	return methodName, methodID
 }
 
 func getFiles(directory string) ([]string, error) {
@@ -301,15 +340,15 @@ func Initialize(directory string) *CodeGraph {
 		}
 		defer tree.Close()
 
-		//TODO: Merge the tree into a single root node
-		//TODO: normalize the class name without duplication of class, method names
+		// TODO: Merge the tree into a single root node
+		// TODO: normalize the class name without duplication of class, method names
 
 		rootNode := tree.RootNode()
 
 		buildGraphFromAST(rootNode, []byte(sourceCode), codeGraph, nil)
 	}
 
-	//log.Println("Graph built successfully:", codeGraph)
+	// log.Println("Graph built successfully:", codeGraph)
 	log.Println("Graph built successfully")
 	// go StartServer(codeGraph)
 
