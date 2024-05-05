@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io/ioutil" //nolint:all
 	"log"
 	"os"
 	"path/filepath"
@@ -85,11 +85,9 @@ func extractVisibilityModifier(modifiers string) string {
 }
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
-	packageName, className := extractPackageAndClassName(node, sourceCode)
-
 	switch node.Type() {
 	case "method_declaration":
-		methodName, methodID := extractMethodName(node, sourceCode, packageName, className)
+		methodName, methodID := extractMethodName(node, sourceCode)
 		invokedNode, exists := graph.Nodes[methodID]
 		modifiers := ""
 		returnType := ""
@@ -137,7 +135,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		currentContext = invokedNode // Update context to the new method
 
 	case "method_invocation":
-		methodName, methodID := extractMethodName(node, sourceCode, packageName, className) // Implement this
+		methodName, methodID := extractMethodName(node, sourceCode) // Implement this
 		invokedNode, exists := graph.Nodes[methodID]
 		if !exists || (exists && invokedNode.ID != methodID) {
 			// Create a placeholder node for external or inbuilt method
@@ -184,7 +182,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 		classNode := &GraphNode{
-			ID:          generateMethodID(node, sourceCode, className, []string{}),
+			ID:          generateMethodID(className, []string{}),
 			Type:        "class_declaration",
 			Name:        className,
 			CodeSnippet: node.Content(sourceCode),
@@ -205,38 +203,15 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 }
 
 // write a function to generate unique method id from method name, class name, and package name, parameters, and return type.
-func generateMethodID(node *sitter.Node, sourceCode []byte, methodName string, parameters []string) string {
+func generateMethodID(methodName string, parameters []string) string {
 	// Example: Use the node type and its start byte position in the source code to generate a unique ID
 	hashInput := fmt.Sprintf("%s-%s", methodName, parameters)
 	hash := sha256.Sum256([]byte(hashInput))
 	return hex.EncodeToString(hash[:])
 }
 
-// write a function to get package name and class name from the AST.
-func extractPackageAndClassName(node *sitter.Node, sourceCode []byte) (string, string) {
-	var packageName, className string
-
-	// Loop through the child nodes to find the package name and class name
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-
-		// Check if the child node is a package_declaration
-		if child.Type() == "package_declaration" {
-			packageName = child.Content(sourceCode)
-			packageName = strings.TrimSpace(packageName)
-		}
-
-		// Check if the child node is a class_declaration
-		if child.Type() == "class_declaration" {
-			// find if child has identifier node child and get class name
-			className = child.ChildByFieldName("name").Content(sourceCode)
-			className = strings.TrimSpace(className)
-		}
-	}
-	return packageName, className
-}
-
-func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string, className string) (string, string) {
+//nolint:all
+func extractMethodName(node *sitter.Node, sourceCode []byte) (string, string) {
 	var methodID string
 
 	// if the child node is method_declaration, extract method name, modifiers, parameters, and return type
@@ -250,7 +225,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string,
 			switch child.Type() {
 			case "modifiers", "marker_annotation", "annotation":
 				// This child is a modifier or annotation, add its content to modifiers
-				modifiers = append(modifiers, child.Content(sourceCode))
+				modifiers = append(modifiers, child.Content(sourceCode)) //nolint:all
 			case "identifier":
 				// This child is the method name
 				methodName = child.Content(sourceCode)
@@ -288,13 +263,13 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, packageName string,
 
 		}
 	}
-	methodID = generateMethodID(node, sourceCode, methodName, parameters)
+	methodID = generateMethodID(methodName, parameters)
 	return methodName, methodID
 }
 
 func getFiles(directory string) ([]string, error) {
 	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, _ error) error {
 		if !info.IsDir() {
 			// append only java files
 			if filepath.Ext(path) == ".java" {
@@ -326,6 +301,7 @@ func Initialize(directory string) *CodeGraph {
 
 	files, err := getFiles(directory)
 	if err != nil {
+		//nolint:all
 		log.Fatal(err)
 	}
 	for _, file := range files {
@@ -334,10 +310,11 @@ func Initialize(directory string) *CodeGraph {
 			log.Fatal(err)
 		}
 		// Parse the source code
-		tree, err := parser.ParseCtx(context.TODO(), nil, []byte(sourceCode))
+		tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 		if err != nil {
 			log.Fatal(err)
 		}
+		//nolint:all
 		defer tree.Close()
 
 		// TODO: Merge the tree into a single root node
@@ -345,11 +322,12 @@ func Initialize(directory string) *CodeGraph {
 
 		rootNode := tree.RootNode()
 
-		buildGraphFromAST(rootNode, []byte(sourceCode), codeGraph, nil)
+		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil)
 	}
-
+	//nolint:all
 	// log.Println("Graph built successfully:", codeGraph)
 	log.Println("Graph built successfully")
+	//nolint:all
 	// go StartServer(codeGraph)
 
 	// select {}

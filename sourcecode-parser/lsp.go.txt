@@ -38,7 +38,11 @@ func mains() {
 
 	for {
 		fmt.Print("Enter JSON message: ")
-		jsonMessage, _ := reader.ReadString('\n')
+		jsonMessage, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			return
+		}
 		jsonMessage = strings.TrimSpace(jsonMessage) // Trim newline character for clean input
 
 		// Calculate the content length
@@ -48,7 +52,8 @@ func mains() {
 		fullMessage := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", contentLength, jsonMessage)
 
 		// Send the message
-		_, err := conn.Write([]byte(fullMessage))
+		datas, err := conn.Write([]byte(fullMessage))
+		fmt.Println(datas)
 		if err != nil {
 			fmt.Println("Error sending message:", err)
 			return

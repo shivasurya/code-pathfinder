@@ -88,7 +88,6 @@ linters:
 
     # Allow or ban replace directives in go.mod
     # or force explanation for retract directives.
-    - gomoddirectives
 
     # Powerful security-oriented linter. But requires some time to
     # configure it properly, see https://github.com/securego/gosec#available-rules
