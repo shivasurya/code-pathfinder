@@ -28,7 +28,7 @@ type Result struct {
 	SinkLine     uint32 `json:"sink_line"`
 }
 
-func DFS(graph *CodeGraph, currentNode *GraphNode, targetNode *GraphNode, visited map[string]bool) bool {
+func DFS(graph *CodeGraph, currentNode, targetNode *GraphNode, visited map[string]bool) bool {
 	if currentNode.ID == targetNode.ID {
 		return true // Target node found
 	}
@@ -84,7 +84,7 @@ type GraphNodeContext struct {
 }
 
 // GetValue returns the value of a field in a GraphNode based on the key.
-func (gnc *GraphNodeContext) GetValue(key string, val string) string {
+func (gnc *GraphNodeContext) GetValue(key, val string) string {
 	switch key {
 	case "visibility":
 		return gnc.Node.Modifier

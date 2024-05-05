@@ -42,6 +42,7 @@ func StartServer(graph *CodeGraph) {
 		http.ServeFile(w, r, "html/index.html")
 	})
 
+	//nolint:all
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		return

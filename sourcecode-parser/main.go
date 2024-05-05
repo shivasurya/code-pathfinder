@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// accept command line param optional path to source code
-	sourceDirectory := "."
+	var sourceDirectory string
 	graph := NewCodeGraph()
 	if len(os.Args) > 1 {
 		sourceDirectory = os.Args[1]
@@ -22,7 +22,11 @@ func main() {
 		fmt.Print("Path-Finder Query Console: \n>")
 		in := bufio.NewReader(os.Stdin)
 
-		input, _ = in.ReadString('\n')
+		input, err := in.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input")
+			return
+		}
 		// if input starts with :quit string
 		if strings.HasPrefix(input, ":quit") {
 			return
