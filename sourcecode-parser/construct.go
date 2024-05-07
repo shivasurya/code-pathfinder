@@ -33,6 +33,7 @@ type GraphNode struct {
 	Interface            []string
 	DataType             string
 	Scope                string
+	VariableValue        string
 }
 
 type GraphEdge struct {
@@ -200,6 +201,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		variableName := ""
 		variableType := ""
 		variableModifier := ""
+		variableValue := ""
 		var scope string
 		if node.Type() == "local_variable_declaration" {
 			scope = "local"
@@ -215,7 +217,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 					if child.Child(j).Type() == "identifier" {
 						variableName = child.Child(j).Content(sourceCode)
 					}
+					// if child type contains =, iterate through and get remaining content
+					if child.Child(j).Type() == "=" {
+						for k := j + 1; k < int(child.ChildCount()); k++ {
+							variableValue += child.Child(k).Content(sourceCode)
+						}
+					}
+
 				}
+				// remove spaces from variable value
+				variableValue = strings.ReplaceAll(variableValue, " ", "")
+				// remove new line from variable value
+				variableValue = strings.ReplaceAll(variableValue, "\n", "")
 			case "modifiers":
 				variableModifier = child.Content(sourceCode)
 			}
@@ -226,14 +239,15 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
-			ID:          generateMethodID(variableName, []string{}),
-			Type:        "variable_declaration",
-			Name:        variableName,
-			CodeSnippet: node.Content(sourceCode),
-			LineNumber:  node.StartPoint().Row + 1,
-			Modifier:    extractVisibilityModifier(variableModifier),
-			DataType:    variableType,
-			Scope:       scope,
+			ID:            generateMethodID(variableName, []string{}),
+			Type:          "variable_declaration",
+			Name:          variableName,
+			CodeSnippet:   node.Content(sourceCode),
+			LineNumber:    node.StartPoint().Row + 1,
+			Modifier:      extractVisibilityModifier(variableModifier),
+			DataType:      variableType,
+			Scope:         scope,
+			VariableValue: variableValue,
 		}
 		graph.AddNode(variableNode)
 	}
