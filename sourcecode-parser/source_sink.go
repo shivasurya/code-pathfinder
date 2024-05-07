@@ -118,6 +118,12 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 			}
 		}
 		return ""
+	case "scope":
+		return gnc.Node.Scope
+	case "variablevalue":
+		return gnc.Node.VariableValue
+	case "variabledatatype":
+		return gnc.Node.DataType
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""
