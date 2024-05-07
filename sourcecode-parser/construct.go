@@ -31,6 +31,7 @@ type GraphNode struct {
 	ImportPackage        []string
 	SuperClass           string
 	Interface            []string
+	DataType             string
 }
 
 type GraphEdge struct {
@@ -193,6 +194,40 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Interface:   implementedInterface,
 		}
 		graph.AddNode(classNode)
+	case "local_variable_declaration", "field_declaration":
+		// Extract variable name, type, and modifiers
+		variableName := ""
+		variableType := ""
+		variableModifier := ""
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			switch child.Type() {
+			case "variable_declarator":
+				variableName = child.Content(sourceCode)
+				for j := 0; j < int(child.ChildCount()); j++ {
+					if child.Child(j).Type() == "identifier" {
+						variableName = child.Child(j).Content(sourceCode)
+					}
+				}
+			case "modifiers":
+				variableModifier = child.Content(sourceCode)
+			}
+			// if child type contains type, get the type of variable
+			if strings.Contains(child.Type(), "type") {
+				variableType = child.Content(sourceCode)
+			}
+		}
+		// Create a new node for the variable
+		variableNode := &GraphNode{
+			ID:          generateMethodID(variableName, []string{}),
+			Type:        "variable_declaration",
+			Name:        variableName,
+			CodeSnippet: node.Content(sourceCode),
+			LineNumber:  node.StartPoint().Row + 1,
+			Modifier:    extractVisibilityModifier(variableModifier),
+			DataType:    variableType,
+		}
+		graph.AddNode(variableNode)
 	}
 
 	// Recursively process child nodes
