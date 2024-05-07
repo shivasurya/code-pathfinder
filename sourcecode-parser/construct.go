@@ -31,6 +31,9 @@ type GraphNode struct {
 	ImportPackage        []string
 	SuperClass           string
 	Interface            []string
+	DataType             string
+	Scope                string
+	VariableValue        string
 }
 
 type GraphEdge struct {
@@ -193,6 +196,60 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Interface:   implementedInterface,
 		}
 		graph.AddNode(classNode)
+	case "local_variable_declaration", "field_declaration":
+		// Extract variable name, type, and modifiers
+		variableName := ""
+		variableType := ""
+		variableModifier := ""
+		variableValue := ""
+		var scope string
+		if node.Type() == "local_variable_declaration" {
+			scope = "local"
+		} else {
+			scope = "field"
+		}
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			switch child.Type() {
+			case "variable_declarator":
+				variableName = child.Content(sourceCode)
+				for j := 0; j < int(child.ChildCount()); j++ {
+					if child.Child(j).Type() == "identifier" {
+						variableName = child.Child(j).Content(sourceCode)
+					}
+					// if child type contains =, iterate through and get remaining content
+					if child.Child(j).Type() == "=" {
+						for k := j + 1; k < int(child.ChildCount()); k++ {
+							variableValue += child.Child(k).Content(sourceCode)
+						}
+					}
+
+				}
+				// remove spaces from variable value
+				variableValue = strings.ReplaceAll(variableValue, " ", "")
+				// remove new line from variable value
+				variableValue = strings.ReplaceAll(variableValue, "\n", "")
+			case "modifiers":
+				variableModifier = child.Content(sourceCode)
+			}
+			// if child type contains type, get the type of variable
+			if strings.Contains(child.Type(), "type") {
+				variableType = child.Content(sourceCode)
+			}
+		}
+		// Create a new node for the variable
+		variableNode := &GraphNode{
+			ID:            generateMethodID(variableName, []string{}),
+			Type:          "variable_declaration",
+			Name:          variableName,
+			CodeSnippet:   node.Content(sourceCode),
+			LineNumber:    node.StartPoint().Row + 1,
+			Modifier:      extractVisibilityModifier(variableModifier),
+			DataType:      variableType,
+			Scope:         scope,
+			VariableValue: variableValue,
+		}
+		graph.AddNode(variableNode)
 	}
 
 	// Recursively process child nodes
