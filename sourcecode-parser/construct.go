@@ -32,6 +32,7 @@ type GraphNode struct {
 	SuperClass           string
 	Interface            []string
 	DataType             string
+	Scope                string
 }
 
 type GraphEdge struct {
@@ -199,6 +200,12 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		variableName := ""
 		variableType := ""
 		variableModifier := ""
+		var scope string
+		if node.Type() == "local_variable_declaration" {
+			scope = "local"
+		} else {
+			scope = "field"
+		}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
 			switch child.Type() {
@@ -226,6 +233,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			LineNumber:  node.StartPoint().Row + 1,
 			Modifier:    extractVisibilityModifier(variableModifier),
 			DataType:    variableType,
+			Scope:       scope,
 		}
 		graph.AddNode(variableNode)
 	}
