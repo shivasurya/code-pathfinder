@@ -111,11 +111,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				// get method arguments
 				for j := 0; j < int(childNode.NamedChildCount()); j++ {
 					param := childNode.NamedChild(j)
-					// get type of argument and add to method arguments
-					paramType := param.Child(0).Content(sourceCode)
-					paramValue := param.Child(1).Content(sourceCode)
-					methodArgumentType = append(methodArgumentType, paramType)
-					methodArgumentValue = append(methodArgumentValue, paramValue)
+					if param.Type() == "formal_parameter" {
+						// get type of argument and add to method arguments
+						paramType := param.Child(0).Content(sourceCode)
+						paramValue := param.Child(1).Content(sourceCode)
+						methodArgumentType = append(methodArgumentType, paramType)
+						methodArgumentValue = append(methodArgumentValue, paramValue)
+					}
 				}
 			}
 		}
