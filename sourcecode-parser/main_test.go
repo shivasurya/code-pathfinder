@@ -22,7 +22,8 @@ func TestProcessQuery(t *testing.T) {
 }
 
 func TestExecuteProject(t *testing.T) {
-	project := "/Users/shiva/src/Stirling-PDF"
+	// get project from command line
+	project := "../test-src/"
 	query := "FIND variable_declaration WHERE visibility = 'private'"
 	output := "json"
 
