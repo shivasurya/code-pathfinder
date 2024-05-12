@@ -35,6 +35,7 @@ type GraphNode struct {
 	Scope                string
 	VariableValue        string
 	hasAccess            bool
+	File                 string
 }
 
 type GraphEdge struct {
@@ -92,8 +93,6 @@ func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	if node == nil {
 		return false
 	}
-
-	// Check if current node is an identifier and matches the variableName
 	if node.Type() == "identifier" && node.Content(sourceCode) == variableName {
 		return true
 	}
@@ -110,7 +109,7 @@ func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	return hasAccess(node.NextSibling(), variableName, sourceCode)
 }
 
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
+func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
 	switch node.Type() {
 	case "method_declaration":
 		methodName, methodID := extractMethodName(node, sourceCode)
@@ -260,9 +259,10 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		if node.Type() == "local_variable_declaration" {
 			scope = "local"
-			hasAccessValue = hasAccess(node, variableName, sourceCode)
+			hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
 		} else {
 			scope = "field"
+			hasAccessValue = false
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
@@ -276,6 +276,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Scope:         scope,
 			VariableValue: variableValue,
 			hasAccess:     hasAccessValue,
+			File:          file,
 		}
 		graph.AddNode(variableNode)
 	}
@@ -283,7 +284,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		buildGraphFromAST(child, sourceCode, graph, currentContext)
+		buildGraphFromAST(child, sourceCode, graph, currentContext, file)
 	}
 }
 
@@ -407,7 +408,7 @@ func Initialize(directory string) *CodeGraph {
 
 		rootNode := tree.RootNode()
 
-		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil)
+		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil, file)
 	}
 	//nolint:all
 	// log.Println("Graph built successfully:", codeGraph)
