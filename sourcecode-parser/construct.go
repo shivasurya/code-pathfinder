@@ -262,7 +262,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
 		} else {
 			scope = "field"
-			hasAccessValue = false
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
