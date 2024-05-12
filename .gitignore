@@ -2,3 +2,4 @@ example-java-project/
 main
 sourcecode-parser/sourcecode-parser
 .idea/
+*.json

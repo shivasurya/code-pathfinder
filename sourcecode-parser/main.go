@@ -71,6 +71,7 @@ func executeProject(project, query, output string, stdin bool) (string, error) {
 func main() {
 	// accept command line param optional path to source code
 	output := flag.String("output", "", "Supported output format: json")
+	outputFile := flag.String("output-file", "", "Output file path")
 	query := flag.String("query", "", "Query to execute")
 	project := flag.String("project", "", "Project to analyze")
 	stdin := flag.Bool("stdin", false, "Read query from stdin")
@@ -81,5 +82,25 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(result)
+	if *outputFile != "" {
+		file, err := os.Create(*outputFile)
+		if err != nil {
+			fmt.Println("Error creating output file: ", err)
+			return
+		}
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
+				fmt.Println("Error closing output file: ", err)
+				return
+			}
+		}(file)
+		_, err = file.WriteString(result)
+		if err != nil {
+			fmt.Println("Error writing output file: ", err)
+			return
+		}
+	} else {
+		fmt.Println(result)
+	}
 }
