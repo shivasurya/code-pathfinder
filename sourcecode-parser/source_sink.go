@@ -6,20 +6,6 @@ import (
 	"queryparser"
 )
 
-type SourceSinkPath struct {
-	Source *GraphNode
-	Sink   *GraphNode
-}
-
-var MethodAttribute = map[string]int{
-	"name":         0,
-	"visibility":   1,
-	"returntype":   2,
-	"argumentype":  3,
-	"argumentname": 4,
-	// Add more attributes as needed
-}
-
 type Result struct {
 	IsConnected  bool   `json:"is_connected"`
 	SourceMethod string `json:"source_method"`
@@ -124,6 +110,11 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 		return gnc.Node.VariableValue
 	case "variabledatatype":
 		return gnc.Node.DataType
+	case "has_access":
+		if gnc.Node.hasAccess {
+			return "true"
+		}
+		return "false"
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""

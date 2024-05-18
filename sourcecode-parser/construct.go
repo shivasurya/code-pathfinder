@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil" //nolint:all
 	"log"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
+	//nolint:all
 )
 
 type GraphNode struct {
@@ -34,6 +34,8 @@ type GraphNode struct {
 	DataType             string
 	Scope                string
 	VariableValue        string
+	hasAccess            bool
+	File                 string
 }
 
 type GraphEdge struct {
@@ -87,7 +89,27 @@ func extractVisibilityModifier(modifiers string) string {
 	return "" // return an empty string if no visibility modifier is found
 }
 
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode) {
+func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
+	if node == nil {
+		return false
+	}
+	if node.Type() == "identifier" && node.Content(sourceCode) == variableName {
+		return true
+	}
+
+	// Recursively check all children of the current node
+	for i := 0; i < int(node.ChildCount()); i++ {
+		childNode := node.Child(i)
+		if hasAccess(childNode, variableName, sourceCode) {
+			return true
+		}
+	}
+
+	// Continue checking in the next sibling
+	return hasAccess(node.NextSibling(), variableName, sourceCode)
+}
+
+func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
 	switch node.Type() {
 	case "method_declaration":
 		methodName, methodID := extractMethodName(node, sourceCode)
@@ -204,12 +226,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		variableType := ""
 		variableModifier := ""
 		variableValue := ""
+		hasAccessValue := false
 		var scope string
-		if node.Type() == "local_variable_declaration" {
-			scope = "local"
-		} else {
-			scope = "field"
-		}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
 			switch child.Type() {
@@ -239,6 +257,12 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				variableType = child.Content(sourceCode)
 			}
 		}
+		if node.Type() == "local_variable_declaration" {
+			scope = "local"
+			hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
+		} else {
+			scope = "field"
+		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
 			ID:            generateMethodID(variableName, []string{}),
@@ -250,6 +274,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			DataType:      variableType,
 			Scope:         scope,
 			VariableValue: variableValue,
+			hasAccess:     hasAccessValue,
+			File:          file,
 		}
 		graph.AddNode(variableNode)
 	}
@@ -257,7 +283,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		buildGraphFromAST(child, sourceCode, graph, currentContext)
+		buildGraphFromAST(child, sourceCode, graph, currentContext, file)
 	}
 }
 
@@ -341,7 +367,7 @@ func getFiles(directory string) ([]string, error) {
 }
 
 func readFile(path string) ([]byte, error) {
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -381,14 +407,13 @@ func Initialize(directory string) *CodeGraph {
 
 		rootNode := tree.RootNode()
 
-		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil)
+		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil, file)
 	}
 	//nolint:all
 	// log.Println("Graph built successfully:", codeGraph)
 	log.Println("Graph built successfully")
 	//nolint:all
 	// go StartServer(codeGraph)
-
 	// select {}
 	return codeGraph
 }

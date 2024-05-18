@@ -30,7 +30,10 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 	var result strings.Builder
 	result.WriteString("------Query Results------\n")
 	for _, entity := range entities {
+		result.WriteString("-------------------\n")
 		result.WriteString(entity.CodeSnippet + "\n")
+		result.WriteString(entity.File + "\n")
+		result.WriteString("-------------------\n")
 	}
 	result.WriteString("-------------------\n")
 	return result.String(), nil
