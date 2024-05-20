@@ -164,15 +164,30 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	case "method_invocation":
 		methodName, methodID := extractMethodName(node, sourceCode) // Implement this
 		invokedNode, exists := graph.Nodes[methodID]
+		arguments := []string{}
+		// get argument list from arguments node iterate for child node
+		for i := 0; i < int(node.ChildCount()); i++ {
+			if node.Child(i).Type() == "argument_list" {
+				argumentsNode := node.Child(i)
+				for j := 0; j < int(argumentsNode.ChildCount()); j++ {
+					argument := argumentsNode.Child(j)
+					if argument.Type() == "identifier" {
+						arguments = append(arguments, argument.Content(sourceCode))
+					}
+				}
+			}
+		}
+
 		if !exists || (exists && invokedNode.ID != methodID) {
 			// Create a placeholder node for external or inbuilt method
 			invokedNode = &GraphNode{
-				ID:          methodID,
-				Type:        "method_invocation",
-				Name:        methodName,
-				IsExternal:  true,
-				CodeSnippet: node.Content(sourceCode),
-				LineNumber:  node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				ID:                   methodID,
+				Type:                 "method_invocation",
+				Name:                 methodName,
+				IsExternal:           true,
+				CodeSnippet:          node.Content(sourceCode),
+				LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				MethodArgumentsValue: arguments,
 			}
 			graph.AddNode(invokedNode)
 		}
@@ -284,6 +299,23 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		buildGraphFromAST(child, sourceCode, graph, currentContext, file)
+	}
+
+	// iterate through method declaration from graph node
+	for _, node := range graph.Nodes {
+		if node.Type == "method_declaration" {
+			// iterate through method method_invocation from graph node
+			for _, invokedNode := range graph.Nodes {
+				if invokedNode.Type == "method_invocation" {
+					if invokedNode.Name == node.Name {
+						// check argument list count is same
+						if len(invokedNode.MethodArgumentsValue) == len(node.MethodArgumentsType) {
+							node.hasAccess = true
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
