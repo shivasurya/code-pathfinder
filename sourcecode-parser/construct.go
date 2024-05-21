@@ -36,6 +36,7 @@ type GraphNode struct {
 	VariableValue        string
 	hasAccess            bool
 	File                 string
+	isJavaSourceFile     bool
 }
 
 type GraphEdge struct {
@@ -89,6 +90,10 @@ func extractVisibilityModifier(modifiers string) string {
 	return "" // return an empty string if no visibility modifier is found
 }
 
+func isJavaSourceFile(filename string) bool {
+	return filepath.Ext(filename) == ".java"
+}
+
 func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	if node == nil {
 		return false
@@ -110,6 +115,7 @@ func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 }
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
+	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
 	case "method_declaration":
 		methodName, methodID := extractMethodName(node, sourceCode)
@@ -155,6 +161,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				ReturnType:           returnType,
 				MethodArgumentsType:  methodArgumentType,
 				MethodArgumentsValue: methodArgumentValue,
+				File:                 file,
+				isJavaSourceFile:     isJavaSourceFile,
 				// CodeSnippet and LineNumber are skipped as per the requirement
 			}
 		}
@@ -188,6 +196,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				CodeSnippet:          node.Content(sourceCode),
 				LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				MethodArgumentsValue: arguments,
+				File:                 file,
+				isJavaSourceFile:     isJavaSourceFile,
 			}
 			graph.AddNode(invokedNode)
 		}
@@ -224,15 +234,17 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 		classNode := &GraphNode{
-			ID:          generateMethodID(className, []string{}),
-			Type:        "class_declaration",
-			Name:        className,
-			CodeSnippet: node.Content(sourceCode),
-			LineNumber:  node.StartPoint().Row + 1,
-			PackageName: packageName,
-			Modifier:    extractVisibilityModifier(accessModifier),
-			SuperClass:  superClass,
-			Interface:   implementedInterface,
+			ID:               generateMethodID(className, []string{}),
+			Type:             "class_declaration",
+			Name:             className,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			PackageName:      packageName,
+			Modifier:         extractVisibilityModifier(accessModifier),
+			SuperClass:       superClass,
+			Interface:        implementedInterface,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
 		}
 		graph.AddNode(classNode)
 	case "local_variable_declaration", "field_declaration":
@@ -280,17 +292,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
-			ID:            generateMethodID(variableName, []string{}),
-			Type:          "variable_declaration",
-			Name:          variableName,
-			CodeSnippet:   node.Content(sourceCode),
-			LineNumber:    node.StartPoint().Row + 1,
-			Modifier:      extractVisibilityModifier(variableModifier),
-			DataType:      variableType,
-			Scope:         scope,
-			VariableValue: variableValue,
-			hasAccess:     hasAccessValue,
-			File:          file,
+			ID:               generateMethodID(variableName, []string{}),
+			Type:             "variable_declaration",
+			Name:             variableName,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			Modifier:         extractVisibilityModifier(variableModifier),
+			DataType:         variableType,
+			Scope:            scope,
+			VariableValue:    variableValue,
+			hasAccess:        hasAccessValue,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
 		}
 		graph.AddNode(variableNode)
 	}

@@ -115,6 +115,11 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 			return "true"
 		}
 		return "false"
+	case "is_java_source":
+		if gnc.Node.isJavaSourceFile {
+			return "true"
+		}
+		return "false"
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""
