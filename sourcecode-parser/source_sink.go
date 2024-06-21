@@ -120,6 +120,15 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 			return "true"
 		}
 		return "false"
+	case "comment_author":
+		for _, docTag := range gnc.Node.JavaDocTag {
+			if docTag.TagName == "author" && docTag.Text != "" {
+				if docTag.Text == val {
+					return docTag.Text
+				}
+			}
+		}
+		return ""
 	default:
 		fmt.Printf("Unsupported attribute key: %s\n", key)
 		return ""

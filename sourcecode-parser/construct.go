@@ -259,6 +259,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 			for _, line := range commentLines {
 				line = strings.TrimSpace(line)
+				// line may start with /** or *
+				line = strings.TrimPrefix(line, "*")
+				line = strings.TrimSpace(line)
 				if strings.HasPrefix(line, "@") {
 					parts := strings.SplitN(line, " ", 2)
 					if len(parts) == 2 {
@@ -284,7 +287,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 
 			commentNode := &GraphNode{
-				ID:               generateMethodID(node.Type(), []string{}),
+				ID:               generateMethodID(node.Content(sourceCode), []string{}),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
 				LineNumber:       node.StartPoint().Row + 1,
