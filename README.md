@@ -9,7 +9,7 @@ Code Pathfinder attempts to be query language for structural search on source co
 </div>
 
 ## Getting Started
-Read the [documentation](./README.md), or run `pathfinder --help`.
+Read the [official documentation](https://codepathfinder.dev/), or run `pathfinder --help`.
 
 ## Features
 
