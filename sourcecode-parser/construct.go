@@ -278,6 +278,10 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 							javadocTag = model.NewJavadocTag(tagName, tagText, "see")
 						case "throws":
 							javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
+						case "version":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "version")
+						case "since":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "since")
 						default:
 							javadocTag = model.NewJavadocTag(tagName, tagText, "unknown")
 						}
