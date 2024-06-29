@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sourcecode-parser/model"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -37,6 +38,7 @@ type GraphNode struct {
 	hasAccess            bool
 	File                 string
 	isJavaSourceFile     bool
+	JavaDocTag           []*model.JavadocTag
 }
 
 type GraphEdge struct {
@@ -247,6 +249,58 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 		}
 		graph.AddNode(classNode)
+	case "block_comment":
+		// Parse block comments
+		if strings.HasPrefix(node.Content(sourceCode), "/*") {
+			commentContent := node.Content(sourceCode)
+			commentLines := strings.Split(commentContent, "\n")
+
+			var javadocTags []*model.JavadocTag
+
+			for _, line := range commentLines {
+				line = strings.TrimSpace(line)
+				// line may start with /** or *
+				line = strings.TrimPrefix(line, "*")
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "@") {
+					parts := strings.SplitN(line, " ", 2)
+					if len(parts) == 2 {
+						tagName := strings.TrimPrefix(parts[0], "@")
+						tagText := strings.TrimSpace(parts[1])
+
+						var javadocTag *model.JavadocTag
+						switch tagName {
+						case "author":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "author")
+						case "param":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "param")
+						case "see":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "see")
+						case "throws":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
+						case "version":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "version")
+						case "since":
+							javadocTag = model.NewJavadocTag(tagName, tagText, "since")
+						default:
+							javadocTag = model.NewJavadocTag(tagName, tagText, "unknown")
+						}
+						javadocTags = append(javadocTags, javadocTag)
+					}
+				}
+			}
+
+			commentNode := &GraphNode{
+				ID:               generateMethodID(node.Content(sourceCode), []string{}),
+				Type:             "block_comment",
+				CodeSnippet:      commentContent,
+				LineNumber:       node.StartPoint().Row + 1,
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				JavaDocTag:       javadocTags,
+			}
+			graph.AddNode(commentNode)
+		}
 	case "local_variable_declaration", "field_declaration":
 		// Extract variable name, type, and modifiers
 		variableName := ""
