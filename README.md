@@ -1,5 +1,6 @@
+<p>
 <div align="center">
-  <img src="./assets/pathfinder-logo.png" alt="Code Pathfinder" width="75" height="75"/>
+  <img src="./assets/cpv.png" alt="Code Pathfinder" width="100" height="100"/>
 </p>
 
 # Code Pathfinder 
