@@ -116,10 +116,57 @@ func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	return hasAccess(node.NextSibling(), variableName, sourceCode)
 }
 
+func parseJavadocTags(commentContent string) []*model.JavadocTag {
+	var javadocTags []*model.JavadocTag
+
+	commentLines := strings.Split(commentContent, "\n")
+	for _, line := range commentLines {
+		line = strings.TrimSpace(line)
+		// line may start with /** or *
+		line = strings.TrimPrefix(line, "*")
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "@") {
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) == 2 {
+				tagName := strings.TrimPrefix(parts[0], "@")
+				tagText := strings.TrimSpace(parts[1])
+
+				var javadocTag *model.JavadocTag
+				switch tagName {
+				case "author":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "author")
+				case "param":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "param")
+				case "see":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "see")
+				case "throws":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
+				case "version":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "version")
+				case "since":
+					javadocTag = model.NewJavadocTag(tagName, tagText, "since")
+				default:
+					javadocTag = model.NewJavadocTag(tagName, tagText, "unknown")
+				}
+				javadocTags = append(javadocTags, javadocTag)
+			}
+		}
+	}
+
+	return javadocTags
+}
+
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
 	case "method_declaration":
+		var javadocTags []*model.JavadocTag
+		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
+			commentContent := node.PrevSibling().Content(sourceCode)
+			if strings.HasPrefix(commentContent, "/*") {
+				javadocTags = parseJavadocTags(commentContent)
+			}
+		}
 		methodName, methodID := extractMethodName(node, sourceCode)
 		invokedNode, exists := graph.Nodes[methodID]
 		modifiers := ""
@@ -165,6 +212,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				MethodArgumentsValue: methodArgumentValue,
 				File:                 file,
 				isJavaSourceFile:     isJavaSourceFile,
+				JavaDocTag:           javadocTags,
 				// CodeSnippet and LineNumber are skipped as per the requirement
 			}
 		}
@@ -208,6 +256,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			graph.AddEdge(currentContext, invokedNode)
 		}
 	case "class_declaration":
+		var javadocTags []*model.JavadocTag
+		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
+			commentContent := node.PrevSibling().Content(sourceCode)
+			if strings.HasPrefix(commentContent, "/*") {
+				javadocTags = parseJavadocTags(commentContent)
+			}
+		}
 		className := node.ChildByFieldName("name").Content(sourceCode)
 		packageName := ""
 		accessModifier := ""
@@ -247,48 +302,14 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Interface:        implementedInterface,
 			File:             file,
 			isJavaSourceFile: isJavaSourceFile,
+			JavaDocTag:       javadocTags,
 		}
 		graph.AddNode(classNode)
 	case "block_comment":
 		// Parse block comments
 		if strings.HasPrefix(node.Content(sourceCode), "/*") {
 			commentContent := node.Content(sourceCode)
-			commentLines := strings.Split(commentContent, "\n")
-
-			var javadocTags []*model.JavadocTag
-
-			for _, line := range commentLines {
-				line = strings.TrimSpace(line)
-				// line may start with /** or *
-				line = strings.TrimPrefix(line, "*")
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "@") {
-					parts := strings.SplitN(line, " ", 2)
-					if len(parts) == 2 {
-						tagName := strings.TrimPrefix(parts[0], "@")
-						tagText := strings.TrimSpace(parts[1])
-
-						var javadocTag *model.JavadocTag
-						switch tagName {
-						case "author":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "author")
-						case "param":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "param")
-						case "see":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "see")
-						case "throws":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
-						case "version":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "version")
-						case "since":
-							javadocTag = model.NewJavadocTag(tagName, tagText, "since")
-						default:
-							javadocTag = model.NewJavadocTag(tagName, tagText, "unknown")
-						}
-						javadocTags = append(javadocTags, javadocTag)
-					}
-				}
-			}
+			javadocTags := parseJavadocTags(commentContent)
 
 			commentNode := &GraphNode{
 				ID:               generateMethodID(node.Content(sourceCode), []string{}),
