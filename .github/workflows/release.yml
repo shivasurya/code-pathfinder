@@ -25,7 +25,7 @@ jobs:
       - name: Build for Linux
         run: |
           cd sourcecode-parser
-          go build -v -o pathfinder-linux-amd64 .
+          go build -ldflags="-s -w" -v -o pathfinder-linux-amd64 .
 
       - name: Upload Linux Release Asset
         uses: actions/upload-artifact@v3
@@ -47,7 +47,7 @@ jobs:
       - name: Build for Windows
         run: |
           cd sourcecode-parser
-          go build -v -o pathfinder-windows-amd64.exe .
+          go build -ldflags="-s -w" -v -o pathfinder-windows-amd64.exe .
 
       - name: Upload Windows Release Asset
         uses: actions/upload-artifact@v3
@@ -69,7 +69,7 @@ jobs:
       - name: Build for macOS
         run: |
           cd sourcecode-parser
-          go build -v -o pathfinder-darwin-amd64 .
+          go build -ldflags="-s -w" -v -o pathfinder-darwin-amd64 .
 
       - name: Upload macOS Release Asset
         uses: actions/upload-artifact@v3
