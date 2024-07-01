@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"os"
 	"queryparser"
 	"strings"
@@ -27,16 +28,29 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 		}
 		return string(queryResults), nil
 	}
-	var result strings.Builder
-	result.WriteString("------Query Results------\n")
-	for _, entity := range entities {
-		result.WriteString("-------------------\n")
-		result.WriteString(entity.CodeSnippet + "\n")
-		result.WriteString(entity.File + "\n")
-		result.WriteString("-------------------\n")
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"#", "File", "Line Number", "Type", "Name", "Code Snippet"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{
+			Name:     "File",
+			WidthMin: 6,
+			WidthMax: 40,
+		},
+		{
+			Name:     "Code Snippet",
+			WidthMin: 6,
+			WidthMax: 60,
+		},
+	})
+	for i, entity := range entities {
+		t.AppendRow([]interface{}{i + 1, entity.File, entity.LineNumber, entity.Type, entity.Name, entity.CodeSnippet})
+		t.AppendSeparator()
 	}
-	result.WriteString("-------------------\n")
-	return result.String(), nil
+	t.SetStyle(table.StyleLight)
+	t.Render()
+	return "", nil
 }
 
 func executeProject(project, query, output string, stdin bool) (string, error) {
@@ -59,11 +73,10 @@ func executeProject(project, query, output string, stdin bool) (string, error) {
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, graph, output)
+			_, err = processQuery(input, graph, output)
 			if err != nil {
 				return "", fmt.Errorf("error processing query: %w", err)
 			}
-			fmt.Println(result)
 		}
 	} else if output != "" && query != "" {
 		return processQuery(query, graph, output)
