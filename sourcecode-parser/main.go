@@ -12,6 +12,11 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+var (
+	Version   = "dev"
+	GitCommit = "none"
+)
+
 func processQuery(input string, graph *CodeGraph, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	lex := queryparser.NewLexer(input)
@@ -92,7 +97,14 @@ func main() {
 	query := flag.String("query", "", "Query to execute")
 	project := flag.String("project", "", "Project to analyze")
 	stdin := flag.Bool("stdin", false, "Read query from stdin")
+	versionFlag := flag.Bool("version", false, "Print the version information and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("Version: %s\n", Version)
+		fmt.Printf("Git Commit: %s\n", GitCommit)
+		os.Exit(0)
+	}
 
 	result, err := executeProject(*project, *query, *output, *stdin)
 	if err != nil {
