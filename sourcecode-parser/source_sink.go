@@ -110,6 +110,13 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 		return gnc.Node.VariableValue
 	case "variabledatatype":
 		return gnc.Node.DataType
+	case "throwstype":
+		for i, arg := range gnc.Node.ThrowsExceptions {
+			if arg == val {
+				return gnc.Node.ThrowsExceptions[i]
+			}
+		}
+		return ""
 	case "has_access":
 		if gnc.Node.hasAccess {
 			return "true"

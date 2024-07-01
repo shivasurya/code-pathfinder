@@ -28,6 +28,10 @@ func (l *Lexer) NextToken() Token {
 	switch l.ch {
 	case '=':
 		tok = Token{Type: OPERATOR, Literal: string(l.ch)}
+	case '!':
+		ch := l.ch
+		l.readChar()
+		tok = Token{Type: OPERATOR, Literal: string(ch) + string(l.ch)}
 	case '\'':
 		tok.Type = STRING
 		tok.Literal = l.readString()

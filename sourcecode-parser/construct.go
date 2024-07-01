@@ -39,6 +39,7 @@ type GraphNode struct {
 	File                 string
 	isJavaSourceFile     bool
 	JavaDocTag           []*model.JavadocTag
+	ThrowsExceptions     []string
 }
 
 type GraphEdge struct {
@@ -171,6 +172,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		invokedNode, exists := graph.Nodes[methodID]
 		modifiers := ""
 		returnType := ""
+		throws := []string{}
 		methodArgumentType := []string{}
 		methodArgumentValue := []string{}
 
@@ -179,6 +181,14 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			childType := childNode.Type()
 
 			switch childType {
+			case "throws":
+				// namedChild
+				for j := 0; j < int(childNode.NamedChildCount()); j++ {
+					namedChild := childNode.NamedChild(j)
+					if namedChild.Type() == "type_identifier" {
+						throws = append(throws, namedChild.Content(sourceCode))
+					}
+				}
 			case "modifiers":
 				modifiers = childNode.Content(sourceCode)
 			case "void_type", "type_identifier":
@@ -199,7 +209,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		if !exists || (exists && invokedNode.ID != methodID) {
+		if !exists || (invokedNode.ID != methodID) {
 			invokedNode = &GraphNode{
 				ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
 				Type:                 "method_declaration",
@@ -213,6 +223,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				File:                 file,
 				isJavaSourceFile:     isJavaSourceFile,
 				JavaDocTag:           javadocTags,
+				ThrowsExceptions:     throws,
 				// CodeSnippet and LineNumber are skipped as per the requirement
 			}
 		}
@@ -236,7 +247,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		if !exists || (exists && invokedNode.ID != methodID) {
+		if !exists || (invokedNode.ID != methodID) {
 			// Create a placeholder node for external or inbuilt method
 			invokedNode = &GraphNode{
 				ID:                   methodID,
