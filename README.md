@@ -27,38 +27,22 @@ $ cd sourcecode-parser
 $ go build -o pathfinder (or) go run .
 
 $ ./pathfinder /PATH/TO/SOURCE
-
-2024/04/19 12:46:08 Graph built successfully
+2024/06/30 21:35:29 Graph built successfully
 Path-Finder Query Console: 
->FIND method WHERE name = 'onCreate'
-FIND method WHERE name = 'onCreate'
-------Results------
-@Override
-public void onCreate(SQLiteDatabase db) {
-    db.execSQL(DATABASE_CREATE);
-}
--------
-@Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_movie_detail);
-    Intent intent = getIntent();
+>FIND method_declaration WHERE throwstype = "ClassCastException"
+Executing query: FIND method_declaration WHERE throwstype = "ClassCastException"
 
-    getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-    getSupportActionBar().setDisplayShowHomeEnabled(true);
-
-    movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
-
-    if (savedInstanceState == null) {
-
-        movieDetailFragment fragment = new movieDetailFragment();
-        fragment.setMovieData(moviegeneralModal);
-        getSupportFragmentManager().beginTransaction()
-                .add(R.id.movie_detail_container, fragment)
-                .commit();
-    }
-}
-------Results------
+┌───┬──────────────────────────────────────────┬─────────────┬────────────────────┬────────────────┬──────────────────────────────────────────────────────────────┐
+│ # │ FILE                                     │ LINE NUMBER │ TYPE               │ NAME           │ CODE SNIPPET                                                 │
+├───┼──────────────────────────────────────────┼─────────────┼────────────────────┼────────────────┼──────────────────────────────────────────────────────────────┤
+│ 1 │ /Users/shiva/src/code-pathfinder/test-sr │         148 │ method_declaration │ getPaneChanges │ protected void getPaneChanges() throws ClassCastException {  │
+│   │ c/android/app/src/main/java/com/ivb/udac │             │                    │                │         mTwoPane = findViewById(R.id.movie_detail_container) │
+│   │ ity/movieListActivity.java               │             │                    │                │  != null;                                                    │
+│   │                                          │             │                    │                │     }                                                        │
+└───┴──────────────────────────────────────────┴─────────────┴────────────────────┴────────────────┴──────────────────────────────────────────────────────────────┘
+Path-Finder Query Console: 
+>:quit
+Okay, Bye!
 ```
 
 ## Acknowledgements
