@@ -40,6 +40,7 @@ type GraphNode struct {
 	isJavaSourceFile     bool
 	JavaDocTag           []*model.JavadocTag
 	ThrowsExceptions     []string
+	Annotation           []string
 }
 
 type GraphEdge struct {
@@ -168,13 +169,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				javadocTags = parseJavadocTags(commentContent)
 			}
 		}
-		methodName, methodID := extractMethodName(node, sourceCode)
-		invokedNode, exists := graph.Nodes[methodID]
+		methodName, methodID := extractMethodName(node, sourceCode, file)
 		modifiers := ""
 		returnType := ""
 		throws := []string{}
 		methodArgumentType := []string{}
 		methodArgumentValue := []string{}
+		annotationMarkers := []string{}
 
 		for i := 0; i < int(node.ChildCount()); i++ {
 			childNode := node.Child(i)
@@ -191,6 +192,11 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				}
 			case "modifiers":
 				modifiers = childNode.Content(sourceCode)
+				for j := 0; j < int(childNode.ChildCount()); j++ {
+					if childNode.Child(j).Type() == "marker_annotation" {
+						annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode))
+					}
+				}
 			case "void_type", "type_identifier":
 				// get return type of method
 				returnType = childNode.Content(sourceCode)
@@ -209,30 +215,27 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		if !exists || (invokedNode.ID != methodID) {
-			invokedNode = &GraphNode{
-				ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
-				Type:                 "method_declaration",
-				Name:                 methodName,
-				CodeSnippet:          node.Content(sourceCode),
-				LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-				Modifier:             extractVisibilityModifier(modifiers),
-				ReturnType:           returnType,
-				MethodArgumentsType:  methodArgumentType,
-				MethodArgumentsValue: methodArgumentValue,
-				File:                 file,
-				isJavaSourceFile:     isJavaSourceFile,
-				JavaDocTag:           javadocTags,
-				ThrowsExceptions:     throws,
-				// CodeSnippet and LineNumber are skipped as per the requirement
-			}
+		invokedNode := &GraphNode{
+			ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
+			Type:                 "method_declaration",
+			Name:                 methodName,
+			CodeSnippet:          node.Content(sourceCode),
+			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
+			Modifier:             extractVisibilityModifier(modifiers),
+			ReturnType:           returnType,
+			MethodArgumentsType:  methodArgumentType,
+			MethodArgumentsValue: methodArgumentValue,
+			File:                 file,
+			isJavaSourceFile:     isJavaSourceFile,
+			JavaDocTag:           javadocTags,
+			ThrowsExceptions:     throws,
+			Annotation:           annotationMarkers,
 		}
 		graph.AddNode(invokedNode)
 		currentContext = invokedNode // Update context to the new method
 
 	case "method_invocation":
-		methodName, methodID := extractMethodName(node, sourceCode) // Implement this
-		invokedNode, exists := graph.Nodes[methodID]
+		methodName, methodID := extractMethodName(node, sourceCode, file)
 		arguments := []string{}
 		// get argument list from arguments node iterate for child node
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -247,21 +250,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		if !exists || (invokedNode.ID != methodID) {
-			// Create a placeholder node for external or inbuilt method
-			invokedNode = &GraphNode{
-				ID:                   methodID,
-				Type:                 "method_invocation",
-				Name:                 methodName,
-				IsExternal:           true,
-				CodeSnippet:          node.Content(sourceCode),
-				LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-				MethodArgumentsValue: arguments,
-				File:                 file,
-				isJavaSourceFile:     isJavaSourceFile,
-			}
-			graph.AddNode(invokedNode)
+		invokedNode := &GraphNode{
+			ID:                   methodID,
+			Type:                 "method_invocation",
+			Name:                 methodName,
+			IsExternal:           true,
+			CodeSnippet:          node.Content(sourceCode),
+			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
+			MethodArgumentsValue: arguments,
+			File:                 file,
+			isJavaSourceFile:     isJavaSourceFile,
 		}
+		graph.AddNode(invokedNode)
 
 		if currentContext != nil {
 			graph.AddEdge(currentContext, invokedNode)
@@ -278,11 +278,17 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		packageName := ""
 		accessModifier := ""
 		superClass := ""
+		annotationMarkers := []string{}
 		implementedInterface := []string{}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
 			if child.Type() == "modifiers" {
 				accessModifier = child.Content(sourceCode)
+				for j := 0; j < int(child.ChildCount()); j++ {
+					if child.Child(j).Type() == "marker_annotation" {
+						annotationMarkers = append(annotationMarkers, child.Child(j).Content(sourceCode))
+					}
+				}
 			}
 			if child.Type() == "superclass" {
 				for j := 0; j < int(child.ChildCount()); j++ {
@@ -302,7 +308,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 		classNode := &GraphNode{
-			ID:               generateMethodID(className, []string{}),
+			ID:               generateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
 			Name:             className,
 			CodeSnippet:      node.Content(sourceCode),
@@ -314,6 +320,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			File:             file,
 			isJavaSourceFile: isJavaSourceFile,
 			JavaDocTag:       javadocTags,
+			Annotation:       annotationMarkers,
 		}
 		graph.AddNode(classNode)
 	case "block_comment":
@@ -323,7 +330,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			javadocTags := parseJavadocTags(commentContent)
 
 			commentNode := &GraphNode{
-				ID:               generateMethodID(node.Content(sourceCode), []string{}),
+				ID:               generateMethodID(node.Content(sourceCode), []string{}, file),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
 				LineNumber:       node.StartPoint().Row + 1,
@@ -378,7 +385,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
-			ID:               generateMethodID(variableName, []string{}),
+			ID:               generateMethodID(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,
 			CodeSnippet:      node.Content(sourceCode),
@@ -419,15 +426,15 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 }
 
 // write a function to generate unique method id from method name, class name, and package name, parameters, and return type.
-func generateMethodID(methodName string, parameters []string) string {
+func generateMethodID(methodName string, parameters []string, sourceFile string) string {
 	// Example: Use the node type and its start byte position in the source code to generate a unique ID
-	hashInput := fmt.Sprintf("%s-%s", methodName, parameters)
+	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
 	hash := sha256.Sum256([]byte(hashInput))
 	return hex.EncodeToString(hash[:])
 }
 
 //nolint:all
-func extractMethodName(node *sitter.Node, sourceCode []byte) (string, string) {
+func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (string, string) {
 	var methodID string
 
 	// if the child node is method_declaration, extract method name, modifiers, parameters, and return type
@@ -479,7 +486,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte) (string, string) {
 
 		}
 	}
-	methodID = generateMethodID(methodName, parameters)
+	methodID = generateMethodID(methodName, parameters, filepath)
 	return methodName, methodID
 }
 

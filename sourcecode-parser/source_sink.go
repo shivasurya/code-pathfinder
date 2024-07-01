@@ -74,6 +74,13 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 	switch key {
 	case "visibility":
 		return gnc.Node.Modifier
+	case "annotation":
+		for _, annotation := range gnc.Node.Annotation {
+			if annotation == val {
+				return annotation
+			}
+		}
+		return ""
 	case "returntype":
 		return gnc.Node.ReturnType
 	case "name":
