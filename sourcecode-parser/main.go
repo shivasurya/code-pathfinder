@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"os"
 	"queryparser"
 	"strings"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func processQuery(input string, graph *CodeGraph, output string) (string, error) {
