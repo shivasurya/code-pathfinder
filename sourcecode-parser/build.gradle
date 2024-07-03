@@ -1,0 +1,106 @@
+plugins {
+    id 'base'
+}
+
+ext {
+    versionFile = file('VERSION')
+    projectVersion  = versionFile.text
+    gitCommit = 'git rev-parse --short HEAD'.execute().text.trim()
+}
+
+task version {
+    doLast {
+        println "Version: ${projectVersion}"
+        println "Git Commit: ${gitCommit}"
+    }
+}
+
+task buildGo(type: Exec) {
+    def outputDir = "${buildDir}/go"
+    outputs.dir outputDir
+    commandLine 'go', 'build', '-ldflags', "-X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}", '-o', "${outputDir}/pathfinder", '.'
+}
+
+// gradle run --console=plain 
+task runGo(type: Exec, dependsOn: build) {
+    commandLine "${buildDir}/go/pathfinder", '--project', '../test-src/android', '--stdin', 'true'
+    standardInput = System.in
+}
+
+task testGo(type: Exec) {
+    commandLine 'go', 'test', './...'
+}
+
+task lintGo(type: Exec) {
+    commandLine 'golangci-lint', 'run'
+}
+
+task cleanGo(type: Delete) {
+    delete "${buildDir}/go"
+}
+
+task bumpVersion {
+    doLast {
+        def currentVersion = versionFile.text.trim()
+        def (major, minor, patch) = currentVersion.tokenize('.').collect { it.toInteger() }
+        patch += 1
+        if (patch > 999) {
+            patch = 0
+            minor += 1
+            if (minor > 999) {
+                minor = 0
+                major += 1
+            }
+        }
+        def newVersion = "${major}.${minor}.${patch}"
+        versionFile.text = newVersion
+        println "Version bumped to ${newVersion}"
+    }
+}
+
+task prepareRelease(dependsOn: bumpVersion) {
+    doLast {
+        exec {
+            commandLine 'git', 'checkout', '-b', "bump/v${versionFile.text.trim()}"
+        }
+        exec {
+            commandLine 'git', 'add', 'VERSION'
+        }
+        exec {
+            commandLine 'git', 'commit', '-m', "Bump version to ${versionFile.text.trim()}"
+        }
+        exec {
+            commandLine 'git', 'push', 'origin', "bump/v${versionFile.text.trim()}"
+        }
+        println "New version finalized: ${versionFile.text.trim()}"
+    }
+}
+
+task tagExists {
+    doLast {
+        def result = exec {
+            commandLine 'git', 'rev-parse', "v${versionFile.text.trim()}"
+            ignoreExitValue true
+        }
+        if (result.exitValue == 0) {
+            println "Tag v${versionFile.text.trim()} already exists."
+            throw new GradleException("Tag already exists")
+        } else {
+            println "Tag v${versionFile.text.trim()} does not exist."
+        }
+    }
+}
+
+task createTag(dependsOn: tagExists) {
+    doLast {
+        exec {
+            commandLine 'git', 'tag', "v${versionFile.text.trim()}"
+        }
+        exec {
+            commandLine 'git', 'push', 'origin', "v${versionFile.text.trim()}"
+        }
+        println "New version tag published: v${versionFile.text.trim()}"
+    }
+}
+
+clean.dependsOn cleanGo
