@@ -8,8 +8,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sourcecode-parser/model"
 	"strings"
+
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
