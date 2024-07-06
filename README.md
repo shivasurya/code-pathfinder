@@ -6,7 +6,7 @@
 # Code Pathfinder 
 Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code. Currently, it only supports Java language.
 
-[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
+[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/shivasurya/code-pathfinder/sourcecode-parser)](https://goreportcard.com/report/github.com/shivasurya/code-pathfinder/sourcecode-parser)
 </div>
 
 ## Getting Started
