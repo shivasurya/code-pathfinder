@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"log"
 	"os"
 	"path/filepath"
-	"sourcecode-parser/model"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
