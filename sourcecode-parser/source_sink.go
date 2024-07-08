@@ -135,55 +135,63 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 		}
 		return "false"
 	case "comment_author":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "author" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
-				}
+		if gnc.Node.JavaDoc != nil {
+			if gnc.Node.JavaDoc.Author != "" {
+				return gnc.Node.JavaDoc.Author
 			}
 		}
 		return ""
 	case "comment_see":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "see" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
+		if gnc.Node.JavaDoc != nil {
+			for _, docTag := range gnc.Node.JavaDoc.Tags {
+				if docTag.TagName == "see" && docTag.Text != "" {
+					if docTag.Text == val {
+						return docTag.Text
+					}
 				}
 			}
 		}
 		return ""
 	case "comment_version":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "version" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
+		if gnc.Node.JavaDoc != nil {
+			for _, docTag := range gnc.Node.JavaDoc.Tags {
+				if docTag.TagName == "version" && docTag.Text != "" {
+					if docTag.Text == val {
+						return docTag.Text
+					}
 				}
 			}
 		}
 		return ""
 	case "comment_since":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "since" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
+		if gnc.Node.JavaDoc != nil {
+			for _, docTag := range gnc.Node.JavaDoc.Tags {
+				if docTag.TagName == "since" && docTag.Text != "" {
+					if docTag.Text == val {
+						return docTag.Text
+					}
 				}
 			}
 		}
 		return ""
 	case "comment_param":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "param" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
+		if gnc.Node.JavaDoc != nil {
+			for _, docTag := range gnc.Node.JavaDoc.Tags {
+				if docTag.TagName == "param" && docTag.Text != "" {
+					if docTag.Text == val {
+						return docTag.Text
+					}
 				}
 			}
 		}
 		return ""
 	case "comment_throws":
-		for _, docTag := range gnc.Node.JavaDocTag {
-			if docTag.TagName == "throws" && docTag.Text != "" {
-				if docTag.Text == val {
-					return docTag.Text
+		if gnc.Node.JavaDoc != nil {
+			for _, docTag := range gnc.Node.JavaDoc.Tags {
+				if docTag.TagName == "throws" && docTag.Text != "" {
+					if docTag.Text == val {
+						return docTag.Text
+					}
 				}
 			}
 		}
