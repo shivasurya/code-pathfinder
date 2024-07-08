@@ -42,10 +42,12 @@ func TestNewJavadocTagWithEmptyValues(t *testing.T) {
 
 func TestJavadocTagsSlice(t *testing.T) {
 	tags := []*JavadocTag{
-		{TagName: "author", Text: "John Doe", DocType: "class"},
-		{TagName: "version", Text: "1.0", DocType: "class"},
+		{TagName: "author", Text: "John Doe", DocType: "author"},
+		{TagName: "version", Text: "1.0", DocType: "version"},
 	}
 	jdoc := &Javadoc{Tags: tags}
+	jdoc.Author = "John Doe"
+	jdoc.Version = "1.0"
 
 	if len(jdoc.Tags) != 2 {
 		t.Errorf("Expected 2 tags, got %d", len(jdoc.Tags))
