@@ -2,7 +2,6 @@ example-java-project/
 main
 sourcecode-parser/pathfinder
 .idea/
-*.json
 .gradle/
 build/
 

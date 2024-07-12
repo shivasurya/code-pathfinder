@@ -29,6 +29,13 @@ export default defineConfig({
 					autogenerate: { directory: 'api' },
 				},
 			],
+			customCss: [
+				"./src/styles/font.css",
+				"./src/styles/layout.css",
+			],
+			editLink: {
+				baseUrl: "https://github.com/shivasurya/code-pathfinder/edit/main/docs/",
+			},
 		}),
 	],
 });

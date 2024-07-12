@@ -3,7 +3,7 @@ title: API Index
 description: "Code PathFinder API Index"
 ---
 
-- [A](./a)
+- [A](./doc/a)
 - [B](./b)
 - [C](./c)
 - [D](./d)
@@ -28,5 +28,5 @@ description: "Code PathFinder API Index"
 - [W](./w)
 - [X](./x)
 - [Y](./y)
-- [Z](./z)
+- [Z](./z) 
 - 
