@@ -6,6 +6,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'Code PathFinder',
+			favicon: 'favicon.ico',
 			social: {
 				github: 'https://github.com/shivasurya/code-pathfinder',
 				discord: 'https://discord.gg/xmPdJC6WPX',
