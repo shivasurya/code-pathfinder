@@ -1,17 +1,10 @@
-example-java-project/
-main
-sourcecode-parser/pathfinder
-.idea/
-.gradle/
-build/
-
 # build output
-docs/dist/
+dist/
 # generated types
-docs/.astro/
+.astro/
 
 # dependencies
-docs/node_modules/
+node_modules/
 
 # logs
 npm-debug.log*
@@ -26,4 +19,3 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
-
