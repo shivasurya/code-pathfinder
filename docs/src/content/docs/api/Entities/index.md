@@ -3,7 +3,7 @@ title: Index
 description: "Code PathFinder API Index"
 ---
 
-- [Class Declaration](./class.mdx)
+- [Class Declaration](./class/)
 - [JavaDoc Declaration](./javadoc/)
 - [Method Declaration](./method/)
 - [Method Invocation](./method_call/)
