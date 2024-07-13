@@ -1,5 +1,5 @@
 ---
-title: A
+title: Method Entity
 description: "A - Code PathFinder API Index"
 ---
 | Entity                    | Description                                              |
