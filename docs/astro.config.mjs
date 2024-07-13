@@ -3,6 +3,8 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
+	site: 'https://shivasurya.github.io',
+	base: 'code-pathfinder',
 	integrations: [
 		starlight({
 			title: 'Code PathFinder',
