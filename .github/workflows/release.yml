@@ -31,6 +31,7 @@ jobs:
         run: |
           cd sourcecode-parser
           sha256sum pathfinder-linux-amd64 > pathfinder-linux-amd64.sha256sum.txt
+          tar -czvf pathfinder-linux-amd64.tar.gz pathfinder-linux-amd64
 
       - name: Upload Linux Release Asset
         uses: actions/upload-artifact@v3
@@ -39,6 +40,7 @@ jobs:
           path: |
             sourcecode-parser/pathfinder-linux-amd64
             sourcecode-parser/pathfinder-linux-amd64.sha256sum.txt
+            sourcecode-parser/pathfinder-linux-amd64.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -60,6 +62,7 @@ jobs:
         run: |
           cd sourcecode-parser
           Get-FileHash -Algorithm SHA256 pathfinder-windows-amd64.exe | Select-Object Hash | Out-File -Encoding UTF8 pathfinder-windows-amd64.exe.sha256sum.txt
+          Compress-Archive -Path pathfinder-windows-amd64.exe -DestinationPath pathfinder-windows-amd64.zip
 
       - name: Upload Windows Release Asset
         uses: actions/upload-artifact@v3
@@ -68,6 +71,7 @@ jobs:
           path: |
             sourcecode-parser/pathfinder-windows-amd64.exe
             sourcecode-parser/pathfinder-windows-amd64.exe.sha256sum.txt
+            sourcecode-parser/pathfinder-windows-amd64.zip
 
   build-macos:
     runs-on: macos-latest
@@ -89,6 +93,7 @@ jobs:
         run: |
           cd sourcecode-parser
           shasum -a 256 pathfinder-darwin-amd64 > pathfinder-darwin-amd64.sha256sum.txt
+          tar -czvf pathfinder-darwin-amd64.tar.gz pathfinder-darwin-amd64
 
       - name: Upload macOS Release Asset
         uses: actions/upload-artifact@v3
@@ -97,6 +102,7 @@ jobs:
           path: |
             sourcecode-parser/pathfinder-darwin-amd64
             sourcecode-parser/pathfinder-darwin-amd64.sha256sum.txt
+            sourcecode-parser/pathfinder-darwin-amd64.tar.gz
 
   release:
     needs: [build-linux, build-windows, build-macos]
@@ -138,6 +144,16 @@ jobs:
           asset_name: pathfinder-linux-amd64
           asset_content_type: application/octet-stream
 
+      - name: Upload Linux tar.gz Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-linux-amd64.tar.gz
+          asset_name: pathfinder-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+
       - name: Upload Windows Release Asset
         uses: actions/upload-release-asset@v1
         env:
@@ -147,6 +163,26 @@ jobs:
           asset_path: ./pathfinder-windows-amd64.exe
           asset_name: pathfinder-windows-amd64.exe
           asset_content_type: application/octet-stream
+
+      - name: Upload Windows zip Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-windows-amd64.zip
+          asset_name: pathfinder-windows-amd64.zip
+          asset_content_type: application/zip
+
+      - name: Upload macOS tar.gz Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-darwin-amd64.tar.gz
+          asset_name: pathfinder-darwin-amd64.tar.gz
+          asset_content_type: application/gzip
 
       - name: Upload macOS Release Asset
         uses: actions/upload-release-asset@v1
