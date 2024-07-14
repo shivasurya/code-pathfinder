@@ -28,7 +28,9 @@ jobs:
           GOARCH: amd64
         run: |
           cd sourcecode-parser
-          go build -ldflags="-s -w" -v -o pathfinder-linux-amd64 .
+          gitCommit=$(git describe --tags)
+          projectVersion=$(cat VERSION)
+          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-linux-amd64 .
           chmod +x pathfinder-linux-amd64
 
       - name: Calculate SHA256
@@ -64,7 +66,9 @@ jobs:
           GOARCH: amd64
         run: |
           cd sourcecode-parser
-          go build -ldflags="-s -w" -v -o pathfinder-windows-amd64.exe .
+          for /f "tokens=*" %%i in ('git describe --tags') do set gitCommit=%%i
+          set /p projectVersion=<VERSION
+          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-windows-amd64.exe .
 
       - name: Calculate SHA256
         run: |
@@ -99,7 +103,7 @@ jobs:
           GOARCH: arm64
         run: |
           cd sourcecode-parser
-          go build -ldflags="-s -w" -v -o pathfinder-darwin-arm64 .
+          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-darwin-arm64 .
           chmod +x pathfinder-darwin-arm64
 
       - name: Calculate SHA256
