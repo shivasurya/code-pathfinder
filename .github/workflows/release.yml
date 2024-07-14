@@ -35,7 +35,8 @@ jobs:
         run: |
           cd sourcecode-parser
           sha256sum pathfinder-linux-amd64 > pathfinder-linux-amd64.sha256sum.txt
-          tar -czvf pathfinder-linux-amd64.tar.gz pathfinder-linux-amd64
+          cp pathfinder-linux-amd64 pathfinder
+          tar -czvf pathfinder-linux-amd64.tar.gz pathfinder
 
       - name: Upload Linux Release Asset
         uses: actions/upload-artifact@v3
@@ -69,7 +70,8 @@ jobs:
         run: |
           cd sourcecode-parser
           Get-FileHash -Algorithm SHA256 pathfinder-windows-amd64.exe | Select-Object Hash | Out-File -Encoding UTF8 pathfinder-windows-amd64.exe.sha256sum.txt
-          Compress-Archive -Path pathfinder-windows-amd64.exe -DestinationPath pathfinder-windows-amd64.zip
+          Copy-Item pathfinder-windows-amd64.exe pathfinder.exe
+          Compress-Archive -Path pathfinder.exe -DestinationPath pathfinder-windows-amd64.zip
 
       - name: Upload Windows Release Asset
         uses: actions/upload-artifact@v3
@@ -104,7 +106,8 @@ jobs:
         run: |
           cd sourcecode-parser
           shasum -a 256 pathfinder-darwin-arm64 > pathfinder-darwin-arm64.sha256sum.txt
-          tar -czvf pathfinder-darwin-arm64.tar.gz pathfinder-darwin-arm64
+          cp pathfinder-darwin-arm64 pathfinder
+          tar -czvf pathfinder-darwin-arm64.tar.gz pathfinder
 
       - name: Upload macOS Release Asset
         uses: actions/upload-artifact@v3
