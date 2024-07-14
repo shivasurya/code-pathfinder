@@ -129,6 +129,11 @@ jobs:
         with:
           name: pathfinder-windows-amd64
 
+      - name: Download Windows Release Asset
+        uses: actions/download-artifact@v3
+        with:
+          name: pathfinder-darwin-arm64
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
