@@ -3,7 +3,7 @@
   "version": "0.0.22",
   "description": "Code Pathfinder, the open-source alternative to CodeQL. Designed for precise flow analysis and advanced structural search, it identifies vulnerabilities in source code.",
   "goBinary": {
-    "name": "codepathfinder",
+    "name": "pathfinder",
     "path": "./bin",
     "url": "https://github.com/shivasurya/code-pathfinder/releases/download/v{{version}}/pathfinder-{{platform}}-{{arch}}{{archive_ext}}"
   },
