@@ -1,0 +1,32 @@
+{
+  "name": "codepathfinder",
+  "version": "0.0.17",
+  "description": "Code Pathfinder, the open-source alternative to CodeQL. Designed for precise flow analysis and advanced structural search, it identifies vulnerabilities in source code.",
+  "goBinary": {
+    "name": "codepathfinder",
+    "path": "./bin",
+    "url": "https://github.com/shivasurya/code-pathfinder/releases/download/v{{version}}/pathfinder_{{platform}}_{{arch}}{{archive_ext}}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shivasurya/code-pathfinder.git"
+  },
+  "keywords": [
+    "sast",
+    "security-tools",
+    "structural-search",
+    "codeql-alternative",
+    "tree-sitter"
+  ],
+  "author": "shivasurya",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "go-npm": "^0.1.9"
+  },
+  "bugs": {
+    "url": "https://github.com/shivasurya/code-pathfinder/issues"
+  },
+  "homepage": "https://codepathfinder.dev",
+  "postinstall": "go-npm install",
+  "preuninstall": "go-npm uninstall"
+}
