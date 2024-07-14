@@ -11,6 +11,26 @@ Code Pathfinder attempts to be query language for structural search on source co
 [![Discord](https://img.shields.io/discord/1259511338183557120?logo=discord&label=discord&utm_source=github)](https://discord.gg/xmPdJC6WPX)
 </div>
 
+## Installation
+
+### From npm
+
+```bash
+$ npm install -g codepathfinder
+$ pathfinder --help
+```
+
+### Pre-Built Binaries
+
+Download the latest release from [GitHub releases](https://github.com/shivasurya/code-pathfinder/releases) and choose
+the binary that matches your operating system.
+
+```shell
+$ chmod u+x pathfinder
+$ pathfinder --help
+```
+
+
 ## Getting Started
 Read the [official documentation](https://codepathfinder.dev/), or run `pathfinder --help`.
 
