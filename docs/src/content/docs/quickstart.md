@@ -6,7 +6,16 @@ description: "A quickstart guide to get started with Code-PathFinder."
 ## Installation
 
 You can install Code-PathFinder using pre-built binaries from [GitHub releases](https://github.com/shivasurya/code-pathfinder/releases) or from source.
-More installation support via homebrew, npm, curl will be added soon.
+More installation support via homebrew, curl will be added soon.
+
+### Using npm
+
+Ensure you have [Node.js](https://nodejs.org/en/download/) installed. Then run the following command:
+
+```shell
+$ npm install -g codepathfinder
+$ pathfinder --help
+```
 
 ### Pre-Built Binaries
 
