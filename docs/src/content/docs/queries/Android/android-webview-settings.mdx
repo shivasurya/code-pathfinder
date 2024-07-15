@@ -1,0 +1,27 @@
+---
+title: Android WebView JavaScript settings
+description: "Code PathFinder Query for finding android webview javascript settings."
+---
+import { Badge } from '@astrojs/starlight/components';
+
+## Android WebView JavaScript settings
+
+Pathfinder supports querying for Android WebView JavaScript settings in the source code. Enabling this setting can
+result in cross-site scripting attacks.
+
+## Query Syntax <Badge text="CWE-079" variant="tip" size="small" />
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling JavaScript execution in a WebView can result in cross-site scripting attacks.
+ * @kind problem
+ * @id java/android/websettings-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 6.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 'true'
+```
