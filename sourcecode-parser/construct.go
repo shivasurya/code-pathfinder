@@ -251,7 +251,15 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				argumentsNode := node.Child(i)
 				for j := 0; j < int(argumentsNode.ChildCount()); j++ {
 					argument := argumentsNode.Child(j)
-					if argument.Type() == "identifier" {
+					switch argument.Type() {
+					case "identifier":
+						arguments = append(arguments, argument.Content(sourceCode))
+					case "string_literal":
+						stringliteral := argument.Content(sourceCode)
+						stringliteral = strings.TrimPrefix(stringliteral, "\"")
+						stringliteral = strings.TrimSuffix(stringliteral, "\"")
+						arguments = append(arguments, stringliteral)
+					default:
 						arguments = append(arguments, argument.Content(sourceCode))
 					}
 				}
