@@ -8,8 +8,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sourcecode-parser/model"
 	"strings"
+
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
@@ -38,9 +39,9 @@ type GraphNode struct {
 	hasAccess            bool
 	File                 string
 	isJavaSourceFile     bool
-	JavaDocTag           []*model.JavadocTag
 	ThrowsExceptions     []string
 	Annotation           []string
+	JavaDoc              *model.Javadoc
 }
 
 type GraphEdge struct {
@@ -118,7 +119,8 @@ func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	return hasAccess(node.NextSibling(), variableName, sourceCode)
 }
 
-func parseJavadocTags(commentContent string) []*model.JavadocTag {
+func parseJavadocTags(commentContent string) *model.Javadoc {
+	javaDoc := &model.Javadoc{}
 	var javadocTags []*model.JavadocTag
 
 	commentLines := strings.Split(commentContent, "\n")
@@ -137,6 +139,7 @@ func parseJavadocTags(commentContent string) []*model.JavadocTag {
 				switch tagName {
 				case "author":
 					javadocTag = model.NewJavadocTag(tagName, tagText, "author")
+					javaDoc.Author = tagText
 				case "param":
 					javadocTag = model.NewJavadocTag(tagName, tagText, "param")
 				case "see":
@@ -145,6 +148,7 @@ func parseJavadocTags(commentContent string) []*model.JavadocTag {
 					javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
 				case "version":
 					javadocTag = model.NewJavadocTag(tagName, tagText, "version")
+					javaDoc.Version = tagText
 				case "since":
 					javadocTag = model.NewJavadocTag(tagName, tagText, "since")
 				default:
@@ -155,18 +159,22 @@ func parseJavadocTags(commentContent string) []*model.JavadocTag {
 		}
 	}
 
-	return javadocTags
+	javaDoc.Tags = javadocTags
+	javaDoc.NumberOfCommentLines = len(commentLines)
+	javaDoc.CommentedCodeElements = commentContent
+
+	return javaDoc
 }
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
 	case "method_declaration":
-		var javadocTags []*model.JavadocTag
+		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 			commentContent := node.PrevSibling().Content(sourceCode)
 			if strings.HasPrefix(commentContent, "/*") {
-				javadocTags = parseJavadocTags(commentContent)
+				javadoc = parseJavadocTags(commentContent)
 			}
 		}
 		methodName, methodID := extractMethodName(node, sourceCode, file)
@@ -227,9 +235,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			MethodArgumentsValue: methodArgumentValue,
 			File:                 file,
 			isJavaSourceFile:     isJavaSourceFile,
-			JavaDocTag:           javadocTags,
 			ThrowsExceptions:     throws,
 			Annotation:           annotationMarkers,
+			JavaDoc:              javadoc,
 		}
 		graph.AddNode(invokedNode)
 		currentContext = invokedNode // Update context to the new method
@@ -243,7 +251,15 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				argumentsNode := node.Child(i)
 				for j := 0; j < int(argumentsNode.ChildCount()); j++ {
 					argument := argumentsNode.Child(j)
-					if argument.Type() == "identifier" {
+					switch argument.Type() {
+					case "identifier":
+						arguments = append(arguments, argument.Content(sourceCode))
+					case "string_literal":
+						stringliteral := argument.Content(sourceCode)
+						stringliteral = strings.TrimPrefix(stringliteral, "\"")
+						stringliteral = strings.TrimSuffix(stringliteral, "\"")
+						arguments = append(arguments, stringliteral)
+					default:
 						arguments = append(arguments, argument.Content(sourceCode))
 					}
 				}
@@ -267,11 +283,11 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			graph.AddEdge(currentContext, invokedNode)
 		}
 	case "class_declaration":
-		var javadocTags []*model.JavadocTag
+		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 			commentContent := node.PrevSibling().Content(sourceCode)
 			if strings.HasPrefix(commentContent, "/*") {
-				javadocTags = parseJavadocTags(commentContent)
+				javadoc = parseJavadocTags(commentContent)
 			}
 		}
 		className := node.ChildByFieldName("name").Content(sourceCode)
@@ -319,7 +335,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Interface:        implementedInterface,
 			File:             file,
 			isJavaSourceFile: isJavaSourceFile,
-			JavaDocTag:       javadocTags,
+			JavaDoc:          javadoc,
 			Annotation:       annotationMarkers,
 		}
 		graph.AddNode(classNode)
@@ -336,7 +352,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				LineNumber:       node.StartPoint().Row + 1,
 				File:             file,
 				isJavaSourceFile: isJavaSourceFile,
-				JavaDocTag:       javadocTags,
+				JavaDoc:          javadocTags,
 			}
 			graph.AddNode(commentNode)
 		}

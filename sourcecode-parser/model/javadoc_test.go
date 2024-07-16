@@ -39,3 +39,57 @@ func TestNewJavadocTagWithEmptyValues(t *testing.T) {
 		t.Errorf("Expected DocType to be empty, got %s", tag.DocType)
 	}
 }
+
+func TestJavadocTagsSlice(t *testing.T) {
+	tags := []*JavadocTag{
+		{TagName: "author", Text: "John Doe", DocType: "author"},
+		{TagName: "version", Text: "1.0", DocType: "version"},
+	}
+	jdoc := &Javadoc{Tags: tags}
+	jdoc.Author = "John Doe"
+	jdoc.Version = "1.0"
+
+	if len(jdoc.Tags) != 2 {
+		t.Errorf("Expected 2 tags, got %d", len(jdoc.Tags))
+	}
+
+	if jdoc.Author != "John Doe" {
+		t.Errorf("Expected Author to be 'John Doe', got '%s'", jdoc.Author)
+	}
+
+	if jdoc.Version != "1.0" {
+		t.Errorf("Expected Version to be '1.0', got '%s'", jdoc.Version)
+	}
+}
+
+func TestJavadocWithNoTags(t *testing.T) {
+	jdoc := &Javadoc{}
+
+	if len(jdoc.Tags) != 0 {
+		t.Errorf("Expected 0 tags, got %d", len(jdoc.Tags))
+	}
+
+	if jdoc.Author != "" {
+		t.Errorf("Expected Author to be empty, got '%s'", jdoc.Author)
+	}
+
+	if jdoc.Version != "" {
+		t.Errorf("Expected Version to be empty, got '%s'", jdoc.Version)
+	}
+}
+
+func TestJavadocWithCommentedCodeElements(t *testing.T) {
+	jdoc := &Javadoc{CommentedCodeElements: "MyClass"}
+
+	if jdoc.CommentedCodeElements != "MyClass" {
+		t.Errorf("Expected CommentedCodeElements to be 'MyClass', got '%s'", jdoc.CommentedCodeElements)
+	}
+}
+
+func TestJavadocWithNumberOfCommentLines(t *testing.T) {
+	jdoc := &Javadoc{NumberOfCommentLines: 5}
+
+	if jdoc.NumberOfCommentLines != 5 {
+		t.Errorf("Expected NumberOfCommentLines to be 5, got %d", jdoc.NumberOfCommentLines)
+	}
+}

@@ -6,8 +6,30 @@
 # Code Pathfinder 
 Code Pathfinder attempts to be query language for structural search on source code. It's built for identifying vulnerabilities in source code. Currently, it only supports Java language.
 
-[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
+[![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/shivasurya/code-pathfinder/sourcecode-parser)](https://goreportcard.com/report/github.com/shivasurya/code-pathfinder/sourcecode-parser)
+[![MIT License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
+[![Discord](https://img.shields.io/discord/1259511338183557120?logo=discord&label=discord&utm_source=github)](https://discord.gg/xmPdJC6WPX)
 </div>
+
+## Installation
+
+### From npm
+
+```bash
+$ npm install -g codepathfinder
+$ pathfinder --help
+```
+
+### Pre-Built Binaries
+
+Download the latest release from [GitHub releases](https://github.com/shivasurya/code-pathfinder/releases) and choose
+the binary that matches your operating system.
+
+```shell
+$ chmod u+x pathfinder
+$ pathfinder --help
+```
+
 
 ## Getting Started
 Read the [official documentation](https://codepathfinder.dev/), or run `pathfinder --help`.

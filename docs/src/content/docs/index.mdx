@@ -1,0 +1,46 @@
+---
+title: Code PathFinder
+description: Opensource CodeQL alternative for finding vulnerabilities in your code.
+template: splash
+hero:
+  tagline: "Opensource CodeQL alternative for finding vulnerabilities in your code."
+  actions:
+    - text: Install Now
+      link: /quickstart
+      icon: right-arrow
+      variant: primary
+    - text: Documentation
+      link: /overview
+      icon: open-book
+    - text: Get Source
+      link: https://github.com/shivasurya/code-pathfinder
+      icon: github
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+```shell
+Code-PathFinder Console:
+> FIND method_declaration WHERE visibility = "public" AND name = "main"
+
+public static void main(String[] args) {
+    System.out.println("\"Set thy heart upon thy work, but never on its reward.\" - Bhagavad Gita, Chapter 2, Verse 47");
+}
+```
+
+## Features
+
+<CardGrid stagger>
+	<Card title="Craft Queries" icon="pencil">
+		Strengthen your code’s integrity with robust security checks and insights.
+	</Card>
+	<Card title="Structural Search" icon="seti:code-search">
+		Search and identify specific patterns in your Java code seamlessly.
+	</Card>
+	<Card title="Call Graph Analysis" icon="seti:pipeline">
+		Visualize and analyze method calls and data flow for better understanding.
+	</Card>
+	<Card title="Source-Sink Analysis" icon="seti:plan">
+		Detect and prevent vulnerabilities by tracing sensitive data paths.
+	</Card>
+</CardGrid>

@@ -1,4 +1,4 @@
-module sourcecode-parser
+module github.com/shivasurya/code-pathfinder/sourcecode-parser
 
 go 1.22.0
 

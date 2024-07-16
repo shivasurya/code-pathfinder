@@ -1,0 +1,29 @@
+---
+title: Class Entity
+description: "Class Declaration Entity - Code PathFinder API Index"
+---
+
+import { Badge } from '@astrojs/starlight/components';
+
+### Class Declaration Entity <Badge text="Entity" variant="tip" size="small" />
+
+Class declaration entity represents a class declaration in the source code. It contains information about the class
+name, visibility, and other attributes.
+
+```java
+@annotation
+<visibility> <modifier> class <name> extends <parent> implements <interface> {
+    ...
+}
+```
+
+### Attributes
+
+| Entity                    | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| `name`                    | Entity's name                                            |
+| `visibility`              | Entity's visibility (public, private, protected)         |
+| `returntype`              | Entity's return type                                     |
+| `superclass`              | Entity's parent class                                    |
+| `interface`               | Entity's implemented interfaces                          |
+| `is_java_source`          | Is the entity a Java source code                         |

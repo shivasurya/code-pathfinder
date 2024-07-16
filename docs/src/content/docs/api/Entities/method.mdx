@@ -1,0 +1,35 @@
+---
+title: Method Entity
+description: "Method Declaration - Code PathFinder API Index"
+---
+import { Badge } from '@astrojs/starlight/components';
+
+### Method Declaration Entity <Badge text="Entity" variant="tip" size="small" />
+
+Method declaration entity represents a method declaration in the source code. It contains information about the method name,
+visibility, return type, and other attributes.
+
+```java
+@annotation
+<visibility> <returntype> <name>(<parameter>) throws <exception> {
+   ...
+   return <returnvalue>;
+   ...
+   throw <exception>;
+   ...
+}
+```
+
+### Attributes
+
+| Entity                    | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| `name`                    | Entity's name                                            |
+| `visibility`              | Entity's visibility (public, private, protected)         |
+| `returntype`              | Entity's return type                                     |
+| `annotation`              | Entity's annotation                                      |
+| `argumentype`             | Entity's parameter type                                  |
+| `argumentname`            | Entity's parameter name                                  |
+| `throwstype`              | Entity's thrown exceptions                               |
+| `has_access`              | Check if the entity is being accessed based on scope     |
+| `is_java_source`          | Is the entity a Java source code                         |

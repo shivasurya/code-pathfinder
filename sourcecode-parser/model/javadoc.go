@@ -1,5 +1,13 @@
 package model
 
+type Javadoc struct {
+	Tags                  []*JavadocTag
+	NumberOfCommentLines  int
+	CommentedCodeElements string
+	Version               string // redundant from tags
+	Author                string // redundant from tags
+}
+
 // JavadocTag represents a generic Javadoc tag.
 type JavadocTag struct {
 	TagName string
