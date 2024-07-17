@@ -5,6 +5,8 @@ sourcecode-parser/pathfinder
 .gradle/
 build/
 
+.env
+
 # build output
 docs/dist/
 # generated types

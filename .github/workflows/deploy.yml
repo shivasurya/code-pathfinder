@@ -20,6 +20,11 @@ jobs:
     steps:
       - name: Checkout your repository using git
         uses: actions/checkout@v4
+      - name: Create .env file
+        env:
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
+        run: |
+            echo "PUBLIC_ANALYTICS_KEY=${{ secrets.POSTHOG_WEB_ANALYTICS }}" >> docs/.env
       - name: Install, build, and upload your site
         uses: withastro/action@v2
         with:
