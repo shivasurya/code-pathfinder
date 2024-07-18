@@ -15,12 +15,13 @@ result in cross-site scripting attacks.
 
 ## Query Syntax <Badge text="CWE-079" variant="tip" size="small" />
 
+### setJavaScriptEnabled Webview API
 ```sql
 /**
  * @name Android WebView JavaScript settings
  * @description Enabling JavaScript execution in a WebView can result in cross-site scripting attacks.
  * @kind problem
- * @id java/android/websettings-javascript-enabled
+ * @id java/android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
@@ -28,4 +29,89 @@ result in cross-site scripting attacks.
  * external/cwe/cwe-079
  */
 FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 'true'
+```
+
+### setAllowUniversalAccessFromFileURLs Webview API
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling SetAllowUniversalAccessFromFileURLs leak sandbox access to file:/// URLs from any origin.
+ * @kind problem
+ * @id java/android/webview-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 6.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'setAllowUniversalAccessFromFileURLs' AND argumentname = 'true'
+```
+
+### setAllowFileAccessFromFileURLs Webview API
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling setAllowFileAccessFromFileURLs leak sandbox access to file:/// URLs.
+ * @kind problem
+ * @id java/android/webview-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 6.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'setAllowFileAccessFromFileURLs' AND argumentname = 'true'
+```
+
+### setAllowContentAccess Webview API
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling setAllowContentAccess enables content:// access from webpages.
+ * @kind problem
+ * @id java/android/webview-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 6.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'setAllowContentAccess' AND argumentname = 'true'
+```
+
+### setAllowFileAccess Webview API
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling setAllowFileAccess enables webview access to file:/// URLs.
+ * @kind problem
+ * @id java/android/webview-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 6.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'setAllowFileAccess' AND argumentname = 'true'
+```
+
+### addJavascriptInterface Webview API
+
+```sql
+/**
+ * @name Android WebView JavaScript settings
+ * @description Enabling addJavascriptInterface exposes java methods to JavaScript.
+ * @kind problem
+ * @id java/android/webview-javascript-enabled
+ * @problem.severity warning
+ * @security-severity 8.1
+ * @precision medium
+ * @tags security
+ * external/cwe/cwe-079
+ */
+FIND method_invocation WHERE name = 'addJavascriptInterface'
 ```
