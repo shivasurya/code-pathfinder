@@ -9,8 +9,8 @@ require (
 	queryparser v0.0.0-00010101000000-000000000000
 )
 
-require github.com/stretchr/testify v1.8.4 // indirect
+require github.com/stretchr/testify v1.9.0 // indirect
 
-require golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+require golang.org/x/exp v0.0.0-20240716175740-e3f259677ff7 // indirect
 
 replace queryparser => ./queryparser

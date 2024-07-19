@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
-	"sourcecode-parser/antlr" // Adjust this path to your generated parser
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 )
 
 // Define the data model
@@ -156,38 +156,48 @@ func parseValue(ctx parser.IValueContext) *Value {
 
 // Evaluation Functions
 
-func evaluateExpression(expr *Expression) bool {
+func evaluateExpression(expr *Expression, data map[string]interface{}) bool {
 	if expr == nil {
 		return false
 	}
 
-	result := evaluateAndExpression(expr.OrExpr[0])
-	for _, andExpr := range expr.OrExpr[1:] {
-		result = result || evaluateAndExpression(andExpr)
+	stack := []bool{}
+	for _, andExpr := range expr.OrExpr {
+		stack = append(stack, evaluateAndExpression(andExpr, data))
+	}
+
+	result := stack[0]
+	for i := 1; i < len(stack); i++ {
+		result = result || stack[i]
 	}
 
 	return result
 }
 
-func evaluateAndExpression(andExpr *AndExpression) bool {
+func evaluateAndExpression(andExpr *AndExpression, data map[string]interface{}) bool {
 	if andExpr == nil {
 		return false
 	}
 
-	result := evaluateNotExpression(andExpr.NotExpr[0])
-	for _, notExpr := range andExpr.NotExpr[1:] {
-		result = result && evaluateNotExpression(notExpr)
+	stack := []bool{}
+	for _, notExpr := range andExpr.NotExpr {
+		stack = append(stack, evaluateNotExpression(notExpr, data))
+	}
+
+	result := stack[0]
+	for i := 1; i < len(stack); i++ {
+		result = result && stack[i]
 	}
 
 	return result
 }
 
-func evaluateNotExpression(notExpr *NotExpression) bool {
+func evaluateNotExpression(notExpr *NotExpression, data map[string]interface{}) bool {
 	if notExpr == nil {
 		return false
 	}
 
-	result := evaluatePrimary(notExpr.Primary)
+	result := evaluatePrimary(notExpr.Primary, data)
 	if notExpr.Negation {
 		return !result
 	}
@@ -195,30 +205,82 @@ func evaluateNotExpression(notExpr *NotExpression) bool {
 	return result
 }
 
-func evaluatePrimary(primary *Primary) bool {
+func evaluatePrimary(primary *Primary, data map[string]interface{}) bool {
 	if primary == nil {
 		return false
 	}
 
 	if primary.Condition != nil {
-		return evaluateCondition(primary.Condition)
+		return evaluateCondition(primary.Condition, data)
 	} else if primary.SubExpr != nil {
-		return evaluateExpression(primary.SubExpr)
+		return evaluateExpression(primary.SubExpr, data)
 	}
 
 	return false
 }
 
-func evaluateCondition(cond *Condition) bool {
-	// Implement your own condition evaluation logic here
-	// For demonstration purposes, we'll assume all conditions evaluate to true
-	return true
+func evaluateCondition(cond *Condition, data map[string]interface{}) bool {
+	aliasData, exists := data[cond.Alias]
+	if !exists {
+		return false
+	}
+
+	fieldValue := aliasData.(map[string]interface{})
+	for i, methodOrVar := range cond.MethodChain {
+		if i == len(cond.MethodChain)-1 {
+			break
+		}
+		fieldValue = fieldValue[methodOrVar].(map[string]interface{})
+	}
+
+	lastMethodOrVar := cond.MethodChain[len(cond.MethodChain)-1]
+	var fieldVal interface{}
+	if strings.HasSuffix(lastMethodOrVar, "()") {
+		// Handle method calls, e.g., u.age()
+		method := strings.TrimSuffix(lastMethodOrVar, "()")
+		fieldVal = fieldValue[method]
+	} else {
+		// Handle field accesses, e.g., u.age
+		fieldVal = fieldValue[lastMethodOrVar]
+	}
+
+	var value interface{}
+	if cond.Value.StringValue != nil {
+		value = *cond.Value.StringValue
+	} else if cond.Value.NumberValue != nil {
+		value = *cond.Value.NumberValue
+	}
+
+	switch cond.Comparator {
+	case "=":
+		return fieldVal == value
+	case "!=":
+		return fieldVal != value
+	case "<":
+		fieldValFloat, _ := fieldVal.(float64)
+		valueFloat, _ := value.(float64)
+		return fieldValFloat < valueFloat
+	case ">":
+		fieldValFloat, _ := fieldVal.(float64)
+		valueFloat, _ := value.(float64)
+		return fieldValFloat > valueFloat
+	case "<=":
+		fieldValFloat, _ := fieldVal.(float64)
+		valueFloat, _ := value.(float64)
+		return fieldValFloat <= valueFloat
+	case ">=":
+		fieldValFloat, _ := fieldVal.(float64)
+		valueFloat, _ := value.(float64)
+		return fieldValFloat >= valueFloat
+	default:
+		return false
+	}
 }
 
 func main() {
 	queries := []string{
-		"FIND User AS u, Data AS d WHERE u.age > 30 AND d.ty = ( 30, 100, 1000 )",
-		"FIND User AS u WHERE u.getData() > 30",
+		"FIND User AS u, Data AS d WHERE u.age > 30",
+		"FIND User AS u WHERE u.getData() < 30",
 		"FIND User AS u WHERE u.age > 30 AND u.name = \"John\"",
 		"FIND User AS u WHERE u.getData() > 30 AND u.name = \"John\"",
 		"FIND User AS u WHERE u.age > 30 OR (u.salary > 50000 AND u.id < 100)",
@@ -227,6 +289,8 @@ func main() {
 	}
 
 	for _, input := range queries {
+
+		var resultHolder []map[string]interface{}
 		// Create the ANTLR input stream
 		is := antlr.NewInputStream(input)
 
@@ -246,12 +310,77 @@ func main() {
 		// Walk the tree
 		antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
+		// Sample data for evaluation
+		data := []map[string]interface{}{
+			{
+				"u": map[string]interface{}{
+					"age":        34.0,
+					"name":       "John",
+					"getData":    4.0,
+					"id":         50.0,
+					"salary":     60000.0,
+					"ty":         []float64{30.0, 100.0, 1000.0},
+					"department": "HR",
+				},
+				"d": map[string]interface{}{
+					"ty": []float64{30.0, 100.0, 1000.0},
+				},
+			},
+			{
+				"u": map[string]interface{}{
+					"age":        28.0,
+					"name":       "Alice",
+					"getData":    60.0,
+					"id":         51.0,
+					"salary":     75000.0,
+					"ty":         []float64{50.0, 200.0, 2000.0},
+					"department": "IT",
+				},
+				"d": map[string]interface{}{
+					"ty": []float64{50.0, 200.0, 2000.0},
+				},
+			},
+			{
+				"u": map[string]interface{}{
+					"age":        42.0,
+					"name":       "Bob",
+					"getData":    30.0,
+					"id":         52.0,
+					"salary":     90000.0,
+					"ty":         []float64{40.0, 150.0, 1500.0},
+					"department": "Finance",
+				},
+				"d": map[string]interface{}{
+					"ty": []float64{40.0, 150.0, 1500.0},
+				},
+			},
+			{
+				"u": map[string]interface{}{
+					"age":        31.0,
+					"name":       "Emma",
+					"getData":    55.0,
+					"id":         53.0,
+					"salary":     70000.0,
+					"ty":         []float64{35.0, 120.0, 1200.0},
+					"department": "Marketing",
+				},
+				"d": map[string]interface{}{
+					"ty": []float64{35.0, 120.0, 1200.0},
+				},
+			},
+		}
+
 		// Print the model
 		fmt.Printf("Query: %s\n", input)
 		fmt.Printf("Model: %+v\n", listener.Model)
 
 		// Evaluate the where clause
-		result := evaluateExpression(listener.Model.WhereClause)
-		fmt.Printf("Evaluation result: %v\n\n", result)
+		for _, datum := range data {
+			result := evaluateExpression(listener.Model.WhereClause, datum)
+			if result {
+				resultHolder = append(resultHolder, datum)
+			}
+		}
+		fmt.Printf("Evaluation result: %v\n\n", resultHolder)
 	}
 }
