@@ -1,100 +1,153 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"flag"
 	"fmt"
-	"github.com/antlr4-go/antlr/v4"
-	"github.com/expr-lang/expr"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"os"
+	"strconv"
 	"strings"
 )
 
-// QueryListener is a complete listener for a parse tree produced by QueryParser.
-type QueryListener struct {
-	*parser.BaseQueryListener
-	expression strings.Builder
-}
-
-func NewQueryListener() *QueryListener {
-	return &QueryListener{
-		BaseQueryListener: &parser.BaseQueryListener{},
-	}
-}
-
-func (l *QueryListener) EnterExpression(ctx *parser.ExpressionContext) {
-	if l.expression.Len() > 0 {
-		l.expression.WriteString(" ")
-	}
-	l.expression.WriteString(ctx.GetText())
-}
-
-func (l *QueryListener) ExitOrExpression(ctx *parser.OrExpressionContext) {
-	if ctx.GetChildCount() > 1 {
-		var result strings.Builder
-		for i := 0; i < ctx.GetChildCount(); i++ {
-			child := ctx.GetChild(i).(antlr.ParseTree)
-			if child.GetText() == "||" {
-				result.WriteString(" || ")
-			} else {
-				result.WriteString(child.GetText())
-			}
-		}
-		l.expression.Reset()
-		l.expression.WriteString(result.String())
-	}
-}
-
-func (l *QueryListener) ExitAndExpression(ctx *parser.AndExpressionContext) {
-	if ctx.GetChildCount() > 1 {
-		var result strings.Builder
-		for i := 0; i < ctx.GetChildCount(); i++ {
-			child := ctx.GetChild(i).(antlr.ParseTree)
-			if child.GetText() == "&&" {
-				result.WriteString(" && ")
-			} else {
-				result.WriteString(child.GetText())
-			}
-		}
-		l.expression.Reset()
-		l.expression.WriteString(result.String())
-	}
-}
-
-func parseQuery(inputQuery string) string {
-	inputStream := antlr.NewInputStream(inputQuery)
-	lexer := parser.NewQueryLexer(inputStream)
-	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := parser.NewQueryParser(stream)
-
-	listener := NewQueryListener()
-	antlr.ParseTreeWalkerDefault.Walk(listener, p.Query())
-
-	return listener.expression.String()
-}
+// Version is the current version of the application
+const Version = "0.0.16"
+const GitCommit = "HEAD"
 
 func main() {
-	inputQuery := `FIND method_declaration AS md WHERE (md.getName() == "onCreate" || md.getVisibility() == "public") && md.getReturnType() != "void"`
-	expression := parseQuery(inputQuery)
-	// string replace "md." with ""
-	expression = strings.Replace(expression, "md.", "", -1)
-	fmt.Println(expression)
-	env := map[string]interface{}{
-		"getName": func() string {
-			return "onCreate"
-		},
-		"getVisibility": func() string {
-			return "public"
-		},
-		"getReturnType": func() string {
-			return "voids"
-		},
+	// accept command line param optional path to source code
+	output := flag.String("output", "", "Supported output format: json")
+	outputFile := flag.String("output-file", "", "Output file path")
+	project := flag.String("project", "", "Project to analyze")
+	query := flag.String("query", "", "Query to execute")
+	stdin := flag.Bool("stdin", false, "Read query from stdin")
+	versionFlag := flag.Bool("version", false, "Print the version information and exit")
+	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("Version: %s\n", Version)
+		fmt.Printf("Git Commit: %s\n", GitCommit)
+		os.Exit(0)
 	}
-	program, err := expr.Compile(expression, expr.Env(env))
+
+	result, err := executeCLIQuery(*project, *query, *output, *stdin)
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(1)
 	}
-	output, err := expr.Run(program, env)
-	if err != nil {
-		fmt.Println(err)
+	if *outputFile != "" {
+		file, err := os.Create(*outputFile)
+		if err != nil {
+			fmt.Println("Error creating output file: ", err)
+			os.Exit(1)
+		}
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
+				fmt.Println("Error closing output file: ", err)
+				os.Exit(1)
+			}
+		}(file)
+		_, err = file.WriteString(result)
+		if err != nil {
+			fmt.Println("Error writing output file: ", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Println(result)
+		os.Exit(0)
 	}
-	fmt.Println(output)
 }
+
+func processQuery(input string, graph *CodeGraph, output string) (string, error) {
+	fmt.Println("Executing query: " + input)
+	parsedQuery := parser.ParseQuery(input)
+	entities := QueryEntities(graph, parsedQuery)
+	if output == "json" {
+		// convert struct to query_results
+		queryResults, err := json.Marshal(entities)
+		if err != nil {
+			return "", fmt.Errorf("error processing query results: %w", err)
+		}
+		return string(queryResults), nil
+	} else {
+		result := ""
+		for _, entity := range entities {
+			// add blockquotes to string
+			result := entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
+			result += "------------\n"
+			result += "> " + entity.CodeSnippet + "\n"
+			result += "------------"
+		}
+		return result, nil
+	}
+}
+
+func InitializeProject(project string) *CodeGraph {
+	graph := NewCodeGraph()
+	if project != "" {
+		graph = Initialize(project)
+	}
+	return graph
+}
+
+func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
+	graph := InitializeProject(project)
+
+	if stdin {
+		// read from stdin
+		for {
+			fmt.Print("Path-Finder Query Console: \n>")
+			in := bufio.NewReader(os.Stdin)
+
+			input, err := in.ReadString('\n')
+			if err != nil {
+				return "", fmt.Errorf("error processing query: %w", err)
+			}
+			// if input starts with :quit string
+			if strings.HasPrefix(input, ":quit") {
+				return "Okay, Bye!", nil
+			}
+			result, err := processQuery(input, graph, output)
+			fmt.Println(result)
+			if err != nil {
+				return "", fmt.Errorf("error processing query: %w", err)
+			}
+		}
+	} else {
+		// read from command line
+		result, err := processQuery(query, graph, output)
+		if err != nil {
+			return "", fmt.Errorf("error processing query: %w", err)
+		}
+		return result, nil
+	}
+}
+
+//func parseQueryWithExpr(inputQuery string) {
+//
+//	// string replace "md." with ""
+//	expression = strings.Replace(expression, "md.", "", -1)
+//	fmt.Println(expression)
+//	env := map[string]interface{}{
+//		"getName": func() string {
+//			return "onCreate"
+//		},
+//		"getVisibility": func() string {
+//			return "public"
+//		},
+//		"getReturnType": func() string {
+//			return "voids"
+//		},
+//	}
+//	program, err := expr.Compile(expression, expr.Env(env))
+//	if err != nil {
+//		fmt.Println(err)
+//	}
+//	output, err := expr.Run(program, env)
+//	if err != nil {
+//		fmt.Println(err)
+//	}
+//	fmt.Println(output)
+//}

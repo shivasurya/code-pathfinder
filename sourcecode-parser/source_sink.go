@@ -3,7 +3,7 @@ package main
 
 import (
 	"fmt"
-	"queryparser"
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 )
 
 type Result struct {
@@ -202,15 +202,13 @@ func (gnc *GraphNodeContext) GetValue(key, val string) string {
 	}
 }
 
-func QueryEntities(graph *CodeGraph, query *queryparser.Query) []*GraphNode {
+func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
 
 	for _, node := range graph.Nodes {
-		if node.Type == query.Entity {
-			ctx := GraphNodeContext{Node: node}  // Create a context for each node
-			if query.Conditions.Evaluate(&ctx) { // Use the context in evaluation
-				result = append(result, node)
-			}
+		for _, entity := range query.SelectList {
+			ctx := GraphNodeContext{Node: node}
+			fmt.Println(entity)
 		}
 	}
 	return result
