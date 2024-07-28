@@ -6,10 +6,8 @@ select_item     : entity 'AS' alias ;
 entity          : IDENTIFIER ;
 alias           : IDENTIFIER ;
 expression      : orExpression ;
-orExpression    : andExpression ( 'OR' andExpression )* ;
-andExpression   : notExpression ( 'AND' notExpression )* ;
-notExpression   : 'NOT' notExpression
-                | primary ;
+orExpression    : andExpression ( '||' andExpression )* ;
+andExpression   : primary ( '&&' primary )* ;
 primary         : condition
                 | '(' expression ')' ;
 condition       : alias '.' method_chain comparator (value | method_chain | '(' value_list ')') ;
@@ -17,7 +15,7 @@ method_chain    : method_or_variable ('.' method_or_variable)* ;
 method_or_variable : method | variable ;
 method          : IDENTIFIER '(' ')' ;
 variable        : IDENTIFIER ;
-comparator      : '=' | '!=' | '<' | '>' | '<=' | '>=' | 'LIKE' | 'IN' ;
+comparator      : '==' | '!=' | '<' | '>' | '<=' | '>=' | 'LIKE' | 'IN' ;
 value           : STRING | NUMBER | STRING_WITH_WILDCARD ;
 value_list      : value (',' value)* ;
 STRING          : '"' ( ~('"' | '\\') | '\\' . )* '"' ;

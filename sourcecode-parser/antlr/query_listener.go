@@ -32,9 +32,6 @@ type QueryListener interface {
 	// EnterAndExpression is called when entering the andExpression production.
 	EnterAndExpression(c *AndExpressionContext)
 
-	// EnterNotExpression is called when entering the notExpression production.
-	EnterNotExpression(c *NotExpressionContext)
-
 	// EnterPrimary is called when entering the primary production.
 	EnterPrimary(c *PrimaryContext)
 
@@ -85,9 +82,6 @@ type QueryListener interface {
 
 	// ExitAndExpression is called when exiting the andExpression production.
 	ExitAndExpression(c *AndExpressionContext)
-
-	// ExitNotExpression is called when exiting the notExpression production.
-	ExitNotExpression(c *NotExpressionContext)
 
 	// ExitPrimary is called when exiting the primary production.
 	ExitPrimary(c *PrimaryContext)

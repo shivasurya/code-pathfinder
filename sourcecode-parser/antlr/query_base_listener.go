@@ -69,12 +69,6 @@ func (s *BaseQueryListener) EnterAndExpression(ctx *AndExpressionContext) {}
 // ExitAndExpression is called when production andExpression is exited.
 func (s *BaseQueryListener) ExitAndExpression(ctx *AndExpressionContext) {}
 
-// EnterNotExpression is called when production notExpression is entered.
-func (s *BaseQueryListener) EnterNotExpression(ctx *NotExpressionContext) {}
-
-// ExitNotExpression is called when production notExpression is exited.
-func (s *BaseQueryListener) ExitNotExpression(ctx *NotExpressionContext) {}
-
 // EnterPrimary is called when production primary is entered.
 func (s *BaseQueryListener) EnterPrimary(ctx *PrimaryContext) {}
 
