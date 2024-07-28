@@ -65,7 +65,15 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 	entities := QueryEntities(graph, parsedQuery)
 	if output == "json" {
 		// convert struct to query_results
-		queryResults, err := json.Marshal(entities)
+		results := []map[string]interface{}{}
+		for _, entity := range entities {
+			result := make(map[string]interface{})
+			result["file"] = entity.File
+			result["line"] = entity.LineNumber
+			result["code"] = entity.CodeSnippet
+			results = append(results, result)
+		}
+		queryResults, err := json.Marshal(results)
 		if err != nil {
 			return "", fmt.Errorf("error processing query results: %w", err)
 		}
