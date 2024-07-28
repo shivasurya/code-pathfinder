@@ -24,10 +24,10 @@ func TestProcessQuery(t *testing.T) {
 func TestExecuteProject(t *testing.T) {
 	// get project from command line
 	project := "../test-src/"
-	query := "FIND variable_declaration WHERE visibility = 'private'"
+	query := "FIND method_declaration as md WHERE md.getName() = \"private\""
 	output := "json"
 
-	result, err := executeProject(project, query, output, false)
+	result, err := executeCLIQuery(project, query, output, false)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}

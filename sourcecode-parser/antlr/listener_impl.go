@@ -1,8 +1,9 @@
 package parser
 
 import (
-	"github.com/antlr4-go/antlr/v4"
 	"strings"
+
+	"github.com/antlr4-go/antlr/v4"
 )
 
 type Query struct {
@@ -27,8 +28,8 @@ func NewCustomQueryListener() *CustomQueryListener {
 	}
 }
 
+//nolint:all
 func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
-	// get select list
 	for i := 0; i < ctx.GetChildCount(); i++ {
 		child := ctx.GetChild(i).(antlr.ParseTree)
 		if child, ok := child.(ISelect_itemContext); ok {
@@ -51,7 +52,7 @@ func (l *CustomQueryListener) ExitOrExpression(ctx *OrExpressionContext) {
 	if ctx.GetChildCount() > 1 {
 		var result strings.Builder
 		for i := 0; i < ctx.GetChildCount(); i++ {
-			child := ctx.GetChild(i).(antlr.ParseTree)
+			child := ctx.GetChild(i).(antlr.ParseTree) //nolint:all
 			if child.GetText() == "||" {
 				result.WriteString(" || ")
 			} else {
@@ -67,7 +68,7 @@ func (l *CustomQueryListener) ExitAndExpression(ctx *AndExpressionContext) {
 	if ctx.GetChildCount() > 1 {
 		var result strings.Builder
 		for i := 0; i < ctx.GetChildCount(); i++ {
-			child := ctx.GetChild(i).(antlr.ParseTree)
+			child := ctx.GetChild(i).(antlr.ParseTree) //nolint:all
 			if child.GetText() == "&&" {
 				result.WriteString(" && ")
 			} else {

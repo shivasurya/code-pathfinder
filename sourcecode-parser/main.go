@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"os"
 	"strconv"
 	"strings"
+
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 )
 
-// Version is the current version of the application
-const Version = "0.0.22"
-const GitCommit = "HEAD"
+// Version is the current version of the application.
+const (
+	Version   = "0.0.22"
+	GitCommit = "HEAD"
+)
 
 func main() {
 	// accept command line param optional path to source code
@@ -34,13 +37,11 @@ func main() {
 	result, err := executeCLIQuery(*project, *query, *output, *stdin)
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
 	}
 	if *outputFile != "" {
 		file, err := os.Create(*outputFile)
 		if err != nil {
 			fmt.Println("Error creating output file: ", err)
-			os.Exit(1)
 		}
 		defer func(file *os.File) {
 			err := file.Close()
@@ -52,11 +53,9 @@ func main() {
 		_, err = file.WriteString(result)
 		if err != nil {
 			fmt.Println("Error writing output file: ", err)
-			os.Exit(1)
 		}
 	} else {
 		fmt.Println(result)
-		os.Exit(0)
 	}
 }
 
@@ -71,18 +70,17 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 			return "", fmt.Errorf("error processing query results: %w", err)
 		}
 		return string(queryResults), nil
-	} else {
-		result := ""
-		for _, entity := range entities {
-			// add blockquotes to string
-			result += entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
-			result += "------------\n"
-			result += "> " + entity.CodeSnippet + "\n"
-			result += "------------"
-			result += "\n"
-		}
-		return result, nil
 	}
+	result := ""
+	for _, entity := range entities {
+		// add blockquotes to string
+		result += entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
+		result += "------------\n"
+		result += "> " + entity.CodeSnippet + "\n"
+		result += "------------"
+		result += "\n"
+	}
+	return result, nil
 }
 
 func InitializeProject(project string) *CodeGraph {
@@ -126,7 +124,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-//func parseQueryWithExpr(inputQuery string) {
+// func parseQueryWithExpr(inputQuery string) {
 //
 //	// string replace "md." with ""
 //	expression = strings.Replace(expression, "md.", "", -1)
