@@ -207,8 +207,9 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 
 	for _, node := range graph.Nodes {
 		for _, entity := range query.SelectList {
-			ctx := GraphNodeContext{Node: node}
-			fmt.Println(entity)
+			if entity.Entity == node.Type {
+				result = append(result, node)
+			}
 		}
 	}
 	return result

@@ -12,7 +12,7 @@ import (
 )
 
 // Version is the current version of the application
-const Version = "0.0.16"
+const Version = "0.0.22"
 const GitCommit = "HEAD"
 
 func main() {
@@ -75,10 +75,11 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 		result := ""
 		for _, entity := range entities {
 			// add blockquotes to string
-			result := entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
+			result += entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
 			result += "------------\n"
 			result += "> " + entity.CodeSnippet + "\n"
 			result += "------------"
+			result += "\n"
 		}
 		return result, nil
 	}

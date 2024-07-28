@@ -1,20 +1,24 @@
 package parser
 
 import (
-	"fmt"
 	"github.com/antlr4-go/antlr/v4"
 	"strings"
 )
 
 type Query struct {
-	SelectList []string
+	SelectList []SelectList
 	Expression string
 }
 
 type CustomQueryListener struct {
 	BaseQueryListener
 	expression strings.Builder
-	selectList []string
+	selectList []SelectList
+}
+
+type SelectList struct {
+	Entity string
+	Alias  string
 }
 
 func NewCustomQueryListener() *CustomQueryListener {
@@ -27,8 +31,11 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 	// get select list
 	for i := 0; i < ctx.GetChildCount(); i++ {
 		child := ctx.GetChild(i).(antlr.ParseTree)
-		if _, ok := child.(ISelect_itemContext); ok {
-			l.selectList = append(l.selectList, child.GetText())
+		if child, ok := child.(ISelect_itemContext); ok {
+			l.selectList = append(l.selectList, SelectList{
+				Entity: child.Entity().GetText(),
+				Alias:  child.Alias().GetText(),
+			})
 		}
 	}
 }
@@ -80,8 +87,6 @@ func ParseQuery(inputQuery string) Query {
 
 	listener := NewCustomQueryListener()
 	antlr.ParseTreeWalkerDefault.Walk(listener, p.Query())
-
-	fmt.Println(listener.selectList)
 
 	return Query{SelectList: listener.selectList, Expression: listener.expression.String()}
 }
