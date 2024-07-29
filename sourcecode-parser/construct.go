@@ -508,7 +508,10 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 func getFiles(directory string) ([]string, error) {
 	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, _ error) error {
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if !info.IsDir() {
 			// append only java files
 			if filepath.Ext(path) == ".java" {
@@ -541,17 +544,20 @@ func Initialize(directory string) *CodeGraph {
 	files, err := getFiles(directory)
 	if err != nil {
 		//nolint:all
-		log.Fatal(err)
+		log.Println("Directory not found:", err)
+		return codeGraph
 	}
 	for _, file := range files {
 		sourceCode, err := readFile(file)
 		if err != nil {
-			log.Fatal(err)
+			log.Println("File not found:", err)
+			continue
 		}
 		// Parse the source code
 		tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 		if err != nil {
-			log.Fatal(err)
+			log.Println("Error parsing file:", err)
+			continue
 		}
 		//nolint:all
 		defer tree.Close()

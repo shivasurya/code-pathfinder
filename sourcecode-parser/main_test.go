@@ -21,7 +21,7 @@ func TestProcessQuery(t *testing.T) {
 	}
 }
 
-func TestExecuteProject(t *testing.T) {
+func TestExecuteCLIQuery(t *testing.T) {
 	// get project from command line
 	project := "../test-src/"
 	query := "FIND method_declaration AS md WHERE md.getName() == \"onCreate\""
@@ -36,5 +36,59 @@ func TestExecuteProject(t *testing.T) {
 	// This will depend on the specifics of your executeProject function.
 	if result == "" {
 		t.Errorf("Expected result to be non-empty")
+	}
+}
+
+func TestInitializeProject(t *testing.T) {
+	tests := []struct {
+		name    string
+		project string
+		want    *CodeGraph
+	}{
+		{
+			name:    "Empty project",
+			project: "",
+			want:    NewCodeGraph(),
+		},
+		{
+			name:    "Valid project",
+			project: "../test-src/",
+			want:    Initialize("../test-src/"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := InitializeProject(tt.project)
+			if got == nil {
+				t.Errorf("InitializeProject() returned nil")
+			}
+			if tt.project == "" && len(got.Nodes) != 0 {
+				t.Errorf("InitializeProject() with empty project should return empty graph")
+			}
+			if tt.project != "" && len(got.Nodes) == 0 {
+				t.Errorf("InitializeProject() with valid project should return non-empty graph")
+			}
+		})
+	}
+}
+
+func TestInitializeProjectWithInvalidPath(t *testing.T) {
+	invalidProject := "/path/to/nonexistent/project"
+	got := InitializeProject(invalidProject)
+	if got == nil || got.Nodes == nil {
+		t.Errorf("InitializeProject() with invalid path should return empty graph, not nil")
+	} else if len(got.Nodes) != 0 {
+		t.Errorf("InitializeProject() with invalid path should return empty graph")
+	}
+}
+
+func TestInitializeProjectConsistency(t *testing.T) {
+	project := "../test-src/"
+	graph1 := InitializeProject(project)
+	graph2 := InitializeProject(project)
+
+	if len(graph1.Nodes) != len(graph2.Nodes) {
+		t.Errorf("InitializeProject() should return consistent results for the same project")
 	}
 }
