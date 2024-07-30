@@ -3,6 +3,9 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/expr-lang/expr"
 
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 )
@@ -66,141 +69,164 @@ func AnalyzeSourceSinkPatterns(graph *CodeGraph, sourceMethodName, sinkMethodNam
 	return Result{IsConnected: isConnected, SourceMethod: sourceNode.CodeSnippet, SinkMethod: sinkNode.CodeSnippet, SourceLine: sourceNode.LineNumber, SinkLine: sinkNode.LineNumber}
 }
 
-type GraphNodeContext struct {
+type Env struct {
 	Node *GraphNode
 }
 
-// GetValue returns the value of a field in a GraphNode based on the key.
-func (gnc *GraphNodeContext) GetValue(key, val string) string {
-	switch key {
-	case "visibility":
-		return gnc.Node.Modifier
-	case "annotation":
-		for _, annotation := range gnc.Node.Annotation {
-			if annotation == val {
-				return annotation
-			}
+func (env *Env) GetVisibility() string {
+	return env.Node.Modifier
+}
+
+func (env *Env) GetAnnotation(annotationVal string) string {
+	for _, annotation := range env.Node.Annotation {
+		if annotation == annotationVal {
+			return annotation
 		}
-		return ""
-	case "returntype":
-		return gnc.Node.ReturnType
-	case "name":
-		return gnc.Node.Name
-	case "argumentype":
-		// check value in MethodArgumentsType array
-		for i, arg := range gnc.Node.MethodArgumentsType {
-			if arg == val {
-				return gnc.Node.MethodArgumentsType[i]
-			}
-		}
-		return ""
-	case "argumentname":
-		// check value in MethodArgumentsValue array
-		for i, arg := range gnc.Node.MethodArgumentsValue {
-			if arg == val {
-				return gnc.Node.MethodArgumentsValue[i]
-			}
-		}
-		return ""
-	case "superclass":
-		return gnc.Node.SuperClass
-	case "interface":
-		// check value in Interface array
-		for i, iface := range gnc.Node.Interface {
-			if iface == val {
-				return gnc.Node.Interface[i]
-			}
-		}
-		return ""
-	case "scope":
-		return gnc.Node.Scope
-	case "variablevalue":
-		return gnc.Node.VariableValue
-	case "variabledatatype":
-		return gnc.Node.DataType
-	case "throwstype":
-		for i, arg := range gnc.Node.ThrowsExceptions {
-			if arg == val {
-				return gnc.Node.ThrowsExceptions[i]
-			}
-		}
-		return ""
-	case "has_access":
-		if gnc.Node.hasAccess {
-			return "true"
-		}
-		return "false"
-	case "is_java_source":
-		if gnc.Node.isJavaSourceFile {
-			return "true"
-		}
-		return "false"
-	case "comment_author":
-		if gnc.Node.JavaDoc != nil {
-			if gnc.Node.JavaDoc.Author != "" {
-				return gnc.Node.JavaDoc.Author
-			}
-		}
-		return ""
-	case "comment_see":
-		if gnc.Node.JavaDoc != nil {
-			for _, docTag := range gnc.Node.JavaDoc.Tags {
-				if docTag.TagName == "see" && docTag.Text != "" {
-					if docTag.Text == val {
-						return docTag.Text
-					}
-				}
-			}
-		}
-		return ""
-	case "comment_version":
-		if gnc.Node.JavaDoc != nil {
-			for _, docTag := range gnc.Node.JavaDoc.Tags {
-				if docTag.TagName == "version" && docTag.Text != "" {
-					if docTag.Text == val {
-						return docTag.Text
-					}
-				}
-			}
-		}
-		return ""
-	case "comment_since":
-		if gnc.Node.JavaDoc != nil {
-			for _, docTag := range gnc.Node.JavaDoc.Tags {
-				if docTag.TagName == "since" && docTag.Text != "" {
-					if docTag.Text == val {
-						return docTag.Text
-					}
-				}
-			}
-		}
-		return ""
-	case "comment_param":
-		if gnc.Node.JavaDoc != nil {
-			for _, docTag := range gnc.Node.JavaDoc.Tags {
-				if docTag.TagName == "param" && docTag.Text != "" {
-					if docTag.Text == val {
-						return docTag.Text
-					}
-				}
-			}
-		}
-		return ""
-	case "comment_throws":
-		if gnc.Node.JavaDoc != nil {
-			for _, docTag := range gnc.Node.JavaDoc.Tags {
-				if docTag.TagName == "throws" && docTag.Text != "" {
-					if docTag.Text == val {
-						return docTag.Text
-					}
-				}
-			}
-		}
-		return ""
-	default:
-		fmt.Printf("Unsupported attribute key: %s\n", key)
-		return ""
 	}
+	return ""
+}
+
+func (env *Env) GetReturnType() string {
+	return env.Node.ReturnType
+}
+
+func (env *Env) GetName() string {
+	return env.Node.Name
+}
+
+func (env *Env) GetArgumentType(argVal string) string {
+	for i, arg := range env.Node.MethodArgumentsType {
+		if arg == argVal {
+			return env.Node.MethodArgumentsType[i]
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetArgumentName(argVal string) string {
+	for i, arg := range env.Node.MethodArgumentsValue {
+		if arg == argVal {
+			return env.Node.MethodArgumentsValue[i]
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetSuperClass() string {
+	return env.Node.SuperClass
+}
+
+func (env *Env) GetInterface(interfaceVal string) string {
+	for i, iface := range env.Node.Interface {
+		if iface == interfaceVal {
+			return env.Node.Interface[i]
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetScope() string {
+	return env.Node.Scope
+}
+
+func (env *Env) GetVariableValue() string {
+	return env.Node.VariableValue
+}
+
+func (env *Env) GetVariableDataType() string {
+	return env.Node.DataType
+}
+
+func (env *Env) GetThrowsType(throwsVal string) string {
+	for i, arg := range env.Node.ThrowsExceptions {
+		if arg == throwsVal {
+			return env.Node.ThrowsExceptions[i]
+		}
+	}
+	return ""
+}
+
+func (env *Env) HasAccess() bool {
+	return env.Node.hasAccess
+}
+
+func (env *Env) IsJavaSourceFile() bool {
+	return env.Node.isJavaSourceFile
+}
+
+func (env *Env) GetCommentAuthor() string {
+	if env.Node.JavaDoc != nil {
+		if env.Node.JavaDoc.Author != "" {
+			return env.Node.JavaDoc.Author
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentSee() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "see" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentVersion() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "version" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentSince() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "since" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentParam() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "param" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentThrows() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "throws" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
+}
+
+func (env *Env) GetCommentReturn() string {
+	if env.Node.JavaDoc != nil {
+		for _, docTag := range env.Node.JavaDoc.Tags {
+			if docTag.TagName == "return" && docTag.Text != "" {
+				return docTag.Text
+			}
+		}
+	}
+	return ""
 }
 
 func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
@@ -208,10 +234,33 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 
 	for _, node := range graph.Nodes {
 		for _, entity := range query.SelectList {
-			if entity.Entity == node.Type {
+			if entity.Entity == node.Type && FilterEntities(node, query) {
 				result = append(result, node)
 			}
 		}
 	}
 	return result
+}
+
+func FilterEntities(node *GraphNode, query parser.Query) bool {
+	expression := query.Expression
+	if expression == "" {
+		return true
+	}
+	env := &Env{Node: node}
+	expression = strings.ReplaceAll(expression, "md.", "")
+	program, err := expr.Compile(expression, expr.Env(env))
+	if err != nil {
+		fmt.Println("Error compiling expression: ", err)
+		return false
+	}
+	output, err := expr.Run(program, env)
+	if err != nil {
+		fmt.Println("Error evaluating expression: ", err)
+		return false
+	}
+	if output.(bool) {
+		return true
+	}
+	return false
 }

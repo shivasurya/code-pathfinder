@@ -7,7 +7,7 @@ import (
 func TestProcessQuery(t *testing.T) {
 	graph := NewCodeGraph()
 	output := "json"
-	input := "FIND method_declaration AS md WHERE md.getVisibility() == \"public\""
+	input := "FIND method_declaration AS md WHERE md.GetVisibility() == \"public\""
 
 	result, err := processQuery(input, graph, output)
 	if err != nil {
@@ -24,7 +24,7 @@ func TestProcessQuery(t *testing.T) {
 func TestExecuteCLIQuery(t *testing.T) {
 	// get project from command line
 	project := "../test-src/"
-	query := "FIND method_declaration AS md WHERE md.getName() == \"onCreate\""
+	query := "FIND method_declaration AS md WHERE md.GetName() == \"onCreate\""
 	output := "json"
 
 	result, err := executeCLIQuery(project, query, output, false)

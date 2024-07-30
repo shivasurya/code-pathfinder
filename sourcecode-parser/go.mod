@@ -8,4 +8,7 @@ require github.com/antlr4-go/antlr/v4 v4.13.1
 
 require github.com/stretchr/testify v1.9.0 // indirect
 
-require golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+require (
+	github.com/expr-lang/expr v1.16.9 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+)
