@@ -200,6 +200,30 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 		}
 	}
 	env := map[string]interface{}{
+		"isJavaSourceFile": func() bool {
+			return proxyenv.IsJavaSourceFile()
+		},
+		"getCommentAuthor": func() string {
+			return proxyenv.GetCommentAuthor()
+		},
+		"getCommentSee": func() string {
+			return proxyenv.GetCommentSee()
+		},
+		"getCommentVersion": func() string {
+			return proxyenv.GetCommentVersion()
+		},
+		"getCommentSince": func() string {
+			return proxyenv.GetCommentSince()
+		},
+		"getCommentParam": func() string {
+			return proxyenv.GetCommentParam()
+		},
+		"getCommentThrows": func() string {
+			return proxyenv.GetCommentThrows()
+		},
+		"getCommentReturn": func() string {
+			return proxyenv.GetCommentReturn()
+		},
 		methodDeclaration: map[string]interface{}{
 			"getVisibility": func() string {
 				return proxyenv.GetVisibility()
@@ -222,8 +246,8 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getInterface": func(interfaceVal string) string {
 				return proxyenv.GetInterface(interfaceVal)
 			},
-			"getScope": func() string {
-				return proxyenv.GetScope()
+			"getThrowsType": func(throwsVal string) string {
+				return proxyenv.GetThrowsType(throwsVal)
 			},
 		},
 		classDeclaration: map[string]interface{}{
@@ -233,21 +257,39 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getName": func() string {
 				return proxyenv.GetName()
 			},
+			"getAnnotation": func(annotationVal string) string {
+				return proxyenv.GetAnnotation(annotationVal)
+			},
+			"getVisibility": func() string {
+				return proxyenv.GetVisibility()
+			},
+			"getInterface": func(interfaceVal string) string {
+				return proxyenv.GetInterface(interfaceVal)
+			},
 		},
 		methodInvocation: map[string]interface{}{
-			"getThrowsType": func(throwsVal string) string {
-				return proxyenv.GetThrowsType(throwsVal)
+			"getArgumentName": func(argVal string) string {
+				return proxyenv.GetArgumentName(argVal)
 			},
 			"getName": func() string {
 				return proxyenv.GetName()
 			},
 		},
 		variableDeclaration: map[string]interface{}{
+			"getName": func() string {
+				return proxyenv.GetName()
+			},
+			"getVisibility": func() string {
+				return proxyenv.GetVisibility()
+			},
 			"getVariableValue": func() string {
 				return proxyenv.GetVariableValue()
 			},
 			"getVariableDataType": func() string {
 				return proxyenv.GetVariableDataType()
+			},
+			"getScope": func() string {
+				return proxyenv.GetScope()
 			},
 		},
 	}
