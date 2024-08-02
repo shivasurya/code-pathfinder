@@ -581,9 +581,6 @@ func Initialize(directory string) *CodeGraph {
 			//nolint:all
 			defer tree.Close()
 
-			// TODO: Merge the tree into a single root node
-			// TODO: normalize the class name without duplication of class, method names
-
 			rootNode := tree.RootNode()
 			localGraph := NewCodeGraph()
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
@@ -618,7 +615,7 @@ func Initialize(directory string) *CodeGraph {
 				if !ok {
 					return
 				}
-				workerID := int(status[12] - '0') // Extract worker ID from the status message
+				workerID := int(status[12] - '0')
 				statusLines[workerID-1] = status
 			case _, ok := <-progressChan:
 				if !ok {
@@ -652,18 +649,10 @@ func Initialize(directory string) *CodeGraph {
 		}
 	}
 
-	// Clear the line after processing
-	fmt.Print("\rProcessing complete.                          \n")
-
-	//nolint:all
-	// log.Println("Graph built successfully:", codeGraph)
-	// record end time
 	end := time.Now()
 	elapsed := end.Sub(start)
 	log.Println("Elapsed time: ", elapsed)
 	log.Println("Graph built successfully")
-	//nolint:all
-	// go StartServer(codeGraph)
-	// select {}
+
 	return codeGraph
 }
