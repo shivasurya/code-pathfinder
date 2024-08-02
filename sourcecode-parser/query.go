@@ -15,13 +15,8 @@ func (env *Env) GetVisibility() string {
 	return env.Node.Modifier
 }
 
-func (env *Env) GetAnnotation(annotationVal string) string {
-	for _, annotation := range env.Node.Annotation {
-		if annotation == annotationVal {
-			return annotation
-		}
-	}
-	return ""
+func (env *Env) GetAnnotations() []string {
+	return env.Node.Annotation
 }
 
 func (env *Env) GetReturnType() string {
@@ -32,35 +27,20 @@ func (env *Env) GetName() string {
 	return env.Node.Name
 }
 
-func (env *Env) GetArgumentType(argVal string) string {
-	for i, arg := range env.Node.MethodArgumentsType {
-		if arg == argVal {
-			return env.Node.MethodArgumentsType[i]
-		}
-	}
-	return ""
+func (env *Env) GetArgumentTypes() []string {
+	return env.Node.MethodArgumentsType
 }
 
-func (env *Env) GetArgumentName(argVal string) string {
-	for i, arg := range env.Node.MethodArgumentsValue {
-		if arg == argVal {
-			return env.Node.MethodArgumentsValue[i]
-		}
-	}
-	return ""
+func (env *Env) GetArgumentNames() []string {
+	return env.Node.MethodArgumentsValue
 }
 
 func (env *Env) GetSuperClass() string {
 	return env.Node.SuperClass
 }
 
-func (env *Env) GetInterface(interfaceVal string) string {
-	for i, iface := range env.Node.Interface {
-		if iface == interfaceVal {
-			return env.Node.Interface[i]
-		}
-	}
-	return ""
+func (env *Env) GetInterfaces() []string {
+	return env.Node.Interface
 }
 
 func (env *Env) GetScope() string {
@@ -75,13 +55,8 @@ func (env *Env) GetVariableDataType() string {
 	return env.Node.DataType
 }
 
-func (env *Env) GetThrowsType(throwsVal string) string {
-	for i, arg := range env.Node.ThrowsExceptions {
-		if arg == throwsVal {
-			return env.Node.ThrowsExceptions[i]
-		}
-	}
-	return ""
+func (env *Env) GetThrowsTypes() []string {
+	return env.Node.ThrowsExceptions
 }
 
 func (env *Env) HasAccess() bool {
@@ -228,8 +203,8 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getVisibility": func() string {
 				return proxyenv.GetVisibility()
 			},
-			"getAnnotation": func(annotationVal string) string {
-				return proxyenv.GetAnnotation(annotationVal)
+			"getAnnotation": func() []string {
+				return proxyenv.GetAnnotations()
 			},
 			"getReturnType": func() string {
 				return proxyenv.GetReturnType()
@@ -237,17 +212,17 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getName": func() string {
 				return proxyenv.GetName()
 			},
-			"getArgumentType": func(argVal string) string {
-				return proxyenv.GetArgumentType(argVal)
+			"getArgumentType": func() []string {
+				return proxyenv.GetArgumentTypes()
 			},
-			"getArgumentName": func(argVal string) string {
-				return proxyenv.GetArgumentName(argVal)
+			"getArgumentName": func() []string {
+				return proxyenv.GetArgumentNames()
 			},
-			"getInterface": func(interfaceVal string) string {
-				return proxyenv.GetInterface(interfaceVal)
+			"getInterface": func() []string {
+				return proxyenv.GetInterfaces()
 			},
-			"getThrowsType": func(throwsVal string) string {
-				return proxyenv.GetThrowsType(throwsVal)
+			"getThrowsType": func() []string {
+				return proxyenv.GetThrowsTypes()
 			},
 		},
 		classDeclaration: map[string]interface{}{
@@ -257,19 +232,19 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getName": func() string {
 				return proxyenv.GetName()
 			},
-			"getAnnotation": func(annotationVal string) string {
-				return proxyenv.GetAnnotation(annotationVal)
+			"getAnnotation": func() []string {
+				return proxyenv.GetAnnotations()
 			},
 			"getVisibility": func() string {
 				return proxyenv.GetVisibility()
 			},
-			"getInterface": func(interfaceVal string) string {
-				return proxyenv.GetInterface(interfaceVal)
+			"getInterface": func() []string {
+				return proxyenv.GetInterfaces()
 			},
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": func(argVal string) string {
-				return proxyenv.GetArgumentName(argVal)
+			"getArgumentName": func() []string {
+				return proxyenv.GetArgumentNames()
 			},
 			"getName": func() string {
 				return proxyenv.GetName()
