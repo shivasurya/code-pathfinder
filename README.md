@@ -9,6 +9,7 @@ Code Pathfinder attempts to be query language for structural search on source co
 [![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/shivasurya/code-pathfinder/sourcecode-parser)](https://goreportcard.com/report/github.com/shivasurya/code-pathfinder/sourcecode-parser)
 [![MIT License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
 [![Discord](https://img.shields.io/discord/1259511338183557120?logo=discord&label=discord&utm_source=github)](https://discord.gg/xmPdJC6WPX)
+[![codecov](https://codecov.io/gh/shivasurya/code-pathfinder/graph/badge.svg?token=VYQLI49TF4)](https://codecov.io/gh/shivasurya/code-pathfinder)
 </div>
 
 ## Installation
