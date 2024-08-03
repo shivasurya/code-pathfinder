@@ -156,7 +156,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 }
 
 func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{} {
-	proxyenv := &Env{Node: node}
+	proxyenv := Env{Node: node}
 	methodDeclaration := "method_declaration"
 	classDeclaration := "class_declaration"
 	methodInvocation := "method_invocation"
@@ -175,97 +175,41 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 		}
 	}
 	env := map[string]interface{}{
-		"isJavaSourceFile": func() bool {
-			return proxyenv.IsJavaSourceFile()
-		},
-		"getCommentAuthor": func() string {
-			return proxyenv.GetCommentAuthor()
-		},
-		"getCommentSee": func() string {
-			return proxyenv.GetCommentSee()
-		},
-		"getCommentVersion": func() string {
-			return proxyenv.GetCommentVersion()
-		},
-		"getCommentSince": func() string {
-			return proxyenv.GetCommentSince()
-		},
-		"getCommentParam": func() string {
-			return proxyenv.GetCommentParam()
-		},
-		"getCommentThrows": func() string {
-			return proxyenv.GetCommentThrows()
-		},
-		"getCommentReturn": func() string {
-			return proxyenv.GetCommentReturn()
-		},
+		"isJavaSourceFile":  proxyenv.IsJavaSourceFile(),
+		"getCommentAuthor":  proxyenv.GetCommentAuthor(),
+		"getCommentSee":     proxyenv.GetCommentSee(),
+		"getCommentVersion": proxyenv.GetCommentVersion(),
+		"getCommentSince":   proxyenv.GetCommentSince(),
+		"getCommentParam":   proxyenv.GetCommentParam(),
+		"getCommentThrows":  proxyenv.GetCommentThrows(),
+		"getCommentReturn":  proxyenv.GetCommentReturn(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility": func() string {
-				return proxyenv.GetVisibility()
-			},
-			"getAnnotation": func() []string {
-				return proxyenv.GetAnnotations()
-			},
-			"getReturnType": func() string {
-				return proxyenv.GetReturnType()
-			},
-			"getName": func() string {
-				return proxyenv.GetName()
-			},
-			"getArgumentType": func() []string {
-				return proxyenv.GetArgumentTypes()
-			},
-			"getArgumentName": func() []string {
-				return proxyenv.GetArgumentNames()
-			},
-			"getInterface": func() []string {
-				return proxyenv.GetInterfaces()
-			},
-			"getThrowsType": func() []string {
-				return proxyenv.GetThrowsTypes()
-			},
+			"getVisibility":   proxyenv.GetVisibility(),
+			"getAnnotation":   proxyenv.GetAnnotations(),
+			"getReturnType":   proxyenv.GetReturnType,
+			"getName":         proxyenv.GetName,
+			"getArgumentType": proxyenv.GetArgumentTypes(),
+			"getArgumentName": proxyenv.GetArgumentNames(),
+			"getInterface":    proxyenv.GetInterfaces(),
+			"getThrowsType":   proxyenv.GetThrowsTypes(),
 		},
 		classDeclaration: map[string]interface{}{
-			"getSuperClass": func() string {
-				return proxyenv.GetSuperClass()
-			},
-			"getName": func() string {
-				return proxyenv.GetName()
-			},
-			"getAnnotation": func() []string {
-				return proxyenv.GetAnnotations()
-			},
-			"getVisibility": func() string {
-				return proxyenv.GetVisibility()
-			},
-			"getInterface": func() []string {
-				return proxyenv.GetInterfaces()
-			},
+			"getSuperClass": proxyenv.GetSuperClass,
+			"getName":       proxyenv.GetName,
+			"getAnnotation": proxyenv.GetAnnotations(),
+			"getVisibility": proxyenv.GetVisibility,
+			"getInterface":  proxyenv.GetInterfaces(),
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": func() []string {
-				return proxyenv.GetArgumentNames()
-			},
-			"getName": func() string {
-				return proxyenv.GetName()
-			},
+			"getArgumentName": proxyenv.GetArgumentNames(),
+			"getName":         proxyenv.GetName,
 		},
 		variableDeclaration: map[string]interface{}{
-			"getName": func() string {
-				return proxyenv.GetName()
-			},
-			"getVisibility": func() string {
-				return proxyenv.GetVisibility()
-			},
-			"getVariableValue": func() string {
-				return proxyenv.GetVariableValue()
-			},
-			"getVariableDataType": func() string {
-				return proxyenv.GetVariableDataType()
-			},
-			"getScope": func() string {
-				return proxyenv.GetScope()
-			},
+			"getName":             proxyenv.GetName,
+			"getVisibility":       proxyenv.GetVisibility,
+			"getVariableValue":    proxyenv.GetVariableValue,
+			"getVariableDataType": proxyenv.GetVariableDataType,
+			"getScope":            proxyenv.GetScope(),
 		},
 	}
 	return env

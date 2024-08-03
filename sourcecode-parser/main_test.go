@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -24,18 +26,32 @@ func TestProcessQuery(t *testing.T) {
 func TestExecuteCLIQuery(t *testing.T) {
 	// get project from command line
 	project := "../test-src/"
-	query := "FIND method_declaration AS md WHERE md.GetName() == \"onCreate\""
+	queries := []string{
+		`FIND method_declaration AS md WHERE md.getName() == "onCreate"`,
+		`FIND variable_declaration AS vd WHERE vd.getVisibility() == "private"`,
+	}
 	output := "json"
 
-	result, err := executeCLIQuery(project, query, output, false)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+	for _, query := range queries {
+		fmt.Println(query)
+		result, err := executeCLIQuery(project, query, output, false)
+		if err != nil {
+			t.Errorf("Expected no error for query %s, got %v", query, err)
+		}
+		var resultMap []map[string]interface{}
+		err = json.Unmarshal([]byte(result), &resultMap)
+		if len(resultMap) == 0 {
+			t.Errorf("Expected result to be non-empty for query %s", query)
+		}
+		if err != nil {
+			t.Errorf("Expected no error for query %s, got %v", query, err)
+		}
 
-	// Here you can add assertions based on what you expect the result to be.
-	// This will depend on the specifics of your executeProject function.
-	if result == "" {
-		t.Errorf("Expected result to be non-empty")
+		// Here you can add assertions based on what you expect the result to be.
+		// This will depend on the specifics of your executeProject function.
+		if result == "" {
+			t.Errorf("Expected result to be non-empty for query %s", query)
+		}
 	}
 }
 
