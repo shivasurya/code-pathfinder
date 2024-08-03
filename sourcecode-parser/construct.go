@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	"github.com/smacker/go-tree-sitter/java"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/java"
 	//nolint:all
 )
 
@@ -99,6 +101,7 @@ func isJavaSourceFile(filename string) bool {
 	return filepath.Ext(filename) == ".java"
 }
 
+//nolint:all
 func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	if node == nil {
 		return false
@@ -395,7 +398,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		if node.Type() == "local_variable_declaration" {
 			scope = "local"
-			hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
+			//nolint:all
+			// hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
 		} else {
 			scope = "field"
 		}
@@ -508,7 +512,10 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 func getFiles(directory string) ([]string, error) {
 	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, _ error) error {
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if !info.IsDir() {
 			// append only java files
 			if filepath.Ext(path) == ".java" {
@@ -529,45 +536,123 @@ func readFile(path string) ([]byte, error) {
 }
 
 func Initialize(directory string) *CodeGraph {
-	// Initialize the parser
-	parser := sitter.NewParser()
-	defer parser.Close()
-
-	// Set the language (Java in this case)
-	parser.SetLanguage(java.GetLanguage())
-
 	codeGraph := NewCodeGraph()
+	// record start time
+	start := time.Now()
 
 	files, err := getFiles(directory)
 	if err != nil {
 		//nolint:all
-		log.Fatal(err)
+		log.Println("Directory not found:", err)
+		return codeGraph
 	}
+
+	totalFiles := len(files)
+	numWorkers := 5 // Number of concurrent workers
+	fileChan := make(chan string, totalFiles)
+	resultChan := make(chan *CodeGraph, totalFiles)
+	statusChan := make(chan string, numWorkers)
+	progressChan := make(chan int, totalFiles)
+	var wg sync.WaitGroup
+
+	// Worker function
+	worker := func(workerID int) {
+		// Initialize the parser for each worker
+		parser := sitter.NewParser()
+		defer parser.Close()
+
+		// Set the language (Java in this case)
+		parser.SetLanguage(java.GetLanguage())
+
+		for file := range fileChan {
+			fileName := filepath.Base(file)
+			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
+			sourceCode, err := readFile(file)
+			if err != nil {
+				log.Println("File not found:", err)
+				continue
+			}
+			// Parse the source code
+			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
+			if err != nil {
+				log.Println("Error parsing file:", err)
+				continue
+			}
+			//nolint:all
+			defer tree.Close()
+
+			rootNode := tree.RootNode()
+			localGraph := NewCodeGraph()
+			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
+			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file)
+			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
+
+			resultChan <- localGraph
+			progressChan <- 1
+		}
+		wg.Done()
+	}
+
+	// Start workers
+	wg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go worker(i + 1)
+	}
+
+	// Send files to workers
 	for _, file := range files {
-		sourceCode, err := readFile(file)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Parse the source code
-		tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
-		if err != nil {
-			log.Fatal(err)
-		}
-		//nolint:all
-		defer tree.Close()
-
-		// TODO: Merge the tree into a single root node
-		// TODO: normalize the class name without duplication of class, method names
-
-		rootNode := tree.RootNode()
-
-		buildGraphFromAST(rootNode, sourceCode, codeGraph, nil, file)
+		fileChan <- file
 	}
-	//nolint:all
-	// log.Println("Graph built successfully:", codeGraph)
+	close(fileChan)
+
+	// Status updater
+	go func() {
+		statusLines := make([]string, numWorkers)
+		progress := 0
+		for {
+			select {
+			case status, ok := <-statusChan:
+				if !ok {
+					return
+				}
+				workerID := int(status[12] - '0')
+				statusLines[workerID-1] = status
+			case _, ok := <-progressChan:
+				if !ok {
+					return
+				}
+				progress++
+			}
+			fmt.Print("\033[H\033[J") // Clear the screen
+			for _, line := range statusLines {
+				fmt.Println(line)
+			}
+			fmt.Printf("Progress: %d%%\n", (progress*100)/totalFiles)
+		}
+	}()
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(statusChan)
+		close(progressChan)
+	}()
+
+	// Collect results
+	for localGraph := range resultChan {
+		for _, node := range localGraph.Nodes {
+			codeGraph.AddNode(node)
+		}
+		for _, edge := range localGraph.Edges {
+			codeGraph.AddEdge(edge.From, edge.To)
+		}
+	}
+
+	end := time.Now()
+	elapsed := end.Sub(start)
+	log.Println("Elapsed time: ", elapsed)
 	log.Println("Graph built successfully")
-	//nolint:all
-	// go StartServer(codeGraph)
-	// select {}
+
 	return codeGraph
 }
