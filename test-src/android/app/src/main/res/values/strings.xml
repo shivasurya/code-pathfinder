@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Movies Now</string>
+    <string name="nanodegree">My NanoDegree Apps</string>
+    <string name="spotify">Spotify Streamer</string>
+    <string name="scores">Scores App</string>
+    <string name="library">Library App</string>
+    <string name="build">Build It Bigger</string>
+    <string name="xyz">XYZ Reader</string>
+    <string name="capstone">CAPSTONE:My Own App</string>
+    <string name="menu">sort</string>
+    <string name="title_activity_movie_detail">MovieDetailActivity</string>
+    <string name="share_using">Share using</string>
+    <string name="title_movie_list">Movies Now</string>
+    <string name="title_movie_detail">Movie</string>
+    <string name="badluck">Bad Luck!Network Error</string>
+    <string name="trailer">Trailer</string>
+    <string name="share">SHARE</string>
+    <string name="plot">Plot Synopsis</string>
+    <string name="review">Review</string>
+</resources>

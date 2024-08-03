@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#FF5722</color>
+    <color name="colorPrimaryDark">#E64A19</color>
+    <color name="colorAccent">#795548</color>
+    <color name="primaryText">#212121</color>
+    <color name="secondaryText">#212121</color>
+    <color name="divider">#B6B6B6</color>
+    <color name="capstone">#F44336</color>
+    <color name="xyz">#BA68C8</color>
+    <color name="build">#F50057</color>
+    <color name="library">#42A5F5</color>
+    <color name="score">#26A69A</color>
+    <color name="spotify">#00C853</color>
+    <color name="grey">#455A64</color>
+    <color name="white">#fff</color>
+    <color name="bgcolor">#e7e7e7</color>
+</resources>
