@@ -1,0 +1,18 @@
+---
+title: Changelog - Code PathFinder
+description: "Changelog - Opensource CodeQL alternative"
+---
+
+import PostHogLayout from '../../layouts/PostHogLayout.astro';
+
+<PostHogLayout>
+</PostHogLayout>
+
+## v0.0.23
+
+### **New Feature**:
+
+- Added support for variety of operators in check conditions. (such as `!=`, `==`, `>`, `<`, `in`, `like`)
+- Added support for `&&` and `\|\|` operators in check conditions.
+- Migrated all entity types to methods. (such as `getVisibility()`)
+- Introduced Alias for entity types. (such as method_declaration AS md WHERE `md.get_visibility()`)

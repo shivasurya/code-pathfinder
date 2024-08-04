@@ -10,12 +10,12 @@ orExpression    : andExpression ( '||' andExpression )* ;
 andExpression   : primary ( '&&' primary )* ;
 primary         : condition
                 | '(' expression ')' ;
-condition       : alias '.' method_chain comparator (value | method_chain | '(' value_list ')') ;
+condition       : (value | alias '.' method_chain | '[' value_list ']') comparator (value | alias '.' method_chain | '[' value_list ']') ;
 method_chain    : method_or_variable ('.' method_or_variable)* ;
 method_or_variable : method | variable ;
 method          : IDENTIFIER '(' ')' ;
 variable        : IDENTIFIER ;
-comparator      : '==' | '!=' | '<' | '>' | '<=' | '>=' | 'LIKE' | 'IN' ;
+comparator      : '==' | '!=' | '<' | '>' | '<=' | '>=' | 'LIKE' | 'in' ;
 value           : STRING | NUMBER | STRING_WITH_WILDCARD ;
 value_list      : value (',' value)* ;
 STRING          : '"' ( ~('"' | '\\') | '\\' . )* '"' ;

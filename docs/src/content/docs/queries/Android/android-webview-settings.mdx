@@ -1,6 +1,6 @@
 ---
 title: Android WebView JavaScript settings
-description: "Code PathFinder Query for finding android webview javascript settings."
+description: "Code PathFinder Query for finding Android webview javascript settings."
 ---
 import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 import { Badge } from '@astrojs/starlight/components';
@@ -21,14 +21,14 @@ result in cross-site scripting attacks.
  * @name Android WebView JavaScript settings
  * @description Enabling JavaScript execution in a WebView can result in cross-site scripting attacks.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "false" in mi.getArgumentName()
 ```
 
 ### setAllowUniversalAccessFromFileURLs Webview API
@@ -36,16 +36,16 @@ FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 't
 ```sql
 /**
  * @name Android WebView JavaScript settings
- * @description Enabling SetAllowUniversalAccessFromFileURLs leak sandbox access to file:/// URLs from any origin.
+ * @description Enabling SetAllowUniversalAccessFromFileURLs leak s&&box access to file:/// URLs from any origin.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowUniversalAccessFromFileURLs' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromFileURLs" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowFileAccessFromFileURLs Webview API
@@ -53,16 +53,16 @@ FIND method_invocation WHERE name = 'setAllowUniversalAccessFromFileURLs' AND ar
 ```sql
 /**
  * @name Android WebView JavaScript settings
- * @description Enabling setAllowFileAccessFromFileURLs leak sandbox access to file:/// URLs.
+ * @description Enabling setAllowFileAccessFromFileURLs leak s&&box access to file:/// URLs.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowFileAccessFromFileURLs' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowContentAccess Webview API
@@ -72,14 +72,14 @@ FIND method_invocation WHERE name = 'setAllowFileAccessFromFileURLs' AND argumen
  * @name Android WebView JavaScript settings
  * @description Enabling setAllowContentAccess enables content:// access from webpages.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowContentAccess' AND argumentname = 'true'
+FIND method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowFileAccess Webview API
@@ -89,14 +89,14 @@ FIND method_invocation WHERE name = 'setAllowContentAccess' AND argumentname = '
  * @name Android WebView JavaScript settings
  * @description Enabling setAllowFileAccess enables webview access to file:/// URLs.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowFileAccess' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
 ```
 
 ### addJavascriptInterface Webview API
@@ -106,12 +106,12 @@ FIND method_invocation WHERE name = 'setAllowFileAccess' AND argumentname = 'tru
  * @name Android WebView JavaScript settings
  * @description Enabling addJavascriptInterface exposes java methods to JavaScript.
  * @kind problem
- * @id java/android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-enabled
  * @problem.severity warning
  * @security-severity 8.1
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'addJavascriptInterface'
+FIND method_invocation AS mi WHERE mi.getName() == "addJavascriptInterface"
 ```

@@ -184,14 +184,13 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 		"getCommentThrows":  proxyenv.GetCommentThrows(),
 		"getCommentReturn":  proxyenv.GetCommentReturn(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility":   proxyenv.GetVisibility(),
-			"getAnnotation":   proxyenv.GetAnnotations(),
+			"getVisibility":   proxyenv.GetVisibility,
+			"getAnnotation":   proxyenv.GetAnnotations,
 			"getReturnType":   proxyenv.GetReturnType,
 			"getName":         proxyenv.GetName,
-			"getArgumentType": proxyenv.GetArgumentTypes(),
-			"getArgumentName": proxyenv.GetArgumentNames(),
-			"getInterface":    proxyenv.GetInterfaces(),
-			"getThrowsType":   proxyenv.GetThrowsTypes(),
+			"getArgumentType": proxyenv.GetArgumentTypes,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"getThrowsType":   proxyenv.GetThrowsTypes,
 		},
 		classDeclaration: map[string]interface{}{
 			"getSuperClass": proxyenv.GetSuperClass,
@@ -201,7 +200,7 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getInterface":  proxyenv.GetInterfaces(),
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": proxyenv.GetArgumentNames(),
+			"getArgumentName": proxyenv.GetArgumentNames,
 			"getName":         proxyenv.GetName,
 		},
 		variableDeclaration: map[string]interface{}{

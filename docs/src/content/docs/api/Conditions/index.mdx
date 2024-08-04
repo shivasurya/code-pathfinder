@@ -15,16 +15,20 @@ Operators are used to compare two values and return a boolean value.
 
 | Operators                 |
 |---------------------------|
-| `AND`                     |
-| `OR`                      |
+| `&&`                      |
+| `\|\|`                      |
 
 ## Check Conditions
 
-Check conditions are used to filter out entities based on their attributes.
+Check conditions are used to filter out entities based on their attributes. Code-Pathfinder has adopted `expr-lang` as its expression language.
+You can use variety of operators to compare two values.
 
 | Checks                    |
 |---------------------------|
 | `!=` - Not Equals         |
-| `=`  - Equals             |
-
+| `==` - Equals             |
+| `>`  - Greater than       |
+| `<`  - Less than          |
+| `in` - In ("uwaterloo" in ["uwaterloo", "mit", "stanford"])    |
+| `like`  - "shiva" like "shiv*"          |
 

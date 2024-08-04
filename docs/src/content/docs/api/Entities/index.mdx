@@ -8,6 +8,33 @@ import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 <PostHogLayout>
 </PostHogLayout>
 
+# Query structure
+
+The query structure is simple, easy to use and inspired by SQL. Query often start with the keyword `FIND` followed by the entity type and then the condition.
+
+```sql
+FIND entity_type WHERE condition
+```
+
+## Example
+
+```sql
+FIND method_declaration AS md WHERE "@Deprecated" in md.getAnnotation()
+```
+
+### Alias syntax
+
+The alias syntax is used to give a name to the entity. This is useful when the entity is used multiple times in the query. It's mandatory
+to use the alias to invoke the entity methods.
+
+```sql
+FIND method_declaration AS md WHERE md.<Entity method>
+```
+
+Learn more about the entity methods below in the API Index.
+
+# API Index
+
 - [Class Declaration](./class/)
 - [JavaDoc Declaration](./javadoc/)
 - [Method Declaration](./method/)
