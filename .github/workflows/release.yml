@@ -66,8 +66,8 @@ jobs:
           GOARCH: amd64
         run: |
           cd sourcecode-parser
-          for /f "tokens=*" %%i in ('git describe --tags') do set gitCommit=%%i
-          set /p projectVersion=<VERSION
+          $gitCommit = (git describe --tags).Trim()
+          $projectVersion = Get-Content VERSION
           go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-windows-amd64.exe .
 
       - name: Calculate SHA256
