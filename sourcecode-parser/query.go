@@ -190,7 +190,6 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getName":         proxyenv.GetName,
 			"getArgumentType": proxyenv.GetArgumentTypes,
 			"getArgumentName": proxyenv.GetArgumentNames,
-			"getInterface":    proxyenv.GetInterfaces,
 			"getThrowsType":   proxyenv.GetThrowsTypes,
 		},
 		classDeclaration: map[string]interface{}{
