@@ -14,8 +14,8 @@ Pathfinder supports querying for deprecated callable access in the source code. 
 
 ## Query Syntax
 
-The query syntax is simple, easy to use and inspired by SQL. The has_access routine is used to check if the callable is being accessed across the project.
+The query syntax is simple, easy to use and inspired by SQL.
 
 ```sql
-FIND method_declaration WHERE annotation = "@Deprecated" AND has_access = "true"
+FIND method_declaration AS md WHERE "@Deprecated" in md.getAnnotation()
 ```

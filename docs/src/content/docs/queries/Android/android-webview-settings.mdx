@@ -28,7 +28,7 @@ result in cross-site scripting attacks.
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "false" in mi.getArgumentName()
 ```
 
 ### setAllowUniversalAccessFromFileURLs Webview API
@@ -45,7 +45,7 @@ FIND method_invocation WHERE name = 'setJavaScriptEnabled' AND argumentname = 't
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowUniversalAccessFromFileURLs' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == 'setAllowUniversalAccessFromFileURLs' AND mi.getArgumentName() = 'true'
 ```
 
 ### setAllowFileAccessFromFileURLs Webview API
@@ -62,7 +62,7 @@ FIND method_invocation WHERE name = 'setAllowUniversalAccessFromFileURLs' AND ar
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowFileAccessFromFileURLs' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == 'setAllowFileAccessFromFileURLs' AND mi.getArgumentName() == 'true'
 ```
 
 ### setAllowContentAccess Webview API
@@ -79,7 +79,7 @@ FIND method_invocation WHERE name = 'setAllowFileAccessFromFileURLs' AND argumen
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowContentAccess' AND argumentname = 'true'
+FIND method_invocation WHERE mi.getName() == 'setAllowContentAccess' AND mi.getArgumentName() == 'true'
 ```
 
 ### setAllowFileAccess Webview API
@@ -96,7 +96,7 @@ FIND method_invocation WHERE name = 'setAllowContentAccess' AND argumentname = '
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'setAllowFileAccess' AND argumentname = 'true'
+FIND method_invocation AS mi WHERE mi.getName() == 'setAllowFileAccess' AND mi.getArgumentName() == 'true'
 ```
 
 ### addJavascriptInterface Webview API
@@ -113,5 +113,5 @@ FIND method_invocation WHERE name = 'setAllowFileAccess' AND argumentname = 'tru
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE name = 'addJavascriptInterface'
+FIND method_invocation AS mi WHERE mi.getName() == 'addJavascriptInterface'
 ```

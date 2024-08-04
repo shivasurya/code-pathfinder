@@ -62,6 +62,8 @@ func main() {
 func processQuery(input string, graph *CodeGraph, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery := parser.ParseQuery(input)
+	// split the input string if WHERE
+	parsedQuery.Expression = strings.Split(input, "WHERE")[1]
 	entities := QueryEntities(graph, parsedQuery)
 	if output == "json" {
 		// convert struct to query_results

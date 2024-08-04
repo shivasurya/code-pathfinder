@@ -19,9 +19,10 @@ import com.ivb.udacity.modal.movieGeneralModal;
  * @see movieListActivity
  * @see movieDetailFragment
  */
+ @Deprecated
 public class movieDetailActivity extends AppCompatActivity {
 
-    @Override
+    @Deprecated
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_movie_detail);
