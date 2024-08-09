@@ -39,6 +39,11 @@ public class movieGeneralAdapter extends RecyclerView.Adapter<movieGeneralHolder
         return rcv;
     }
 
+    /*
+     @author shivasurya
+     @param movieGeneralHolder
+     @param int
+    */
     @Override
     public void onBindViewHolder(movieGeneralHolder holder, final int position) {
         holder.movieName.setText(mMovieGeneralModal.get(position).getTitle());

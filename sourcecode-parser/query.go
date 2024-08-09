@@ -109,15 +109,16 @@ func (env *Env) GetCommentSince() string {
 	return ""
 }
 
-func (env *Env) GetCommentParam() string {
+func (env *Env) GetCommentParam() []string {
+	result := []string{}
 	if env.Node.JavaDoc != nil {
 		for _, docTag := range env.Node.JavaDoc.Tags {
 			if docTag.TagName == "param" && docTag.Text != "" {
-				return docTag.Text
+				result = append(result, docTag.Text)
 			}
 		}
 	}
-	return ""
+	return result
 }
 
 func (env *Env) GetCommentThrows() string {
@@ -175,40 +176,61 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 		}
 	}
 	env := map[string]interface{}{
-		"isJavaSourceFile":  proxyenv.IsJavaSourceFile(),
-		"getCommentAuthor":  proxyenv.GetCommentAuthor(),
-		"getCommentSee":     proxyenv.GetCommentSee(),
-		"getCommentVersion": proxyenv.GetCommentVersion(),
-		"getCommentSince":   proxyenv.GetCommentSince(),
-		"getCommentParam":   proxyenv.GetCommentParam(),
-		"getCommentThrows":  proxyenv.GetCommentThrows(),
-		"getCommentReturn":  proxyenv.GetCommentReturn(),
+		"isJavaSourceFile": proxyenv.IsJavaSourceFile(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility":   proxyenv.GetVisibility,
-			"getAnnotation":   proxyenv.GetAnnotations,
-			"getReturnType":   proxyenv.GetReturnType,
-			"getName":         proxyenv.GetName,
-			"getArgumentType": proxyenv.GetArgumentTypes,
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getThrowsType":   proxyenv.GetThrowsTypes,
+			"getVisibility":     proxyenv.GetVisibility,
+			"getAnnotation":     proxyenv.GetAnnotations,
+			"getReturnType":     proxyenv.GetReturnType,
+			"getName":           proxyenv.GetName,
+			"getArgumentType":   proxyenv.GetArgumentTypes,
+			"getArgumentName":   proxyenv.GetArgumentNames,
+			"getThrowsType":     proxyenv.GetThrowsTypes,
+			"getCommentAuthor":  proxyenv.GetCommentAuthor,
+			"getCommentSee":     proxyenv.GetCommentSee,
+			"getCommentVersion": proxyenv.GetCommentVersion,
+			"getCommentSince":   proxyenv.GetCommentSince,
+			"getCommentParams":  proxyenv.GetCommentParam,
+			"getCommentThrows":  proxyenv.GetCommentThrows,
+			"getCommentReturn":  proxyenv.GetCommentReturn,
 		},
 		classDeclaration: map[string]interface{}{
-			"getSuperClass": proxyenv.GetSuperClass,
-			"getName":       proxyenv.GetName,
-			"getAnnotation": proxyenv.GetAnnotations(),
-			"getVisibility": proxyenv.GetVisibility,
-			"getInterface":  proxyenv.GetInterfaces(),
+			"getSuperClass":     proxyenv.GetSuperClass,
+			"getName":           proxyenv.GetName,
+			"getAnnotation":     proxyenv.GetAnnotations,
+			"getVisibility":     proxyenv.GetVisibility,
+			"getInterface":      proxyenv.GetInterfaces,
+			"getCommentAuthor":  proxyenv.GetCommentAuthor,
+			"getCommentSee":     proxyenv.GetCommentSee,
+			"getCommentVersion": proxyenv.GetCommentVersion,
+			"getCommentSince":   proxyenv.GetCommentSince,
+			"getCommentParams":  proxyenv.GetCommentParam,
+			"getCommentThrows":  proxyenv.GetCommentThrows,
+			"getCommentReturn":  proxyenv.GetCommentReturn,
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getName":         proxyenv.GetName,
+			"getArgumentName":   proxyenv.GetArgumentNames,
+			"getName":           proxyenv.GetName,
+			"getCommentAuthor":  proxyenv.GetCommentAuthor,
+			"getCommentSee":     proxyenv.GetCommentSee,
+			"getCommentVersion": proxyenv.GetCommentVersion,
+			"getCommentSince":   proxyenv.GetCommentSince,
+			"getCommentParams":  proxyenv.GetCommentParam,
+			"getCommentThrows":  proxyenv.GetCommentThrows,
+			"getCommentReturn":  proxyenv.GetCommentReturn,
 		},
 		variableDeclaration: map[string]interface{}{
 			"getName":             proxyenv.GetName,
 			"getVisibility":       proxyenv.GetVisibility,
 			"getVariableValue":    proxyenv.GetVariableValue,
 			"getVariableDataType": proxyenv.GetVariableDataType,
-			"getScope":            proxyenv.GetScope(),
+			"getScope":            proxyenv.GetScope,
+			"getCommentAuthor":    proxyenv.GetCommentAuthor,
+			"getCommentSee":       proxyenv.GetCommentSee,
+			"getCommentVersion":   proxyenv.GetCommentVersion,
+			"getCommentSince":     proxyenv.GetCommentSince,
+			"getCommentParam":     proxyenv.GetCommentParam,
+			"getCommentThrows":    proxyenv.GetCommentThrows,
+			"getCommentReturn":    proxyenv.GetCommentReturn,
 		},
 	}
 	return env
