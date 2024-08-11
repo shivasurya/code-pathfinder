@@ -133,30 +133,3 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		return result, nil
 	}
 }
-
-// func parseQueryWithExpr(inputQuery string) {
-//
-//	// string replace "md." with ""
-//	expression = strings.Replace(expression, "md.", "", -1)
-//	fmt.Println(expression)
-//	env := map[string]interface{}{
-//		"getName": func() string {
-//			return "onCreate"
-//		},
-//		"getVisibility": func() string {
-//			return "public"
-//		},
-//		"getReturnType": func() string {
-//			return "voids"
-//		},
-//	}
-//	program, err := expr.Compile(expression, expr.Env(env))
-//	if err != nil {
-//		fmt.Println(err)
-//	}
-//	output, err := expr.Run(program, env)
-//	if err != nil {
-//		fmt.Println(err)
-//	}
-//	fmt.Println(output)
-//}
