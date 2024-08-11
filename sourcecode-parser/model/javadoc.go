@@ -23,3 +23,67 @@ func NewJavadocTag(tagName, text, docType string) *JavadocTag {
 		DocType: docType,
 	}
 }
+
+func (j *Javadoc) GetCommentAuthor() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "author" {
+			return tag.Text
+		}
+	}
+	return ""
+}
+
+func (j *Javadoc) GetCommentSee() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "see" {
+			return tag.Text
+		}
+	}
+	return ""
+}
+
+func (j *Javadoc) GetCommentVersion() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "version" {
+			return tag.Text
+		}
+	}
+	return ""
+}
+
+func (j *Javadoc) GetCommentSince() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "since" {
+			return tag.Text
+		}
+	}
+	return ""
+}
+
+func (j *Javadoc) GetCommentParam() []string {
+	result := []string{}
+	for _, tag := range j.Tags {
+		if tag.TagName == "param" {
+			result = append(result, tag.Text)
+		}
+	}
+	return result
+}
+
+func (j *Javadoc) GetCommentThrows() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "throws" {
+			return tag.Text
+		}
+	}
+	return ""
+}
+
+func (j *Javadoc) GetCommentReturn() string {
+	for _, tag := range j.Tags {
+		if tag.TagName == "return" {
+			return tag.Text
+		}
+	}
+	return ""
+}
