@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+
 	"github.com/expr-lang/expr"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 )
@@ -67,80 +69,11 @@ func (env *Env) IsJavaSourceFile() bool {
 	return env.Node.isJavaSourceFile
 }
 
-func (env *Env) GetCommentAuthor() string {
-	if env.Node.JavaDoc != nil {
-		if env.Node.JavaDoc.Author != "" {
-			return env.Node.JavaDoc.Author
-		}
+func (env *Env) GetDoc() *model.Javadoc {
+	if env.Node.JavaDoc == nil {
+		env.Node.JavaDoc = &model.Javadoc{}
 	}
-	return ""
-}
-
-func (env *Env) GetCommentSee() string {
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "see" && docTag.Text != "" {
-				return docTag.Text
-			}
-		}
-	}
-	return ""
-}
-
-func (env *Env) GetCommentVersion() string {
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "version" && docTag.Text != "" {
-				return docTag.Text
-			}
-		}
-	}
-	return ""
-}
-
-func (env *Env) GetCommentSince() string {
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "since" && docTag.Text != "" {
-				return docTag.Text
-			}
-		}
-	}
-	return ""
-}
-
-func (env *Env) GetCommentParam() []string {
-	result := []string{}
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "param" && docTag.Text != "" {
-				result = append(result, docTag.Text)
-			}
-		}
-	}
-	return result
-}
-
-func (env *Env) GetCommentThrows() string {
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "throws" && docTag.Text != "" {
-				return docTag.Text
-			}
-		}
-	}
-	return ""
-}
-
-func (env *Env) GetCommentReturn() string {
-	if env.Node.JavaDoc != nil {
-		for _, docTag := range env.Node.JavaDoc.Tags {
-			if docTag.TagName == "return" && docTag.Text != "" {
-				return docTag.Text
-			}
-		}
-	}
-	return ""
+	return env.Node.JavaDoc
 }
 
 func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
@@ -178,45 +111,27 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 	env := map[string]interface{}{
 		"isJavaSourceFile": proxyenv.IsJavaSourceFile(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility":     proxyenv.GetVisibility,
-			"getAnnotation":     proxyenv.GetAnnotations,
-			"getReturnType":     proxyenv.GetReturnType,
-			"getName":           proxyenv.GetName,
-			"getArgumentType":   proxyenv.GetArgumentTypes,
-			"getArgumentName":   proxyenv.GetArgumentNames,
-			"getThrowsType":     proxyenv.GetThrowsTypes,
-			"getCommentAuthor":  proxyenv.GetCommentAuthor,
-			"getCommentSee":     proxyenv.GetCommentSee,
-			"getCommentVersion": proxyenv.GetCommentVersion,
-			"getCommentSince":   proxyenv.GetCommentSince,
-			"getCommentParams":  proxyenv.GetCommentParam,
-			"getCommentThrows":  proxyenv.GetCommentThrows,
-			"getCommentReturn":  proxyenv.GetCommentReturn,
+			"getVisibility":   proxyenv.GetVisibility,
+			"getAnnotation":   proxyenv.GetAnnotations,
+			"getReturnType":   proxyenv.GetReturnType,
+			"getName":         proxyenv.GetName,
+			"getArgumentType": proxyenv.GetArgumentTypes,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"getThrowsType":   proxyenv.GetThrowsTypes,
+			"getDoc":          proxyenv.GetDoc,
 		},
 		classDeclaration: map[string]interface{}{
-			"getSuperClass":     proxyenv.GetSuperClass,
-			"getName":           proxyenv.GetName,
-			"getAnnotation":     proxyenv.GetAnnotations,
-			"getVisibility":     proxyenv.GetVisibility,
-			"getInterface":      proxyenv.GetInterfaces,
-			"getCommentAuthor":  proxyenv.GetCommentAuthor,
-			"getCommentSee":     proxyenv.GetCommentSee,
-			"getCommentVersion": proxyenv.GetCommentVersion,
-			"getCommentSince":   proxyenv.GetCommentSince,
-			"getCommentParams":  proxyenv.GetCommentParam,
-			"getCommentThrows":  proxyenv.GetCommentThrows,
-			"getCommentReturn":  proxyenv.GetCommentReturn,
+			"getSuperClass": proxyenv.GetSuperClass,
+			"getName":       proxyenv.GetName,
+			"getAnnotation": proxyenv.GetAnnotations,
+			"getVisibility": proxyenv.GetVisibility,
+			"getInterface":  proxyenv.GetInterfaces,
+			"getDoc":        proxyenv.GetDoc,
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName":   proxyenv.GetArgumentNames,
-			"getName":           proxyenv.GetName,
-			"getCommentAuthor":  proxyenv.GetCommentAuthor,
-			"getCommentSee":     proxyenv.GetCommentSee,
-			"getCommentVersion": proxyenv.GetCommentVersion,
-			"getCommentSince":   proxyenv.GetCommentSince,
-			"getCommentParams":  proxyenv.GetCommentParam,
-			"getCommentThrows":  proxyenv.GetCommentThrows,
-			"getCommentReturn":  proxyenv.GetCommentReturn,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"getName":         proxyenv.GetName,
+			"getDoc":          proxyenv.GetDoc,
 		},
 		variableDeclaration: map[string]interface{}{
 			"getName":             proxyenv.GetName,
@@ -224,13 +139,7 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getVariableValue":    proxyenv.GetVariableValue,
 			"getVariableDataType": proxyenv.GetVariableDataType,
 			"getScope":            proxyenv.GetScope,
-			"getCommentAuthor":    proxyenv.GetCommentAuthor,
-			"getCommentSee":       proxyenv.GetCommentSee,
-			"getCommentVersion":   proxyenv.GetCommentVersion,
-			"getCommentSince":     proxyenv.GetCommentSince,
-			"getCommentParam":     proxyenv.GetCommentParam,
-			"getCommentThrows":    proxyenv.GetCommentThrows,
-			"getCommentReturn":    proxyenv.GetCommentReturn,
+			"getDoc":              proxyenv.GetDoc,
 		},
 	}
 	return env
