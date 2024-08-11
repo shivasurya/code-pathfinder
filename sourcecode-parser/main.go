@@ -14,7 +14,7 @@ import (
 
 // Version is the current version of the application.
 const (
-	Version   = "0.0.22"
+	Version   = "0.0.24"
 	GitCommit = "HEAD"
 )
 
