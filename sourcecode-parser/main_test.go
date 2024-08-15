@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -106,5 +109,48 @@ func TestInitializeProjectConsistency(t *testing.T) {
 
 	if len(graph1.Nodes) != len(graph2.Nodes) {
 		t.Errorf("InitializeProject() should return consistent results for the same project")
+	}
+}
+
+func TestMainFunctionality(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectedExit int
+		expectedOut  string
+	}{
+		{
+			name:         "Version flag",
+			args:         []string{"--version"},
+			expectedExit: 0,
+			expectedOut:  "Version: " + Version + "\nGit Commit: " + GitCommit + "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldArgs := os.Args
+			defer func() { os.Args = oldArgs }()
+
+			os.Args = append([]string{"cmd"}, tt.args...)
+
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			main()
+
+			err := w.Close()
+			if err != nil {
+				return
+			}
+			os.Stdout = oldStdout
+			out, _ := io.ReadAll(r)
+
+			if !strings.Contains(string(out), tt.expectedOut) {
+				t.Errorf("Expected output to contain %q, got %q", tt.expectedOut, string(out))
+			}
+
+		})
 	}
 }

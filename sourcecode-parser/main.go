@@ -31,7 +31,7 @@ func main() {
 	if *versionFlag {
 		fmt.Printf("Version: %s\n", Version)
 		fmt.Printf("Git Commit: %s\n", GitCommit)
-		os.Exit(0)
+		return
 	}
 
 	result, err := executeCLIQuery(*project, *query, *output, *stdin)
