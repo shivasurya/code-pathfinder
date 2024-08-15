@@ -11,7 +11,6 @@ on:
 # Allow this job to clone the repo and create a page deployment
 permissions:
   contents: read
-  pages: write
   id-token: write
 
 jobs:
@@ -23,20 +22,10 @@ jobs:
       - name: Create .env file
         env:
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
             echo "PUBLIC_ANALYTICS_KEY=${{ secrets.POSTHOG_WEB_ANALYTICS }}" >> docs/.env
-      - name: Install, build, and upload your site
-        uses: withastro/action@v2
-        with:
-          path: docs
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+            cd docs
+            npm run build
+            npx wrangler pages deploy ./dist --project-name=codepathfinder --branch=main
