@@ -172,6 +172,15 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "binary_expression":
+		leftNode := node.ChildByFieldName("left")
+		rightNode := node.ChildByFieldName("right")
+		operator := node.ChildByFieldName("operator")
+		operatorType := operator.Type()
+		expressionNode := model.BinaryExpr{}
+		expressionNode.LeftOperand = &model.Expr{Node: *leftNode}
+		expressionNode.RightOperand = &model.Expr{Node: *rightNode}
+		expressionNode.Op = operatorType
 	case "method_declaration":
 		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
