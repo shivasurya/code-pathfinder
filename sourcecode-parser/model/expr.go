@@ -2,11 +2,11 @@ package model
 
 import (
 	"fmt"
+
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-type ExprParent struct {
-}
+type ExprParent struct{}
 
 func (e *ExprParent) GetAChildExpr() *Expr {
 	return nil
@@ -39,7 +39,6 @@ func (e *Expr) GetNumChildExpr() int64 {
 }
 
 func (e *Expr) GetBoolValue() {
-
 }
 
 func (e *Expr) GetKind() int {
