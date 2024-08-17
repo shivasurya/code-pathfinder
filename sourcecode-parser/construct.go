@@ -44,6 +44,7 @@ type GraphNode struct {
 	ThrowsExceptions     []string
 	Annotation           []string
 	JavaDoc              *model.Javadoc
+	BinaryExpr           *model.BinaryExpr
 }
 
 type GraphEdge struct {
@@ -181,6 +182,20 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		expressionNode.LeftOperand = &model.Expr{Node: *leftNode}
 		expressionNode.RightOperand = &model.Expr{Node: *rightNode}
 		expressionNode.Op = operatorType
+
+		invokedNode := &GraphNode{
+			ID:               node.Content(sourceCode),
+			Type:             "binary_expression",
+			Name:             node.Content(sourceCode),
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			BinaryExpr:       &expressionNode,
+		}
+		graph.AddNode(invokedNode)
+		fmt.Println(node.Content(sourceCode))
+		currentContext = invokedNode
 	case "method_declaration":
 		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
