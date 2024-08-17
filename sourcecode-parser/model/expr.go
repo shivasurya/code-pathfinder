@@ -12,7 +12,7 @@ func (e *ExprParent) GetAChildExpr() *Expr {
 	return nil
 }
 
-func (e *ExprParent) GetChildExpr(i int) *Expr {
+func (e *ExprParent) GetChildExpr(_ int) *Expr {
 	return nil
 }
 
@@ -30,7 +30,7 @@ func (e *Expr) GetAChildExpr() *Expr {
 	return e
 }
 
-func (e *Expr) GetChildExpr(i int) *Expr {
+func (e *Expr) GetChildExpr(_ int) *Expr {
 	return e
 }
 
@@ -79,7 +79,7 @@ func (e *BinaryExpr) GetAnOperand() *Expr {
 	return e.RightOperand
 }
 
-func (e *BinaryExpr) HasOperands(expr1 *Expr, expr2 *Expr) bool {
+func (e *BinaryExpr) HasOperands(expr1, expr2 *Expr) bool {
 	return e.LeftOperand == expr1 && e.RightOperand == expr2
 }
 
