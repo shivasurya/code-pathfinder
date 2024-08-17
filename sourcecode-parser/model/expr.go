@@ -69,7 +69,7 @@ func (e *BinaryExpr) GetKind() int {
 }
 
 func (e *BinaryExpr) ToString() string {
-	return fmt.Sprintf("BinaryExpr(%s, %s, %s)", e.Op, e.LeftOperand, e.RightOperand)
+	return fmt.Sprintf("BinaryExpr(%s, %v, %v)", e.Op, e.LeftOperand, e.RightOperand)
 }
 
 func (e *BinaryExpr) GetAnOperand() *Expr {
