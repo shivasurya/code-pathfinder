@@ -188,3 +188,84 @@ type NEExpr struct {
 func (e *NEExpr) GetOp() string {
 	return e.op
 }
+
+type LeftShiftExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *LeftShiftExpr) GetOp() string {
+	return e.op
+}
+
+type MulExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *MulExpr) GetOp() string {
+	return e.op
+}
+
+type OrBitwiseExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *OrBitwiseExpr) GetOp() string {
+	return e.op
+}
+
+type OrLogicalExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *OrLogicalExpr) GetOp() string {
+	return e.op
+}
+
+type RemExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *RemExpr) GetOp() string {
+	return e.op
+}
+
+type RightShiftExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *RightShiftExpr) GetOp() string {
+	return e.op
+}
+
+type SubExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *SubExpr) GetOp() string {
+	return e.op
+}
+
+type UnsignedRightShiftExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *UnsignedRightShiftExpr) GetOp() string {
+	return e.op
+}
+
+type XorBitwiseExpr struct {
+	BinaryExpr
+	op string
+}
+
+func (e *XorBitwiseExpr) GetOp() string {
+	return e.op
+}
