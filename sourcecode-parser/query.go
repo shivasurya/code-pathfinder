@@ -95,6 +95,7 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 	classDeclaration := "class_declaration"
 	methodInvocation := "method_invocation"
 	variableDeclaration := "variable_declaration"
+	binaryExpression := "binary_expression"
 	// print query select list
 	for _, entity := range query.SelectList {
 		switch entity.Entity {
@@ -106,6 +107,8 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			methodInvocation = entity.Alias
 		case "variable_declaration":
 			variableDeclaration = entity.Alias
+		case "binary_expression":
+			binaryExpression = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -140,6 +143,13 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getVariableDataType": proxyenv.GetVariableDataType,
 			"getScope":            proxyenv.GetScope,
 			"getDoc":              proxyenv.GetDoc,
+		},
+		binaryExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetVariableValue,
+			"getRightOperand": proxyenv.GetVariableValue,
+			"getOperator":     proxyenv.GetVariableDataType,
+			"getDoc":          proxyenv.GetDoc,
+			"isExample":       true,
 		},
 	}
 	return env
