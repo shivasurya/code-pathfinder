@@ -29,6 +29,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 	queries := []string{
 		`FIND method_declaration AS md WHERE md.getName() == "onCreate"`,
 		`FIND variable_declaration AS vd WHERE vd.getVisibility() == "private"`,
+		`FIND add_expression AS ae WHERE ae.isExample == true`,
 	}
 	output := "json"
 
