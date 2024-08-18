@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -190,7 +188,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			addExpr.Op = expressionNode.Op
 			addExpr.BinaryExpr = expressionNode
 			addExpressionNode := &GraphNode{
-				ID:               node.Content(sourceCode),
+				ID:               GenerateSha256("add_expression" + node.Content(sourceCode)),
 				Type:             "add_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
@@ -207,7 +205,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			subExpr.Op = expressionNode.Op
 			subExpr.BinaryExpr = expressionNode
 			subExpressionNode := &GraphNode{
-				ID:               node.Content(sourceCode),
+				ID:               GenerateSha256("sub_expression" + node.Content(sourceCode)),
 				Type:             "sub_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
@@ -224,7 +222,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			mulExpr.Op = expressionNode.Op
 			mulExpr.BinaryExpr = expressionNode
 			mulExpressionNode := &GraphNode{
-				ID:               node.Content(sourceCode),
+				ID:               GenerateSha256("mul_expression" + node.Content(sourceCode)),
 				Type:             "mul_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
@@ -241,7 +239,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			divExpr.Op = expressionNode.Op
 			divExpr.BinaryExpr = expressionNode
 			divExpressionNode := &GraphNode{
-				ID:               node.Content(sourceCode),
+				ID:               GenerateSha256("div_expression" + node.Content(sourceCode)),
 				Type:             "div_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
@@ -251,10 +249,11 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				BinaryExpr:       &expressionNode,
 			}
 			graph.AddNode(divExpressionNode)
+
 		}
 
 		invokedNode := &GraphNode{
-			ID:               node.Content(sourceCode) + "binary_expression",
+			ID:               GenerateSha256("binary_expression" + node.Content(sourceCode)),
 			Type:             "binary_expression",
 			Name:             node.Content(sourceCode),
 			CodeSnippet:      node.Content(sourceCode),
@@ -420,7 +419,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 		classNode := &GraphNode{
-			ID:               generateMethodID(className, []string{}, file),
+			ID:               GenerateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
 			Name:             className,
 			CodeSnippet:      node.Content(sourceCode),
@@ -442,7 +441,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			javadocTags := parseJavadocTags(commentContent)
 
 			commentNode := &GraphNode{
-				ID:               generateMethodID(node.Content(sourceCode), []string{}, file),
+				ID:               GenerateMethodID(node.Content(sourceCode), []string{}, file),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
 				LineNumber:       node.StartPoint().Row + 1,
@@ -498,7 +497,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		// Create a new node for the variable
 		variableNode := &GraphNode{
-			ID:               generateMethodID(variableName, []string{}, file),
+			ID:               GenerateMethodID(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,
 			CodeSnippet:      node.Content(sourceCode),
@@ -536,14 +535,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 	}
-}
-
-// write a function to generate unique method id from method name, class name, and package name, parameters, and return type.
-func generateMethodID(methodName string, parameters []string, sourceFile string) string {
-	// Example: Use the node type and its start byte position in the source code to generate a unique ID
-	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
-	hash := sha256.Sum256([]byte(hashInput))
-	return hex.EncodeToString(hash[:])
 }
 
 //nolint:all
@@ -599,7 +590,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 		}
 	}
-	methodID = generateMethodID(methodName, parameters, filepath)
+	methodID = GenerateMethodID(methodName, parameters, filepath)
 	return methodName, methodID
 }
 
