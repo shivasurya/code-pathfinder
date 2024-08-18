@@ -96,6 +96,10 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 	methodInvocation := "method_invocation"
 	variableDeclaration := "variable_declaration"
 	binaryExpression := "binary_expression"
+	addExpression := "add_expression"
+	subExpression := "sub_expression"
+	mulExpression := "mul_expression"
+	divExpression := "div_expression"
 	// print query select list
 	for _, entity := range query.SelectList {
 		switch entity.Entity {
@@ -109,6 +113,14 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			variableDeclaration = entity.Alias
 		case "binary_expression":
 			binaryExpression = entity.Alias
+		case "add_expression":
+			addExpression = entity.Alias
+		case "sub_expression":
+			subExpression = entity.Alias
+		case "mul_expression":
+			mulExpression = entity.Alias
+		case "div_expression":
+			divExpression = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -150,6 +162,34 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 			"getOperator":     proxyenv.GetVariableDataType,
 			"getDoc":          proxyenv.GetDoc,
 			"isExample":       true,
+		},
+		addExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetVariableValue,
+			"getRightOperand": proxyenv.GetVariableValue,
+			"getDoc":          proxyenv.GetDoc,
+			"isExample":       true,
+			"getOperator":     "+",
+		},
+		subExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetVariableValue,
+			"getRightOperand": proxyenv.GetVariableValue,
+			"getDoc":          proxyenv.GetDoc,
+			"isExample":       true,
+			"getOperator":     "-",
+		},
+		mulExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetVariableValue,
+			"getRightOperand": proxyenv.GetVariableValue,
+			"getDoc":          proxyenv.GetDoc,
+			"isExample":       true,
+			"getOperator":     "*",
+		},
+		divExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetVariableValue,
+			"getRightOperand": proxyenv.GetVariableValue,
+			"getDoc":          proxyenv.GetDoc,
+			"isExample":       true,
+			"getOperator":     "/",
 		},
 	}
 	return env

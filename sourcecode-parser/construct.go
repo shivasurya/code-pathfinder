@@ -182,9 +182,79 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		expressionNode.LeftOperand = &model.Expr{Node: *leftNode}
 		expressionNode.RightOperand = &model.Expr{Node: *rightNode}
 		expressionNode.Op = operatorType
+		switch operatorType {
+		case "+":
+			var addExpr model.AddExpr
+			addExpr.LeftOperand = expressionNode.LeftOperand
+			addExpr.RightOperand = expressionNode.RightOperand
+			addExpr.Op = expressionNode.Op
+			addExpr.BinaryExpr = expressionNode
+			addExpressionNode := &GraphNode{
+				ID:               node.Content(sourceCode),
+				Type:             "add_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(addExpressionNode)
+		case "-":
+			var subExpr model.SubExpr
+			subExpr.LeftOperand = expressionNode.LeftOperand
+			subExpr.RightOperand = expressionNode.RightOperand
+			subExpr.Op = expressionNode.Op
+			subExpr.BinaryExpr = expressionNode
+			subExpressionNode := &GraphNode{
+				ID:               node.Content(sourceCode),
+				Type:             "sub_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(subExpressionNode)
+		case "*":
+			var mulExpr model.MulExpr
+			mulExpr.LeftOperand = expressionNode.LeftOperand
+			mulExpr.RightOperand = expressionNode.RightOperand
+			mulExpr.Op = expressionNode.Op
+			mulExpr.BinaryExpr = expressionNode
+			mulExpressionNode := &GraphNode{
+				ID:               node.Content(sourceCode),
+				Type:             "mul_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(mulExpressionNode)
+		case "/":
+			var divExpr model.DivExpr
+			divExpr.LeftOperand = expressionNode.LeftOperand
+			divExpr.RightOperand = expressionNode.RightOperand
+			divExpr.Op = expressionNode.Op
+			divExpr.BinaryExpr = expressionNode
+			divExpressionNode := &GraphNode{
+				ID:               node.Content(sourceCode),
+				Type:             "div_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(divExpressionNode)
+		}
 
 		invokedNode := &GraphNode{
-			ID:               node.Content(sourceCode),
+			ID:               node.Content(sourceCode) + "binary_expression",
 			Type:             "binary_expression",
 			Name:             node.Content(sourceCode),
 			CodeSnippet:      node.Content(sourceCode),
@@ -194,7 +264,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BinaryExpr:       &expressionNode,
 		}
 		graph.AddNode(invokedNode)
-		fmt.Println(node.Content(sourceCode))
 		currentContext = invokedNode
 	case "method_declaration":
 		var javadoc *model.Javadoc
