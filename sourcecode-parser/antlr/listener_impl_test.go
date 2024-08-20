@@ -32,6 +32,17 @@ func TestParseQuery(t *testing.T) {
 				Expression: "e1.GetName()==\"test\"",
 			},
 		},
+		{
+			name:  "Select with multiple entities and aliases",
+			input: "FIND entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" || e2.GetName() == \"test\"",
+			expectedQuery: Query{
+				SelectList: []SelectList{
+					{Entity: "entity1", Alias: "e1"},
+					{Entity: "entity2", Alias: "e2"},
+				},
+				Expression: "e1.GetName()==\"test\" || e2.GetName()==\"test\"",
+			},
+		},
 	}
 
 	for _, tt := range tests {
