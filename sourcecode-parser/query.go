@@ -79,6 +79,11 @@ func (env *Env) GetDoc() *model.Javadoc {
 func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 	result := make([]*GraphNode, 0)
 
+	// log query select list alone
+	for _, entity := range query.SelectList {
+		reportEvent(entity.Entity, AnalyticsPublicKey)
+	}
+
 	for _, node := range graph.Nodes {
 		for _, entity := range query.SelectList {
 			if entity.Entity == node.Type && FilterEntities(node, query) {
