@@ -13,9 +13,11 @@ import (
 )
 
 // Version is the current version of the application.
-const (
-	Version   = "0.0.24"
-	GitCommit = "HEAD"
+var (
+	Version            = "0.0.24"
+	GitCommit          = "HEAD"
+	AnalyticsPublicKey = "test"
+	enableMetrics      = true
 )
 
 func main() {
@@ -26,12 +28,20 @@ func main() {
 	query := flag.String("query", "", "Query to execute")
 	stdin := flag.Bool("stdin", false, "Read query from stdin")
 	versionFlag := flag.Bool("version", false, "Print the version information and exit")
+	disableMetrics := flag.Bool("disable-metrics", false, "Disable metrics")
 	flag.Parse()
 
+	if *disableMetrics {
+		enableMetrics = false
+	}
+
+	loadEnvFile()
+
 	if *versionFlag {
+		reportEvent(VersionCommand, AnalyticsPublicKey)
 		fmt.Printf("Version: %s\n", Version)
 		fmt.Printf("Git Commit: %s\n", GitCommit)
-		os.Exit(0)
+		return
 	}
 
 	result, err := executeCLIQuery(*project, *query, *output, *stdin)
@@ -66,6 +76,7 @@ func processQuery(input string, graph *CodeGraph, output string) (string, error)
 	parsedQuery.Expression = strings.Split(input, "WHERE")[1]
 	entities := QueryEntities(graph, parsedQuery)
 	if output == "json" {
+		reportEvent(QueryCommandJSON, AnalyticsPublicKey)
 		// convert struct to query_results
 		results := []map[string]interface{}{}
 		for _, entity := range entities {
@@ -111,6 +122,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			in := bufio.NewReader(os.Stdin)
 
 			input, err := in.ReadString('\n')
+			reportEvent(QueryCommandStdin, AnalyticsPublicKey)
 			if err != nil {
 				return "", fmt.Errorf("error processing query: %w", err)
 			}
@@ -121,6 +133,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			result, err := processQuery(input, graph, output)
 			fmt.Println(result)
 			if err != nil {
+				reportEvent(ErrorProcessingQuery, AnalyticsPublicKey)
 				return "", fmt.Errorf("error processing query: %w", err)
 			}
 		}
@@ -128,6 +141,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		// read from command line
 		result, err := processQuery(query, graph, output)
 		if err != nil {
+			reportEvent(ErrorProcessingQuery, AnalyticsPublicKey)
 			return "", fmt.Errorf("error processing query: %w", err)
 		}
 		return result, nil
