@@ -51,23 +51,25 @@ func loadEnvFile() {
 }
 
 func reportEvent(event, publickey string) {
-	client, err := posthog.NewWithConfig(
-		publickey,
-		posthog.Config{
-			Endpoint: "https://us.i.posthog.com",
-		},
-	)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	err = client.Enqueue(posthog.Capture{
-		DistinctId: os.Getenv("uuid"),
-		Event:      event,
-	})
-	defer client.Close()
-	if err != nil {
-		fmt.Println(err)
-		return
+	if enableMetrics {
+		client, err := posthog.NewWithConfig(
+			publickey,
+			posthog.Config{
+				Endpoint: "https://us.i.posthog.com",
+			},
+		)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		err = client.Enqueue(posthog.Capture{
+			DistinctId: os.Getenv("uuid"),
+			Event:      event,
+		})
+		defer client.Close()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 }

@@ -17,6 +17,7 @@ var (
 	Version            = "0.0.24"
 	GitCommit          = "HEAD"
 	AnalyticsPublicKey = "test"
+	enableMetrics      = true
 )
 
 func main() {
@@ -27,7 +28,12 @@ func main() {
 	query := flag.String("query", "", "Query to execute")
 	stdin := flag.Bool("stdin", false, "Read query from stdin")
 	versionFlag := flag.Bool("version", false, "Print the version information and exit")
+	disableMetrics := flag.Bool("disable-metrics", false, "Disable metrics")
 	flag.Parse()
+
+	if *disableMetrics {
+		enableMetrics = false
+	}
 
 	loadEnvFile()
 
