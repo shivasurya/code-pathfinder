@@ -32,7 +32,7 @@ public class movieDetailActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayShowHomeEnabled(true);
 
         // webview.javascriptEnabled();
-        webview.getSettings().setJavaScriptEnabled(false);
+        webview.getSettings().setJavaScriptEnabled(true);
 
         movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
 

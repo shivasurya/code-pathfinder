@@ -108,3 +108,17 @@ func TestInitializeProjectConsistency(t *testing.T) {
 		t.Errorf("InitializeProject() should return consistent results for the same project")
 	}
 }
+
+func TestExtractQueryFromFile(t *testing.T) {
+	queryFile := "../pathfinder-rules/android/webview.cql"
+
+	result, err := ExtractQueryFromFile(queryFile)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	expected := "FIND method_invocation AS mi WHERE mi.getName() == \"setJavaScriptEnabled\" && \"true\" in mi.getArgumentName()"
+	if result != expected {
+		t.Errorf("Expected query '%s', but got '%s'", expected, result)
+	}
+}

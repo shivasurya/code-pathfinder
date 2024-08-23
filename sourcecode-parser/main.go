@@ -29,6 +29,7 @@ func main() {
 	stdin := flag.Bool("stdin", false, "Read query from stdin")
 	versionFlag := flag.Bool("version", false, "Print the version information and exit")
 	disableMetrics := flag.Bool("disable-metrics", false, "Disable metrics")
+	queryFile := flag.String("query-file", "", "File containing query to execute")
 	flag.Parse()
 
 	if *disableMetrics {
@@ -42,6 +43,15 @@ func main() {
 		fmt.Printf("Version: %s\n", Version)
 		fmt.Printf("Git Commit: %s\n", GitCommit)
 		return
+	}
+
+	if *queryFile != "" {
+		extractedQuery, err := ExtractQueryFromFile(*queryFile)
+		if err != nil {
+			fmt.Println("Error extracting query from file:", err)
+			return
+		}
+		*query = extractedQuery
 	}
 
 	result, err := executeCLIQuery(*project, *query, *output, *stdin)
@@ -67,6 +77,39 @@ func main() {
 	} else {
 		fmt.Println(result)
 	}
+}
+
+func ExtractQueryFromFile(file string) (string, error) {
+	// read from file
+	queryFileContent, err := os.Open(file)
+	if err != nil {
+		fmt.Println("Error opening file: ", err)
+		return "", err
+	}
+	defer func(queryFileContent *os.File) {
+		err := queryFileContent.Close()
+		if err != nil {
+			fmt.Println("Error closing file: ", err)
+			os.Exit(1)
+		}
+	}(queryFileContent)
+	query := ""
+	scanner := bufio.NewScanner(queryFileContent)
+	findLineFound := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(strings.TrimSpace(line), "FIND") {
+			findLineFound = true
+			query += line + " "
+		} else if findLineFound {
+			query += line + " "
+		}
+	}
+	query = strings.TrimSpace(query)
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return query, nil
 }
 
 func processQuery(input string, graph *CodeGraph, output string) (string, error) {
