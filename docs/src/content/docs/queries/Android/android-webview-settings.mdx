@@ -28,7 +28,7 @@ result in cross-site scripting attacks.
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "false" in mi.getArgumentName()
+FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowUniversalAccessFromFileURLs Webview API
