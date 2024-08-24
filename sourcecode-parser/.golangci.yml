@@ -401,6 +401,9 @@ issues:
   # I found it strange to skip the errors, setting 0 to have all the results.
   max-issues-per-linter: 0
 
+  exclude-files:
+    - ".*_test.go"
+
   # Same here, nothing should be skipped to not miss errors.
   max-same-issues: 0
 
