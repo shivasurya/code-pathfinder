@@ -32,7 +32,7 @@ jobs:
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit} -X main.AnalyticsPublicKey=${posthogkey}" -v -o pathfinder-linux-amd64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-amd64 .
           chmod +x pathfinder-linux-amd64
 
       - name: Calculate SHA256
@@ -72,7 +72,7 @@ jobs:
           $gitCommit = (git describe --tags).Trim()
           $projectVersion = Get-Content VERSION
           $posthogkey=$env:POSTHOG_WEB_ANALYTICS          
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit} main.AnalyticsPublicKey=${posthogkey}" -v -o pathfinder-windows-amd64.exe .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-windows-amd64.exe .
 
       - name: Calculate SHA256
         run: |
@@ -111,7 +111,7 @@ jobs:
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit} main.AnalyticsPublicKey=${posthogkey}" -v -o pathfinder-darwin-arm64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-arm64 .
           chmod +x pathfinder-darwin-arm64
 
       - name: Calculate SHA256
