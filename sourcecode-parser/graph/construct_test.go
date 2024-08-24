@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	"reflect"
 	"testing"
 )
 
@@ -111,6 +113,72 @@ func TestIsJavaSourceFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isJavaSourceFile(tt.filename); got != tt.want {
 				t.Errorf("isJavaSourceFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+func TestParseJavadocTags(t *testing.T) {
+	tests := []struct {
+		name           string
+		commentContent string
+		want           *model.Javadoc
+	}{
+		{
+			name: "Multi-line comment with various tags",
+			commentContent: `/**
+ * This is a multi-line comment
+ * @author John Doe
+ * @param input The input string
+ * @throws IllegalArgumentException if input is null
+ * @see SomeOtherClass
+ * @version 1.0
+ * @since 2021-01-01
+ */`,
+			want: &model.Javadoc{
+				NumberOfCommentLines: 9,
+				CommentedCodeElements: `/**
+ * This is a multi-line comment
+ * @author John Doe
+ * @param input The input string
+ * @throws IllegalArgumentException if input is null
+ * @see SomeOtherClass
+ * @version 1.0
+ * @since 2021-01-01
+ */`,
+				Author:  "John Doe",
+				Version: "1.0",
+				Tags: []*model.JavadocTag{
+					model.NewJavadocTag("author", "John Doe", "author"),
+					model.NewJavadocTag("param", "input The input string", "param"),
+					model.NewJavadocTag("throws", "IllegalArgumentException if input is null", "throws"),
+					model.NewJavadocTag("see", "SomeOtherClass", "see"),
+					model.NewJavadocTag("version", "1.0", "version"),
+					model.NewJavadocTag("since", "2021-01-01", "since"),
+				},
+			},
+		},
+		{
+			name: "Comment with unknown tag",
+			commentContent: `/**
+ * @customTag This is a custom tag
+ */`,
+			want: &model.Javadoc{
+				NumberOfCommentLines: 3,
+				CommentedCodeElements: `/**
+ * @customTag This is a custom tag
+ */`,
+				Tags: []*model.JavadocTag{
+					model.NewJavadocTag("customTag", "This is a custom tag", "unknown"),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseJavadocTags(tt.commentContent)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseJavadocTags() = %v, want %v", got, tt.want)
 			}
 		})
 	}
