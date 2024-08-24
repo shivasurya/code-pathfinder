@@ -1,4 +1,4 @@
-package main
+package graph
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ func TestNewCodeGraph(t *testing.T) {
 
 func TestAddNode(t *testing.T) {
 	graph := NewCodeGraph()
-	node := &GraphNode{ID: "test_node"}
+	node := &Node{ID: "test_node"}
 	graph.AddNode(node)
 
 	if len(graph.Nodes) != 1 {
@@ -38,8 +38,8 @@ func TestAddNode(t *testing.T) {
 
 func TestAddEdge(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &GraphNode{ID: "node1"}
-	node2 := &GraphNode{ID: "node2"}
+	node1 := &Node{ID: "node1"}
+	node2 := &Node{ID: "node2"}
 	graph.AddNode(node1)
 	graph.AddNode(node2)
 
@@ -61,9 +61,9 @@ func TestAddEdge(t *testing.T) {
 
 func TestAddMultipleNodesAndEdges(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &GraphNode{ID: "node1"}
-	node2 := &GraphNode{ID: "node2"}
-	node3 := &GraphNode{ID: "node3"}
+	node1 := &Node{ID: "node1"}
+	node2 := &Node{ID: "node2"}
+	node3 := &Node{ID: "node3"}
 
 	graph.AddNode(node1)
 	graph.AddNode(node2)

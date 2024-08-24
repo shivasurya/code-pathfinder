@@ -1,4 +1,4 @@
-package main
+package graph
 
 import (
 	"context"
@@ -19,13 +19,13 @@ import (
 	//nolint:all
 )
 
-type GraphNode struct {
+type Node struct {
 	ID                   string
 	Type                 string
 	Name                 string
 	CodeSnippet          string
 	LineNumber           uint32
-	OutgoingEdges        []*GraphEdge
+	OutgoingEdges        []*Edge
 	IsExternal           bool
 	Modifier             string
 	ReturnType           string
@@ -46,29 +46,29 @@ type GraphNode struct {
 	JavaDoc              *model.Javadoc
 }
 
-type GraphEdge struct {
-	From *GraphNode
-	To   *GraphNode
+type Edge struct {
+	From *Node
+	To   *Node
 }
 
 type CodeGraph struct {
-	Nodes map[string]*GraphNode
-	Edges []*GraphEdge
+	Nodes map[string]*Node
+	Edges []*Edge
 }
 
 func NewCodeGraph() *CodeGraph {
 	return &CodeGraph{
-		Nodes: make(map[string]*GraphNode),
-		Edges: make([]*GraphEdge, 0),
+		Nodes: make(map[string]*Node),
+		Edges: make([]*Edge, 0),
 	}
 }
 
-func (g *CodeGraph) AddNode(node *GraphNode) {
+func (g *CodeGraph) AddNode(node *Node) {
 	g.Nodes[node.ID] = node
 }
 
-func (g *CodeGraph) AddEdge(from, to *GraphNode) {
-	edge := &GraphEdge{From: from, To: to}
+func (g *CodeGraph) AddEdge(from, to *Node) {
+	edge := &Edge{From: from, To: to}
 	g.Edges = append(g.Edges, edge)
 	from.OutgoingEdges = append(from.OutgoingEdges, edge)
 }
@@ -76,8 +76,8 @@ func (g *CodeGraph) AddEdge(from, to *GraphNode) {
 // Add to graph.go
 
 // FindNodesByType finds all nodes of a given type.
-func (g *CodeGraph) FindNodesByType(nodeType string) []*GraphNode {
-	var nodes []*GraphNode
+func (g *CodeGraph) FindNodesByType(nodeType string) []*Node {
+	var nodes []*Node
 	for _, node := range g.Nodes {
 		if node.Type == nodeType {
 			nodes = append(nodes, node)
@@ -169,7 +169,7 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 	return javaDoc
 }
 
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *GraphNode, file string) {
+func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
 	case "method_declaration":
@@ -226,7 +226,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		invokedNode := &GraphNode{
+		invokedNode := &Node{
 			ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
 			Type:                 "method_declaration",
 			Name:                 methodName,
@@ -269,7 +269,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 
-		invokedNode := &GraphNode{
+		invokedNode := &Node{
 			ID:                   methodID,
 			Type:                 "method_invocation",
 			Name:                 methodName,
@@ -326,7 +326,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				}
 			}
 		}
-		classNode := &GraphNode{
+		classNode := &Node{
 			ID:               generateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
 			Name:             className,
@@ -348,7 +348,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			commentContent := node.Content(sourceCode)
 			javadocTags := parseJavadocTags(commentContent)
 
-			commentNode := &GraphNode{
+			commentNode := &Node{
 				ID:               generateMethodID(node.Content(sourceCode), []string{}, file),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
@@ -404,7 +404,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			scope = "field"
 		}
 		// Create a new node for the variable
-		variableNode := &GraphNode{
+		variableNode := &Node{
 			ID:               generateMethodID(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,

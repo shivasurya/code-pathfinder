@@ -1,4 +1,4 @@
-package main
+package analytics
 
 import (
 	"fmt"
@@ -16,6 +16,15 @@ const (
 	ErrorProcessingQuery = "error_processing_query"
 	QueryCommandStdin    = "executed_query_command_stdin_mode"
 )
+
+var (
+	PublicKey     string
+	enableMetrics bool
+)
+
+func Init(disableMetrics bool) {
+	enableMetrics = !disableMetrics
+}
 
 func createEnvFile() {
 	homeDir, err := os.UserHomeDir()
@@ -41,7 +50,7 @@ func createEnvFile() {
 	}
 }
 
-func loadEnvFile() {
+func LoadEnvFile() {
 	createEnvFile()
 	envFile := filepath.Join(os.Getenv("HOME"), ".codepathfinder", ".env")
 	err := godotenv.Load(envFile)
@@ -50,10 +59,10 @@ func loadEnvFile() {
 	}
 }
 
-func reportEvent(event, publickey string) {
-	if enableMetrics {
+func ReportEvent(event string) {
+	if enableMetrics && PublicKey != "" {
 		client, err := posthog.NewWithConfig(
-			publickey,
+			PublicKey,
 			posthog.Config{
 				Endpoint: "https://us.i.posthog.com",
 			},

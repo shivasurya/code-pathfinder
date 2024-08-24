@@ -1,8 +1,9 @@
-package main
+package graph
 
 import (
 	"fmt"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 
 	"github.com/expr-lang/expr"
@@ -10,7 +11,7 @@ import (
 )
 
 type Env struct {
-	Node *GraphNode
+	Node *Node
 }
 
 func (env *Env) GetVisibility() string {
@@ -76,12 +77,12 @@ func (env *Env) GetDoc() *model.Javadoc {
 	return env.Node.JavaDoc
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
-	result := make([]*GraphNode, 0)
+func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
+	result := make([]*Node, 0)
 
 	// log query select list alone
 	for _, entity := range query.SelectList {
-		reportEvent(entity.Entity, AnalyticsPublicKey)
+		analytics.ReportEvent(entity.Entity)
 	}
 
 	for _, node := range graph.Nodes {
@@ -94,7 +95,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*GraphNode {
 	return result
 }
 
-func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{} {
+func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	proxyenv := Env{Node: node}
 	methodDeclaration := "method_declaration"
 	classDeclaration := "class_declaration"
@@ -150,7 +151,7 @@ func generateProxyEnv(node *GraphNode, query parser.Query) map[string]interface{
 	return env
 }
 
-func FilterEntities(node *GraphNode, query parser.Query) bool {
+func FilterEntities(node *Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
 		return true
