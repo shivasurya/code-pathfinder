@@ -39,14 +39,14 @@ func TestVersionCmd(t *testing.T) {
 			rootCmd.AddCommand(versionCmd)
 
 			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
+			r, w, _ := os.Pipe() //nolint:all
 			os.Stdout = w
 			rootCmd.SetOut(w)
 			rootCmd.SetArgs([]string{"version"})
 			err := rootCmd.Execute()
 
 			w.Close()
-			out, _ := io.ReadAll(r)
+			out, _ := io.ReadAll(r) //nolint:all
 			os.Stdout = oldStdout
 
 			output := string(out)

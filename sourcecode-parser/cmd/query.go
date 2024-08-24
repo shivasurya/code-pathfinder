@@ -24,7 +24,7 @@ var queryCmd = &cobra.Command{
 		projectInput := cmd.Flag("project").Value.String()
 		output := cmd.Flag("output").Value.String()
 		outputFile := cmd.Flag("output-file").Value.String()
-		stdin, _ := cmd.Flags().GetBool("stdin")
+		stdin, _ := cmd.Flags().GetBool("stdin") //nolint:all
 
 		if queryFile != "" {
 			extractedQuery, err := ExtractQueryFromFile(queryFile)

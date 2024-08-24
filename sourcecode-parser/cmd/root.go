@@ -10,7 +10,7 @@ var rootCmd = &cobra.Command{
 	Short: "Code Pathfinder - A query language for structural search on source code",
 	Long:  `Code Pathfinder is designed for identifying vulnerabilities in source code.`,
 	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-		disableMetrics, _ := cmd.Flags().GetBool("disable-metrics")
+		disableMetrics, _ := cmd.Flags().GetBool("disable-metrics") //nolint:all
 		analytics.LoadEnvFile()
 		analytics.Init(disableMetrics)
 	},

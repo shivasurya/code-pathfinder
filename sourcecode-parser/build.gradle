@@ -19,7 +19,7 @@ task version {
 task buildGo(type: Exec) {
     def outputDir = "${buildDir}/go"
     outputs.dir outputDir
-    commandLine 'go', 'build', '-ldflags', "-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}", '-o', "${outputDir}/pathfinder", '.'
+    commandLine 'go', 'build', '-ldflags', "-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${analyticskey}", '-o', "${outputDir}/pathfinder", '.'
 }
 
 // gradle run --console=plain 
