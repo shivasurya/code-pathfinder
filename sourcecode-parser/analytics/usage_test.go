@@ -54,16 +54,13 @@ func TestLoadEnvFile(t *testing.T) {
 	// Clean up before test
 	os.RemoveAll(filepath.Dir(envFile))
 
-	// Create a test .env file
-	testEnv := map[string]string{
-		"uuid": "test-uuid",
-	}
-	err := godotenv.Write(testEnv, envFile)
-	assert.NoError(t, err)
-
 	LoadEnvFile()
 
-	assert.Equal(t, "test-uuid", os.Getenv("uuid"))
+	// read env file and check if uuid is set
+	env, err := godotenv.Read(envFile)
+	assert.NoError(t, err)
+
+	assert.Equal(t, env["uuid"], os.Getenv("uuid"))
 
 	// Clean up after test
 	os.RemoveAll(filepath.Dir(envFile))

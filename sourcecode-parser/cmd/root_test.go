@@ -109,12 +109,12 @@ func TestRootCmdOutput(t *testing.T) {
 		{
 			name:           "No arguments",
 			args:           []string{},
-			expectedOutput: "Code Pathfinder - A query language for structural search on source code",
+			expectedOutput: "Usage:\n  pathfinder [command]\n\nAvailable Commands:\n  completion",
 		},
 		{
 			name:           "Help command",
 			args:           []string{"--help"},
-			expectedOutput: "Code Pathfinder is designed for identifying vulnerabilities in source code.",
+			expectedOutput: "Usage:\n  pathfinder [command]\n\nAvailable Commands:\n  completion",
 		},
 	}
 

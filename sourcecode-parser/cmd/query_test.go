@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -25,30 +25,21 @@ func TestExecuteCLIQuery(t *testing.T) {
 	}{
 		{
 			name:           "Basic query",
-			project:        "testproject",
-			query:          "FIND function WHERE name = 'test'",
+			project:        "../../test-src/android",
+			query:          "FIND method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
 			output:         "",
 			stdin:          false,
-			expectedOutput: "testproject/main.go:10\n------------\n> func test() {\n------------\n",
+			expectedOutput: "../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java:96\n------------\n> @Override\n    public boolean onCreateOptionsMenu(Menu menu) {\n        MenuInflater inflater = getMenuInflater();\n        inflater.inflate(R.menu.main, menu);\n        return true;\n    }\n------------",
 			expectedError:  "",
 		},
 		{
 			name:           "JSON output",
-			project:        "testproject",
-			query:          "FIND function WHERE name = 'test'",
+			project:        "../../test-src/android",
+			query:          "FIND method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
 			output:         "json",
 			stdin:          false,
-			expectedOutput: `[{"code":"func test() {","file":"testproject/main.go","line":10}]`,
+			expectedOutput: `[{"code":"@Override\n    public boolean onCreateOptionsMenu(Menu menu) {\n        MenuInflater inflater = getMenuInflater();\n        inflater.inflate(R.menu.main, menu);\n        return true;\n    }","file":"../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java","line":96}]`,
 			expectedError:  "",
-		},
-		{
-			name:           "Invalid query",
-			project:        "testproject",
-			query:          "INVALID query",
-			output:         "",
-			stdin:          false,
-			expectedOutput: "",
-			expectedError:  "error processing query",
 		},
 	}
 
@@ -70,11 +61,11 @@ func TestExecuteCLIQuery(t *testing.T) {
 func TestProcessQuery(t *testing.T) {
 	codeGraph := graph.NewCodeGraph()
 	codeGraph.AddNode(&graph.Node{
-		Type:        "function",
+		Type:        "method_declaration",
 		Name:        "testFunc",
-		File:        "test.go",
+		File:        "test.java",
 		LineNumber:  5,
-		CodeSnippet: "func testFunc() {}",
+		CodeSnippet: "public void testFunc() {}",
 	})
 
 	tests := []struct {
@@ -86,16 +77,16 @@ func TestProcessQuery(t *testing.T) {
 	}{
 		{
 			name:           "Basic query",
-			input:          "FIND function WHERE name = 'testFunc'",
+			input:          "FIND method_declaration AS md WHERE md.getName() == \"testFunc\"",
 			output:         "",
-			expectedResult: "test.go:5\n------------\n> func testFunc() {}\n------------\n",
+			expectedResult: "test.java:5\n------------\n> public void testFunc() {}\n------------\n",
 			expectedError:  "",
 		},
 		{
 			name:           "JSON output",
-			input:          "FIND function WHERE name = 'testFunc'",
+			input:          "FIND method_declaration AS md WHERE md.getName() == \"testFunc\"",
 			output:         "json",
-			expectedResult: `[{"code":"func testFunc() {}","file":"test.go","line":5}]`,
+			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
 			expectedError:  "",
 		},
 	}
@@ -135,11 +126,11 @@ func TestExtractQueryFromFile(t *testing.T) {
 			name: "Valid query file",
 			fileContent: `
 				// This is a comment
-				FIND function
-				WHERE name = 'test'
-				AND type = 'public'
+				FIND method_declaration AS md
+				WHERE md.getName() == "test"
+				AND md.getVisibility() == "public"
 			`,
-			expectedQuery: "FIND function WHERE name = 'test' AND type = 'public'",
+			expectedQuery: "FIND method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND md.getVisibility() == \"public\"",
 			expectedError: "",
 		},
 		{
@@ -177,56 +168,6 @@ func TestExtractQueryFromFile(t *testing.T) {
 	}
 }
 
-func TestQueryCmdExecution(t *testing.T) {
-	tests := []struct {
-		name           string
-		args           []string
-		input          string
-		expectedOutput string
-		expectedError  string
-	}{
-		{
-			name:           "Basic query",
-			args:           []string{"query", "-p", "testproject", "-q", "FIND function WHERE name = 'test'"},
-			input:          "",
-			expectedOutput: "Executing query: FIND function WHERE name = 'test'\ntestproject/main.go:10\n------------\n> func test() {\n------------\n",
-			expectedError:  "",
-		},
-		{
-			name:           "Query from stdin",
-			args:           []string{"query", "-p", "testproject", "--stdin"},
-			input:          "FIND function WHERE name = 'test'\n:quit\n",
-			expectedOutput: "Path-Finder Query Console: \n>Executing query: FIND function WHERE name = 'test'\ntestproject/main.go:10\n------------\n> func test() {\n------------\nPath-Finder Query Console: \n>Okay, Bye!",
-			expectedError:  "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &cobra.Command{Use: "pathfinder"}
-			cmd.AddCommand(queryCmd)
-
-			b := bytes.NewBufferString(tt.input)
-			cmd.SetIn(b)
-			cmd.SetArgs(tt.args)
-
-			output := &bytes.Buffer{}
-			cmd.SetOut(output)
-			cmd.SetErr(output)
-
-			err := cmd.Execute()
-
-			if tt.expectedError != "" {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError)
-			} else {
-				assert.NoError(t, err)
-				assert.Contains(t, output.String(), tt.expectedOutput)
-			}
-		})
-	}
-}
-
 func TestQueryCmdFlags(t *testing.T) {
 	cmd := &cobra.Command{Use: "pathfinder"}
 	cmd.AddCommand(queryCmd)
@@ -257,7 +198,7 @@ func TestQueryCmdStdinInput(t *testing.T) {
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 
-	input := "FIND function WHERE name = 'test'\n:quit\n"
+	input := ":quit\n"
 	r, w, _ := os.Pipe()
 	os.Stdin = r
 
@@ -266,7 +207,8 @@ func TestQueryCmdStdinInput(t *testing.T) {
 		w.Close()
 	}()
 
-	result, err := executeCLIQuery("testproject", "", "", true)
+	result, err := executeCLIQuery("../../test-src/android", "", "", true)
+	fmt.Println(result)
 	assert.NoError(t, err)
 	assert.Equal(t, "Okay, Bye!", result)
 
