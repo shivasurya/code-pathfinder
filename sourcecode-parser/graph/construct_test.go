@@ -535,3 +535,171 @@ func TestExtractVisibilityModifierWithInvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestInitialize(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_initialize")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	testFiles := []struct {
+		name    string
+		content string
+	}{
+		{"File1.java", "public class File1 { }"},
+		{"File2.java", "public class File2 { }"},
+		{"subdir/File3.java", "public class File3 { }"},
+	}
+
+	for _, tf := range testFiles {
+		path := filepath.Join(tempDir, tf.name)
+		err := os.MkdirAll(filepath.Dir(path), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+		err = os.WriteFile(path, []byte(tf.content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	graph := Initialize(tempDir)
+
+	if graph == nil {
+		t.Fatal("Initialize returned nil graph")
+	}
+
+	expectedNodeCount := 3 // One for each file
+	if len(graph.Nodes) != expectedNodeCount {
+		t.Errorf("Expected %d nodes, but got %d", expectedNodeCount, len(graph.Nodes))
+	}
+
+	nodeTypes := map[string]int{"class": 0, "interface": 0, "enum": 0}
+	for _, node := range graph.Nodes {
+		nodeTypes[node.Type]++
+	}
+
+	if nodeTypes["class_declaration"] != 3 {
+		t.Errorf("Unexpected node type distribution: %v", nodeTypes)
+	}
+}
+
+func TestInitializeEmptyDirectory(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_initialize_empty")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	graph := Initialize(tempDir)
+
+	if graph == nil {
+		t.Fatal("Initialize returned nil graph for empty directory")
+	}
+
+	if len(graph.Nodes) != 0 {
+		t.Errorf("Expected 0 nodes for empty directory, but got %d", len(graph.Nodes))
+	}
+
+	if len(graph.Edges) != 0 {
+		t.Errorf("Expected 0 edges for empty directory, but got %d", len(graph.Edges))
+	}
+}
+
+func TestInitializeNonExistentDirectory(t *testing.T) {
+	nonExistentDir := "/path/to/non/existent/directory"
+	graph := Initialize(nonExistentDir)
+
+	if graph == nil {
+		t.Fatal("Initialize returned nil graph for non-existent directory")
+	}
+
+	if len(graph.Nodes) != 0 {
+		t.Errorf("Expected 0 nodes for non-existent directory, but got %d", len(graph.Nodes))
+	}
+
+	if len(graph.Edges) != 0 {
+		t.Errorf("Expected 0 edges for non-existent directory, but got %d", len(graph.Edges))
+	}
+}
+
+func TestInitializeWithNonJavaFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_initialize_non_java")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	testFiles := []struct {
+		name    string
+		content string
+	}{
+		{"File1.java", "public class File1 { }"},
+		{"File2.txt", "This is a text file"},
+		{"File3.cpp", "int main() { return 0; }"},
+	}
+
+	for _, tf := range testFiles {
+		path := filepath.Join(tempDir, tf.name)
+		err := os.WriteFile(path, []byte(tf.content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	graph := Initialize(tempDir)
+
+	if graph == nil {
+		t.Fatal("Initialize returned nil graph")
+	}
+
+	expectedNodeCount := 1 // Only one Java file
+	if len(graph.Nodes) != expectedNodeCount {
+		t.Errorf("Expected %d node, but got %d", expectedNodeCount, len(graph.Nodes))
+	}
+
+	for _, node := range graph.Nodes {
+		if node.Type != "class_declaration" {
+			t.Errorf("Expected node type to be 'class', but got '%s'", node.Type)
+		}
+	}
+}
+
+func TestInitializeWithLargeNumberOfFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_initialize_large")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a large number of test files
+	numFiles := 100
+	for i := 0; i < numFiles; i++ {
+		fileName := fmt.Sprintf("File%d.java", i)
+		content := fmt.Sprintf("public class File%d { }", i)
+		path := filepath.Join(tempDir, fileName)
+		err := os.WriteFile(path, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	graph := Initialize(tempDir)
+
+	if graph == nil {
+		t.Fatal("Initialize returned nil graph")
+	}
+
+	if len(graph.Nodes) != numFiles {
+		t.Errorf("Expected %d nodes, but got %d", numFiles, len(graph.Nodes))
+	}
+
+	for _, node := range graph.Nodes {
+		if node.Type != "class_declaration" {
+			t.Errorf("Expected node type to be 'class_declaration', but got '%s'", node.Type)
+		}
+	}
+}
