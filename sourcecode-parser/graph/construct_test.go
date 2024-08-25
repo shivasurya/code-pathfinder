@@ -745,11 +745,19 @@ func TestBuildGraphFromAST(t *testing.T) {
 						int a = 5 - 1;
 						int b = 20 / 2;
 						boolean c = 20 == 2;
+                        int d = 1 * 2;
+						int e = 10 % 3;
+						int f = 10 >> 3;
+						int g = 10 << 3;
+						int h = 1 & 1;
+                        int i = 1 | 1;
+                        int j = 1 ^ 1;
+                        int l = 1 >>> 1;
 						return (5 > 3) && (10 <= 20) || (15 != 12) || (20 > 15);
 					}
 				}
 			`,
-			expectedNodes:   25,
+			expectedNodes:   49,
 			expectedEdges:   0,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression"},
 			unexpectedTypes: []string{""},
