@@ -22,8 +22,9 @@ func (e *ExprParent) GetNumChildExpr() int64 {
 
 type Expr struct {
 	ExprParent
-	kind int
-	Node sitter.Node
+	kind       int
+	Node       sitter.Node
+	NodeString string
 }
 
 func (e *Expr) GetAChildExpr() *Expr {
@@ -56,8 +57,16 @@ func (e *BinaryExpr) GetLeftOperand() *Expr {
 	return e.LeftOperand
 }
 
+func (e *BinaryExpr) GetLeftOperandString() string {
+	return e.LeftOperand.NodeString
+}
+
 func (e *BinaryExpr) GetRightOperand() *Expr {
 	return e.RightOperand
+}
+
+func (e *BinaryExpr) GetRightOperandString() string {
+	return e.RightOperand.NodeString
 }
 
 func (e *BinaryExpr) GetOp() string {

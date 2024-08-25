@@ -177,8 +177,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		operator := node.ChildByFieldName("operator")
 		operatorType := operator.Type()
 		expressionNode := model.BinaryExpr{}
-		expressionNode.LeftOperand = &model.Expr{Node: *leftNode}
-		expressionNode.RightOperand = &model.Expr{Node: *rightNode}
+		expressionNode.LeftOperand = &model.Expr{Node: *leftNode, NodeString: leftNode.Content(sourceCode)}
+		expressionNode.RightOperand = &model.Expr{Node: *rightNode, NodeString: rightNode.Content(sourceCode)}
 		expressionNode.Op = operatorType
 		switch operatorType {
 		case "+":
