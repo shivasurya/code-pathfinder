@@ -77,6 +77,18 @@ func (env *Env) GetDoc() *model.Javadoc {
 	return env.Node.JavaDoc
 }
 
+func (env *Env) GetBinaryExpr() *model.BinaryExpr {
+	return env.Node.BinaryExpr
+}
+
+func (env *Env) GetLeftOperand() string {
+	return env.Node.BinaryExpr.LeftOperand.NodeString
+}
+
+func (env *Env) GetRightOperand() string {
+	return env.Node.BinaryExpr.RightOperand.NodeString
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 	result := make([]*Node, 0)
 
@@ -101,6 +113,24 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	classDeclaration := "class_declaration"
 	methodInvocation := "method_invocation"
 	variableDeclaration := "variable_declaration"
+	binaryExpression := "binary_expression"
+	addExpression := "add_expression"
+	subExpression := "sub_expression"
+	mulExpression := "mul_expression"
+	divExpression := "div_expression"
+	comparisionExpression := "comparison_expression"
+	remainderExpression := "remainder_expression"
+	rightShiftExpression := "right_shift_expression"
+	leftShiftExpression := "left_shift_expression"
+	notEqualExpression := "not_equal_expression"
+	equalExpression := "equal_expression"
+	andBitwiseExpression := "and_bitwise_expression"
+	andLogicalExpression := "and_logical_expression"
+	orLogicalExpression := "or_logical_expression"
+	orBitwiseExpression := "or_bitwise_expression"
+	unsignedRightShiftExpression := "unsigned_right_shift_expression"
+	xorBitwsieExpression := "xor_bitwise_expression"
+
 	// print query select list
 	for _, entity := range query.SelectList {
 		switch entity.Entity {
@@ -112,6 +142,40 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			methodInvocation = entity.Alias
 		case "variable_declaration":
 			variableDeclaration = entity.Alias
+		case "binary_expression":
+			binaryExpression = entity.Alias
+		case "add_expression":
+			addExpression = entity.Alias
+		case "sub_expression":
+			subExpression = entity.Alias
+		case "mul_expression":
+			mulExpression = entity.Alias
+		case "div_expression":
+			divExpression = entity.Alias
+		case "comparison_expression":
+			comparisionExpression = entity.Alias
+		case "remainder_expression":
+			remainderExpression = entity.Alias
+		case "right_shift_expression":
+			rightShiftExpression = entity.Alias
+		case "left_shift_expression":
+			leftShiftExpression = entity.Alias
+		case "not_equal_expression":
+			notEqualExpression = entity.Alias
+		case "equal_expression":
+			equalExpression = entity.Alias
+		case "and_bitwise_expression":
+			andBitwiseExpression = entity.Alias
+		case "and_logical_expression":
+			andLogicalExpression = entity.Alias
+		case "or_logical_expression":
+			orLogicalExpression = entity.Alias
+		case "or_bitwise_expression":
+			orBitwiseExpression = entity.Alias
+		case "unsigned_right_shift_expression":
+			unsignedRightShiftExpression = entity.Alias
+		case "xor_bitwise_expression":
+			xorBitwsieExpression = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -146,6 +210,74 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getVariableDataType": proxyenv.GetVariableDataType,
 			"getScope":            proxyenv.GetScope,
 			"getDoc":              proxyenv.GetDoc,
+		},
+		binaryExpression: map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetLeftOperand,
+			"getRightOperand": proxyenv.GetRightOperand,
+		},
+		addExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "+",
+		},
+		subExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "-",
+		},
+		mulExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "*",
+		},
+		divExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "/",
+		},
+		comparisionExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "==",
+		},
+		remainderExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "%",
+		},
+		rightShiftExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   ">>",
+		},
+		leftShiftExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "<<",
+		},
+		notEqualExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "!=",
+		},
+		equalExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "==",
+		},
+		andBitwiseExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "&",
+		},
+		andLogicalExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "&&",
+		},
+		orLogicalExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "||",
+		},
+		orBitwiseExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "|",
+		},
+		unsignedRightShiftExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   ">>>",
+		},
+		xorBitwsieExpression: map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "^",
 		},
 	}
 	return env

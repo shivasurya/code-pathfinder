@@ -2,8 +2,6 @@ package graph
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -44,6 +42,7 @@ type Node struct {
 	ThrowsExceptions     []string
 	Annotation           []string
 	JavaDoc              *model.Javadoc
+	BinaryExpr           *model.BinaryExpr
 }
 
 type Edge struct {
@@ -172,6 +171,302 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "binary_expression":
+		leftNode := node.ChildByFieldName("left")
+		rightNode := node.ChildByFieldName("right")
+		operator := node.ChildByFieldName("operator")
+		operatorType := operator.Type()
+		expressionNode := model.BinaryExpr{}
+		expressionNode.LeftOperand = &model.Expr{Node: *leftNode, NodeString: leftNode.Content(sourceCode)}
+		expressionNode.RightOperand = &model.Expr{Node: *rightNode, NodeString: rightNode.Content(sourceCode)}
+		expressionNode.Op = operatorType
+		switch operatorType {
+		case "+":
+			var addExpr model.AddExpr
+			addExpr.LeftOperand = expressionNode.LeftOperand
+			addExpr.RightOperand = expressionNode.RightOperand
+			addExpr.Op = expressionNode.Op
+			addExpr.BinaryExpr = expressionNode
+			addExpressionNode := &Node{
+				ID:               GenerateSha256("add_expression" + node.Content(sourceCode)),
+				Type:             "add_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(addExpressionNode)
+		case "-":
+			var subExpr model.SubExpr
+			subExpr.LeftOperand = expressionNode.LeftOperand
+			subExpr.RightOperand = expressionNode.RightOperand
+			subExpr.Op = expressionNode.Op
+			subExpr.BinaryExpr = expressionNode
+			subExpressionNode := &Node{
+				ID:               GenerateSha256("sub_expression" + node.Content(sourceCode)),
+				Type:             "sub_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(subExpressionNode)
+		case "*":
+			var mulExpr model.MulExpr
+			mulExpr.LeftOperand = expressionNode.LeftOperand
+			mulExpr.RightOperand = expressionNode.RightOperand
+			mulExpr.Op = expressionNode.Op
+			mulExpr.BinaryExpr = expressionNode
+			mulExpressionNode := &Node{
+				ID:               GenerateSha256("mul_expression" + node.Content(sourceCode)),
+				Type:             "mul_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(mulExpressionNode)
+		case "/":
+			var divExpr model.DivExpr
+			divExpr.LeftOperand = expressionNode.LeftOperand
+			divExpr.RightOperand = expressionNode.RightOperand
+			divExpr.Op = expressionNode.Op
+			divExpr.BinaryExpr = expressionNode
+			divExpressionNode := &Node{
+				ID:               GenerateSha256("div_expression" + node.Content(sourceCode)),
+				Type:             "div_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(divExpressionNode)
+		case ">", "<", ">=", "<=":
+			var compExpr model.ComparisonExpr
+			compExpr.LeftOperand = expressionNode.LeftOperand
+			compExpr.RightOperand = expressionNode.RightOperand
+			compExpr.Op = expressionNode.Op
+			compExpr.BinaryExpr = expressionNode
+			compExpressionNode := &Node{
+				ID:               GenerateSha256("comp_expression" + node.Content(sourceCode)),
+				Type:             "comp_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(compExpressionNode)
+		case "%":
+			var RemExpr model.RemExpr
+			RemExpr.LeftOperand = expressionNode.LeftOperand
+			RemExpr.RightOperand = expressionNode.RightOperand
+			RemExpr.Op = expressionNode.Op
+			RemExpr.BinaryExpr = expressionNode
+			RemExpressionNode := &Node{
+				ID:               GenerateSha256("rem_expression" + node.Content(sourceCode)),
+				Type:             "rem_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(RemExpressionNode)
+		case ">>":
+			var RightShiftExpr model.RightShiftExpr
+			RightShiftExpr.LeftOperand = expressionNode.LeftOperand
+			RightShiftExpr.RightOperand = expressionNode.RightOperand
+			RightShiftExpr.Op = expressionNode.Op
+			RightShiftExpr.BinaryExpr = expressionNode
+			RightShiftExpressionNode := &Node{
+				ID:               GenerateSha256("right_shift_expression" + node.Content(sourceCode)),
+				Type:             "right_shift_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(RightShiftExpressionNode)
+		case "<<":
+			var LeftShiftExpr model.LeftShiftExpr
+			LeftShiftExpr.LeftOperand = expressionNode.LeftOperand
+			LeftShiftExpr.RightOperand = expressionNode.RightOperand
+			LeftShiftExpr.Op = expressionNode.Op
+			LeftShiftExpr.BinaryExpr = expressionNode
+			LeftShiftExpressionNode := &Node{
+				ID:               GenerateSha256("left_shift_expression" + node.Content(sourceCode)),
+				Type:             "left_shift_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(LeftShiftExpressionNode)
+		case "!=":
+			var NEExpr model.NEExpr
+			NEExpr.LeftOperand = expressionNode.LeftOperand
+			NEExpr.RightOperand = expressionNode.RightOperand
+			NEExpr.Op = expressionNode.Op
+			NEExpr.BinaryExpr = expressionNode
+			NEExpressionNode := &Node{
+				ID:               GenerateSha256("ne_expression" + node.Content(sourceCode)),
+				Type:             "ne_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(NEExpressionNode)
+		case "==":
+			var EQExpr model.EqExpr
+			EQExpr.LeftOperand = expressionNode.LeftOperand
+			EQExpr.RightOperand = expressionNode.RightOperand
+			EQExpr.Op = expressionNode.Op
+			EQExpr.BinaryExpr = expressionNode
+			EQExpressionNode := &Node{
+				ID:               GenerateSha256("eq_expression" + node.Content(sourceCode)),
+				Type:             "eq_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(EQExpressionNode)
+		case "&":
+			var BitwiseAndExpr model.AndBitwiseExpr
+			BitwiseAndExpr.LeftOperand = expressionNode.LeftOperand
+			BitwiseAndExpr.RightOperand = expressionNode.RightOperand
+			BitwiseAndExpr.Op = expressionNode.Op
+			BitwiseAndExpr.BinaryExpr = expressionNode
+			BitwiseAndExpressionNode := &Node{
+				ID:               GenerateSha256("bitwise_and_expression" + node.Content(sourceCode)),
+				Type:             "bitwise_and_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(BitwiseAndExpressionNode)
+		case "&&":
+			var AndExpr model.AndLogicalExpr
+			AndExpr.LeftOperand = expressionNode.LeftOperand
+			AndExpr.RightOperand = expressionNode.RightOperand
+			AndExpr.Op = expressionNode.Op
+			AndExpr.BinaryExpr = expressionNode
+			AndExpressionNode := &Node{
+				ID:               GenerateSha256("and_expression" + node.Content(sourceCode)),
+				Type:             "and_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(AndExpressionNode)
+		case "||":
+			var OrExpr model.OrLogicalExpr
+			OrExpr.LeftOperand = expressionNode.LeftOperand
+			OrExpr.RightOperand = expressionNode.RightOperand
+			OrExpr.Op = expressionNode.Op
+			OrExpr.BinaryExpr = expressionNode
+			OrExpressionNode := &Node{
+				ID:               GenerateSha256("or_expression" + node.Content(sourceCode)),
+				Type:             "or_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(OrExpressionNode)
+		case "|":
+			var BitwiseOrExpr model.OrBitwiseExpr
+			BitwiseOrExpr.LeftOperand = expressionNode.LeftOperand
+			BitwiseOrExpr.RightOperand = expressionNode.RightOperand
+			BitwiseOrExpr.Op = expressionNode.Op
+			BitwiseOrExpr.BinaryExpr = expressionNode
+			BitwiseOrExpressionNode := &Node{
+				ID:               GenerateSha256("bitwise_or_expression" + node.Content(sourceCode)),
+				Type:             "bitwise_or_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(BitwiseOrExpressionNode)
+		case ">>>":
+			var BitwiseRightShiftExpr model.UnsignedRightShiftExpr
+			BitwiseRightShiftExpr.LeftOperand = expressionNode.LeftOperand
+			BitwiseRightShiftExpr.RightOperand = expressionNode.RightOperand
+			BitwiseRightShiftExpr.Op = expressionNode.Op
+			BitwiseRightShiftExpr.BinaryExpr = expressionNode
+			BitwiseRightShiftExpressionNode := &Node{
+				ID:               GenerateSha256("bitwise_right_shift_expression" + node.Content(sourceCode)),
+				Type:             "bitwise_right_shift_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(BitwiseRightShiftExpressionNode)
+		case "^":
+			var BitwiseXorExpr model.XorBitwiseExpr
+			BitwiseXorExpr.LeftOperand = expressionNode.LeftOperand
+			BitwiseXorExpr.RightOperand = expressionNode.RightOperand
+			BitwiseXorExpr.Op = expressionNode.Op
+			BitwiseXorExpr.BinaryExpr = expressionNode
+			BitwiseXorExpressionNode := &Node{
+				ID:               GenerateSha256("bitwise_xor_expression" + node.Content(sourceCode)),
+				Type:             "bitwise_xor_expression",
+				Name:             node.Content(sourceCode),
+				CodeSnippet:      node.Content(sourceCode),
+				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BinaryExpr:       &expressionNode,
+			}
+			graph.AddNode(BitwiseXorExpressionNode)
+		}
+
+		invokedNode := &Node{
+			ID:               GenerateSha256("binary_expression" + node.Content(sourceCode)),
+			Type:             "binary_expression",
+			Name:             node.Content(sourceCode),
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			BinaryExpr:       &expressionNode,
+		}
+		graph.AddNode(invokedNode)
+		currentContext = invokedNode
 	case "method_declaration":
 		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
@@ -326,8 +621,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				}
 			}
 		}
+
 		classNode := &Node{
-			ID:               generateMethodID(className, []string{}, file),
+			ID:               GenerateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
 			Name:             className,
 			CodeSnippet:      node.Content(sourceCode),
@@ -349,7 +645,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			javadocTags := parseJavadocTags(commentContent)
 
 			commentNode := &Node{
-				ID:               generateMethodID(node.Content(sourceCode), []string{}, file),
+				ID:               GenerateMethodID(node.Content(sourceCode), []string{}, file),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
 				LineNumber:       node.StartPoint().Row + 1,
@@ -405,7 +701,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 		// Create a new node for the variable
 		variableNode := &Node{
-			ID:               generateMethodID(variableName, []string{}, file),
+			ID:               GenerateMethodID(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,
 			CodeSnippet:      node.Content(sourceCode),
@@ -443,14 +739,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			}
 		}
 	}
-}
-
-// write a function to generate unique method id from method name, class name, and package name, parameters, and return type.
-func generateMethodID(methodName string, parameters []string, sourceFile string) string {
-	// Example: Use the node type and its start byte position in the source code to generate a unique ID
-	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
-	hash := sha256.Sum256([]byte(hashInput))
-	return hex.EncodeToString(hash[:])
 }
 
 //nolint:all
@@ -506,7 +794,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 		}
 	}
-	methodID = generateMethodID(methodName, parameters, filepath)
+	methodID = GenerateMethodID(methodName, parameters, filepath)
 	return methodName, methodID
 }
 

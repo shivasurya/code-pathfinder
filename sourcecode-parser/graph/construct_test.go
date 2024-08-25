@@ -1,12 +1,15 @@
 package graph
 
 import (
-	"encoding/hex"
+	"context"
 	"fmt"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -186,72 +189,6 @@ func TestParseJavadocTags(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGenerateMethodID(t *testing.T) {
-	tests := []struct {
-		name       string
-		methodName string
-		parameters []string
-		sourceFile string
-		want       string
-	}{
-		{
-			name:       "Simple method",
-			methodName: "testMethod",
-			parameters: []string{"int", "string"},
-			sourceFile: "Test.java",
-			want:       "f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3",
-		},
-		{
-			name:       "Empty parameters",
-			methodName: "emptyParams",
-			parameters: []string{},
-			sourceFile: "Empty.java",
-			want:       "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
-		},
-		{
-			name:       "Long method name",
-			methodName: "thisIsAVeryLongMethodNameThatExceedsTwentyCharacters",
-			parameters: []string{"long"},
-			sourceFile: "LongName.java",
-			want:       "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
-		},
-		{
-			name:       "Special characters",
-			methodName: "special$Method#Name",
-			parameters: []string{"char[]", "int[]"},
-			sourceFile: "Special!File@Name.java",
-			want:       "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4",
-		},
-		{
-			name:       "Unicode characters",
-			methodName: "unicodeMethod你好",
-			parameters: []string{"String"},
-			sourceFile: "Unicode文件.java",
-			want:       "c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := generateMethodID(tt.methodName, tt.parameters, tt.sourceFile)
-			if len(got) != 64 {
-				t.Errorf("generateMethodID() returned ID with incorrect length, got %d, want 64", len(got))
-			}
-			if !isValidHexString(got) {
-				t.Errorf("generateMethodID() returned invalid hex string: %s", got)
-			}
-			if got == tt.want {
-				t.Errorf("generateMethodID() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func isValidHexString(s string) bool {
-	_, err := hex.DecodeString(s)
-	return err == nil
 }
 
 func TestGetFiles(t *testing.T) {
@@ -741,6 +678,199 @@ func TestReadFile(t *testing.T) {
 			}
 			if !tt.wantErr && string(got) != tt.expected {
 				t.Errorf("readFile() = %v, want %v", string(got), tt.expected)
+			}
+		})
+	}
+}
+
+func TestBuildGraphFromAST(t *testing.T) {
+	tests := []struct {
+		name            string
+		sourceCode      string
+		expectedNodes   int
+		expectedEdges   int
+		expectedTypes   []string
+		unexpectedTypes []string
+	}{
+		{
+			name: "Simple class with method",
+			sourceCode: `
+				public class SimpleClass {
+					public void simpleMethod() {
+						int x = 5;
+					}
+				}
+			`,
+			expectedNodes:   3,
+			expectedEdges:   0,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "variable_declaration"},
+			unexpectedTypes: []string{"method_invocation"},
+		},
+		{
+			name: "Class with method invocation",
+			sourceCode: `
+				public class InvocationClass {
+					public void caller() {
+						callee();
+					}
+					private void callee() {
+					  fmt.Println("Hello, World!");
+					}
+				}
+			`,
+			expectedNodes:   4,
+			expectedEdges:   2,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "method_invocation"},
+			unexpectedTypes: []string{"variable_declaration"},
+		},
+		{
+			name: "Class with binary expression",
+			sourceCode: `
+				public class BinaryExprClass {
+					public int add() {
+						return 5 + 3;
+					}
+				}
+			`,
+			expectedNodes:   4,
+			expectedEdges:   0,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression"},
+			unexpectedTypes: []string{"variable_declaration"},
+		},
+		{
+			name: "Class with multiple binary expressions",
+			sourceCode: `
+				public class MultiBinaryExprClass {
+					public boolean complex() {
+						int a = 5 - 1;
+						int b = 20 / 2;
+						boolean c = 20 == 2;
+                        int d = 1 * 2;
+						int e = 10 % 3;
+						int f = 10 >> 3;
+						int g = 10 << 3;
+						int h = 1 & 1;
+                        int i = 1 | 1;
+                        int j = 1 ^ 1;
+                        int l = 1 >>> 1;
+						return (5 > 3) && (10 <= 20) || (15 != 12) || (20 > 15);
+					}
+				}
+			`,
+			expectedNodes:   49,
+			expectedEdges:   0,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression"},
+			unexpectedTypes: []string{""},
+		},
+		{
+			name: "Class with Javadoc and annotations",
+			sourceCode: `
+				/**
+				 * @author John Doe
+				 * @version 1.0
+				 */
+				@Deprecated
+				public class AnnotatedClass {
+					@Override
+					public String toString() {
+						return "AnnotatedClass";
+					}
+				}
+			`,
+			expectedNodes:   3,
+			expectedEdges:   0,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "block_comment"},
+			unexpectedTypes: []string{"variable_declaration", "binary_expression"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(java.GetLanguage())
+			tree, err := parser.ParseCtx(context.TODO(), nil, []byte(tt.sourceCode))
+			if err != nil {
+				t.Fatalf("Failed to parse source code: %v", err)
+			}
+			root := tree.RootNode()
+
+			graph := NewCodeGraph()
+			buildGraphFromAST(root, []byte(tt.sourceCode), graph, nil, "test.java")
+
+			if len(graph.Nodes) != tt.expectedNodes {
+				t.Errorf("Expected %d nodes, but got %d", tt.expectedNodes, len(graph.Nodes))
+			}
+
+			if len(graph.Edges) != tt.expectedEdges {
+				t.Errorf("Expected %d edges, but got %d", tt.expectedEdges, len(graph.Edges))
+			}
+
+			nodeTypes := make(map[string]bool)
+			for _, node := range graph.Nodes {
+				nodeTypes[node.Type] = true
+			}
+
+			for _, expectedType := range tt.expectedTypes {
+				if !nodeTypes[expectedType] {
+					t.Errorf("Expected node type %s not found", expectedType)
+				}
+			}
+
+			for _, unexpectedType := range tt.unexpectedTypes {
+				if nodeTypes[unexpectedType] {
+					t.Errorf("Unexpected node type %s found", unexpectedType)
+				}
+			}
+		})
+	}
+}
+
+func TestExtractMethodName(t *testing.T) {
+	tests := []struct {
+		name           string
+		sourceCode     string
+		expectedName   string
+		expectedIDPart string
+	}{
+		{
+			name:           "Simple method",
+			sourceCode:     "public void simpleMethod() {}",
+			expectedName:   "simpleMethod",
+			expectedIDPart: "f5bef43ffe2408f266cdb6a6649ec63ae0e3e00d0f8b9269c057626c2ed750e7",
+		},
+		{
+			name:           "Method with parameters",
+			sourceCode:     "private int complexMethod(String a, int b) {}",
+			expectedName:   "complexMethod",
+			expectedIDPart: "7aafd0e3d06b68d9795e019ed7131eeda9f3ae692125b537a4e69486205ef6a0",
+		},
+		{
+			name:           "Generic method",
+			sourceCode:     "public <T> List<T> genericMethod(T item) {}",
+			expectedName:   "genericMethod",
+			expectedIDPart: "5bcc19f46ab5547ade3962fc401d19b71d17c2c16ee9ff1a0bdfa7fd9b788131",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(java.GetLanguage())
+			tree, err := parser.ParseCtx(context.TODO(), nil, []byte(tt.sourceCode))
+			if err != nil {
+				t.Fatalf("Failed to parse source code: %v", err)
+			}
+			root := tree.RootNode()
+
+			methodNode := root.NamedChild(0)
+			name, id := extractMethodName(methodNode, []byte(tt.sourceCode), "test.java")
+
+			if name != tt.expectedName {
+				t.Errorf("Expected method name %s, but got %s", tt.expectedName, name)
+			}
+
+			if !strings.Contains(id, tt.expectedIDPart) {
+				t.Errorf("Expected method ID to contain %s, but got %s", tt.expectedIDPart, id)
 			}
 		})
 	}

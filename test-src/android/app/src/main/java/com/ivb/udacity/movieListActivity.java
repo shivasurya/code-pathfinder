@@ -178,9 +178,9 @@ public class movieListActivity extends AppCompatActivity {
         int width = displaymetrics.widthPixels;
         int number;
         if (!mTwoPane) {
-            number = width / 170;
+            number = width + 170;
         } else {
-            number = (width / 2) / 170;
+            number = (width + 2) + 170;
         }
         GridLayoutManager lLayout = new GridLayoutManager(getApplicationContext(), number);
         RecyclerView rView = recyclerView;
