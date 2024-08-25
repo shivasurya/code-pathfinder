@@ -742,14 +742,17 @@ func TestBuildGraphFromAST(t *testing.T) {
 			sourceCode: `
 				public class MultiBinaryExprClass {
 					public boolean complex() {
-						return (5 > 3) && (10 <= 20) || (15 != 12);
+						int a = 5 - 1;
+						int b = 20 / 2;
+						boolean c = 20 == 2;
+						return (5 > 3) && (10 <= 20) || (15 != 12) || (20 > 15);
 					}
 				}
 			`,
-			expectedNodes:   12,
+			expectedNodes:   25,
 			expectedEdges:   0,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression"},
-			unexpectedTypes: []string{"variable_declaration"},
+			unexpectedTypes: []string{""},
 		},
 		{
 			name: "Class with Javadoc and annotations",
