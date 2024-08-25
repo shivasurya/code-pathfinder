@@ -703,3 +703,45 @@ func TestInitializeWithLargeNumberOfFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestReadFile(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_read_file")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	tests := []struct {
+		name     string
+		content  string
+		wantErr  bool
+		expected string
+	}{
+		{"Valid file", "Hello, World!", false, "Hello, World!"},
+		{"Empty file", "", false, ""},
+		{"File with special characters", "!@#$%^&*()", false, "!@#$%^&*()"},
+		{"File with multiple lines", "Line 1\nLine 2\nLine 3", false, "Line 1\nLine 2\nLine 3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filePath := filepath.Join(tempDir, "testfile.txt")
+			if !tt.wantErr {
+				err := os.WriteFile(filePath, []byte(tt.content), 0644)
+				if err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+			}
+
+			got, err := readFile(filePath)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("readFile() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && string(got) != tt.expected {
+				t.Errorf("readFile() = %v, want %v", string(got), tt.expected)
+			}
+		})
+	}
+}
