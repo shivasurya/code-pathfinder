@@ -26,11 +26,13 @@ jobs:
         env:
           GOOS: linux
           GOARCH: amd64
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
           cd sourcecode-parser
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-linux-amd64 .
+          posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-amd64 .
           chmod +x pathfinder-linux-amd64
 
       - name: Calculate SHA256
@@ -64,11 +66,13 @@ jobs:
         env:
           GOOS: windows
           GOARCH: amd64
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
           cd sourcecode-parser
           $gitCommit = (git describe --tags).Trim()
           $projectVersion = Get-Content VERSION
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-windows-amd64.exe .
+          $posthogkey=$env:POSTHOG_WEB_ANALYTICS          
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-windows-amd64.exe .
 
       - name: Calculate SHA256
         run: |
@@ -101,9 +105,13 @@ jobs:
         env:
           GOOS: darwin
           GOARCH: arm64
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
           cd sourcecode-parser
-          go build -ldflags="-s -w -X main.Version=${projectVersion} -X main.GitCommit=${gitCommit}" -v -o pathfinder-darwin-arm64 .
+          gitCommit=$(git describe --tags)
+          projectVersion=$(cat VERSION)
+          posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-arm64 .
           chmod +x pathfinder-darwin-arm64
 
       - name: Calculate SHA256
