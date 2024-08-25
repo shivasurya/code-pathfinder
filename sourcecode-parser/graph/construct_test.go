@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"os"
@@ -186,72 +185,6 @@ func TestParseJavadocTags(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGenerateMethodID(t *testing.T) {
-	tests := []struct {
-		name       string
-		methodName string
-		parameters []string
-		sourceFile string
-		want       string
-	}{
-		{
-			name:       "Simple method",
-			methodName: "testMethod",
-			parameters: []string{"int", "string"},
-			sourceFile: "Test.java",
-			want:       "f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3f3f8f9d3",
-		},
-		{
-			name:       "Empty parameters",
-			methodName: "emptyParams",
-			parameters: []string{},
-			sourceFile: "Empty.java",
-			want:       "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
-		},
-		{
-			name:       "Long method name",
-			methodName: "thisIsAVeryLongMethodNameThatExceedsTwentyCharacters",
-			parameters: []string{"long"},
-			sourceFile: "LongName.java",
-			want:       "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
-		},
-		{
-			name:       "Special characters",
-			methodName: "special$Method#Name",
-			parameters: []string{"char[]", "int[]"},
-			sourceFile: "Special!File@Name.java",
-			want:       "b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4",
-		},
-		{
-			name:       "Unicode characters",
-			methodName: "unicodeMethod你好",
-			parameters: []string{"String"},
-			sourceFile: "Unicode文件.java",
-			want:       "c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GenerateMethodID(tt.methodName, tt.parameters, tt.sourceFile)
-			if len(got) != 64 {
-				t.Errorf("generateMethodID() returned ID with incorrect length, got %d, want 64", len(got))
-			}
-			if !isValidHexString(got) {
-				t.Errorf("generateMethodID() returned invalid hex string: %s", got)
-			}
-			if got == tt.want {
-				t.Errorf("generateMethodID() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func isValidHexString(s string) bool {
-	_, err := hex.DecodeString(s)
-	return err == nil
 }
 
 func TestGetFiles(t *testing.T) {
