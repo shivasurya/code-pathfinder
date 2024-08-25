@@ -187,7 +187,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			addExpr.RightOperand = expressionNode.RightOperand
 			addExpr.Op = expressionNode.Op
 			addExpr.BinaryExpr = expressionNode
-			addExpressionNode := &GraphNode{
+			addExpressionNode := &Node{
 				ID:               GenerateSha256("add_expression" + node.Content(sourceCode)),
 				Type:             "add_expression",
 				Name:             node.Content(sourceCode),
@@ -204,7 +204,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			subExpr.RightOperand = expressionNode.RightOperand
 			subExpr.Op = expressionNode.Op
 			subExpr.BinaryExpr = expressionNode
-			subExpressionNode := &GraphNode{
+			subExpressionNode := &Node{
 				ID:               GenerateSha256("sub_expression" + node.Content(sourceCode)),
 				Type:             "sub_expression",
 				Name:             node.Content(sourceCode),
@@ -221,7 +221,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			mulExpr.RightOperand = expressionNode.RightOperand
 			mulExpr.Op = expressionNode.Op
 			mulExpr.BinaryExpr = expressionNode
-			mulExpressionNode := &GraphNode{
+			mulExpressionNode := &Node{
 				ID:               GenerateSha256("mul_expression" + node.Content(sourceCode)),
 				Type:             "mul_expression",
 				Name:             node.Content(sourceCode),
@@ -238,7 +238,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			divExpr.RightOperand = expressionNode.RightOperand
 			divExpr.Op = expressionNode.Op
 			divExpr.BinaryExpr = expressionNode
-			divExpressionNode := &GraphNode{
+			divExpressionNode := &Node{
 				ID:               GenerateSha256("div_expression" + node.Content(sourceCode)),
 				Type:             "div_expression",
 				Name:             node.Content(sourceCode),
@@ -255,7 +255,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			compExpr.RightOperand = expressionNode.RightOperand
 			compExpr.Op = expressionNode.Op
 			compExpr.BinaryExpr = expressionNode
-			compExpressionNode := &GraphNode{
+			compExpressionNode := &Node{
 				ID:               GenerateSha256("comp_expression" + node.Content(sourceCode)),
 				Type:             "comp_expression",
 				Name:             node.Content(sourceCode),
@@ -272,7 +272,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			RemExpr.RightOperand = expressionNode.RightOperand
 			RemExpr.Op = expressionNode.Op
 			RemExpr.BinaryExpr = expressionNode
-			RemExpressionNode := &GraphNode{
+			RemExpressionNode := &Node{
 				ID:               GenerateSha256("rem_expression" + node.Content(sourceCode)),
 				Type:             "rem_expression",
 				Name:             node.Content(sourceCode),
@@ -289,7 +289,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			RightShiftExpr.RightOperand = expressionNode.RightOperand
 			RightShiftExpr.Op = expressionNode.Op
 			RightShiftExpr.BinaryExpr = expressionNode
-			RightShiftExpressionNode := &GraphNode{
+			RightShiftExpressionNode := &Node{
 				ID:               GenerateSha256("right_shift_expression" + node.Content(sourceCode)),
 				Type:             "right_shift_expression",
 				Name:             node.Content(sourceCode),
@@ -306,7 +306,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			LeftShiftExpr.RightOperand = expressionNode.RightOperand
 			LeftShiftExpr.Op = expressionNode.Op
 			LeftShiftExpr.BinaryExpr = expressionNode
-			LeftShiftExpressionNode := &GraphNode{
+			LeftShiftExpressionNode := &Node{
 				ID:               GenerateSha256("left_shift_expression" + node.Content(sourceCode)),
 				Type:             "left_shift_expression",
 				Name:             node.Content(sourceCode),
@@ -323,7 +323,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			NEExpr.RightOperand = expressionNode.RightOperand
 			NEExpr.Op = expressionNode.Op
 			NEExpr.BinaryExpr = expressionNode
-			NEExpressionNode := &GraphNode{
+			NEExpressionNode := &Node{
 				ID:               GenerateSha256("ne_expression" + node.Content(sourceCode)),
 				Type:             "ne_expression",
 				Name:             node.Content(sourceCode),
@@ -340,7 +340,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			EQExpr.RightOperand = expressionNode.RightOperand
 			EQExpr.Op = expressionNode.Op
 			EQExpr.BinaryExpr = expressionNode
-			EQExpressionNode := &GraphNode{
+			EQExpressionNode := &Node{
 				ID:               GenerateSha256("eq_expression" + node.Content(sourceCode)),
 				Type:             "eq_expression",
 				Name:             node.Content(sourceCode),
@@ -357,7 +357,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BitwiseAndExpr.RightOperand = expressionNode.RightOperand
 			BitwiseAndExpr.Op = expressionNode.Op
 			BitwiseAndExpr.BinaryExpr = expressionNode
-			BitwiseAndExpressionNode := &GraphNode{
+			BitwiseAndExpressionNode := &Node{
 				ID:               GenerateSha256("bitwise_and_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_and_expression",
 				Name:             node.Content(sourceCode),
@@ -374,7 +374,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			AndExpr.RightOperand = expressionNode.RightOperand
 			AndExpr.Op = expressionNode.Op
 			AndExpr.BinaryExpr = expressionNode
-			AndExpressionNode := &GraphNode{
+			AndExpressionNode := &Node{
 				ID:               GenerateSha256("and_expression" + node.Content(sourceCode)),
 				Type:             "and_expression",
 				Name:             node.Content(sourceCode),
@@ -391,7 +391,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			OrExpr.RightOperand = expressionNode.RightOperand
 			OrExpr.Op = expressionNode.Op
 			OrExpr.BinaryExpr = expressionNode
-			OrExpressionNode := &GraphNode{
+			OrExpressionNode := &Node{
 				ID:               GenerateSha256("or_expression" + node.Content(sourceCode)),
 				Type:             "or_expression",
 				Name:             node.Content(sourceCode),
@@ -408,7 +408,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BitwiseOrExpr.RightOperand = expressionNode.RightOperand
 			BitwiseOrExpr.Op = expressionNode.Op
 			BitwiseOrExpr.BinaryExpr = expressionNode
-			BitwiseOrExpressionNode := &GraphNode{
+			BitwiseOrExpressionNode := &Node{
 				ID:               GenerateSha256("bitwise_or_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_or_expression",
 				Name:             node.Content(sourceCode),
@@ -425,7 +425,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BitwiseRightShiftExpr.RightOperand = expressionNode.RightOperand
 			BitwiseRightShiftExpr.Op = expressionNode.Op
 			BitwiseRightShiftExpr.BinaryExpr = expressionNode
-			BitwiseRightShiftExpressionNode := &GraphNode{
+			BitwiseRightShiftExpressionNode := &Node{
 				ID:               GenerateSha256("bitwise_right_shift_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_right_shift_expression",
 				Name:             node.Content(sourceCode),
@@ -442,7 +442,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BitwiseXorExpr.RightOperand = expressionNode.RightOperand
 			BitwiseXorExpr.Op = expressionNode.Op
 			BitwiseXorExpr.BinaryExpr = expressionNode
-			BitwiseXorExpressionNode := &GraphNode{
+			BitwiseXorExpressionNode := &Node{
 				ID:               GenerateSha256("bitwise_xor_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_xor_expression",
 				Name:             node.Content(sourceCode),
@@ -455,7 +455,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			graph.AddNode(BitwiseXorExpressionNode)
 		}
 
-		invokedNode := &GraphNode{
+		invokedNode := &Node{
 			ID:               GenerateSha256("binary_expression" + node.Content(sourceCode)),
 			Type:             "binary_expression",
 			Name:             node.Content(sourceCode),
@@ -621,7 +621,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				}
 			}
 		}
-		
+
 		classNode := &Node{
 			ID:               GenerateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
@@ -700,7 +700,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			scope = "field"
 		}
 		// Create a new node for the variable
-		variableNode := &GraphNode{
+		variableNode := &Node{
 			ID:               GenerateMethodID(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,

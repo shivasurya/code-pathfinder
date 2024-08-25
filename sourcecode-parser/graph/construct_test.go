@@ -235,7 +235,7 @@ func TestGenerateMethodID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := generateMethodID(tt.methodName, tt.parameters, tt.sourceFile)
+			got := GenerateMethodID(tt.methodName, tt.parameters, tt.sourceFile)
 			if len(got) != 64 {
 				t.Errorf("generateMethodID() returned ID with incorrect length, got %d, want 64", len(got))
 			}
