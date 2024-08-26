@@ -97,13 +97,58 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	for _, node := range graph.Nodes {
-		for _, entity := range query.SelectList {
-			if entity.Entity == node.Type && FilterEntities(node, query) {
-				result = append(result, node)
-			}
+	cartesianProduct := generateCartesianProduct(graph, query.SelectList)
+
+	for _, nodeSet := range cartesianProduct {
+		if FilterEntities(nodeSet, query) {
+			result = append(result, nodeSet...)
 		}
 	}
+	return result
+}
+
+func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList) [][]*Node {
+	var sets [][]interface{}
+
+	for _, entity := range selectList {
+		set := make([]interface{}, 0)
+		for _, node := range graph.Nodes {
+			if entity.Entity == node.Type {
+				set = append(set, node)
+			}
+		}
+		sets = append(sets, set)
+	}
+
+	product := cartesianProduct(sets)
+
+	result := make([][]*Node, len(product))
+	for i, p := range product {
+		result[i] = make([]*Node, len(p))
+		for j, node := range p {
+			result[i][j] = node.(*Node)
+		}
+	}
+
+	return result
+}
+
+func cartesianProduct(sets [][]interface{}) [][]interface{} {
+	result := [][]interface{}{{}}
+
+	for _, set := range sets {
+		var newResult [][]interface{}
+		for _, item := range set {
+			for _, subResult := range result {
+				newSubResult := make([]interface{}, len(subResult), len(subResult)+1)
+				copy(newSubResult, subResult)
+				newSubResult = append(newSubResult, item)
+				newResult = append(newResult, newSubResult)
+			}
+		}
+		result = newResult
+	}
+
 	return result
 }
 
@@ -283,13 +328,13 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	return env
 }
 
-func FilterEntities(node *Node, query parser.Query) bool {
+func FilterEntities(node []*Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
 		return true
 	}
 
-	env := generateProxyEnv(node, query)
+	env := generateProxyEnvForSet(node, query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
@@ -305,4 +350,15 @@ func FilterEntities(node *Node, query parser.Query) bool {
 		return true
 	}
 	return false
+}
+
+func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
+	env := make(map[string]interface{})
+
+	for i, entity := range query.SelectList {
+		proxyEnv := generateProxyEnv(nodeSet[i], query)
+		env[entity.Alias] = proxyEnv[entity.Alias]
+	}
+
+	return env
 }
