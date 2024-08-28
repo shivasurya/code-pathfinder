@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
@@ -166,4 +167,78 @@ func TestGenerateProxyEnv(t *testing.T) {
 
 	throwsTypes := methodEnv["getThrowsType"].(func() []string)()
 	assert.Equal(t, []string{"IOException"}, throwsTypes)
+}
+
+func TestCartesianProduct(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    [][]interface{}
+		expected [][]interface{}
+	}{
+		{
+			name:     "Empty input",
+			input:    [][]interface{}{},
+			expected: [][]interface{}{{}},
+		},
+		{
+			name:     "Single set",
+			input:    [][]interface{}{{1, 2, 3}},
+			expected: [][]interface{}{{1}, {2}, {3}},
+		},
+		{
+			name:     "Two sets",
+			input:    [][]interface{}{{1, 2}, {"a", "b"}},
+			expected: [][]interface{}{{1, "a"}, {2, "a"}, {1, "b"}, {2, "b"}},
+		},
+		{
+			name:  "Three sets",
+			input: [][]interface{}{{1, 2}, {"a", "b"}, {true, false}},
+			expected: [][]interface{}{
+				{1, "a", true}, {2, "a", true},
+				{1, "b", true}, {2, "b", true},
+				{1, "a", false}, {2, "a", false},
+				{1, "b", false}, {2, "b", false},
+			},
+		},
+		{
+			name:     "Mixed types",
+			input:    [][]interface{}{{1, "x"}, {true, 3.14}},
+			expected: [][]interface{}{{1, true}, {"x", true}, {1, 3.14}, {"x", 3.14}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cartesianProduct(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestCartesianProductLargeInput(t *testing.T) {
+	input := [][]interface{}{
+		{1, 2, 3, 4, 5},
+		{"a", "b", "c", "d", "e"},
+		{true, false},
+	}
+	result := cartesianProduct(input)
+	assert.Equal(t, 50, len(result))
+	assert.Equal(t, 3, len(result[0]))
+}
+
+func TestCartesianProductPerformance(t *testing.T) {
+	input := make([][]interface{}, 10)
+	for i := range input {
+		input[i] = make([]interface{}, 5)
+		for j := range input[i] {
+			input[i][j] = j
+		}
+	}
+
+	start := time.Now()
+	result := cartesianProduct(input)
+	duration := time.Since(start)
+
+	assert.Equal(t, 9765625, len(result))
+	assert.Less(t, duration, 5*time.Second)
 }
