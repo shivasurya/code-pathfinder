@@ -113,7 +113,7 @@ func TestFilterEntities(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FilterEntities(tt.node, tt.query)
+			result := FilterEntities([]*Node{tt.node}, tt.query)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
