@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
@@ -108,7 +109,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 }
 
 func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList) [][]*Node {
-	var sets [][]interface{}
+	sets := make([][]interface{}, 0, len(selectList))
 
 	for _, entity := range selectList {
 		set := make([]interface{}, 0)
@@ -126,7 +127,13 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList) 
 	for i, p := range product {
 		result[i] = make([]*Node, len(p))
 		for j, node := range p {
-			result[i][j] = node.(*Node)
+			if n, ok := node.(*Node); ok {
+				result[i][j] = n
+			} else {
+				// Handle the error case, e.g., skip this node or log an error
+				// You might want to customize this part based on your error handling strategy
+				log.Printf("Warning: Expected *Node type, got %T", node)
+			}
 		}
 	}
 
