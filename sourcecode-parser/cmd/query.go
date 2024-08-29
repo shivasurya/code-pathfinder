@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
@@ -139,12 +139,18 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 		return string(queryResults), nil
 	}
 	result := ""
+	verticalLine := "|"
+	yellowCode := color.New(color.FgYellow).SprintFunc()
+	greenCode := color.New(color.FgGreen).SprintFunc()
 	for _, entity := range entities {
-		// add blockquotes to string
-		result += entity.File + ":" + strconv.Itoa(int(entity.LineNumber)) + "\n"
-		result += "------------\n"
-		result += "> " + entity.CodeSnippet + "\n"
-		result += "------------"
+		header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entity.File), greenCode(entity.LineNumber))
+		result += header
+		result += "\n"
+		codeSnippetArray := strings.Split(entity.CodeSnippet, "\n")
+		for i := 0; i < len(codeSnippetArray); i++ {
+			lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entity.LineNumber)+i)
+			result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+		}
 		result += "\n"
 	}
 	return result, nil
