@@ -9,7 +9,7 @@ require (
 	github.com/expr-lang/expr v1.16.9
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/posthog/posthog-go v1.2.19
+	github.com/posthog/posthog-go v1.2.20
 	github.com/spf13/cobra v1.8.1
 )
 
