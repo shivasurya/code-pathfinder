@@ -135,17 +135,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux Release Asset
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: pathfinder-linux-amd64
 
       - name: Download Windows Release Asset
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: pathfinder-windows-amd64
 
       - name: Download Windows Release Asset
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: pathfinder-darwin-arm64
 
