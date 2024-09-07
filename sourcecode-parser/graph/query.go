@@ -114,7 +114,7 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 	for _, condition := range conditions {
 		// this code helps to reduce search space
 		// if there is single entity in select list, the condition is easy to reduce the search space
-		// if there are multiple entities in select list, the condition is hard to reduce the search space
+		// if there are multiple entities in select list, the condition is hard to reduce the search space,
 		// but I have tried my best using O(n^2) time complexity to reduce the search space
 		if len(selectList) > 1 {
 			lhsNodes := graph.FindNodesByType(selectList[0].Entity)
