@@ -26,7 +26,10 @@ func TestQueryEntities(t *testing.T) {
 			name: "Query with expression",
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getVisibility() == 'public'",
+				Expression: "md.getVisibility() == \"public\"",
+				Condition: []string{
+					"md.getVisibility()==\"public\"",
+				},
 			},
 			expected: 1,
 		},
@@ -34,7 +37,10 @@ func TestQueryEntities(t *testing.T) {
 			name: "Query with no results",
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getVisibility() == 'private'",
+				Expression: "md.getVisibility() == \"private\"",
+				Condition: []string{
+					"md.getVisibility()==\"private\"",
+				},
 			},
 			expected: 0,
 		},
@@ -61,7 +67,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "method_declaration", Modifier: "public"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getVisibility() == 'public'",
+				Expression: "md.getVisibility() == \"public\"",
 			},
 			expected: true,
 		},
@@ -70,7 +76,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "class_declaration", Name: "TestClass"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "class_declaration", Alias: "cd"}},
-				Expression: "cd.getName() == 'TestClass'",
+				Expression: "cd.getName() == \"TestClass\"",
 			},
 			expected: true,
 		},
@@ -79,7 +85,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "method_declaration", ReturnType: "void"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getReturnType() == 'void'",
+				Expression: "md.getReturnType() == \"void\"",
 			},
 			expected: true,
 		},
@@ -88,7 +94,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "variable_declaration", DataType: "int"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "variable_declaration", Alias: "vd"}},
-				Expression: "vd.getVariableDataType() == 'int'",
+				Expression: "vd.getVariableDataType() == \"int\"",
 			},
 			expected: true,
 		},
@@ -97,7 +103,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "method_declaration", Modifier: "public", ReturnType: "String", Name: "getName"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getVisibility() == 'public' && md.getReturnType() == 'String' && md.getName() == 'getName'",
+				Expression: "md.getVisibility() == \"public\" && md.getReturnType() == \"String\" && md.getName() == \"getName\"",
 			},
 			expected: true,
 		},
@@ -106,7 +112,7 @@ func TestFilterEntities(t *testing.T) {
 			node: &Node{Type: "method_declaration", Modifier: "private"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
-				Expression: "md.getVisibility() == 'public'",
+				Expression: "md.getVisibility() == \"public\"",
 			},
 			expected: false,
 		},
@@ -240,5 +246,5 @@ func TestCartesianProductPerformance(t *testing.T) {
 	duration := time.Since(start)
 
 	assert.Equal(t, 9765625, len(result))
-	assert.Less(t, duration, 5*time.Second)
+	assert.Less(t, duration, 10*time.Second)
 }

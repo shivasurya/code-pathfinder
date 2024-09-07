@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-
 	"github.com/expr-lang/expr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 type Env struct {
@@ -98,7 +97,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	cartesianProduct := generateCartesianProduct(graph, query.SelectList)
+	cartesianProduct := generateCartesianProduct(graph, query.SelectList, query.Condition)
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
@@ -108,13 +107,42 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 	return result
 }
 
-func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList) [][]*Node {
+func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
+	typeIndex := make(map[string][]*Node)
+
+	// value and reference based reducing search space
+	for _, condition := range conditions {
+		// this code helps to reduce search space
+		// if there is single entity in select list, the condition is easy to reduce the search space
+		// if there are multiple entities in select list, the condition is hard to reduce the search space
+		// but I have tried my best using O(n^2) time complexity to reduce the search space
+		if len(selectList) > 1 {
+			lhsNodes := graph.FindNodesByType(selectList[0].Entity)
+			rhsNodes := graph.FindNodesByType(selectList[1].Entity)
+			for _, lhsNode := range lhsNodes {
+				for _, rhsNode := range rhsNodes {
+					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
+						typeIndex[lhsNode.Type] = append(typeIndex[lhsNode.Type], lhsNode)
+						typeIndex[rhsNode.Type] = append(typeIndex[rhsNode.Type], rhsNode)
+					}
+				}
+			}
+		} else {
+			for _, node := range graph.Nodes {
+				query := parser.Query{Expression: condition, SelectList: selectList}
+				if FilterEntities([]*Node{node}, query) {
+					typeIndex[node.Type] = append(typeIndex[node.Type], node)
+				}
+			}
+		}
+	}
+
 	sets := make([][]interface{}, 0, len(selectList))
 
 	for _, entity := range selectList {
 		set := make([]interface{}, 0)
-		for _, node := range graph.Nodes {
-			if entity.Entity == node.Type {
+		if nodes, ok := typeIndex[entity.Entity]; ok {
+			for _, node := range nodes {
 				set = append(set, node)
 			}
 		}
@@ -142,7 +170,6 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList) 
 
 func cartesianProduct(sets [][]interface{}) [][]interface{} {
 	result := [][]interface{}{{}}
-
 	for _, set := range sets {
 		var newResult [][]interface{}
 		for _, item := range set {

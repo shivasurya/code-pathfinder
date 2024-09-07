@@ -9,12 +9,14 @@ import (
 type Query struct {
 	SelectList []SelectList
 	Expression string
+	Condition  []string
 }
 
 type CustomQueryListener struct {
 	BaseQueryListener
 	expression strings.Builder
 	selectList []SelectList
+	condition  []string
 }
 
 type SelectList struct {
@@ -38,6 +40,12 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 				Alias:  child.Alias().GetText(),
 			})
 		}
+	}
+}
+
+func (l *CustomQueryListener) EnterCondition(ctx *ConditionContext) {
+	if ctx.GetChildCount() > 1 {
+		l.condition = append(l.condition, ctx.GetText())
 	}
 }
 
@@ -89,5 +97,5 @@ func ParseQuery(inputQuery string) Query {
 	listener := NewCustomQueryListener()
 	antlr.ParseTreeWalkerDefault.Walk(listener, p.Query())
 
-	return Query{SelectList: listener.selectList, Expression: listener.expression.String()}
+	return Query{SelectList: listener.selectList, Expression: listener.expression.String(), Condition: listener.condition}
 }
