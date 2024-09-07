@@ -19,6 +19,7 @@ func TestParseQuery(t *testing.T) {
 			expectedQuery: Query{
 				SelectList: []SelectList{{Entity: "class_declaration", Alias: "cd"}},
 				Expression: "cd.GetName()==\"test\"",
+				Condition:  []string{"cd.GetName()==\"test\""},
 			},
 		},
 		{
@@ -30,6 +31,7 @@ func TestParseQuery(t *testing.T) {
 					{Entity: "entity2", Alias: "e2"},
 				},
 				Expression: "e1.GetName()==\"test\"",
+				Condition:  []string{"e1.GetName()==\"test\""},
 			},
 		},
 		{
@@ -41,6 +43,7 @@ func TestParseQuery(t *testing.T) {
 					{Entity: "entity2", Alias: "e2"},
 				},
 				Expression: "e1.GetName()==\"test\" || e2.GetName()==\"test\"",
+				Condition:  []string{"e1.GetName()==\"test\"", "e2.GetName()==\"test\""},
 			},
 		},
 		{
@@ -52,6 +55,7 @@ func TestParseQuery(t *testing.T) {
 					{Entity: "entity2", Alias: "e2"},
 				},
 				Expression: "e1.GetName()==\"test\" && e2.GetName()==\"test\"",
+				Condition:  []string{"e1.GetName()==\"test\"", "e2.GetName()==\"test\""},
 			},
 		},
 	}

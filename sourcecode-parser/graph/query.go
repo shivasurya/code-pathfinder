@@ -2,12 +2,12 @@ package graph
 
 import (
 	"fmt"
-
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	"log"
 
 	"github.com/expr-lang/expr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 type Env struct {
@@ -97,13 +97,92 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	for _, node := range graph.Nodes {
-		for _, entity := range query.SelectList {
-			if entity.Entity == node.Type && FilterEntities(node, query) {
-				result = append(result, node)
+	cartesianProduct := generateCartesianProduct(graph, query.SelectList, query.Condition)
+
+	for _, nodeSet := range cartesianProduct {
+		if FilterEntities(nodeSet, query) {
+			result = append(result, nodeSet...)
+		}
+	}
+	return result
+}
+
+func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
+	typeIndex := make(map[string][]*Node)
+
+	// value and reference based reducing search space
+	for _, condition := range conditions {
+		// this code helps to reduce search space
+		// if there is single entity in select list, the condition is easy to reduce the search space
+		// if there are multiple entities in select list, the condition is hard to reduce the search space,
+		// but I have tried my best using O(n^2) time complexity to reduce the search space
+		if len(selectList) > 1 {
+			lhsNodes := graph.FindNodesByType(selectList[0].Entity)
+			rhsNodes := graph.FindNodesByType(selectList[1].Entity)
+			for _, lhsNode := range lhsNodes {
+				for _, rhsNode := range rhsNodes {
+					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
+						typeIndex[lhsNode.Type] = append(typeIndex[lhsNode.Type], lhsNode)
+						typeIndex[rhsNode.Type] = append(typeIndex[rhsNode.Type], rhsNode)
+					}
+				}
+			}
+		} else {
+			for _, node := range graph.Nodes {
+				query := parser.Query{Expression: condition, SelectList: selectList}
+				if FilterEntities([]*Node{node}, query) {
+					typeIndex[node.Type] = append(typeIndex[node.Type], node)
+				}
 			}
 		}
 	}
+
+	sets := make([][]interface{}, 0, len(selectList))
+
+	for _, entity := range selectList {
+		set := make([]interface{}, 0)
+		if nodes, ok := typeIndex[entity.Entity]; ok {
+			for _, node := range nodes {
+				set = append(set, node)
+			}
+		}
+		sets = append(sets, set)
+	}
+
+	product := cartesianProduct(sets)
+
+	result := make([][]*Node, len(product))
+	for i, p := range product {
+		result[i] = make([]*Node, len(p))
+		for j, node := range p {
+			if n, ok := node.(*Node); ok {
+				result[i][j] = n
+			} else {
+				// Handle the error case, e.g., skip this node or log an error
+				// You might want to customize this part based on your error handling strategy
+				log.Printf("Warning: Expected *Node type, got %T", node)
+			}
+		}
+	}
+
+	return result
+}
+
+func cartesianProduct(sets [][]interface{}) [][]interface{} {
+	result := [][]interface{}{{}}
+	for _, set := range sets {
+		var newResult [][]interface{}
+		for _, item := range set {
+			for _, subResult := range result {
+				newSubResult := make([]interface{}, len(subResult), len(subResult)+1)
+				copy(newSubResult, subResult)
+				newSubResult = append(newSubResult, item)
+				newResult = append(newResult, newSubResult)
+			}
+		}
+		result = newResult
+	}
+
 	return result
 }
 
@@ -283,13 +362,13 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	return env
 }
 
-func FilterEntities(node *Node, query parser.Query) bool {
+func FilterEntities(node []*Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
 		return true
 	}
 
-	env := generateProxyEnv(node, query)
+	env := generateProxyEnvForSet(node, query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
@@ -305,4 +384,15 @@ func FilterEntities(node *Node, query parser.Query) bool {
 		return true
 	}
 	return false
+}
+
+func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
+	env := make(map[string]interface{})
+
+	for i, entity := range query.SelectList {
+		proxyEnv := generateProxyEnv(nodeSet[i], query)
+		env[entity.Alias] = proxyEnv[entity.Alias]
+	}
+
+	return env
 }
