@@ -98,18 +98,18 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 				return "Okay, Bye!", nil
 			}
 			result, err := processQuery(input, codeGraph, output)
-			fmt.Println(result)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
-				return "", fmt.Errorf("error processing query: %w", err)
+				return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
 			}
+			fmt.Println(result)
 		}
 	} else {
 		// read from command line
 		result, err := processQuery(query, codeGraph, output)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
-			return "", fmt.Errorf("error processing query: %w", err)
+			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
 		}
 		return result, nil
 	}
@@ -117,7 +117,10 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 
 func processQuery(input string, codeGraph *graph.CodeGraph, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
-	parsedQuery := parser.ParseQuery(input)
+	parsedQuery, err := parser.ParseQuery(input)
+	if err != nil {
+		return "", err
+	}
 	// split the input string if WHERE
 	parsedQuery.Expression = strings.Split(input, "WHERE")[1]
 	entities := graph.QueryEntities(codeGraph, parsedQuery)

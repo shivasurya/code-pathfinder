@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -22,6 +23,15 @@ type CustomQueryListener struct {
 type SelectList struct {
 	Entity string
 	Alias  string
+}
+
+type customErrorListener struct {
+	*antlr.DefaultErrorListener
+	errors []string
+}
+
+func (l *customErrorListener) SyntaxError(_ antlr.Recognizer, _ interface{}, line, column int, msg string, _ antlr.RecognitionException) {
+	l.errors = append(l.errors, fmt.Sprintf("line %d:%d %s", line, column, msg))
 }
 
 func NewCustomQueryListener() *CustomQueryListener {
@@ -88,14 +98,28 @@ func (l *CustomQueryListener) ExitAndExpression(ctx *AndExpressionContext) {
 	}
 }
 
-func ParseQuery(inputQuery string) Query {
+func ParseQuery(inputQuery string) (Query, error) {
 	inputStream := antlr.NewInputStream(inputQuery)
 	lexer := NewQueryLexer(inputStream)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	p := NewQueryParser(stream)
 
-	listener := NewCustomQueryListener()
-	antlr.ParseTreeWalkerDefault.Walk(listener, p.Query())
+	errorListener := &customErrorListener{}
+	p.RemoveErrorListeners()
+	p.AddErrorListener(errorListener)
 
-	return Query{SelectList: listener.selectList, Expression: listener.expression.String(), Condition: listener.condition}
+	listener := NewCustomQueryListener()
+	tree := p.Query()
+
+	if len(errorListener.errors) > 0 {
+		return Query{}, fmt.Errorf("\n%s", strings.Join(errorListener.errors, "\n"))
+	}
+
+	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
+
+	return Query{
+		SelectList: listener.selectList,
+		Expression: listener.expression.String(),
+		Condition:  listener.condition,
+	}, nil
 }
