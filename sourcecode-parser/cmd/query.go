@@ -100,9 +100,11 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			result, err := processQuery(input, codeGraph, output)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
-				return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
+				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
+				fmt.Println(err)
+			} else {
+				fmt.Println(result)
 			}
-			fmt.Println(result)
 		}
 	} else {
 		// read from command line
