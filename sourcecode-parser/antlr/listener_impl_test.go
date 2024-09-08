@@ -62,7 +62,11 @@ func TestParseQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ParseQuery(tt.input)
+			result, err := ParseQuery(tt.input)
+			if err != nil {
+				t.Errorf("ParseQuery() error = %v", err)
+				return
+			}
 			if !reflect.DeepEqual(result, tt.expectedQuery) {
 				t.Errorf("ParseQuery() = %v, want %v", result, tt.expectedQuery)
 			}
