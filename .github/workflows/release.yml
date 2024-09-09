@@ -43,7 +43,7 @@ jobs:
           tar -czvf pathfinder-linux-amd64.tar.gz pathfinder
 
       - name: Upload Linux Release Asset
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pathfinder-linux-amd64
           path: |
@@ -82,7 +82,7 @@ jobs:
           Compress-Archive -Path pathfinder.exe -DestinationPath pathfinder-windows-amd64.zip
 
       - name: Upload Windows Release Asset
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pathfinder-windows-amd64
           path: |
@@ -122,7 +122,7 @@ jobs:
           tar -czvf pathfinder-darwin-arm64.tar.gz pathfinder
 
       - name: Upload macOS Release Asset
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pathfinder-darwin-arm64
           path: |
