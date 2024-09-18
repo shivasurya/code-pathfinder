@@ -180,7 +180,7 @@ func ExtractQueryFromFile(file string) (string, error) {
 	findLineFound := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(strings.TrimSpace(line), "FIND") {
+		if strings.HasPrefix(strings.TrimSpace(line), "predicate") {
 			findLineFound = true
 			query += line + " "
 		} else if findLineFound {

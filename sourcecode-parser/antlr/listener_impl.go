@@ -7,10 +7,17 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+type Predicate struct {
+	PredicateName string
+	Parameter     []string
+	body          string
+}
+
 type Query struct {
 	SelectList []SelectList
 	Expression string
 	Condition  []string
+	Predicate  map[string]Predicate
 }
 
 type CustomQueryListener struct {
@@ -18,6 +25,7 @@ type CustomQueryListener struct {
 	expression strings.Builder
 	selectList []SelectList
 	condition  []string
+	Predicate  map[string]Predicate
 }
 
 type SelectList struct {
@@ -53,9 +61,38 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 	}
 }
 
-func (l *CustomQueryListener) EnterCondition(ctx *ConditionContext) {
+func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {
+	name := ctx.Predicate_name().GetText()
+	params := []string{}
+	if ctx.Parameter_list() != nil {
+		for _, paramCtx := range ctx.Parameter_list().AllParameter() {
+			params = append(params, paramCtx.GetText())
+		}
+	}
+	body := ctx.Expression()
+
+	if l.Predicate == nil {
+		l.Predicate = make(map[string]Predicate)
+	}
+
+	l.Predicate[name] = Predicate{
+		PredicateName: name,
+		Parameter:     params,
+		body:          body.GetText(),
+	}
+}
+
+func (l *CustomQueryListener) EnterEqualityExpression(ctx *EqualityExpressionContext) {
 	if ctx.GetChildCount() > 1 {
-		l.condition = append(l.condition, ctx.GetText())
+		conditionText := ctx.GetText()
+		l.condition = append(l.condition, conditionText)
+	}
+}
+
+func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressionContext) {
+	if ctx.GetChildCount() > 1 {
+		conditionText := ctx.GetText()
+		l.condition = append(l.condition, conditionText)
 	}
 }
 
@@ -116,6 +153,8 @@ func ParseQuery(inputQuery string) (Query, error) {
 	}
 
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
+
+	fmt.Println(listener.Predicate)
 
 	return Query{
 		SelectList: listener.selectList,

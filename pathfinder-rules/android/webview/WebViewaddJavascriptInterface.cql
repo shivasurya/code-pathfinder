@@ -9,5 +9,10 @@
  * @tags security
  * external/cwe/cwe-079
  */
+
+predicate isPublic(mi, data) {
+  mi.getName() == "setJavaScriptEnabled"
+}
+
 FIND method_invocation AS mi
-WHERE mi.getName() == "addJavascriptInterface"
+WHERE isPublic(mi)
