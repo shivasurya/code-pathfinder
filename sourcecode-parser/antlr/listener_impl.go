@@ -10,7 +10,7 @@ import (
 type Predicate struct {
 	PredicateName string
 	Parameter     []string
-	body          string
+	Body          string
 }
 
 type Query struct {
@@ -61,6 +61,7 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 	}
 }
 
+//nolint:all
 func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {
 	name := ctx.Predicate_name().GetText()
 	params := []string{}
@@ -78,7 +79,7 @@ func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarat
 	l.Predicate[name] = Predicate{
 		PredicateName: name,
 		Parameter:     params,
-		body:          body.GetText(),
+		Body:          body.GetText(),
 	}
 }
 
@@ -154,11 +155,10 @@ func ParseQuery(inputQuery string) (Query, error) {
 
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
-	fmt.Println(listener.Predicate)
-
 	return Query{
 		SelectList: listener.selectList,
 		Expression: listener.expression.String(),
 		Condition:  listener.condition,
+		Predicate:  listener.Predicate,
 	}, nil
 }

@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/expr-lang/expr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
@@ -369,6 +370,17 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 	}
 
 	env := generateProxyEnvForSet(node, query)
+
+	for _, predicate := range query.Predicate {
+		// replace predicate invocation with predicate body
+		predicateExpression := predicate.PredicateName + "("
+		for _, argument := range predicate.Parameter {
+			predicateExpression += argument + ","
+		}
+		predicateExpression = predicateExpression[:len(predicateExpression)-1] + ")"
+		predicate.Body = "(" + predicate.Body + ")"
+		expression = strings.ReplaceAll(expression, predicateExpression, predicate.Body)
+	}
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
