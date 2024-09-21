@@ -89,6 +89,13 @@ func TestProcessQuery(t *testing.T) {
 			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
 			expectedError:  "",
 		},
+		{
+			name:           "Basic query with predicate",
+			input:          "predicate isTest(method_declaration md) { md.getName() == \"testFunc\" } FIND method_declaration AS md WHERE isTest(md)",
+			output:         "json",
+			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
+			expectedError:  "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -141,6 +148,21 @@ func TestExtractQueryFromFile(t *testing.T) {
 				WHERE name = 'test'
 			`,
 			expectedQuery: "",
+			expectedError: "",
+		},
+		{
+			name: "Yet another valid query file",
+			fileContent: `
+				// This is a comment
+				predicate isPublic(method_declaration md) {
+					md.getVisibility() == "public"
+				}
+
+				FIND method_declaration AS md
+				WHERE md.getName() == "test"
+				AND isPublic(md)
+			`,
+			expectedQuery: "predicate isPublic(method_declaration md) { \t\t\t\t\tmd.getVisibility() == \"public\" \t\t\t\t}  \t\t\t\tFIND method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND isPublic(md)",
 			expectedError: "",
 		},
 	}
