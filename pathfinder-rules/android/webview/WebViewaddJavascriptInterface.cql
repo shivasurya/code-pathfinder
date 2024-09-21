@@ -10,7 +10,7 @@
  * external/cwe/cwe-079
  */
 
-predicate isJavaScriptEnabled(mi) {
+predicate isJavaScriptEnabled(method_invocation mi) {
   mi.getName() == "addJavascriptInterface"
 }
 

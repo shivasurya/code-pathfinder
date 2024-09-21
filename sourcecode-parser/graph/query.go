@@ -374,11 +374,12 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 	for _, predicate := range query.Predicate {
 		// replace predicate invocation with predicate body
 		predicateExpression := predicate.PredicateName + "("
-		for _, argument := range predicate.Parameter {
-			predicateExpression += argument + ","
+		invocationParams, ok := query.PredicateInvocation[predicate.PredicateName]
+		if ok {
+			predicateExpression += invocationParams + ")"
 		}
-		predicateExpression = predicateExpression[:len(predicateExpression)-1] + ")"
 		predicate.Body = "(" + predicate.Body + ")"
+		// TODO: replace predicate params with invocation params
 		expression = strings.ReplaceAll(expression, predicateExpression, predicate.Body)
 	}
 

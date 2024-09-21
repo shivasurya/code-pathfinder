@@ -9,23 +9,25 @@ import (
 
 type Predicate struct {
 	PredicateName string
-	Parameter     []string
+	Parameter     map[string]string
 	Body          string
 }
 
 type Query struct {
-	SelectList []SelectList
-	Expression string
-	Condition  []string
-	Predicate  map[string]Predicate
+	SelectList          []SelectList
+	Expression          string
+	Condition           []string
+	Predicate           map[string]Predicate
+	PredicateInvocation map[string]string
 }
 
 type CustomQueryListener struct {
 	BaseQueryListener
-	expression strings.Builder
-	selectList []SelectList
-	condition  []string
-	Predicate  map[string]Predicate
+	expression          strings.Builder
+	selectList          []SelectList
+	condition           []string
+	Predicate           map[string]Predicate
+	PredicateInvocation map[string]string
 }
 
 type SelectList struct {
@@ -62,12 +64,24 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 }
 
 //nolint:all
+func (l *CustomQueryListener) EnterPredicate_invocation(ctx *Predicate_invocationContext) {
+	predicateName := ctx.Predicate_name().GetText()
+	predicateInvocation := ctx.Argument_list().GetText()
+	if l.PredicateInvocation == nil {
+		l.PredicateInvocation = make(map[string]string)
+	}
+	l.PredicateInvocation[predicateName] = predicateInvocation
+}
+
+//nolint:all
 func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {
 	name := ctx.Predicate_name().GetText()
-	params := []string{}
+	params := map[string]string{}
 	if ctx.Parameter_list() != nil {
 		for _, paramCtx := range ctx.Parameter_list().AllParameter() {
-			params = append(params, paramCtx.GetText())
+			paramType := paramCtx.Type_().GetText()
+			paramName := paramCtx.IDENTIFIER().GetText()
+			params[paramName] = paramType
 		}
 	}
 	body := ctx.Expression()
@@ -156,9 +170,10 @@ func ParseQuery(inputQuery string) (Query, error) {
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
 	return Query{
-		SelectList: listener.selectList,
-		Expression: listener.expression.String(),
-		Condition:  listener.condition,
-		Predicate:  listener.Predicate,
+		SelectList:          listener.selectList,
+		Expression:          listener.expression.String(),
+		Condition:           listener.condition,
+		Predicate:           listener.Predicate,
+		PredicateInvocation: listener.PredicateInvocation,
 	}, nil
 }

@@ -57,6 +57,12 @@ func (s *BaseQueryListener) EnterParameter(ctx *ParameterContext) {}
 // ExitParameter is called when production parameter is exited.
 func (s *BaseQueryListener) ExitParameter(ctx *ParameterContext) {}
 
+// EnterType is called when production type is entered.
+func (s *BaseQueryListener) EnterType(ctx *TypeContext) {}
+
+// ExitType is called when production type is exited.
+func (s *BaseQueryListener) ExitType(ctx *TypeContext) {}
+
 // EnterSelect_list is called when production select_list is entered.
 func (s *BaseQueryListener) EnterSelect_list(ctx *Select_listContext) {}
 

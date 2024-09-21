@@ -26,6 +26,9 @@ type QueryListener interface {
 	// EnterParameter is called when entering the parameter production.
 	EnterParameter(c *ParameterContext)
 
+	// EnterType is called when entering the type production.
+	EnterType(c *TypeContext)
+
 	// EnterSelect_list is called when entering the select_list production.
 	EnterSelect_list(c *Select_listContext)
 
@@ -112,6 +115,9 @@ type QueryListener interface {
 
 	// ExitParameter is called when exiting the parameter production.
 	ExitParameter(c *ParameterContext)
+
+	// ExitType is called when exiting the type production.
+	ExitType(c *TypeContext)
 
 	// ExitSelect_list is called when exiting the select_list production.
 	ExitSelect_list(c *Select_listContext)
