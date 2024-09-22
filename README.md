@@ -5,7 +5,7 @@
 
 # Code Pathfinder 
 About
-Code Pathfinder, the open-source alternative to CodeQL. Designed for precise flow analysis and advanced structural search, it identifies vulnerabilities in source code. Currently, it only supports Java language.
+Code Pathfinder, the open-source alternative to GitHub CodeQL. Built for advanced structural search, derive insights, find vulnerabilities in code.
 
 [![Build and Release](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/shivasurya/code-pathfinder/sourcecode-parser)](https://goreportcard.com/report/github.com/shivasurya/code-pathfinder/sourcecode-parser)
 [![MIT License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
