@@ -33,6 +33,10 @@ type Query struct {
 	PredicateInvocation []PredicateInvocation
 }
 
+type State struct {
+	isInPredicateDeclaration bool
+}
+
 type CustomQueryListener struct {
 	BaseQueryListener
 	expression          strings.Builder
@@ -40,6 +44,7 @@ type CustomQueryListener struct {
 	condition           []string
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
+	State               State
 }
 
 type SelectList struct {
@@ -95,6 +100,11 @@ func (l *CustomQueryListener) EnterPredicate_invocation(ctx *Predicate_invocatio
 
 //nolint:all
 func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {
+	if l.State == (State{}) {
+		l.State = State{
+			isInPredicateDeclaration: true,
+		}
+	}
 	name := ctx.Predicate_name().GetText()
 	var params []Parameter
 	if ctx.Parameter_list() != nil {
@@ -122,17 +132,30 @@ func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarat
 	})
 }
 
+//nolint:all
+func (l *CustomQueryListener) ExitPredicate_declaration(_ *Predicate_declarationContext) {
+	if l.State.isInPredicateDeclaration {
+		l.State = State{
+			isInPredicateDeclaration: false,
+		}
+	}
+}
+
 func (l *CustomQueryListener) EnterEqualityExpression(ctx *EqualityExpressionContext) {
 	if ctx.GetChildCount() > 1 {
 		conditionText := ctx.GetText()
-		l.condition = append(l.condition, conditionText)
+		if !l.State.isInPredicateDeclaration {
+			l.condition = append(l.condition, conditionText)
+		}
 	}
 }
 
 func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressionContext) {
 	if ctx.GetChildCount() > 1 {
 		conditionText := ctx.GetText()
-		l.condition = append(l.condition, conditionText)
+		if !l.State.isInPredicateDeclaration {
+			l.condition = append(l.condition, conditionText)
+		}
 	}
 }
 
