@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/expr-lang/expr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
@@ -134,6 +135,12 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 					typeIndex[node.Type] = append(typeIndex[node.Type], node)
 				}
 			}
+		}
+	}
+
+	if len(conditions) == 0 {
+		for _, node := range graph.Nodes {
+			typeIndex[node.Type] = append(typeIndex[node.Type], node)
 		}
 	}
 
@@ -362,6 +369,32 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	return env
 }
 
+func ReplacePredicateVariables(query parser.Query) string {
+	expression := query.Expression
+	if expression == "" {
+		return query.Expression
+	}
+
+	for _, invokedPredicate := range query.PredicateInvocation {
+		predicateExpression := invokedPredicate.PredicateName + "("
+		for i, param := range invokedPredicate.Parameter {
+			predicateExpression += param.Name + ","
+			for _, entity := range query.SelectList {
+				if entity.Alias == param.Name {
+					matchedPredicate := invokedPredicate.Predicate
+					invokedPredicate.Predicate.Body = strings.ReplaceAll(invokedPredicate.Predicate.Body, matchedPredicate.Parameter[i].Name, entity.Alias)
+				}
+			}
+		}
+		// remove the last comma
+		predicateExpression = predicateExpression[:len(predicateExpression)-1]
+		predicateExpression += ")"
+		invokedPredicate.Predicate.Body = "(" + invokedPredicate.Predicate.Body + ")"
+		expression = strings.ReplaceAll(expression, predicateExpression, invokedPredicate.Predicate.Body)
+	}
+	return expression
+}
+
 func FilterEntities(node []*Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
@@ -369,6 +402,8 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 	}
 
 	env := generateProxyEnvForSet(node, query)
+
+	expression = ReplacePredicateVariables(query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {

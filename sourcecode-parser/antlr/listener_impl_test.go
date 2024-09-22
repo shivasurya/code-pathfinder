@@ -15,7 +15,7 @@ func TestParseQuery(t *testing.T) {
 	}{
 		{
 			name:  "Simple select with single entity",
-			input: "FIND class_declaration AS cd WHERE cd.GetName() == \"test\"",
+			input: "FROM class_declaration AS cd WHERE cd.GetName() == \"test\"",
 			expectedQuery: Query{
 				SelectList: []SelectList{{Entity: "class_declaration", Alias: "cd"}},
 				Expression: "cd.GetName()==\"test\"",
@@ -24,7 +24,7 @@ func TestParseQuery(t *testing.T) {
 		},
 		{
 			name:  "Select with multiple entities and aliases",
-			input: "FIND entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\"",
+			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\"",
 			expectedQuery: Query{
 				SelectList: []SelectList{
 					{Entity: "entity1", Alias: "e1"},
@@ -36,7 +36,7 @@ func TestParseQuery(t *testing.T) {
 		},
 		{
 			name:  "Select with multiple entities and aliases",
-			input: "FIND entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" || e2.GetName() == \"test\"",
+			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" || e2.GetName() == \"test\"",
 			expectedQuery: Query{
 				SelectList: []SelectList{
 					{Entity: "entity1", Alias: "e1"},
@@ -48,7 +48,7 @@ func TestParseQuery(t *testing.T) {
 		},
 		{
 			name:  "Select with multiple entities and aliases",
-			input: "FIND entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" && e2.GetName() == \"test\"",
+			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" && e2.GetName() == \"test\"",
 			expectedQuery: Query{
 				SelectList: []SelectList{
 					{Entity: "entity1", Alias: "e1"},

@@ -9,5 +9,10 @@
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi
-WHERE mi.getName() == "addJavascriptInterface"
+
+predicate isJavaScriptEnabled(method_invocation mi) {
+  mi.getName() == "addJavascriptInterface"
+}
+
+FROM method_invocation AS mi
+WHERE isJavaScriptEnabled(mi)

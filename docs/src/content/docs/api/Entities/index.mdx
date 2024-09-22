@@ -13,13 +13,13 @@ import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 The query structure is simple, easy to use and inspired by SQL. Query often start with the keyword `FIND` followed by the entity type and then the condition.
 
 ```sql
-FIND entity_type WHERE condition
+FROM entity_type AS entity_variable WHERE condition
 ```
 
 ## Example
 
 ```sql
-FIND method_declaration AS md WHERE "@Deprecated" in md.getAnnotation()
+FROM method_declaration AS md WHERE "@Deprecated" in md.getAnnotation()
 ```
 
 ### Alias syntax
@@ -28,7 +28,7 @@ The alias syntax is used to give a name to the entity. This is useful when the e
 to use the alias to invoke the entity methods.
 
 ```sql
-FIND method_declaration AS md WHERE md.<Entity method>
+FROM method_declaration AS md WHERE md.<Entity method>
 ```
 
 Learn more about the entity methods below in the API Index.

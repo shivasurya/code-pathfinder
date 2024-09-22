@@ -1,4 +1,4 @@
-// Code generated from Query.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from Query.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // Query
 
@@ -26,6 +26,42 @@ func (s *BaseQueryListener) EnterQuery(ctx *QueryContext) {}
 
 // ExitQuery is called when production query is exited.
 func (s *BaseQueryListener) ExitQuery(ctx *QueryContext) {}
+
+// EnterPredicate_declarations is called when production predicate_declarations is entered.
+func (s *BaseQueryListener) EnterPredicate_declarations(ctx *Predicate_declarationsContext) {}
+
+// ExitPredicate_declarations is called when production predicate_declarations is exited.
+func (s *BaseQueryListener) ExitPredicate_declarations(ctx *Predicate_declarationsContext) {}
+
+// EnterPredicate_declaration is called when production predicate_declaration is entered.
+func (s *BaseQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {}
+
+// ExitPredicate_declaration is called when production predicate_declaration is exited.
+func (s *BaseQueryListener) ExitPredicate_declaration(ctx *Predicate_declarationContext) {}
+
+// EnterPredicate_name is called when production predicate_name is entered.
+func (s *BaseQueryListener) EnterPredicate_name(ctx *Predicate_nameContext) {}
+
+// ExitPredicate_name is called when production predicate_name is exited.
+func (s *BaseQueryListener) ExitPredicate_name(ctx *Predicate_nameContext) {}
+
+// EnterParameter_list is called when production parameter_list is entered.
+func (s *BaseQueryListener) EnterParameter_list(ctx *Parameter_listContext) {}
+
+// ExitParameter_list is called when production parameter_list is exited.
+func (s *BaseQueryListener) ExitParameter_list(ctx *Parameter_listContext) {}
+
+// EnterParameter is called when production parameter is entered.
+func (s *BaseQueryListener) EnterParameter(ctx *ParameterContext) {}
+
+// ExitParameter is called when production parameter is exited.
+func (s *BaseQueryListener) ExitParameter(ctx *ParameterContext) {}
+
+// EnterType is called when production type is entered.
+func (s *BaseQueryListener) EnterType(ctx *TypeContext) {}
+
+// ExitType is called when production type is exited.
+func (s *BaseQueryListener) ExitType(ctx *TypeContext) {}
 
 // EnterSelect_list is called when production select_list is entered.
 func (s *BaseQueryListener) EnterSelect_list(ctx *Select_listContext) {}
@@ -69,17 +105,47 @@ func (s *BaseQueryListener) EnterAndExpression(ctx *AndExpressionContext) {}
 // ExitAndExpression is called when production andExpression is exited.
 func (s *BaseQueryListener) ExitAndExpression(ctx *AndExpressionContext) {}
 
+// EnterEqualityExpression is called when production equalityExpression is entered.
+func (s *BaseQueryListener) EnterEqualityExpression(ctx *EqualityExpressionContext) {}
+
+// ExitEqualityExpression is called when production equalityExpression is exited.
+func (s *BaseQueryListener) ExitEqualityExpression(ctx *EqualityExpressionContext) {}
+
+// EnterRelationalExpression is called when production relationalExpression is entered.
+func (s *BaseQueryListener) EnterRelationalExpression(ctx *RelationalExpressionContext) {}
+
+// ExitRelationalExpression is called when production relationalExpression is exited.
+func (s *BaseQueryListener) ExitRelationalExpression(ctx *RelationalExpressionContext) {}
+
+// EnterAdditiveExpression is called when production additiveExpression is entered.
+func (s *BaseQueryListener) EnterAdditiveExpression(ctx *AdditiveExpressionContext) {}
+
+// ExitAdditiveExpression is called when production additiveExpression is exited.
+func (s *BaseQueryListener) ExitAdditiveExpression(ctx *AdditiveExpressionContext) {}
+
+// EnterMultiplicativeExpression is called when production multiplicativeExpression is entered.
+func (s *BaseQueryListener) EnterMultiplicativeExpression(ctx *MultiplicativeExpressionContext) {}
+
+// ExitMultiplicativeExpression is called when production multiplicativeExpression is exited.
+func (s *BaseQueryListener) ExitMultiplicativeExpression(ctx *MultiplicativeExpressionContext) {}
+
+// EnterUnaryExpression is called when production unaryExpression is entered.
+func (s *BaseQueryListener) EnterUnaryExpression(ctx *UnaryExpressionContext) {}
+
+// ExitUnaryExpression is called when production unaryExpression is exited.
+func (s *BaseQueryListener) ExitUnaryExpression(ctx *UnaryExpressionContext) {}
+
 // EnterPrimary is called when production primary is entered.
 func (s *BaseQueryListener) EnterPrimary(ctx *PrimaryContext) {}
 
 // ExitPrimary is called when production primary is exited.
 func (s *BaseQueryListener) ExitPrimary(ctx *PrimaryContext) {}
 
-// EnterCondition is called when production condition is entered.
-func (s *BaseQueryListener) EnterCondition(ctx *ConditionContext) {}
+// EnterOperand is called when production operand is entered.
+func (s *BaseQueryListener) EnterOperand(ctx *OperandContext) {}
 
-// ExitCondition is called when production condition is exited.
-func (s *BaseQueryListener) ExitCondition(ctx *ConditionContext) {}
+// ExitOperand is called when production operand is exited.
+func (s *BaseQueryListener) ExitOperand(ctx *OperandContext) {}
 
 // EnterMethod_chain is called when production method_chain is entered.
 func (s *BaseQueryListener) EnterMethod_chain(ctx *Method_chainContext) {}
@@ -104,6 +170,18 @@ func (s *BaseQueryListener) EnterVariable(ctx *VariableContext) {}
 
 // ExitVariable is called when production variable is exited.
 func (s *BaseQueryListener) ExitVariable(ctx *VariableContext) {}
+
+// EnterPredicate_invocation is called when production predicate_invocation is entered.
+func (s *BaseQueryListener) EnterPredicate_invocation(ctx *Predicate_invocationContext) {}
+
+// ExitPredicate_invocation is called when production predicate_invocation is exited.
+func (s *BaseQueryListener) ExitPredicate_invocation(ctx *Predicate_invocationContext) {}
+
+// EnterArgument_list is called when production argument_list is entered.
+func (s *BaseQueryListener) EnterArgument_list(ctx *Argument_listContext) {}
+
+// ExitArgument_list is called when production argument_list is exited.
+func (s *BaseQueryListener) ExitArgument_list(ctx *Argument_listContext) {}
 
 // EnterComparator is called when production comparator is entered.
 func (s *BaseQueryListener) EnterComparator(ctx *ComparatorContext) {}

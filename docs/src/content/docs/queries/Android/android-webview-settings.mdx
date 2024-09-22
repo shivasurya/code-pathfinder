@@ -28,7 +28,7 @@ result in cross-site scripting attacks.
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowUniversalAccessFromFileURLs Webview API
@@ -45,7 +45,7 @@ FIND method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "tr
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromFileURLs" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromFileURLs" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowFileAccessFromFileURLs Webview API
@@ -62,7 +62,7 @@ FIND method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromF
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowContentAccess Webview API
@@ -79,7 +79,7 @@ FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileUR
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+FROM method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
 ```
 
 ### setAllowFileAccess Webview API
@@ -96,7 +96,7 @@ FIND method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" i
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
 ```
 
 ### addJavascriptInterface Webview API
@@ -113,5 +113,5 @@ FIND method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi WHERE mi.getName() == "addJavascriptInterface"
+FROM method_invocation AS mi WHERE mi.getName() == "addJavascriptInterface"
 ```
