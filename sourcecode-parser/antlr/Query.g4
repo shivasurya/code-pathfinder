@@ -1,5 +1,5 @@
 grammar Query;
-query: predicate_declarations? FIND select_list (WHERE expression)?;
+query: predicate_declarations? FROM select_list (WHERE expression)?;
 predicate_declarations: predicate_declaration+;
 predicate_declaration: PREDICATE predicate_name '(' parameter_list? ')' '{' expression '}';
 predicate_name: IDENTIFIER;
@@ -33,7 +33,7 @@ STRING: '"' ( ~('"' | '\\') | '\\' . )* '"';
 STRING_WITH_WILDCARD: '"' ( ~('"' | '\\') | '\\' . | '%' )* '"';
 NUMBER: [0-9]+ ('.' [0-9]+)?;
 PREDICATE: 'predicate';
-FIND: 'FIND';
+FROM: 'FROM';
 WHERE: 'WHERE';
 AS: 'AS';
 IDENTIFIER: [a-zA-Z_][a-zA-Z0-9_]*;

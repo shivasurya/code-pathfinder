@@ -14,5 +14,5 @@ predicate isJavaScriptEnabled(method_invocation mi) {
   mi.getName() == "addJavascriptInterface"
 }
 
-FIND method_invocation AS mi
+FROM method_invocation AS mi
 WHERE isJavaScriptEnabled(mi)

@@ -26,7 +26,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 		{
 			name:           "Basic query",
 			project:        "../../test-src/android",
-			query:          "FIND method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
+			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
 			output:         "",
 			stdin:          false,
 			expectedOutput: "File: ../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java, Line: 96 \n\n\t\t  96 | @Override\n\t\t  97 |     public boolean onCreateOptionsMenu(Menu menu) {\n\t\t  98 |         MenuInflater inflater = getMenuInflater();\n\t\t  99 |         inflater.inflate(R.menu.main, menu);\n\t\t 100 |         return true;\n\t\t 101 |     }",
@@ -35,7 +35,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 		{
 			name:           "JSON output",
 			project:        "../../test-src/android",
-			query:          "FIND method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
+			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
 			output:         "json",
 			stdin:          false,
 			expectedOutput: `[{"code":"@Override\n    public boolean onCreateOptionsMenu(Menu menu) {\n        MenuInflater inflater = getMenuInflater();\n        inflater.inflate(R.menu.main, menu);\n        return true;\n    }","file":"../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java","line":96}]`,
@@ -77,21 +77,21 @@ func TestProcessQuery(t *testing.T) {
 	}{
 		{
 			name:           "Basic query",
-			input:          "FIND method_declaration AS md WHERE md.getName() == \"testFunc\"",
+			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\"",
 			output:         "",
 			expectedResult: "\tFile: test.java, Line: 5 \n\n\t\t   5 | public void testFunc() {}\n\n",
 			expectedError:  "",
 		},
 		{
 			name:           "JSON output",
-			input:          "FIND method_declaration AS md WHERE md.getName() == \"testFunc\"",
+			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\"",
 			output:         "json",
 			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
 			expectedError:  "",
 		},
 		{
 			name:           "Basic query with predicate",
-			input:          "predicate isTest(method_declaration md) { md.getName() == \"testFunc\" } FIND method_declaration AS md WHERE isTest(md)",
+			input:          "predicate isTest(method_declaration md) { md.getName() == \"testFunc\" } FROM method_declaration AS md WHERE isTest(md)",
 			output:         "json",
 			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
 			expectedError:  "",
@@ -133,11 +133,11 @@ func TestExtractQueryFromFile(t *testing.T) {
 			name: "Valid query file",
 			fileContent: `
 				// This is a comment
-				FIND method_declaration AS md
+				FROM method_declaration AS md
 				WHERE md.getName() == "test"
 				AND md.getVisibility() == "public"
 			`,
-			expectedQuery: "FIND method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND md.getVisibility() == \"public\"",
+			expectedQuery: "FROM method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND md.getVisibility() == \"public\"",
 			expectedError: "",
 		},
 		{
@@ -158,11 +158,11 @@ func TestExtractQueryFromFile(t *testing.T) {
 					md.getVisibility() == "public"
 				}
 
-				FIND method_declaration AS md
+				FROM method_declaration AS md
 				WHERE md.getName() == "test"
 				AND isPublic(md)
 			`,
-			expectedQuery: "predicate isPublic(method_declaration md) { \t\t\t\t\tmd.getVisibility() == \"public\" \t\t\t\t}  \t\t\t\tFIND method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND isPublic(md)",
+			expectedQuery: "predicate isPublic(method_declaration md) { \t\t\t\t\tmd.getVisibility() == \"public\" \t\t\t\t}  \t\t\t\tFROM method_declaration AS md \t\t\t\tWHERE md.getName() == \"test\" \t\t\t\tAND isPublic(md)",
 			expectedError: "",
 		},
 	}

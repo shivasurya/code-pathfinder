@@ -27,7 +27,7 @@ null
 null
 null
 'predicate'
-'FIND'
+'FROM'
 'WHERE'
 'AS'
 null
@@ -62,7 +62,7 @@ STRING
 STRING_WITH_WILDCARD
 NUMBER
 PREDICATE
-FIND
+FROM
 WHERE
 AS
 IDENTIFIER

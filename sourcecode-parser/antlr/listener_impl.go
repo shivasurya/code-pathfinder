@@ -7,18 +7,30 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+type Parameter struct {
+	Name         string
+	Type         string
+	DefaultValue string
+}
+
 type Predicate struct {
 	PredicateName string
-	Parameter     map[string]string
+	Parameter     []Parameter
 	Body          string
+}
+
+type PredicateInvocation struct {
+	PredicateName string
+	Parameter     []Parameter
+	Predicate     Predicate
 }
 
 type Query struct {
 	SelectList          []SelectList
 	Expression          string
 	Condition           []string
-	Predicate           map[string]Predicate
-	PredicateInvocation map[string]string
+	Predicate           []Predicate
+	PredicateInvocation []PredicateInvocation
 }
 
 type CustomQueryListener struct {
@@ -26,8 +38,8 @@ type CustomQueryListener struct {
 	expression          strings.Builder
 	selectList          []SelectList
 	condition           []string
-	Predicate           map[string]Predicate
-	PredicateInvocation map[string]string
+	Predicate           []Predicate
+	PredicateInvocation []PredicateInvocation
 }
 
 type SelectList struct {
@@ -66,35 +78,48 @@ func (l *CustomQueryListener) EnterSelect_list(ctx *Select_listContext) {
 //nolint:all
 func (l *CustomQueryListener) EnterPredicate_invocation(ctx *Predicate_invocationContext) {
 	predicateName := ctx.Predicate_name().GetText()
-	predicateInvocation := ctx.Argument_list().GetText()
-	if l.PredicateInvocation == nil {
-		l.PredicateInvocation = make(map[string]string)
+	parameters := ctx.Argument_list().GetText()
+	// split the arguments by comma
+	invokedPredicateArgs := strings.Split(parameters, ",")
+	arguments := l.extractArguments(invokedPredicateArgs)
+	invokedPredicate := PredicateInvocation{
+		PredicateName: predicateName,
+		Parameter:     arguments,
 	}
-	l.PredicateInvocation[predicateName] = predicateInvocation
+	matchedPredicate, err := l.matchPredicate(invokedPredicate)
+	if err == nil {
+		invokedPredicate.Predicate = matchedPredicate
+	}
+	l.PredicateInvocation = append(l.PredicateInvocation, invokedPredicate)
 }
 
 //nolint:all
 func (l *CustomQueryListener) EnterPredicate_declaration(ctx *Predicate_declarationContext) {
 	name := ctx.Predicate_name().GetText()
-	params := map[string]string{}
+	var params []Parameter
 	if ctx.Parameter_list() != nil {
 		for _, paramCtx := range ctx.Parameter_list().AllParameter() {
 			paramType := paramCtx.Type_().GetText()
 			paramName := paramCtx.IDENTIFIER().GetText()
-			params[paramName] = paramType
+			param := Parameter{
+				Name:         paramName,
+				Type:         paramType,
+				DefaultValue: "",
+			}
+			params = append(params, param)
 		}
 	}
 	body := ctx.Expression()
 
 	if l.Predicate == nil {
-		l.Predicate = make(map[string]Predicate)
+		l.Predicate = []Predicate{}
 	}
 
-	l.Predicate[name] = Predicate{
+	l.Predicate = append(l.Predicate, Predicate{
 		PredicateName: name,
 		Parameter:     params,
 		Body:          body.GetText(),
-	}
+	})
 }
 
 func (l *CustomQueryListener) EnterEqualityExpression(ctx *EqualityExpressionContext) {
@@ -148,6 +173,75 @@ func (l *CustomQueryListener) ExitAndExpression(ctx *AndExpressionContext) {
 		l.expression.Reset()
 		l.expression.WriteString(result.String())
 	}
+}
+
+func (l *CustomQueryListener) extractArguments(arguments []string) []Parameter {
+	args := make([]Parameter, 0, len(arguments))
+	for _, argument := range arguments {
+		exprType, err := l.inferExpressionType(argument)
+		if err != nil {
+			continue
+		}
+		args = append(args, exprType)
+	}
+	return args
+}
+
+func (l *CustomQueryListener) inferExpressionType(argument string) (Parameter, error) {
+	argument = strings.TrimSpace(argument)
+	for _, entity := range l.selectList {
+		if strings.Contains(argument, entity.Alias) {
+			return Parameter{
+				Name:         entity.Alias,
+				Type:         entity.Entity,
+				DefaultValue: "",
+			}, nil
+		}
+	}
+	return Parameter{}, fmt.Errorf("undefined entity: %s", argument)
+}
+
+func (l *CustomQueryListener) matchPredicate(invokedPredicate PredicateInvocation) (Predicate, error) {
+	var candidates []Predicate
+	for _, pred := range l.Predicate {
+		if pred.PredicateName == invokedPredicate.PredicateName {
+			candidates = append(candidates, pred)
+		}
+	}
+	if len(candidates) == 0 {
+		return Predicate{}, fmt.Errorf("undefined predicate: %s", invokedPredicate.PredicateName)
+	}
+
+	var matches []Predicate
+	for _, pred := range candidates {
+		if len(pred.Parameter) != len(invokedPredicate.Parameter) {
+			continue
+		}
+
+		// Assume types are compatible unless type checking is required
+		compatible := true
+		for i := 0; i < len(pred.Parameter); i++ {
+			param := pred.Parameter[i]
+			argType := invokedPredicate.Parameter[i]
+			if param.Type != argType.Type {
+				compatible = false
+				break
+			}
+		}
+
+		if compatible {
+			matches = append(matches, pred)
+		}
+	}
+
+	if len(matches) == 0 {
+		return Predicate{}, fmt.Errorf("no matching predicate found for %s with given arguments", invokedPredicate.PredicateName)
+	} else if len(matches) > 1 {
+		// Handle ambiguity if overloading is supported
+		return Predicate{}, fmt.Errorf("ambiguous predicate invocation for %s", invokedPredicate.PredicateName)
+	}
+
+	return matches[0], nil
 }
 
 func ParseQuery(inputQuery string) (Query, error) {

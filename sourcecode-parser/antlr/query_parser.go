@@ -35,13 +35,13 @@ func queryParserInit() {
 	staticData.LiteralNames = []string{
 		"", "'('", "')'", "'{'", "'}'", "','", "'||'", "'&&'", "'=='", "'!='",
 		"'<'", "'>'", "'<='", "'>='", "'+'", "'-'", "'*'", "'/'", "'!'", "'.'",
-		"'['", "']'", "'LIKE'", "'in'", "", "", "", "'predicate'", "'FIND'",
+		"'['", "']'", "'LIKE'", "'in'", "", "", "", "'predicate'", "'FROM'",
 		"'WHERE'", "'AS'",
 	}
 	staticData.SymbolicNames = []string{
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
 		"", "", "", "", "", "", "", "STRING", "STRING_WITH_WILDCARD", "NUMBER",
-		"PREDICATE", "FIND", "WHERE", "AS", "IDENTIFIER", "WS",
+		"PREDICATE", "FROM", "WHERE", "AS", "IDENTIFIER", "WS",
 	}
 	staticData.RuleNames = []string{
 		"query", "predicate_declarations", "predicate_declaration", "predicate_name",
@@ -220,7 +220,7 @@ const (
 	QueryParserSTRING_WITH_WILDCARD = 25
 	QueryParserNUMBER               = 26
 	QueryParserPREDICATE            = 27
-	QueryParserFIND                 = 28
+	QueryParserFROM                 = 28
 	QueryParserWHERE                = 29
 	QueryParserAS                   = 30
 	QueryParserIDENTIFIER           = 31
@@ -269,7 +269,7 @@ type IQueryContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	FIND() antlr.TerminalNode
+	FROM() antlr.TerminalNode
 	Select_list() ISelect_listContext
 	Predicate_declarations() IPredicate_declarationsContext
 	WHERE() antlr.TerminalNode
@@ -311,8 +311,8 @@ func NewQueryContext(parser antlr.Parser, parent antlr.ParserRuleContext, invoki
 
 func (s *QueryContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *QueryContext) FIND() antlr.TerminalNode {
-	return s.GetToken(QueryParserFIND, 0)
+func (s *QueryContext) FROM() antlr.TerminalNode {
+	return s.GetToken(QueryParserFROM, 0)
 }
 
 func (s *QueryContext) Select_list() ISelect_listContext {
@@ -409,7 +409,7 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 	}
 	{
 		p.SetState(63)
-		p.Match(QueryParserFIND)
+		p.Match(QueryParserFROM)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit

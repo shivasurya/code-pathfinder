@@ -371,16 +371,17 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 
 	env := generateProxyEnvForSet(node, query)
 
-	for _, predicate := range query.Predicate {
-		// replace predicate invocation with predicate body
-		predicateExpression := predicate.PredicateName + "("
-		invocationParams, ok := query.PredicateInvocation[predicate.PredicateName]
-		if ok {
-			predicateExpression += invocationParams + ")"
+	for _, invokedPredicate := range query.PredicateInvocation {
+		predicateExpression := invokedPredicate.PredicateName + "("
+		matchedPredicate := invokedPredicate.Predicate
+		for _, param := range matchedPredicate.Parameter {
+			predicateExpression += param.Name + ","
 		}
-		predicate.Body = "(" + predicate.Body + ")"
-		// TODO: replace predicate params with invocation params
-		expression = strings.ReplaceAll(expression, predicateExpression, predicate.Body)
+		// remove the last comma
+		predicateExpression = predicateExpression[:len(predicateExpression)-1]
+		predicateExpression += ")"
+		invokedPredicate.Predicate.Body = "(" + invokedPredicate.Predicate.Body + ")"
+		expression = strings.ReplaceAll(expression, predicateExpression, invokedPredicate.Predicate.Body)
 	}
 
 	program, err := expr.Compile(expression, expr.Env(env))

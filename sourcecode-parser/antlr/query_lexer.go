@@ -45,19 +45,19 @@ func querylexerLexerInit() {
 	staticData.LiteralNames = []string{
 		"", "'('", "')'", "'{'", "'}'", "','", "'||'", "'&&'", "'=='", "'!='",
 		"'<'", "'>'", "'<='", "'>='", "'+'", "'-'", "'*'", "'/'", "'!'", "'.'",
-		"'['", "']'", "'LIKE'", "'in'", "", "", "", "'predicate'", "'FIND'",
+		"'['", "']'", "'LIKE'", "'in'", "", "", "", "'predicate'", "'FROM'",
 		"'WHERE'", "'AS'",
 	}
 	staticData.SymbolicNames = []string{
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
 		"", "", "", "", "", "", "", "STRING", "STRING_WITH_WILDCARD", "NUMBER",
-		"PREDICATE", "FIND", "WHERE", "AS", "IDENTIFIER", "WS",
+		"PREDICATE", "FROM", "WHERE", "AS", "IDENTIFIER", "WS",
 	}
 	staticData.RuleNames = []string{
 		"T__0", "T__1", "T__2", "T__3", "T__4", "T__5", "T__6", "T__7", "T__8",
 		"T__9", "T__10", "T__11", "T__12", "T__13", "T__14", "T__15", "T__16",
 		"T__17", "T__18", "T__19", "T__20", "T__21", "T__22", "STRING", "STRING_WITH_WILDCARD",
-		"NUMBER", "PREDICATE", "FIND", "WHERE", "AS", "IDENTIFIER", "WS",
+		"NUMBER", "PREDICATE", "FROM", "WHERE", "AS", "IDENTIFIER", "WS",
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
@@ -136,8 +136,8 @@ func querylexerLexerInit() {
 		0, 0, 157, 158, 5, 112, 0, 0, 158, 159, 5, 114, 0, 0, 159, 160, 5, 101,
 		0, 0, 160, 161, 5, 100, 0, 0, 161, 162, 5, 105, 0, 0, 162, 163, 5, 99,
 		0, 0, 163, 164, 5, 97, 0, 0, 164, 165, 5, 116, 0, 0, 165, 166, 5, 101,
-		0, 0, 166, 54, 1, 0, 0, 0, 167, 168, 5, 70, 0, 0, 168, 169, 5, 73, 0, 0,
-		169, 170, 5, 78, 0, 0, 170, 171, 5, 68, 0, 0, 171, 56, 1, 0, 0, 0, 172,
+		0, 0, 166, 54, 1, 0, 0, 0, 167, 168, 5, 70, 0, 0, 168, 169, 5, 82, 0, 0,
+		169, 170, 5, 79, 0, 0, 170, 171, 5, 77, 0, 0, 171, 56, 1, 0, 0, 0, 172,
 		173, 5, 87, 0, 0, 173, 174, 5, 72, 0, 0, 174, 175, 5, 69, 0, 0, 175, 176,
 		5, 82, 0, 0, 176, 177, 5, 69, 0, 0, 177, 58, 1, 0, 0, 0, 178, 179, 5, 65,
 		0, 0, 179, 180, 5, 83, 0, 0, 180, 60, 1, 0, 0, 0, 181, 185, 7, 2, 0, 0,
@@ -214,7 +214,7 @@ const (
 	QueryLexerSTRING_WITH_WILDCARD = 25
 	QueryLexerNUMBER               = 26
 	QueryLexerPREDICATE            = 27
-	QueryLexerFIND                 = 28
+	QueryLexerFROM                 = 28
 	QueryLexerWHERE                = 29
 	QueryLexerAS                   = 30
 	QueryLexerIDENTIFIER           = 31

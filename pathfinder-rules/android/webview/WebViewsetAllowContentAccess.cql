@@ -9,5 +9,5 @@
  * @tags security
  * external/cwe/cwe-079
  */
-FIND method_invocation AS mi
+FROM method_invocation AS mi
 WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()

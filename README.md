@@ -46,7 +46,6 @@ Read the [official documentation](https://codepathfinder.dev/), or run `pathfind
 
 - [x] Basic queries (Similar to CodeQL)
 - [x] Source Sink Analysis
-- [ ] Taint Analysis
 - [ ] Data Flow Analysis with Control Flow Graph
 
 ## Usage
@@ -59,8 +58,8 @@ $ gradle buildGo (or) npm install -g codepathfinder
 $ ./pathfinder query --project <path_to_project> --stdin
 2024/06/30 21:35:29 Graph built successfully
 Path-Finder Query Console: 
->FIND method_declaration WHERE throwstype = "ClassCastException"
-Executing query: FIND method_declaration WHERE throwstype = "ClassCastException"
+>FROM method_declaration AS md WHERE md.getName() == "getPaneChanges"
+Executing query: FROM method_declaration AS md WHERE md.getName() == "getPaneChanges"
 
 ┌───┬──────────────────────────────────────────┬─────────────┬────────────────────┬────────────────┬──────────────────────────────────────────────────────────────┐
 │ # │ FILE                                     │ LINE NUMBER │ TYPE               │ NAME           │ CODE SNIPPET                                                 │
