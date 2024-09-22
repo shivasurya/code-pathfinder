@@ -101,6 +101,12 @@ type QueryListener interface {
 	// EnterSelect_clause is called when entering the select_clause production.
 	EnterSelect_clause(c *Select_clauseContext)
 
+	// EnterSelect_expression is called when entering the select_expression production.
+	EnterSelect_expression(c *Select_expressionContext)
+
+	// EnterMethod_invocation is called when entering the method_invocation production.
+	EnterMethod_invocation(c *Method_invocationContext)
+
 	// ExitQuery is called when exiting the query production.
 	ExitQuery(c *QueryContext)
 
@@ -193,4 +199,10 @@ type QueryListener interface {
 
 	// ExitSelect_clause is called when exiting the select_clause production.
 	ExitSelect_clause(c *Select_clauseContext)
+
+	// ExitSelect_expression is called when exiting the select_expression production.
+	ExitSelect_expression(c *Select_expressionContext)
+
+	// ExitMethod_invocation is called when exiting the method_invocation production.
+	ExitMethod_invocation(c *Method_invocationContext)
 }

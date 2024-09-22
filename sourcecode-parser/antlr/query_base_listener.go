@@ -206,3 +206,15 @@ func (s *BaseQueryListener) EnterSelect_clause(ctx *Select_clauseContext) {}
 
 // ExitSelect_clause is called when production select_clause is exited.
 func (s *BaseQueryListener) ExitSelect_clause(ctx *Select_clauseContext) {}
+
+// EnterSelect_expression is called when production select_expression is entered.
+func (s *BaseQueryListener) EnterSelect_expression(ctx *Select_expressionContext) {}
+
+// ExitSelect_expression is called when production select_expression is exited.
+func (s *BaseQueryListener) ExitSelect_expression(ctx *Select_expressionContext) {}
+
+// EnterMethod_invocation is called when production method_invocation is entered.
+func (s *BaseQueryListener) EnterMethod_invocation(ctx *Method_invocationContext) {}
+
+// ExitMethod_invocation is called when production method_invocation is exited.
+func (s *BaseQueryListener) ExitMethod_invocation(ctx *Method_invocationContext) {}
