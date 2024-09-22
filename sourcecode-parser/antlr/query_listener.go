@@ -98,6 +98,9 @@ type QueryListener interface {
 	// EnterValue_list is called when entering the value_list production.
 	EnterValue_list(c *Value_listContext)
 
+	// EnterSelect_clause is called when entering the select_clause production.
+	EnterSelect_clause(c *Select_clauseContext)
+
 	// ExitQuery is called when exiting the query production.
 	ExitQuery(c *QueryContext)
 
@@ -187,4 +190,7 @@ type QueryListener interface {
 
 	// ExitValue_list is called when exiting the value_list production.
 	ExitValue_list(c *Value_listContext)
+
+	// ExitSelect_clause is called when exiting the select_clause production.
+	ExitSelect_clause(c *Select_clauseContext)
 }

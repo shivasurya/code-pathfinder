@@ -200,3 +200,9 @@ func (s *BaseQueryListener) EnterValue_list(ctx *Value_listContext) {}
 
 // ExitValue_list is called when production value_list is exited.
 func (s *BaseQueryListener) ExitValue_list(ctx *Value_listContext) {}
+
+// EnterSelect_clause is called when production select_clause is entered.
+func (s *BaseQueryListener) EnterSelect_clause(ctx *Select_clauseContext) {}
+
+// ExitSelect_clause is called when production select_clause is exited.
+func (s *BaseQueryListener) ExitSelect_clause(ctx *Select_clauseContext) {}
