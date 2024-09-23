@@ -17,7 +17,7 @@ func GenerateSha256(input string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// Helper function to append a node to a slice only if it's not already present
+// Helper function to append a node to a slice only if it's not already present.
 func appendUnique(slice []*Node, node *Node) []*Node {
 	for _, n := range slice {
 		if n == node {
