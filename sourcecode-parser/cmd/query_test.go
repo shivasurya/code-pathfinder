@@ -26,7 +26,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 		{
 			name:           "Basic query",
 			project:        "../../test-src/android",
-			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
+			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\" SELECT md.getName()",
 			output:         "",
 			stdin:          false,
 			expectedOutput: "File: ../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java, Line: 96 \n\n\t\t  96 | @Override\n\t\t  97 |     public boolean onCreateOptionsMenu(Menu menu) {\n\t\t  98 |         MenuInflater inflater = getMenuInflater();\n\t\t  99 |         inflater.inflate(R.menu.main, menu);\n\t\t 100 |         return true;\n\t\t 101 |     }",
@@ -35,10 +35,10 @@ func TestExecuteCLIQuery(t *testing.T) {
 		{
 			name:           "JSON output",
 			project:        "../../test-src/android",
-			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\"",
+			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\" SELECT md.getName()",
 			output:         "json",
 			stdin:          false,
-			expectedOutput: `[{"code":"@Override\n    public boolean onCreateOptionsMenu(Menu menu) {\n        MenuInflater inflater = getMenuInflater();\n        inflater.inflate(R.menu.main, menu);\n        return true;\n    }","file":"../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java","line":96}]`,
+			expectedOutput: `{"output":[["onCreateOptionsMenu"]],"result_set":[{"code":"@Override\n    public boolean onCreateOptionsMenu(Menu menu) {\n        MenuInflater inflater = getMenuInflater();\n        inflater.inflate(R.menu.main, menu);\n        return true;\n    }","file":"../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java","line":96}]}`,
 			expectedError:  "",
 		},
 	}
@@ -77,23 +77,23 @@ func TestProcessQuery(t *testing.T) {
 	}{
 		{
 			name:           "Basic query",
-			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\"",
+			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\" SELECT md.getName()",
 			output:         "",
 			expectedResult: "\tFile: test.java, Line: 5 \n\n\t\t   5 | public void testFunc() {}\n\n",
 			expectedError:  "",
 		},
 		{
 			name:           "JSON output",
-			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\"",
+			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\" SELECT md.getName()",
 			output:         "json",
-			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
+			expectedResult: `{"output":[["testFunc"]],"result_set":[{"code":"public void testFunc() {}","file":"test.java","line":5}]}`,
 			expectedError:  "",
 		},
 		{
 			name:           "Basic query with predicate",
-			input:          "predicate isTest(method_declaration md) { md.getName() == \"testFunc\" } FROM method_declaration AS md WHERE isTest(md)",
+			input:          "predicate isTest(method_declaration md) { md.getName() == \"testFunc\" } FROM method_declaration AS md WHERE isTest(md) SELECT md.getName()",
 			output:         "json",
-			expectedResult: `[{"code":"public void testFunc() {}", "file":"test.java", "line":5}]`,
+			expectedResult: `{"output":[["testFunc"]],"result_set":[{"code":"public void testFunc() {}","file":"test.java","line":5}]}`,
 			expectedError:  "",
 		},
 	}
@@ -108,7 +108,8 @@ func TestProcessQuery(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				if tt.output == "json" {
-					var expectedJSON, resultJSON []map[string]interface{}
+					var expectedJSON, resultJSON map[string]interface{}
+					fmt.Println(result)
 					err = json.Unmarshal([]byte(tt.expectedResult), &expectedJSON)
 					assert.NoError(t, err)
 					err = json.Unmarshal([]byte(result), &resultJSON)

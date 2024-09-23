@@ -16,3 +16,4 @@ predicate isJavaScriptEnabled(method_invocation mi) {
 
 FROM method_invocation AS mi
 WHERE isJavaScriptEnabled(mi)
+SELECT mi.getName(), "JavaScript interface exposed"

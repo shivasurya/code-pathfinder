@@ -159,11 +159,11 @@ func (s *BaseQueryListener) EnterMethod_or_variable(ctx *Method_or_variableConte
 // ExitMethod_or_variable is called when production method_or_variable is exited.
 func (s *BaseQueryListener) ExitMethod_or_variable(ctx *Method_or_variableContext) {}
 
-// EnterMethod is called when production method is entered.
-func (s *BaseQueryListener) EnterMethod(ctx *MethodContext) {}
+// EnterMethod_invocation is called when production method_invocation is entered.
+func (s *BaseQueryListener) EnterMethod_invocation(ctx *Method_invocationContext) {}
 
-// ExitMethod is called when production method is exited.
-func (s *BaseQueryListener) ExitMethod(ctx *MethodContext) {}
+// ExitMethod_invocation is called when production method_invocation is exited.
+func (s *BaseQueryListener) ExitMethod_invocation(ctx *Method_invocationContext) {}
 
 // EnterVariable is called when production variable is entered.
 func (s *BaseQueryListener) EnterVariable(ctx *VariableContext) {}
@@ -183,6 +183,12 @@ func (s *BaseQueryListener) EnterArgument_list(ctx *Argument_listContext) {}
 // ExitArgument_list is called when production argument_list is exited.
 func (s *BaseQueryListener) ExitArgument_list(ctx *Argument_listContext) {}
 
+// EnterArgument is called when production argument is entered.
+func (s *BaseQueryListener) EnterArgument(ctx *ArgumentContext) {}
+
+// ExitArgument is called when production argument is exited.
+func (s *BaseQueryListener) ExitArgument(ctx *ArgumentContext) {}
+
 // EnterComparator is called when production comparator is entered.
 func (s *BaseQueryListener) EnterComparator(ctx *ComparatorContext) {}
 
@@ -200,3 +206,15 @@ func (s *BaseQueryListener) EnterValue_list(ctx *Value_listContext) {}
 
 // ExitValue_list is called when production value_list is exited.
 func (s *BaseQueryListener) ExitValue_list(ctx *Value_listContext) {}
+
+// EnterSelect_clause is called when production select_clause is entered.
+func (s *BaseQueryListener) EnterSelect_clause(ctx *Select_clauseContext) {}
+
+// ExitSelect_clause is called when production select_clause is exited.
+func (s *BaseQueryListener) ExitSelect_clause(ctx *Select_clauseContext) {}
+
+// EnterSelect_expression is called when production select_expression is entered.
+func (s *BaseQueryListener) EnterSelect_expression(ctx *Select_expressionContext) {}
+
+// ExitSelect_expression is called when production select_expression is exited.
+func (s *BaseQueryListener) ExitSelect_expression(ctx *Select_expressionContext) {}

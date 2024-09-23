@@ -86,12 +86,33 @@ func (env *Env) GetLeftOperand() string {
 	return env.Node.BinaryExpr.LeftOperand.NodeString
 }
 
+func (env *Env) ToString() string {
+	return fmt.Sprintf("Node{Type: %s, Name: %s, Modifier: %s, Annotation: %v, ReturnType: %s, MethodArgumentsType: %v, MethodArgumentsValue: %v, SuperClass: %s, Interface: %v, Scope: %s, VariableValue: %s, DataType: %s, ThrowsExceptions: %v, hasAccess: %t, isJavaSourceFile: %t, JavaDoc: %+v, BinaryExpr: %+v}",
+		env.Node.Type,
+		env.Node.Name,
+		env.Node.Modifier,
+		env.Node.Annotation,
+		env.Node.ReturnType,
+		env.Node.MethodArgumentsType,
+		env.Node.MethodArgumentsValue,
+		env.Node.SuperClass,
+		env.Node.Interface,
+		env.Node.Scope,
+		env.Node.VariableValue,
+		env.Node.DataType,
+		env.Node.ThrowsExceptions,
+		env.Node.hasAccess,
+		env.Node.isJavaSourceFile,
+		env.Node.JavaDoc,
+		env.Node.BinaryExpr)
+}
+
 func (env *Env) GetRightOperand() string {
 	return env.Node.BinaryExpr.RightOperand.NodeString
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
-	result := make([]*Node, 0)
+func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]string) {
+	result := make([][]*Node, 0)
 
 	// log query select list alone
 	for _, entity := range query.SelectList {
@@ -102,10 +123,53 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
-			result = append(result, nodeSet...)
+			result = append(result, nodeSet)
 		}
 	}
-	return result
+	output = generateOutput(result, query)
+	nodes = result
+	return nodes, output
+}
+
+func generateOutput(nodeSet [][]*Node, query parser.Query) [][]string {
+	results := make([][]string, 0, len(nodeSet))
+	for _, nodeSet := range nodeSet {
+		var result []string
+		for _, outputFormat := range query.SelectOutput {
+			switch outputFormat.Type {
+			case "string":
+				outputFormat.SelectEntity = strings.ReplaceAll(outputFormat.SelectEntity, "\"", "")
+				result = append(result, outputFormat.SelectEntity)
+			case "method_chain", "variable":
+				if outputFormat.Type == "variable" {
+					outputFormat.SelectEntity += ".toString()"
+				}
+				response, err := evaluateExpression(nodeSet, outputFormat.SelectEntity, query)
+				if err != nil {
+					log.Fatal(err)
+				}
+				result = append(result, response)
+			}
+		}
+		results = append(results, result)
+	}
+	return results
+}
+
+func evaluateExpression(node []*Node, expression string, query parser.Query) (string, error) {
+	env := generateProxyEnvForSet(node, query)
+
+	program, err := expr.Compile(expression, expr.Env(env))
+	if err != nil {
+		fmt.Println("Error compiling expression: ", err)
+		return "", err
+	}
+	output, err := expr.Run(program, env)
+	if err != nil {
+		fmt.Println("Error evaluating expression: ", err)
+		return "", err
+	}
+	return output.(string), nil
 }
 
 func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
@@ -123,8 +187,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			for _, lhsNode := range lhsNodes {
 				for _, rhsNode := range rhsNodes {
 					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
-						typeIndex[lhsNode.Type] = append(typeIndex[lhsNode.Type], lhsNode)
-						typeIndex[rhsNode.Type] = append(typeIndex[rhsNode.Type], rhsNode)
+						typeIndex[lhsNode.Type] = appendUnique(typeIndex[lhsNode.Type], lhsNode)
+						typeIndex[rhsNode.Type] = appendUnique(typeIndex[rhsNode.Type], rhsNode)
 					}
 				}
 			}
@@ -132,7 +196,7 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			for _, node := range graph.Nodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
 				if FilterEntities([]*Node{node}, query) {
-					typeIndex[node.Type] = append(typeIndex[node.Type], node)
+					typeIndex[node.Type] = appendUnique(typeIndex[node.Type], node)
 				}
 			}
 		}
@@ -275,6 +339,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getArgumentName": proxyenv.GetArgumentNames,
 			"getThrowsType":   proxyenv.GetThrowsTypes,
 			"getDoc":          proxyenv.GetDoc,
+			"toString":        proxyenv.ToString,
 		},
 		classDeclaration: map[string]interface{}{
 			"getSuperClass": proxyenv.GetSuperClass,
@@ -283,11 +348,13 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getVisibility": proxyenv.GetVisibility,
 			"getInterface":  proxyenv.GetInterfaces,
 			"getDoc":        proxyenv.GetDoc,
+			"toString":      proxyenv.ToString,
 		},
 		methodInvocation: map[string]interface{}{
 			"getArgumentName": proxyenv.GetArgumentNames,
 			"getName":         proxyenv.GetName,
 			"getDoc":          proxyenv.GetDoc,
+			"toString":        proxyenv.ToString,
 		},
 		variableDeclaration: map[string]interface{}{
 			"getName":             proxyenv.GetName,
@@ -296,74 +363,92 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getVariableDataType": proxyenv.GetVariableDataType,
 			"getScope":            proxyenv.GetScope,
 			"getDoc":              proxyenv.GetDoc,
+			"toString":            proxyenv.ToString,
 		},
 		binaryExpression: map[string]interface{}{
 			"getLeftOperand":  proxyenv.GetLeftOperand,
 			"getRightOperand": proxyenv.GetRightOperand,
+			"toString":        proxyenv.ToString,
 		},
 		addExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "+",
+			"toString":      proxyenv.ToString,
 		},
 		subExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "-",
+			"toString":      proxyenv.ToString,
 		},
 		mulExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "*",
+			"toString":      proxyenv.ToString,
 		},
 		divExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "/",
+			"toString":      proxyenv.ToString,
 		},
 		comparisionExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "==",
+			"toString":      proxyenv.ToString,
 		},
 		remainderExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "%",
+			"toString":      proxyenv.ToString,
 		},
 		rightShiftExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   ">>",
+			"toString":      proxyenv.ToString,
 		},
 		leftShiftExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "<<",
+			"toString":      proxyenv.ToString,
 		},
 		notEqualExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "!=",
+			"toString":      proxyenv.ToString,
 		},
 		equalExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "==",
+			"toString":      proxyenv.ToString,
 		},
 		andBitwiseExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "&",
+			"toString":      proxyenv.ToString,
 		},
 		andLogicalExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "&&",
+			"toString":      proxyenv.ToString,
 		},
 		orLogicalExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "||",
+			"toString":      proxyenv.ToString,
 		},
 		orBitwiseExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "|",
+			"toString":      proxyenv.ToString,
 		},
 		unsignedRightShiftExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   ">>>",
+			"toString":      proxyenv.ToString,
 		},
 		xorBitwsieExpression: map[string]interface{}{
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "^",
+			"toString":      proxyenv.ToString,
 		},
 	}
 	return env

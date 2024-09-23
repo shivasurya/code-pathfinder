@@ -31,6 +31,7 @@ type Query struct {
 	Condition           []string
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
+	SelectOutput        []SelectOutput
 }
 
 type State struct {
@@ -45,11 +46,17 @@ type CustomQueryListener struct {
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
 	State               State
+	SelectOutput        []SelectOutput
 }
 
 type SelectList struct {
 	Entity string
 	Alias  string
+}
+
+type SelectOutput struct {
+	SelectEntity string
+	Type         string
 }
 
 type customErrorListener struct {
@@ -65,6 +72,25 @@ func NewCustomQueryListener() *CustomQueryListener {
 	return &CustomQueryListener{
 		BaseQueryListener: BaseQueryListener{},
 	}
+}
+
+//nolint:all
+func (l *CustomQueryListener) EnterSelect_expression(ctx *Select_expressionContext) {
+	// get the select expression type and set it to the select output
+	var selectType string
+	switch {
+	case ctx.Variable() != nil:
+		selectType = "variable"
+	case ctx.Method_chain() != nil:
+		selectType = "method_chain"
+	case ctx.STRING() != nil:
+		selectType = "string"
+	}
+
+	l.SelectOutput = append(l.SelectOutput, SelectOutput{
+		SelectEntity: ctx.GetText(),
+		Type:         selectType,
+	})
 }
 
 //nolint:all
@@ -292,5 +318,6 @@ func ParseQuery(inputQuery string) (Query, error) {
 		Condition:           listener.condition,
 		Predicate:           listener.Predicate,
 		PredicateInvocation: listener.PredicateInvocation,
+		SelectOutput:        listener.SelectOutput,
 	}, nil
 }
