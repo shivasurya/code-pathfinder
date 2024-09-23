@@ -11,3 +11,4 @@
  */
 FROM method_invocation AS mi
 WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "JavaScript enabled"

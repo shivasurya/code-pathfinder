@@ -123,13 +123,15 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	if err != nil {
 		return "", err
 	}
-	// split the input string if WHERE
-	parsedQuery.Expression = strings.Split(input, "WHERE")[1]
+	parts := strings.SplitN(input, "WHERE", 2)
+	if len(parts) > 1 {
+		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
+	}
 	entities := graph.QueryEntities(codeGraph, parsedQuery)
 	if output == "json" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results
-		results := []map[string]interface{}{}
+		var results []map[string]interface{}
 		for _, entity := range entities {
 			result := make(map[string]interface{})
 			result["file"] = entity.File

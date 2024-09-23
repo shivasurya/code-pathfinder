@@ -77,8 +77,8 @@ type QueryListener interface {
 	// EnterMethod_or_variable is called when entering the method_or_variable production.
 	EnterMethod_or_variable(c *Method_or_variableContext)
 
-	// EnterMethod is called when entering the method production.
-	EnterMethod(c *MethodContext)
+	// EnterMethod_invocation is called when entering the method_invocation production.
+	EnterMethod_invocation(c *Method_invocationContext)
 
 	// EnterVariable is called when entering the variable production.
 	EnterVariable(c *VariableContext)
@@ -88,6 +88,9 @@ type QueryListener interface {
 
 	// EnterArgument_list is called when entering the argument_list production.
 	EnterArgument_list(c *Argument_listContext)
+
+	// EnterArgument is called when entering the argument production.
+	EnterArgument(c *ArgumentContext)
 
 	// EnterComparator is called when entering the comparator production.
 	EnterComparator(c *ComparatorContext)
@@ -103,9 +106,6 @@ type QueryListener interface {
 
 	// EnterSelect_expression is called when entering the select_expression production.
 	EnterSelect_expression(c *Select_expressionContext)
-
-	// EnterMethod_invocation is called when entering the method_invocation production.
-	EnterMethod_invocation(c *Method_invocationContext)
 
 	// ExitQuery is called when exiting the query production.
 	ExitQuery(c *QueryContext)
@@ -176,8 +176,8 @@ type QueryListener interface {
 	// ExitMethod_or_variable is called when exiting the method_or_variable production.
 	ExitMethod_or_variable(c *Method_or_variableContext)
 
-	// ExitMethod is called when exiting the method production.
-	ExitMethod(c *MethodContext)
+	// ExitMethod_invocation is called when exiting the method_invocation production.
+	ExitMethod_invocation(c *Method_invocationContext)
 
 	// ExitVariable is called when exiting the variable production.
 	ExitVariable(c *VariableContext)
@@ -187,6 +187,9 @@ type QueryListener interface {
 
 	// ExitArgument_list is called when exiting the argument_list production.
 	ExitArgument_list(c *Argument_listContext)
+
+	// ExitArgument is called when exiting the argument production.
+	ExitArgument(c *ArgumentContext)
 
 	// ExitComparator is called when exiting the comparator production.
 	ExitComparator(c *ComparatorContext)
@@ -202,7 +205,4 @@ type QueryListener interface {
 
 	// ExitSelect_expression is called when exiting the select_expression production.
 	ExitSelect_expression(c *Select_expressionContext)
-
-	// ExitMethod_invocation is called when exiting the method_invocation production.
-	ExitMethod_invocation(c *Method_invocationContext)
 }

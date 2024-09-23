@@ -32,11 +32,16 @@ func TestParseQuery(t *testing.T) {
 				},
 				Expression: "e1.GetName()==\"test\"",
 				Condition:  []string{"e1.GetName()==\"test\""},
+				SelectOutput: []SelectOutput{
+					{
+						SelectEntity: "e1.GetName()",
+					},
+				},
 			},
 		},
 		{
 			name:  "Select with multiple entities and aliases",
-			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" || e2.GetName() == \"test\"",
+			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" || e2.GetName() == \"test\" SELECT e1.GetName()",
 			expectedQuery: Query{
 				SelectList: []SelectList{
 					{Entity: "entity1", Alias: "e1"},
@@ -44,11 +49,16 @@ func TestParseQuery(t *testing.T) {
 				},
 				Expression: "e1.GetName()==\"test\" || e2.GetName()==\"test\"",
 				Condition:  []string{"e1.GetName()==\"test\"", "e2.GetName()==\"test\""},
+				SelectOutput: []SelectOutput{
+					{
+						SelectEntity: "e1.GetName()",
+					},
+				},
 			},
 		},
 		{
 			name:  "Select with multiple entities and aliases",
-			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" && e2.GetName() == \"test\"",
+			input: "FROM entity1 AS e1, entity2 AS e2 WHERE e1.GetName() == \"test\" && e2.GetName() == \"test\" SELECT e1.GetName()",
 			expectedQuery: Query{
 				SelectList: []SelectList{
 					{Entity: "entity1", Alias: "e1"},
