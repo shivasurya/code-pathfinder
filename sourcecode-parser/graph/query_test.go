@@ -48,9 +48,10 @@ func TestQueryEntities(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := QueryEntities(graph, tt.query)
-			fmt.Println(result)
-			assert.Equal(t, tt.expected, len(result))
+			resultSet, output := QueryEntities(graph, tt.query)
+			fmt.Println(resultSet)
+			fmt.Println(output)
+			assert.Equal(t, tt.expected, len(resultSet))
 		})
 	}
 }

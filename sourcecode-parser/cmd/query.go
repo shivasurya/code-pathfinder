@@ -127,11 +127,13 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities := graph.QueryEntities(codeGraph, parsedQuery)
+	entities, formattedOutput := graph.QueryEntities(codeGraph, parsedQuery)
 	if output == "json" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results
-		var results []map[string]interface{}
+		results := make(map[string]interface{})
+		results["result_set"] = make([]map[string]interface{}, 0)
+		results["output"] = formattedOutput
 		for _, entity := range entities {
 			for _, entityObject := range entity {
 				result := make(map[string]interface{})
@@ -139,25 +141,10 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 				result["line"] = entityObject.LineNumber
 				result["code"] = entityObject.CodeSnippet
 
-				// from the parsedQuery.SelectOutput, get the fields and add them to the result
-				result["select"] = []string{}
-				for _, field := range parsedQuery.SelectOutput {
-					switch field.Type {
-					case "string":
-						// just append the field.SelectEntity to the result
-						result["select"] = append(result["select"].([]string), field.SelectEntity)
-					case "method_chain":
-						// invoke the method chain and get the result
-						result["select"] = append(result["select"].([]string), field.SelectEntity)
-					case "variable":
-						// get the variable to string or code snippet
-						result["select"] = append(result["select"].([]string), field.SelectEntity)
-					}
-				}
-				results = append(results, result)
+				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result)
 			}
 		}
-		queryResults, err := json.Marshal(results)
+		queryResults, err := json.MarshalIndent(results, "", "    ")
 		if err != nil {
 			return "", fmt.Errorf("error processing query results: %w", err)
 		}
