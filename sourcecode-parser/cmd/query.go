@@ -133,11 +133,29 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 		// convert struct to query_results
 		var results []map[string]interface{}
 		for _, entity := range entities {
-			result := make(map[string]interface{})
-			result["file"] = entity.File
-			result["line"] = entity.LineNumber
-			result["code"] = entity.CodeSnippet
-			results = append(results, result)
+			for _, entityObject := range entity {
+				result := make(map[string]interface{})
+				result["file"] = entityObject.File
+				result["line"] = entityObject.LineNumber
+				result["code"] = entityObject.CodeSnippet
+
+				// from the parsedQuery.SelectOutput, get the fields and add them to the result
+				result["select"] = []string{}
+				for _, field := range parsedQuery.SelectOutput {
+					switch field.Type {
+					case "string":
+						// just append the field.SelectEntity to the result
+						result["select"] = append(result["select"].([]string), field.SelectEntity)
+					case "method_chain":
+						// invoke the method chain and get the result
+						result["select"] = append(result["select"].([]string), field.SelectEntity)
+					case "variable":
+						// get the variable to string or code snippet
+						result["select"] = append(result["select"].([]string), field.SelectEntity)
+					}
+				}
+				results = append(results, result)
+			}
 		}
 		queryResults, err := json.Marshal(results)
 		if err != nil {
@@ -150,15 +168,17 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	yellowCode := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
 	for _, entity := range entities {
-		header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entity.File), greenCode(entity.LineNumber))
-		result += header
-		result += "\n"
-		codeSnippetArray := strings.Split(entity.CodeSnippet, "\n")
-		for i := 0; i < len(codeSnippetArray); i++ {
-			lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entity.LineNumber)+i)
-			result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+		for _, entityObject := range entity {
+			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject.File), greenCode(entityObject.LineNumber))
+			result += header
+			result += "\n"
+			codeSnippetArray := strings.Split(entityObject.CodeSnippet, "\n")
+			for i := 0; i < len(codeSnippetArray); i++ {
+				lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
+				result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+			}
+			result += "\n"
 		}
-		result += "\n"
 	}
 	return result, nil
 }

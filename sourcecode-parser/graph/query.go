@@ -90,8 +90,8 @@ func (env *Env) GetRightOperand() string {
 	return env.Node.BinaryExpr.RightOperand.NodeString
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
-	result := make([]*Node, 0)
+func QueryEntities(graph *CodeGraph, query parser.Query) [][]*Node {
+	result := make([][]*Node, 0)
 
 	// log query select list alone
 	for _, entity := range query.SelectList {
@@ -102,7 +102,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) []*Node {
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
-			result = append(result, nodeSet...)
+			result = append(result, nodeSet)
 		}
 	}
 	return result

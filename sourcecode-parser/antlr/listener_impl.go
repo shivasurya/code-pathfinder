@@ -56,6 +56,7 @@ type SelectList struct {
 
 type SelectOutput struct {
 	SelectEntity string
+	Type         string
 }
 
 type customErrorListener struct {
@@ -75,8 +76,20 @@ func NewCustomQueryListener() *CustomQueryListener {
 
 //nolint:all
 func (l *CustomQueryListener) EnterSelect_expression(ctx *Select_expressionContext) {
+	// get the select expression type and set it to the select output
+	var selectType string
+	switch {
+	case ctx.Variable() != nil:
+		selectType = "variable"
+	case ctx.Method_chain() != nil:
+		selectType = "method_chain"
+	case ctx.STRING() != nil:
+		selectType = "string"
+	}
+
 	l.SelectOutput = append(l.SelectOutput, SelectOutput{
 		SelectEntity: ctx.GetText(),
+		Type:         selectType,
 	})
 }
 
