@@ -123,8 +123,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			for _, lhsNode := range lhsNodes {
 				for _, rhsNode := range rhsNodes {
 					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
-						typeIndex[lhsNode.Type] = append(typeIndex[lhsNode.Type], lhsNode)
-						typeIndex[rhsNode.Type] = append(typeIndex[rhsNode.Type], rhsNode)
+						typeIndex[lhsNode.Type] = appendUnique(typeIndex[lhsNode.Type], lhsNode)
+						typeIndex[rhsNode.Type] = appendUnique(typeIndex[rhsNode.Type], rhsNode)
 					}
 				}
 			}
@@ -132,7 +132,7 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			for _, node := range graph.Nodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
 				if FilterEntities([]*Node{node}, query) {
-					typeIndex[node.Type] = append(typeIndex[node.Type], node)
+					typeIndex[node.Type] = appendUnique(typeIndex[node.Type], node)
 				}
 			}
 		}
