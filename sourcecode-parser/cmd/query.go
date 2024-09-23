@@ -144,7 +144,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result)
 			}
 		}
-		queryResults, err := json.MarshalIndent(results, "", "    ")
+		queryResults, err := json.Marshal(results)
 		if err != nil {
 			return "", fmt.Errorf("error processing query results: %w", err)
 		}
