@@ -25,7 +25,9 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
 
 ```shell
 Code-PathFinder Console:
-> FROM method_declaration AS md WHERE md.getVisibility() == "public" && md.getName() == "main"
+> FROM method_declaration AS md
+  WHERE md.getVisibility() == "public" && md.getName() == "main"
+  SELECT md, "Listing all main methods"
 
 public static void main(String[] args) {
     System.out.println("\"Set thy heart upon thy work, but never on its reward.\" - Bhagavad Gita, Chapter 2, Verse 47");
@@ -39,7 +41,7 @@ public static void main(String[] args) {
 		Strengthen your code’s integrity with robust security checks and insights.
 	</Card>
 	<Card title="Structural Search" icon="seti:code-search">
-		Search and identify specific patterns in your Java code seamlessly.
+		Search and identify specific patterns in source code seamlessly.
 	</Card>
 	<Card title="Call Graph Analysis" icon="seti:pipeline">
 		Visualize and analyze method calls and data flow for better understanding.
