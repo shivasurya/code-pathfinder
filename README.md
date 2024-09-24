@@ -58,7 +58,9 @@ $ gradle buildGo (or) npm install -g codepathfinder
 $ ./pathfinder query --project <path_to_project> --stdin
 2024/06/30 21:35:29 Graph built successfully
 Path-Finder Query Console: 
->FROM method_declaration AS md WHERE md.getName() == "getPaneChanges"
+>FROM method_declaration AS md 
+ WHERE md.getName() == "getPaneChanges"
+ SELECT md, "query for pane changes layout methods"
 Executing query: FROM method_declaration AS md WHERE md.getName() == "getPaneChanges"
 
 ┌───┬──────────────────────────────────────────┬─────────────┬────────────────────┬────────────────┬──────────────────────────────────────────────────────────────┐

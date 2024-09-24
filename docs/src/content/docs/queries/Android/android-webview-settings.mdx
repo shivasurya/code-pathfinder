@@ -28,7 +28,9 @@ result in cross-site scripting attacks.
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi
+WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+SELECT mi, "Enabling JavaScript execution in a WebView can result in cross-site scripting attacks."
 ```
 
 ### setAllowUniversalAccessFromFileURLs Webview API
@@ -45,7 +47,9 @@ FROM method_invocation AS mi WHERE mi.getName() == "setJavaScriptEnabled" && "tr
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromFileURLs" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowUniversalAccessFromFileURLs" && "true" in mi.getArgumentName()
+SELECT mi, "Enabling SetAllowUniversalAccessFromFileURLs leak s&&box access to file:/// URLs from any origin."
 ```
 
 ### setAllowFileAccessFromFileURLs Webview API
@@ -62,7 +66,9 @@ FROM method_invocation AS mi WHERE mi.getName() == "setAllowUniversalAccessFromF
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
+SELECT mi, "Enabling setAllowFileAccessFromFileURLs leak s&&box access to file:/// URLs."
 ```
 
 ### setAllowContentAccess Webview API
@@ -79,7 +85,9 @@ FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccessFromFileUR
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+SELECT mi, "Enabling setAllowContentAccess enables content:// access from webpages."
 ```
 
 ### setAllowFileAccess Webview API
@@ -96,7 +104,9 @@ FROM method_invocation WHERE mi.getName() == "setAllowContentAccess" && "true" i
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+SELECT mi, "Enabling setAllowFileAccess enables webview access to file:/// URLs."
 ```
 
 ### addJavascriptInterface Webview API
@@ -113,5 +123,7 @@ FROM method_invocation AS mi WHERE mi.getName() == "setAllowFileAccess" && "true
  * @tags security
  * external/cwe/cwe-079
  */
-FROM method_invocation AS mi WHERE mi.getName() == "addJavascriptInterface"
+FROM method_invocation AS mi
+WHERE mi.getName() == "addJavascriptInterface"
+SELECT mi, "Enabling addJavascriptInterface exposes java methods to JavaScript."
 ```

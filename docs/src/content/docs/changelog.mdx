@@ -8,6 +8,19 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
 <PostHogLayout>
 </PostHogLayout>
 
+## v0.0.26
+
+- You can now query multiple entities in a single query and compare with them in conditions and filter them like CodeQL 🚀
+   Example:
+   ```sql
+   FIND method_declaration AS md, method_invocation AS mi
+   WHERE md.getName() == mi.getName() &&
+   md.getVisibility() != "private"
+   ```
+- The pathfinder cli now fresh look with code, line number, file name formatted
+- If you make any mistakes in query, pathfinder cli advises you error message exactly line number and doesn't crash the program
+- Posthog had issues in previous release due to breaking changes in golang sdk from posthog, which is now fixed.
+
 ## v0.0.23
 
 ### **New Feature**:
