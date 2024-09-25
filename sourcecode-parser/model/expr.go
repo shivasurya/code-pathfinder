@@ -22,9 +22,10 @@ func (e *ExprParent) GetNumChildExpr() int64 {
 
 type Expr struct {
 	ExprParent
-	kind       int
+	Kind       int
 	Node       sitter.Node
 	NodeString string
+	Type       string
 }
 
 func (e *Expr) GetAChildExpr() *Expr {
@@ -43,7 +44,7 @@ func (e *Expr) GetBoolValue() {
 }
 
 func (e *Expr) GetKind() int {
-	return e.kind
+	return e.Kind
 }
 
 type BinaryExpr struct {
@@ -277,4 +278,26 @@ type XorBitwiseExpr struct {
 
 func (e *XorBitwiseExpr) GetOp() string {
 	return e.op
+}
+
+type ClassInstanceExpr struct {
+	Expr
+	ClassName string
+	Args      []*Expr
+}
+
+func (e *ClassInstanceExpr) GetClassName() string {
+	return e.ClassName
+}
+
+func (e *ClassInstanceExpr) GetArgs() []*Expr {
+	return e.Args
+}
+
+func (e *ClassInstanceExpr) GetArg(i int) *Expr {
+	return e.Args[i]
+}
+
+func (e *ClassInstanceExpr) GetNumArgs() int {
+	return len(e.Args)
 }

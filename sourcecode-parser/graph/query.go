@@ -111,6 +111,14 @@ func (env *Env) GetRightOperand() string {
 	return env.Node.BinaryExpr.RightOperand.NodeString
 }
 
+func (env *Env) GetClassInstanceExpr() *model.ClassInstanceExpr {
+	return env.Node.ClassInstanceExpr
+}
+
+func (env *Env) GetClassInstanceExprName() string {
+	return env.Node.ClassInstanceExpr.ClassName
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]string) {
 	result := make([][]*Node, 0)
 
@@ -193,7 +201,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 				}
 			}
 		} else {
-			for _, node := range graph.Nodes {
+			filteredNodes := graph.FindNodesByType(selectList[0].Entity)
+			for _, node := range filteredNodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
 				if FilterEntities([]*Node{node}, query) {
 					typeIndex[node.Type] = appendUnique(typeIndex[node.Type], node)
@@ -207,6 +216,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			typeIndex[node.Type] = append(typeIndex[node.Type], node)
 		}
 	}
+
+	fmt.Println(len(conditions))
 
 	sets := make([][]interface{}, 0, len(selectList))
 
@@ -280,6 +291,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	orBitwiseExpression := "or_bitwise_expression"
 	unsignedRightShiftExpression := "unsigned_right_shift_expression"
 	xorBitwsieExpression := "xor_bitwise_expression"
+	classInstanceExpression := "ClassInstanceExpr"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -326,6 +338,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			unsignedRightShiftExpression = entity.Alias
 		case "xor_bitwise_expression":
 			xorBitwsieExpression = entity.Alias
+		case "ClassInstanceExpr":
+			classInstanceExpression = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -449,6 +463,13 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getBinaryExpr": proxyenv.GetBinaryExpr,
 			"getOperator":   "^",
 			"toString":      proxyenv.ToString,
+		},
+		classInstanceExpression: map[string]interface{}{
+			"getName":              proxyenv.GetName,
+			"getDoc":               proxyenv.GetDoc,
+			"toString":             proxyenv.ToString,
+			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
+			"getClassName":         proxyenv.GetClassInstanceExprName,
 		},
 	}
 	return env

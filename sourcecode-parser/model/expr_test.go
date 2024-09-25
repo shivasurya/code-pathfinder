@@ -7,8 +7,8 @@ import (
 )
 
 func TestBinaryExpr(t *testing.T) {
-	leftExpr := &Expr{kind: 0}
-	rightExpr := &Expr{kind: 0}
+	leftExpr := &Expr{Kind: 0}
+	rightExpr := &Expr{Kind: 0}
 	binaryExpr := &BinaryExpr{
 		Op:           "+",
 		LeftOperand:  leftExpr,
@@ -59,7 +59,7 @@ func TestComparisonExpr(t *testing.T) {
 }
 
 func TestExpr(t *testing.T) {
-	expr := &Expr{kind: 42}
+	expr := &Expr{Kind: 42}
 
 	t.Run("GetAChildExpr", func(t *testing.T) {
 		assert.Equal(t, expr, expr.GetAChildExpr())

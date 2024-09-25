@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ type Node struct {
 	Annotation           []string
 	JavaDoc              *model.Javadoc
 	BinaryExpr           *model.BinaryExpr
+	ClassInstanceExpr    *model.ClassInstanceExpr
 }
 
 type Edge struct {
@@ -715,6 +717,52 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 		}
 		graph.AddNode(variableNode)
+	case "object_creation_expression":
+		className := ""
+		classInstanceExpression := model.ClassInstanceExpr{
+			ClassName: "",
+			Args:      []*model.Expr{},
+		}
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child.Type() == "type_identifier" || child.Type() == "scoped_type_identifier" {
+				className = child.Content(sourceCode)
+				classInstanceExpression.ClassName = className
+			}
+			if child.Type() == "argument_list" {
+				classInstanceExpression.Args = []*model.Expr{}
+				for j := 0; j < int(child.ChildCount()); j++ {
+					argType := child.Child(j).Type()
+					argumentStopWords := map[string]bool{
+						"(": true,
+						")": true,
+						"{": true,
+						"}": true,
+						"[": true,
+						"]": true,
+						",": true,
+					}
+					if !argumentStopWords[argType] {
+						argument := &model.Expr{}
+						argument.Type = child.Child(j).Type()
+						argument.NodeString = child.Child(j).Content(sourceCode)
+						classInstanceExpression.Args = append(classInstanceExpression.Args, argument)
+					}
+				}
+			}
+		}
+
+		objectNode := &Node{
+			ID:                GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
+			Type:              "ClassInstanceExpr",
+			Name:              className,
+			CodeSnippet:       node.Content(sourceCode),
+			LineNumber:        node.StartPoint().Row + 1,
+			File:              file,
+			isJavaSourceFile:  isJavaSourceFile,
+			ClassInstanceExpr: &classInstanceExpression,
+		}
+		graph.AddNode(objectNode)
 	}
 
 	// Recursively process child nodes
