@@ -3,6 +3,7 @@ package graph
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 )
 
@@ -25,4 +26,21 @@ func appendUnique(slice []*Node, node *Node) []*Node {
 		}
 	}
 	return append(slice, node)
+}
+
+func FormatType(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case int, int64:
+		return fmt.Sprintf("%d", val)
+	case float32, float64:
+		return fmt.Sprintf("%.2f", val)
+	case []interface{}:
+		//nolint:all
+		jsonBytes, _ := json.Marshal(val)
+		return string(jsonBytes)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }

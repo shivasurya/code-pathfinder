@@ -113,3 +113,71 @@ func isValidHexString(s string) bool {
 	_, err := hex.DecodeString(s)
 	return err == nil
 }
+
+func TestFormatType(t *testing.T) {
+	tests := []struct {
+		name  string
+		input interface{}
+		want  string
+	}{
+		{
+			name:  "String input",
+			input: "test string",
+			want:  "test string",
+		},
+		{
+			name:  "Integer input",
+			input: 42,
+			want:  "42",
+		},
+		{
+			name:  "Int64 input",
+			input: int64(9223372036854775807),
+			want:  "9223372036854775807",
+		},
+		{
+			name:  "Float32 input",
+			input: float32(3.14),
+			want:  "3.14",
+		},
+		{
+			name:  "Float64 input",
+			input: 2.71828,
+			want:  "2.72",
+		},
+		{
+			name:  "Slice of integers",
+			input: []interface{}{1, 2, 3},
+			want:  "[1,2,3]",
+		},
+		{
+			name:  "Slice of mixed types",
+			input: []interface{}{"a", 1, true},
+			want:  `["a",1,true]`,
+		},
+		{
+			name:  "Boolean input",
+			input: true,
+			want:  "true",
+		},
+		{
+			name:  "Nil input",
+			input: nil,
+			want:  "<nil>",
+		},
+		{
+			name:  "Struct input",
+			input: struct{ Name string }{"John"},
+			want:  "{John}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatType(tt.input)
+			if got != tt.want {
+				t.Errorf("FormatType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

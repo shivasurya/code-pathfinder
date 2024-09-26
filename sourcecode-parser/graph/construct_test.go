@@ -782,6 +782,22 @@ func TestBuildGraphFromAST(t *testing.T) {
 			expectedTypes:   []string{"class_declaration", "method_declaration", "block_comment"},
 			unexpectedTypes: []string{"variable_declaration", "binary_expression"},
 		},
+		// add testcase for object creation expression
+		{
+			name: "Class with object creation expression",
+			sourceCode: `
+				public class ObjectCreationClass {
+					public static void main(String[] args) {
+						ObjectCreationClass obj = new ObjectCreationClass();
+						Socket socket = new Socket("www.google.com", 80);
+					}
+				}
+			`,
+			expectedNodes:   6,
+			expectedEdges:   0,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "ClassInstanceExpr"},
+			unexpectedTypes: []string{"binary_expression"},
+		},
 	}
 
 	for _, tt := range tests {
