@@ -34,6 +34,12 @@ public class movieDetailActivity extends AppCompatActivity {
         // webview.javascriptEnabled();
         webview.getSettings().setJavaScriptEnabled(true);
 
+        Socket socket = new Socket("www.google.com", 80);
+
+        Socket socket = new Socket();
+
+        ServerSocket serverSocket = new ServerSocket(80);
+
         movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
 
         if (savedInstanceState == null) {
