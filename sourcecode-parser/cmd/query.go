@@ -154,9 +154,17 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	verticalLine := "|"
 	yellowCode := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
-	for _, entity := range entities {
+	for i, entity := range entities {
 		for _, entityObject := range entity {
 			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject.File), greenCode(entityObject.LineNumber))
+			// add formatted output to result
+			output := "\tResult: "
+			for _, outputObject := range formattedOutput[i] {
+				output += graph.FormatType(outputObject)
+				output += " "
+				output += verticalLine + " "
+			}
+			header += output + "\n"
 			result += header
 			result += "\n"
 			codeSnippetArray := strings.Split(entityObject.CodeSnippet, "\n")

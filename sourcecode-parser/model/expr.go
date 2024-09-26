@@ -28,6 +28,10 @@ type Expr struct {
 	Type       string
 }
 
+func (e *Expr) String() string {
+	return fmt.Sprintf("Expr(%s)", e.NodeString)
+}
+
 func (e *Expr) GetAChildExpr() *Expr {
 	return e
 }
