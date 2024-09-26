@@ -301,3 +301,7 @@ func (e *ClassInstanceExpr) GetArg(i int) *Expr {
 func (e *ClassInstanceExpr) GetNumArgs() int {
 	return len(e.Args)
 }
+
+func (e *ClassInstanceExpr) String() string {
+	return fmt.Sprintf("ClassInstanceExpr(%s, %v)", e.ClassName, e.Args)
+}

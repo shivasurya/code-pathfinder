@@ -119,7 +119,7 @@ func (env *Env) GetClassInstanceExprName() string {
 	return env.Node.ClassInstanceExpr.ClassName
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]string) {
+func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
 	// log query select list alone
@@ -139,10 +139,10 @@ func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, outpu
 	return nodes, output
 }
 
-func generateOutput(nodeSet [][]*Node, query parser.Query) [][]string {
-	results := make([][]string, 0, len(nodeSet))
+func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
+	results := make([][]interface{}, 0, len(nodeSet))
 	for _, nodeSet := range nodeSet {
-		var result []string
+		var result []interface{}
 		for _, outputFormat := range query.SelectOutput {
 			switch outputFormat.Type {
 			case "string":
@@ -164,7 +164,7 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]string {
 	return results
 }
 
-func evaluateExpression(node []*Node, expression string, query parser.Query) (string, error) {
+func evaluateExpression(node []*Node, expression string, query parser.Query) (interface{}, error) {
 	env := generateProxyEnvForSet(node, query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
@@ -177,7 +177,7 @@ func evaluateExpression(node []*Node, expression string, query parser.Query) (st
 		fmt.Println("Error evaluating expression: ", err)
 		return "", err
 	}
-	return output.(string), nil
+	return output, nil
 }
 
 func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
@@ -216,8 +216,6 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			typeIndex[node.Type] = append(typeIndex[node.Type], node)
 		}
 	}
-
-	fmt.Println(len(conditions))
 
 	sets := make([][]interface{}, 0, len(selectList))
 
@@ -469,7 +467,6 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getDoc":               proxyenv.GetDoc,
 			"toString":             proxyenv.ToString,
 			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
-			"getClassName":         proxyenv.GetClassInstanceExprName,
 		},
 	}
 	return env
