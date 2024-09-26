@@ -29,7 +29,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 			query:          "FROM method_declaration AS md WHERE md.getName() == \"onCreateOptionsMenu\" SELECT md.getName()",
 			output:         "",
 			stdin:          false,
-			expectedOutput: "File: ../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java, Line: 96 \n\n\t\t  96 | @Override\n\t\t  97 |     public boolean onCreateOptionsMenu(Menu menu) {\n\t\t  98 |         MenuInflater inflater = getMenuInflater();\n\t\t  99 |         inflater.inflate(R.menu.main, menu);\n\t\t 100 |         return true;\n\t\t 101 |     }",
+			expectedOutput: "File: ../../test-src/android/app/src/main/java/com/ivb/udacity/movieListActivity.java, Line: 96 \n\tResult: onCreateOptionsMenu | \n\n\t\t  96 | @Override\n\t\t  97 |     public boolean onCreateOptionsMenu(Menu menu) {\n\t\t  98 |         MenuInflater inflater = getMenuInflater();\n\t\t  99 |         inflater.inflate(R.menu.main, menu);\n\t\t 100 |         return true;\n\t\t 101 |     }",
 			expectedError:  "",
 		},
 		{
@@ -79,7 +79,7 @@ func TestProcessQuery(t *testing.T) {
 			name:           "Basic query",
 			input:          "FROM method_declaration AS md WHERE md.getName() == \"testFunc\" SELECT md.getName()",
 			output:         "",
-			expectedResult: "\tFile: test.java, Line: 5 \n\n\t\t   5 | public void testFunc() {}\n\n",
+			expectedResult: "\tFile: test.java, Line: 5 \n\tResult: testFunc | \n\n\t\t   5 | public void testFunc() {}\n\n",
 			expectedError:  "",
 		},
 		{

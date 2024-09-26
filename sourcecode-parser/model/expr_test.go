@@ -85,3 +85,36 @@ func TestExprParent(t *testing.T) {
 	assert.Nil(t, parent.GetChildExpr(0))
 	assert.Equal(t, int64(0), parent.GetNumChildExpr())
 }
+
+func TestClassInstanceExpr(t *testing.T) {
+	t.Run("GetClassName", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			expr     *ClassInstanceExpr
+			expected string
+		}{
+			{
+				name:     "Normal class name",
+				expr:     &ClassInstanceExpr{ClassName: "MyClass"},
+				expected: "MyClass",
+			},
+			{
+				name:     "Empty class name",
+				expr:     &ClassInstanceExpr{ClassName: ""},
+				expected: "",
+			},
+			{
+				name:     "Class name with special characters",
+				expr:     &ClassInstanceExpr{ClassName: "My_Class$123"},
+				expected: "My_Class$123",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result := tc.expr.GetClassName()
+				assert.Equal(t, tc.expected, result)
+			})
+		}
+	})
+}
