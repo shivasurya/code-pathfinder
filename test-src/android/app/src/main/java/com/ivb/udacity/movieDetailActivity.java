@@ -34,6 +34,10 @@ public class movieDetailActivity extends AppCompatActivity {
         // webview.javascriptEnabled();
         webview.getSettings().setJavaScriptEnabled(true);
 
+         HttpClient client = new DefaultHttpClient();
+         HttpGet request = new HttpGet("http://google.com");
+         HttpResponse response = client.execute(request);
+
         Socket socket = new Socket("www.google.com", 80);
 
         Socket socket = new Socket();
