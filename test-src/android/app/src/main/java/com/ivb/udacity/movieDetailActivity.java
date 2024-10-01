@@ -73,7 +73,8 @@ public class movieDetailActivity extends AppCompatActivity {
             onBackPressed();
             return true;
         }
-         Cipher.getInstance("RC4")
+        Cipher.getInstance("RC4")
+        MessageDigest.getInstance("SHA1", "BC");
         return super.onOptionsItemSelected(item);
     }
 }
