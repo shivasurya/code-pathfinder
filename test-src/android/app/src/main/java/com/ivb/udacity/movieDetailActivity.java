@@ -31,9 +31,7 @@ public class movieDetailActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
 
-        Cipher.getInstance("RC4");
-
-        Cipher.getInstance("Blowfish")
+        int data = Cipher.getInstance("RC4");
 
         double rand = Math.random();
 
@@ -75,6 +73,7 @@ public class movieDetailActivity extends AppCompatActivity {
             onBackPressed();
             return true;
         }
+         Cipher.getInstance("RC4")
         return super.onOptionsItemSelected(item);
     }
 }

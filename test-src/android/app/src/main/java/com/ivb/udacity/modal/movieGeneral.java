@@ -43,6 +43,7 @@ public class movieGeneral implements Serializable {
     }
 
     public void setTotal_results(String total_results) {
+        Cipher.getInstance("Blowfish");
         this.total_results = total_results;
     }
 
