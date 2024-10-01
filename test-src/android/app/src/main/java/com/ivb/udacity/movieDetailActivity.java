@@ -33,6 +33,8 @@ public class movieDetailActivity extends AppCompatActivity {
 
         Cipher.getInstance("RC4");
 
+        Cipher.getInstance("Blowfish")
+
         double rand = Math.random();
 
         // webview.javascriptEnabled();
