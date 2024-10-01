@@ -31,6 +31,8 @@ public class movieDetailActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
 
+        Cipher.getInstance("RC4");
+
         // webview.javascriptEnabled();
         webview.getSettings().setJavaScriptEnabled(true);
 
