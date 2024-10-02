@@ -842,10 +842,14 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 		}
 	}
-	methodID = GenerateMethodID(methodName, parameters, filepath)
+	content := node.Content(sourceCode)
+	lineNumber := int(node.StartPoint().Row) + 1
+	columnNumber := int(node.StartPoint().Column) + 1
+	// convert to string and merge
+	content += " " + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber)
+	methodID = GenerateMethodID(methodName, parameters, filepath+"/"+content)
 	return methodName, methodID
 }
-
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
