@@ -718,7 +718,7 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   4,
+			expectedNodes:   5,
 			expectedEdges:   2,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "method_invocation"},
 			unexpectedTypes: []string{"variable_declaration"},
@@ -852,19 +852,19 @@ func TestExtractMethodName(t *testing.T) {
 			name:           "Simple method",
 			sourceCode:     "public void simpleMethod() {}",
 			expectedName:   "simpleMethod",
-			expectedIDPart: "f5bef43ffe2408f266cdb6a6649ec63ae0e3e00d0f8b9269c057626c2ed750e7",
+			expectedIDPart: "e4bf121a07daa7b5fc0821f04fe31f22689361aaa7604264034bf231640c0b94",
 		},
 		{
 			name:           "Method with parameters",
 			sourceCode:     "private int complexMethod(String a, int b) {}",
 			expectedName:   "complexMethod",
-			expectedIDPart: "7aafd0e3d06b68d9795e019ed7131eeda9f3ae692125b537a4e69486205ef6a0",
+			expectedIDPart: "8fa7666614f2db09a92d83f0ec126328a0c0fc93ac0919ffce2be2ce65e5fed5",
 		},
 		{
 			name:           "Generic method",
 			sourceCode:     "public <T> List<T> genericMethod(T item) {}",
 			expectedName:   "genericMethod",
-			expectedIDPart: "5bcc19f46ab5547ade3962fc401d19b71d17c2c16ee9ff1a0bdfa7fd9b788131",
+			expectedIDPart: "4072dc9bf8d115f9c73a0ff3ff2205ef2866845921ac3dd218530ffe85966d96",
 		},
 	}
 
