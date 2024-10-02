@@ -13,14 +13,13 @@ import PostHogLayout from '../../../layouts/PostHogLayout.astro';
 
 ## What is Code PathFinder?
 
-Code PathFinder is a code analysis tool that helps you find exact code pattern and paths in your codebase. While there are several ways to
-grep source code, having source code broken down into individual entities, building graph & edges which helps in building
+Code PathFinder is a code analysis tool that helps you find exact code patterns and paths in your codebase. While there are several ways to
+grep source code, having source code broken down into individual entities, building graphs & edges which help in establishing
 relationships between entities, imitates the way a human reads code.
 
+### How do security engineers interact with codebases today?
 
-### How do security engineers interact with codebase today?
-
-If you generically think about how engineers interact with codebase, it is something like this:
+If you think about how engineers generally interact with a codebase, it typically follows this process:
 
 1. Start by searching for a symbol
 2. Resolve the symbol to an entity such as a class or function
@@ -28,41 +27,41 @@ If you generically think about how engineers interact with codebase, it is somet
 4. Find the entity's references across the codebase and often across multiple repositories
 5. Determine the flow of the code
   - 5A. Have a source in mind such as user inputs, database, or a file or even network operations
-  - 5B. Have a sink in mind such as above symbols definition
+  - 5B. Have a sink in mind such as the above symbol's definition
   - 5C. Determine the flow of the code including method jumps, method calls, and method returns
-  - 5D. Identify if there is any blocker in between such as conditions, loops, etc
+  - 5D. Identify if there are any blockers in between such as conditions, loops, etc.
 6. Identify the variables that are modified and the variables that are used within the flow
 
-Representing it technically as a graph, can be more useful in finding the flow of the code. Moreover, the relationship as edges
+Representing this process technically as a graph can be more useful in finding the flow of the code. Moreover, the relationships as edges
 between entities can be used as conditions to focus on the paths that are relevant to the source and sink.
 
-For example, Find code pattern where `Socket` class is instantiated and `send` method is called on it and get me all enclosing methods.
+For example, to find a code pattern where the `Socket` class is instantiated and the `send` method is called on it, and to get all enclosing methods, you could use:
 
-```sql
+
 SELECT MethodInvocation AS mi, MethodDeclaration AS md, ClassInstanceExpr AS ci
 WHERE
     ci.getClassInstanceExpr().getClassName() = "Socket" &&
     mi.getMethodName() = "send" && mi.getEnclosingMethod() = md
     mi.getMethodInvocation().getObject() = ci
 SELECT MethodDeclaration AS md, MethodInvocation AS mi
-```
-The above query will return all the enclosing methods of the `send` method in the `Socket` class and invoked call to `send` method.
-The above entities such as `MethodInvocation`, `MethodDeclaration`, `ClassInstanceExpr` are called as entities and they are represented as nodes in the graph.
-The edges between the nodes are represented as relationships between the entities.
+
+The above query will return all the enclosing methods of the `send` method in the `Socket` class and invoked calls to the `send` method.
+The entities such as `MethodInvocation`, `MethodDeclaration`, and `ClassInstanceExpr` are called entities and are represented as nodes in the graph.
+The edges between the nodes represent relationships between the entities.
 
 ### How does Code PathFinder work?
 
 Code Pathfinder uses tree-sitter to parse the source code and build a graph of the code. The graph is then used to find answers to queries.
 Similar to SQL, Code Pathfinder uses a query language to filter and apply conditions to the graph nodes logically. Sometimes, it generates
-cartesian product of the graph nodes to retrieve all possible combinations and apply the conditions in order to find the paths in code.
-While there are lot of APIs yet to be implemented, lacks support for classes and inheritance, Code Pathfinder is currently equipped with
+a cartesian product of the graph nodes to retrieve all possible combinations and applies the conditions in order to find the paths in code.
+While there are still many APIs yet to be implemented and it lacks support for classes and inheritance, Code Pathfinder is currently equipped with
 the following features:
 
 - Predicates
 - Complex conditions
 - Aliases
 
+![Code-Pathfinder Process Illustration](/assets/codepathfinder-process.png)
+
 If you are interested in contributing to Code Pathfinder, please check out the [Code Pathfinder](https://github.com/shivasurya/code-pathfinder) repository.
 Give it a try and file an issue if you find any bugs or have any suggestions.
-
-
