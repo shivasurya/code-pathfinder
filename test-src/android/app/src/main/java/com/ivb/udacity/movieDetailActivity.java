@@ -31,8 +31,16 @@ public class movieDetailActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
 
+        int data = Cipher.getInstance("RC4");
+
+        double rand = Math.random();
+
         // webview.javascriptEnabled();
         webview.getSettings().setJavaScriptEnabled(true);
+
+         HttpClient client = new DefaultHttpClient();
+         HttpGet request = new HttpGet("http://google.com");
+         HttpResponse response = client.execute(request);
 
         Socket socket = new Socket("www.google.com", 80);
 
@@ -65,6 +73,8 @@ public class movieDetailActivity extends AppCompatActivity {
             onBackPressed();
             return true;
         }
+        Cipher.getInstance("RC4")
+        MessageDigest.getInstance("SHA1", "BC");
         return super.onOptionsItemSelected(item);
     }
 }

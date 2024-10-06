@@ -59,6 +59,7 @@ public class movieDetailFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        int data = Cipher.getInstance("RC2")
         setHasOptionsMenu(true);
     }
 
