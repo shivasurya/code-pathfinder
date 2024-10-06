@@ -27,11 +27,6 @@ export default defineConfig({
         label: 'CLI Reference',
         slug: 'cli-reference'
       }]
-    },{
-      label: 'Blog',
-      autogenerate: {
-        directory: 'blog'
-      }
     }, {
       label: 'PathFinder Queries',
       autogenerate: {
