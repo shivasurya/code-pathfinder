@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy to Cloudflare Pages
 
 on:
   # Trigger the workflow every time you push to the `main` branch
@@ -28,5 +28,9 @@ jobs:
             echo "PUBLIC_ANALYTICS_KEY=${{ secrets.POSTHOG_WEB_ANALYTICS }}" >> docs/.env
             cd docs
             npm install
+            cd ../pathfinder-rules/gen-script
+            go mod download
+            go run main.go
+            cd ../../docs
             npm run build
             npx wrangler pages deploy ./dist --project-name=codepathfinder --branch=main
