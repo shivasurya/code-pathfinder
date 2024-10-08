@@ -1,0 +1,29 @@
+{
+  "ruleset": "java",
+  "files": [
+    {
+      "file_name": "BlowfishUsage.cql",
+      "content": "/**\n * @name BlowfishUsage\n * @description Use of Blowfish was detected. Blowfish uses a 64-bit block size\n * @kind problem\n * @id java/BlowfishUsage\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-327\n */\n\nFROM method_invocation AS mi\nWHERE mi.getName() == \"Cipher.getInstance\"\n\u0026\u0026 \"Blowfish\" in mi.getArgumentName()\nSELECT mi.getName(), \"Use of Blowfish was detected. Blowfish uses a 64-bit block size\n    that  makes it vulnerable to birthday attacks, and is therefore considered\n      non-compliant.\""
+    },
+    {
+      "file_name": "DefaultHttpClient.cql",
+      "content": "/**\n * @name DefaultHttpClient\n * @description The DefaultHttpClient is deprecated. Use HttpClientBuilder instead.\n * @kind problem\n * @id java/DefaultHttpClient\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-326\n */\n\n FROM ClassInstanceExpr AS cie\n WHERE cie.getClassInstanceExpr().GetClassName() == \"DefaultHttpClient\"\n SELECT cie.getName(), \"The DefaultHttpClient is deprecated. Use HttpClientBuilder instead.\"\n"
+    },
+    {
+      "file_name": "InsecureRandom.cql",
+      "content": "/**\n * @name InsecureRandom\n * @description Math.random() is not cryptographically secure. Use SecureRandom instead.\n * @kind problem\n * @id java/InsecureRandom\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-330\n */\n\nFROM method_invocation AS mi\nWHERE mi.getName() == \"Math.random\"\nSELECT mi.getName(), \"Math.random() is not cryptographically secure. Use SecureRandom instead.\""
+    },
+    {
+      "file_name": "RC4Usage.cql",
+      "content": "/**\n * @name RC4Usage\n * @description RC4/RC2 is insecure. Use an alternative cipher suite.\n * @kind problem\n * @id java/RC4Usage\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-327\n */\n\nFROM method_invocation AS mi\nWHERE mi.getName() == \"Cipher.getInstance\"\n\u0026\u0026 (\"RC4\" in mi.getArgumentName() || \"RC2\" in mi.getArgumentName())\nSELECT mi.getName(), \"RC4/RC2 is insecure. Use an alternative cipher suite.\""
+    },
+    {
+      "file_name": "SHA1Usage.cql",
+      "content": "/**\n * @name SHA1Usage\n * @description SHA1 is not collision resistant and is therefore not suitable as a cryptographic signature\n * @kind problem\n * @id java/SHA1Usage\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-328\n */\n\nFROM method_invocation AS mi\nWHERE mi.getName() == \"MessageDigest.getInstance\"\n\u0026\u0026 (\"SHA1\" in mi.getArgumentName() || \"SHA-1\" in mi.getArgumentName())\nSELECT mi.getName(), \"SHA1 is not collision resistant and is therefore not suitable as a cryptographic signature\""
+    },
+    {
+      "file_name": "UnEncryptedSocketConnection.cql",
+      "content": "/**\n * @name unencrypted-socket\n * @description This socket is not encrypted. Use an SSLSocket created by SSLSocketFactory or SSLServerSocketFactory instead.\n * @kind problem\n * @id java/UnEncryptedSocketConnection\n * @problem.severity warning\n * @security-severity 3.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-319\n */\n\nFROM ClassInstanceExpr AS cie\nWHERE cie.getClassInstanceExpr().GetClassName() == \"Socket\" || cie.getClassInstanceExpr().GetClassName() == \"ServerSocket\"\nSELECT cie.getName(), \"This socket is not encrypted. Use an SSLSocket created by SSLSocketFactory or SSLServerSocketFactory instead\""
+    }
+  ]
+}

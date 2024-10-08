@@ -1,0 +1,9 @@
+{
+  "ruleset": "test",
+  "files": [
+    {
+      "file_name": "ClassInstanceExpr.cql",
+      "content": "FROM ClassInstanceExpr AS cie\nWHERE cie.getClassInstanceExpr().GetClassName() == \"Intent\"\nSELECT cie.getClassInstanceExpr().GetArgs(), cie.getClassInstanceExpr().GetNumArgs(), cie.getClassInstanceExpr().GetArg(0)"
+    }
+  ]
+}
