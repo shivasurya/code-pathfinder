@@ -58,7 +58,13 @@ func processDirectory(path string, info os.FileInfo, err error) error {
 			}
 
 			jsonFileName := filepath.Base(path) + ".json"
-			jsonFilePath := filepath.Join(path, jsonFileName)
+			jsonFilePath := filepath.Join("..", "..", "docs", "public", "rules", jsonFileName)
+
+			err := os.MkdirAll(filepath.Dir(jsonFilePath), 0755)
+			if err != nil {
+				return err
+			}
+
 			jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
 			if err != nil {
 				return err

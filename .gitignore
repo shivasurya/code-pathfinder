@@ -20,6 +20,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+docs/public/rules/*.json
+
 
 # environment variables
 .env
