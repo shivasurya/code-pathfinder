@@ -12,44 +12,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var verboseFlag bool
+
 var ciCmd = &cobra.Command{
 	Use:   "ci",
 	Short: "Scan a project for vulnerabilities with ruleset in ci mode",
 	Run: func(cmd *cobra.Command, _ []string) {
-		fmt.Println("Executing in CI mode")
 		rulesetConfig := cmd.Flag("ruleset").Value.String()
 		rulesetDirectory := cmd.Flag("rules-directory").Value.String()
 		projectInput := cmd.Flag("project").Value.String()
 		output := cmd.Flag("output").Value.String()
 		outputFile := cmd.Flag("output-file").Value.String()
+		verboseFlag, _ = cmd.Flags().GetBool("verbose") //nolint:all
+
+		if verboseFlag {
+			fmt.Println("Executing in CI mode")
+		}
 
 		if rulesetConfig == "" || rulesetDirectory == "" {
 			fmt.Println("Ruleset or rules directory not specified")
-			return
+			os.Exit(1)
 		}
 
 		if projectInput == "" {
 			fmt.Println("Project not specified")
-			return
+			os.Exit(1)
 		}
 
-		if strings.HasPrefix(rulesetConfig, "cfp/") {
+		if !strings.HasPrefix(rulesetConfig, "cpf/") {
 			fmt.Println("Ruleset not specified")
-			return
+			os.Exit(1)
 		}
 		ruleset, err := loadRules(rulesetConfig, rulesetConfig != "")
 		if err != nil {
 			fmt.Println("Error loading rules: ", err)
-			return
+			os.Exit(1)
 		}
-		fmt.Println(ruleset)
 		codeGraph := initializeProject(projectInput)
 		for _, rule := range ruleset {
 			queryInput := ParseQuery(rule)
 			result, err := processQuery(queryInput, codeGraph, output)
 			if err != nil {
 				fmt.Println("Error processing query: ", err)
-				return
+				os.Exit(1)
 			}
 			fmt.Println(outputFile)
 			fmt.Println(result)
@@ -107,14 +112,16 @@ func downloadRuleset(ruleset string) []string {
 	//nolint:all
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println("Error downloading ruleset: ", err)
+		err := fmt.Errorf("error downloading ruleset: %w", err)
+		fmt.Println(err)
 		return rules
 	}
 	defer resp.Body.Close()
 	// read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Error reading response body: ", err)
+		err := fmt.Errorf("error reading response body: %w", err)
+		fmt.Println(err)
 		return rules
 	}
 	// parse response body
