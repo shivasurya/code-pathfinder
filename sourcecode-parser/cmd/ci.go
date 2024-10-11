@@ -45,7 +45,9 @@ var ciCmd = &cobra.Command{
 		}
 		ruleset, err := loadRules(rulesetConfig, rulesetConfig != "")
 		if err != nil {
-			fmt.Println("Error loading rules: ", err)
+			if verboseFlag {
+				fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
+			}
 			os.Exit(1)
 		}
 		codeGraph := initializeProject(projectInput)
@@ -69,18 +71,23 @@ func init() {
 	ciCmd.Flags().StringP("project", "p", "", "Project to analyze")
 	ciCmd.Flags().StringP("ruleset", "q", "", "Ruleset to use example: cfp/java")
 	ciCmd.Flags().Bool("rules-directory", false, "Ruleset directory")
+	ciCmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 }
 
 func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
 	var rules []string
+	var err error
 
 	if isHosted {
-		rules = downloadRuleset(rulesDirectory)
+		rules, err = downloadRuleset(rulesDirectory)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		entries, err := os.ReadDir(rulesDirectory)
 		// check if rules directory exists
 		if err != nil {
-			fmt.Println("Rules directory does not exist")
+			err = fmt.Errorf("rules directory does not exist")
 			return nil, err
 		}
 		// read all cql files in rules directory
@@ -93,7 +100,8 @@ func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
 				// read file contents
 				contents, err := os.ReadFile(filepath.Join(rulesDirectory, entry.Name()))
 				if err != nil {
-					fmt.Println("Error reading file: ", err)
+					err = fmt.Errorf("error reading file: %w", err)
+					fmt.Println(err)
 					continue
 				}
 				// add file contents to rules
@@ -105,7 +113,7 @@ func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
 	return rules, nil
 }
 
-func downloadRuleset(ruleset string) []string {
+func downloadRuleset(ruleset string) ([]string, error) {
 	rules := []string{}
 	ruleset = strings.TrimPrefix(ruleset, "cpf/")
 	url := "https://codepathfinder.dev/rules/" + ruleset + ".json"
@@ -113,23 +121,21 @@ func downloadRuleset(ruleset string) []string {
 	resp, err := http.Get(url)
 	if err != nil {
 		err := fmt.Errorf("error downloading ruleset: %w", err)
-		fmt.Println(err)
-		return rules
+		return nil, err
 	}
 	defer resp.Body.Close()
 	// read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err := fmt.Errorf("error reading response body: %w", err)
-		fmt.Println(err)
-		return rules
+		return nil, err
 	}
 	// parse response body
 	var response map[string]interface{}
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		fmt.Println("Error parsing response body: ", err)
-		return rules
+		err := fmt.Errorf("error parsing response body: %w", err)
+		return nil, err
 	}
 	// add rules to rules
 	if files, ok := response["files"].([]interface{}); ok {
@@ -141,7 +147,7 @@ func downloadRuleset(ruleset string) []string {
 			}
 		}
 	}
-	return rules
+	return rules, nil
 }
 
 func ParseQuery(query string) string {
