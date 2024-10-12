@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var verboseFlag bool
-
 var ciCmd = &cobra.Command{
 	Use:   "ci",
 	Short: "Scan a project for vulnerabilities with ruleset in ci mode",
@@ -71,7 +69,6 @@ func init() {
 	ciCmd.Flags().StringP("project", "p", "", "Project to analyze")
 	ciCmd.Flags().StringP("ruleset", "q", "", "Ruleset to use example: cfp/java")
 	ciCmd.Flags().Bool("rules-directory", false, "Ruleset directory")
-	ciCmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 }
 
 func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 )
 
+var verboseFlag bool
+
 func GenerateMethodID(methodName string, parameters []string, sourceFile string) string {
 	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
 	hash := sha256.Sum256([]byte(hashInput))
@@ -42,5 +44,15 @@ func FormatType(v interface{}) string {
 		return string(jsonBytes)
 	default:
 		return fmt.Sprintf("%v", val)
+	}
+}
+
+func EnableVerboseLogging() {
+	verboseFlag = true
+}
+
+func Log(message string, args ...interface{}) {
+	if verboseFlag {
+		fmt.Printf(message, args...)
 	}
 }
