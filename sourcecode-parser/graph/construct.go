@@ -962,11 +962,11 @@ func Initialize(directory string) *CodeGraph {
 				}
 				progress++
 			}
-			Log("\033[H\033[J") // Clear the screen
+			fmt.Print("\033[H\033[J") // Clear the screen
 			for _, line := range statusLines {
 				Log(line)
 			}
-			Log("Progress: %d%%\n", (progress*100)/totalFiles)
+			Fmt("Progress: %d%%\n", (progress*100)/totalFiles)
 		}
 	}()
 

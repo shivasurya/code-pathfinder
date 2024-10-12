@@ -124,14 +124,14 @@ func downloadRuleset(ruleset string) ([]string, error) {
 	// read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err := fmt.Errorf("error reading response body: %w", err)
+		err := fmt.Errorf("error downloading ruleset: %w", err)
 		return nil, err
 	}
 	// parse response body
 	var response map[string]interface{}
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		err := fmt.Errorf("error parsing response body: %w", err)
+		err := fmt.Errorf("error downloading ruleset: %w", err)
 		return nil, err
 	}
 	// add rules to rules

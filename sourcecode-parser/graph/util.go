@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 )
 
 var verboseFlag bool
@@ -53,6 +54,12 @@ func EnableVerboseLogging() {
 
 func Log(message string, args ...interface{}) {
 	if verboseFlag {
-		fmt.Printf(message, args...)
+		log.Println(message, args)
+	}
+}
+
+func Fmt(format string, args ...interface{}) {
+	if verboseFlag {
+		fmt.Printf(format, args...)
 	}
 }
