@@ -23,11 +23,14 @@ var ciCmd = &cobra.Command{
 		outputFile := cmd.Flag("output-file").Value.String()
 		verboseFlag, _ = cmd.Flags().GetBool("verbose") //nolint:all
 
+		var ruleset []string
+		var err error
+
 		if verboseFlag {
 			fmt.Println("Executing in CI mode")
 		}
 
-		if rulesetConfig == "" || rulesetDirectory == "" {
+		if rulesetConfig == "" && rulesetDirectory == "" {
 			fmt.Println("Ruleset or rules directory not specified")
 			os.Exit(1)
 		}
@@ -37,16 +40,26 @@ var ciCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if !strings.HasPrefix(rulesetConfig, "cpf/") {
-			fmt.Println("Ruleset not specified")
-			os.Exit(1)
-		}
-		ruleset, err := loadRules(rulesetConfig, rulesetConfig != "")
-		if err != nil {
-			if verboseFlag {
-				fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
+		if rulesetConfig != "" {
+			if !strings.HasPrefix(rulesetConfig, "cpf/") {
+				fmt.Println("Ruleset not specified")
+				os.Exit(1)
 			}
-			os.Exit(1)
+			ruleset, err = loadRules(rulesetConfig, true)
+			if err != nil {
+				if verboseFlag {
+					fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
+				}
+				os.Exit(1)
+			}
+		} else if rulesetDirectory != "" {
+			ruleset, err = loadRules(rulesetDirectory, false)
+			if err != nil {
+				if verboseFlag {
+					fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetDirectory, err)
+				}
+				os.Exit(1)
+			}
 		}
 		codeGraph := initializeProject(projectInput)
 		for _, rule := range ruleset {
@@ -68,7 +81,7 @@ func init() {
 	ciCmd.Flags().StringP("output-file", "f", "", "Output file path")
 	ciCmd.Flags().StringP("project", "p", "", "Project to analyze")
 	ciCmd.Flags().StringP("ruleset", "q", "", "Ruleset to use example: cfp/java")
-	ciCmd.Flags().Bool("rules-directory", false, "Ruleset directory")
+	ciCmd.Flags().StringP("rules-directory", "r", "", "Rules directory to use")
 }
 
 func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
@@ -81,29 +94,22 @@ func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
 			return nil, err
 		}
 	} else {
-		entries, err := os.ReadDir(rulesDirectory)
-		// check if rules directory exists
-		if err != nil {
-			err = fmt.Errorf("rules directory does not exist")
-			return nil, err
-		}
-		// read all cql files in rules directory
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+		err = filepath.Walk(rulesDirectory, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
 			}
-			// check if file is a cql file
-			if strings.HasSuffix(entry.Name(), ".cql") {
-				// read file contents
-				contents, err := os.ReadFile(filepath.Join(rulesDirectory, entry.Name()))
+			if !info.IsDir() && strings.HasSuffix(info.Name(), ".cql") {
+				contents, err := os.ReadFile(path)
 				if err != nil {
-					err = fmt.Errorf("error reading file: %w", err)
-					fmt.Println(err)
-					continue
+					fmt.Printf("Error reading file %s: %v\n", path, err)
+					return nil
 				}
-				// add file contents to rules
 				rules = append(rules, string(contents))
 			}
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error walking through rules directory: %w", err)
 		}
 	}
 
