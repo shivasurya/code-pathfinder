@@ -24,6 +24,7 @@ var ciCmd = &cobra.Command{
 		verboseFlag, _ = cmd.Flags().GetBool("verbose") //nolint:all
 
 		var ruleset []string
+		var outputResult []map[string]interface{}
 		var err error
 
 		if verboseFlag {
@@ -64,13 +65,46 @@ var ciCmd = &cobra.Command{
 		codeGraph := initializeProject(projectInput)
 		for _, rule := range ruleset {
 			queryInput := ParseQuery(rule)
+			// create json object with queryinput and result
+			rulesetResult := make(map[string]interface{})
 			result, err := processQuery(queryInput, codeGraph, output)
+			// unstringify json result
+			var resultObject map[string]interface{}
+			json.Unmarshal([]byte(result), &resultObject) //nolint:all
+			rulesetResult["query"] = queryInput
+			rulesetResult["result"] = resultObject
+			outputResult = append(outputResult, rulesetResult)
 			if err != nil {
 				fmt.Println("Error processing query: ", err)
-				os.Exit(1)
 			}
-			fmt.Println(outputFile)
-			fmt.Println(result)
+		}
+
+		// TODO: Add sarif file support
+		if output == "json" {
+			if outputFile != "" {
+				file, err := os.Create(outputFile)
+				if err != nil {
+					fmt.Println("Error creating output file: ", err)
+				}
+				defer func(file *os.File) {
+					err := file.Close()
+					if err != nil {
+						fmt.Println("Error closing output file: ", err)
+						os.Exit(1)
+					}
+				}(file)
+				// convert outputResult to json
+				outputResultJSON, err := json.MarshalIndent(outputResult, "", "  ")
+				if err != nil {
+					fmt.Println("Error converting output to json: ", err)
+				}
+				_, err = file.WriteString(string(outputResultJSON))
+				if err != nil {
+					fmt.Println("Error writing output file: ", err)
+				}
+			} else {
+				fmt.Println(outputResult)
+			}
 		}
 	},
 }
