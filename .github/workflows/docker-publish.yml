@@ -45,6 +45,7 @@ jobs:
           fi
           echo "PROJECT_VERSION=$(cat sourcecode-parser/VERSION)" >> $GITHUB_OUTPUT
           echo "GIT_COMMIT=$(git describe --tags)" >> $GITHUB_OUTPUT
+          echo $GIT_COMMIT
 
       - name: Build and push to GitHub Container Registry
         uses: docker/build-push-action@v5
