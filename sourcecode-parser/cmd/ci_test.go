@@ -56,3 +56,49 @@ func TestCiCmdAddedToRootCmd(t *testing.T) {
 	}
 	assert.True(t, foundCiCmd, "ci command should be added to root command")
 }
+
+func TestParseQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Single predicate",
+			input:    "predicate foo()\n{\n    bar\n}",
+			expected: "predicate foo() {     bar }",
+		},
+		{
+			name:     "Multiple predicates",
+			input:    "some code\npredicate foo()\n{\n    bar\n}\npredicate baz()\n{\n    qux\n}",
+			expected: "predicate foo() {     bar } predicate baz() {     qux }",
+		},
+		{
+			name:     "FROM clause",
+			input:    "SELECT *\nFROM table\nWHERE condition",
+			expected: "FROM table WHERE condition",
+		},
+		{
+			name:     "Mixed predicates and FROM",
+			input:    "predicate foo()\n{\n    bar\n}\nSELECT *\nFROM table\nWHERE condition",
+			expected: "predicate foo() {     bar } SELECT * FROM table WHERE condition",
+		},
+		{
+			name:     "No matching lines",
+			input:    "Some random\ntext without\nmatching lines",
+			expected: "",
+		},
+		{
+			name:     "Empty input",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseQuery(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
