@@ -3,10 +3,8 @@ name: Build and Publish Docker Image
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  release:
-    types: [published]
+    tags:
+      - '*'
 
 jobs:
   build-and-publish:
@@ -35,7 +33,7 @@ jobs:
       - name: Determine Docker Tag
         id: vars
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=$(cat sourcecode-parser/VERSION)
             echo "tag=${VERSION}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
