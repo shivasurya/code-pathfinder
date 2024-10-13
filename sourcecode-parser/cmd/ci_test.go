@@ -17,7 +17,7 @@ func TestCiCmd(t *testing.T) {
 		{
 			name:           "Basic CI command",
 			args:           []string{"ci", "--help"},
-			expectedOutput: "Scan a project for vulnerabilities with ruleset in ci mode\n\nUsage:\n  pathfinder ci [flags]\n\nFlags:\n  -h, --help                 help for ci\n  -o, --output string        Supported output format: json\n  -f, --output-file string   Output file path\n  -p, --project string       Project to analyze\n      --rules-directory      Ruleset directory\n  -q, --ruleset string       Ruleset to use example: cfp/java\n",
+			expectedOutput: "Scan a project for vulnerabilities with ruleset in ci mode\n\nUsage:\n  pathfinder ci [flags]\n\nFlags:\n  -h, --help                     help for ci\n  -o, --output string            Supported output format: json\n  -f, --output-file string       Output file path\n  -p, --project string           Project to analyze\n  -r, --rules-directory string   Rules directory to use\n  -q, --ruleset string           Ruleset to use example: cfp/java\n",
 		},
 	}
 
