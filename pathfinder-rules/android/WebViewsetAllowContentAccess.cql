@@ -11,3 +11,4 @@
  */
 FROM method_invocation AS mi
 WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "Content access enabled"

@@ -11,3 +11,4 @@
  */
 FROM method_invocation AS mi
 WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "File access enabled"

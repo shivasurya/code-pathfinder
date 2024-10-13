@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/spf13/cobra"
 )
+
+var verboseFlag bool
 
 var rootCmd = &cobra.Command{
 	Use:   "pathfinder",
@@ -11,8 +14,12 @@ var rootCmd = &cobra.Command{
 	Long:  `Code Pathfinder is designed for identifying vulnerabilities in source code.`,
 	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 		disableMetrics, _ := cmd.Flags().GetBool("disable-metrics") //nolint:all
+		verboseFlag, _ = cmd.Flags().GetBool("verbose")             //nolint:all
 		analytics.LoadEnvFile()
 		analytics.Init(disableMetrics)
+		if verboseFlag {
+			graph.EnableVerboseLogging()
+		}
 	},
 }
 
@@ -22,4 +29,5 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().Bool("disable-metrics", false, "Disable metrics collection")
+	rootCmd.PersistentFlags().Bool("verbose", false, "Verbose output")
 }

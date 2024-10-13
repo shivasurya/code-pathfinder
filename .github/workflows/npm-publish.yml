@@ -1,8 +1,9 @@
 name: Publish Latest Release
 
 on:
-  release:
-    types: [released]
+  push:
+    tags:
+      - '*'
 
 jobs:
   publish:

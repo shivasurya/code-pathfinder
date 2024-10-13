@@ -5,7 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 )
+
+var verboseFlag bool
 
 func GenerateMethodID(methodName string, parameters []string, sourceFile string) string {
 	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
@@ -42,5 +45,21 @@ func FormatType(v interface{}) string {
 		return string(jsonBytes)
 	default:
 		return fmt.Sprintf("%v", val)
+	}
+}
+
+func EnableVerboseLogging() {
+	verboseFlag = true
+}
+
+func Log(message string, args ...interface{}) {
+	if verboseFlag {
+		log.Println(message, args)
+	}
+}
+
+func Fmt(format string, args ...interface{}) {
+	if verboseFlag {
+		fmt.Printf(format, args...)
 	}
 }

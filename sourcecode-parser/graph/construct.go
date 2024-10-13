@@ -3,7 +3,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -883,7 +882,7 @@ func Initialize(directory string) *CodeGraph {
 	files, err := getFiles(directory)
 	if err != nil {
 		//nolint:all
-		log.Println("Directory not found:", err)
+		Log("Directory not found:", err)
 		return codeGraph
 	}
 
@@ -909,13 +908,13 @@ func Initialize(directory string) *CodeGraph {
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
 			sourceCode, err := readFile(file)
 			if err != nil {
-				log.Println("File not found:", err)
+				Log("File not found:", err)
 				continue
 			}
 			// Parse the source code
 			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 			if err != nil {
-				log.Println("Error parsing file:", err)
+				Log("Error parsing file:", err)
 				continue
 			}
 			//nolint:all
@@ -965,9 +964,9 @@ func Initialize(directory string) *CodeGraph {
 			}
 			fmt.Print("\033[H\033[J") // Clear the screen
 			for _, line := range statusLines {
-				fmt.Println(line)
+				Log(line)
 			}
-			fmt.Printf("Progress: %d%%\n", (progress*100)/totalFiles)
+			Fmt("Progress: %d%%\n", (progress*100)/totalFiles)
 		}
 	}()
 
@@ -991,8 +990,8 @@ func Initialize(directory string) *CodeGraph {
 
 	end := time.Now()
 	elapsed := end.Sub(start)
-	log.Println("Elapsed time: ", elapsed)
-	log.Println("Graph built successfully")
+	Log("Elapsed time: ", elapsed)
+	Log("Graph built successfully")
 
 	return codeGraph
 }
