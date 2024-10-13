@@ -12,7 +12,7 @@ ENV POSTHOG_API_KEY=$POSTHOG_WEB_ANALYTICS
 
 ARG PROJECT_VERSION
 
-RUN echo "Building version ${PROJECT_VERSION} with commit ${GIT_COMMIT}"
+RUN echo "Building version ${PROJECT_VERSION} with commit ${PROJECT_COMMIT}"
 
 RUN go mod download
 

@@ -31,6 +31,16 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Compute Version and Commit Info
+        id: cpfinfo
+        run: |
+          VERSION=$(cat sourcecode-parser/VERSION)
+          COMMIT=$(git describe --tags)
+          echo $VERSION
+          echo $COMMIT
+          echo "PROJECT_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "PROJECT_COMMIT=${COMMIT}" >> $GITHUB_OUTPUT
+
       - name: Determine Docker Tag
         id: vars
         run: |
@@ -43,8 +53,6 @@ jobs:
           else
             echo "tag=dev" >> $GITHUB_OUTPUT
           fi
-          echo "PROJECT_VERSION=$(cat sourcecode-parser/VERSION)" >> $GITHUB_OUTPUT
-          echo "PROJECT_COMMIT=$(git describe --tags)" >> $GITHUB_OUTPUT
 
       - name: Build and push to GitHub Container Registry
         uses: docker/build-push-action@v5
@@ -55,8 +63,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
-            PROJECT_COMMIT=${{ steps.vars.outputs.PROJECT_COMMIT }}
-            PROJECT_VERSION=${{ steps.vars.outputs.PROJECT_VERSION }}
+            PROJECT_COMMIT=${{ steps.cpfinfo.outputs.PROJECT_COMMIT }}
+            PROJECT_VERSION=${{ steps.cpfinfo.outputs.PROJECT_VERSION }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag }}
@@ -71,7 +79,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
-            PROJECT_COMMIT=${{ steps.vars.outputs.PROJECT_COMMIT }}
-            PROJECT_VERSION=${{ steps.vars.outputs.PROJECT_VERSION }}
+            PROJECT_COMMIT=${{ steps.cpfinfo.outputs.PROJECT_COMMIT }}
+            PROJECT_VERSION=${{ steps.cpfinfo.outputs.PROJECT_VERSION }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag }}
