@@ -1,7 +1,13 @@
 package graph
 
 import (
+	"bytes"
 	"encoding/hex"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -177,6 +183,117 @@ func TestFormatType(t *testing.T) {
 			got := FormatType(tt.input)
 			if got != tt.want {
 				t.Errorf("FormatType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnableVerboseLogging(t *testing.T) {
+	// Reset verboseFlag before test
+	verboseFlag = false
+
+	EnableVerboseLogging()
+
+	if !verboseFlag {
+		t.Error("EnableVerboseLogging() did not set verboseFlag to true")
+	}
+}
+
+func TestLog(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		args    []interface{}
+		verbose bool
+	}{
+		{
+			name:    "Verbose logging enabled",
+			message: "Test message",
+			args:    []interface{}{1, "two", true},
+			verbose: true,
+		},
+		{
+			name:    "Verbose logging disabled",
+			message: "Another test message",
+			args:    []interface{}{3.14, []int{1, 2, 3}},
+			verbose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			verboseFlag = tt.verbose
+
+			// Redirect log output
+			var buf bytes.Buffer
+			log.SetOutput(&buf)
+			defer log.SetOutput(os.Stderr)
+
+			Log(tt.message, tt.args...)
+
+			logOutput := buf.String()
+			if tt.verbose {
+				if !strings.Contains(logOutput, tt.message) {
+					t.Errorf("Log() output does not contain expected message: %s", tt.message)
+				}
+				for _, arg := range tt.args {
+					if !strings.Contains(logOutput, fmt.Sprint(arg)) {
+						t.Errorf("Log() output does not contain expected argument: %v", arg)
+					}
+				}
+			} else {
+				if logOutput != "" {
+					t.Errorf("Log() produced output when verbose logging was disabled")
+				}
+			}
+		})
+	}
+}
+
+func TestFmt(t *testing.T) {
+	tests := []struct {
+		name    string
+		format  string
+		args    []interface{}
+		verbose bool
+		want    string
+	}{
+		{
+			name:    "Verbose formatting enabled",
+			format:  "Number: %d, String: %s, Float: %.2f",
+			args:    []interface{}{42, "test", 3.14159},
+			verbose: true,
+			want:    "Number: 42, String: test, Float: 3.14",
+		},
+		{
+			name:    "Verbose formatting disabled",
+			format:  "This should not be printed: %v",
+			args:    []interface{}{"ignored"},
+			verbose: false,
+			want:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			verboseFlag = tt.verbose
+
+			// Redirect stdout
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			Fmt(tt.format, tt.args...)
+
+			w.Close()
+			os.Stdout = oldStdout
+
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
+			got := buf.String()
+
+			if got != tt.want {
+				t.Errorf("Fmt() output = %q, want %q", got, tt.want)
 			}
 		})
 	}
