@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -101,4 +104,106 @@ func TestParseQuery(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestLoadRules(t *testing.T) {
+	tests := []struct {
+		name           string
+		rulesDirectory string
+		isHosted       bool
+		expectedRules  int
+		expectError    bool
+	}{
+		{
+			name:           "Local rules directory",
+			rulesDirectory: "../../pathfinder-rules",
+			isHosted:       false,
+			expectedRules:  12,
+			expectError:    false,
+		},
+		{
+			name:           "Hosted rules",
+			rulesDirectory: "cpf/java",
+			isHosted:       true,
+			expectedRules:  6,
+			expectError:    false,
+		},
+		{
+			name:           "Non-existent local directory",
+			rulesDirectory: "testdata/nonexistent",
+			isHosted:       false,
+			expectedRules:  0,
+			expectError:    true,
+		},
+		{
+			name:           "Invalid hosted URL",
+			rulesDirectory: "https://invalid.example.com/rules",
+			isHosted:       true,
+			expectedRules:  0,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rules, err := loadRules(tt.rulesDirectory, tt.isHosted)
+			fmt.Println(len(rules))
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Len(t, rules, tt.expectedRules)
+			}
+		})
+	}
+}
+
+func TestLoadRulesLocalFileContent(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "rules_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	testRule := "predicate test() { foo }"
+	err = os.WriteFile(filepath.Join(tempDir, "test.cql"), []byte(testRule), 0644)
+	assert.NoError(t, err)
+
+	rules, err := loadRules(tempDir, false)
+	assert.NoError(t, err)
+	assert.Len(t, rules, 1)
+	assert.Equal(t, testRule, rules[0])
+}
+
+func TestLoadRulesIgnoreNonCQLFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "rules_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	err = os.WriteFile(filepath.Join(tempDir, "test.cql"), []byte("predicate test() { foo }"), 0644)
+	assert.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tempDir, "ignore.txt"), []byte("This should be ignored"), 0644)
+	assert.NoError(t, err)
+
+	rules, err := loadRules(tempDir, false)
+	assert.NoError(t, err)
+	assert.Len(t, rules, 1)
+}
+
+func TestLoadRulesNestedDirectories(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "rules_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	nestedDir := filepath.Join(tempDir, "nested")
+	err = os.Mkdir(nestedDir, 0755)
+	assert.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tempDir, "test1.cql"), []byte("predicate test1() { foo }"), 0644)
+	assert.NoError(t, err)
+	err = os.WriteFile(filepath.Join(nestedDir, "test2.cql"), []byte("predicate test2() { bar }"), 0644)
+	assert.NoError(t, err)
+
+	rules, err := loadRules(tempDir, false)
+	assert.NoError(t, err)
+	assert.Len(t, rules, 2)
 }
