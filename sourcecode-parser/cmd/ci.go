@@ -65,15 +65,18 @@ var ciCmd = &cobra.Command{
 		codeGraph := initializeProject(projectInput)
 		for _, rule := range ruleset {
 			queryInput := ParseQuery(rule)
-			// create json object with queryinput and result
 			rulesetResult := make(map[string]interface{})
 			result, err := processQuery(queryInput, codeGraph, output)
-			// unstringify json result
-			var resultObject map[string]interface{}
-			json.Unmarshal([]byte(result), &resultObject) //nolint:all
-			rulesetResult["query"] = queryInput
-			rulesetResult["result"] = resultObject
-			outputResult = append(outputResult, rulesetResult)
+
+			if output == "json" {
+				var resultObject map[string]interface{}
+				json.Unmarshal([]byte(result), &resultObject) //nolint:all
+				rulesetResult["query"] = queryInput
+				rulesetResult["result"] = resultObject
+				outputResult = append(outputResult, rulesetResult)
+			} else {
+				fmt.Println(result)
+			}
 			if err != nil {
 				fmt.Println("Error processing query: ", err)
 			}
@@ -102,8 +105,6 @@ var ciCmd = &cobra.Command{
 				if err != nil {
 					fmt.Println("Error writing output file: ", err)
 				}
-			} else {
-				fmt.Println(outputResult)
 			}
 		}
 	},
