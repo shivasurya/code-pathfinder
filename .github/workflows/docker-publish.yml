@@ -44,8 +44,7 @@ jobs:
             echo "tag=dev" >> $GITHUB_OUTPUT
           fi
           echo "PROJECT_VERSION=$(cat sourcecode-parser/VERSION)" >> $GITHUB_OUTPUT
-          echo "GIT_COMMIT=$(git describe --tags)" >> $GITHUB_OUTPUT
-          echo $GIT_COMMIT
+          echo "PROJECT_COMMIT=$(git describe --tags)" >> $GITHUB_OUTPUT
 
       - name: Build and push to GitHub Container Registry
         uses: docker/build-push-action@v5
@@ -56,7 +55,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
-            GIT_COMMIT=${{ steps.vars.outputs.GIT_COMMIT }}
+            PROJECT_COMMIT=${{ steps.vars.outputs.PROJECT_COMMIT }}
             PROJECT_VERSION=${{ steps.vars.outputs.PROJECT_VERSION }}
           push: true
           tags: |
@@ -72,7 +71,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
-            GIT_COMMIT=${{ steps.vars.outputs.GIT_COMMIT }}
+            PROJECT_COMMIT=${{ steps.vars.outputs.PROJECT_COMMIT }}
             PROJECT_VERSION=${{ steps.vars.outputs.PROJECT_VERSION }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag }}
