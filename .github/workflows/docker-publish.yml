@@ -46,9 +46,15 @@ jobs:
 
       - name: Build and push to GitHub Container Registry
         uses: docker/build-push-action@v5
+        env:
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         with:
           context: .
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
+            GIT_COMMIT=$(git describe --tags)
+            PROJECT_VERSION=$(cat sourcecode-parser/VERSION)
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag }}
@@ -64,5 +70,6 @@ jobs:
           build-args: |
             POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
             GIT_COMMIT=$(git describe --tags)
+            PROJECT_VERSION=$(cat sourcecode-parser/VERSION)
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag }}
