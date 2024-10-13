@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags:
       - '*'
+  pull_request:
 
 jobs:
   build-and-publish:
@@ -54,9 +55,13 @@ jobs:
 
       - name: Build and push to Docker Hub
         uses: docker/build-push-action@v5
+        env:
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            POSTHOG_WEB_ANALYTICS=${{ secrets.POSTHOG_WEB_ANALYTICS }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag }}

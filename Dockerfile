@@ -4,9 +4,17 @@ WORKDIR /app
 
 COPY sourcecode-parser .
 
+ARG POSTHOG_WEB_ANALYTICS
+
+ENV POSTHOG_API_KEY=$POSTHOG_WEB_ANALYTICS
+
+RUN PROJECT_VERSION=$(cat VERSION)
+
+RUN GIT_COMMIT=$(git describe --tags)
+
 RUN go mod download
 
-RUN go build -o pathfinder .
+RUN go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${PROJECT_VERSION} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${GIT_COMMIT} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${POSTHOG_API_KEY}" -v -o pathfinder .
 
 FROM cgr.dev/chainguard/wolfi-base:latest
 
