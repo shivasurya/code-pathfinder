@@ -6,6 +6,23 @@ inputs:
     description: 'Command to run'
     required: true
     default: 'ci'
+  project:
+    description: 'Project to scan'
+    required: true
+  rules-directory:
+    description: 'Rules directory'
+    required: false
+  rules-set:
+    description: 'Predefined rules eg: cpf/java'
+    required: false
+  output:
+    description: 'Output format eg: json'
+    required: false
+    default: 'json'
+  output-file:
+    description: 'Output file'
+    required: false
+    default: 'output.json'
 outputs:
   result:
     description: 'Query result'
