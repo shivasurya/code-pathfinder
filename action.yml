@@ -1,0 +1,16 @@
+# action.yml
+name: 'Code-Pathfinder OSS'
+description: 'Code-Pathfinder open source alternative to CodeQL'
+inputs:
+  command:
+    description: 'Command to run'
+    required: true
+    default: 'ci'
+outputs:
+  result:
+    description: 'Query result'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.command }}

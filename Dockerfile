@@ -22,10 +22,14 @@ FROM cgr.dev/chainguard/wolfi-base:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/pathfinder /usr/local/bin/pathfinder
+COPY --from=builder /app/pathfinder /usr/bin/pathfinder
 
-RUN chmod +x /usr/local/bin/pathfinder
+COPY entrypoint.sh /usr/bin/entrypoint.sh
 
-CMD ["pathfinder", "version"]
+RUN chmod +x /usr/bin/pathfinder
+
+RUN chmod +x /usr/bin/entrypoint.sh
 
 LABEL maintainer="shiva@shivasurya.me"
+
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]
