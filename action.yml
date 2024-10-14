@@ -7,7 +7,7 @@ inputs:
     required: true
     default: 'ci'
   project:
-    description: 'Project to scan'
+    description: 'Source code to scan'
     required: true
   rules-directory:
     description: 'Rules directory'
@@ -23,11 +23,13 @@ inputs:
     description: 'Output file'
     required: false
     default: 'output.json'
-outputs:
-  result:
-    description: 'Query result'
 runs:
   using: 'docker'
   image: 'Dockerfile'
   args:
     - ${{ inputs.command }}
+    - ${{ inputs.project }}
+    - ${{ inputs.rules-directory }}
+    - ${{ inputs.rules-set }}
+    - ${{ inputs.output }}
+    - ${{ inputs.output-file }}
