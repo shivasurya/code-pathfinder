@@ -1,6 +1,6 @@
 # action.yml
 name: 'Code-Pathfinder OSS'
-description: 'Code-Pathfinder open source alternative to CodeQL'
+description: 'Code-Pathfinder open-source alternative to CodeQL'
 inputs:
   command:
     description: 'Command to run'
