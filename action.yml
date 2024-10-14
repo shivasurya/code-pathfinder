@@ -28,8 +28,11 @@ runs:
   image: 'Dockerfile'
   args:
     - ${{ inputs.command }}
+    - --project
     - ${{ inputs.project }}
-    - ${{ inputs.rules-directory }}
+    - --ruleset
     - ${{ inputs.rules-set }}
+    - --output
     - ${{ inputs.output }}
+    - --output-file
     - ${{ inputs.output-file }}
