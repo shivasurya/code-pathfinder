@@ -12,7 +12,7 @@ inputs:
   rules-directory:
     description: 'Rules directory'
     required: false
-  rules-set:
+  ruleset:
     description: 'Predefined rules eg: cpf/java'
     required: false
   output:
