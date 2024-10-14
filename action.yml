@@ -26,7 +26,7 @@ inputs:
     default: 'output.json'
 runs:
   using: 'docker'
-  image: 'Dockerfile'
+  image: 'shivasurya/code-pathfinder:dev-0.0.28'
   args:
     - ${{ inputs.command }}
     - --project
