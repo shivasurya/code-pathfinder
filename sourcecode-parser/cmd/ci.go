@@ -17,7 +17,6 @@ var ciCmd = &cobra.Command{
 	Short: "Scan a project for vulnerabilities with ruleset in ci mode",
 	Run: func(cmd *cobra.Command, _ []string) {
 		rulesetConfig := cmd.Flag("ruleset").Value.String()
-		rulesetDirectory := cmd.Flag("rules-directory").Value.String()
 		projectInput := cmd.Flag("project").Value.String()
 		output := cmd.Flag("output").Value.String()
 		outputFile := cmd.Flag("output-file").Value.String()
@@ -31,8 +30,8 @@ var ciCmd = &cobra.Command{
 			fmt.Println("Executing in CI mode")
 		}
 
-		if rulesetConfig == "" && rulesetDirectory == "" {
-			fmt.Println("Ruleset or rules directory not specified")
+		if rulesetConfig == "" {
+			fmt.Println("ruleset are not specified. Please specify a ruleset eg: cpf/java or directory path")
 			os.Exit(1)
 		}
 
@@ -41,26 +40,12 @@ var ciCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if rulesetConfig != "" {
-			if !strings.HasPrefix(rulesetConfig, "cpf/") {
-				fmt.Println("Ruleset not specified")
-				os.Exit(1)
+		ruleset, err = loadRules(rulesetConfig, strings.HasPrefix(rulesetConfig, "cpf/"))
+		if err != nil {
+			if verboseFlag {
+				fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
 			}
-			ruleset, err = loadRules(rulesetConfig, true)
-			if err != nil {
-				if verboseFlag {
-					fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
-				}
-				os.Exit(1)
-			}
-		} else if rulesetDirectory != "" {
-			ruleset, err = loadRules(rulesetDirectory, false)
-			if err != nil {
-				if verboseFlag {
-					fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetDirectory, err)
-				}
-				os.Exit(1)
-			}
+			os.Exit(1)
 		}
 		codeGraph := initializeProject(projectInput)
 		for _, rule := range ruleset {
@@ -115,8 +100,7 @@ func init() {
 	ciCmd.Flags().StringP("output", "o", "", "Supported output format: json")
 	ciCmd.Flags().StringP("output-file", "f", "", "Output file path")
 	ciCmd.Flags().StringP("project", "p", "", "Project to analyze")
-	ciCmd.Flags().StringP("ruleset", "q", "", "Ruleset to use example: cfp/java")
-	ciCmd.Flags().StringP("rules-directory", "r", "", "Rules directory to use")
+	ciCmd.Flags().StringP("ruleset", "r", "", "Ruleset to use example: cfp/java or directory path")
 }
 
 func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {

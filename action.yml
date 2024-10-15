@@ -10,11 +10,8 @@ inputs:
     description: 'Source code to scan'
     required: true
     default: ${{ github.workspace }}
-  rules-directory:
-    description: 'Rules directory'
-    required: false
   ruleset:
-    description: 'Predefined rules eg: cpf/java'
+    description: 'Predefined rules eg: cpf/java or rules directory'
     required: false
   output:
     description: 'Output format eg: json'
