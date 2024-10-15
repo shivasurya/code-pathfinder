@@ -58,7 +58,7 @@ task bumpVersion {
         println "Version bumped to ${newVersion}"
 
         // Update package.json
-        def packageJsonFile = file("${rootDir}/package.json")
+        def packageJsonFile = file("../package.json")
         if (packageJsonFile.exists()) {
             def packageJson = new groovy.json.JsonSlurper().parse(packageJsonFile)
             packageJson.version = newVersion
