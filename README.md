@@ -13,13 +13,25 @@ Code Pathfinder, the open-source alternative to GitHub CodeQL. Built for advance
 [![codecov](https://codecov.io/gh/shivasurya/code-pathfinder/graph/badge.svg?token=VYQLI49TF4)](https://codecov.io/gh/shivasurya/code-pathfinder)
 </div>
 
-## Documentation
+## :tv: Demo
+
+```bash
+docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest pathfinder ci --project /src/code-pathfinder/test-src --ruleset cpf/java
+```
+
+## :book: Documentation
 
 - [Documentation](https://codepathfinder.dev/)
 - [Pathfinder Queries](https://github.com/shivasurya/code-pathfinder/tree/main/pathfinder-rules)
 
 
-## Installation
+## :floppy_disk: Installation
+
+### :whale: Using Docker
+
+```bash
+$ docker pull shivasurya/code-pathfinder:dev
+```
 
 ### From npm
 

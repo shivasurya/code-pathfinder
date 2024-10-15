@@ -1,0 +1,41 @@
+# action.yml
+name: 'Code-Pathfinder OSS'
+description: 'Code-Pathfinder open-source alternative to CodeQL'
+author: 'Shivasurya shiva@shivasurya.me'
+branding:
+  icon: "shield"
+  color: "blue"
+inputs:
+  command:
+    description: 'Command to run example: ci, query'
+    required: true
+    default: 'ci'
+  project:
+    description: 'Source code to scan. eg: /path/to/project'
+    required: true
+    default: ${{ github.workspace }}
+  ruleset:
+    description: 'Predefined rules eg: cpf/java or rules directory'
+    required: false
+  output:
+    description: 'Output format eg: json'
+    required: false
+    default: 'json'
+  output-file:
+    description: 'Output file name eg: output.json'
+    required: false
+    default: 'output.json'
+runs:
+  using: 'docker'
+  image: 'docker://shivasurya/code-pathfinder:stable-latest'
+  args:
+    - pathfinder
+    - ${{ inputs.command }}
+    - --project
+    - ${{ inputs.project }}
+    - --ruleset
+    - ${{ inputs.ruleset }}
+    - --output
+    - ${{ inputs.output }}
+    - --output-file
+    - ${{ inputs.output-file }}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 )
 
 var verboseFlag bool
@@ -62,4 +63,8 @@ func Fmt(format string, args ...interface{}) {
 	if verboseFlag {
 		fmt.Printf(format, args...)
 	}
+}
+
+func IsGitHubActions() bool {
+	return os.Getenv("GITHUB_ACTIONS") == "true"
 }
