@@ -1,6 +1,10 @@
 # action.yml
 name: 'Code-Pathfinder OSS'
 description: 'Code-Pathfinder open-source alternative to CodeQL'
+author: 'Shivasurya shiva@shivasurya.me'
+branding:
+  icon: "shield"
+  color: "blue"
 inputs:
   command:
     description: 'Command to run example: ci, query'
