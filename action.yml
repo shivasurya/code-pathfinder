@@ -3,11 +3,11 @@ name: 'Code-Pathfinder OSS'
 description: 'Code-Pathfinder open-source alternative to CodeQL'
 inputs:
   command:
-    description: 'Command to run'
+    description: 'Command to run example: ci, query'
     required: true
     default: 'ci'
   project:
-    description: 'Source code to scan'
+    description: 'Source code to scan. eg: /path/to/project'
     required: true
     default: ${{ github.workspace }}
   ruleset:

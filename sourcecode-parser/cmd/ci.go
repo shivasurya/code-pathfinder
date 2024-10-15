@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"io"
 	"net/http"
 	"os"
@@ -70,6 +71,10 @@ var ciCmd = &cobra.Command{
 		// TODO: Add sarif file support
 		if output == "json" {
 			if outputFile != "" {
+				if graph.IsGitHubActions() {
+					// append GITHUB_WORKSPACE to output file path
+					outputFile = os.Getenv("GITHUB_WORKSPACE") + "/" + outputFile
+				}
 				file, err := os.Create(outputFile)
 				if err != nil {
 					fmt.Println("Error creating output file: ", err)
