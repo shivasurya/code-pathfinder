@@ -48,12 +48,15 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=$(cat sourcecode-parser/VERSION)
-            echo "tag=v${VERSION}, stable-latest" >> $GITHUB_OUTPUT
+            echo "tag1=v${VERSION}" >> $GITHUB_OUTPUT
+            echo "tag2=stable-latest" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
             VERSION=$(cat sourcecode-parser/VERSION)
-            echo "tag=dev-${VERSION}, nightly-latest" >> $GITHUB_OUTPUT
+            echo "tag1=dev-${VERSION}" >> $GITHUB_OUTPUT
+            echo "tag2=nightly-latest" >> $GITHUB_OUTPUT
           else
-            echo "tag=dev" >> $GITHUB_OUTPUT
+            echo "tag1=dev" >> $GITHUB_OUTPUT
+            echo "tag2=nightly-dev" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push to GitHub Container Registry
@@ -69,7 +72,8 @@ jobs:
             PROJECT_VERSION=${{ steps.cpfinfo.outputs.PROJECT_VERSION }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag1 }}
+            ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag2 }}
 
       - name: Build and push to Docker Hub
         uses: docker/build-push-action@v5
@@ -84,4 +88,5 @@ jobs:
             PROJECT_COMMIT=${{ steps.cpfinfo.outputs.PROJECT_COMMIT }}
             PROJECT_VERSION=${{ steps.cpfinfo.outputs.PROJECT_VERSION }}
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag1 }}
+            ${{ secrets.DOCKER_USERNAME }}/code-pathfinder:${{ steps.vars.outputs.tag2 }}
