@@ -18,7 +18,7 @@ inputs:
     required: false
     default: 'json'
   output-file:
-    description: 'Output file'
+    description: 'Output file name eg: output.json'
     required: false
     default: 'output.json'
 runs:
