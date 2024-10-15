@@ -30,7 +30,7 @@ docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest pathfin
 ### :whale: Using Docker
 
 ```bash
-$ docker pull shivasurya/code-pathfinder:dev
+$ docker pull shivasurya/code-pathfinder:stable-latest
 ```
 
 ### From npm
