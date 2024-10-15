@@ -1,4 +1,4 @@
-name: Publish Latest Release
+name: Publish new npm version
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: github.event.release.latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
