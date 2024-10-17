@@ -8,6 +8,7 @@
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
+ * @ruleprovider android
  */
 
 predicate isJavaScriptEnabled(method_invocation mi) {

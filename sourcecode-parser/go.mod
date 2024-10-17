@@ -15,6 +15,7 @@ require (
 
 require (
 	github.com/fatih/color v1.17.0
+	github.com/owenrumney/go-sarif/v2 v2.3.3
 	github.com/stretchr/testify v1.9.0
 )
 

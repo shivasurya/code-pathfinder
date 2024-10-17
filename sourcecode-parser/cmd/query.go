@@ -128,7 +128,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
 	entities, formattedOutput := graph.QueryEntities(codeGraph, parsedQuery)
-	if output == "json" {
+	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results
 		results := make(map[string]interface{})
