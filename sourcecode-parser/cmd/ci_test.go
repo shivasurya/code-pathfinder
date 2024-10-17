@@ -64,37 +64,36 @@ func TestParseQuery(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected string
+		expected Rule
 	}{
 		{
 			name:     "Single predicate",
 			input:    "predicate foo()\n{\n    bar\n}",
-			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar }\", RuleProvider:\"\"})",
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "predicate foo() {     bar }", RuleProvider: ""},
 		},
 		{
 			name:     "Multiple predicates",
 			input:    "some code\npredicate foo()\n{\n    bar\n}\npredicate baz()\n{\n    qux\n}",
-			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar } predicate baz() {     qux }\", RuleProvider:\"\"})",
-		},
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "predicate foo() {     bar } predicate baz() {     qux }", RuleProvider: ""}},
 		{
 			name:     "FROM clause",
 			input:    "SELECT *\nFROM table\nWHERE condition",
-			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"FROM table WHERE condition\", RuleProvider:\"\"})",
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "FROM table WHERE condition", RuleProvider: ""},
 		},
 		{
 			name:     "Mixed predicates and FROM",
 			input:    "predicate foo()\n{\n    bar\n}\nSELECT *\nFROM table\nWHERE condition",
-			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar } SELECT * FROM table WHERE condition\", RuleProvider:\"\"})",
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "predicate foo() {     bar } SELECT * FROM table WHERE condition", RuleProvider: ""},
 		},
 		{
 			name:     "No matching lines",
 			input:    "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"\", RuleProvider:\"\"})",
-			expected: "",
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "", RuleProvider: ""},
 		},
 		{
 			name:     "Empty input",
 			input:    "",
-			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"\", RuleProvider:\"\"})",
+			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "", RuleProvider: ""},
 		},
 	}
 
