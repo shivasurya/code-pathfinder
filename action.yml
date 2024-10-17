@@ -29,7 +29,6 @@ runs:
   using: 'docker'
   image: 'docker://shivasurya/code-pathfinder:stable-latest'
   args:
-    - pathfinder
     - ${{ inputs.command }}
     - --project
     - ${{ inputs.project }}
