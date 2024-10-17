@@ -8,6 +8,7 @@
  * @precision medium
  * @tags security
  * external/cwe/cwe-326
+ * @ruleprovider java
  */
 
  FROM ClassInstanceExpr AS cie

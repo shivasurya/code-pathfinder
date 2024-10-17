@@ -20,7 +20,7 @@ func TestCiCmd(t *testing.T) {
 		{
 			name:           "Basic CI command",
 			args:           []string{"ci", "--help"},
-			expectedOutput: "Scan a project for vulnerabilities with ruleset in ci mode\n\nUsage:\n  pathfinder ci [flags]\n\nFlags:\n  -h, --help                 help for ci\n  -o, --output string        Supported output format: json\n  -f, --output-file string   Output file path\n  -p, --project string       Project to analyze\n  -r, --ruleset string       Ruleset to use example: cfp/java or directory path\n",
+			expectedOutput: "Scan a project for vulnerabilities with ruleset in ci mode\n\nUsage:\n  pathfinder ci [flags]\n\nFlags:\n  -h, --help                 help for ci\n  -o, --output string        Supported output format: json, sarif\n  -f, --output-file string   Output file path\n  -p, --project string       Source code to analyze\n  -r, --ruleset string       Ruleset to use example: cfp/java or directory path\n",
 		},
 	}
 
@@ -69,32 +69,32 @@ func TestParseQuery(t *testing.T) {
 		{
 			name:     "Single predicate",
 			input:    "predicate foo()\n{\n    bar\n}",
-			expected: "predicate foo() {     bar }",
+			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar }\", RuleProvider:\"\"})",
 		},
 		{
 			name:     "Multiple predicates",
 			input:    "some code\npredicate foo()\n{\n    bar\n}\npredicate baz()\n{\n    qux\n}",
-			expected: "predicate foo() {     bar } predicate baz() {     qux }",
+			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar } predicate baz() {     qux }\", RuleProvider:\"\"})",
 		},
 		{
 			name:     "FROM clause",
 			input:    "SELECT *\nFROM table\nWHERE condition",
-			expected: "FROM table WHERE condition",
+			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"FROM table WHERE condition\", RuleProvider:\"\"})",
 		},
 		{
 			name:     "Mixed predicates and FROM",
 			input:    "predicate foo()\n{\n    bar\n}\nSELECT *\nFROM table\nWHERE condition",
-			expected: "predicate foo() {     bar } SELECT * FROM table WHERE condition",
+			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"predicate foo() {     bar } SELECT * FROM table WHERE condition\", RuleProvider:\"\"})",
 		},
 		{
 			name:     "No matching lines",
-			input:    "Some random\ntext without\nmatching lines",
+			input:    "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"\", RuleProvider:\"\"})",
 			expected: "",
 		},
 		{
 			name:     "Empty input",
 			input:    "",
-			expected: "",
+			expected: "cmd.Rule(cmd.Rule{ID:\"\", Description:\"\", Impact:\"\", Severity:\"\", Passed:false, Query:\"\", RuleProvider:\"\"})",
 		},
 	}
 

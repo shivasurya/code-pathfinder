@@ -8,6 +8,7 @@
  * @precision medium
  * @tags security
  * external/cwe/cwe-327
+ * @ruleprovider java
  */
 
 FROM method_invocation AS mi

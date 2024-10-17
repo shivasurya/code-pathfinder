@@ -8,6 +8,7 @@
  * @precision medium
  * @tags security
  * external/cwe/cwe-079
+ * @ruleprovider android
  */
 FROM method_invocation AS mi
 WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
