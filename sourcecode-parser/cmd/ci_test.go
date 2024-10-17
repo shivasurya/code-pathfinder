@@ -95,6 +95,11 @@ func TestParseQuery(t *testing.T) {
 			input:    "",
 			expected: Rule{ID: "", Description: "", Impact: "", Severity: "", Passed: false, Query: "", RuleProvider: ""},
 		},
+		{
+			name:     "Single line comment",
+			input:    "/**\n * @name Android WebView JavaScript settings\n * @description Enabling setAllowFileAccessFromFileURLs leak s&&box access to file:/// URLs.\n * @kind problem\n * @id java/Android/webview-javascript-enabled\n * @problem.severity warning\n * @security-severity 6.1\n * @precision medium\n * @tags security\n * external/cwe/cwe-079\n * @ruleprovider android\n */\nFROM method_invocation AS mi\nWHERE mi.getName() == \"setAllowFileAccessFromFileURLs\" && \"true\" in mi.getArgumentName()\nSELECT mi.getName(), \"File access enabled\"",
+			expected: Rule{ID: "java/Android/webview-javascript-enabled", Description: "Enabling setAllowFileAccessFromFileURLs leak s&&box access to file:/// URLs.", Impact: "6.1", Severity: "warning", Passed: false, Query: "FROM method_invocation AS mi WHERE mi.getName() == \"setAllowFileAccessFromFileURLs\" && \"true\" in mi.getArgumentName() SELECT mi.getName(), \"File access enabled\"", RuleProvider: "android"},
+		},
 	}
 
 	for _, tt := range tests {
