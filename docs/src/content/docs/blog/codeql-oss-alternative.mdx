@@ -7,18 +7,21 @@ pubDate: "2024-10-01"
 ---
 
 import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import { Card } from '@astrojs/starlight/components';
 
 <PostHogLayout>
 </PostHogLayout>
 
-  <div style=" margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
-      ![Code Pathfinder Illustration](/assets/cpf-illustration.jpg)
 
+  <Card title="">
+    <div style=" margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
       ## What is Code PathFinder?
 
       Code PathFinder is a code analysis tool that helps you find exact code patterns and paths in your codebase. While there are several ways to
       grep source code, having source code broken down into individual entities, building graphs & edges which help in establishing
       relationships between entities, imitates the way a human reads code.
+
+      ![Code Pathfinder Illustration](/assets/cpf-illustration.jpg)
 
       ### How do security engineers interact with codebases today?
 
@@ -101,5 +104,6 @@ import PostHogLayout from '../../../layouts/PostHogLayout.astro';
 
       If you are interested in contributing to Code Pathfinder, please check out the [Code Pathfinder](https://github.com/shivasurya/code-pathfinder) repository.
       Give it a try and file an issue if you find any bugs or have any suggestions.
+      </div>
+    </Card>
 
-    </div>
