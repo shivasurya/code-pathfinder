@@ -16,3 +16,11 @@ type Top struct {
 	BaseTop
 	File string
 }
+
+type ControlFlowNode struct {
+	Top
+}
+
+type BasicBlock struct {
+	ControlFlowNode
+}
