@@ -48,7 +48,7 @@ import { Card } from '@astrojs/starlight/components';
       the JavaScript code is being used. Code-PathFinder helps you find the code path where the JavaScript is being executed and the data being passed in is not properly sanitized and validated.
 
       ```sql
-      FROM MethodInvocation AS mi
+      FROM method_invocation AS mi
       WHERE
         mi.GetName() = "loadUrl" || mi.GetName() = "loadData"
         || mi.GetName() = "loadDataWithBaseURL"
@@ -65,7 +65,7 @@ import { Card } from '@astrojs/starlight/components';
       `setAllowContentAccess` method is being called.
 
       ```sql
-      FROM MethodInvocation AS mi
+      FROM method_invocation AS mi
       WHERE
         mi.GetName() = "setAllowContentAccess"
       SELECT mi, mi.GetEnclosingMethod()
@@ -78,7 +78,7 @@ import { Card } from '@astrojs/starlight/components';
       `setAllowFileAccess` and `setAllowFileAccessFromFileURLs` methods are being called.
 
       ```sql
-      FROM MethodInvocation AS mi
+      FROM method_invocation AS mi
       WHERE
        mi.GetName() = "setAllowFileAccess"
        || mi.GetName() = "setAllowFileAccessFromFileURLs"
@@ -92,7 +92,7 @@ import { Card } from '@astrojs/starlight/components';
       Using Code-PathFinder, you can find the code path where the `setAllowUniversalAccessFromFileURLs` method is being called.
 
       ```sql
-      FROM MethodInvocation AS mi
+      FROM method_invocation AS mi
       WHERE
         mi.GetName() = "setAllowUniversalAccessFromFileURLs"
       SELECT mi, mi.GetEnclosingMethod()
@@ -104,7 +104,7 @@ import { Card } from '@astrojs/starlight/components';
       and enable or disable JavaScript's ability to open popups. Using Code-PathFinder, you can find the code path where the `setJavaScriptEnabled` method is being called.
 
       ```sql
-      FROM MethodInvocation AS mi
+      FROM method_invocation AS mi
       WHERE
         (mi.GetName() = "setJavaScriptEnabled" && "true" in mi.getArgumentName())
         || (mi.GetName() = "setJavaScriptCanOpenWindowsAutomatically" && "true" in mi.getArgumentName())
