@@ -26,7 +26,10 @@ export default defineConfig({
       }, {
         label: 'CLI Reference',
         slug: 'cli-reference'
-      }]
+      }, {
+          label: 'CI Integration',
+          slug: 'ci'
+        }]
     }, {
       label: 'PathFinder Queries',
       autogenerate: {
