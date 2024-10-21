@@ -26,13 +26,114 @@ import { Card } from '@astrojs/starlight/components';
       ### WebView Misconfigurations
 
       - Cross-site scripting
-      - Content access from webview javascript
-      - File access from webview javascript
-      - Universal file access from webview javascript
+      - Enabling Content access from webview javascript
+      - Enabling File access from webview javascript
+      - Enabling Universal file access from webview javascript
       - Javascript settings
       - Webview javascript interface injection
 
       #### Cross-site scripting
+
+      Cross-site scripting (XSS) is a type of security vulnerability that allows an attacker to inject malicious code into a web application. This can be used to steal sensitive information,
+      such as user credentials, or to take control of the account of the victim. WebView poses couple of methods to execute javascript in the context of the webview and it doesn't respect the
+      same-origin policy. Such methods are:
+
+      - `loadUrl`
+      - `loadData`
+      - `loadDataWithBaseURL`
+      - `loadDataWithBaseURL`
+      - `evaluateJavascript`
+      - `evaluateJavaScriptAsync`
+
+      When using these methods, it's important to ensure that the data being passed in is properly sanitized and validated. Additionally, the application should be aware of the context in which
+      the javascript code is being used. Code-Pathfinder helps you to find the code path where the javascript is being executed and the data being passed in is not properly sanitized and validated.
+
+      ```sql
+      FROM MethodInvocation AS mi
+      WHERE
+        mi.GetName() = "loadUrl" || mi.GetName() = "loadData"
+        || mi.GetName() = "loadDataWithBaseURL" || mi.GetName() = "loadDataWithBaseURL"
+        || mi.GetName() = "evaluateJavascript"
+        || mi.GetName() = "evaluateJavaScriptAsync"
+      SELECT mi, mi.GetEnclosingMethod()
+      ```
+
+      #### Enabling Content url access from webview
+
+      Content protocol allows to load data from a URL. For instance, content:// is used to load data from a file on the device such as images, videos, etc. While this is a useful feature, it can also be
+      misused to access sensitive data from the application's file system. This can be done by using the `setAllowContentAccess` method of the WebView class. Using Code-Pathfinder, you can find the code path where the
+      `setAllowContentAccess` method is being called.
+
+      ```sql
+      FROM MethodInvocation AS mi
+      WHERE
+        mi.GetName() = "setAllowContentAccess"
+      SELECT mi, mi.GetEnclosingMethod()
+      ```
+
+      ### Enabling File access from webview javascript
+
+      File protocol allows to load data from a file on the device. For instance, file:// is used to load data from a file on the device such as images, videos, etc. While this is a useful feature, it can also be
+      misused to access sensitive data from the application's file system. This can be done by using the `setAllowFileAccess` method of the WebView class. Using Code-Pathfinder, you can find the code path where the
+      `setAllowFileAccess` and `setAllowFileAccessFromFileURLs` method is being called.
+
+      ```sql
+      FROM MethodInvocation AS mi
+      WHERE
+       mi.GetName() = "setAllowFileAccess"
+       || mi.GetName() = "setAllowFileAccessFromFileURLs"
+      SELECT mi, mi.GetEnclosingMethod()
+      ```
+
+      ### Enabling Universal file access from webview javascript
+
+      `setAllowUniversalAccessFromFileURLs` method allows javascript to access file protocol from any origin. This can be used to access sensitive data from the application's file system. If the webview setting is enabled,
+      the web page can access the file system of the device. While this is a useful feature to flexibly access files and content, it seriously poses security threat when arbitrary website javascript are loaded into the frame.
+      Using Code-Pathfinder, you can find the code path where the `setAllowUniversalAccessFromFileURLs` method is being called.
+
+      ```sql
+      FROM MethodInvocation AS mi
+      WHERE
+        mi.GetName() = "setAllowUniversalAccessFromFileURLs"
+      SELECT mi, mi.GetEnclosingMethod()
+      ```
+
+      ### Javascript settings
+
+      Javascript settings can be used to control the behavior of the webview. For instance, you can enable or disable javascript, enable or disable javascript interfaces, enable or disable javascript can open windows,
+      enable or disable javascript can open popups. Using Code-Pathfinder, you can find the code path where the `setJavaScriptEnabled` method is being called.
+
+      ```sql
+      FROM MethodInvocation AS mi
+      WHERE
+        (mi.GetName() = "setJavaScriptEnabled" && "true" in mi.getArgumentName())
+        || (mi.GetName() = "setJavaScriptCanOpenWindowsAutomatically" && "true" in mi.getArgumentName())
+      SELECT mi, mi.GetEnclosingMethod()
+      ```
+
+      ### Javascript interfaces
+
+      Here comes the most important ⚠️ and exciting part of the webview. Javascript interfaces allow you to expose native methods to javascript. For instance, you can expose a native method to javascript to open a file picker
+      or execute java methods. Historically, [Javascript interfaces](https://labs.withsecure.com/publications/webview-addjavascriptinterface-remote-code-execution) were abused to execute arbitrary code on the device and
+      attain remote code execution. Using Code-Pathfinder, you can find the code path where the `addJavascriptInterface` method is being called.
+
+      ```sql
+      predicate isJavaScriptEnabled(method_invocation mi) {
+        mi.getName() == "addJavascriptInterface"
+      }
+
+      FROM method_invocation AS mi
+      WHERE isJavaScriptEnabled(mi)
+      SELECT mi.getName(), "JavaScript interface exposed"
+      ```
+
+      The above vulnerability classification is based on the [OWASP Mobile Top 10](https://owasp.org/www-project-mobile-top-10/) and [OWASP Mobile Security Testing Guide](https://owasp.org/www-project-mobile-security-testing-guide/).
+
+      ### Conclusion
+
+      While [Code-Pathfinder the opensource alternative to CodeQL](https://codepathfinder.dev) is a powerful tool for finding security vulnerabilities in Android applications, one can always tweak the queries to filter out false positives
+      effectively comparing to grep based scanners like `Semgrep` or `ast-grep`. Because the taint analysis and source to sink analysis are way more powerful than grep based scanners. Give it a try and file an [issue](https://github.com/shivasurya/code-pathfinder/issues)
+      if you find any bugs or have any suggestions.
 
 
       ### Contributing to Code-Pathfinder OSS
