@@ -1,6 +1,6 @@
 ---
-title: CI/CD Integration
-description: "Code PathFinder CI/CD Integration"
+title: CI Integration
+description: "Integrate Code PathFinder into your CI/CD pipeline."
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -9,14 +9,15 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
 <PostHogLayout>
 </PostHogLayout>
 
+One can use Code PathFinder as a part of your CI/CD pipeline to scan your code for vulnerabilities.
+The code-pathfinder docker image is available on [Docker Hub](https://hub.docker.com/r/shivasurya/code-pathfinder).
+
 <Tabs>
   <TabItem label="GitHub Actions">
   ```yaml
   name: Code-Pathfinder SAST Scan
-
   on:
     pull_request:
-
   jobs:
     sast-scan:
       runs-on: ubuntu-latest
@@ -39,7 +40,7 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
             cat $GITHUB_WORKSPACE/output.sarif
   ```
 
-    Here you can provide specific instructions for integrating Code PathFinder with GitHub Actions.
+
   </TabItem>
 
   <TabItem label="GitLab CI">
@@ -64,7 +65,7 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
 ```
   </TabItem>
 
-  <TabItem label="BitBucket">
+  <TabItem label="BitBucket Pipelines">
     ```yaml
     image: shivasurya/code-pathfinder:stable-latest
 
@@ -82,7 +83,7 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
      ```
   </TabItem>
 
-  <TabItem label="CircleCI">
+  <TabItem label="CircleCI Pipelines">
     ```yaml
     version: 2.1
 
@@ -113,8 +114,31 @@ import PostHogLayout from '../../layouts/PostHogLayout.astro';
           - code-pathfinder-sast
    ```
   </TabItem>
+
+  <TabItem label="Azure DevOps">
+  ```yaml
+  trigger:
+    - '*'
+
+  jobs:
+  - job: CodePathfinderSAST
+    pool:
+      name: 'yourpoolname'
+    steps:
+      - script: |
+          echo "Running Code-Pathfinder SAST Scan..."
+          docker run --rm -v $(System.DefaultWorkingDirectory):/workspace -w /workspace shivasurya/code-pathfinder:stable-latest ci --project . --output-file output.sarif --output sarif --ruleset cpf/java
+        displayName: 'Run SAST Scan with Docker'
+
+      - script: |
+          echo "SARIF file content:"
+          cat output.sarif || echo "No SARIF file found"
+        displayName: 'Read SARIF File'
+
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: 'output.sarif'
+          ArtifactName: 'SARIF Report'
+```
+</TabItem>
 </Tabs>
-
-## Basic Syntax
-
-... (rest of your existing content)

@@ -27,7 +27,7 @@ export default defineConfig({
         label: 'CLI Reference',
         slug: 'cli-reference'
       }, {
-          label: 'CI/CD Integration',
+          label: 'CI Integration',
           slug: 'ci'
         }]
     }, {
