@@ -1,0 +1,44 @@
+---
+title: Detecting WebView Misconfigurations in Android With Code-PathFinder
+description: "A short blog post about finding webview misconfigurations in Android with Code-PathFinder"
+template: splash
+author: "@sshivasurya"
+pubDate: "2024-10-20"
+---
+
+import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import { Card } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+
+  <Card title="">
+    <div style=" margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
+      ## Introduction
+
+      Android WebView is a component that allows you to display web content in your Android application. It's fairly complex to configure and easy to misconfigure. From Browsers to
+      Third party applications, they use powerful APIs to interact with the web. Such as, sending cookies, local storage setting headers, and more.
+      In this blog post, we will be discussing how to detect webview misconfigurations in Android with [Code-PathFinder](https://github.com/shivasurya/code-pathfinder).
+
+      ![Android Webview Illustration](/assets/webview.webp)
+
+      ### WebView Misconfigurations
+
+      - Cross-site scripting
+      - Content access from webview javascript
+      - File access from webview javascript
+      - Universal file access from webview javascript
+      - Javascript settings
+      - Webview javascript interface injection
+
+      #### Cross-site scripting
+
+
+      ### Contributing to Code-Pathfinder OSS
+
+      If you are interested in contributing to Code Pathfinder, please check out the [Code-Pathfinder](https://github.com/shivasurya/code-pathfinder) repository.
+      Give it a try and file an issue if you find any bugs or have any suggestions.
+      </div>
+  </Card>
+
