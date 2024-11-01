@@ -51,6 +51,15 @@ type DoStmt struct {
 	ConditionalStmt
 }
 
+type IDoStmt interface {
+	GetAPrimaryQlClass() string
+	GetCondition() *Expr
+	GetHalsteadID() int
+	GetStmt() *Stmt
+	GetPP() string
+	ToString() string
+}
+
 type IForStmt interface {
 	GetPrimaryQlClass() string
 	GetAnInit() *Expr
