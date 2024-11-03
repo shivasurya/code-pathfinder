@@ -44,6 +44,7 @@ type Node struct {
 	JavaDoc              *model.Javadoc
 	BinaryExpr           *model.BinaryExpr
 	ClassInstanceExpr    *model.ClassInstanceExpr
+	IfStmt               *model.IfStmt
 }
 
 type Edge struct {
@@ -172,6 +173,32 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "if_statement":
+		ifNode := model.IfStmt{}
+		// get the condition of the if statement
+		conditionNode := node.Child(0)
+		ifNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		// get the then block of the if statement
+		thenNode := node.Child(2)
+		ifNode.Then = model.Stmt{NodeString: thenNode.Content(sourceCode)}
+		// get the else block of the if statement
+		elseNode := node.Child(4)
+		ifNode.Else = model.Stmt{NodeString: elseNode.Content(sourceCode)}
+
+		methodID := fmt.Sprintf("ifstmt_%d_%d", node.StartPoint().Row+1, node.StartPoint().Column+1)
+		// add node to graph
+		ifStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "IfStmt",
+			Name:             "IfStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			IfStmt:           &ifNode,
+		}
+		graph.AddNode(ifStmtNode)
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")

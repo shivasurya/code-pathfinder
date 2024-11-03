@@ -1,5 +1,7 @@
 package model
 
+import "fmt"
+
 type StmtParent struct {
 	Top
 }
@@ -21,6 +23,7 @@ type IStmt interface {
 }
 
 type Stmt struct {
+	NodeString string
 	StmtParent
 }
 
@@ -45,6 +48,32 @@ type IIfStmt interface {
 
 type IfStmt struct {
 	ConditionalStmt
+	Else Stmt
+	Then Stmt
+}
+
+func (ifStmt *IfStmt) GetCondition() *Expr {
+	return ifStmt.Condition
+}
+
+func (ifStmt *IfStmt) GetElse() *Stmt {
+	return &ifStmt.Else
+}
+
+func (ifStmt *IfStmt) GetThen() *Stmt {
+	return &ifStmt.Then
+}
+
+func (ifStmt *IfStmt) GetAPrimaryQlClass() string {
+	return "ifStmt"
+}
+
+func (ifStmt *IfStmt) GetPP() string {
+	return fmt.Sprintf("if (%s) %s else %s", ifStmt.Condition.NodeString, ifStmt.Then.NodeString, ifStmt.Else.NodeString)
+}
+
+func (ifStmt *IfStmt) ToString() string {
+	return fmt.Sprintf("if (%s) %s else %s", ifStmt.Condition.NodeString, ifStmt.Then.NodeString, ifStmt.Else.NodeString)
 }
 
 type DoStmt struct {
@@ -82,11 +111,35 @@ type IWhileStmt interface {
 	GetAPrimaryQlClass() string
 	GetCondition() *Expr
 	GetHalsteadID() int
-	GetStmt() *Stmt
+	GetStmt() Stmt
 	GetPP() string
 	ToString() string
 }
 
 type WhileStmt struct {
 	ConditionalStmt
+}
+
+func (whileStmt *WhileStmt) GetAPrimaryQlClass() string {
+	return "whileStmt"
+}
+
+func (whileStmt *WhileStmt) GetCondition() *Expr {
+	return whileStmt.Condition
+}
+
+func (whileStmt *WhileStmt) GetHalsteadID() int {
+	return 0
+}
+
+func (whileStmt *WhileStmt) GetStmt() Stmt {
+	return whileStmt.Stmt
+}
+
+func (whileStmt *WhileStmt) GetPP() string {
+	return ""
+}
+
+func (whileStmt *WhileStmt) ToString() string {
+	return ""
 }
