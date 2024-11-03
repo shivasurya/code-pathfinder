@@ -119,6 +119,10 @@ func (env *Env) GetClassInstanceExprName() string {
 	return env.Node.ClassInstanceExpr.ClassName
 }
 
+func (env *Env) GetIfStmt() *model.IfStmt {
+	return env.Node.IfStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -290,6 +294,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	unsignedRightShiftExpression := "unsigned_right_shift_expression"
 	xorBitwsieExpression := "xor_bitwise_expression"
 	classInstanceExpression := "ClassInstanceExpr"
+	ifStmt := "IfStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -338,6 +343,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			xorBitwsieExpression = entity.Alias
 		case "ClassInstanceExpr":
 			classInstanceExpression = entity.Alias
+		case "IfStmt":
+			ifStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -467,6 +474,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"getDoc":               proxyenv.GetDoc,
 			"toString":             proxyenv.ToString,
 			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
+		},
+		ifStmt: map[string]interface{}{
+			"getIfStmt": proxyenv.GetIfStmt,
+			"toString":  proxyenv.ToString,
 		},
 	}
 	return env
