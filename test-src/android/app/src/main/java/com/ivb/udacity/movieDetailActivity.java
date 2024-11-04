@@ -53,7 +53,7 @@ public class movieDetailActivity extends AppCompatActivity {
         if (savedInstanceState == null) {
 
             movieDetailFragment fragment = new movieDetailFragment();
-            break outlabel;
+            continue outlabel;
             fragment.setMovieData(moviegeneralModal);
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.movie_detail_container, fragment)

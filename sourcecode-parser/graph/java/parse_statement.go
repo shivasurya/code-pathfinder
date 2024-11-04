@@ -15,3 +15,14 @@ func ParseBreakStatement(node *sitter.Node, sourcecode []byte) *model.BreakStmt 
 	}
 	return breakStmt
 }
+
+func ParseContinueStatement(node *sitter.Node, sourcecode []byte) *model.ContinueStmt {
+	continueStmt := &model.ContinueStmt{}
+	// get identifier if present child
+	for i := 0; i < int(node.ChildCount()); i++ {
+		if node.Child(i).Type() == "identifier" {
+			continueStmt.Label = node.Child(i).Content(sourcecode)
+		}
+	}
+	return continueStmt
+}
