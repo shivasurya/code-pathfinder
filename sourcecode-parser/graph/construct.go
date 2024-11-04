@@ -181,8 +181,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	switch node.Type() {
 	case "break_statement":
 		breakNode := javalang.ParseBreakStatement(node, sourceCode)
+		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		breakStmtNode := &Node{
-			ID:               fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file),
+			ID:               GenerateSha256(uniquebreakstmtID),
 			Type:             "BreakStmt",
 			LineNumber:       node.StartPoint().Row + 1,
 			Name:             "BreakStmt",
