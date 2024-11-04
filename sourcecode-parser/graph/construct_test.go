@@ -753,13 +753,27 @@ func TestBuildGraphFromAST(t *testing.T) {
                         int i = 1 | 1;
                         int j = 1 ^ 1;
                         int l = 1 >>> 1;
+					    while (a > 0) {
+							a--;
+						}
+                        for (int i = 0; i < 10; i++) {
+							System.out.println(i);
+						}
+						do {
+							System.out.println("Hello, World!");
+						} while (a > 0);
+		                if (a < 0) {
+							System.out.println("Negative number");
+						} else {
+							System.out.println("Positive number");	
+						}
 						return (5 > 3) && (10 <= 20) || (15 != 12) || (20 > 15);
 					}
 				}
 			`,
-			expectedNodes:   49,
-			expectedEdges:   0,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression"},
+			expectedNodes:   63,
+			expectedEdges:   4,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{
