@@ -44,6 +44,10 @@ type Node struct {
 	JavaDoc              *model.Javadoc
 	BinaryExpr           *model.BinaryExpr
 	ClassInstanceExpr    *model.ClassInstanceExpr
+	IfStmt               *model.IfStmt
+	WhileStmt            *model.WhileStmt
+	DoStmt               *model.DoStmt
+	ForStmt              *model.ForStmt
 }
 
 type Edge struct {
@@ -172,6 +176,110 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "if_statement":
+		ifNode := model.IfStmt{}
+		// get the condition of the if statement
+		conditionNode := node.Child(1)
+		if conditionNode != nil {
+			ifNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		// get the then block of the if statement
+		thenNode := node.Child(2)
+		if thenNode != nil {
+			ifNode.Then = model.Stmt{NodeString: thenNode.Content(sourceCode)}
+		}
+		// get the else block of the if statement
+		elseNode := node.Child(4)
+		if elseNode != nil {
+			ifNode.Else = model.Stmt{NodeString: elseNode.Content(sourceCode)}
+		}
+
+		methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		ifStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "IfStmt",
+			Name:             "IfStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			IfStmt:           &ifNode,
+		}
+		graph.AddNode(ifStmtNode)
+	case "while_statement":
+		whileNode := model.WhileStmt{}
+		// get the condition of the while statement
+		conditionNode := node.Child(1)
+		if conditionNode != nil {
+			whileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		methodID := fmt.Sprintf("while_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		whileStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "WhileStmt",
+			Name:             "WhileStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			WhileStmt:        &whileNode,
+		}
+		graph.AddNode(whileStmtNode)
+	case "do_statement":
+		doWhileNode := model.DoStmt{}
+		// get the condition of the while statement
+		conditionNode := node.Child(2)
+		if conditionNode != nil {
+			doWhileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		methodID := fmt.Sprintf("dowhile_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		doWhileStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "DoStmt",
+			Name:             "DoStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			DoStmt:           &doWhileNode,
+		}
+		graph.AddNode(doWhileStmtNode)
+	case "for_statement":
+		forNode := model.ForStmt{}
+		// get the condition of the while statement
+		initNode := node.ChildByFieldName("init")
+		if initNode != nil {
+			forNode.Init = &model.Expr{Node: *initNode, NodeString: initNode.Content(sourceCode)}
+		}
+		conditionNode := node.ChildByFieldName("condition")
+		if conditionNode != nil {
+			forNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		incrementNode := node.ChildByFieldName("increment")
+		if incrementNode != nil {
+			forNode.Increment = &model.Expr{Node: *incrementNode, NodeString: incrementNode.Content(sourceCode)}
+		}
+
+		methodID := fmt.Sprintf("for_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		forStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "ForStmt",
+			Name:             "ForStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			ForStmt:          &forNode,
+		}
+		graph.AddNode(forStmtNode)
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")
