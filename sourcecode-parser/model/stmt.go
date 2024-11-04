@@ -105,6 +105,28 @@ type IForStmt interface {
 
 type ForStmt struct {
 	ConditionalStmt
+	Init      *Expr
+	Increment *Expr
+}
+
+func (forStmt *ForStmt) GetPrimaryQlClass() string {
+	return "ForStmt"
+}
+
+func (forStmt *ForStmt) GetAnInit() *Expr {
+	return forStmt.Init
+}
+
+func (forStmt *ForStmt) GetCondition() *Expr {
+	return forStmt.Condition
+}
+
+func (forStmt *ForStmt) GetAnUpdate() *Expr {
+	return forStmt.Increment
+}
+
+func (forStmt *ForStmt) ToString() string {
+	return fmt.Sprintf("for (%s; %s; %s) %s", forStmt.Init.NodeString, forStmt.Condition.NodeString, forStmt.Increment.NodeString, forStmt.Stmt.NodeString)
 }
 
 type IWhileStmt interface {

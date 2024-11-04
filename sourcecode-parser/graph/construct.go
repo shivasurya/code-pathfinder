@@ -47,6 +47,7 @@ type Node struct {
 	IfStmt               *model.IfStmt
 	WhileStmt            *model.WhileStmt
 	DoStmt               *model.DoStmt
+	ForStmt              *model.ForStmt
 }
 
 type Edge struct {
@@ -249,6 +250,36 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			DoStmt:           &doWhileNode,
 		}
 		graph.AddNode(doWhileStmtNode)
+	case "for_statement":
+		forNode := model.ForStmt{}
+		// get the condition of the while statement
+		initNode := node.ChildByFieldName("init")
+		if initNode != nil {
+			forNode.Init = &model.Expr{Node: *initNode, NodeString: initNode.Content(sourceCode)}
+		}
+		conditionNode := node.ChildByFieldName("condition")
+		if conditionNode != nil {
+			forNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		incrementNode := node.ChildByFieldName("increment")
+		if incrementNode != nil {
+			forNode.Increment = &model.Expr{Node: *incrementNode, NodeString: incrementNode.Content(sourceCode)}
+		}
+
+		methodID := fmt.Sprintf("for_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		forStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "ForStmt",
+			Name:             "ForStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			ForStmt:          &forNode,
+		}
+		graph.AddNode(forStmtNode)
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")
