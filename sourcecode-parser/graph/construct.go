@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	javalang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/java"
+
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"github.com/smacker/go-tree-sitter/java"
 
@@ -48,6 +50,7 @@ type Node struct {
 	WhileStmt            *model.WhileStmt
 	DoStmt               *model.DoStmt
 	ForStmt              *model.ForStmt
+	BreakStmt            *model.BreakStmt
 }
 
 type Edge struct {
@@ -176,6 +179,21 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "break_statement":
+		breakNode := javalang.ParseBreakStatement(node, sourceCode)
+		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		breakStmtNode := &Node{
+			ID:               GenerateSha256(uniquebreakstmtID),
+			Type:             "BreakStmt",
+			LineNumber:       node.StartPoint().Row + 1,
+			Name:             "BreakStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			BreakStmt:        breakNode,
+		}
+		graph.AddNode(breakStmtNode)
 	case "if_statement":
 		ifNode := model.IfStmt{}
 		// get the condition of the if statement

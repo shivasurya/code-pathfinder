@@ -166,3 +166,64 @@ func (whileStmt *WhileStmt) GetPP() string {
 func (whileStmt *WhileStmt) ToString() string {
 	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.Stmt.NodeString)
 }
+
+type ILabeledStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetLabel() *LabeledStmt
+	GetPP() string
+	ToString() string
+}
+
+type LabeledStmt struct {
+	Stmt
+	Label *LabeledStmt
+}
+
+type JumpStmt struct {
+	Stmt
+}
+
+type IJumpStmt interface {
+	GetTarget() *StmtParent
+	GetTargetLabel() *LabeledStmt
+}
+
+type IBreakStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetLabel() string
+	hasLabel() bool
+	GetPP() string
+	ToString() string
+}
+
+type BreakStmt struct {
+	JumpStmt
+	Label string
+}
+
+func (breakStmt *BreakStmt) GetAPrimaryQlClass() string {
+	return "BreakStmt"
+}
+
+func (breakStmt *BreakStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for BreakStmt
+	return 0
+}
+
+func (breakStmt *BreakStmt) GetPP() string {
+	return fmt.Sprintf("break (%s)", breakStmt.Label)
+}
+
+func (breakStmt *BreakStmt) ToString() string {
+	return fmt.Sprintf("break (%s)", breakStmt.Label)
+}
+
+func (breakStmt *BreakStmt) hasLabel() bool {
+	return breakStmt.Label != ""
+}
+
+func (breakStmt *BreakStmt) GetLabel() string {
+	return breakStmt.Label
+}
