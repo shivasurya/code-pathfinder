@@ -123,6 +123,10 @@ func (env *Env) GetIfStmt() *model.IfStmt {
 	return env.Node.IfStmt
 }
 
+func (env *Env) GetWhileStmt() *model.WhileStmt {
+	return env.Node.WhileStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -295,6 +299,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	xorBitwsieExpression := "xor_bitwise_expression"
 	classInstanceExpression := "ClassInstanceExpr"
 	ifStmt := "IfStmt"
+	whileStmt := "WhileStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -345,6 +350,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			classInstanceExpression = entity.Alias
 		case "IfStmt":
 			ifStmt = entity.Alias
+		case "WhileStmt":
+			whileStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -478,6 +485,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 		ifStmt: map[string]interface{}{
 			"getIfStmt": proxyenv.GetIfStmt,
 			"toString":  proxyenv.ToString,
+		},
+		whileStmt: map[string]interface{}{
+			"getWhileStmt": proxyenv.GetWhileStmt,
+			"toString":     proxyenv.ToString,
 		},
 	}
 	return env

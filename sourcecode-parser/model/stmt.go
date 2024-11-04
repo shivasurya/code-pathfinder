@@ -121,7 +121,7 @@ type WhileStmt struct {
 }
 
 func (whileStmt *WhileStmt) GetAPrimaryQlClass() string {
-	return "whileStmt"
+	return "WhileStmt"
 }
 
 func (whileStmt *WhileStmt) GetCondition() *Expr {
@@ -129,6 +129,7 @@ func (whileStmt *WhileStmt) GetCondition() *Expr {
 }
 
 func (whileStmt *WhileStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for WhileStmt
 	return 0
 }
 
@@ -137,9 +138,9 @@ func (whileStmt *WhileStmt) GetStmt() Stmt {
 }
 
 func (whileStmt *WhileStmt) GetPP() string {
-	return ""
+	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.Stmt.NodeString)
 }
 
 func (whileStmt *WhileStmt) ToString() string {
-	return ""
+	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.Stmt.NodeString)
 }

@@ -45,6 +45,7 @@ type Node struct {
 	BinaryExpr           *model.BinaryExpr
 	ClassInstanceExpr    *model.ClassInstanceExpr
 	IfStmt               *model.IfStmt
+	WhileStmt            *model.WhileStmt
 }
 
 type Edge struct {
@@ -191,7 +192,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			ifNode.Else = model.Stmt{NodeString: elseNode.Content(sourceCode)}
 		}
 
-		methodID := fmt.Sprintf("ifstmt_%d_%d", node.StartPoint().Row+1, node.StartPoint().Column+1)
+		methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		// add node to graph
 		ifStmtNode := &Node{
 			ID:               GenerateSha256(methodID),
@@ -205,6 +206,27 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			IfStmt:           &ifNode,
 		}
 		graph.AddNode(ifStmtNode)
+	case "while_statement":
+		whileNode := model.WhileStmt{}
+		// get the condition of the while statement
+		conditionNode := node.Child(1)
+		if conditionNode != nil {
+			whileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+		}
+		methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		// add node to graph
+		whileStmtNode := &Node{
+			ID:               GenerateSha256(methodID),
+			Type:             "WhileStmt",
+			Name:             "WhileStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			LineNumber:       node.StartPoint().Row + 1,
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			WhileStmt:        &whileNode,
+		}
+		graph.AddNode(whileStmtNode)
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")
