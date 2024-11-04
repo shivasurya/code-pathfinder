@@ -227,3 +227,42 @@ func (breakStmt *BreakStmt) hasLabel() bool {
 func (breakStmt *BreakStmt) GetLabel() string {
 	return breakStmt.Label
 }
+
+type IContinueStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetLabel() string
+	hasLabel() bool
+	GetPP() string
+	ToString() string
+}
+
+type ContinueStmt struct {
+	JumpStmt
+	Label string
+}
+
+func (continueStmt *ContinueStmt) GetAPrimaryQlClass() string {
+	return "ContinueStmt"
+}
+
+func (continueStmt *ContinueStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for ContinueStmt
+	return 0
+}
+
+func (continueStmt *ContinueStmt) GetPP() string {
+	return fmt.Sprintf("continue (%s)", continueStmt.Label)
+}
+
+func (continueStmt *ContinueStmt) ToString() string {
+	return fmt.Sprintf("continue (%s)", continueStmt.Label)
+}
+
+func (continueStmt *ContinueStmt) hasLabel() bool {
+	return continueStmt.Label != ""
+}
+
+func (continueStmt *ContinueStmt) GetLabel() string {
+	return continueStmt.Label
+}

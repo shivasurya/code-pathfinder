@@ -758,6 +758,8 @@ func TestBuildGraphFromAST(t *testing.T) {
 							a--;
                             if (a == 0) {
 								break outerlabel;
+							} else {
+								continue outerlabel;
 							}
 						}
                         for (int i = 0; i < 10; i++) {
@@ -776,9 +778,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   68,
+			expectedNodes:   69,
 			expectedEdges:   4,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{

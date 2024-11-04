@@ -51,7 +51,8 @@ type Node struct {
 	DoStmt               *model.DoStmt
 	ForStmt              *model.ForStmt
 	BreakStmt            *model.BreakStmt
-}
+	ContinueStmt         *model.ContinueStmt
+} //
 
 type Edge struct {
 	From *Node
@@ -194,6 +195,21 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BreakStmt:        breakNode,
 		}
 		graph.AddNode(breakStmtNode)
+	case "continue_statement":
+		continueNode := javalang.ParseContinueStatement(node, sourceCode)
+		uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		continueStmtNode := &Node{
+			ID:               GenerateSha256(uniquecontinueID),
+			Type:             "ContinueStmt",
+			LineNumber:       node.StartPoint().Row + 1,
+			Name:             "ContinueStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			ContinueStmt:     continueNode,
+		}
+		graph.AddNode(continueStmtNode)
 	case "if_statement":
 		ifNode := model.IfStmt{}
 		// get the condition of the if statement

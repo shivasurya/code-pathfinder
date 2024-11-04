@@ -147,3 +147,75 @@ func TestIfStmt(t *testing.T) {
 		assert.Equal(t, expected, ifStmt.ToString())
 	})
 }
+
+func TestContinueStmt(t *testing.T) {
+	t.Run("GetAPrimaryQlClass", func(t *testing.T) {
+		continueStmt := &ContinueStmt{}
+		assert.Equal(t, "ContinueStmt", continueStmt.GetAPrimaryQlClass())
+	})
+
+	t.Run("GetHalsteadID", func(t *testing.T) {
+		continueStmt := &ContinueStmt{}
+		assert.Equal(t, 0, continueStmt.GetHalsteadID())
+	})
+
+	t.Run("GetPP with label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "outerLoop",
+		}
+		expected := "continue (outerLoop)"
+		assert.Equal(t, expected, continueStmt.GetPP())
+	})
+
+	t.Run("GetPP without label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "",
+		}
+		expected := "continue ()"
+		assert.Equal(t, expected, continueStmt.GetPP())
+	})
+
+	t.Run("ToString with label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "innerLoop",
+		}
+		expected := "continue (innerLoop)"
+		assert.Equal(t, expected, continueStmt.ToString())
+	})
+
+	t.Run("ToString without label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "",
+		}
+		expected := "continue ()"
+		assert.Equal(t, expected, continueStmt.ToString())
+	})
+
+	t.Run("hasLabel with label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "loop1",
+		}
+		assert.True(t, continueStmt.hasLabel())
+	})
+
+	t.Run("hasLabel without label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "",
+		}
+		assert.False(t, continueStmt.hasLabel())
+	})
+
+	t.Run("GetLabel with label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "loop2",
+		}
+		assert.Equal(t, "loop2", continueStmt.GetLabel())
+	})
+
+	t.Run("GetLabel without label", func(t *testing.T) {
+		continueStmt := &ContinueStmt{
+			Label: "",
+		}
+		assert.Equal(t, "", continueStmt.GetLabel())
+	})
+}
