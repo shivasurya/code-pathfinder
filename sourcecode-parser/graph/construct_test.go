@@ -753,11 +753,16 @@ func TestBuildGraphFromAST(t *testing.T) {
                         int i = 1 | 1;
                         int j = 1 ^ 1;
                         int l = 1 >>> 1;
+                        outerlabel:
 					    while (a > 0) {
 							a--;
+                            if (a == 0) {
+								break outerlabel;
+							}
 						}
                         for (int i = 0; i < 10; i++) {
 							System.out.println(i);
+                             break;
 						}
 						do {
 							System.out.println("Hello, World!");
@@ -771,9 +776,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   63,
+			expectedNodes:   68,
 			expectedEdges:   4,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{

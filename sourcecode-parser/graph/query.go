@@ -135,6 +135,10 @@ func (env *Env) GetForStmt() *model.ForStmt {
 	return env.Node.ForStmt
 }
 
+func (env *Env) GetBreakStmt() *model.BreakStmt {
+	return env.Node.BreakStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -310,6 +314,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	whileStmt := "WhileStmt"
 	doStmt := "DoStmt"
 	forStmt := "ForStmt"
+	breakStmt := "BreakStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -366,6 +371,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			doStmt = entity.Alias
 		case "ForStmt":
 			forStmt = entity.Alias
+		case "BreakStmt":
+			breakStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -511,6 +518,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 		forStmt: map[string]interface{}{
 			"getForStmt": proxyenv.GetForStmt,
 			"toString":   proxyenv.ToString,
+		},
+		breakStmt: map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getBreakStmt": proxyenv.GetBreakStmt,
 		},
 	}
 	return env

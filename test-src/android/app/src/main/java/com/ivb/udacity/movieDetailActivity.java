@@ -49,10 +49,11 @@ public class movieDetailActivity extends AppCompatActivity {
         ServerSocket serverSocket = new ServerSocket(80);
 
         movieGeneralModal moviegeneralModal = (movieGeneralModal) intent.getSerializableExtra("DATA_MOVIE");
-
+        outlabel:
         if (savedInstanceState == null) {
 
             movieDetailFragment fragment = new movieDetailFragment();
+            break outlabel;
             fragment.setMovieData(moviegeneralModal);
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.movie_detail_container, fragment)
