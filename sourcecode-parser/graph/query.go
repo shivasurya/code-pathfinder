@@ -127,6 +127,10 @@ func (env *Env) GetWhileStmt() *model.WhileStmt {
 	return env.Node.WhileStmt
 }
 
+func (env *Env) GetDoStmt() *model.DoStmt {
+	return env.Node.DoStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -300,6 +304,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	classInstanceExpression := "ClassInstanceExpr"
 	ifStmt := "IfStmt"
 	whileStmt := "WhileStmt"
+	doStmt := "DoStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -352,6 +357,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			ifStmt = entity.Alias
 		case "WhileStmt":
 			whileStmt = entity.Alias
+		case "DoStmt":
+			doStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -489,6 +496,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 		whileStmt: map[string]interface{}{
 			"getWhileStmt": proxyenv.GetWhileStmt,
 			"toString":     proxyenv.ToString,
+		},
+		doStmt: map[string]interface{}{
+			"getDoStmt": proxyenv.GetDoStmt,
+			"toString":  proxyenv.ToString,
 		},
 	}
 	return env

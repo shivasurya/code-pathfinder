@@ -77,6 +77,10 @@ public class movieDetailActivity extends AppCompatActivity {
             int i = 0;
             i++;
         }
+
+        do {
+            i++;
+        } while (i < 10);
         Cipher.getInstance("RC4")
         MessageDigest.getInstance("SHA1", "BC");
         return super.onOptionsItemSelected(item);
