@@ -79,6 +79,18 @@ public class movieDetailActivity extends AppCompatActivity {
             i++;
         }
 
+        String message = switch (number) {
+            case ONE -> {
+                yield "Got a 1";
+            }
+            case TWO -> {
+                yield "Got a 2";
+            }
+            default -> {
+                yield a+b;
+            }
+        };
+
         do {
             i++;
         } while (i < 10);

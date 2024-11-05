@@ -266,3 +266,38 @@ func (continueStmt *ContinueStmt) hasLabel() bool {
 func (continueStmt *ContinueStmt) GetLabel() string {
 	return continueStmt.Label
 }
+
+// TODO: Implement the SwitchStmt Expr.
+type YieldStmt struct {
+	JumpStmt
+	Value *Expr
+}
+
+type IYieldStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetPP() string
+	ToString() string
+	GetValue() *Expr
+}
+
+func (yieldStmt *YieldStmt) GetAPrimaryQlClass() string {
+	return "YieldStmt"
+}
+
+func (yieldStmt *YieldStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for YieldStmt
+	return 0
+}
+
+func (yieldStmt *YieldStmt) GetPP() string {
+	return fmt.Sprintf("yield %s", yieldStmt.Value.NodeString)
+}
+
+func (yieldStmt *YieldStmt) ToString() string {
+	return fmt.Sprintf("yield %s", yieldStmt.Value.NodeString)
+}
+
+func (yieldStmt *YieldStmt) GetValue() *Expr {
+	return yieldStmt.Value
+}

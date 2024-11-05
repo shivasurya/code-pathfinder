@@ -766,6 +766,19 @@ func TestBuildGraphFromAST(t *testing.T) {
 							System.out.println(i);
                              break;
 						}
+						switch (day) {
+									case "MONDAY" -> 1;
+									case "TUESDAY" -> 2;
+									case "WEDNESDAY" -> 3;
+									case "THURSDAY" -> 4;
+									case "FRIDAY" -> 5;
+									case "SATURDAY" -> 6;
+									case "SUNDAY" -> 7;
+									default -> {
+										System.out.println("Invalid day: " + day);
+										yield 9;  // Using 'yield' to return a value from this case
+									}
+						};
 						do {
 							System.out.println("Hello, World!");
 						} while (a > 0);
@@ -778,9 +791,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   69,
-			expectedEdges:   4,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt"},
+			expectedNodes:   73,
+			expectedEdges:   5,
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt", "YieldStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{
