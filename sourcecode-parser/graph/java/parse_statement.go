@@ -26,3 +26,10 @@ func ParseContinueStatement(node *sitter.Node, sourcecode []byte) *model.Continu
 	}
 	return continueStmt
 }
+
+func ParseYieldStatement(node *sitter.Node, sourcecode []byte) *model.YieldStmt {
+	yieldStmt := &model.YieldStmt{}
+	yieldStmtExpr := &model.Expr{NodeString: node.Child(1).Content(sourcecode)}
+	yieldStmt.Value = yieldStmtExpr
+	return yieldStmt
+}

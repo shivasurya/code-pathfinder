@@ -52,7 +52,8 @@ type Node struct {
 	ForStmt              *model.ForStmt
 	BreakStmt            *model.BreakStmt
 	ContinueStmt         *model.ContinueStmt
-} //
+	YieldStmt            *model.YieldStmt
+}
 
 type Edge struct {
 	From *Node
@@ -180,6 +181,21 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
+	case "yield_statement":
+		yieldNode := javalang.ParseYieldStatement(node, sourceCode)
+		uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+		yieldStmtNode := &Node{
+			ID:               GenerateSha256(uniqueyieldID),
+			Type:             "YieldStmt",
+			LineNumber:       node.StartPoint().Row + 1,
+			Name:             "YieldStmt",
+			IsExternal:       true,
+			CodeSnippet:      node.Content(sourceCode),
+			File:             file,
+			isJavaSourceFile: isJavaSourceFile,
+			YieldStmt:        yieldNode,
+		}
+		graph.AddNode(yieldStmtNode)
 	case "break_statement":
 		breakNode := javalang.ParseBreakStatement(node, sourceCode)
 		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)

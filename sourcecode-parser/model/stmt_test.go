@@ -219,3 +219,33 @@ func TestContinueStmt(t *testing.T) {
 		assert.Equal(t, "", continueStmt.GetLabel())
 	})
 }
+
+func TestYieldStmt(t *testing.T) {
+	t.Run("ToString with non-empty value", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "42"},
+		}
+		assert.Equal(t, "yield 42", yieldStmt.ToString())
+	})
+
+	t.Run("ToString with empty value", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: ""},
+		}
+		assert.Equal(t, "yield ", yieldStmt.ToString())
+	})
+
+	t.Run("ToString with complex expression", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "a + b * c"},
+		}
+		assert.Equal(t, "yield a + b * c", yieldStmt.ToString())
+	})
+
+	t.Run("ToString with string literal", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "\"hello world\""},
+		}
+		assert.Equal(t, "yield \"hello world\"", yieldStmt.ToString())
+	})
+}

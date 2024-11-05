@@ -143,6 +143,10 @@ func (env *Env) GetContinueStmt() *model.ContinueStmt {
 	return env.Node.ContinueStmt
 }
 
+func (env *Env) GetYieldStmt() *model.YieldStmt {
+	return env.Node.YieldStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -320,6 +324,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	forStmt := "ForStmt"
 	breakStmt := "BreakStmt"
 	continueStmt := "ContinueStmt"
+	yieldStmt := "YieldStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -380,6 +385,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			breakStmt = entity.Alias
 		case "ContinueStmt":
 			continueStmt = entity.Alias
+		case "YieldStmt":
+			yieldStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -533,6 +540,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 		continueStmt: map[string]interface{}{
 			"toString":        proxyenv.ToString,
 			"getContinueStmt": proxyenv.GetContinueStmt,
+		},
+		yieldStmt: map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getYieldStmt": proxyenv.GetYieldStmt,
 		},
 	}
 	return env
