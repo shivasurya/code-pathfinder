@@ -249,3 +249,103 @@ func TestYieldStmt(t *testing.T) {
 		assert.Equal(t, "yield \"hello world\"", yieldStmt.ToString())
 	})
 }
+
+func TestYieldStmt_GetValue(t *testing.T) {
+	t.Run("GetValue with non-nil value", func(t *testing.T) {
+		expr := &Expr{NodeString: "42"}
+		yieldStmt := &YieldStmt{
+			Value: expr,
+		}
+		assert.Equal(t, expr, yieldStmt.GetValue())
+	})
+
+	t.Run("GetValue with nil value", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: nil,
+		}
+		assert.Nil(t, yieldStmt.GetValue())
+	})
+
+	t.Run("GetValue with complex expression", func(t *testing.T) {
+		expr := &Expr{NodeString: "foo() + bar(x, y)"}
+		yieldStmt := &YieldStmt{
+			Value: expr,
+		}
+		assert.Equal(t, expr, yieldStmt.GetValue())
+	})
+
+	t.Run("GetValue preserves expression reference", func(t *testing.T) {
+		expr := &Expr{NodeString: "someValue"}
+		yieldStmt := &YieldStmt{
+			Value: expr,
+		}
+		retrievedExpr := yieldStmt.GetValue()
+		expr.NodeString = "modifiedValue"
+		assert.Equal(t, "modifiedValue", retrievedExpr.NodeString)
+	})
+}
+
+func TestYieldStmt_GetHalsteadID(t *testing.T) {
+	t.Run("Returns zero for empty yield statement", func(t *testing.T) {
+		yieldStmt := &YieldStmt{}
+		assert.Equal(t, 0, yieldStmt.GetHalsteadID())
+	})
+
+	t.Run("Returns zero for yield with simple value", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "42"},
+		}
+		assert.Equal(t, 0, yieldStmt.GetHalsteadID())
+	})
+
+	t.Run("Returns zero for yield with complex expression", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "a + b * c"},
+		}
+		assert.Equal(t, 0, yieldStmt.GetHalsteadID())
+	})
+
+	t.Run("Returns zero for yield with method call", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "calculateValue()"},
+		}
+		assert.Equal(t, 0, yieldStmt.GetHalsteadID())
+	})
+}
+
+func TestYieldStmt_GetPP(t *testing.T) {
+	t.Run("GetPP with numeric value", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "42"},
+		}
+		assert.Equal(t, "yield 42", yieldStmt.GetPP())
+	})
+
+	t.Run("GetPP with method call", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "getValue()"},
+		}
+		assert.Equal(t, "yield getValue()", yieldStmt.GetPP())
+	})
+
+	t.Run("GetPP with complex expression", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "x + y * (z - 1)"},
+		}
+		assert.Equal(t, "yield x + y * (z - 1)", yieldStmt.GetPP())
+	})
+
+	t.Run("GetPP with empty expression", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: ""},
+		}
+		assert.Equal(t, "yield ", yieldStmt.GetPP())
+	})
+
+	t.Run("GetPP with string literal", func(t *testing.T) {
+		yieldStmt := &YieldStmt{
+			Value: &Expr{NodeString: "\"test string\""},
+		}
+		assert.Equal(t, "yield \"test string\"", yieldStmt.GetPP())
+	})
+}
