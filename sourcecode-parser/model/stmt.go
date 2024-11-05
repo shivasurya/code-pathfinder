@@ -267,7 +267,7 @@ func (continueStmt *ContinueStmt) GetLabel() string {
 	return continueStmt.Label
 }
 
-// TODO: Implement the SwitchStmt Expr
+// TODO: Implement the SwitchStmt Expr.
 type YieldStmt struct {
 	JumpStmt
 	Value *Expr
