@@ -33,3 +33,12 @@ func ParseYieldStatement(node *sitter.Node, sourcecode []byte) *model.YieldStmt 
 	yieldStmt.Value = yieldStmtExpr
 	return yieldStmt
 }
+
+func ParseAssertStatement(node *sitter.Node, sourcecode []byte) *model.AssertStmt {
+	assertStmt := &model.AssertStmt{}
+	assertStmt.Expr = &model.Expr{NodeString: node.Child(1).Content(sourcecode)}
+	if node.Child(3) != nil && node.Child(3).Type() == "string_literal" {
+		assertStmt.Message = &model.Expr{NodeString: node.Child(3).Content(sourcecode)}
+	}
+	return assertStmt
+}

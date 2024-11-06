@@ -349,3 +349,38 @@ func TestYieldStmt_GetPP(t *testing.T) {
 		assert.Equal(t, "yield \"test string\"", yieldStmt.GetPP())
 	})
 }
+
+func TestAssertStmt_GetMessage(t *testing.T) {
+	t.Run("GetMessage with non-nil message", func(t *testing.T) {
+		message := &Expr{NodeString: "Expected value to be positive"}
+		assertStmt := &AssertStmt{
+			Message: message,
+		}
+		assert.Equal(t, message, assertStmt.GetMessage())
+	})
+
+	t.Run("GetMessage with nil message", func(t *testing.T) {
+		assertStmt := &AssertStmt{
+			Message: nil,
+		}
+		assert.Nil(t, assertStmt.GetMessage())
+	})
+
+	t.Run("GetMessage with complex expression", func(t *testing.T) {
+		message := &Expr{NodeString: "String.format(\"Value %d should be greater than zero\", value)"}
+		assertStmt := &AssertStmt{
+			Message: message,
+		}
+		assert.Equal(t, message, assertStmt.GetMessage())
+	})
+
+	t.Run("GetMessage preserves expression reference", func(t *testing.T) {
+		message := &Expr{NodeString: "Initial message"}
+		assertStmt := &AssertStmt{
+			Message: message,
+		}
+		retrievedMessage := assertStmt.GetMessage()
+		message.NodeString = "Modified message"
+		assert.Equal(t, "Modified message", retrievedMessage.NodeString)
+	})
+}

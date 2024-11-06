@@ -301,3 +301,43 @@ func (yieldStmt *YieldStmt) ToString() string {
 func (yieldStmt *YieldStmt) GetValue() *Expr {
 	return yieldStmt.Value
 }
+
+type AssertStmt struct {
+	Stmt
+	Expr    *Expr
+	Message *Expr
+}
+
+type IAssertStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetPP() string
+	ToString() string
+	GetMessage() *Expr
+	GetExpr() *Expr
+}
+
+func (assertStmt *AssertStmt) GetAPrimaryQlClass() string {
+	return "AssertStmt"
+}
+
+func (assertStmt *AssertStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for AssertStmt
+	return 0
+}
+
+func (assertStmt *AssertStmt) GetPP() string {
+	return fmt.Sprintf("assert %s", assertStmt.Expr.NodeString)
+}
+
+func (assertStmt *AssertStmt) ToString() string {
+	return fmt.Sprintf("assert %s", assertStmt.Expr.NodeString)
+}
+
+func (assertStmt *AssertStmt) GetMessage() *Expr {
+	return assertStmt.Message
+}
+
+func (assertStmt *AssertStmt) GetExpr() *Expr {
+	return assertStmt.Expr
+}
