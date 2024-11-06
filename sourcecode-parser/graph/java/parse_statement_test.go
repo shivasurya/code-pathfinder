@@ -136,3 +136,64 @@ func TestParseYieldStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestParseAssertStatement(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *model.AssertStmt
+	}{
+		{
+			name:  "Simple assert statement without message",
+			input: "assert x > 0;",
+			expected: &model.AssertStmt{
+				Expr:    &model.Expr{NodeString: "x > 0"},
+				Message: nil,
+			},
+		},
+		{
+			name:  "Assert statement with message",
+			input: "assert condition : \"Value must be positive\";",
+			expected: &model.AssertStmt{
+				Expr:    &model.Expr{NodeString: "condition"},
+				Message: &model.Expr{NodeString: "\"Value must be positive\""},
+			},
+		},
+		{
+			name:  "Assert statement with boolean literal",
+			input: "assert true;",
+			expected: &model.AssertStmt{
+				Expr:    &model.Expr{NodeString: "true"},
+				Message: nil,
+			},
+		},
+		{
+			name:  "Assert statement with complex expression",
+			input: "assert x != null && x.isValid();",
+			expected: &model.AssertStmt{
+				Expr:    &model.Expr{NodeString: "x != null && x.isValid()"},
+				Message: nil,
+			},
+		},
+		{
+			name:  "Assert statement with method call and message",
+			input: "assert obj.validate() : \"Validation failed\";",
+			expected: &model.AssertStmt{
+				Expr:    &model.Expr{NodeString: "obj.validate()"},
+				Message: &model.Expr{NodeString: "\"Validation failed\""},
+			},
+		},
+	}
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(java.GetLanguage())
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := parser.Parse(nil, []byte(tt.input))
+			node := tree.RootNode().Child(0)
+			result := ParseAssertStatement(node, []byte(tt.input))
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
