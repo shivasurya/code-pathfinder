@@ -42,3 +42,11 @@ func ParseAssertStatement(node *sitter.Node, sourcecode []byte) *model.AssertStm
 	}
 	return assertStmt
 }
+
+func ParseReturnStatement(node *sitter.Node, sourcecode []byte) *model.ReturnStmt {
+	returnStmt := &model.ReturnStmt{}
+	if node.Child(0) != nil {
+		returnStmt.Result = &model.Expr{NodeString: node.Child(0).Content(sourcecode)}
+	}
+	return returnStmt
+}
