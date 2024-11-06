@@ -384,3 +384,47 @@ func TestAssertStmt_GetMessage(t *testing.T) {
 		assert.Equal(t, "Modified message", retrievedMessage.NodeString)
 	})
 }
+
+func TestReturnStmt_GetPP(t *testing.T) {
+	t.Run("GetPP with numeric value", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: "42"},
+		}
+		assert.Equal(t, "return 42", returnStmt.GetPP())
+	})
+
+	t.Run("GetPP with string literal", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: "\"hello world\""},
+		}
+		assert.Equal(t, "return \"hello world\"", returnStmt.GetPP())
+	})
+
+	t.Run("GetPP with method call", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: "getValue()"},
+		}
+		assert.Equal(t, "return getValue()", returnStmt.GetPP())
+	})
+
+	t.Run("GetPP with complex expression", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: "x + y * (z - 1)"},
+		}
+		assert.Equal(t, "return x + y * (z - 1)", returnStmt.GetPP())
+	})
+
+	t.Run("GetPP with empty expression", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: ""},
+		}
+		assert.Equal(t, "return ", returnStmt.GetPP())
+	})
+
+	t.Run("GetPP with boolean expression", func(t *testing.T) {
+		returnStmt := &ReturnStmt{
+			Result: &Expr{NodeString: "x > 0 && y < 10"},
+		}
+		assert.Equal(t, "return x > 0 && y < 10", returnStmt.GetPP())
+	})
+}

@@ -732,9 +732,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   4,
+			expectedNodes:   5,
 			expectedEdges:   0,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "ReturnStmt"},
 			unexpectedTypes: []string{"variable_declaration"},
 		},
 		{
@@ -791,9 +791,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   73,
+			expectedNodes:   74,
 			expectedEdges:   5,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt", "YieldStmt"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt", "YieldStmt", "ReturnStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{
@@ -811,9 +811,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   3,
+			expectedNodes:   4,
 			expectedEdges:   0,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "block_comment"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "block_comment", "ReturnStmt"},
 			unexpectedTypes: []string{"variable_declaration", "binary_expression"},
 		},
 		// add testcase for object creation expression

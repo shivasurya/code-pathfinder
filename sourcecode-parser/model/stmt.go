@@ -341,3 +341,37 @@ func (assertStmt *AssertStmt) GetMessage() *Expr {
 func (assertStmt *AssertStmt) GetExpr() *Expr {
 	return assertStmt.Expr
 }
+
+type ReturnStmt struct {
+	Stmt
+	Result *Expr
+}
+
+type IReturnStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetPP() string
+	ToString() string
+	GetResult() *Expr
+}
+
+func (returnStmt *ReturnStmt) GetAPrimaryQlClass() string {
+	return "ReturnStmt"
+}
+
+func (returnStmt *ReturnStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for ReturnStmt
+	return 0
+}
+
+func (returnStmt *ReturnStmt) GetPP() string {
+	return fmt.Sprintf("return %s", returnStmt.Result.NodeString)
+}
+
+func (returnStmt *ReturnStmt) ToString() string {
+	return fmt.Sprintf("return %s", returnStmt.Result.NodeString)
+}
+
+func (returnStmt *ReturnStmt) GetResult() *Expr {
+	return returnStmt.Result
+}
