@@ -155,6 +155,10 @@ func (env *Env) GetReturnStmt() *model.ReturnStmt {
 	return env.Node.ReturnStmt
 }
 
+func (env *Env) GetBlockStmt() *model.BlockStmt {
+	return env.Node.BlockStmt
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -335,6 +339,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	yieldStmt := "YieldStmt"
 	assertStmt := "AssertStmt"
 	returnStmt := "ReturnStmt"
+	blockStmt := "BlockStmt"
 
 	// print query select list
 	for _, entity := range query.SelectList {
@@ -401,6 +406,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			assertStmt = entity.Alias
 		case "ReturnStmt":
 			returnStmt = entity.Alias
+		case "BlockStmt":
+			blockStmt = entity.Alias
 		}
 	}
 	env := map[string]interface{}{
@@ -566,6 +573,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 		returnStmt: map[string]interface{}{
 			"toString":      proxyenv.ToString,
 			"getReturnStmt": proxyenv.GetReturnStmt,
+		},
+		blockStmt: map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getBlockStmt": proxyenv.GetBlockStmt,
 		},
 	}
 	return env

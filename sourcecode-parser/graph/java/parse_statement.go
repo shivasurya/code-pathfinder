@@ -50,3 +50,13 @@ func ParseReturnStatement(node *sitter.Node, sourcecode []byte) *model.ReturnStm
 	}
 	return returnStmt
 }
+
+func ParseBlockStatement(node *sitter.Node, sourcecode []byte) *model.BlockStmt {
+	blockStmt := &model.BlockStmt{}
+	for i := 0; i < int(node.ChildCount()); i++ {
+		singleBlockStmt := &model.Stmt{}
+		singleBlockStmt.NodeString = node.Child(i).Content(sourcecode)
+		blockStmt.Stmts = append(blockStmt.Stmts, *singleBlockStmt)
+	}
+	return blockStmt
+}
