@@ -16,7 +16,7 @@ Code Pathfinder, the open-source alternative to GitHub CodeQL. Built for advance
 ## :tv: Demo
 
 ```bash
-docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest pathfinder ci --project /src/code-pathfinder/test-src --ruleset cpf/java
+docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest ci --project /src/code-pathfinder/test-src --ruleset cpf/java
 ```
 
 ## :book: Documentation
