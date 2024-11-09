@@ -701,9 +701,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   3,
+			expectedNodes:   4,
 			expectedEdges:   0,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "variable_declaration"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "variable_declaration", "BlockStmt"},
 			unexpectedTypes: []string{"method_invocation"},
 		},
 		{
@@ -718,9 +718,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   5,
+			expectedNodes:   7,
 			expectedEdges:   2,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "method_invocation"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "method_invocation", "BlockStmt"},
 			unexpectedTypes: []string{"variable_declaration"},
 		},
 		{
@@ -732,7 +732,7 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   5,
+			expectedNodes:   6,
 			expectedEdges:   0,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "ReturnStmt"},
 			unexpectedTypes: []string{"variable_declaration"},
@@ -791,9 +791,9 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   74,
+			expectedNodes:   83,
 			expectedEdges:   5,
-			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt", "YieldStmt", "ReturnStmt"},
+			expectedTypes:   []string{"class_declaration", "method_declaration", "binary_expression", "comp_expression", "and_expression", "or_expression", "IfStmt", "ForStmt", "WhileStmt", "DoStmt", "BreakStmt", "ContinueStmt", "YieldStmt", "ReturnStmt", "BlockStmt"},
 			unexpectedTypes: []string{""},
 		},
 		{
@@ -811,7 +811,7 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   4,
+			expectedNodes:   5,
 			expectedEdges:   0,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "block_comment", "ReturnStmt"},
 			unexpectedTypes: []string{"variable_declaration", "binary_expression"},
@@ -827,7 +827,7 @@ func TestBuildGraphFromAST(t *testing.T) {
 					}
 				}
 			`,
-			expectedNodes:   6,
+			expectedNodes:   7,
 			expectedEdges:   0,
 			expectedTypes:   []string{"class_declaration", "method_declaration", "ClassInstanceExpr"},
 			unexpectedTypes: []string{"binary_expression"},

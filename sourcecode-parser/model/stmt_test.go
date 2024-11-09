@@ -428,3 +428,61 @@ func TestReturnStmt_GetPP(t *testing.T) {
 		assert.Equal(t, "return x > 0 && y < 10", returnStmt.GetPP())
 	})
 }
+
+func TestBlockStmt(t *testing.T) {
+	t.Run("GetAPrimaryQlClass", func(t *testing.T) {
+		blockStmt := &BlockStmt{}
+		assert.Equal(t, "BlockStmt", blockStmt.GetAPrimaryQlClass())
+	})
+
+	t.Run("GetHalsteadID", func(t *testing.T) {
+		blockStmt := &BlockStmt{}
+		assert.Equal(t, 0, blockStmt.GetHalsteadID())
+	})
+
+	t.Run("GetStmt with valid index", func(t *testing.T) {
+		stmt1 := Stmt{NodeString: "x = 1"}
+		stmt2 := Stmt{NodeString: "y = 2"}
+		blockStmt := &BlockStmt{
+			Stmts: []Stmt{stmt1, stmt2},
+		}
+		assert.Equal(t, stmt2, blockStmt.GetStmt(1))
+	})
+
+	t.Run("GetAStmt with non-empty block", func(t *testing.T) {
+		stmt1 := Stmt{NodeString: "x = 1"}
+		stmt2 := Stmt{NodeString: "y = 2"}
+		blockStmt := &BlockStmt{
+			Stmts: []Stmt{stmt1, stmt2},
+		}
+		assert.Equal(t, stmt1, blockStmt.GetAStmt())
+	})
+
+	t.Run("GetNumStmt with multiple statements", func(t *testing.T) {
+		blockStmt := &BlockStmt{
+			Stmts: []Stmt{
+				{NodeString: "x = 1"},
+				{NodeString: "y = 2"},
+				{NodeString: "z = 3"},
+			},
+		}
+		assert.Equal(t, 3, blockStmt.GetNumStmt())
+	})
+
+	t.Run("GetNumStmt with empty block", func(t *testing.T) {
+		blockStmt := &BlockStmt{
+			Stmts: []Stmt{},
+		}
+		assert.Equal(t, 0, blockStmt.GetNumStmt())
+	})
+
+	t.Run("GetLastStmt with multiple statements", func(t *testing.T) {
+		stmt1 := Stmt{NodeString: "x = 1"}
+		stmt2 := Stmt{NodeString: "y = 2"}
+		stmt3 := Stmt{NodeString: "z = 3"}
+		blockStmt := &BlockStmt{
+			Stmts: []Stmt{stmt1, stmt2, stmt3},
+		}
+		assert.Equal(t, stmt3, blockStmt.GetLastStmt())
+	})
+}

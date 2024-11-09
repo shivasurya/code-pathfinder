@@ -197,3 +197,83 @@ func TestParseAssertStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBlockStatement(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *model.BlockStmt
+	}{
+		{
+			name:  "Empty block statement",
+			input: "{}",
+			expected: &model.BlockStmt{
+				Stmts: []model.Stmt{
+					{NodeString: "{"},
+					{NodeString: "}"},
+				},
+			},
+		},
+		{
+			name:  "Single statement block",
+			input: "{return true;}",
+			expected: &model.BlockStmt{
+				Stmts: []model.Stmt{
+					{NodeString: "{"},
+					{NodeString: "return true;"},
+					{NodeString: "}"},
+				},
+			},
+		},
+		{
+			name:  "Multiple statement block",
+			input: "{int x = 1; x++; return x;}",
+			expected: &model.BlockStmt{
+				Stmts: []model.Stmt{
+					{NodeString: "{"},
+					{NodeString: "int x = 1;"},
+					{NodeString: "x++;"},
+					{NodeString: "return x;"},
+					{NodeString: "}"},
+				},
+			},
+		},
+		{
+			name:  "Nested block statements",
+			input: "{{int x = 1;}{int y = 2;}}",
+			expected: &model.BlockStmt{
+				Stmts: []model.Stmt{
+					{NodeString: "{"},
+					{NodeString: "{int x = 1;}"},
+					{NodeString: "{int y = 2;}"},
+					{NodeString: "}"},
+				},
+			},
+		},
+		{
+			name:  "Block with complex statements",
+			input: "{System.out.println(\"Hello\"); if(x > 0) { return true; } throw new Exception();}",
+			expected: &model.BlockStmt{
+				Stmts: []model.Stmt{
+					{NodeString: "{"},
+					{NodeString: "System.out.println(\"Hello\");"},
+					{NodeString: "if(x > 0) { return true; }"},
+					{NodeString: "throw new Exception();"},
+					{NodeString: "}"},
+				},
+			},
+		},
+	}
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(java.GetLanguage())
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := parser.Parse(nil, []byte(tt.input))
+			node := tree.RootNode().Child(0)
+			result := ParseBlockStatement(node, []byte(tt.input))
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

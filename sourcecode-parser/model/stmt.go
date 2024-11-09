@@ -375,3 +375,52 @@ func (returnStmt *ReturnStmt) ToString() string {
 func (returnStmt *ReturnStmt) GetResult() *Expr {
 	return returnStmt.Result
 }
+
+type BlockStmt struct {
+	Stmt
+	Stmts []Stmt
+}
+
+type IBlockStmt interface {
+	GetAPrimaryQlClass() string
+	GetHalsteadID() int
+	GetPP() string
+	ToString() string
+	GetStmt(index int) Stmt
+	GetAStmt() Stmt
+	GetNumStmt() int
+	GetLastStmt() Stmt
+}
+
+func (blockStmt *BlockStmt) GetAPrimaryQlClass() string {
+	return "BlockStmt"
+}
+
+func (blockStmt *BlockStmt) GetHalsteadID() int {
+	// TODO: Implement Halstead ID calculation for BlockStmt
+	return 0
+}
+
+func (blockStmt *BlockStmt) GetPP() string {
+	return fmt.Sprintf("block %s", blockStmt.Stmts)
+}
+
+func (blockStmt *BlockStmt) ToString() string {
+	return fmt.Sprintf("block %s", blockStmt.Stmts)
+}
+
+func (blockStmt *BlockStmt) GetStmt(index int) Stmt {
+	return blockStmt.Stmts[index]
+}
+
+func (blockStmt *BlockStmt) GetAStmt() Stmt {
+	return blockStmt.Stmts[0]
+}
+
+func (blockStmt *BlockStmt) GetNumStmt() int {
+	return len(blockStmt.Stmts)
+}
+
+func (blockStmt *BlockStmt) GetLastStmt() Stmt {
+	return blockStmt.Stmts[len(blockStmt.Stmts)-1]
+}
