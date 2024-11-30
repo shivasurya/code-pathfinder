@@ -71,7 +71,7 @@ linters:
     - errorlint
 
     # Checks for pointers to enclosing loop variables.
-    - exportloopref
+    - copyloopvar
 
     # As you already know I'm a co-author. It would be strange to not use
     # one of my warmly loved projects.
@@ -208,9 +208,6 @@ linters:
     # I'm fine to check the error from json.Marshal ¯\_(ツ)_/¯
     - errchkjson
 
-    # All SQL queries MUST BE covered with tests.
-    - execinquery
-
     # Forces to handle more cases. Cool but noisy.
     - exhaustive
     - exhaustruct
@@ -250,9 +247,6 @@ linters:
 
     # I don't use file headers.
     - goheader
-
-    # Reports magic consts. Might be noisy but still good.
-    - gomnd
 
     # Allowed/blocked packages to import. I prefer to do it manually.
     - gomodguard
