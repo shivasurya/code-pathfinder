@@ -1,0 +1,40 @@
+---
+title: BlockStmt - Code-Pathfinder Reference | CodeQL Alternative
+description: "Variable Declaration Entity - Code PathFinder API Index"
+---
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+### BlockStmt <Badge text="Entity" variant="tip" size="small" />
+
+BlockStmt is a statement that contains a list of statements. It is used to declare variables, methods, and classes.
+
+#### Example
+```java
+class MyClass {
+    ...
+    public void myMethod()
+    {  // BlockStmt
+        int myLocalVariable; // BlockStmt
+        Double myLocalVariable2; // BlockStmt
+        System.out.Println("Hello World"); // BlockStmt
+    } // BlockStmt
+    ....
+}
+```
+
+### Attributes
+
+| Entity                         | Description                                               |
+| ------------------------------ | ----------------------------------------------------------|
+| `GetAPrimaryQlClass()`         | Returns the primary QL class name as a string             |
+| `GetHalsteadID()`              | Returns the Halstead complexity metric ID                 |
+| `GetPP()`                      | Returns the pretty-printed representation of the block    |
+| `ToString()`                   | Returns string representation of the block statement      |
+| `GetStmt(index int)`           | Returns the statement at the specified index              |
+| `GetAStmt()`                   | Returns a statement from the block                        |
+| `GetNumStmt()`                 | Returns the total number of statements in the block       |
+| `GetLastStmt()`                | Returns the last statement in the block                   |
