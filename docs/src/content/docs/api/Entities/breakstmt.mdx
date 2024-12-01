@@ -1,0 +1,36 @@
+---
+title: Break Statement
+description: "BreakStmt Statement Entity - Code PathFinder API Index"
+---
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+### BreakStmt <Badge text="Entity" variant="tip" size="small" />
+
+In Java, the break statement is used within loops (for, while, do-while) and switch statements to immediately terminate the execution of the current loop or switch block and transfer control to the statement following the terminated block.
+When encountered, it stops the current iteration and continues with the next one, bypassing any code that comes after the continue statement within the loop body.
+This is particularly useful when you want to skip specific iterations based on certain conditions while allowing the loop to continue its normal execution for other cases.
+
+#### Example
+```java
+for (int i = 0; i < 10; i++) {
+    if (i == 5) {
+    break; // BreakStmt
+    }
+    // Code to be executed for all iterations except when i is 5
+}
+```
+
+### Attributes
+
+| Method                      | Description                                                       |
+|-----------------------------|-------------------------------------------------------------------|
+| GetAPrimaryQlClass() string | Returns the primary CodeQL class name for this entity             |
+| GetHalsteadID() int         | Returns the Halstead ID for this break statement                  |
+| GetLabel() string           | Returns the label associated with this break statement            |
+| hasLabel() bool             | Checks if the break statement has a label                         |
+| GetPP() string              | Returns the pretty-printed representation of the break statement  |
+| ToString() string           | Returns the string representation of the break statement          |

@@ -1,0 +1,50 @@
+---
+title: Labeled Statement
+description: "LabeledStmt Statement Entity - Code PathFinder API Index"
+---
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+### LabeledStmt <Badge text="Entity" variant="tip" size="small" />
+
+In Java, a labeled statement allows you to assign an identifier (label) to a specific block of code or statement. Labels are most commonly used with break and
+continue statements to control the flow of nested loops or blocks.
+When using a labeled statement, you place the label name followed by a colon (:) before the statement or block you want to label.
+This is particularly useful when you need to break out of or continue a specific outer loop from within a nested loop structure.
+
+#### Example
+```java
+outer: // Label for the outer loop
+for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+        if (i == 1 && j == 1) {
+            break outer; // Breaks out of the outer loop
+        }
+        System.out.println("i = " + i + ", j = " + j);
+    }
+}
+
+// Example with continue and label
+search:
+for (int i = 0; i < array.length; i++) {
+    for (int j = 0; j < array[i].length; j++) {
+        if (array[i][j] == -1) {
+            continue search; // Skips to the next iteration of outer loop
+        }
+        // Process array[i][j]
+    }
+}
+```
+
+### Attributes
+
+| Method | Description |
+|--------|-------------|
+| GetAPrimaryQlClass() string | Returns the primary CodeQL class name for this entity |
+| GetHalsteadID() int | Returns the Halstead complexity metric identifier for the labeled statement |
+| GetLabel() *LabeledStmt | Returns a pointer to the labeled statement itself |
+| GetPP() string | Returns the pretty-printed representation of the labeled statement |
+| ToString() string | Returns a string representation of the labeled statement |
