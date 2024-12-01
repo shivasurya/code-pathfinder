@@ -628,7 +628,7 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 		fmt.Println("Error evaluating expression: ", err)
 		return false
 	}
-	if output.(bool) {
+	if output.(bool) { //nolint:all
 		return true
 	}
 	return false
