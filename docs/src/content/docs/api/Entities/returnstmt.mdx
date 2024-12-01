@@ -1,0 +1,36 @@
+---
+title: ReturnStmt - Code-Pathfinder Reference | CodeQL Alternative
+description: Return Statement Entity - Code PathFinder API Index"
+---
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+### ReturnStmt <Badge text="Entity" variant="tip" size="small" />
+
+ReturnStmt is a statement that returns a value from a method.
+
+#### Example
+```java
+class MyClass {
+    ...
+    public int myMethod()
+    {
+        return 1; // ReturnStmt
+    }
+    ....
+}
+```
+
+### Attributes
+
+| Method                         | Description                                                |
+| ------------------------------ | -----------------------------------------------------------|
+| GetAPrimaryQlClass() string    | Returns the primary CodeQL class name for this entity      |
+| GetHalsteadID() int            | Returns the Halstead complexity metric identifier          |
+| GetPP() string                 | Returns the pretty-printed representation of the statement |
+| ToString() string              | Returns a string representation of the return statement    |
+| GetResult() *Expr              | Returns the expression being returned by this statement    |
+| ------------------------------ | -----------------------------------------------------------|

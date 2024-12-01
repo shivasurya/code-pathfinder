@@ -141,7 +141,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 				result["line"] = entityObject.LineNumber
 				result["code"] = entityObject.CodeSnippet
 
-				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result)
+				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
 			}
 		}
 		queryResults, err := json.Marshal(results)
