@@ -1,0 +1,39 @@
+---
+title: YieldStmt Statement
+description: "YieldStmt Statement Entity - Code PathFinder API Index"
+---
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Badge } from '@astrojs/starlight/components';
+
+<PostHogLayout>
+</PostHogLayout>
+
+### YieldStmt <Badge text="Entity" variant="tip" size="small" />
+
+In Java, the `yield` keyword is used within switch expressions to return a value from a case label. It was introduced in Java 13 as part of switch expressions to provide a way to return values from individual cases. Unlike the traditional break statement, yield allows you to produce a value that becomes the result of the entire switch expression. This is particularly useful when you need to
+compute and return different values based on different cases in a more concise and expressive way than traditional switch statements.
+
+#### Example
+```java
+String message = switch (number) {
+    case ONE -> {
+        yield "Got a 1";
+    }
+    case TWO -> {
+        yield "Got a 2";
+    }
+    default -> {
+        yield "More than 2";
+    }
+};
+```
+
+### Attributes
+
+| Method                      | Description                                                      |
+|-----------------------------|------------------------------------------------------------------|
+| GetAPrimaryQlClass() string | Returns the primary CodeQL class name for this entity            |
+| GetHalsteadID() int         | Returns the Halstead ID metric for this statement                |
+| GetPP() string              | Returns the pretty-printed representation of this statement      |
+| ToString() string           | Returns a string representation of this statement                |
+| GetValue() *Exp             | Returns the expression being yielded in this statement           |
