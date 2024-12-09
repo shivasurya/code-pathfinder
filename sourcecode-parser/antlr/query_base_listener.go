@@ -27,6 +27,60 @@ func (s *BaseQueryListener) EnterQuery(ctx *QueryContext) {}
 // ExitQuery is called when production query is exited.
 func (s *BaseQueryListener) ExitQuery(ctx *QueryContext) {}
 
+// EnterClass_declarations is called when production class_declarations is entered.
+func (s *BaseQueryListener) EnterClass_declarations(ctx *Class_declarationsContext) {}
+
+// ExitClass_declarations is called when production class_declarations is exited.
+func (s *BaseQueryListener) ExitClass_declarations(ctx *Class_declarationsContext) {}
+
+// EnterClass_declaration is called when production class_declaration is entered.
+func (s *BaseQueryListener) EnterClass_declaration(ctx *Class_declarationContext) {}
+
+// ExitClass_declaration is called when production class_declaration is exited.
+func (s *BaseQueryListener) ExitClass_declaration(ctx *Class_declarationContext) {}
+
+// EnterClass_name is called when production class_name is entered.
+func (s *BaseQueryListener) EnterClass_name(ctx *Class_nameContext) {}
+
+// ExitClass_name is called when production class_name is exited.
+func (s *BaseQueryListener) ExitClass_name(ctx *Class_nameContext) {}
+
+// EnterMethod_declarations is called when production method_declarations is entered.
+func (s *BaseQueryListener) EnterMethod_declarations(ctx *Method_declarationsContext) {}
+
+// ExitMethod_declarations is called when production method_declarations is exited.
+func (s *BaseQueryListener) ExitMethod_declarations(ctx *Method_declarationsContext) {}
+
+// EnterMethod_declaration is called when production method_declaration is entered.
+func (s *BaseQueryListener) EnterMethod_declaration(ctx *Method_declarationContext) {}
+
+// ExitMethod_declaration is called when production method_declaration is exited.
+func (s *BaseQueryListener) ExitMethod_declaration(ctx *Method_declarationContext) {}
+
+// EnterMethod_name is called when production method_name is entered.
+func (s *BaseQueryListener) EnterMethod_name(ctx *Method_nameContext) {}
+
+// ExitMethod_name is called when production method_name is exited.
+func (s *BaseQueryListener) ExitMethod_name(ctx *Method_nameContext) {}
+
+// EnterMethod_body is called when production method_body is entered.
+func (s *BaseQueryListener) EnterMethod_body(ctx *Method_bodyContext) {}
+
+// ExitMethod_body is called when production method_body is exited.
+func (s *BaseQueryListener) ExitMethod_body(ctx *Method_bodyContext) {}
+
+// EnterReturn_statement is called when production return_statement is entered.
+func (s *BaseQueryListener) EnterReturn_statement(ctx *Return_statementContext) {}
+
+// ExitReturn_statement is called when production return_statement is exited.
+func (s *BaseQueryListener) ExitReturn_statement(ctx *Return_statementContext) {}
+
+// EnterReturn_type is called when production return_type is entered.
+func (s *BaseQueryListener) EnterReturn_type(ctx *Return_typeContext) {}
+
+// ExitReturn_type is called when production return_type is exited.
+func (s *BaseQueryListener) ExitReturn_type(ctx *Return_typeContext) {}
+
 // EnterPredicate_declarations is called when production predicate_declarations is entered.
 func (s *BaseQueryListener) EnterPredicate_declarations(ctx *Predicate_declarationsContext) {}
 
