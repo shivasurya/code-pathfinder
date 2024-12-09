@@ -11,6 +11,33 @@ type QueryListener interface {
 	// EnterQuery is called when entering the query production.
 	EnterQuery(c *QueryContext)
 
+	// EnterClass_declarations is called when entering the class_declarations production.
+	EnterClass_declarations(c *Class_declarationsContext)
+
+	// EnterClass_declaration is called when entering the class_declaration production.
+	EnterClass_declaration(c *Class_declarationContext)
+
+	// EnterClass_name is called when entering the class_name production.
+	EnterClass_name(c *Class_nameContext)
+
+	// EnterMethod_declarations is called when entering the method_declarations production.
+	EnterMethod_declarations(c *Method_declarationsContext)
+
+	// EnterMethod_declaration is called when entering the method_declaration production.
+	EnterMethod_declaration(c *Method_declarationContext)
+
+	// EnterMethod_name is called when entering the method_name production.
+	EnterMethod_name(c *Method_nameContext)
+
+	// EnterMethod_body is called when entering the method_body production.
+	EnterMethod_body(c *Method_bodyContext)
+
+	// EnterReturn_statement is called when entering the return_statement production.
+	EnterReturn_statement(c *Return_statementContext)
+
+	// EnterReturn_type is called when entering the return_type production.
+	EnterReturn_type(c *Return_typeContext)
+
 	// EnterPredicate_declarations is called when entering the predicate_declarations production.
 	EnterPredicate_declarations(c *Predicate_declarationsContext)
 
@@ -109,6 +136,33 @@ type QueryListener interface {
 
 	// ExitQuery is called when exiting the query production.
 	ExitQuery(c *QueryContext)
+
+	// ExitClass_declarations is called when exiting the class_declarations production.
+	ExitClass_declarations(c *Class_declarationsContext)
+
+	// ExitClass_declaration is called when exiting the class_declaration production.
+	ExitClass_declaration(c *Class_declarationContext)
+
+	// ExitClass_name is called when exiting the class_name production.
+	ExitClass_name(c *Class_nameContext)
+
+	// ExitMethod_declarations is called when exiting the method_declarations production.
+	ExitMethod_declarations(c *Method_declarationsContext)
+
+	// ExitMethod_declaration is called when exiting the method_declaration production.
+	ExitMethod_declaration(c *Method_declarationContext)
+
+	// ExitMethod_name is called when exiting the method_name production.
+	ExitMethod_name(c *Method_nameContext)
+
+	// ExitMethod_body is called when exiting the method_body production.
+	ExitMethod_body(c *Method_bodyContext)
+
+	// ExitReturn_statement is called when exiting the return_statement production.
+	ExitReturn_statement(c *Return_statementContext)
+
+	// ExitReturn_type is called when exiting the return_type production.
+	ExitReturn_type(c *Return_typeContext)
 
 	// ExitPredicate_declarations is called when exiting the predicate_declarations production.
 	ExitPredicate_declarations(c *Predicate_declarationsContext)
