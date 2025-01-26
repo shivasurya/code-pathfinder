@@ -382,9 +382,6 @@ output:
   # Must have. Easier to understand the output.
   print-linter-name: true
 
-  # No, no skips, everything should be reported.
-  uniq-by-line: true
-
   # To be honest no idea when this can be needed, maybe a multi-module setup?
   path-prefix: ""
 
@@ -397,6 +394,8 @@ issues:
 
   exclude-files:
     - ".*_test.go"
+
+  uniq-by-line: true
 
   # Same here, nothing should be skipped to not miss errors.
   max-same-issues: 0
