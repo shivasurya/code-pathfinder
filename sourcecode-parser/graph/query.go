@@ -191,10 +191,14 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
 			case "method_chain", "variable":
 				if outputFormat.Type == "variable" {
 					outputFormat.SelectEntity += ".toString()"
+				} else if outputFormat.Type == "method_chain" {
+					if !strings.Contains(outputFormat.SelectEntity, ".") {
+						continue
+					}
 				}
 				response, err := evaluateExpression(nodeSet, outputFormat.SelectEntity, query)
 				if err != nil {
-					log.Fatal(err)
+					log.Print(err)
 				}
 				result = append(result, response)
 			}
