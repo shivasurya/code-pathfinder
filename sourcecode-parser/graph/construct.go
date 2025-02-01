@@ -56,6 +56,7 @@ type Node struct {
 	AssertStmt           *model.AssertStmt
 	ReturnStmt           *model.ReturnStmt
 	BlockStmt            *model.BlockStmt
+	FileNode             *model.File
 }
 
 type Edge struct {
@@ -66,6 +67,22 @@ type Edge struct {
 type CodeGraph struct {
 	Nodes map[string]*Node
 	Edges []*Edge
+}
+
+type TreeNode struct {
+	ID       string
+	Children []*TreeNode
+	Parent   *TreeNode
+	NodeType string
+	Node     *Node
+}
+
+func (t *TreeNode) AddChild(child *TreeNode) {
+	t.Children = append(t.Children, child)
+}
+
+func (t *TreeNode) AddChildren(children []*TreeNode) {
+	t.Children = append(t.Children, children...)
 }
 
 func NewCodeGraph() *CodeGraph {
@@ -181,7 +198,7 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 	return javaDoc
 }
 
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
+func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string, fileTree *TreeNode) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	switch node.Type() {
 	case "block":
@@ -844,6 +861,12 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			JavaDoc:          javadoc,
 			Annotation:       annotationMarkers,
 		}
+		fileTree.AddChild(&TreeNode{
+			ID:       classNode.ID,
+			Node:     classNode,
+			Children: nil,
+			Parent:   fileTree,
+		})
 		graph.AddNode(classNode)
 	case "block_comment":
 		// Parse block comments
@@ -973,7 +996,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		buildGraphFromAST(child, sourceCode, graph, currentContext, file)
+		buildGraphFromAST(child, sourceCode, graph, currentContext, file, fileTree)
 	}
 
 	// iterate through method declaration from graph node
@@ -1082,6 +1105,7 @@ func readFile(path string) ([]byte, error) {
 
 func Initialize(directory string) *CodeGraph {
 	codeGraph := NewCodeGraph()
+	treeHolder := []*TreeNode{}
 	// record start time
 	start := time.Now()
 
@@ -1128,8 +1152,19 @@ func Initialize(directory string) *CodeGraph {
 
 			rootNode := tree.RootNode()
 			localGraph := NewCodeGraph()
+			localTree := &TreeNode{
+				NodeType: "file",
+				ID:       fileName,
+				Parent:   nil,
+				Node: &Node{
+					ID:       fileName,
+					Type:     "file",
+					FileNode: &model.File{File: fileName},
+				},
+			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file)
+			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file, localTree)
+			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 
 			resultChan <- localGraph
