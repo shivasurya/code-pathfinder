@@ -191,10 +191,14 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
 			case "method_chain", "variable":
 				if outputFormat.Type == "variable" {
 					outputFormat.SelectEntity += ".toString()"
+				} else if outputFormat.Type == "method_chain" {
+					if !strings.Contains(outputFormat.SelectEntity, ".") {
+						continue
+					}
 				}
 				response, err := evaluateExpression(nodeSet, outputFormat.SelectEntity, query)
 				if err != nil {
-					log.Fatal(err)
+					log.Print(err)
 				}
 				result = append(result, response)
 			}
@@ -634,13 +638,47 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 	return false
 }
 
+type classInstance struct {
+	Class   *parser.ClassDeclaration
+	Methods map[string]string // method name -> result
+}
+
 func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
 	env := make(map[string]interface{})
 
 	for i, entity := range query.SelectList {
-		proxyEnv := generateProxyEnv(nodeSet[i], query)
-		env[entity.Alias] = proxyEnv[entity.Alias]
+		// Check if entity is a class type
+		classDecl := findClassDeclaration(entity.Entity, query.Classes)
+		if classDecl != nil {
+			env[entity.Alias] = createClassInstance(classDecl)
+		} else {
+			// Handle existing node types
+			proxyEnv := generateProxyEnv(nodeSet[i], query)
+			env[entity.Alias] = proxyEnv[entity.Alias]
+		}
+	}
+	return env
+}
+
+func findClassDeclaration(className string, classes []parser.ClassDeclaration) *parser.ClassDeclaration {
+	for _, class := range classes {
+		if class.Name == className {
+			return &class
+		}
+	}
+	return nil
+}
+
+func createClassInstance(class *parser.ClassDeclaration) *classInstance {
+	instance := &classInstance{
+		Class:   class,
+		Methods: make(map[string]string),
 	}
 
-	return env
+	// Initialize method results
+	for _, method := range class.Methods {
+		instance.Methods[method.Name] = method.Body
+	}
+
+	return instance
 }

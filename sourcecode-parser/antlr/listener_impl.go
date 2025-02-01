@@ -26,16 +26,13 @@ type PredicateInvocation struct {
 }
 
 type Query struct {
+	Classes             []ClassDeclaration
 	SelectList          []SelectList
 	Expression          string
 	Condition           []string
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
 	SelectOutput        []SelectOutput
-}
-
-type State struct {
-	isInPredicateDeclaration bool
 }
 
 type CustomQueryListener struct {
@@ -45,8 +42,56 @@ type CustomQueryListener struct {
 	condition           []string
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
+	Classes             []ClassDeclaration
 	State               State
 	SelectOutput        []SelectOutput
+}
+
+func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) { //nolint:all
+	// Handle class method calls
+	if ctx.Class_name() != nil {
+		className := ctx.Class_name().GetText()
+		methodName := ctx.Method_name().GetText()
+
+		// Find the class and method
+		for _, class := range l.Classes {
+			if class.Name == className {
+				for _, method := range class.Methods {
+					if method.Name == methodName {
+						// Store method call information
+						l.SelectOutput = append(l.SelectOutput, SelectOutput{
+							SelectEntity: ctx.GetText(),
+							Type:         "class_method",
+						})
+						return
+					}
+				}
+			}
+		}
+	}
+
+	// Handle existing method chain logic
+	if ctx.Method_name() != nil {
+		l.SelectOutput = append(l.SelectOutput, SelectOutput{
+			SelectEntity: ctx.GetText(),
+			Type:         "method_chain",
+		})
+	}
+}
+
+type State struct {
+	isInPredicateDeclaration bool
+}
+
+type ClassDeclaration struct {
+	Name    string
+	Methods []MethodDeclaration
+}
+
+type MethodDeclaration struct {
+	Name       string
+	ReturnType string
+	Body       string
 }
 
 type SelectList struct {
@@ -57,6 +102,26 @@ type SelectList struct {
 type SelectOutput struct {
 	SelectEntity string
 	Type         string
+}
+
+func (l *CustomQueryListener) EnterClass_declaration(ctx *Class_declarationContext) { //nolint:all
+	className := ctx.Class_name().GetText()
+	class := ClassDeclaration{
+		Name: className,
+	}
+	l.Classes = append(l.Classes, class)
+}
+
+func (l *CustomQueryListener) EnterMethod_declaration(ctx *Method_declarationContext) { //nolint:all
+	if len(l.Classes) > 0 {
+		currentClass := &l.Classes[len(l.Classes)-1]
+		method := MethodDeclaration{
+			Name:       ctx.Method_name().GetText(),
+			ReturnType: ctx.Return_type().GetText(),
+			Body:       ctx.Method_body().GetText(),
+		}
+		currentClass.Methods = append(currentClass.Methods, method)
+	}
 }
 
 type customErrorListener struct {
@@ -313,6 +378,7 @@ func ParseQuery(inputQuery string) (Query, error) {
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
 	return Query{
+		Classes:             listener.Classes,
 		SelectList:          listener.selectList,
 		Expression:          listener.expression.String(),
 		Condition:           listener.condition,

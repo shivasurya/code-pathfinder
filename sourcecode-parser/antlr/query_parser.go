@@ -33,18 +33,21 @@ var QueryParserStaticData struct {
 func queryParserInit() {
 	staticData := &QueryParserStaticData
 	staticData.LiteralNames = []string{
-		"", "'('", "')'", "'{'", "'}'", "','", "'||'", "'&&'", "'=='", "'!='",
-		"'<'", "'>'", "'<='", "'>='", "' in '", "'+'", "'-'", "'*'", "'/'",
-		"'!'", "'.'", "'['", "']'", "'LIKE'", "'in'", "", "", "", "'predicate'",
-		"'FROM'", "'WHERE'", "'AS'", "'SELECT'",
+		"", "'class'", "'{'", "'}'", "'('", "')'", "'result'", "'='", "','",
+		"'||'", "'&&'", "'=='", "'!='", "'<'", "'>'", "'<='", "'>='", "' in '",
+		"'+'", "'-'", "'*'", "'/'", "'!'", "'.'", "'['", "']'", "'LIKE'", "'in'",
+		"", "", "", "'predicate'", "'FROM'", "'WHERE'", "'AS'", "'SELECT'",
 	}
 	staticData.SymbolicNames = []string{
 		"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
-		"", "", "", "", "", "", "", "", "STRING", "STRING_WITH_WILDCARD", "NUMBER",
-		"PREDICATE", "FROM", "WHERE", "AS", "SELECT", "IDENTIFIER", "WS",
+		"", "", "", "", "", "", "", "", "", "", "", "STRING", "STRING_WITH_WILDCARD",
+		"NUMBER", "PREDICATE", "FROM", "WHERE", "AS", "SELECT", "IDENTIFIER",
+		"WS",
 	}
 	staticData.RuleNames = []string{
-		"query", "predicate_declarations", "predicate_declaration", "predicate_name",
+		"query", "class_declarations", "class_declaration", "class_name", "method_declarations",
+		"method_declaration", "method_name", "method_body", "return_statement",
+		"return_type", "predicate_declarations", "predicate_declaration", "predicate_name",
 		"parameter_list", "parameter", "type", "select_list", "select_item",
 		"entity", "alias", "expression", "orExpression", "andExpression", "equalityExpression",
 		"relationalExpression", "additiveExpression", "multiplicativeExpression",
@@ -54,121 +57,150 @@ func queryParserInit() {
 	}
 	staticData.PredictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 34, 272, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 37, 341, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
 		2, 16, 7, 16, 2, 17, 7, 17, 2, 18, 7, 18, 2, 19, 7, 19, 2, 20, 7, 20, 2,
 		21, 7, 21, 2, 22, 7, 22, 2, 23, 7, 23, 2, 24, 7, 24, 2, 25, 7, 25, 2, 26,
 		7, 26, 2, 27, 7, 27, 2, 28, 7, 28, 2, 29, 7, 29, 2, 30, 7, 30, 2, 31, 7,
-		31, 2, 32, 7, 32, 1, 0, 3, 0, 68, 8, 0, 1, 0, 1, 0, 1, 0, 1, 0, 3, 0, 74,
-		8, 0, 1, 0, 1, 0, 1, 0, 1, 1, 4, 1, 80, 8, 1, 11, 1, 12, 1, 81, 1, 2, 1,
-		2, 1, 2, 1, 2, 3, 2, 88, 8, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3, 1, 3,
-		1, 4, 1, 4, 1, 4, 5, 4, 100, 8, 4, 10, 4, 12, 4, 103, 9, 4, 1, 5, 1, 5,
-		1, 5, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7, 5, 7, 113, 8, 7, 10, 7, 12, 7, 116,
-		9, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 9, 1, 9, 1, 10, 1, 10, 1, 11, 1, 11, 1,
-		12, 1, 12, 1, 12, 5, 12, 131, 8, 12, 10, 12, 12, 12, 134, 9, 12, 1, 13,
-		1, 13, 1, 13, 5, 13, 139, 8, 13, 10, 13, 12, 13, 142, 9, 13, 1, 14, 1,
-		14, 1, 14, 5, 14, 147, 8, 14, 10, 14, 12, 14, 150, 9, 14, 1, 15, 1, 15,
-		1, 15, 5, 15, 155, 8, 15, 10, 15, 12, 15, 158, 9, 15, 1, 16, 1, 16, 1,
-		16, 5, 16, 163, 8, 16, 10, 16, 12, 16, 166, 9, 16, 1, 17, 1, 17, 1, 17,
-		5, 17, 171, 8, 17, 10, 17, 12, 17, 174, 9, 17, 1, 18, 1, 18, 1, 18, 3,
-		18, 179, 8, 18, 1, 19, 1, 19, 1, 19, 1, 19, 1, 19, 1, 19, 3, 19, 187, 8,
-		19, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20, 1, 20,
-		3, 20, 199, 8, 20, 1, 21, 1, 21, 1, 21, 3, 21, 204, 8, 21, 1, 21, 1, 21,
-		1, 21, 5, 21, 209, 8, 21, 10, 21, 12, 21, 212, 9, 21, 1, 22, 1, 22, 1,
-		22, 3, 22, 217, 8, 22, 1, 23, 1, 23, 1, 23, 3, 23, 222, 8, 23, 1, 23, 1,
-		23, 1, 24, 1, 24, 1, 25, 1, 25, 1, 25, 3, 25, 231, 8, 25, 1, 25, 1, 25,
-		1, 26, 1, 26, 1, 26, 5, 26, 238, 8, 26, 10, 26, 12, 26, 241, 9, 26, 1,
-		27, 1, 27, 3, 27, 245, 8, 27, 1, 28, 1, 28, 1, 29, 1, 29, 1, 30, 1, 30,
-		1, 30, 5, 30, 254, 8, 30, 10, 30, 12, 30, 257, 9, 30, 1, 31, 1, 31, 1,
-		31, 5, 31, 262, 8, 31, 10, 31, 12, 31, 265, 9, 31, 1, 32, 1, 32, 1, 32,
-		3, 32, 270, 8, 32, 1, 32, 0, 0, 33, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18,
-		20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54,
-		56, 58, 60, 62, 64, 0, 7, 1, 0, 8, 9, 1, 0, 10, 14, 1, 0, 15, 16, 1, 0,
-		17, 18, 2, 0, 16, 16, 19, 19, 2, 0, 8, 13, 23, 24, 1, 0, 25, 27, 268, 0,
-		67, 1, 0, 0, 0, 2, 79, 1, 0, 0, 0, 4, 83, 1, 0, 0, 0, 6, 94, 1, 0, 0, 0,
-		8, 96, 1, 0, 0, 0, 10, 104, 1, 0, 0, 0, 12, 107, 1, 0, 0, 0, 14, 109, 1,
-		0, 0, 0, 16, 117, 1, 0, 0, 0, 18, 121, 1, 0, 0, 0, 20, 123, 1, 0, 0, 0,
-		22, 125, 1, 0, 0, 0, 24, 127, 1, 0, 0, 0, 26, 135, 1, 0, 0, 0, 28, 143,
-		1, 0, 0, 0, 30, 151, 1, 0, 0, 0, 32, 159, 1, 0, 0, 0, 34, 167, 1, 0, 0,
-		0, 36, 178, 1, 0, 0, 0, 38, 186, 1, 0, 0, 0, 40, 198, 1, 0, 0, 0, 42, 203,
-		1, 0, 0, 0, 44, 216, 1, 0, 0, 0, 46, 218, 1, 0, 0, 0, 48, 225, 1, 0, 0,
-		0, 50, 227, 1, 0, 0, 0, 52, 234, 1, 0, 0, 0, 54, 244, 1, 0, 0, 0, 56, 246,
-		1, 0, 0, 0, 58, 248, 1, 0, 0, 0, 60, 250, 1, 0, 0, 0, 62, 258, 1, 0, 0,
-		0, 64, 269, 1, 0, 0, 0, 66, 68, 3, 2, 1, 0, 67, 66, 1, 0, 0, 0, 67, 68,
-		1, 0, 0, 0, 68, 69, 1, 0, 0, 0, 69, 70, 5, 29, 0, 0, 70, 73, 3, 14, 7,
-		0, 71, 72, 5, 30, 0, 0, 72, 74, 3, 22, 11, 0, 73, 71, 1, 0, 0, 0, 73, 74,
-		1, 0, 0, 0, 74, 75, 1, 0, 0, 0, 75, 76, 5, 32, 0, 0, 76, 77, 3, 62, 31,
-		0, 77, 1, 1, 0, 0, 0, 78, 80, 3, 4, 2, 0, 79, 78, 1, 0, 0, 0, 80, 81, 1,
-		0, 0, 0, 81, 79, 1, 0, 0, 0, 81, 82, 1, 0, 0, 0, 82, 3, 1, 0, 0, 0, 83,
-		84, 5, 28, 0, 0, 84, 85, 3, 6, 3, 0, 85, 87, 5, 1, 0, 0, 86, 88, 3, 8,
-		4, 0, 87, 86, 1, 0, 0, 0, 87, 88, 1, 0, 0, 0, 88, 89, 1, 0, 0, 0, 89, 90,
-		5, 2, 0, 0, 90, 91, 5, 3, 0, 0, 91, 92, 3, 22, 11, 0, 92, 93, 5, 4, 0,
-		0, 93, 5, 1, 0, 0, 0, 94, 95, 5, 33, 0, 0, 95, 7, 1, 0, 0, 0, 96, 101,
-		3, 10, 5, 0, 97, 98, 5, 5, 0, 0, 98, 100, 3, 10, 5, 0, 99, 97, 1, 0, 0,
-		0, 100, 103, 1, 0, 0, 0, 101, 99, 1, 0, 0, 0, 101, 102, 1, 0, 0, 0, 102,
-		9, 1, 0, 0, 0, 103, 101, 1, 0, 0, 0, 104, 105, 3, 12, 6, 0, 105, 106, 5,
-		33, 0, 0, 106, 11, 1, 0, 0, 0, 107, 108, 5, 33, 0, 0, 108, 13, 1, 0, 0,
-		0, 109, 114, 3, 16, 8, 0, 110, 111, 5, 5, 0, 0, 111, 113, 3, 16, 8, 0,
-		112, 110, 1, 0, 0, 0, 113, 116, 1, 0, 0, 0, 114, 112, 1, 0, 0, 0, 114,
-		115, 1, 0, 0, 0, 115, 15, 1, 0, 0, 0, 116, 114, 1, 0, 0, 0, 117, 118, 3,
-		18, 9, 0, 118, 119, 5, 31, 0, 0, 119, 120, 3, 20, 10, 0, 120, 17, 1, 0,
-		0, 0, 121, 122, 5, 33, 0, 0, 122, 19, 1, 0, 0, 0, 123, 124, 5, 33, 0, 0,
-		124, 21, 1, 0, 0, 0, 125, 126, 3, 24, 12, 0, 126, 23, 1, 0, 0, 0, 127,
-		132, 3, 26, 13, 0, 128, 129, 5, 6, 0, 0, 129, 131, 3, 26, 13, 0, 130, 128,
-		1, 0, 0, 0, 131, 134, 1, 0, 0, 0, 132, 130, 1, 0, 0, 0, 132, 133, 1, 0,
-		0, 0, 133, 25, 1, 0, 0, 0, 134, 132, 1, 0, 0, 0, 135, 140, 3, 28, 14, 0,
-		136, 137, 5, 7, 0, 0, 137, 139, 3, 28, 14, 0, 138, 136, 1, 0, 0, 0, 139,
-		142, 1, 0, 0, 0, 140, 138, 1, 0, 0, 0, 140, 141, 1, 0, 0, 0, 141, 27, 1,
-		0, 0, 0, 142, 140, 1, 0, 0, 0, 143, 148, 3, 30, 15, 0, 144, 145, 7, 0,
-		0, 0, 145, 147, 3, 30, 15, 0, 146, 144, 1, 0, 0, 0, 147, 150, 1, 0, 0,
-		0, 148, 146, 1, 0, 0, 0, 148, 149, 1, 0, 0, 0, 149, 29, 1, 0, 0, 0, 150,
-		148, 1, 0, 0, 0, 151, 156, 3, 32, 16, 0, 152, 153, 7, 1, 0, 0, 153, 155,
-		3, 32, 16, 0, 154, 152, 1, 0, 0, 0, 155, 158, 1, 0, 0, 0, 156, 154, 1,
-		0, 0, 0, 156, 157, 1, 0, 0, 0, 157, 31, 1, 0, 0, 0, 158, 156, 1, 0, 0,
-		0, 159, 164, 3, 34, 17, 0, 160, 161, 7, 2, 0, 0, 161, 163, 3, 34, 17, 0,
-		162, 160, 1, 0, 0, 0, 163, 166, 1, 0, 0, 0, 164, 162, 1, 0, 0, 0, 164,
-		165, 1, 0, 0, 0, 165, 33, 1, 0, 0, 0, 166, 164, 1, 0, 0, 0, 167, 172, 3,
-		36, 18, 0, 168, 169, 7, 3, 0, 0, 169, 171, 3, 36, 18, 0, 170, 168, 1, 0,
-		0, 0, 171, 174, 1, 0, 0, 0, 172, 170, 1, 0, 0, 0, 172, 173, 1, 0, 0, 0,
-		173, 35, 1, 0, 0, 0, 174, 172, 1, 0, 0, 0, 175, 176, 7, 4, 0, 0, 176, 179,
-		3, 36, 18, 0, 177, 179, 3, 38, 19, 0, 178, 175, 1, 0, 0, 0, 178, 177, 1,
-		0, 0, 0, 179, 37, 1, 0, 0, 0, 180, 187, 3, 40, 20, 0, 181, 187, 3, 50,
-		25, 0, 182, 183, 5, 1, 0, 0, 183, 184, 3, 22, 11, 0, 184, 185, 5, 2, 0,
-		0, 185, 187, 1, 0, 0, 0, 186, 180, 1, 0, 0, 0, 186, 181, 1, 0, 0, 0, 186,
-		182, 1, 0, 0, 0, 187, 39, 1, 0, 0, 0, 188, 199, 3, 58, 29, 0, 189, 199,
-		3, 48, 24, 0, 190, 191, 3, 20, 10, 0, 191, 192, 5, 20, 0, 0, 192, 193,
-		3, 42, 21, 0, 193, 199, 1, 0, 0, 0, 194, 195, 5, 21, 0, 0, 195, 196, 3,
-		60, 30, 0, 196, 197, 5, 22, 0, 0, 197, 199, 1, 0, 0, 0, 198, 188, 1, 0,
-		0, 0, 198, 189, 1, 0, 0, 0, 198, 190, 1, 0, 0, 0, 198, 194, 1, 0, 0, 0,
-		199, 41, 1, 0, 0, 0, 200, 201, 3, 20, 10, 0, 201, 202, 5, 20, 0, 0, 202,
-		204, 1, 0, 0, 0, 203, 200, 1, 0, 0, 0, 203, 204, 1, 0, 0, 0, 204, 205,
-		1, 0, 0, 0, 205, 210, 3, 44, 22, 0, 206, 207, 5, 20, 0, 0, 207, 209, 3,
-		44, 22, 0, 208, 206, 1, 0, 0, 0, 209, 212, 1, 0, 0, 0, 210, 208, 1, 0,
-		0, 0, 210, 211, 1, 0, 0, 0, 211, 43, 1, 0, 0, 0, 212, 210, 1, 0, 0, 0,
-		213, 217, 3, 46, 23, 0, 214, 217, 3, 48, 24, 0, 215, 217, 3, 50, 25, 0,
-		216, 213, 1, 0, 0, 0, 216, 214, 1, 0, 0, 0, 216, 215, 1, 0, 0, 0, 217,
-		45, 1, 0, 0, 0, 218, 219, 5, 33, 0, 0, 219, 221, 5, 1, 0, 0, 220, 222,
-		3, 52, 26, 0, 221, 220, 1, 0, 0, 0, 221, 222, 1, 0, 0, 0, 222, 223, 1,
-		0, 0, 0, 223, 224, 5, 2, 0, 0, 224, 47, 1, 0, 0, 0, 225, 226, 5, 33, 0,
-		0, 226, 49, 1, 0, 0, 0, 227, 228, 3, 6, 3, 0, 228, 230, 5, 1, 0, 0, 229,
-		231, 3, 52, 26, 0, 230, 229, 1, 0, 0, 0, 230, 231, 1, 0, 0, 0, 231, 232,
-		1, 0, 0, 0, 232, 233, 5, 2, 0, 0, 233, 51, 1, 0, 0, 0, 234, 239, 3, 54,
-		27, 0, 235, 236, 5, 5, 0, 0, 236, 238, 3, 54, 27, 0, 237, 235, 1, 0, 0,
-		0, 238, 241, 1, 0, 0, 0, 239, 237, 1, 0, 0, 0, 239, 240, 1, 0, 0, 0, 240,
-		53, 1, 0, 0, 0, 241, 239, 1, 0, 0, 0, 242, 245, 3, 22, 11, 0, 243, 245,
-		5, 25, 0, 0, 244, 242, 1, 0, 0, 0, 244, 243, 1, 0, 0, 0, 245, 55, 1, 0,
-		0, 0, 246, 247, 7, 5, 0, 0, 247, 57, 1, 0, 0, 0, 248, 249, 7, 6, 0, 0,
-		249, 59, 1, 0, 0, 0, 250, 255, 3, 58, 29, 0, 251, 252, 5, 5, 0, 0, 252,
-		254, 3, 58, 29, 0, 253, 251, 1, 0, 0, 0, 254, 257, 1, 0, 0, 0, 255, 253,
-		1, 0, 0, 0, 255, 256, 1, 0, 0, 0, 256, 61, 1, 0, 0, 0, 257, 255, 1, 0,
-		0, 0, 258, 263, 3, 64, 32, 0, 259, 260, 5, 5, 0, 0, 260, 262, 3, 64, 32,
-		0, 261, 259, 1, 0, 0, 0, 262, 265, 1, 0, 0, 0, 263, 261, 1, 0, 0, 0, 263,
-		264, 1, 0, 0, 0, 264, 63, 1, 0, 0, 0, 265, 263, 1, 0, 0, 0, 266, 270, 3,
-		48, 24, 0, 267, 270, 3, 42, 21, 0, 268, 270, 5, 25, 0, 0, 269, 266, 1,
-		0, 0, 0, 269, 267, 1, 0, 0, 0, 269, 268, 1, 0, 0, 0, 270, 65, 1, 0, 0,
-		0, 25, 67, 73, 81, 87, 101, 114, 132, 140, 148, 156, 164, 172, 178, 186,
-		198, 203, 210, 216, 221, 230, 239, 244, 255, 263, 269,
+		31, 2, 32, 7, 32, 2, 33, 7, 33, 2, 34, 7, 34, 2, 35, 7, 35, 2, 36, 7, 36,
+		2, 37, 7, 37, 2, 38, 7, 38, 2, 39, 7, 39, 2, 40, 7, 40, 2, 41, 7, 41, 1,
+		0, 3, 0, 86, 8, 0, 1, 0, 3, 0, 89, 8, 0, 1, 0, 1, 0, 1, 0, 1, 0, 3, 0,
+		95, 8, 0, 1, 0, 1, 0, 1, 0, 1, 1, 4, 1, 101, 8, 1, 11, 1, 12, 1, 102, 1,
+		2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3, 1, 3, 1, 4, 4, 4, 114, 8, 4, 11,
+		4, 12, 4, 115, 1, 5, 1, 5, 1, 5, 1, 5, 3, 5, 122, 8, 5, 1, 5, 1, 5, 1,
+		5, 1, 5, 1, 5, 1, 6, 1, 6, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 9, 1,
+		9, 1, 10, 4, 10, 140, 8, 10, 11, 10, 12, 10, 141, 1, 11, 1, 11, 1, 11,
+		1, 11, 3, 11, 148, 8, 11, 1, 11, 1, 11, 1, 11, 1, 11, 1, 11, 1, 12, 1,
+		12, 1, 13, 1, 13, 1, 13, 5, 13, 160, 8, 13, 10, 13, 12, 13, 163, 9, 13,
+		1, 14, 1, 14, 3, 14, 167, 8, 14, 1, 14, 1, 14, 1, 15, 1, 15, 1, 16, 1,
+		16, 1, 16, 5, 16, 176, 8, 16, 10, 16, 12, 16, 179, 9, 16, 1, 17, 1, 17,
+		3, 17, 183, 8, 17, 1, 17, 1, 17, 1, 17, 1, 18, 1, 18, 1, 19, 1, 19, 1,
+		20, 1, 20, 1, 21, 1, 21, 1, 21, 5, 21, 197, 8, 21, 10, 21, 12, 21, 200,
+		9, 21, 1, 22, 1, 22, 1, 22, 5, 22, 205, 8, 22, 10, 22, 12, 22, 208, 9,
+		22, 1, 23, 1, 23, 1, 23, 5, 23, 213, 8, 23, 10, 23, 12, 23, 216, 9, 23,
+		1, 24, 1, 24, 1, 24, 5, 24, 221, 8, 24, 10, 24, 12, 24, 224, 9, 24, 1,
+		25, 1, 25, 1, 25, 5, 25, 229, 8, 25, 10, 25, 12, 25, 232, 9, 25, 1, 26,
+		1, 26, 1, 26, 5, 26, 237, 8, 26, 10, 26, 12, 26, 240, 9, 26, 1, 27, 1,
+		27, 1, 27, 3, 27, 245, 8, 27, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28, 1, 28,
+		3, 28, 253, 8, 28, 1, 29, 1, 29, 1, 29, 1, 29, 1, 29, 1, 29, 1, 29, 1,
+		29, 1, 29, 1, 29, 1, 29, 1, 29, 1, 29, 1, 29, 3, 29, 269, 8, 29, 1, 30,
+		1, 30, 1, 30, 3, 30, 274, 8, 30, 1, 30, 1, 30, 1, 30, 3, 30, 279, 8, 30,
+		1, 30, 1, 30, 1, 31, 1, 31, 1, 31, 3, 31, 286, 8, 31, 1, 32, 1, 32, 1,
+		32, 3, 32, 291, 8, 32, 1, 32, 1, 32, 1, 33, 1, 33, 1, 34, 1, 34, 1, 34,
+		3, 34, 300, 8, 34, 1, 34, 1, 34, 1, 35, 1, 35, 1, 35, 5, 35, 307, 8, 35,
+		10, 35, 12, 35, 310, 9, 35, 1, 36, 1, 36, 3, 36, 314, 8, 36, 1, 37, 1,
+		37, 1, 38, 1, 38, 1, 39, 1, 39, 1, 39, 5, 39, 323, 8, 39, 10, 39, 12, 39,
+		326, 9, 39, 1, 40, 1, 40, 1, 40, 5, 40, 331, 8, 40, 10, 40, 12, 40, 334,
+		9, 40, 1, 41, 1, 41, 1, 41, 3, 41, 339, 8, 41, 1, 41, 0, 0, 42, 0, 2, 4,
+		6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42,
+		44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78,
+		80, 82, 0, 7, 1, 0, 11, 12, 1, 0, 13, 17, 1, 0, 18, 19, 1, 0, 20, 21, 2,
+		0, 19, 19, 22, 22, 2, 0, 11, 16, 26, 27, 1, 0, 28, 30, 335, 0, 85, 1, 0,
+		0, 0, 2, 100, 1, 0, 0, 0, 4, 104, 1, 0, 0, 0, 6, 110, 1, 0, 0, 0, 8, 113,
+		1, 0, 0, 0, 10, 117, 1, 0, 0, 0, 12, 128, 1, 0, 0, 0, 14, 130, 1, 0, 0,
+		0, 16, 132, 1, 0, 0, 0, 18, 136, 1, 0, 0, 0, 20, 139, 1, 0, 0, 0, 22, 143,
+		1, 0, 0, 0, 24, 154, 1, 0, 0, 0, 26, 156, 1, 0, 0, 0, 28, 166, 1, 0, 0,
+		0, 30, 170, 1, 0, 0, 0, 32, 172, 1, 0, 0, 0, 34, 182, 1, 0, 0, 0, 36, 187,
+		1, 0, 0, 0, 38, 189, 1, 0, 0, 0, 40, 191, 1, 0, 0, 0, 42, 193, 1, 0, 0,
+		0, 44, 201, 1, 0, 0, 0, 46, 209, 1, 0, 0, 0, 48, 217, 1, 0, 0, 0, 50, 225,
+		1, 0, 0, 0, 52, 233, 1, 0, 0, 0, 54, 244, 1, 0, 0, 0, 56, 252, 1, 0, 0,
+		0, 58, 268, 1, 0, 0, 0, 60, 273, 1, 0, 0, 0, 62, 285, 1, 0, 0, 0, 64, 287,
+		1, 0, 0, 0, 66, 294, 1, 0, 0, 0, 68, 296, 1, 0, 0, 0, 70, 303, 1, 0, 0,
+		0, 72, 313, 1, 0, 0, 0, 74, 315, 1, 0, 0, 0, 76, 317, 1, 0, 0, 0, 78, 319,
+		1, 0, 0, 0, 80, 327, 1, 0, 0, 0, 82, 338, 1, 0, 0, 0, 84, 86, 3, 2, 1,
+		0, 85, 84, 1, 0, 0, 0, 85, 86, 1, 0, 0, 0, 86, 88, 1, 0, 0, 0, 87, 89,
+		3, 20, 10, 0, 88, 87, 1, 0, 0, 0, 88, 89, 1, 0, 0, 0, 89, 90, 1, 0, 0,
+		0, 90, 91, 5, 32, 0, 0, 91, 94, 3, 32, 16, 0, 92, 93, 5, 33, 0, 0, 93,
+		95, 3, 40, 20, 0, 94, 92, 1, 0, 0, 0, 94, 95, 1, 0, 0, 0, 95, 96, 1, 0,
+		0, 0, 96, 97, 5, 35, 0, 0, 97, 98, 3, 80, 40, 0, 98, 1, 1, 0, 0, 0, 99,
+		101, 3, 4, 2, 0, 100, 99, 1, 0, 0, 0, 101, 102, 1, 0, 0, 0, 102, 100, 1,
+		0, 0, 0, 102, 103, 1, 0, 0, 0, 103, 3, 1, 0, 0, 0, 104, 105, 5, 1, 0, 0,
+		105, 106, 3, 6, 3, 0, 106, 107, 5, 2, 0, 0, 107, 108, 3, 8, 4, 0, 108,
+		109, 5, 3, 0, 0, 109, 5, 1, 0, 0, 0, 110, 111, 5, 36, 0, 0, 111, 7, 1,
+		0, 0, 0, 112, 114, 3, 10, 5, 0, 113, 112, 1, 0, 0, 0, 114, 115, 1, 0, 0,
+		0, 115, 113, 1, 0, 0, 0, 115, 116, 1, 0, 0, 0, 116, 9, 1, 0, 0, 0, 117,
+		118, 3, 18, 9, 0, 118, 119, 3, 12, 6, 0, 119, 121, 5, 4, 0, 0, 120, 122,
+		3, 26, 13, 0, 121, 120, 1, 0, 0, 0, 121, 122, 1, 0, 0, 0, 122, 123, 1,
+		0, 0, 0, 123, 124, 5, 5, 0, 0, 124, 125, 5, 2, 0, 0, 125, 126, 3, 14, 7,
+		0, 126, 127, 5, 3, 0, 0, 127, 11, 1, 0, 0, 0, 128, 129, 5, 36, 0, 0, 129,
+		13, 1, 0, 0, 0, 130, 131, 3, 16, 8, 0, 131, 15, 1, 0, 0, 0, 132, 133, 5,
+		6, 0, 0, 133, 134, 5, 7, 0, 0, 134, 135, 3, 76, 38, 0, 135, 17, 1, 0, 0,
+		0, 136, 137, 3, 30, 15, 0, 137, 19, 1, 0, 0, 0, 138, 140, 3, 22, 11, 0,
+		139, 138, 1, 0, 0, 0, 140, 141, 1, 0, 0, 0, 141, 139, 1, 0, 0, 0, 141,
+		142, 1, 0, 0, 0, 142, 21, 1, 0, 0, 0, 143, 144, 5, 31, 0, 0, 144, 145,
+		3, 24, 12, 0, 145, 147, 5, 4, 0, 0, 146, 148, 3, 26, 13, 0, 147, 146, 1,
+		0, 0, 0, 147, 148, 1, 0, 0, 0, 148, 149, 1, 0, 0, 0, 149, 150, 5, 5, 0,
+		0, 150, 151, 5, 2, 0, 0, 151, 152, 3, 40, 20, 0, 152, 153, 5, 3, 0, 0,
+		153, 23, 1, 0, 0, 0, 154, 155, 5, 36, 0, 0, 155, 25, 1, 0, 0, 0, 156, 161,
+		3, 28, 14, 0, 157, 158, 5, 8, 0, 0, 158, 160, 3, 28, 14, 0, 159, 157, 1,
+		0, 0, 0, 160, 163, 1, 0, 0, 0, 161, 159, 1, 0, 0, 0, 161, 162, 1, 0, 0,
+		0, 162, 27, 1, 0, 0, 0, 163, 161, 1, 0, 0, 0, 164, 167, 3, 30, 15, 0, 165,
+		167, 3, 6, 3, 0, 166, 164, 1, 0, 0, 0, 166, 165, 1, 0, 0, 0, 167, 168,
+		1, 0, 0, 0, 168, 169, 5, 36, 0, 0, 169, 29, 1, 0, 0, 0, 170, 171, 5, 36,
+		0, 0, 171, 31, 1, 0, 0, 0, 172, 177, 3, 34, 17, 0, 173, 174, 5, 8, 0, 0,
+		174, 176, 3, 34, 17, 0, 175, 173, 1, 0, 0, 0, 176, 179, 1, 0, 0, 0, 177,
+		175, 1, 0, 0, 0, 177, 178, 1, 0, 0, 0, 178, 33, 1, 0, 0, 0, 179, 177, 1,
+		0, 0, 0, 180, 183, 3, 36, 18, 0, 181, 183, 3, 6, 3, 0, 182, 180, 1, 0,
+		0, 0, 182, 181, 1, 0, 0, 0, 183, 184, 1, 0, 0, 0, 184, 185, 5, 34, 0, 0,
+		185, 186, 3, 38, 19, 0, 186, 35, 1, 0, 0, 0, 187, 188, 5, 36, 0, 0, 188,
+		37, 1, 0, 0, 0, 189, 190, 5, 36, 0, 0, 190, 39, 1, 0, 0, 0, 191, 192, 3,
+		42, 21, 0, 192, 41, 1, 0, 0, 0, 193, 198, 3, 44, 22, 0, 194, 195, 5, 9,
+		0, 0, 195, 197, 3, 44, 22, 0, 196, 194, 1, 0, 0, 0, 197, 200, 1, 0, 0,
+		0, 198, 196, 1, 0, 0, 0, 198, 199, 1, 0, 0, 0, 199, 43, 1, 0, 0, 0, 200,
+		198, 1, 0, 0, 0, 201, 206, 3, 46, 23, 0, 202, 203, 5, 10, 0, 0, 203, 205,
+		3, 46, 23, 0, 204, 202, 1, 0, 0, 0, 205, 208, 1, 0, 0, 0, 206, 204, 1,
+		0, 0, 0, 206, 207, 1, 0, 0, 0, 207, 45, 1, 0, 0, 0, 208, 206, 1, 0, 0,
+		0, 209, 214, 3, 48, 24, 0, 210, 211, 7, 0, 0, 0, 211, 213, 3, 48, 24, 0,
+		212, 210, 1, 0, 0, 0, 213, 216, 1, 0, 0, 0, 214, 212, 1, 0, 0, 0, 214,
+		215, 1, 0, 0, 0, 215, 47, 1, 0, 0, 0, 216, 214, 1, 0, 0, 0, 217, 222, 3,
+		50, 25, 0, 218, 219, 7, 1, 0, 0, 219, 221, 3, 50, 25, 0, 220, 218, 1, 0,
+		0, 0, 221, 224, 1, 0, 0, 0, 222, 220, 1, 0, 0, 0, 222, 223, 1, 0, 0, 0,
+		223, 49, 1, 0, 0, 0, 224, 222, 1, 0, 0, 0, 225, 230, 3, 52, 26, 0, 226,
+		227, 7, 2, 0, 0, 227, 229, 3, 52, 26, 0, 228, 226, 1, 0, 0, 0, 229, 232,
+		1, 0, 0, 0, 230, 228, 1, 0, 0, 0, 230, 231, 1, 0, 0, 0, 231, 51, 1, 0,
+		0, 0, 232, 230, 1, 0, 0, 0, 233, 238, 3, 54, 27, 0, 234, 235, 7, 3, 0,
+		0, 235, 237, 3, 54, 27, 0, 236, 234, 1, 0, 0, 0, 237, 240, 1, 0, 0, 0,
+		238, 236, 1, 0, 0, 0, 238, 239, 1, 0, 0, 0, 239, 53, 1, 0, 0, 0, 240, 238,
+		1, 0, 0, 0, 241, 242, 7, 4, 0, 0, 242, 245, 3, 54, 27, 0, 243, 245, 3,
+		56, 28, 0, 244, 241, 1, 0, 0, 0, 244, 243, 1, 0, 0, 0, 245, 55, 1, 0, 0,
+		0, 246, 253, 3, 58, 29, 0, 247, 253, 3, 68, 34, 0, 248, 249, 5, 4, 0, 0,
+		249, 250, 3, 40, 20, 0, 250, 251, 5, 5, 0, 0, 251, 253, 1, 0, 0, 0, 252,
+		246, 1, 0, 0, 0, 252, 247, 1, 0, 0, 0, 252, 248, 1, 0, 0, 0, 253, 57, 1,
+		0, 0, 0, 254, 269, 3, 76, 38, 0, 255, 269, 3, 66, 33, 0, 256, 257, 3, 38,
+		19, 0, 257, 258, 5, 23, 0, 0, 258, 259, 3, 60, 30, 0, 259, 269, 1, 0, 0,
+		0, 260, 261, 3, 6, 3, 0, 261, 262, 5, 23, 0, 0, 262, 263, 3, 60, 30, 0,
+		263, 269, 1, 0, 0, 0, 264, 265, 5, 24, 0, 0, 265, 266, 3, 78, 39, 0, 266,
+		267, 5, 25, 0, 0, 267, 269, 1, 0, 0, 0, 268, 254, 1, 0, 0, 0, 268, 255,
+		1, 0, 0, 0, 268, 256, 1, 0, 0, 0, 268, 260, 1, 0, 0, 0, 268, 264, 1, 0,
+		0, 0, 269, 59, 1, 0, 0, 0, 270, 271, 3, 6, 3, 0, 271, 272, 5, 23, 0, 0,
+		272, 274, 1, 0, 0, 0, 273, 270, 1, 0, 0, 0, 273, 274, 1, 0, 0, 0, 274,
+		275, 1, 0, 0, 0, 275, 276, 3, 12, 6, 0, 276, 278, 5, 4, 0, 0, 277, 279,
+		3, 70, 35, 0, 278, 277, 1, 0, 0, 0, 278, 279, 1, 0, 0, 0, 279, 280, 1,
+		0, 0, 0, 280, 281, 5, 5, 0, 0, 281, 61, 1, 0, 0, 0, 282, 286, 3, 64, 32,
+		0, 283, 286, 3, 66, 33, 0, 284, 286, 3, 68, 34, 0, 285, 282, 1, 0, 0, 0,
+		285, 283, 1, 0, 0, 0, 285, 284, 1, 0, 0, 0, 286, 63, 1, 0, 0, 0, 287, 288,
+		5, 36, 0, 0, 288, 290, 5, 4, 0, 0, 289, 291, 3, 70, 35, 0, 290, 289, 1,
+		0, 0, 0, 290, 291, 1, 0, 0, 0, 291, 292, 1, 0, 0, 0, 292, 293, 5, 5, 0,
+		0, 293, 65, 1, 0, 0, 0, 294, 295, 5, 36, 0, 0, 295, 67, 1, 0, 0, 0, 296,
+		297, 3, 24, 12, 0, 297, 299, 5, 4, 0, 0, 298, 300, 3, 70, 35, 0, 299, 298,
+		1, 0, 0, 0, 299, 300, 1, 0, 0, 0, 300, 301, 1, 0, 0, 0, 301, 302, 5, 5,
+		0, 0, 302, 69, 1, 0, 0, 0, 303, 308, 3, 72, 36, 0, 304, 305, 5, 8, 0, 0,
+		305, 307, 3, 72, 36, 0, 306, 304, 1, 0, 0, 0, 307, 310, 1, 0, 0, 0, 308,
+		306, 1, 0, 0, 0, 308, 309, 1, 0, 0, 0, 309, 71, 1, 0, 0, 0, 310, 308, 1,
+		0, 0, 0, 311, 314, 3, 40, 20, 0, 312, 314, 5, 28, 0, 0, 313, 311, 1, 0,
+		0, 0, 313, 312, 1, 0, 0, 0, 314, 73, 1, 0, 0, 0, 315, 316, 7, 5, 0, 0,
+		316, 75, 1, 0, 0, 0, 317, 318, 7, 6, 0, 0, 318, 77, 1, 0, 0, 0, 319, 324,
+		3, 76, 38, 0, 320, 321, 5, 8, 0, 0, 321, 323, 3, 76, 38, 0, 322, 320, 1,
+		0, 0, 0, 323, 326, 1, 0, 0, 0, 324, 322, 1, 0, 0, 0, 324, 325, 1, 0, 0,
+		0, 325, 79, 1, 0, 0, 0, 326, 324, 1, 0, 0, 0, 327, 332, 3, 82, 41, 0, 328,
+		329, 5, 8, 0, 0, 329, 331, 3, 82, 41, 0, 330, 328, 1, 0, 0, 0, 331, 334,
+		1, 0, 0, 0, 332, 330, 1, 0, 0, 0, 332, 333, 1, 0, 0, 0, 333, 81, 1, 0,
+		0, 0, 334, 332, 1, 0, 0, 0, 335, 339, 3, 66, 33, 0, 336, 339, 3, 60, 30,
+		0, 337, 339, 5, 28, 0, 0, 338, 335, 1, 0, 0, 0, 338, 336, 1, 0, 0, 0, 338,
+		337, 1, 0, 0, 0, 339, 83, 1, 0, 0, 0, 31, 85, 88, 94, 102, 115, 121, 141,
+		147, 161, 166, 177, 182, 198, 206, 214, 222, 230, 238, 244, 252, 268, 273,
+		278, 285, 290, 299, 308, 313, 324, 332, 338,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -231,53 +263,65 @@ const (
 	QueryParserT__21                = 22
 	QueryParserT__22                = 23
 	QueryParserT__23                = 24
-	QueryParserSTRING               = 25
-	QueryParserSTRING_WITH_WILDCARD = 26
-	QueryParserNUMBER               = 27
-	QueryParserPREDICATE            = 28
-	QueryParserFROM                 = 29
-	QueryParserWHERE                = 30
-	QueryParserAS                   = 31
-	QueryParserSELECT               = 32
-	QueryParserIDENTIFIER           = 33
-	QueryParserWS                   = 34
+	QueryParserT__24                = 25
+	QueryParserT__25                = 26
+	QueryParserT__26                = 27
+	QueryParserSTRING               = 28
+	QueryParserSTRING_WITH_WILDCARD = 29
+	QueryParserNUMBER               = 30
+	QueryParserPREDICATE            = 31
+	QueryParserFROM                 = 32
+	QueryParserWHERE                = 33
+	QueryParserAS                   = 34
+	QueryParserSELECT               = 35
+	QueryParserIDENTIFIER           = 36
+	QueryParserWS                   = 37
 )
 
 // QueryParser rules.
 const (
 	QueryParserRULE_query                    = 0
-	QueryParserRULE_predicate_declarations   = 1
-	QueryParserRULE_predicate_declaration    = 2
-	QueryParserRULE_predicate_name           = 3
-	QueryParserRULE_parameter_list           = 4
-	QueryParserRULE_parameter                = 5
-	QueryParserRULE_type                     = 6
-	QueryParserRULE_select_list              = 7
-	QueryParserRULE_select_item              = 8
-	QueryParserRULE_entity                   = 9
-	QueryParserRULE_alias                    = 10
-	QueryParserRULE_expression               = 11
-	QueryParserRULE_orExpression             = 12
-	QueryParserRULE_andExpression            = 13
-	QueryParserRULE_equalityExpression       = 14
-	QueryParserRULE_relationalExpression     = 15
-	QueryParserRULE_additiveExpression       = 16
-	QueryParserRULE_multiplicativeExpression = 17
-	QueryParserRULE_unaryExpression          = 18
-	QueryParserRULE_primary                  = 19
-	QueryParserRULE_operand                  = 20
-	QueryParserRULE_method_chain             = 21
-	QueryParserRULE_method_or_variable       = 22
-	QueryParserRULE_method_invocation        = 23
-	QueryParserRULE_variable                 = 24
-	QueryParserRULE_predicate_invocation     = 25
-	QueryParserRULE_argument_list            = 26
-	QueryParserRULE_argument                 = 27
-	QueryParserRULE_comparator               = 28
-	QueryParserRULE_value                    = 29
-	QueryParserRULE_value_list               = 30
-	QueryParserRULE_select_clause            = 31
-	QueryParserRULE_select_expression        = 32
+	QueryParserRULE_class_declarations       = 1
+	QueryParserRULE_class_declaration        = 2
+	QueryParserRULE_class_name               = 3
+	QueryParserRULE_method_declarations      = 4
+	QueryParserRULE_method_declaration       = 5
+	QueryParserRULE_method_name              = 6
+	QueryParserRULE_method_body              = 7
+	QueryParserRULE_return_statement         = 8
+	QueryParserRULE_return_type              = 9
+	QueryParserRULE_predicate_declarations   = 10
+	QueryParserRULE_predicate_declaration    = 11
+	QueryParserRULE_predicate_name           = 12
+	QueryParserRULE_parameter_list           = 13
+	QueryParserRULE_parameter                = 14
+	QueryParserRULE_type                     = 15
+	QueryParserRULE_select_list              = 16
+	QueryParserRULE_select_item              = 17
+	QueryParserRULE_entity                   = 18
+	QueryParserRULE_alias                    = 19
+	QueryParserRULE_expression               = 20
+	QueryParserRULE_orExpression             = 21
+	QueryParserRULE_andExpression            = 22
+	QueryParserRULE_equalityExpression       = 23
+	QueryParserRULE_relationalExpression     = 24
+	QueryParserRULE_additiveExpression       = 25
+	QueryParserRULE_multiplicativeExpression = 26
+	QueryParserRULE_unaryExpression          = 27
+	QueryParserRULE_primary                  = 28
+	QueryParserRULE_operand                  = 29
+	QueryParserRULE_method_chain             = 30
+	QueryParserRULE_method_or_variable       = 31
+	QueryParserRULE_method_invocation        = 32
+	QueryParserRULE_variable                 = 33
+	QueryParserRULE_predicate_invocation     = 34
+	QueryParserRULE_argument_list            = 35
+	QueryParserRULE_argument                 = 36
+	QueryParserRULE_comparator               = 37
+	QueryParserRULE_value                    = 38
+	QueryParserRULE_value_list               = 39
+	QueryParserRULE_select_clause            = 40
+	QueryParserRULE_select_expression        = 41
 )
 
 // IQueryContext is an interface to support dynamic dispatch.
@@ -292,6 +336,7 @@ type IQueryContext interface {
 	Select_list() ISelect_listContext
 	SELECT() antlr.TerminalNode
 	Select_clause() ISelect_clauseContext
+	Class_declarations() IClass_declarationsContext
 	Predicate_declarations() IPredicate_declarationsContext
 	WHERE() antlr.TerminalNode
 	Expression() IExpressionContext
@@ -372,6 +417,22 @@ func (s *QueryContext) Select_clause() ISelect_clauseContext {
 	return t.(ISelect_clauseContext)
 }
 
+func (s *QueryContext) Class_declarations() IClass_declarationsContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_declarationsContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_declarationsContext)
+}
+
 func (s *QueryContext) Predicate_declarations() IPredicate_declarationsContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
@@ -434,7 +495,21 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(67)
+	p.SetState(85)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	if _la == QueryParserT__0 {
+		{
+			p.SetState(84)
+			p.Class_declarations()
+		}
+
+	}
+	p.SetState(88)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -443,13 +518,13 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 
 	if _la == QueryParserPREDICATE {
 		{
-			p.SetState(66)
+			p.SetState(87)
 			p.Predicate_declarations()
 		}
 
 	}
 	{
-		p.SetState(69)
+		p.SetState(90)
 		p.Match(QueryParserFROM)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -457,10 +532,10 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 		}
 	}
 	{
-		p.SetState(70)
+		p.SetState(91)
 		p.Select_list()
 	}
-	p.SetState(73)
+	p.SetState(94)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -469,7 +544,7 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 
 	if _la == QueryParserWHERE {
 		{
-			p.SetState(71)
+			p.SetState(92)
 			p.Match(QueryParserWHERE)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -477,13 +552,13 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 			}
 		}
 		{
-			p.SetState(72)
+			p.SetState(93)
 			p.Expression()
 		}
 
 	}
 	{
-		p.SetState(75)
+		p.SetState(96)
 		p.Match(QueryParserSELECT)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -491,8 +566,1184 @@ func (p *QueryParser) Query() (localctx IQueryContext) {
 		}
 	}
 	{
-		p.SetState(76)
+		p.SetState(97)
 		p.Select_clause()
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IClass_declarationsContext is an interface to support dynamic dispatch.
+type IClass_declarationsContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	AllClass_declaration() []IClass_declarationContext
+	Class_declaration(i int) IClass_declarationContext
+
+	// IsClass_declarationsContext differentiates from other interfaces.
+	IsClass_declarationsContext()
+}
+
+type Class_declarationsContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyClass_declarationsContext() *Class_declarationsContext {
+	var p = new(Class_declarationsContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_declarations
+	return p
+}
+
+func InitEmptyClass_declarationsContext(p *Class_declarationsContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_declarations
+}
+
+func (*Class_declarationsContext) IsClass_declarationsContext() {}
+
+func NewClass_declarationsContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Class_declarationsContext {
+	var p = new(Class_declarationsContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_class_declarations
+
+	return p
+}
+
+func (s *Class_declarationsContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Class_declarationsContext) AllClass_declaration() []IClass_declarationContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(IClass_declarationContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]IClass_declarationContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(IClass_declarationContext); ok {
+			tst[i] = t.(IClass_declarationContext)
+			i++
+		}
+	}
+
+	return tst
+}
+
+func (s *Class_declarationsContext) Class_declaration(i int) IClass_declarationContext {
+	var t antlr.RuleContext
+	j := 0
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_declarationContext); ok {
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_declarationContext)
+}
+
+func (s *Class_declarationsContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Class_declarationsContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Class_declarationsContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterClass_declarations(s)
+	}
+}
+
+func (s *Class_declarationsContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitClass_declarations(s)
+	}
+}
+
+func (p *QueryParser) Class_declarations() (localctx IClass_declarationsContext) {
+	localctx = NewClass_declarationsContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 2, QueryParserRULE_class_declarations)
+	var _la int
+
+	p.EnterOuterAlt(localctx, 1)
+	p.SetState(100)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	for ok := true; ok; ok = _la == QueryParserT__0 {
+		{
+			p.SetState(99)
+			p.Class_declaration()
+		}
+
+		p.SetState(102)
+		p.GetErrorHandler().Sync(p)
+		if p.HasError() {
+			goto errorExit
+		}
+		_la = p.GetTokenStream().LA(1)
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IClass_declarationContext is an interface to support dynamic dispatch.
+type IClass_declarationContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Class_name() IClass_nameContext
+	Method_declarations() IMethod_declarationsContext
+
+	// IsClass_declarationContext differentiates from other interfaces.
+	IsClass_declarationContext()
+}
+
+type Class_declarationContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyClass_declarationContext() *Class_declarationContext {
+	var p = new(Class_declarationContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_declaration
+	return p
+}
+
+func InitEmptyClass_declarationContext(p *Class_declarationContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_declaration
+}
+
+func (*Class_declarationContext) IsClass_declarationContext() {}
+
+func NewClass_declarationContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Class_declarationContext {
+	var p = new(Class_declarationContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_class_declaration
+
+	return p
+}
+
+func (s *Class_declarationContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Class_declarationContext) Class_name() IClass_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_nameContext)
+}
+
+func (s *Class_declarationContext) Method_declarations() IMethod_declarationsContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IMethod_declarationsContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IMethod_declarationsContext)
+}
+
+func (s *Class_declarationContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Class_declarationContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Class_declarationContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterClass_declaration(s)
+	}
+}
+
+func (s *Class_declarationContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitClass_declaration(s)
+	}
+}
+
+func (p *QueryParser) Class_declaration() (localctx IClass_declarationContext) {
+	localctx = NewClass_declarationContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 4, QueryParserRULE_class_declaration)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(104)
+		p.Match(QueryParserT__0)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(105)
+		p.Class_name()
+	}
+	{
+		p.SetState(106)
+		p.Match(QueryParserT__1)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(107)
+		p.Method_declarations()
+	}
+	{
+		p.SetState(108)
+		p.Match(QueryParserT__2)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IClass_nameContext is an interface to support dynamic dispatch.
+type IClass_nameContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	IDENTIFIER() antlr.TerminalNode
+
+	// IsClass_nameContext differentiates from other interfaces.
+	IsClass_nameContext()
+}
+
+type Class_nameContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyClass_nameContext() *Class_nameContext {
+	var p = new(Class_nameContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_name
+	return p
+}
+
+func InitEmptyClass_nameContext(p *Class_nameContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_class_name
+}
+
+func (*Class_nameContext) IsClass_nameContext() {}
+
+func NewClass_nameContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Class_nameContext {
+	var p = new(Class_nameContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_class_name
+
+	return p
+}
+
+func (s *Class_nameContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Class_nameContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(QueryParserIDENTIFIER, 0)
+}
+
+func (s *Class_nameContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Class_nameContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Class_nameContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterClass_name(s)
+	}
+}
+
+func (s *Class_nameContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitClass_name(s)
+	}
+}
+
+func (p *QueryParser) Class_name() (localctx IClass_nameContext) {
+	localctx = NewClass_nameContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 6, QueryParserRULE_class_name)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(110)
+		p.Match(QueryParserIDENTIFIER)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IMethod_declarationsContext is an interface to support dynamic dispatch.
+type IMethod_declarationsContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	AllMethod_declaration() []IMethod_declarationContext
+	Method_declaration(i int) IMethod_declarationContext
+
+	// IsMethod_declarationsContext differentiates from other interfaces.
+	IsMethod_declarationsContext()
+}
+
+type Method_declarationsContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyMethod_declarationsContext() *Method_declarationsContext {
+	var p = new(Method_declarationsContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_declarations
+	return p
+}
+
+func InitEmptyMethod_declarationsContext(p *Method_declarationsContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_declarations
+}
+
+func (*Method_declarationsContext) IsMethod_declarationsContext() {}
+
+func NewMethod_declarationsContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Method_declarationsContext {
+	var p = new(Method_declarationsContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_method_declarations
+
+	return p
+}
+
+func (s *Method_declarationsContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Method_declarationsContext) AllMethod_declaration() []IMethod_declarationContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(IMethod_declarationContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]IMethod_declarationContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(IMethod_declarationContext); ok {
+			tst[i] = t.(IMethod_declarationContext)
+			i++
+		}
+	}
+
+	return tst
+}
+
+func (s *Method_declarationsContext) Method_declaration(i int) IMethod_declarationContext {
+	var t antlr.RuleContext
+	j := 0
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IMethod_declarationContext); ok {
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IMethod_declarationContext)
+}
+
+func (s *Method_declarationsContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Method_declarationsContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Method_declarationsContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterMethod_declarations(s)
+	}
+}
+
+func (s *Method_declarationsContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitMethod_declarations(s)
+	}
+}
+
+func (p *QueryParser) Method_declarations() (localctx IMethod_declarationsContext) {
+	localctx = NewMethod_declarationsContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 8, QueryParserRULE_method_declarations)
+	var _la int
+
+	p.EnterOuterAlt(localctx, 1)
+	p.SetState(113)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	for ok := true; ok; ok = _la == QueryParserIDENTIFIER {
+		{
+			p.SetState(112)
+			p.Method_declaration()
+		}
+
+		p.SetState(115)
+		p.GetErrorHandler().Sync(p)
+		if p.HasError() {
+			goto errorExit
+		}
+		_la = p.GetTokenStream().LA(1)
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IMethod_declarationContext is an interface to support dynamic dispatch.
+type IMethod_declarationContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Return_type() IReturn_typeContext
+	Method_name() IMethod_nameContext
+	Method_body() IMethod_bodyContext
+	Parameter_list() IParameter_listContext
+
+	// IsMethod_declarationContext differentiates from other interfaces.
+	IsMethod_declarationContext()
+}
+
+type Method_declarationContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyMethod_declarationContext() *Method_declarationContext {
+	var p = new(Method_declarationContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_declaration
+	return p
+}
+
+func InitEmptyMethod_declarationContext(p *Method_declarationContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_declaration
+}
+
+func (*Method_declarationContext) IsMethod_declarationContext() {}
+
+func NewMethod_declarationContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Method_declarationContext {
+	var p = new(Method_declarationContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_method_declaration
+
+	return p
+}
+
+func (s *Method_declarationContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Method_declarationContext) Return_type() IReturn_typeContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IReturn_typeContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IReturn_typeContext)
+}
+
+func (s *Method_declarationContext) Method_name() IMethod_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IMethod_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IMethod_nameContext)
+}
+
+func (s *Method_declarationContext) Method_body() IMethod_bodyContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IMethod_bodyContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IMethod_bodyContext)
+}
+
+func (s *Method_declarationContext) Parameter_list() IParameter_listContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IParameter_listContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IParameter_listContext)
+}
+
+func (s *Method_declarationContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Method_declarationContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Method_declarationContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterMethod_declaration(s)
+	}
+}
+
+func (s *Method_declarationContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitMethod_declaration(s)
+	}
+}
+
+func (p *QueryParser) Method_declaration() (localctx IMethod_declarationContext) {
+	localctx = NewMethod_declarationContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 10, QueryParserRULE_method_declaration)
+	var _la int
+
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(117)
+		p.Return_type()
+	}
+	{
+		p.SetState(118)
+		p.Method_name()
+	}
+	{
+		p.SetState(119)
+		p.Match(QueryParserT__3)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	p.SetState(121)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+	_la = p.GetTokenStream().LA(1)
+
+	if _la == QueryParserIDENTIFIER {
+		{
+			p.SetState(120)
+			p.Parameter_list()
+		}
+
+	}
+	{
+		p.SetState(123)
+		p.Match(QueryParserT__4)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(124)
+		p.Match(QueryParserT__1)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(125)
+		p.Method_body()
+	}
+	{
+		p.SetState(126)
+		p.Match(QueryParserT__2)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IMethod_nameContext is an interface to support dynamic dispatch.
+type IMethod_nameContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	IDENTIFIER() antlr.TerminalNode
+
+	// IsMethod_nameContext differentiates from other interfaces.
+	IsMethod_nameContext()
+}
+
+type Method_nameContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyMethod_nameContext() *Method_nameContext {
+	var p = new(Method_nameContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_name
+	return p
+}
+
+func InitEmptyMethod_nameContext(p *Method_nameContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_name
+}
+
+func (*Method_nameContext) IsMethod_nameContext() {}
+
+func NewMethod_nameContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Method_nameContext {
+	var p = new(Method_nameContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_method_name
+
+	return p
+}
+
+func (s *Method_nameContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Method_nameContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(QueryParserIDENTIFIER, 0)
+}
+
+func (s *Method_nameContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Method_nameContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Method_nameContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterMethod_name(s)
+	}
+}
+
+func (s *Method_nameContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitMethod_name(s)
+	}
+}
+
+func (p *QueryParser) Method_name() (localctx IMethod_nameContext) {
+	localctx = NewMethod_nameContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 12, QueryParserRULE_method_name)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(128)
+		p.Match(QueryParserIDENTIFIER)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IMethod_bodyContext is an interface to support dynamic dispatch.
+type IMethod_bodyContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Return_statement() IReturn_statementContext
+
+	// IsMethod_bodyContext differentiates from other interfaces.
+	IsMethod_bodyContext()
+}
+
+type Method_bodyContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyMethod_bodyContext() *Method_bodyContext {
+	var p = new(Method_bodyContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_body
+	return p
+}
+
+func InitEmptyMethod_bodyContext(p *Method_bodyContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_method_body
+}
+
+func (*Method_bodyContext) IsMethod_bodyContext() {}
+
+func NewMethod_bodyContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Method_bodyContext {
+	var p = new(Method_bodyContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_method_body
+
+	return p
+}
+
+func (s *Method_bodyContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Method_bodyContext) Return_statement() IReturn_statementContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IReturn_statementContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IReturn_statementContext)
+}
+
+func (s *Method_bodyContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Method_bodyContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Method_bodyContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterMethod_body(s)
+	}
+}
+
+func (s *Method_bodyContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitMethod_body(s)
+	}
+}
+
+func (p *QueryParser) Method_body() (localctx IMethod_bodyContext) {
+	localctx = NewMethod_bodyContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 14, QueryParserRULE_method_body)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(130)
+		p.Return_statement()
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IReturn_statementContext is an interface to support dynamic dispatch.
+type IReturn_statementContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Value() IValueContext
+
+	// IsReturn_statementContext differentiates from other interfaces.
+	IsReturn_statementContext()
+}
+
+type Return_statementContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyReturn_statementContext() *Return_statementContext {
+	var p = new(Return_statementContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_return_statement
+	return p
+}
+
+func InitEmptyReturn_statementContext(p *Return_statementContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_return_statement
+}
+
+func (*Return_statementContext) IsReturn_statementContext() {}
+
+func NewReturn_statementContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Return_statementContext {
+	var p = new(Return_statementContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_return_statement
+
+	return p
+}
+
+func (s *Return_statementContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Return_statementContext) Value() IValueContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IValueContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IValueContext)
+}
+
+func (s *Return_statementContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Return_statementContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Return_statementContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterReturn_statement(s)
+	}
+}
+
+func (s *Return_statementContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitReturn_statement(s)
+	}
+}
+
+func (p *QueryParser) Return_statement() (localctx IReturn_statementContext) {
+	localctx = NewReturn_statementContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 16, QueryParserRULE_return_statement)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(132)
+		p.Match(QueryParserT__5)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(133)
+		p.Match(QueryParserT__6)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(134)
+		p.Value()
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
+// IReturn_typeContext is an interface to support dynamic dispatch.
+type IReturn_typeContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	Type_() ITypeContext
+
+	// IsReturn_typeContext differentiates from other interfaces.
+	IsReturn_typeContext()
+}
+
+type Return_typeContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyReturn_typeContext() *Return_typeContext {
+	var p = new(Return_typeContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_return_type
+	return p
+}
+
+func InitEmptyReturn_typeContext(p *Return_typeContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = QueryParserRULE_return_type
+}
+
+func (*Return_typeContext) IsReturn_typeContext() {}
+
+func NewReturn_typeContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Return_typeContext {
+	var p = new(Return_typeContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = QueryParserRULE_return_type
+
+	return p
+}
+
+func (s *Return_typeContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *Return_typeContext) Type_() ITypeContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ITypeContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ITypeContext)
+}
+
+func (s *Return_typeContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *Return_typeContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *Return_typeContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.EnterReturn_type(s)
+	}
+}
+
+func (s *Return_typeContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(QueryListener); ok {
+		listenerT.ExitReturn_type(s)
+	}
+}
+
+func (p *QueryParser) Return_type() (localctx IReturn_typeContext) {
+	localctx = NewReturn_typeContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 18, QueryParserRULE_return_type)
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(136)
+		p.Type_()
 	}
 
 errorExit:
@@ -618,11 +1869,11 @@ func (s *Predicate_declarationsContext) ExitRule(listener antlr.ParseTreeListene
 
 func (p *QueryParser) Predicate_declarations() (localctx IPredicate_declarationsContext) {
 	localctx = NewPredicate_declarationsContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 2, QueryParserRULE_predicate_declarations)
+	p.EnterRule(localctx, 20, QueryParserRULE_predicate_declarations)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(79)
+	p.SetState(139)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -631,11 +1882,11 @@ func (p *QueryParser) Predicate_declarations() (localctx IPredicate_declarations
 
 	for ok := true; ok; ok = _la == QueryParserPREDICATE {
 		{
-			p.SetState(78)
+			p.SetState(138)
 			p.Predicate_declaration()
 		}
 
-		p.SetState(81)
+		p.SetState(141)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -779,12 +2030,12 @@ func (s *Predicate_declarationContext) ExitRule(listener antlr.ParseTreeListener
 
 func (p *QueryParser) Predicate_declaration() (localctx IPredicate_declarationContext) {
 	localctx = NewPredicate_declarationContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 4, QueryParserRULE_predicate_declaration)
+	p.EnterRule(localctx, 22, QueryParserRULE_predicate_declaration)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(83)
+		p.SetState(143)
 		p.Match(QueryParserPREDICATE)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -792,18 +2043,18 @@ func (p *QueryParser) Predicate_declaration() (localctx IPredicate_declarationCo
 		}
 	}
 	{
-		p.SetState(84)
+		p.SetState(144)
 		p.Predicate_name()
 	}
 	{
-		p.SetState(85)
-		p.Match(QueryParserT__0)
+		p.SetState(145)
+		p.Match(QueryParserT__3)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(87)
+	p.SetState(147)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
@@ -812,13 +2063,21 @@ func (p *QueryParser) Predicate_declaration() (localctx IPredicate_declarationCo
 
 	if _la == QueryParserIDENTIFIER {
 		{
-			p.SetState(86)
+			p.SetState(146)
 			p.Parameter_list()
 		}
 
 	}
 	{
-		p.SetState(89)
+		p.SetState(149)
+		p.Match(QueryParserT__4)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	{
+		p.SetState(150)
 		p.Match(QueryParserT__1)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -826,20 +2085,12 @@ func (p *QueryParser) Predicate_declaration() (localctx IPredicate_declarationCo
 		}
 	}
 	{
-		p.SetState(90)
-		p.Match(QueryParserT__2)
-		if p.HasError() {
-			// Recognition error - abort rule
-			goto errorExit
-		}
-	}
-	{
-		p.SetState(91)
+		p.SetState(151)
 		p.Expression()
 	}
 	{
-		p.SetState(92)
-		p.Match(QueryParserT__3)
+		p.SetState(152)
+		p.Match(QueryParserT__2)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
@@ -931,10 +2182,10 @@ func (s *Predicate_nameContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Predicate_name() (localctx IPredicate_nameContext) {
 	localctx = NewPredicate_nameContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 6, QueryParserRULE_predicate_name)
+	p.EnterRule(localctx, 24, QueryParserRULE_predicate_name)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(94)
+		p.SetState(154)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1065,36 +2316,36 @@ func (s *Parameter_listContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Parameter_list() (localctx IParameter_listContext) {
 	localctx = NewParameter_listContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 8, QueryParserRULE_parameter_list)
+	p.EnterRule(localctx, 26, QueryParserRULE_parameter_list)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(96)
+		p.SetState(156)
 		p.Parameter()
 	}
-	p.SetState(101)
+	p.SetState(161)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__4 {
+	for _la == QueryParserT__7 {
 		{
-			p.SetState(97)
-			p.Match(QueryParserT__4)
+			p.SetState(157)
+			p.Match(QueryParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(98)
+			p.SetState(158)
 			p.Parameter()
 		}
 
-		p.SetState(103)
+		p.SetState(163)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -1123,8 +2374,9 @@ type IParameterContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	Type_() ITypeContext
 	IDENTIFIER() antlr.TerminalNode
+	Type_() ITypeContext
+	Class_name() IClass_nameContext
 
 	// IsParameterContext differentiates from other interfaces.
 	IsParameterContext()
@@ -1162,6 +2414,10 @@ func NewParameterContext(parser antlr.Parser, parent antlr.ParserRuleContext, in
 
 func (s *ParameterContext) GetParser() antlr.Parser { return s.parser }
 
+func (s *ParameterContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(QueryParserIDENTIFIER, 0)
+}
+
 func (s *ParameterContext) Type_() ITypeContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
@@ -1178,8 +2434,20 @@ func (s *ParameterContext) Type_() ITypeContext {
 	return t.(ITypeContext)
 }
 
-func (s *ParameterContext) IDENTIFIER() antlr.TerminalNode {
-	return s.GetToken(QueryParserIDENTIFIER, 0)
+func (s *ParameterContext) Class_name() IClass_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_nameContext)
 }
 
 func (s *ParameterContext) GetRuleContext() antlr.RuleContext {
@@ -1204,14 +2472,32 @@ func (s *ParameterContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Parameter() (localctx IParameterContext) {
 	localctx = NewParameterContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 10, QueryParserRULE_parameter)
+	p.EnterRule(localctx, 28, QueryParserRULE_parameter)
 	p.EnterOuterAlt(localctx, 1)
-	{
-		p.SetState(104)
-		p.Type_()
+	p.SetState(166)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 9, p.GetParserRuleContext()) {
+	case 1:
+		{
+			p.SetState(164)
+			p.Type_()
+		}
+
+	case 2:
+		{
+			p.SetState(165)
+			p.Class_name()
+		}
+
+	case antlr.ATNInvalidAltNumber:
+		goto errorExit
 	}
 	{
-		p.SetState(105)
+		p.SetState(168)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1304,10 +2590,10 @@ func (s *TypeContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Type_() (localctx ITypeContext) {
 	localctx = NewTypeContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 12, QueryParserRULE_type)
+	p.EnterRule(localctx, 30, QueryParserRULE_type)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(107)
+		p.SetState(170)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1438,36 +2724,36 @@ func (s *Select_listContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Select_list() (localctx ISelect_listContext) {
 	localctx = NewSelect_listContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 14, QueryParserRULE_select_list)
+	p.EnterRule(localctx, 32, QueryParserRULE_select_list)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(109)
+		p.SetState(172)
 		p.Select_item()
 	}
-	p.SetState(114)
+	p.SetState(177)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__4 {
+	for _la == QueryParserT__7 {
 		{
-			p.SetState(110)
-			p.Match(QueryParserT__4)
+			p.SetState(173)
+			p.Match(QueryParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(111)
+			p.SetState(174)
 			p.Select_item()
 		}
 
-		p.SetState(116)
+		p.SetState(179)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -1496,9 +2782,10 @@ type ISelect_itemContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	Entity() IEntityContext
 	AS() antlr.TerminalNode
 	Alias() IAliasContext
+	Entity() IEntityContext
+	Class_name() IClass_nameContext
 
 	// IsSelect_itemContext differentiates from other interfaces.
 	IsSelect_itemContext()
@@ -1536,22 +2823,6 @@ func NewSelect_itemContext(parser antlr.Parser, parent antlr.ParserRuleContext, 
 
 func (s *Select_itemContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Select_itemContext) Entity() IEntityContext {
-	var t antlr.RuleContext
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IEntityContext); ok {
-			t = ctx.(antlr.RuleContext)
-			break
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IEntityContext)
-}
-
 func (s *Select_itemContext) AS() antlr.TerminalNode {
 	return s.GetToken(QueryParserAS, 0)
 }
@@ -1570,6 +2841,38 @@ func (s *Select_itemContext) Alias() IAliasContext {
 	}
 
 	return t.(IAliasContext)
+}
+
+func (s *Select_itemContext) Entity() IEntityContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IEntityContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IEntityContext)
+}
+
+func (s *Select_itemContext) Class_name() IClass_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_nameContext)
 }
 
 func (s *Select_itemContext) GetRuleContext() antlr.RuleContext {
@@ -1594,14 +2897,32 @@ func (s *Select_itemContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Select_item() (localctx ISelect_itemContext) {
 	localctx = NewSelect_itemContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 16, QueryParserRULE_select_item)
+	p.EnterRule(localctx, 34, QueryParserRULE_select_item)
 	p.EnterOuterAlt(localctx, 1)
-	{
-		p.SetState(117)
-		p.Entity()
+	p.SetState(182)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 11, p.GetParserRuleContext()) {
+	case 1:
+		{
+			p.SetState(180)
+			p.Entity()
+		}
+
+	case 2:
+		{
+			p.SetState(181)
+			p.Class_name()
+		}
+
+	case antlr.ATNInvalidAltNumber:
+		goto errorExit
 	}
 	{
-		p.SetState(118)
+		p.SetState(184)
 		p.Match(QueryParserAS)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1609,7 +2930,7 @@ func (p *QueryParser) Select_item() (localctx ISelect_itemContext) {
 		}
 	}
 	{
-		p.SetState(119)
+		p.SetState(185)
 		p.Alias()
 	}
 
@@ -1698,10 +3019,10 @@ func (s *EntityContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Entity() (localctx IEntityContext) {
 	localctx = NewEntityContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 18, QueryParserRULE_entity)
+	p.EnterRule(localctx, 36, QueryParserRULE_entity)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(121)
+		p.SetState(187)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1794,10 +3115,10 @@ func (s *AliasContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Alias() (localctx IAliasContext) {
 	localctx = NewAliasContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 20, QueryParserRULE_alias)
+	p.EnterRule(localctx, 38, QueryParserRULE_alias)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(123)
+		p.SetState(189)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -1902,10 +3223,10 @@ func (s *ExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Expression() (localctx IExpressionContext) {
 	localctx = NewExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 22, QueryParserRULE_expression)
+	p.EnterRule(localctx, 40, QueryParserRULE_expression)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(125)
+		p.SetState(191)
 		p.OrExpression()
 	}
 
@@ -2032,36 +3353,36 @@ func (s *OrExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) OrExpression() (localctx IOrExpressionContext) {
 	localctx = NewOrExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 24, QueryParserRULE_orExpression)
+	p.EnterRule(localctx, 42, QueryParserRULE_orExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(127)
+		p.SetState(193)
 		p.AndExpression()
 	}
-	p.SetState(132)
+	p.SetState(198)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__5 {
+	for _la == QueryParserT__8 {
 		{
-			p.SetState(128)
-			p.Match(QueryParserT__5)
+			p.SetState(194)
+			p.Match(QueryParserT__8)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(129)
+			p.SetState(195)
 			p.AndExpression()
 		}
 
-		p.SetState(134)
+		p.SetState(200)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2192,36 +3513,36 @@ func (s *AndExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) AndExpression() (localctx IAndExpressionContext) {
 	localctx = NewAndExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 26, QueryParserRULE_andExpression)
+	p.EnterRule(localctx, 44, QueryParserRULE_andExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(135)
+		p.SetState(201)
 		p.EqualityExpression()
 	}
-	p.SetState(140)
+	p.SetState(206)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__6 {
+	for _la == QueryParserT__9 {
 		{
-			p.SetState(136)
-			p.Match(QueryParserT__6)
+			p.SetState(202)
+			p.Match(QueryParserT__9)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(137)
+			p.SetState(203)
 			p.EqualityExpression()
 		}
 
-		p.SetState(142)
+		p.SetState(208)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2352,27 +3673,27 @@ func (s *EqualityExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) EqualityExpression() (localctx IEqualityExpressionContext) {
 	localctx = NewEqualityExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 28, QueryParserRULE_equalityExpression)
+	p.EnterRule(localctx, 46, QueryParserRULE_equalityExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(143)
+		p.SetState(209)
 		p.RelationalExpression()
 	}
-	p.SetState(148)
+	p.SetState(214)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__7 || _la == QueryParserT__8 {
+	for _la == QueryParserT__10 || _la == QueryParserT__11 {
 		{
-			p.SetState(144)
+			p.SetState(210)
 			_la = p.GetTokenStream().LA(1)
 
-			if !(_la == QueryParserT__7 || _la == QueryParserT__8) {
+			if !(_la == QueryParserT__10 || _la == QueryParserT__11) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -2380,11 +3701,11 @@ func (p *QueryParser) EqualityExpression() (localctx IEqualityExpressionContext)
 			}
 		}
 		{
-			p.SetState(145)
+			p.SetState(211)
 			p.RelationalExpression()
 		}
 
-		p.SetState(150)
+		p.SetState(216)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2515,27 +3836,27 @@ func (s *RelationalExpressionContext) ExitRule(listener antlr.ParseTreeListener)
 
 func (p *QueryParser) RelationalExpression() (localctx IRelationalExpressionContext) {
 	localctx = NewRelationalExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 30, QueryParserRULE_relationalExpression)
+	p.EnterRule(localctx, 48, QueryParserRULE_relationalExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(151)
+		p.SetState(217)
 		p.AdditiveExpression()
 	}
-	p.SetState(156)
+	p.SetState(222)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31744) != 0 {
+	for (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&253952) != 0 {
 		{
-			p.SetState(152)
+			p.SetState(218)
 			_la = p.GetTokenStream().LA(1)
 
-			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&31744) != 0) {
+			if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&253952) != 0) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -2543,11 +3864,11 @@ func (p *QueryParser) RelationalExpression() (localctx IRelationalExpressionCont
 			}
 		}
 		{
-			p.SetState(153)
+			p.SetState(219)
 			p.AdditiveExpression()
 		}
 
-		p.SetState(158)
+		p.SetState(224)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2678,27 +3999,27 @@ func (s *AdditiveExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) AdditiveExpression() (localctx IAdditiveExpressionContext) {
 	localctx = NewAdditiveExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 32, QueryParserRULE_additiveExpression)
+	p.EnterRule(localctx, 50, QueryParserRULE_additiveExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(159)
+		p.SetState(225)
 		p.MultiplicativeExpression()
 	}
-	p.SetState(164)
+	p.SetState(230)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__14 || _la == QueryParserT__15 {
+	for _la == QueryParserT__17 || _la == QueryParserT__18 {
 		{
-			p.SetState(160)
+			p.SetState(226)
 			_la = p.GetTokenStream().LA(1)
 
-			if !(_la == QueryParserT__14 || _la == QueryParserT__15) {
+			if !(_la == QueryParserT__17 || _la == QueryParserT__18) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -2706,11 +4027,11 @@ func (p *QueryParser) AdditiveExpression() (localctx IAdditiveExpressionContext)
 			}
 		}
 		{
-			p.SetState(161)
+			p.SetState(227)
 			p.MultiplicativeExpression()
 		}
 
-		p.SetState(166)
+		p.SetState(232)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2841,27 +4162,27 @@ func (s *MultiplicativeExpressionContext) ExitRule(listener antlr.ParseTreeListe
 
 func (p *QueryParser) MultiplicativeExpression() (localctx IMultiplicativeExpressionContext) {
 	localctx = NewMultiplicativeExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 34, QueryParserRULE_multiplicativeExpression)
+	p.EnterRule(localctx, 52, QueryParserRULE_multiplicativeExpression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(167)
+		p.SetState(233)
 		p.UnaryExpression()
 	}
-	p.SetState(172)
+	p.SetState(238)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__16 || _la == QueryParserT__17 {
+	for _la == QueryParserT__19 || _la == QueryParserT__20 {
 		{
-			p.SetState(168)
+			p.SetState(234)
 			_la = p.GetTokenStream().LA(1)
 
-			if !(_la == QueryParserT__16 || _la == QueryParserT__17) {
+			if !(_la == QueryParserT__19 || _la == QueryParserT__20) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -2869,11 +4190,11 @@ func (p *QueryParser) MultiplicativeExpression() (localctx IMultiplicativeExpres
 			}
 		}
 		{
-			p.SetState(169)
+			p.SetState(235)
 			p.UnaryExpression()
 		}
 
-		p.SetState(174)
+		p.SetState(240)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -2995,23 +4316,23 @@ func (s *UnaryExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) UnaryExpression() (localctx IUnaryExpressionContext) {
 	localctx = NewUnaryExpressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 36, QueryParserRULE_unaryExpression)
+	p.EnterRule(localctx, 54, QueryParserRULE_unaryExpression)
 	var _la int
 
-	p.SetState(178)
+	p.SetState(244)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
 	switch p.GetTokenStream().LA(1) {
-	case QueryParserT__15, QueryParserT__18:
+	case QueryParserT__18, QueryParserT__21:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(175)
+			p.SetState(241)
 			_la = p.GetTokenStream().LA(1)
 
-			if !(_la == QueryParserT__15 || _la == QueryParserT__18) {
+			if !(_la == QueryParserT__18 || _la == QueryParserT__21) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -3019,14 +4340,14 @@ func (p *QueryParser) UnaryExpression() (localctx IUnaryExpressionContext) {
 			}
 		}
 		{
-			p.SetState(176)
+			p.SetState(242)
 			p.UnaryExpression()
 		}
 
-	case QueryParserT__0, QueryParserT__20, QueryParserSTRING, QueryParserSTRING_WITH_WILDCARD, QueryParserNUMBER, QueryParserIDENTIFIER:
+	case QueryParserT__3, QueryParserT__23, QueryParserSTRING, QueryParserSTRING_WITH_WILDCARD, QueryParserNUMBER, QueryParserIDENTIFIER:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(177)
+			p.SetState(243)
 			p.Primary()
 		}
 
@@ -3166,45 +4487,45 @@ func (s *PrimaryContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Primary() (localctx IPrimaryContext) {
 	localctx = NewPrimaryContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 38, QueryParserRULE_primary)
-	p.SetState(186)
+	p.EnterRule(localctx, 56, QueryParserRULE_primary)
+	p.SetState(252)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 13, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 19, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(180)
+			p.SetState(246)
 			p.Operand()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(181)
+			p.SetState(247)
 			p.Predicate_invocation()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(182)
-			p.Match(QueryParserT__0)
+			p.SetState(248)
+			p.Match(QueryParserT__3)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(183)
+			p.SetState(249)
 			p.Expression()
 		}
 		{
-			p.SetState(184)
-			p.Match(QueryParserT__1)
+			p.SetState(250)
+			p.Match(QueryParserT__4)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
@@ -3240,6 +4561,7 @@ type IOperandContext interface {
 	Variable() IVariableContext
 	Alias() IAliasContext
 	Method_chain() IMethod_chainContext
+	Class_name() IClass_nameContext
 	Value_list() IValue_listContext
 
 	// IsOperandContext differentiates from other interfaces.
@@ -3342,6 +4664,22 @@ func (s *OperandContext) Method_chain() IMethod_chainContext {
 	return t.(IMethod_chainContext)
 }
 
+func (s *OperandContext) Class_name() IClass_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_nameContext)
+}
+
 func (s *OperandContext) Value_list() IValue_listContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
@@ -3380,64 +4718,83 @@ func (s *OperandContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Operand() (localctx IOperandContext) {
 	localctx = NewOperandContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 40, QueryParserRULE_operand)
-	p.SetState(198)
+	p.EnterRule(localctx, 58, QueryParserRULE_operand)
+	p.SetState(268)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 14, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 20, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(188)
+			p.SetState(254)
 			p.Value()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(189)
+			p.SetState(255)
 			p.Variable()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(190)
+			p.SetState(256)
 			p.Alias()
 		}
 		{
-			p.SetState(191)
-			p.Match(QueryParserT__19)
+			p.SetState(257)
+			p.Match(QueryParserT__22)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(192)
+			p.SetState(258)
 			p.Method_chain()
 		}
 
 	case 4:
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(194)
-			p.Match(QueryParserT__20)
+			p.SetState(260)
+			p.Class_name()
+		}
+		{
+			p.SetState(261)
+			p.Match(QueryParserT__22)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(195)
+			p.SetState(262)
+			p.Method_chain()
+		}
+
+	case 5:
+		p.EnterOuterAlt(localctx, 5)
+		{
+			p.SetState(264)
+			p.Match(QueryParserT__23)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(265)
 			p.Value_list()
 		}
 		{
-			p.SetState(196)
-			p.Match(QueryParserT__21)
+			p.SetState(266)
+			p.Match(QueryParserT__24)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
@@ -3469,9 +4826,9 @@ type IMethod_chainContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	AllMethod_or_variable() []IMethod_or_variableContext
-	Method_or_variable(i int) IMethod_or_variableContext
-	Alias() IAliasContext
+	Method_name() IMethod_nameContext
+	Class_name() IClass_nameContext
+	Argument_list() IArgument_listContext
 
 	// IsMethod_chainContext differentiates from other interfaces.
 	IsMethod_chainContext()
@@ -3509,51 +4866,10 @@ func NewMethod_chainContext(parser antlr.Parser, parent antlr.ParserRuleContext,
 
 func (s *Method_chainContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Method_chainContext) AllMethod_or_variable() []IMethod_or_variableContext {
-	children := s.GetChildren()
-	len := 0
-	for _, ctx := range children {
-		if _, ok := ctx.(IMethod_or_variableContext); ok {
-			len++
-		}
-	}
-
-	tst := make([]IMethod_or_variableContext, len)
-	i := 0
-	for _, ctx := range children {
-		if t, ok := ctx.(IMethod_or_variableContext); ok {
-			tst[i] = t.(IMethod_or_variableContext)
-			i++
-		}
-	}
-
-	return tst
-}
-
-func (s *Method_chainContext) Method_or_variable(i int) IMethod_or_variableContext {
-	var t antlr.RuleContext
-	j := 0
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IMethod_or_variableContext); ok {
-			if j == i {
-				t = ctx.(antlr.RuleContext)
-				break
-			}
-			j++
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IMethod_or_variableContext)
-}
-
-func (s *Method_chainContext) Alias() IAliasContext {
+func (s *Method_chainContext) Method_name() IMethod_nameContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IAliasContext); ok {
+		if _, ok := ctx.(IMethod_nameContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -3563,7 +4879,39 @@ func (s *Method_chainContext) Alias() IAliasContext {
 		return nil
 	}
 
-	return t.(IAliasContext)
+	return t.(IMethod_nameContext)
+}
+
+func (s *Method_chainContext) Class_name() IClass_nameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IClass_nameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IClass_nameContext)
+}
+
+func (s *Method_chainContext) Argument_list() IArgument_listContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IArgument_listContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IArgument_listContext)
 }
 
 func (s *Method_chainContext) GetRuleContext() antlr.RuleContext {
@@ -3588,21 +4936,21 @@ func (s *Method_chainContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Method_chain() (localctx IMethod_chainContext) {
 	localctx = NewMethod_chainContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 42, QueryParserRULE_method_chain)
+	p.EnterRule(localctx, 60, QueryParserRULE_method_chain)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(203)
+	p.SetState(273)
 	p.GetErrorHandler().Sync(p)
 
-	if p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 15, p.GetParserRuleContext()) == 1 {
+	if p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 21, p.GetParserRuleContext()) == 1 {
 		{
-			p.SetState(200)
-			p.Alias()
+			p.SetState(270)
+			p.Class_name()
 		}
 		{
-			p.SetState(201)
-			p.Match(QueryParserT__19)
+			p.SetState(271)
+			p.Match(QueryParserT__22)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
@@ -3613,36 +4961,38 @@ func (p *QueryParser) Method_chain() (localctx IMethod_chainContext) {
 		goto errorExit
 	}
 	{
-		p.SetState(205)
-		p.Method_or_variable()
+		p.SetState(275)
+		p.Method_name()
 	}
-	p.SetState(210)
+	{
+		p.SetState(276)
+		p.Match(QueryParserT__3)
+		if p.HasError() {
+			// Recognition error - abort rule
+			goto errorExit
+		}
+	}
+	p.SetState(278)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__19 {
+	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&70620020752) != 0 {
 		{
-			p.SetState(206)
-			p.Match(QueryParserT__19)
-			if p.HasError() {
-				// Recognition error - abort rule
-				goto errorExit
-			}
-		}
-		{
-			p.SetState(207)
-			p.Method_or_variable()
+			p.SetState(277)
+			p.Argument_list()
 		}
 
-		p.SetState(212)
-		p.GetErrorHandler().Sync(p)
+	}
+	{
+		p.SetState(280)
+		p.Match(QueryParserT__4)
 		if p.HasError() {
+			// Recognition error - abort rule
 			goto errorExit
 		}
-		_la = p.GetTokenStream().LA(1)
 	}
 
 errorExit:
@@ -3776,32 +5126,32 @@ func (s *Method_or_variableContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Method_or_variable() (localctx IMethod_or_variableContext) {
 	localctx = NewMethod_or_variableContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 44, QueryParserRULE_method_or_variable)
-	p.SetState(216)
+	p.EnterRule(localctx, 62, QueryParserRULE_method_or_variable)
+	p.SetState(285)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 17, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 23, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(213)
+			p.SetState(282)
 			p.Method_invocation()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(214)
+			p.SetState(283)
 			p.Variable()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(215)
+			p.SetState(284)
 			p.Predicate_invocation()
 		}
 
@@ -3911,12 +5261,12 @@ func (s *Method_invocationContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Method_invocation() (localctx IMethod_invocationContext) {
 	localctx = NewMethod_invocationContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 46, QueryParserRULE_method_invocation)
+	p.EnterRule(localctx, 64, QueryParserRULE_method_invocation)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(218)
+		p.SetState(287)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -3924,30 +5274,30 @@ func (p *QueryParser) Method_invocation() (localctx IMethod_invocationContext) {
 		}
 	}
 	{
-		p.SetState(219)
-		p.Match(QueryParserT__0)
+		p.SetState(288)
+		p.Match(QueryParserT__3)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(221)
+	p.SetState(290)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8827502594) != 0 {
+	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&70620020752) != 0 {
 		{
-			p.SetState(220)
+			p.SetState(289)
 			p.Argument_list()
 		}
 
 	}
 	{
-		p.SetState(223)
-		p.Match(QueryParserT__1)
+		p.SetState(292)
+		p.Match(QueryParserT__4)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
@@ -4039,10 +5389,10 @@ func (s *VariableContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Variable() (localctx IVariableContext) {
 	localctx = NewVariableContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 48, QueryParserRULE_variable)
+	p.EnterRule(localctx, 66, QueryParserRULE_variable)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(225)
+		p.SetState(294)
 		p.Match(QueryParserIDENTIFIER)
 		if p.HasError() {
 			// Recognition error - abort rule
@@ -4164,39 +5514,39 @@ func (s *Predicate_invocationContext) ExitRule(listener antlr.ParseTreeListener)
 
 func (p *QueryParser) Predicate_invocation() (localctx IPredicate_invocationContext) {
 	localctx = NewPredicate_invocationContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 50, QueryParserRULE_predicate_invocation)
+	p.EnterRule(localctx, 68, QueryParserRULE_predicate_invocation)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(227)
+		p.SetState(296)
 		p.Predicate_name()
 	}
 	{
-		p.SetState(228)
-		p.Match(QueryParserT__0)
+		p.SetState(297)
+		p.Match(QueryParserT__3)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
 		}
 	}
-	p.SetState(230)
+	p.SetState(299)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&8827502594) != 0 {
+	if (int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&70620020752) != 0 {
 		{
-			p.SetState(229)
+			p.SetState(298)
 			p.Argument_list()
 		}
 
 	}
 	{
-		p.SetState(232)
-		p.Match(QueryParserT__1)
+		p.SetState(301)
+		p.Match(QueryParserT__4)
 		if p.HasError() {
 			// Recognition error - abort rule
 			goto errorExit
@@ -4326,36 +5676,36 @@ func (s *Argument_listContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Argument_list() (localctx IArgument_listContext) {
 	localctx = NewArgument_listContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 52, QueryParserRULE_argument_list)
+	p.EnterRule(localctx, 70, QueryParserRULE_argument_list)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(234)
+		p.SetState(303)
 		p.Argument()
 	}
-	p.SetState(239)
+	p.SetState(308)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__4 {
+	for _la == QueryParserT__7 {
 		{
-			p.SetState(235)
-			p.Match(QueryParserT__4)
+			p.SetState(304)
+			p.Match(QueryParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(236)
+			p.SetState(305)
 			p.Argument()
 		}
 
-		p.SetState(241)
+		p.SetState(310)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4465,25 +5815,25 @@ func (s *ArgumentContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Argument() (localctx IArgumentContext) {
 	localctx = NewArgumentContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 54, QueryParserRULE_argument)
-	p.SetState(244)
+	p.EnterRule(localctx, 72, QueryParserRULE_argument)
+	p.SetState(313)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 21, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 27, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(242)
+			p.SetState(311)
 			p.Expression()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(243)
+			p.SetState(312)
 			p.Match(QueryParserSTRING)
 			if p.HasError() {
 				// Recognition error - abort rule
@@ -4571,15 +5921,15 @@ func (s *ComparatorContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Comparator() (localctx IComparatorContext) {
 	localctx = NewComparatorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 56, QueryParserRULE_comparator)
+	p.EnterRule(localctx, 74, QueryParserRULE_comparator)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(246)
+		p.SetState(315)
 		_la = p.GetTokenStream().LA(1)
 
-		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&25181952) != 0) {
+		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&201455616) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -4682,15 +6032,15 @@ func (s *ValueContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Value() (localctx IValueContext) {
 	localctx = NewValueContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 58, QueryParserRULE_value)
+	p.EnterRule(localctx, 76, QueryParserRULE_value)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(248)
+		p.SetState(317)
 		_la = p.GetTokenStream().LA(1)
 
-		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&234881024) != 0) {
+		if !((int64(_la) & ^0x3f) == 0 && ((int64(1)<<_la)&1879048192) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -4821,36 +6171,36 @@ func (s *Value_listContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Value_list() (localctx IValue_listContext) {
 	localctx = NewValue_listContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 60, QueryParserRULE_value_list)
+	p.EnterRule(localctx, 78, QueryParserRULE_value_list)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(250)
+		p.SetState(319)
 		p.Value()
 	}
-	p.SetState(255)
+	p.SetState(324)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__4 {
+	for _la == QueryParserT__7 {
 		{
-			p.SetState(251)
-			p.Match(QueryParserT__4)
+			p.SetState(320)
+			p.Match(QueryParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(252)
+			p.SetState(321)
 			p.Value()
 		}
 
-		p.SetState(257)
+		p.SetState(326)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -4981,36 +6331,36 @@ func (s *Select_clauseContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Select_clause() (localctx ISelect_clauseContext) {
 	localctx = NewSelect_clauseContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 62, QueryParserRULE_select_clause)
+	p.EnterRule(localctx, 80, QueryParserRULE_select_clause)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(258)
+		p.SetState(327)
 		p.Select_expression()
 	}
-	p.SetState(263)
+	p.SetState(332)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 	_la = p.GetTokenStream().LA(1)
 
-	for _la == QueryParserT__4 {
+	for _la == QueryParserT__7 {
 		{
-			p.SetState(259)
-			p.Match(QueryParserT__4)
+			p.SetState(328)
+			p.Match(QueryParserT__7)
 			if p.HasError() {
 				// Recognition error - abort rule
 				goto errorExit
 			}
 		}
 		{
-			p.SetState(260)
+			p.SetState(329)
 			p.Select_expression()
 		}
 
-		p.SetState(265)
+		p.SetState(334)
 		p.GetErrorHandler().Sync(p)
 		if p.HasError() {
 			goto errorExit
@@ -5137,32 +6487,32 @@ func (s *Select_expressionContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *QueryParser) Select_expression() (localctx ISelect_expressionContext) {
 	localctx = NewSelect_expressionContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 64, QueryParserRULE_select_expression)
-	p.SetState(269)
+	p.EnterRule(localctx, 82, QueryParserRULE_select_expression)
+	p.SetState(338)
 	p.GetErrorHandler().Sync(p)
 	if p.HasError() {
 		goto errorExit
 	}
 
-	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 24, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 30, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(266)
+			p.SetState(335)
 			p.Variable()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(267)
+			p.SetState(336)
 			p.Method_chain()
 		}
 
 	case 3:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(268)
+			p.SetState(337)
 			p.Match(QueryParserSTRING)
 			if p.HasError() {
 				// Recognition error - abort rule
