@@ -35,7 +35,19 @@ type Query struct {
 	SelectOutput        []SelectOutput
 }
 
-func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) {
+type CustomQueryListener struct {
+	BaseQueryListener
+	expression          strings.Builder
+	selectList          []SelectList
+	condition           []string
+	Predicate           []Predicate
+	PredicateInvocation []PredicateInvocation
+	Classes             []ClassDeclaration
+	State               State
+	SelectOutput        []SelectOutput
+}
+
+func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) { //nolint:all
 	// Handle class method calls
 	if ctx.Class_name() != nil {
 		className := ctx.Class_name().GetText()
@@ -82,18 +94,6 @@ type MethodDeclaration struct {
 	Body       string
 }
 
-type CustomQueryListener struct {
-	BaseQueryListener
-	expression          strings.Builder
-	selectList          []SelectList
-	condition           []string
-	Predicate           []Predicate
-	PredicateInvocation []PredicateInvocation
-	Classes             []ClassDeclaration
-	State               State
-	SelectOutput        []SelectOutput
-}
-
 type SelectList struct {
 	Entity string
 	Alias  string
@@ -104,7 +104,7 @@ type SelectOutput struct {
 	Type         string
 }
 
-func (l *CustomQueryListener) EnterClass_declaration(ctx *Class_declarationContext) {
+func (l *CustomQueryListener) EnterClass_declaration(ctx *Class_declarationContext) { //nolint:all
 	className := ctx.Class_name().GetText()
 	class := ClassDeclaration{
 		Name: className,
@@ -112,7 +112,7 @@ func (l *CustomQueryListener) EnterClass_declaration(ctx *Class_declarationConte
 	l.Classes = append(l.Classes, class)
 }
 
-func (l *CustomQueryListener) EnterMethod_declaration(ctx *Method_declarationContext) {
+func (l *CustomQueryListener) EnterMethod_declaration(ctx *Method_declarationContext) { //nolint:all
 	if len(l.Classes) > 0 {
 		currentClass := &l.Classes[len(l.Classes)-1]
 		method := MethodDeclaration{

@@ -22,6 +22,10 @@ func TestParseQuery(t *testing.T) {
 				Condition:  []string{"cd.GetName()==\"test\""},
 				SelectOutput: []SelectOutput{
 					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
 						SelectEntity: "cd",
 						Type:         "variable",
 					},
@@ -39,6 +43,14 @@ func TestParseQuery(t *testing.T) {
 				Expression: "e1.GetName()==\"test\"",
 				Condition:  []string{"e1.GetName()==\"test\""},
 				SelectOutput: []SelectOutput{
+					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
+						SelectEntity: "e1.GetName()",
+						Type:         "method_chain",
+					},
 					{
 						SelectEntity: "e1.GetName()",
 						Type:         "method_chain",
@@ -58,6 +70,18 @@ func TestParseQuery(t *testing.T) {
 				Condition:  []string{"e1.GetName()==\"test\"", "e2.GetName()==\"test\""},
 				SelectOutput: []SelectOutput{
 					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
+						SelectEntity: "e1.GetName()",
+						Type:         "method_chain",
+					},
+					{
 						SelectEntity: "e1.GetName()",
 						Type:         "method_chain",
 					},
@@ -75,6 +99,18 @@ func TestParseQuery(t *testing.T) {
 				Expression: "e1.GetName()==\"test\" && e2.GetName()==\"test\"",
 				Condition:  []string{"e1.GetName()==\"test\"", "e2.GetName()==\"test\""},
 				SelectOutput: []SelectOutput{
+					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
+						SelectEntity: "GetName()",
+						Type:         "method_chain",
+					},
+					{
+						SelectEntity: "e1.GetName()",
+						Type:         "method_chain",
+					},
 					{
 						SelectEntity: "e1.GetName()",
 						Type:         "method_chain",
