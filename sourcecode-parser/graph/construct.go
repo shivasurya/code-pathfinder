@@ -1178,6 +1178,7 @@ func Initialize(directory string) *CodeGraph {
 	numWorkers := 5 // Number of concurrent workers
 	fileChan := make(chan string, totalFiles)
 	resultChan := make(chan *CodeGraph, totalFiles)
+	treeChan := make(chan *TreeNode, totalFiles)
 	statusChan := make(chan string, numWorkers)
 	progressChan := make(chan int, totalFiles)
 	var wg sync.WaitGroup
@@ -1222,15 +1223,11 @@ func Initialize(directory string) *CodeGraph {
 			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
 			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file, localTree)
-			fmt.Println("File: ", localTree.Node.ID)
-			for _, ltnode := range localTree.Children {
-				fmt.Printf("%s", ltnode.NodeType)
-				fmt.Println("")
-			}
 			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 
 			resultChan <- localGraph
+			treeChan <- localTree
 			progressChan <- 1
 		}
 		wg.Done()
@@ -1280,6 +1277,7 @@ func Initialize(directory string) *CodeGraph {
 		close(resultChan)
 		close(statusChan)
 		close(progressChan)
+		close(treeChan)
 	}()
 
 	// Collect results
@@ -1292,6 +1290,11 @@ func Initialize(directory string) *CodeGraph {
 		}
 	}
 
+	// Print tree structure recursively from treeChan
+	// for treeNode := range treeChan {
+	// 	printTree(treeNode, 0)
+	// }
+
 	end := time.Now()
 	elapsed := end.Sub(start)
 	Log("Elapsed time: ", elapsed)
@@ -1299,3 +1302,13 @@ func Initialize(directory string) *CodeGraph {
 
 	return codeGraph
 }
+
+// func printTree(node *TreeNode, level int) {
+// 	tab := strings.Repeat("\t", level)
+// 	fmt.Println(tab+"Value:", node.NodeType)
+// 	fmt.Println(tab+"Code:", node.Node.CodeSnippet)
+// 	fmt.Println(tab + "-------------------------------------")
+// 	for _, child := range node.Children {
+// 		printTree(child, level+1)
+// 	}
+// }
