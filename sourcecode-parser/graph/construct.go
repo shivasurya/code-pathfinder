@@ -25,7 +25,6 @@ type Node struct {
 	Name                 string
 	CodeSnippet          string
 	LineNumber           uint32
-	OutgoingEdges        []*Edge
 	IsExternal           bool
 	Modifier             string
 	ReturnType           string
@@ -59,22 +58,10 @@ type Node struct {
 	FileNode             *model.File
 }
 
-type Edge struct {
-	From *Node
-	To   *Node
-}
-
-type CodeGraph struct {
-	Nodes map[string]*Node
-	Edges []*Edge
-}
-
 type TreeNode struct {
-	ID       string
+	Node     *Node
 	Children []*TreeNode
 	Parent   *TreeNode
-	NodeType string
-	Node     *Node
 }
 
 func (t *TreeNode) AddChild(child *TreeNode) {
@@ -85,121 +72,8 @@ func (t *TreeNode) AddChildren(children []*TreeNode) {
 	t.Children = append(t.Children, children...)
 }
 
-func NewCodeGraph() *CodeGraph {
-	return &CodeGraph{
-		Nodes: make(map[string]*Node),
-		Edges: make([]*Edge, 0),
-	}
-}
-
-func (g *CodeGraph) AddNode(node *Node) {
-	g.Nodes[node.ID] = node
-}
-
-func (g *CodeGraph) AddEdge(from, to *Node) {
-	edge := &Edge{From: from, To: to}
-	g.Edges = append(g.Edges, edge)
-	from.OutgoingEdges = append(from.OutgoingEdges, edge)
-}
-
-// Add to graph.go
-
-// FindNodesByType finds all nodes of a given type.
-func (g *CodeGraph) FindNodesByType(nodeType string) []*Node {
-	var nodes []*Node
-	for _, node := range g.Nodes {
-		if node.Type == nodeType {
-			nodes = append(nodes, node)
-		}
-	}
-	return nodes
-}
-
-func extractVisibilityModifier(modifiers string) string {
-	words := strings.Fields(modifiers)
-	for _, word := range words {
-		switch word {
-		case "public", "private", "protected":
-			return word
-		}
-	}
-	return "" // return an empty string if no visibility modifier is found
-}
-
-func isJavaSourceFile(filename string) bool {
-	return filepath.Ext(filename) == ".java"
-}
-
-//nolint:all
-func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
-	if node == nil {
-		return false
-	}
-	if node.Type() == "identifier" && node.Content(sourceCode) == variableName {
-		return true
-	}
-
-	// Recursively check all children of the current node
-	for i := 0; i < int(node.ChildCount()); i++ {
-		childNode := node.Child(i)
-		if hasAccess(childNode, variableName, sourceCode) {
-			return true
-		}
-	}
-
-	// Continue checking in the next sibling
-	return hasAccess(node.NextSibling(), variableName, sourceCode)
-}
-
-func parseJavadocTags(commentContent string) *model.Javadoc {
-	javaDoc := &model.Javadoc{}
-	var javadocTags []*model.JavadocTag
-
-	commentLines := strings.Split(commentContent, "\n")
-	for _, line := range commentLines {
-		line = strings.TrimSpace(line)
-		// line may start with /** or *
-		line = strings.TrimPrefix(line, "*")
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "@") {
-			parts := strings.SplitN(line, " ", 2)
-			if len(parts) == 2 {
-				tagName := strings.TrimPrefix(parts[0], "@")
-				tagText := strings.TrimSpace(parts[1])
-
-				var javadocTag *model.JavadocTag
-				switch tagName {
-				case "author":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "author")
-					javaDoc.Author = tagText
-				case "param":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "param")
-				case "see":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "see")
-				case "throws":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "throws")
-				case "version":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "version")
-					javaDoc.Version = tagText
-				case "since":
-					javadocTag = model.NewJavadocTag(tagName, tagText, "since")
-				default:
-					javadocTag = model.NewJavadocTag(tagName, tagText, "unknown")
-				}
-				javadocTags = append(javadocTags, javadocTag)
-			}
-		}
-	}
-
-	javaDoc.Tags = javadocTags
-	javaDoc.NumberOfCommentLines = len(commentLines)
-	javaDoc.CommentedCodeElements = commentContent
-
-	return javaDoc
-}
-
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string, parentNode *TreeNode) {
-	isJavaSourceFile := isJavaSourceFile(file)
+func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Node, file string, parentNode *TreeNode) {
+	isJavaSourceFile := javalang.IsJavaSourceFile(file)
 	switch node.Type() {
 	case "block":
 		blockNode := javalang.ParseBlockStatement(node, sourceCode)
@@ -215,8 +89,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			BlockStmt:        blockNode,
 		}
-		graph.AddNode(blockStmtNode)
-		parentNode.AddChild(&TreeNode{Node: blockStmtNode, NodeType: "BlockStmt", ID: blockStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: blockStmtNode, Parent: parentNode})
 	case "return_statement":
 		returnNode := javalang.ParseReturnStatement(node, sourceCode)
 		uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -231,8 +104,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			ReturnStmt:       returnNode,
 		}
-		graph.AddNode(returnStmtNode)
-		parentNode.AddChild(&TreeNode{Node: returnStmtNode, NodeType: "ReturnStmt", ID: returnStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: returnStmtNode, Parent: parentNode})
 	case "assert_statement":
 		assertNode := javalang.ParseAssertStatement(node, sourceCode)
 		uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -247,8 +119,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			AssertStmt:       assertNode,
 		}
-		graph.AddNode(assertStmtNode)
-		parentNode.AddChild(&TreeNode{Node: assertStmtNode, NodeType: "AssertStmt", ID: assertStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: assertStmtNode, Parent: parentNode})
 	case "yield_statement":
 		yieldNode := javalang.ParseYieldStatement(node, sourceCode)
 		uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -263,8 +134,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			YieldStmt:        yieldNode,
 		}
-		graph.AddNode(yieldStmtNode)
-		parentNode.AddChild(&TreeNode{Node: yieldStmtNode, NodeType: "YieldStmt", ID: yieldStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: yieldStmtNode, Parent: parentNode})
 	case "break_statement":
 		breakNode := javalang.ParseBreakStatement(node, sourceCode)
 		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -279,8 +149,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			BreakStmt:        breakNode,
 		}
-		graph.AddNode(breakStmtNode)
-		parentNode.AddChild(&TreeNode{Node: breakStmtNode, NodeType: "BreakStmt", ID: breakStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: breakStmtNode, Parent: parentNode})
 	case "continue_statement":
 		continueNode := javalang.ParseContinueStatement(node, sourceCode)
 		uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -295,26 +164,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			ContinueStmt:     continueNode,
 		}
-		graph.AddNode(continueStmtNode)
-		parentNode.AddChild(&TreeNode{Node: continueStmtNode, NodeType: "ContinueStmt", ID: continueStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: continueStmtNode, Parent: parentNode})
 	case "if_statement":
-		ifNode := model.IfStmt{}
-		// get the condition of the if statement
-		conditionNode := node.Child(1)
-		if conditionNode != nil {
-			ifNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
-		}
-		// get the then block of the if statement
-		thenNode := node.Child(2)
-		if thenNode != nil {
-			ifNode.Then = model.Stmt{NodeString: thenNode.Content(sourceCode)}
-		}
-		// get the else block of the if statement
-		elseNode := node.Child(4)
-		if elseNode != nil {
-			ifNode.Else = model.Stmt{NodeString: elseNode.Content(sourceCode)}
-		}
-
+		ifNode := javalang.ParseIfStatement(node, sourceCode)
 		methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		// add node to graph
 		ifStmtNode := &Node{
@@ -326,10 +178,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			LineNumber:       node.StartPoint().Row + 1,
 			File:             file,
 			isJavaSourceFile: isJavaSourceFile,
-			IfStmt:           &ifNode,
+			IfStmt:           ifNode,
 		}
-		graph.AddNode(ifStmtNode)
-		parentNode.AddChild(&TreeNode{Node: ifStmtNode, NodeType: "IfStmt", ID: ifStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: ifStmtNode, Parent: parentNode})
 	case "while_statement":
 		whileNode := model.WhileStmt{}
 		// get the condition of the while statement
@@ -350,8 +201,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			WhileStmt:        &whileNode,
 		}
-		graph.AddNode(whileStmtNode)
-		parentNode.AddChild(&TreeNode{Node: whileStmtNode, NodeType: "WhileStmt", ID: whileStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: whileStmtNode, Parent: parentNode})
 	case "do_statement":
 		doWhileNode := model.DoStmt{}
 		// get the condition of the while statement
@@ -372,8 +222,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			DoStmt:           &doWhileNode,
 		}
-		graph.AddNode(doWhileStmtNode)
-		parentNode.AddChild(&TreeNode{Node: doWhileStmtNode, NodeType: "DoStmt", ID: doWhileStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: doWhileStmtNode, Parent: parentNode})
 	case "for_statement":
 		forNode := model.ForStmt{}
 		// get the condition of the while statement
@@ -403,8 +252,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			ForStmt:          &forNode,
 		}
-		graph.AddNode(forStmtNode)
-		parentNode.AddChild(&TreeNode{Node: forStmtNode, NodeType: "ForStmt", ID: forStmtNode.ID, Parent: parentNode})
+		parentNode.AddChild(&TreeNode{Node: forStmtNode, Parent: parentNode})
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")
@@ -431,8 +279,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(addExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: addExpressionNode, NodeType: "AddExpr", ID: addExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: addExpressionNode, Parent: parentNode})
 		case "-":
 			var subExpr model.SubExpr
 			subExpr.LeftOperand = expressionNode.LeftOperand
@@ -449,8 +296,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(subExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: subExpressionNode, NodeType: "SubExpr", ID: subExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: subExpressionNode, Parent: parentNode})
 		case "*":
 			var mulExpr model.MulExpr
 			mulExpr.LeftOperand = expressionNode.LeftOperand
@@ -467,8 +313,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(mulExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: mulExpressionNode, NodeType: "MulExpr", ID: mulExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: mulExpressionNode, Parent: parentNode})
 		case "/":
 			var divExpr model.DivExpr
 			divExpr.LeftOperand = expressionNode.LeftOperand
@@ -485,8 +330,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(divExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: divExpressionNode, NodeType: "DivExpr", ID: divExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: divExpressionNode, Parent: parentNode})
 		case ">", "<", ">=", "<=":
 			var compExpr model.ComparisonExpr
 			compExpr.LeftOperand = expressionNode.LeftOperand
@@ -503,8 +347,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(compExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: compExpressionNode, NodeType: "ComparisonExpr", ID: compExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: compExpressionNode, Parent: parentNode})
 		case "%":
 			var RemExpr model.RemExpr
 			RemExpr.LeftOperand = expressionNode.LeftOperand
@@ -521,8 +364,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(RemExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: RemExpressionNode, NodeType: "RemExpr", ID: RemExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: RemExpressionNode, Parent: parentNode})
 		case ">>":
 			var RightShiftExpr model.RightShiftExpr
 			RightShiftExpr.LeftOperand = expressionNode.LeftOperand
@@ -539,8 +381,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(RightShiftExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: RightShiftExpressionNode, NodeType: "RightShiftExpr", ID: RightShiftExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: RightShiftExpressionNode, Parent: parentNode})
 		case "<<":
 			var LeftShiftExpr model.LeftShiftExpr
 			LeftShiftExpr.LeftOperand = expressionNode.LeftOperand
@@ -557,8 +398,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(LeftShiftExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: LeftShiftExpressionNode, NodeType: "LeftShiftExpr", ID: LeftShiftExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: LeftShiftExpressionNode, Parent: parentNode})
 		case "!=":
 			var NEExpr model.NEExpr
 			NEExpr.LeftOperand = expressionNode.LeftOperand
@@ -575,8 +415,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(NEExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: NEExpressionNode, NodeType: "NEExpr", ID: NEExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: NEExpressionNode, Parent: parentNode})
 		case "==":
 			var EQExpr model.EqExpr
 			EQExpr.LeftOperand = expressionNode.LeftOperand
@@ -593,8 +432,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(EQExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: EQExpressionNode, NodeType: "EQExpr", ID: EQExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: EQExpressionNode, Parent: parentNode})
 		case "&":
 			var BitwiseAndExpr model.AndBitwiseExpr
 			BitwiseAndExpr.LeftOperand = expressionNode.LeftOperand
@@ -611,8 +449,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(BitwiseAndExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: BitwiseAndExpressionNode, NodeType: "BitwiseAndExpr", ID: BitwiseAndExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: BitwiseAndExpressionNode, Parent: parentNode})
 		case "&&":
 			var AndExpr model.AndLogicalExpr
 			AndExpr.LeftOperand = expressionNode.LeftOperand
@@ -629,8 +466,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(AndExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: AndExpressionNode, NodeType: "AndExpr", ID: AndExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: AndExpressionNode, Parent: parentNode})
 		case "||":
 			var OrExpr model.OrLogicalExpr
 			OrExpr.LeftOperand = expressionNode.LeftOperand
@@ -647,8 +483,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(OrExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: OrExpressionNode, NodeType: "OrExpr", ID: OrExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: OrExpressionNode, Parent: parentNode})
 		case "|":
 			var BitwiseOrExpr model.OrBitwiseExpr
 			BitwiseOrExpr.LeftOperand = expressionNode.LeftOperand
@@ -665,8 +500,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(BitwiseOrExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: BitwiseOrExpressionNode, NodeType: "BitwiseOrExpr", ID: BitwiseOrExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: BitwiseOrExpressionNode, Parent: parentNode})
 		case ">>>":
 			var BitwiseRightShiftExpr model.UnsignedRightShiftExpr
 			BitwiseRightShiftExpr.LeftOperand = expressionNode.LeftOperand
@@ -683,8 +517,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(BitwiseRightShiftExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: BitwiseRightShiftExpressionNode, NodeType: "BitwiseRightShiftExpr", ID: BitwiseRightShiftExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: BitwiseRightShiftExpressionNode, Parent: parentNode})
 		case "^":
 			var BitwiseXorExpr model.XorBitwiseExpr
 			BitwiseXorExpr.LeftOperand = expressionNode.LeftOperand
@@ -701,8 +534,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			graph.AddNode(BitwiseXorExpressionNode)
-			parentNode.AddChild(&TreeNode{Node: BitwiseXorExpressionNode, NodeType: "BitwiseXorExpr", ID: BitwiseXorExpressionNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: BitwiseXorExpressionNode, Parent: parentNode})
 		}
 
 		invokedNode := &Node{
@@ -715,15 +547,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile: isJavaSourceFile,
 			BinaryExpr:       &expressionNode,
 		}
-		graph.AddNode(invokedNode)
-		parentNode.AddChild(&TreeNode{Node: invokedNode, NodeType: "BinaryExpr", ID: invokedNode.ID, Parent: parentNode})
-		currentContext = invokedNode
+		parentNode.AddChild(&TreeNode{Node: invokedNode, Parent: parentNode})
 	case "method_declaration":
 		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 			commentContent := node.PrevSibling().Content(sourceCode)
 			if strings.HasPrefix(commentContent, "/*") {
-				javadoc = parseJavadocTags(commentContent)
+				javadoc = javalang.ParseJavadocTags(commentContent)
 			}
 		}
 		methodName, methodID := extractMethodName(node, sourceCode, file)
@@ -778,7 +608,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Name:                 methodName,
 			CodeSnippet:          node.Content(sourceCode),
 			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-			Modifier:             extractVisibilityModifier(modifiers),
+			Modifier:             javalang.ExtractVisibilityModifier(modifiers),
 			ReturnType:           returnType,
 			MethodArgumentsType:  methodArgumentType,
 			MethodArgumentsValue: methodArgumentValue,
@@ -788,14 +618,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Annotation:           annotationMarkers,
 			JavaDoc:              javadoc,
 		}
-		graph.AddNode(invokedNode)
-		methodNode := &TreeNode{Node: invokedNode, NodeType: "MethodDecl", ID: invokedNode.ID, Parent: parentNode}
+		methodNode := &TreeNode{Node: invokedNode, Parent: parentNode}
 		parentNode.AddChild(methodNode)
 		currentContext = invokedNode // Update context to the new method
 
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, graph, currentContext, file, methodNode)
+			buildGraphFromAST(child, sourceCode, currentContext, file, methodNode)
 		}
 
 	case "method_invocation":
@@ -833,23 +662,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			File:                 file,
 			isJavaSourceFile:     isJavaSourceFile,
 		}
-		graph.AddNode(invokedNode)
-		methodInvocationTreeNode := &TreeNode{Node: invokedNode, NodeType: "MethodInv", ID: invokedNode.ID, Parent: parentNode}
+		methodInvocationTreeNode := &TreeNode{Node: invokedNode, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, graph, currentContext, file, methodInvocationTreeNode)
-		}
-
-		if currentContext != nil {
-			graph.AddEdge(currentContext, invokedNode)
+			buildGraphFromAST(child, sourceCode, currentContext, file, methodInvocationTreeNode)
 		}
 	case "class_declaration":
 		var javadoc *model.Javadoc
 		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 			commentContent := node.PrevSibling().Content(sourceCode)
 			if strings.HasPrefix(commentContent, "/*") {
-				javadoc = parseJavadocTags(commentContent)
+				javadoc = javalang.ParseJavadocTags(commentContent)
 			}
 		}
 		className := node.ChildByFieldName("name").Content(sourceCode)
@@ -893,7 +717,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1,
 			PackageName:      packageName,
-			Modifier:         extractVisibilityModifier(accessModifier),
+			Modifier:         javalang.ExtractVisibilityModifier(accessModifier),
 			SuperClass:       superClass,
 			Interface:        implementedInterface,
 			File:             file,
@@ -902,7 +726,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Annotation:       annotationMarkers,
 		}
 		classTreeNode := &TreeNode{
-			ID:       classNode.ID,
 			Node:     classNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -910,14 +733,13 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		parentNode.AddChild(classTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, graph, currentContext, file, classTreeNode)
+			buildGraphFromAST(child, sourceCode, currentContext, file, classTreeNode)
 		}
-		graph.AddNode(classNode)
 	case "block_comment":
 		// Parse block comments
 		if strings.HasPrefix(node.Content(sourceCode), "/*") {
 			commentContent := node.Content(sourceCode)
-			javadocTags := parseJavadocTags(commentContent)
+			javadocTags := javalang.ParseJavadocTags(commentContent)
 
 			commentNode := &Node{
 				ID:               GenerateMethodID(node.Content(sourceCode), []string{}, file),
@@ -928,8 +750,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 				isJavaSourceFile: isJavaSourceFile,
 				JavaDoc:          javadocTags,
 			}
-			graph.AddNode(commentNode)
-			parentNode.AddChild(&TreeNode{Node: commentNode, NodeType: "Comment", ID: commentNode.ID, Parent: parentNode})
+			parentNode.AddChild(&TreeNode{Node: commentNode, Parent: parentNode})
 		}
 	case "local_variable_declaration", "field_declaration":
 		// Extract variable name, type, and modifiers
@@ -982,7 +803,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			Name:             variableName,
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1,
-			Modifier:         extractVisibilityModifier(variableModifier),
+			Modifier:         javalang.ExtractVisibilityModifier(variableModifier),
 			DataType:         variableType,
 			Scope:            scope,
 			VariableValue:    variableValue,
@@ -990,9 +811,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			File:             file,
 			isJavaSourceFile: isJavaSourceFile,
 		}
-		graph.AddNode(variableNode)
 		parentNode.AddChild(&TreeNode{
-			ID:       variableNode.ID,
 			Node:     variableNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -1042,9 +861,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			isJavaSourceFile:  isJavaSourceFile,
 			ClassInstanceExpr: &classInstanceExpression,
 		}
-		graph.AddNode(objectNode)
 		parentNode.AddChild(&TreeNode{
-			ID:       objectNode.ID,
 			Node:     objectNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -1054,24 +871,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		buildGraphFromAST(child, sourceCode, graph, currentContext, file, parentNode)
-	}
-
-	// iterate through method declaration from graph node
-	for _, node := range graph.Nodes {
-		if node.Type == "method_declaration" {
-			// iterate through method method_invocation from graph node
-			for _, invokedNode := range graph.Nodes {
-				if invokedNode.Type == "method_invocation" {
-					if invokedNode.Name == node.Name {
-						// check argument list count is same
-						if len(invokedNode.MethodArgumentsValue) == len(node.MethodArgumentsType) {
-							node.hasAccess = true
-						}
-					}
-				}
-			}
-		}
+		buildGraphFromAST(child, sourceCode, currentContext, file, parentNode)
 	}
 }
 
@@ -1161,8 +961,7 @@ func readFile(path string) ([]byte, error) {
 	return content, nil
 }
 
-func Initialize(directory string) *CodeGraph {
-	codeGraph := NewCodeGraph()
+func Initialize(directory string) []*TreeNode {
 	treeHolder := []*TreeNode{}
 	// record start time
 	start := time.Now()
@@ -1171,13 +970,12 @@ func Initialize(directory string) *CodeGraph {
 	if err != nil {
 		//nolint:all
 		Log("Directory not found:", err)
-		return codeGraph
+		return treeHolder
 	}
 
 	totalFiles := len(files)
 	numWorkers := 5 // Number of concurrent workers
 	fileChan := make(chan string, totalFiles)
-	resultChan := make(chan *CodeGraph, totalFiles)
 	treeChan := make(chan *TreeNode, totalFiles)
 	statusChan := make(chan string, numWorkers)
 	progressChan := make(chan int, totalFiles)
@@ -1210,11 +1008,8 @@ func Initialize(directory string) *CodeGraph {
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
-			localGraph := NewCodeGraph()
 			localTree := &TreeNode{
-				NodeType: "file",
-				ID:       fileName,
-				Parent:   nil,
+				Parent: nil,
 				Node: &Node{
 					ID:       fileName,
 					Type:     "file",
@@ -1222,11 +1017,10 @@ func Initialize(directory string) *CodeGraph {
 				},
 			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file, localTree)
+			buildGraphFromAST(rootNode, sourceCode, nil, file, localTree)
 			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 
-			resultChan <- localGraph
 			treeChan <- localTree
 			progressChan <- 1
 		}
@@ -1274,21 +1068,10 @@ func Initialize(directory string) *CodeGraph {
 	// Wait for all workers to finish
 	go func() {
 		wg.Wait()
-		close(resultChan)
 		close(statusChan)
 		close(progressChan)
 		close(treeChan)
 	}()
-
-	// Collect results
-	for localGraph := range resultChan {
-		for _, node := range localGraph.Nodes {
-			codeGraph.AddNode(node)
-		}
-		for _, edge := range localGraph.Edges {
-			codeGraph.AddEdge(edge.From, edge.To)
-		}
-	}
 
 	// Print tree structure recursively from treeChan
 	// for treeNode := range treeChan {
@@ -1298,9 +1081,9 @@ func Initialize(directory string) *CodeGraph {
 	end := time.Now()
 	elapsed := end.Sub(start)
 	Log("Elapsed time: ", elapsed)
-	Log("Graph built successfully")
+	Log("Project parsed successfully")
 
-	return codeGraph
+	return treeHolder
 }
 
 // func printTree(node *TreeNode, level int) {
