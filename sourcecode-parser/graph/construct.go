@@ -16,171 +16,32 @@ import (
 	"github.com/smacker/go-tree-sitter/java"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	//nolint:all
 )
 
-type Node struct {
-	ID                   string
-	Type                 string
-	Name                 string
-	CodeSnippet          string
-	LineNumber           uint32
-	IsExternal           bool
-	Modifier             string
-	ReturnType           string
-	MethodArgumentsType  []string
-	MethodArgumentsValue []string
-	PackageName          string
-	ImportPackage        []string
-	SuperClass           string
-	Interface            []string
-	DataType             string
-	Scope                string
-	VariableValue        string
-	hasAccess            bool
-	File                 string
-	isJavaSourceFile     bool
-	ThrowsExceptions     []string
-	Annotation           []string
-	JavaDoc              *model.Javadoc
-	BinaryExpr           *model.BinaryExpr
-	ClassInstanceExpr    *model.ClassInstanceExpr
-	IfStmt               *model.IfStmt
-	WhileStmt            *model.WhileStmt
-	DoStmt               *model.DoStmt
-	ForStmt              *model.ForStmt
-	BreakStmt            *model.BreakStmt
-	ContinueStmt         *model.ContinueStmt
-	YieldStmt            *model.YieldStmt
-	AssertStmt           *model.AssertStmt
-	ReturnStmt           *model.ReturnStmt
-	BlockStmt            *model.BlockStmt
-	FileNode             *model.File
-}
-
-type TreeNode struct {
-	Node     *Node
-	Children []*TreeNode
-	Parent   *TreeNode
-}
-
-func (t *TreeNode) AddChild(child *TreeNode) {
-	t.Children = append(t.Children, child)
-}
-
-func (t *TreeNode) AddChildren(children []*TreeNode) {
-	t.Children = append(t.Children, children...)
-}
-
-func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Node, file string, parentNode *TreeNode) {
-	isJavaSourceFile := javalang.IsJavaSourceFile(file)
+func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *model.Node, file string, parentNode *model.TreeNode) {
+	IsJavaSourceFile := javalang.IsJavaSourceFile(file)
 	switch node.Type() {
 	case "block":
-		blockNode := javalang.ParseBlockStatement(node, sourceCode)
-		uniqueBlockID := fmt.Sprintf("block_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		blockStmtNode := &Node{
-			ID:               GenerateSha256(uniqueBlockID),
-			Type:             "BlockStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "BlockStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			BlockStmt:        blockNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: blockStmtNode, Parent: parentNode})
+		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: blockStmtNode, Parent: parentNode})
 	case "return_statement":
-		returnNode := javalang.ParseReturnStatement(node, sourceCode)
-		uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		returnStmtNode := &Node{
-			ID:               GenerateSha256(uniqueReturnID),
-			Type:             "ReturnStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "ReturnStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			ReturnStmt:       returnNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: returnStmtNode, Parent: parentNode})
+		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: returnStmtNode, Parent: parentNode})
 	case "assert_statement":
-		assertNode := javalang.ParseAssertStatement(node, sourceCode)
-		uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		assertStmtNode := &Node{
-			ID:               GenerateSha256(uniqueAssertID),
-			Type:             "AssertStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "AssertStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			AssertStmt:       assertNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: assertStmtNode, Parent: parentNode})
+		assertStmtNode := javalang.ParseAssertStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: assertStmtNode, Parent: parentNode})
 	case "yield_statement":
-		yieldNode := javalang.ParseYieldStatement(node, sourceCode)
-		uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		yieldStmtNode := &Node{
-			ID:               GenerateSha256(uniqueyieldID),
-			Type:             "YieldStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "YieldStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			YieldStmt:        yieldNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: yieldStmtNode, Parent: parentNode})
+		yieldStmtNode := javalang.ParseYieldStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: yieldStmtNode, Parent: parentNode})
 	case "break_statement":
-		breakNode := javalang.ParseBreakStatement(node, sourceCode)
-		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		breakStmtNode := &Node{
-			ID:               GenerateSha256(uniquebreakstmtID),
-			Type:             "BreakStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "BreakStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			BreakStmt:        breakNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: breakStmtNode, Parent: parentNode})
+		breakStmtNode := javalang.ParseBreakStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: breakStmtNode, Parent: parentNode})
 	case "continue_statement":
-		continueNode := javalang.ParseContinueStatement(node, sourceCode)
-		uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		continueStmtNode := &Node{
-			ID:               GenerateSha256(uniquecontinueID),
-			Type:             "ContinueStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "ContinueStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			ContinueStmt:     continueNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: continueStmtNode, Parent: parentNode})
+		continueNode := javalang.ParseContinueStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: continueNode, Parent: parentNode})
 	case "if_statement":
-		ifNode := javalang.ParseIfStatement(node, sourceCode)
-		methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		// add node to graph
-		ifStmtNode := &Node{
-			ID:               GenerateSha256(methodID),
-			Type:             "IfStmt",
-			Name:             "IfStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			IfStmt:           ifNode,
-		}
-		parentNode.AddChild(&TreeNode{Node: ifStmtNode, Parent: parentNode})
+		ifNode := javalang.ParseIfStatement(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: ifNode, Parent: parentNode})
 	case "while_statement":
 		whileNode := model.WhileStmt{}
 		// get the condition of the while statement
@@ -190,18 +51,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 		}
 		methodID := fmt.Sprintf("while_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		// add node to graph
-		whileStmtNode := &Node{
-			ID:               GenerateSha256(methodID),
+		whileStmtNode := &model.Node{
+			ID:               util.GenerateSha256(methodID),
 			Type:             "WhileStmt",
 			Name:             "WhileStmt",
 			IsExternal:       true,
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1,
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 			WhileStmt:        &whileNode,
 		}
-		parentNode.AddChild(&TreeNode{Node: whileStmtNode, Parent: parentNode})
+		parentNode.AddChild(&model.TreeNode{Node: whileStmtNode, Parent: parentNode})
 	case "do_statement":
 		doWhileNode := model.DoStmt{}
 		// get the condition of the while statement
@@ -211,18 +72,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 		}
 		methodID := fmt.Sprintf("dowhile_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		// add node to graph
-		doWhileStmtNode := &Node{
-			ID:               GenerateSha256(methodID),
+		doWhileStmtNode := &model.Node{
+			ID:               util.GenerateSha256(methodID),
 			Type:             "DoStmt",
 			Name:             "DoStmt",
 			IsExternal:       true,
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1,
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 			DoStmt:           &doWhileNode,
 		}
-		parentNode.AddChild(&TreeNode{Node: doWhileStmtNode, Parent: parentNode})
+		parentNode.AddChild(&model.TreeNode{Node: doWhileStmtNode, Parent: parentNode})
 	case "for_statement":
 		forNode := model.ForStmt{}
 		// get the condition of the while statement
@@ -241,18 +102,18 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 
 		methodID := fmt.Sprintf("for_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 		// add node to graph
-		forStmtNode := &Node{
-			ID:               GenerateSha256(methodID),
+		forStmtNode := &model.Node{
+			ID:               util.GenerateSha256(methodID),
 			Type:             "ForStmt",
 			Name:             "ForStmt",
 			IsExternal:       true,
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1,
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 			ForStmt:          &forNode,
 		}
-		parentNode.AddChild(&TreeNode{Node: forStmtNode, Parent: parentNode})
+		parentNode.AddChild(&model.TreeNode{Node: forStmtNode, Parent: parentNode})
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
 		rightNode := node.ChildByFieldName("right")
@@ -269,362 +130,293 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			addExpr.RightOperand = expressionNode.RightOperand
 			addExpr.Op = expressionNode.Op
 			addExpr.BinaryExpr = expressionNode
-			addExpressionNode := &Node{
-				ID:               GenerateSha256("add_expression" + node.Content(sourceCode)),
+			addExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("add_expression" + node.Content(sourceCode)),
 				Type:             "add_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: addExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: addExpressionNode, Parent: parentNode})
 		case "-":
 			var subExpr model.SubExpr
 			subExpr.LeftOperand = expressionNode.LeftOperand
 			subExpr.RightOperand = expressionNode.RightOperand
 			subExpr.Op = expressionNode.Op
 			subExpr.BinaryExpr = expressionNode
-			subExpressionNode := &Node{
-				ID:               GenerateSha256("sub_expression" + node.Content(sourceCode)),
+			subExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("sub_expression" + node.Content(sourceCode)),
 				Type:             "sub_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: subExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: subExpressionNode, Parent: parentNode})
 		case "*":
 			var mulExpr model.MulExpr
 			mulExpr.LeftOperand = expressionNode.LeftOperand
 			mulExpr.RightOperand = expressionNode.RightOperand
 			mulExpr.Op = expressionNode.Op
 			mulExpr.BinaryExpr = expressionNode
-			mulExpressionNode := &Node{
-				ID:               GenerateSha256("mul_expression" + node.Content(sourceCode)),
+			mulExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("mul_expression" + node.Content(sourceCode)),
 				Type:             "mul_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: mulExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: mulExpressionNode, Parent: parentNode})
 		case "/":
 			var divExpr model.DivExpr
 			divExpr.LeftOperand = expressionNode.LeftOperand
 			divExpr.RightOperand = expressionNode.RightOperand
 			divExpr.Op = expressionNode.Op
 			divExpr.BinaryExpr = expressionNode
-			divExpressionNode := &Node{
-				ID:               GenerateSha256("div_expression" + node.Content(sourceCode)),
+			divExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("div_expression" + node.Content(sourceCode)),
 				Type:             "div_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: divExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: divExpressionNode, Parent: parentNode})
 		case ">", "<", ">=", "<=":
 			var compExpr model.ComparisonExpr
 			compExpr.LeftOperand = expressionNode.LeftOperand
 			compExpr.RightOperand = expressionNode.RightOperand
 			compExpr.Op = expressionNode.Op
 			compExpr.BinaryExpr = expressionNode
-			compExpressionNode := &Node{
-				ID:               GenerateSha256("comp_expression" + node.Content(sourceCode)),
+			compExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("comp_expression" + node.Content(sourceCode)),
 				Type:             "comp_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: compExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: compExpressionNode, Parent: parentNode})
 		case "%":
 			var RemExpr model.RemExpr
 			RemExpr.LeftOperand = expressionNode.LeftOperand
 			RemExpr.RightOperand = expressionNode.RightOperand
 			RemExpr.Op = expressionNode.Op
 			RemExpr.BinaryExpr = expressionNode
-			RemExpressionNode := &Node{
-				ID:               GenerateSha256("rem_expression" + node.Content(sourceCode)),
+			RemExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("rem_expression" + node.Content(sourceCode)),
 				Type:             "rem_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: RemExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: RemExpressionNode, Parent: parentNode})
 		case ">>":
 			var RightShiftExpr model.RightShiftExpr
 			RightShiftExpr.LeftOperand = expressionNode.LeftOperand
 			RightShiftExpr.RightOperand = expressionNode.RightOperand
 			RightShiftExpr.Op = expressionNode.Op
 			RightShiftExpr.BinaryExpr = expressionNode
-			RightShiftExpressionNode := &Node{
-				ID:               GenerateSha256("right_shift_expression" + node.Content(sourceCode)),
+			RightShiftExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("right_shift_expression" + node.Content(sourceCode)),
 				Type:             "right_shift_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: RightShiftExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: RightShiftExpressionNode, Parent: parentNode})
 		case "<<":
 			var LeftShiftExpr model.LeftShiftExpr
 			LeftShiftExpr.LeftOperand = expressionNode.LeftOperand
 			LeftShiftExpr.RightOperand = expressionNode.RightOperand
 			LeftShiftExpr.Op = expressionNode.Op
 			LeftShiftExpr.BinaryExpr = expressionNode
-			LeftShiftExpressionNode := &Node{
-				ID:               GenerateSha256("left_shift_expression" + node.Content(sourceCode)),
+			LeftShiftExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("left_shift_expression" + node.Content(sourceCode)),
 				Type:             "left_shift_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: LeftShiftExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: LeftShiftExpressionNode, Parent: parentNode})
 		case "!=":
 			var NEExpr model.NEExpr
 			NEExpr.LeftOperand = expressionNode.LeftOperand
 			NEExpr.RightOperand = expressionNode.RightOperand
 			NEExpr.Op = expressionNode.Op
 			NEExpr.BinaryExpr = expressionNode
-			NEExpressionNode := &Node{
-				ID:               GenerateSha256("ne_expression" + node.Content(sourceCode)),
+			NEExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("ne_expression" + node.Content(sourceCode)),
 				Type:             "ne_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: NEExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: NEExpressionNode, Parent: parentNode})
 		case "==":
 			var EQExpr model.EqExpr
 			EQExpr.LeftOperand = expressionNode.LeftOperand
 			EQExpr.RightOperand = expressionNode.RightOperand
 			EQExpr.Op = expressionNode.Op
 			EQExpr.BinaryExpr = expressionNode
-			EQExpressionNode := &Node{
-				ID:               GenerateSha256("eq_expression" + node.Content(sourceCode)),
+			EQExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("eq_expression" + node.Content(sourceCode)),
 				Type:             "eq_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: EQExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: EQExpressionNode, Parent: parentNode})
 		case "&":
 			var BitwiseAndExpr model.AndBitwiseExpr
 			BitwiseAndExpr.LeftOperand = expressionNode.LeftOperand
 			BitwiseAndExpr.RightOperand = expressionNode.RightOperand
 			BitwiseAndExpr.Op = expressionNode.Op
 			BitwiseAndExpr.BinaryExpr = expressionNode
-			BitwiseAndExpressionNode := &Node{
-				ID:               GenerateSha256("bitwise_and_expression" + node.Content(sourceCode)),
+			BitwiseAndExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("bitwise_and_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_and_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: BitwiseAndExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: BitwiseAndExpressionNode, Parent: parentNode})
 		case "&&":
 			var AndExpr model.AndLogicalExpr
 			AndExpr.LeftOperand = expressionNode.LeftOperand
 			AndExpr.RightOperand = expressionNode.RightOperand
 			AndExpr.Op = expressionNode.Op
 			AndExpr.BinaryExpr = expressionNode
-			AndExpressionNode := &Node{
-				ID:               GenerateSha256("and_expression" + node.Content(sourceCode)),
+			AndExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("and_expression" + node.Content(sourceCode)),
 				Type:             "and_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: AndExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: AndExpressionNode, Parent: parentNode})
 		case "||":
 			var OrExpr model.OrLogicalExpr
 			OrExpr.LeftOperand = expressionNode.LeftOperand
 			OrExpr.RightOperand = expressionNode.RightOperand
 			OrExpr.Op = expressionNode.Op
 			OrExpr.BinaryExpr = expressionNode
-			OrExpressionNode := &Node{
-				ID:               GenerateSha256("or_expression" + node.Content(sourceCode)),
+			OrExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("or_expression" + node.Content(sourceCode)),
 				Type:             "or_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: OrExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: OrExpressionNode, Parent: parentNode})
 		case "|":
 			var BitwiseOrExpr model.OrBitwiseExpr
 			BitwiseOrExpr.LeftOperand = expressionNode.LeftOperand
 			BitwiseOrExpr.RightOperand = expressionNode.RightOperand
 			BitwiseOrExpr.Op = expressionNode.Op
 			BitwiseOrExpr.BinaryExpr = expressionNode
-			BitwiseOrExpressionNode := &Node{
-				ID:               GenerateSha256("bitwise_or_expression" + node.Content(sourceCode)),
+			BitwiseOrExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("bitwise_or_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_or_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: BitwiseOrExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: BitwiseOrExpressionNode, Parent: parentNode})
 		case ">>>":
 			var BitwiseRightShiftExpr model.UnsignedRightShiftExpr
 			BitwiseRightShiftExpr.LeftOperand = expressionNode.LeftOperand
 			BitwiseRightShiftExpr.RightOperand = expressionNode.RightOperand
 			BitwiseRightShiftExpr.Op = expressionNode.Op
 			BitwiseRightShiftExpr.BinaryExpr = expressionNode
-			BitwiseRightShiftExpressionNode := &Node{
-				ID:               GenerateSha256("bitwise_right_shift_expression" + node.Content(sourceCode)),
+			BitwiseRightShiftExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("bitwise_right_shift_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_right_shift_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: BitwiseRightShiftExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: BitwiseRightShiftExpressionNode, Parent: parentNode})
 		case "^":
 			var BitwiseXorExpr model.XorBitwiseExpr
 			BitwiseXorExpr.LeftOperand = expressionNode.LeftOperand
 			BitwiseXorExpr.RightOperand = expressionNode.RightOperand
 			BitwiseXorExpr.Op = expressionNode.Op
 			BitwiseXorExpr.BinaryExpr = expressionNode
-			BitwiseXorExpressionNode := &Node{
-				ID:               GenerateSha256("bitwise_xor_expression" + node.Content(sourceCode)),
+			BitwiseXorExpressionNode := &model.Node{
+				ID:               util.GenerateSha256("bitwise_xor_expression" + node.Content(sourceCode)),
 				Type:             "bitwise_xor_expression",
 				Name:             node.Content(sourceCode),
 				CodeSnippet:      node.Content(sourceCode),
 				LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				BinaryExpr:       &expressionNode,
 			}
-			parentNode.AddChild(&TreeNode{Node: BitwiseXorExpressionNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: BitwiseXorExpressionNode, Parent: parentNode})
 		}
 
-		invokedNode := &Node{
-			ID:               GenerateSha256("binary_expression" + node.Content(sourceCode)),
+		invokedNode := &model.Node{
+			ID:               util.GenerateSha256("binary_expression" + node.Content(sourceCode)),
 			Type:             "binary_expression",
 			Name:             node.Content(sourceCode),
 			CodeSnippet:      node.Content(sourceCode),
 			LineNumber:       node.StartPoint().Row + 1, // Lines start from 0 in the AST
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 			BinaryExpr:       &expressionNode,
 		}
-		parentNode.AddChild(&TreeNode{Node: invokedNode, Parent: parentNode})
+		parentNode.AddChild(&model.TreeNode{Node: invokedNode, Parent: parentNode})
 	case "method_declaration":
-		var javadoc *model.Javadoc
-		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
-			commentContent := node.PrevSibling().Content(sourceCode)
-			if strings.HasPrefix(commentContent, "/*") {
-				javadoc = javalang.ParseJavadocTags(commentContent)
-			}
-		}
-		methodName, methodID := extractMethodName(node, sourceCode, file)
-		modifiers := ""
-		returnType := ""
-		throws := []string{}
-		methodArgumentType := []string{}
-		methodArgumentValue := []string{}
-		annotationMarkers := []string{}
-
-		for i := 0; i < int(node.ChildCount()); i++ {
-			childNode := node.Child(i)
-			childType := childNode.Type()
-
-			switch childType {
-			case "throws":
-				// namedChild
-				for j := 0; j < int(childNode.NamedChildCount()); j++ {
-					namedChild := childNode.NamedChild(j)
-					if namedChild.Type() == "type_identifier" {
-						throws = append(throws, namedChild.Content(sourceCode))
-					}
-				}
-			case "modifiers":
-				modifiers = childNode.Content(sourceCode)
-				for j := 0; j < int(childNode.ChildCount()); j++ {
-					if childNode.Child(j).Type() == "marker_annotation" {
-						annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode))
-					}
-				}
-			case "void_type", "type_identifier":
-				// get return type of method
-				returnType = childNode.Content(sourceCode)
-			case "formal_parameters":
-				// get method arguments
-				for j := 0; j < int(childNode.NamedChildCount()); j++ {
-					param := childNode.NamedChild(j)
-					if param.Type() == "formal_parameter" {
-						// get type of argument and add to method arguments
-						paramType := param.Child(0).Content(sourceCode)
-						paramValue := param.Child(1).Content(sourceCode)
-						methodArgumentType = append(methodArgumentType, paramType)
-						methodArgumentValue = append(methodArgumentValue, paramValue)
-					}
-				}
-			}
-		}
-
-		invokedNode := &Node{
-			ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
-			Type:                 "method_declaration",
-			Name:                 methodName,
-			CodeSnippet:          node.Content(sourceCode),
-			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-			Modifier:             javalang.ExtractVisibilityModifier(modifiers),
-			ReturnType:           returnType,
-			MethodArgumentsType:  methodArgumentType,
-			MethodArgumentsValue: methodArgumentValue,
-			File:                 file,
-			isJavaSourceFile:     isJavaSourceFile,
-			ThrowsExceptions:     throws,
-			Annotation:           annotationMarkers,
-			JavaDoc:              javadoc,
-		}
-		methodNode := &TreeNode{Node: invokedNode, Parent: parentNode}
+		methodDeclaration := javalang.ParseMethodDeclaration(node, sourceCode, file)
+		methodNode := &model.TreeNode{Node: methodDeclaration, Parent: parentNode}
 		parentNode.AddChild(methodNode)
-		currentContext = invokedNode // Update context to the new method
 
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, currentContext, file, methodNode)
+			buildQLTreeFromAST(child, sourceCode, currentContext, file, methodNode)
 		}
 
 	case "method_invocation":
@@ -651,7 +443,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			}
 		}
 
-		invokedNode := &Node{
+		invokedNode := &model.Node{
 			ID:                   methodID,
 			Type:                 "method_invocation",
 			Name:                 methodName,
@@ -660,9 +452,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
 			MethodArgumentsValue: arguments,
 			File:                 file,
-			isJavaSourceFile:     isJavaSourceFile,
+			IsJavaSourceFile:     IsJavaSourceFile,
 		}
-		methodInvocationTreeNode := &TreeNode{Node: invokedNode, Parent: parentNode}
+		methodInvocationTreeNode := &model.TreeNode{Node: invokedNode, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
@@ -710,7 +502,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			}
 		}
 
-		classNode := &Node{
+		classNode := &model.Node{
 			ID:               GenerateMethodID(className, []string{}, file),
 			Type:             "class_declaration",
 			Name:             className,
@@ -721,11 +513,11 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			SuperClass:       superClass,
 			Interface:        implementedInterface,
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 			JavaDoc:          javadoc,
 			Annotation:       annotationMarkers,
 		}
-		classTreeNode := &TreeNode{
+		classTreeNode := &model.TreeNode{
 			Node:     classNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -741,16 +533,16 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			commentContent := node.Content(sourceCode)
 			javadocTags := javalang.ParseJavadocTags(commentContent)
 
-			commentNode := &Node{
+			commentNode := &model.Node{
 				ID:               GenerateMethodID(node.Content(sourceCode), []string{}, file),
 				Type:             "block_comment",
 				CodeSnippet:      commentContent,
 				LineNumber:       node.StartPoint().Row + 1,
 				File:             file,
-				isJavaSourceFile: isJavaSourceFile,
+				IsJavaSourceFile: IsJavaSourceFile,
 				JavaDoc:          javadocTags,
 			}
-			parentNode.AddChild(&TreeNode{Node: commentNode, Parent: parentNode})
+			parentNode.AddChild(&model.TreeNode{Node: commentNode, Parent: parentNode})
 		}
 	case "local_variable_declaration", "field_declaration":
 		// Extract variable name, type, and modifiers
@@ -797,8 +589,8 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			scope = "field"
 		}
 		// Create a new node for the variable
-		variableNode := &Node{
-			ID:               GenerateMethodID(variableName, []string{}, file),
+		variableNode := &model.Node{
+			ID:               util.util.GenerateSha256(variableName, []string{}, file),
 			Type:             "variable_declaration",
 			Name:             variableName,
 			CodeSnippet:      node.Content(sourceCode),
@@ -809,9 +601,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			VariableValue:    variableValue,
 			hasAccess:        hasAccessValue,
 			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
+			IsJavaSourceFile: IsJavaSourceFile,
 		}
-		parentNode.AddChild(&TreeNode{
+		parentNode.AddChild(&model.TreeNode{
 			Node:     variableNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -851,17 +643,17 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, currentContext *Nod
 			}
 		}
 
-		objectNode := &Node{
+		objectNode := &model.Node{
 			ID:                GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
 			Type:              "ClassInstanceExpr",
 			Name:              className,
 			CodeSnippet:       node.Content(sourceCode),
 			LineNumber:        node.StartPoint().Row + 1,
 			File:              file,
-			isJavaSourceFile:  isJavaSourceFile,
+			IsJavaSourceFile:  IsJavaSourceFile,
 			ClassInstanceExpr: &classInstanceExpression,
 		}
-		parentNode.AddChild(&TreeNode{
+		parentNode.AddChild(&model.TreeNode{
 			Node:     objectNode,
 			Children: nil,
 			Parent:   parentNode,
@@ -899,8 +691,8 @@ func readFile(path string) ([]byte, error) {
 	return content, nil
 }
 
-func Initialize(directory string) []*TreeNode {
-	treeHolder := []*TreeNode{}
+func Initialize(directory string) []*model.TreeNode {
+	treeHolder := []*model.TreeNode{}
 	// record start time
 	start := time.Now()
 
@@ -914,7 +706,7 @@ func Initialize(directory string) []*TreeNode {
 	totalFiles := len(files)
 	numWorkers := 5 // Number of concurrent workers
 	fileChan := make(chan string, totalFiles)
-	treeChan := make(chan *TreeNode, totalFiles)
+	treeChan := make(chan *model.TreeNode, totalFiles)
 	statusChan := make(chan string, numWorkers)
 	progressChan := make(chan int, totalFiles)
 	var wg sync.WaitGroup
@@ -946,9 +738,9 @@ func Initialize(directory string) []*TreeNode {
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
-			localTree := &TreeNode{
+			localTree := &model.TreeNode{
 				Parent: nil,
-				Node: &Node{
+				Node: &model.Node{
 					ID:       fileName,
 					Type:     "file",
 					FileNode: &model.File{File: fileName},
@@ -1024,7 +816,7 @@ func Initialize(directory string) []*TreeNode {
 	return treeHolder
 }
 
-// func printTree(node *TreeNode, level int) {
+// func printTree(node *model.TreeNode, level int) {
 // 	tab := strings.Repeat("\t", level)
 // 	fmt.Println(tab+"Value:", node.NodeType)
 // 	fmt.Println(tab+"Code:", node.Node.CodeSnippet)

@@ -2,7 +2,9 @@ package java
 
 import (
 	"strconv"
+	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -63,6 +65,79 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	columnNumber := int(node.StartPoint().Column) + 1
 	// convert to string and merge
 	content += " " + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber)
-	methodID = GenerateMethodID(methodName, parameters, filepath+"/"+content)
+	methodID = util.GenerateMethodID(methodName, parameters, filepath+"/"+content)
 	return methodName, methodID
+}
+
+func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	var javadoc *model.Javadoc
+	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
+		commentContent := node.PrevSibling().Content(sourceCode)
+		if strings.HasPrefix(commentContent, "/*") {
+			javadoc = ParseJavadocTags(commentContent)
+		}
+	}
+	methodName, methodID := extractMethodName(node, sourceCode, file)
+	modifiers := ""
+	returnType := ""
+	throws := []string{}
+	methodArgumentType := []string{}
+	methodArgumentValue := []string{}
+	annotationMarkers := []string{}
+
+	for i := 0; i < int(node.ChildCount()); i++ {
+		childNode := node.Child(i)
+		childType := childNode.Type()
+
+		switch childType {
+		case "throws":
+			// namedChild
+			for j := 0; j < int(childNode.NamedChildCount()); j++ {
+				namedChild := childNode.NamedChild(j)
+				if namedChild.Type() == "type_identifier" {
+					throws = append(throws, namedChild.Content(sourceCode))
+				}
+			}
+		case "modifiers":
+			modifiers = childNode.Content(sourceCode)
+			for j := 0; j < int(childNode.ChildCount()); j++ {
+				if childNode.Child(j).Type() == "marker_annotation" {
+					annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode))
+				}
+			}
+		case "void_type", "type_identifier":
+			// get return type of method
+			returnType = childNode.Content(sourceCode)
+		case "formal_parameters":
+			// get method arguments
+			for j := 0; j < int(childNode.NamedChildCount()); j++ {
+				param := childNode.NamedChild(j)
+				if param.Type() == "formal_parameter" {
+					// get type of argument and add to method arguments
+					paramType := param.Child(0).Content(sourceCode)
+					paramValue := param.Child(1).Content(sourceCode)
+					methodArgumentType = append(methodArgumentType, paramType)
+					methodArgumentValue = append(methodArgumentValue, paramValue)
+				}
+			}
+		}
+	}
+
+	invokedNode := &model.Node{
+		ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
+		Type:                 "method_declaration",
+		Name:                 methodName,
+		CodeSnippet:          node.Content(sourceCode),
+		LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
+		Modifier:             ExtractVisibilityModifier(modifiers),
+		ReturnType:           returnType,
+		MethodArgumentsType:  methodArgumentType,
+		MethodArgumentsValue: methodArgumentValue,
+		File:                 file,
+		IsJavaSourceFile:     IsJavaSourceFile(file),
+		ThrowsExceptions:     throws,
+		Annotation:           annotationMarkers,
+		JavaDoc:              javadoc,
+	}
+	return invokedNode
 }
