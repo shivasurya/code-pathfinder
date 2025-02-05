@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	util "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -138,6 +139,44 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		ThrowsExceptions:     throws,
 		Annotation:           annotationMarkers,
 		JavaDoc:              javadoc,
+	}
+	return invokedNode
+}
+
+func ParseMethodInvoker(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	methodName, methodID := extractMethodName(node, sourceCode, file)
+	arguments := []string{}
+	// get argument list from arguments node iterate for child node
+	for i := 0; i < int(node.ChildCount()); i++ {
+		if node.Child(i).Type() == "argument_list" {
+			argumentsNode := node.Child(i)
+			for j := 0; j < int(argumentsNode.ChildCount()); j++ {
+				argument := argumentsNode.Child(j)
+				switch argument.Type() {
+				case "identifier":
+					arguments = append(arguments, argument.Content(sourceCode))
+				case "string_literal":
+					stringliteral := argument.Content(sourceCode)
+					stringliteral = strings.TrimPrefix(stringliteral, "\"")
+					stringliteral = strings.TrimSuffix(stringliteral, "\"")
+					arguments = append(arguments, stringliteral)
+				default:
+					arguments = append(arguments, argument.Content(sourceCode))
+				}
+			}
+		}
+	}
+
+	invokedNode := &model.Node{
+		ID:                   methodID,
+		Type:                 "method_invocation",
+		Name:                 methodName,
+		IsExternal:           true,
+		CodeSnippet:          node.Content(sourceCode),
+		LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
+		MethodArgumentsValue: arguments,
+		File:                 file,
+		IsJavaSourceFile:     IsJavaSourceFile(file),
 	}
 	return invokedNode
 }

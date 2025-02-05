@@ -137,3 +137,81 @@ func ParseBlockStatement(node *sitter.Node, sourceCode []byte, file string) *mod
 	}
 	return blockStmtNode
 }
+
+func ParseWhileStatement(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	whileNode := model.WhileStmt{}
+	// get the condition of the while statement
+	conditionNode := node.Child(1)
+	if conditionNode != nil {
+		whileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+	}
+	methodID := fmt.Sprintf("while_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// add node to graph
+	whileStmtNode := &model.Node{
+		ID:               util.GenerateSha256(methodID),
+		Type:             "WhileStmt",
+		Name:             "WhileStmt",
+		IsExternal:       true,
+		CodeSnippet:      node.Content(sourceCode),
+		LineNumber:       node.StartPoint().Row + 1,
+		File:             file,
+		IsJavaSourceFile: IsJavaSourceFile(file),
+		WhileStmt:        &whileNode,
+	}
+	return whileStmtNode
+}
+
+func ParseDoWhileStatement(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	doWhileNode := model.DoStmt{}
+	// get the condition of the while statement
+	conditionNode := node.Child(2)
+	if conditionNode != nil {
+		doWhileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+	}
+	methodID := fmt.Sprintf("dowhile_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// add node to graph
+	doWhileStmtNode := &model.Node{
+		ID:               util.GenerateSha256(methodID),
+		Type:             "DoStmt",
+		Name:             "DoStmt",
+		IsExternal:       true,
+		CodeSnippet:      node.Content(sourceCode),
+		LineNumber:       node.StartPoint().Row + 1,
+		File:             file,
+		IsJavaSourceFile: IsJavaSourceFile(file),
+		DoStmt:           &doWhileNode,
+	}
+	return doWhileStmtNode
+}
+
+func ParseForLoopStatement(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	forNode := model.ForStmt{}
+	// get the condition of the while statement
+	initNode := node.ChildByFieldName("init")
+	if initNode != nil {
+		forNode.Init = &model.Expr{Node: *initNode, NodeString: initNode.Content(sourceCode)}
+	}
+	conditionNode := node.ChildByFieldName("condition")
+	if conditionNode != nil {
+		forNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
+	}
+	incrementNode := node.ChildByFieldName("increment")
+	if incrementNode != nil {
+		forNode.Increment = &model.Expr{Node: *incrementNode, NodeString: incrementNode.Content(sourceCode)}
+	}
+
+	methodID := fmt.Sprintf("for_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// add node to graph
+	forStmtNode := &model.Node{
+		ID:               util.GenerateSha256(methodID),
+		Type:             "ForStmt",
+		Name:             "ForStmt",
+		IsExternal:       true,
+		CodeSnippet:      node.Content(sourceCode),
+		LineNumber:       node.StartPoint().Row + 1,
+		File:             file,
+		IsJavaSourceFile: IsJavaSourceFile(file),
+		ForStmt:          &forNode,
+	}
+	return forStmtNode
+}

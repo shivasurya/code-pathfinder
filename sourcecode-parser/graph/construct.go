@@ -43,76 +43,13 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		ifNode := javalang.ParseIfStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: ifNode, Parent: parentNode})
 	case "while_statement":
-		whileNode := model.WhileStmt{}
-		// get the condition of the while statement
-		conditionNode := node.Child(1)
-		if conditionNode != nil {
-			whileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
-		}
-		methodID := fmt.Sprintf("while_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		// add node to graph
-		whileStmtNode := &model.Node{
-			ID:               util.GenerateSha256(methodID),
-			Type:             "WhileStmt",
-			Name:             "WhileStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			File:             file,
-			IsJavaSourceFile: IsJavaSourceFile,
-			WhileStmt:        &whileNode,
-		}
+		whileStmtNode := javalang.ParseWhileStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: whileStmtNode, Parent: parentNode})
 	case "do_statement":
-		doWhileNode := model.DoStmt{}
-		// get the condition of the while statement
-		conditionNode := node.Child(2)
-		if conditionNode != nil {
-			doWhileNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
-		}
-		methodID := fmt.Sprintf("dowhile_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		// add node to graph
-		doWhileStmtNode := &model.Node{
-			ID:               util.GenerateSha256(methodID),
-			Type:             "DoStmt",
-			Name:             "DoStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			File:             file,
-			IsJavaSourceFile: IsJavaSourceFile,
-			DoStmt:           &doWhileNode,
-		}
+		doWhileStmtNode := javalang.ParseDoWhileStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: doWhileStmtNode, Parent: parentNode})
 	case "for_statement":
-		forNode := model.ForStmt{}
-		// get the condition of the while statement
-		initNode := node.ChildByFieldName("init")
-		if initNode != nil {
-			forNode.Init = &model.Expr{Node: *initNode, NodeString: initNode.Content(sourceCode)}
-		}
-		conditionNode := node.ChildByFieldName("condition")
-		if conditionNode != nil {
-			forNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
-		}
-		incrementNode := node.ChildByFieldName("increment")
-		if incrementNode != nil {
-			forNode.Increment = &model.Expr{Node: *incrementNode, NodeString: incrementNode.Content(sourceCode)}
-		}
-
-		methodID := fmt.Sprintf("for_stmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		// add node to graph
-		forStmtNode := &model.Node{
-			ID:               util.GenerateSha256(methodID),
-			Type:             "ForStmt",
-			Name:             "ForStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			File:             file,
-			IsJavaSourceFile: IsJavaSourceFile,
-			ForStmt:          &forNode,
-		}
+		forStmtNode := javalang.ParseForLoopStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: forStmtNode, Parent: parentNode})
 	case "binary_expression":
 		leftNode := node.ChildByFieldName("left")
@@ -420,103 +357,15 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		}
 
 	case "method_invocation":
-		methodName, methodID := extractMethodName(node, sourceCode, file)
-		arguments := []string{}
-		// get argument list from arguments node iterate for child node
-		for i := 0; i < int(node.ChildCount()); i++ {
-			if node.Child(i).Type() == "argument_list" {
-				argumentsNode := node.Child(i)
-				for j := 0; j < int(argumentsNode.ChildCount()); j++ {
-					argument := argumentsNode.Child(j)
-					switch argument.Type() {
-					case "identifier":
-						arguments = append(arguments, argument.Content(sourceCode))
-					case "string_literal":
-						stringliteral := argument.Content(sourceCode)
-						stringliteral = strings.TrimPrefix(stringliteral, "\"")
-						stringliteral = strings.TrimSuffix(stringliteral, "\"")
-						arguments = append(arguments, stringliteral)
-					default:
-						arguments = append(arguments, argument.Content(sourceCode))
-					}
-				}
-			}
-		}
-
-		invokedNode := &model.Node{
-			ID:                   methodID,
-			Type:                 "method_invocation",
-			Name:                 methodName,
-			IsExternal:           true,
-			CodeSnippet:          node.Content(sourceCode),
-			LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-			MethodArgumentsValue: arguments,
-			File:                 file,
-			IsJavaSourceFile:     IsJavaSourceFile,
-		}
-		methodInvocationTreeNode := &model.TreeNode{Node: invokedNode, Parent: parentNode}
+		methodInvokedNode := javalang.ParseMethodInvoker(node, sourceCode, file)
+		methodInvocationTreeNode := &model.TreeNode{Node: methodInvokedNode, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, currentContext, file, methodInvocationTreeNode)
+			buildQLTreeFromAST(child, sourceCode, currentContext, file, methodInvocationTreeNode)
 		}
 	case "class_declaration":
-		var javadoc *model.Javadoc
-		if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
-			commentContent := node.PrevSibling().Content(sourceCode)
-			if strings.HasPrefix(commentContent, "/*") {
-				javadoc = javalang.ParseJavadocTags(commentContent)
-			}
-		}
-		className := node.ChildByFieldName("name").Content(sourceCode)
-		packageName := ""
-		accessModifier := ""
-		superClass := ""
-		annotationMarkers := []string{}
-		implementedInterface := []string{}
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			if child.Type() == "modifiers" {
-				accessModifier = child.Content(sourceCode)
-				for j := 0; j < int(child.ChildCount()); j++ {
-					if child.Child(j).Type() == "marker_annotation" {
-						annotationMarkers = append(annotationMarkers, child.Child(j).Content(sourceCode))
-					}
-				}
-			}
-			if child.Type() == "superclass" {
-				for j := 0; j < int(child.ChildCount()); j++ {
-					if child.Child(j).Type() == "type_identifier" {
-						superClass = child.Child(j).Content(sourceCode)
-					}
-				}
-			}
-			if child.Type() == "super_interfaces" {
-				for j := 0; j < int(child.ChildCount()); j++ {
-					// typelist node and then iterate through type_identifier node
-					typeList := child.Child(j)
-					for k := 0; k < int(typeList.ChildCount()); k++ {
-						implementedInterface = append(implementedInterface, typeList.Child(k).Content(sourceCode))
-					}
-				}
-			}
-		}
-
-		classNode := &model.Node{
-			ID:               GenerateMethodID(className, []string{}, file),
-			Type:             "class_declaration",
-			Name:             className,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			PackageName:      packageName,
-			Modifier:         javalang.ExtractVisibilityModifier(accessModifier),
-			SuperClass:       superClass,
-			Interface:        implementedInterface,
-			File:             file,
-			IsJavaSourceFile: IsJavaSourceFile,
-			JavaDoc:          javadoc,
-			Annotation:       annotationMarkers,
-		}
+		classNode := javalang.ParseClass(node, sourceCode, file)
 		classTreeNode := &model.TreeNode{
 			Node:     classNode,
 			Children: nil,
@@ -525,7 +374,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		parentNode.AddChild(classTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			buildGraphFromAST(child, sourceCode, currentContext, file, classTreeNode)
+			buildQLTreeFromAST(child, sourceCode, currentContext, file, classTreeNode)
 		}
 	case "block_comment":
 		// Parse block comments
@@ -546,63 +395,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		}
 	case "local_variable_declaration", "field_declaration":
 		// Extract variable name, type, and modifiers
-		variableName := ""
-		variableType := ""
-		variableModifier := ""
-		variableValue := ""
-		hasAccessValue := false
-		var scope string
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			switch child.Type() {
-			case "variable_declarator":
-				variableName = child.Content(sourceCode)
-				for j := 0; j < int(child.ChildCount()); j++ {
-					if child.Child(j).Type() == "identifier" {
-						variableName = child.Child(j).Content(sourceCode)
-					}
-					// if child type contains =, iterate through and get remaining content
-					if child.Child(j).Type() == "=" {
-						for k := j + 1; k < int(child.ChildCount()); k++ {
-							variableValue += child.Child(k).Content(sourceCode)
-						}
-					}
-
-				}
-				// remove spaces from variable value
-				variableValue = strings.ReplaceAll(variableValue, " ", "")
-				// remove new line from variable value
-				variableValue = strings.ReplaceAll(variableValue, "\n", "")
-			case "modifiers":
-				variableModifier = child.Content(sourceCode)
-			}
-			// if child type contains type, get the type of variable
-			if strings.Contains(child.Type(), "type") {
-				variableType = child.Content(sourceCode)
-			}
-		}
-		if node.Type() == "local_variable_declaration" {
-			scope = "local"
-			//nolint:all
-			// hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
-		} else {
-			scope = "field"
-		}
-		// Create a new node for the variable
-		variableNode := &model.Node{
-			ID:               util.util.GenerateSha256(variableName, []string{}, file),
-			Type:             "variable_declaration",
-			Name:             variableName,
-			CodeSnippet:      node.Content(sourceCode),
-			LineNumber:       node.StartPoint().Row + 1,
-			Modifier:         javalang.ExtractVisibilityModifier(variableModifier),
-			DataType:         variableType,
-			Scope:            scope,
-			VariableValue:    variableValue,
-			hasAccess:        hasAccessValue,
-			File:             file,
-			IsJavaSourceFile: IsJavaSourceFile,
-		}
+		variableNode := javalang.ParseVariableOrField(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{
 			Node:     variableNode,
 			Children: nil,
@@ -663,7 +456,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		buildGraphFromAST(child, sourceCode, currentContext, file, parentNode)
+		buildQLTreeFromAST(child, sourceCode, currentContext, file, parentNode)
 	}
 }
 func getFiles(directory string) ([]string, error) {
@@ -747,7 +540,7 @@ func Initialize(directory string) []*model.TreeNode {
 				},
 			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildGraphFromAST(rootNode, sourceCode, nil, file, localTree)
+			buildQLTreeFromAST(rootNode, sourceCode, nil, file, localTree)
 			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 
