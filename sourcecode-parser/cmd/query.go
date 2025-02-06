@@ -11,6 +11,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	"github.com/spf13/cobra"
 )
 
@@ -160,7 +161,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 			// add formatted output to result
 			output := "\tResult: "
 			for _, outputObject := range formattedOutput[i] {
-				output += graph.FormatType(outputObject)
+				output += utilities.FormatType(outputObject)
 				output += " "
 				output += verticalLine + " "
 			}

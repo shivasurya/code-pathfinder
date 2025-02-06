@@ -12,8 +12,8 @@ import (
 
 func TestQueryEntities(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &Node{ID: "abcd", Type: "method_declaration", Name: "testMethod", Modifier: "public"}
-	node2 := &Node{ID: "cdef", Type: "class_declaration", Name: "TestClass", Modifier: "private"}
+	node1 := &model.Node{ID: "abcd", Type: "method_declaration", Name: "testMethod", Modifier: "public"}
+	node2 := &model.Node{ID: "cdef", Type: "class_declaration", Name: "TestClass", Modifier: "private"}
 	graph.AddNode(node1)
 	graph.AddNode(node2)
 
@@ -59,13 +59,13 @@ func TestQueryEntities(t *testing.T) {
 func TestFilterEntities(t *testing.T) {
 	tests := []struct {
 		name     string
-		node     *Node
+		node     *model.Node
 		query    parser.Query
 		expected bool
 	}{
 		{
 			name: "Filter method by visibility",
-			node: &Node{Type: "method_declaration", Modifier: "public"},
+			node: &model.Node{Type: "method_declaration", Modifier: "public"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
 				Expression: "md.getVisibility() == \"public\"",
@@ -74,7 +74,7 @@ func TestFilterEntities(t *testing.T) {
 		},
 		{
 			name: "Filter class by name",
-			node: &Node{Type: "class_declaration", Name: "TestClass"},
+			node: &model.Node{Type: "class_declaration", Name: "TestClass"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "class_declaration", Alias: "cd"}},
 				Expression: "cd.getName() == \"TestClass\"",
@@ -83,7 +83,7 @@ func TestFilterEntities(t *testing.T) {
 		},
 		{
 			name: "Filter method by return type",
-			node: &Node{Type: "method_declaration", ReturnType: "void"},
+			node: &model.Node{Type: "method_declaration", ReturnType: "void"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
 				Expression: "md.getReturnType() == \"void\"",
@@ -92,7 +92,7 @@ func TestFilterEntities(t *testing.T) {
 		},
 		{
 			name: "Filter variable by data type",
-			node: &Node{Type: "variable_declaration", DataType: "int"},
+			node: &model.Node{Type: "variable_declaration", DataType: "int"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "variable_declaration", Alias: "vd"}},
 				Expression: "vd.getVariableDataType() == \"int\"",
@@ -101,7 +101,7 @@ func TestFilterEntities(t *testing.T) {
 		},
 		{
 			name: "Filter with complex expression",
-			node: &Node{Type: "method_declaration", Modifier: "public", ReturnType: "String", Name: "getName"},
+			node: &model.Node{Type: "method_declaration", Modifier: "public", ReturnType: "String", Name: "getName"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
 				Expression: "md.getVisibility() == \"public\" && md.getReturnType() == \"String\" && md.getName() == \"getName\"",
@@ -110,7 +110,7 @@ func TestFilterEntities(t *testing.T) {
 		},
 		{
 			name: "Filter with false condition",
-			node: &Node{Type: "method_declaration", Modifier: "private"},
+			node: &model.Node{Type: "method_declaration", Modifier: "private"},
 			query: parser.Query{
 				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "md"}},
 				Expression: "md.getVisibility() == \"public\"",
@@ -121,14 +121,14 @@ func TestFilterEntities(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FilterEntities([]*Node{tt.node}, tt.query)
+			result := FilterEntities([]*model.Node{tt.node}, tt.query)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestGenerateProxyEnv(t *testing.T) {
-	node := &Node{
+	node := &model.Node{
 		Type:                 "method_declaration",
 		Name:                 "testMethod",
 		Modifier:             "public",

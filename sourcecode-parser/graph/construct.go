@@ -58,24 +58,21 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		methodNode := &model.TreeNode{Node: methodDeclaration, Parent: parentNode}
 		parentNode.AddChild(methodNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			buildQLTreeFromAST(child, sourceCode, currentContext, file, methodNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, methodNode)
 		}
 	case "method_invocation":
 		methodInvokedNode := javalang.ParseMethodInvoker(node, sourceCode, file)
 		methodInvocationTreeNode := &model.TreeNode{Node: methodInvokedNode, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			buildQLTreeFromAST(child, sourceCode, currentContext, file, methodInvocationTreeNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, methodInvocationTreeNode)
 		}
 	case "class_declaration":
 		classNode := javalang.ParseClass(node, sourceCode, file)
 		classTreeNode := &model.TreeNode{Node: classNode, Children: nil, Parent: parentNode}
 		parentNode.AddChild(classTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			buildQLTreeFromAST(child, sourceCode, currentContext, file, classTreeNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, classTreeNode)
 		}
 	case "block_comment":
 		// Parse block comments
@@ -93,8 +90,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 	}
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		buildQLTreeFromAST(child, sourceCode, currentContext, file, parentNode)
+		buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, parentNode)
 	}
 }
 

@@ -1,6 +1,7 @@
 package java
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
@@ -52,7 +53,7 @@ func ParseVariableOrField(node *sitter.Node, sourceCode []byte, file string) *mo
 	}
 	// Create a new node for the variable
 	variableNode := &model.Node{
-		ID:               util.GenerateSha256(variableName, []string{}, file),
+		ID:               util.GenerateSha256(node.Content(sourceCode) + file + strconv.Itoa(int(node.StartPoint().Row)+1)),
 		Type:             "variable_declaration",
 		Name:             variableName,
 		CodeSnippet:      node.Content(sourceCode),

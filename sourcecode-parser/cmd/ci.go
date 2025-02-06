@@ -11,7 +11,7 @@ import (
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 
 	"github.com/spf13/cobra"
 )
@@ -85,7 +85,7 @@ var ciCmd = &cobra.Command{
 		// TODO: Add sarif file support
 		if output == "json" {
 			if outputFile != "" {
-				if graph.IsGitHubActions() {
+				if utilities.IsGitHubActions() {
 					// append GITHUB_WORKSPACE to output file path
 					outputFile = os.Getenv("GITHUB_WORKSPACE") + "/" + outputFile
 				}
@@ -116,7 +116,7 @@ var ciCmd = &cobra.Command{
 				fmt.Println("Error generating sarif report: ", err)
 				os.Exit(1)
 			}
-			if graph.IsGitHubActions() {
+			if utilities.IsGitHubActions() {
 				// append GITHUB_WORKSPACE to output file path
 				outputFile = os.Getenv("GITHUB_WORKSPACE") + "/" + outputFile
 			}

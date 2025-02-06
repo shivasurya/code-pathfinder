@@ -3,14 +3,15 @@ package graph
 import (
 	"context"
 	"fmt"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/java"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
 )
 
 func TestNewCodeGraph(t *testing.T) {
@@ -34,7 +35,7 @@ func TestNewCodeGraph(t *testing.T) {
 
 func TestAddNode(t *testing.T) {
 	graph := NewCodeGraph()
-	node := &Node{ID: "test_node"}
+	node := &model.Node{ID: "test_node"}
 	graph.AddNode(node)
 
 	if len(graph.Nodes) != 1 {
@@ -47,8 +48,8 @@ func TestAddNode(t *testing.T) {
 
 func TestAddEdge(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &Node{ID: "node1"}
-	node2 := &Node{ID: "node2"}
+	node1 := &model.Node{ID: "node1"}
+	node2 := &model.Node{ID: "node2"}
 	graph.AddNode(node1)
 	graph.AddNode(node2)
 
@@ -70,9 +71,9 @@ func TestAddEdge(t *testing.T) {
 
 func TestAddMultipleNodesAndEdges(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &Node{ID: "node1"}
-	node2 := &Node{ID: "node2"}
-	node3 := &Node{ID: "node3"}
+	node1 := &model.Node{ID: "node1"}
+	node2 := &model.Node{ID: "node2"}
+	node3 := &model.Node{ID: "node3"}
 
 	graph.AddNode(node1)
 	graph.AddNode(node2)
@@ -331,11 +332,11 @@ func TestGetFilesWithSymlinks(t *testing.T) {
 
 func TestFindNodesByType(t *testing.T) {
 	graph := NewCodeGraph()
-	node1 := &Node{ID: "node1", Type: "class"}
-	node2 := &Node{ID: "node2", Type: "method"}
-	node3 := &Node{ID: "node3", Type: "class"}
-	node4 := &Node{ID: "node4", Type: "interface"}
-	node5 := &Node{ID: "node5", Type: "method"}
+	node1 := &model.Node{ID: "node1", Type: "class"}
+	node2 := &model.Node{ID: "node2", Type: "method"}
+	node3 := &model.Node{ID: "node3", Type: "class"}
+	node4 := &model.Node{ID: "node4", Type: "interface"}
+	node5 := &model.Node{ID: "node5", Type: "method"}
 
 	graph.AddNode(node1)
 	graph.AddNode(node2)
@@ -380,7 +381,7 @@ func TestFindNodesByTypeEmptyGraph(t *testing.T) {
 func TestFindNodesByTypeAllSameType(t *testing.T) {
 	graph := NewCodeGraph()
 	for i := 0; i < 5; i++ {
-		graph.AddNode(&Node{ID: fmt.Sprintf("node%d", i), Type: "class"})
+		graph.AddNode(&model.Node{ID: fmt.Sprintf("node%d", i), Type: "class"})
 	}
 
 	nodes := graph.FindNodesByType("class")
@@ -391,8 +392,8 @@ func TestFindNodesByTypeAllSameType(t *testing.T) {
 
 func TestFindNodesByTypeCaseSensitivity(t *testing.T) {
 	graph := NewCodeGraph()
-	graph.AddNode(&Node{ID: "node1", Type: "Class"})
-	graph.AddNode(&Node{ID: "node2", Type: "class"})
+	graph.AddNode(&model.Node{ID: "node1", Type: "Class"})
+	graph.AddNode(&model.Node{ID: "node2", Type: "class"})
 
 	upperNodes := graph.FindNodesByType("Class")
 	lowerNodes := graph.FindNodesByType("class")
@@ -845,7 +846,7 @@ func TestBuildGraphFromAST(t *testing.T) {
 			root := tree.RootNode()
 
 			graph := NewCodeGraph()
-			buildGraphFromAST(root, []byte(tt.sourceCode), graph, nil, "test.java")
+			buildQLTreeFromAST(root, []byte(tt.sourceCode), graph, "test.java")
 
 			if len(graph.Nodes) != tt.expectedNodes {
 				t.Errorf("Expected %d nodes, but got %d", tt.expectedNodes, len(graph.Nodes))

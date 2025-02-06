@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +18,7 @@ var rootCmd = &cobra.Command{
 		analytics.LoadEnvFile()
 		analytics.Init(disableMetrics)
 		if verboseFlag {
-			graph.EnableVerboseLogging()
+			utilities.EnableVerboseLogging()
 		}
 	},
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -60,7 +61,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 
 func TestProcessQuery(t *testing.T) {
 	codeGraph := graph.NewCodeGraph()
-	codeGraph.AddNode(&graph.Node{
+	codeGraph.AddNode(&model.Node{
 		Type:        "method_declaration",
 		Name:        "testFunc",
 		File:        "test.java",

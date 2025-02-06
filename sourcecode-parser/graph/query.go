@@ -9,10 +9,11 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 )
 
 type Env struct {
-	Node *Node
+	Node *model.Node
 }
 
 func (env *Env) GetVisibility() string {
@@ -63,12 +64,8 @@ func (env *Env) GetThrowsTypes() []string {
 	return env.Node.ThrowsExceptions
 }
 
-func (env *Env) HasAccess() bool {
-	return env.Node.hasAccess
-}
-
 func (env *Env) IsJavaSourceFile() bool {
-	return env.Node.isJavaSourceFile
+	return env.Node.IsJavaSourceFile
 }
 
 func (env *Env) GetDoc() *model.Javadoc {
@@ -101,8 +98,7 @@ func (env *Env) ToString() string {
 		env.Node.VariableValue,
 		env.Node.DataType,
 		env.Node.ThrowsExceptions,
-		env.Node.hasAccess,
-		env.Node.isJavaSourceFile,
+		env.Node.IsJavaSourceFile,
 		env.Node.JavaDoc,
 		env.Node.BinaryExpr)
 }
@@ -159,8 +155,8 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
-	result := make([][]*Node, 0)
+func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+	result := make([][]*model.Node, 0)
 
 	// log query select list alone
 	for _, entity := range query.SelectList {
@@ -179,7 +175,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, outpu
 	return nodes, output
 }
 
-func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
+func generateOutput(nodeSet [][]*model.Node, query parser.Query) [][]interface{} {
 	results := make([][]interface{}, 0, len(nodeSet))
 	for _, nodeSet := range nodeSet {
 		var result []interface{}
@@ -208,7 +204,7 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
 	return results
 }
 
-func evaluateExpression(node []*Node, expression string, query parser.Query) (interface{}, error) {
+func evaluateExpression(node []*model.Node, expression string, query parser.Query) (interface{}, error) {
 	env := generateProxyEnvForSet(node, query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
@@ -224,8 +220,8 @@ func evaluateExpression(node []*Node, expression string, query parser.Query) (in
 	return output, nil
 }
 
-func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
-	typeIndex := make(map[string][]*Node)
+func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*model.Node {
+	typeIndex := make(map[string][]*model.Node)
 
 	// value and reference based reducing search space
 	for _, condition := range conditions {
@@ -238,9 +234,9 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			rhsNodes := graph.FindNodesByType(selectList[1].Entity)
 			for _, lhsNode := range lhsNodes {
 				for _, rhsNode := range rhsNodes {
-					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
-						typeIndex[lhsNode.Type] = appendUnique(typeIndex[lhsNode.Type], lhsNode)
-						typeIndex[rhsNode.Type] = appendUnique(typeIndex[rhsNode.Type], rhsNode)
+					if FilterEntities([]*model.Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
+						typeIndex[lhsNode.Type] = utilities.AppendUnique(typeIndex[lhsNode.Type], lhsNode)
+						typeIndex[rhsNode.Type] = utilities.AppendUnique(typeIndex[rhsNode.Type], rhsNode)
 					}
 				}
 			}
@@ -248,8 +244,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 			filteredNodes := graph.FindNodesByType(selectList[0].Entity)
 			for _, node := range filteredNodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
-				if FilterEntities([]*Node{node}, query) {
-					typeIndex[node.Type] = appendUnique(typeIndex[node.Type], node)
+				if FilterEntities([]*model.Node{node}, query) {
+					typeIndex[node.Type] = utilities.AppendUnique(typeIndex[node.Type], node)
 				}
 			}
 		}
@@ -275,16 +271,16 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 
 	product := cartesianProduct(sets)
 
-	result := make([][]*Node, len(product))
+	result := make([][]*model.Node, len(product))
 	for i, p := range product {
-		result[i] = make([]*Node, len(p))
+		result[i] = make([]*model.Node, len(p))
 		for j, node := range p {
-			if n, ok := node.(*Node); ok {
+			if n, ok := node.(*model.Node); ok {
 				result[i][j] = n
 			} else {
 				// Handle the error case, e.g., skip this node or log an error
 				// You might want to customize this part based on your error handling strategy
-				log.Printf("Warning: Expected *Node type, got %T", node)
+				log.Printf("Warning: Expected *model.Node type, got %T", node)
 			}
 		}
 	}
@@ -310,7 +306,7 @@ func cartesianProduct(sets [][]interface{}) [][]interface{} {
 	return result
 }
 
-func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
+func generateProxyEnv(node *model.Node, query parser.Query) map[string]interface{} {
 	proxyenv := Env{Node: node}
 	methodDeclaration := "method_declaration"
 	classDeclaration := "class_declaration"
@@ -612,7 +608,7 @@ func ReplacePredicateVariables(query parser.Query) string {
 	return expression
 }
 
-func FilterEntities(node []*Node, query parser.Query) bool {
+func FilterEntities(node []*model.Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
 		return true
@@ -643,7 +639,7 @@ type classInstance struct {
 	Methods map[string]string // method name -> result
 }
 
-func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
+func generateProxyEnvForSet(nodeSet []*model.Node, query parser.Query) map[string]interface{} {
 	env := make(map[string]interface{})
 
 	for i, entity := range query.SelectList {

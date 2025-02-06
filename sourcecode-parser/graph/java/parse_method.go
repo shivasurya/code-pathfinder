@@ -71,11 +71,11 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 }
 
 func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Node {
-	var javadoc *model.Javadoc
+	var javadoc *model.Node
 	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 		commentContent := node.PrevSibling().Content(sourceCode)
 		if strings.HasPrefix(commentContent, "/*") {
-			javadoc = ParseJavadocTags(commentContent)
+			javadoc = ParseJavadocTags(node, sourceCode, file)
 		}
 	}
 	methodName, methodID := extractMethodName(node, sourceCode, file)
@@ -138,7 +138,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		IsJavaSourceFile:     IsJavaSourceFile(file),
 		ThrowsExceptions:     throws,
 		Annotation:           annotationMarkers,
-		JavaDoc:              javadoc,
+		JavaDoc:              javadoc.JavaDoc,
 	}
 	return invokedNode
 }

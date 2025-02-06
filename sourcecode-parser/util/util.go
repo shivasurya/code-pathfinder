@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 var verboseFlag bool
@@ -23,7 +25,7 @@ func GenerateSha256(input string) string {
 }
 
 // Helper function to append a node to a slice only if it's not already present.
-func appendUnique(slice []*Node, node *Node) []*Node {
+func AppendUnique(slice []*model.Node, node *model.Node) []*model.Node {
 	for _, n := range slice {
 		if n == node {
 			return slice
