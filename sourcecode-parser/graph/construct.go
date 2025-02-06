@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +18,6 @@ import (
 )
 
 func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *model.Node, file string, parentNode *model.TreeNode) {
-	IsJavaSourceFile := javalang.IsJavaSourceFile(file)
 	switch node.Type() {
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
@@ -89,63 +87,16 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		variableNode := javalang.ParseVariableOrField(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: variableNode, Children: nil, Parent: parentNode})
 	case "object_creation_expression":
-		className := ""
-		classInstanceExpression := model.ClassInstanceExpr{
-			ClassName: "",
-			Args:      []*model.Expr{},
-		}
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			if child.Type() == "type_identifier" || child.Type() == "scoped_type_identifier" {
-				className = child.Content(sourceCode)
-				classInstanceExpression.ClassName = className
-			}
-			if child.Type() == "argument_list" {
-				classInstanceExpression.Args = []*model.Expr{}
-				for j := 0; j < int(child.ChildCount()); j++ {
-					argType := child.Child(j).Type()
-					argumentStopWords := map[string]bool{
-						"(": true,
-						")": true,
-						"{": true,
-						"}": true,
-						"[": true,
-						"]": true,
-						",": true,
-					}
-					if !argumentStopWords[argType] {
-						argument := &model.Expr{}
-						argument.Type = child.Child(j).Type()
-						argument.NodeString = child.Child(j).Content(sourceCode)
-						classInstanceExpression.Args = append(classInstanceExpression.Args, argument)
-					}
-				}
-			}
-		}
-
-		objectNode := &model.Node{
-			ID:                GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
-			Type:              "ClassInstanceExpr",
-			Name:              className,
-			CodeSnippet:       node.Content(sourceCode),
-			LineNumber:        node.StartPoint().Row + 1,
-			File:              file,
-			IsJavaSourceFile:  IsJavaSourceFile,
-			ClassInstanceExpr: &classInstanceExpression,
-		}
-		parentNode.AddChild(&model.TreeNode{
-			Node:     objectNode,
-			Children: nil,
-			Parent:   parentNode,
-		})
+		objectNode := javalang.ParseObjectCreationExpr(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: objectNode, Children: nil, Parent: parentNode})
 	}
-
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		buildQLTreeFromAST(child, sourceCode, currentContext, file, parentNode)
 	}
 }
+
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {

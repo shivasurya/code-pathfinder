@@ -1,6 +1,7 @@
 package java
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
@@ -9,11 +10,11 @@ import (
 )
 
 func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
-	var javadoc *model.Javadoc
+	var javadoc *model.Node
 	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 		commentContent := node.PrevSibling().Content(sourceCode)
 		if strings.HasPrefix(commentContent, "/*") {
-			javadoc = ParseJavadocTags(commentContent)
+			javadoc = ParseJavadocTags(node, sourceCode, file)
 		}
 	}
 	className := node.ChildByFieldName("name").Content(sourceCode)
@@ -62,9 +63,57 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 		Interface:        implementedInterface,
 		File:             file,
 		IsJavaSourceFile: IsJavaSourceFile(file),
-		JavaDoc:          javadoc,
+		JavaDoc:          javadoc.JavaDoc,
 		Annotation:       annotationMarkers,
 	}
 
 	return classNode
+}
+
+func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+	className := ""
+	classInstanceExpression := model.ClassInstanceExpr{
+		ClassName: "",
+		Args:      []*model.Expr{},
+	}
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == "type_identifier" || child.Type() == "scoped_type_identifier" {
+			className = child.Content(sourceCode)
+			classInstanceExpression.ClassName = className
+		}
+		if child.Type() == "argument_list" {
+			classInstanceExpression.Args = []*model.Expr{}
+			for j := 0; j < int(child.ChildCount()); j++ {
+				argType := child.Child(j).Type()
+				argumentStopWords := map[string]bool{
+					"(": true,
+					")": true,
+					"{": true,
+					"}": true,
+					"[": true,
+					"]": true,
+					",": true,
+				}
+				if !argumentStopWords[argType] {
+					argument := &model.Expr{}
+					argument.Type = child.Child(j).Type()
+					argument.NodeString = child.Child(j).Content(sourceCode)
+					classInstanceExpression.Args = append(classInstanceExpression.Args, argument)
+				}
+			}
+		}
+	}
+
+	objectNode := &model.Node{
+		ID:                util.GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
+		Type:              "ClassInstanceExpr",
+		Name:              className,
+		CodeSnippet:       node.Content(sourceCode),
+		LineNumber:        node.StartPoint().Row + 1,
+		File:              file,
+		IsJavaSourceFile:  IsJavaSourceFile(file),
+		ClassInstanceExpr: &classInstanceExpression,
+	}
+	return objectNode
 }
