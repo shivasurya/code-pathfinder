@@ -10,6 +10,7 @@ import (
 	"time"
 
 	javalang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/java"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"github.com/smacker/go-tree-sitter/java"
@@ -130,7 +131,7 @@ func Initialize(directory string) []*model.TreeNode {
 	files, err := getFiles(directory)
 	if err != nil {
 		//nolint:all
-		Log("Directory not found:", err)
+		utilities.Log("Directory not found:", err)
 		return treeHolder
 	}
 
@@ -156,13 +157,13 @@ func Initialize(directory string) []*model.TreeNode {
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
 			sourceCode, err := readFile(file)
 			if err != nil {
-				Log("File not found:", err)
+				utilities.Log("File not found:", err)
 				continue
 			}
 			// Parse the source code
 			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 			if err != nil {
-				Log("Error parsing file:", err)
+				utilities.Log("Error parsing file:", err)
 				continue
 			}
 			//nolint:all
@@ -220,9 +221,9 @@ func Initialize(directory string) []*model.TreeNode {
 			}
 			fmt.Print("\033[H\033[J") // Clear the screen
 			for _, line := range statusLines {
-				Log(line)
+				utilities.Log(line)
 			}
-			Fmt("Progress: %d%%\n", (progress*100)/totalFiles)
+			utilities.Fmt("Progress: %d%%\n", (progress*100)/totalFiles)
 		}
 	}()
 
@@ -241,8 +242,8 @@ func Initialize(directory string) []*model.TreeNode {
 
 	end := time.Now()
 	elapsed := end.Sub(start)
-	Log("Elapsed time: ", elapsed)
-	Log("Project parsed successfully")
+	utilities.Log("Elapsed time: ", elapsed)
+	utilities.Log("Project parsed successfully")
 
 	return treeHolder
 }
