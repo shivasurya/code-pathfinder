@@ -4,13 +4,15 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	util "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseJavadocTags(commentContent string) *model.Javadoc {
+func ParseJavadocTags(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 	javaDoc := &model.Javadoc{}
 	var javadocTags []*model.JavadocTag
 
-	commentLines := strings.Split(commentContent, "\n")
+	commentLines := strings.Split(node.Content(sourceCode), "\n")
 	for _, line := range commentLines {
 		line = strings.TrimSpace(line)
 		// line may start with /** or *
@@ -48,7 +50,17 @@ func ParseJavadocTags(commentContent string) *model.Javadoc {
 
 	javaDoc.Tags = javadocTags
 	javaDoc.NumberOfCommentLines = len(commentLines)
-	javaDoc.CommentedCodeElements = commentContent
+	javaDoc.CommentedCodeElements = node.Content(sourceCode)
 
-	return javaDoc
+	commentNode := &model.Node{
+		ID:               util.GenerateMethodID(node.Content(sourceCode), []string{}, file),
+		Type:             "block_comment",
+		CodeSnippet:      node.Content(sourceCode),
+		LineNumber:       node.StartPoint().Row + 1,
+		File:             file,
+		IsJavaSourceFile: IsJavaSourceFile(file),
+		JavaDoc:          javaDoc,
+	}
+
+	return commentNode
 }
