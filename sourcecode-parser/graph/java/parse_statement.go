@@ -124,7 +124,7 @@ func ParseBlockStatement(node *sitter.Node, sourceCode []byte, file string) *mod
 	}
 
 	uniqueBlockID := fmt.Sprintf("block_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-	blockStmtNode := &graph.Node{
+	blockStmtNode := &model.Node{
 		ID:               util.GenerateSha256(uniqueBlockID),
 		Type:             "BlockStmt",
 		LineNumber:       node.StartPoint().Row + 1,

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
 	javalang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/java"
 	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 
@@ -18,7 +19,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *model.Node, file string, parentNode *model.TreeNode) {
+func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *model.Node, file string, parentNode *model.TreeNode, storageNode db.StorageNode) {
 	switch node.Type() {
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
@@ -166,6 +167,7 @@ func Initialize(directory string) []*model.TreeNode {
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
+			storageNode := db.StorageNode{}
 			localTree := &model.TreeNode{
 				Parent: nil,
 				Node: &model.Node{
@@ -175,7 +177,7 @@ func Initialize(directory string) []*model.TreeNode {
 				},
 			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildQLTreeFromAST(rootNode, sourceCode, nil, file, localTree)
+			buildQLTreeFromAST(rootNode, sourceCode, nil, file, localTree, storageNode)
 			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 

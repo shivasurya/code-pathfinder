@@ -104,15 +104,3 @@ func (j *JarFile) GetManifestMainAttributes(key string) (string, bool) {
 func (j *JarFile) GetSpecificationVersion() string {
 	return j.SpecificationVersion
 }
-
-type Package struct {
-	Package string
-}
-
-func (p *Package) GetAPrimaryQlClass() string {
-	return "Package"
-}
-
-func (p *Package) GetURL() string {
-	return p.Package
-}
