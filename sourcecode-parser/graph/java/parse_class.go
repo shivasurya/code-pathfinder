@@ -11,6 +11,7 @@ import (
 
 func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 	var javadoc *model.Node
+	var classDeclaration *model.Class
 	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
 		commentContent := node.PrevSibling().Content(sourceCode)
 		if strings.HasPrefix(commentContent, "/*") {
@@ -23,6 +24,7 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 	superClass := ""
 	annotationMarkers := []string{}
 	implementedInterface := []string{}
+	classDeclaration.ClassOrInterface.QualifiedName = className
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		if child.Type() == "modifiers" {
@@ -50,6 +52,11 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 			}
 		}
 	}
+	classDeclaration.Annotations = annotationMarkers
+	classDeclaration.ClassOrInterface.Package = packageName
+	classDeclaration.SourceFile = file
+	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
+	classDeclaration.SuperTypes = []string{superClass}
 
 	classNode := &model.Node{
 		ID:               util.GenerateMethodID(className, []string{}, file),

@@ -1,6 +1,111 @@
 package model
 
+import "strings"
+
+// Modifiable represents a Java syntax element that may have modifiers.
+type Modifiable struct {
+	Modifiers []string // List of modifiers (e.g., public, static, final)
+}
+
+// NewModifiable initializes a new Modifiable instance.
+func NewModifiable(modifiers []string) *Modifiable {
+	return &Modifiable{
+		Modifiers: modifiers,
+	}
+}
+
+// ✅ Implementing AST-Based Predicates
+
+// GetAModifier retrieves all modifiers of this element.
+func (m *Modifiable) GetAModifier() []string {
+	return m.Modifiers
+}
+
+// HasModifier checks if this element has a specific modifier.
+func (m *Modifiable) HasModifier(modifier string) bool {
+	for _, mod := range m.Modifiers {
+		if mod == modifier {
+			return true
+		}
+	}
+	return false
+}
+
+// HasNoModifier checks if this element has no modifiers.
+func (m *Modifiable) HasNoModifier() bool {
+	return len(m.Modifiers) == 0
+}
+
+// IsAbstract checks if this element has the abstract modifier.
+func (m *Modifiable) IsAbstract() bool {
+	return m.HasModifier("abstract")
+}
+
+// IsDefault checks if this element has the default modifier.
+func (m *Modifiable) IsDefault() bool {
+	return m.HasModifier("default")
+}
+
+// IsFinal checks if this element has the final modifier.
+func (m *Modifiable) IsFinal() bool {
+	return m.HasModifier("final")
+}
+
+// IsNative checks if this element has the native modifier.
+func (m *Modifiable) IsNative() bool {
+	return m.HasModifier("native")
+}
+
+// IsPrivate checks if this element has the private modifier.
+func (m *Modifiable) IsPrivate() bool {
+	return m.HasModifier("private")
+}
+
+// IsProtected checks if this element has the protected modifier.
+func (m *Modifiable) IsProtected() bool {
+	return m.HasModifier("protected")
+}
+
+// IsPublic checks if this element has the public modifier.
+func (m *Modifiable) IsPublic() bool {
+	return m.HasModifier("public")
+}
+
+// IsStatic checks if this element has the static modifier.
+func (m *Modifiable) IsStatic() bool {
+	return m.HasModifier("static")
+}
+
+// IsStrictfp checks if this element has the strictfp modifier.
+func (m *Modifiable) IsStrictfp() bool {
+	return m.HasModifier("strictfp")
+}
+
+// IsSynchronized checks if this element has the synchronized modifier.
+func (m *Modifiable) IsSynchronized() bool {
+	return m.HasModifier("synchronized")
+}
+
+// IsTransient checks if this element has the transient modifier.
+func (m *Modifiable) IsTransient() bool {
+	return m.HasModifier("transient")
+}
+
+// IsVolatile checks if this element has the volatile modifier.
+func (m *Modifiable) IsVolatile() bool {
+	return m.HasModifier("volatile")
+}
+
+// ToString returns a textual representation of the modifiers.
+func (m *Modifiable) ToString() string {
+	if len(m.Modifiers) == 0 {
+		return "No Modifiers"
+	}
+	return strings.Join(m.Modifiers, " ")
+}
+
 type RefType struct {
+	Modifiable
 	// Precomputed from AST
 	QualifiedName   string   // Fully qualified name (e.g., "java.lang.String")
 	Package         string   // Package name (e.g., "java.lang")
@@ -248,7 +353,7 @@ func NewClass(primaryQlClass string, annotations []string, isAnonymous bool, isF
 
 // GetAPrimaryQlClass returns the primary CodeQL class name.
 func (c *Class) GetAPrimaryQlClass() string {
-	return c.PrimaryQlClass
+	return "Class"
 }
 
 // GetAnAnnotation returns the annotations applied to this class.
