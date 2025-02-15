@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/expr-lang/expr/parser/utils"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
@@ -33,7 +34,7 @@ func TestIsJavaSourceFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isJavaSourceFile(tt.filename); got != tt.want {
+			if got := utils.IsJavaSourceFile(tt.filename); got != tt.want {
 				t.Errorf("isJavaSourceFile(%q) = %v, want %v", tt.filename, got, tt.want)
 			}
 		})
@@ -828,7 +829,7 @@ func TestExtractMethodName(t *testing.T) {
 			root := tree.RootNode()
 
 			methodNode := root.NamedChild(0)
-			name, id := extractMethodName(methodNode, []byte(tt.sourceCode), "test.java")
+			name, id := javalang.ExtractMethodName(methodNode, []byte(tt.sourceCode), "test.java")
 
 			if name != tt.expectedName {
 				t.Errorf("Expected method name %s, but got %s", tt.expectedName, name)

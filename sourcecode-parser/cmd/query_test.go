@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	tree "github.com/shivasurya/code-pathfinder/sourcecode-parser/tree"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -60,7 +60,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 }
 
 func TestProcessQuery(t *testing.T) {
-	codeGraph := graph.NewCodeGraph()
+	codeGraph := tree.Initialize()
 	codeGraph.AddNode(&model.Node{
 		Type:        "method_declaration",
 		Name:        "testFunc",

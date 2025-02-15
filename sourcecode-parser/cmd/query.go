@@ -10,7 +10,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	tree "github.com/shivasurya/code-pathfinder/sourcecode-parser/tree"
 	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	"github.com/spf13/cobra"
 )
@@ -72,16 +73,16 @@ func init() {
 	queryCmd.Flags().String("query-file", "", "File containing query to execute")
 }
 
-func initializeProject(project string) *graph.CodeGraph {
-	codeGraph := graph.NewCodeGraph()
+func initializeProject(project string) []*model.TreeNode {
+	treeHolder := []*model.TreeNode{}
 	if project != "" {
-		codeGraph = graph.Initialize(project)
+		treeHolder = tree.Initialize(project)
 	}
-	return codeGraph
+	return treeHolder
 }
 
 func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
-	codeGraph := initializeProject(project)
+	treeHolder := initializeProject(project)
 
 	if stdin {
 		// read from stdin
@@ -98,7 +99,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, codeGraph, output)
+			result, err := processQuery(input, treeHolder, output)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
 				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -109,7 +110,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		}
 	} else {
 		// read from command line
-		result, err := processQuery(query, codeGraph, output)
+		result, err := processQuery(query, treeHolder, output)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
 			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -118,7 +119,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, codeGraph *graph.CodeGraph, output string) (string, error) {
+func processQuery(input string, treeHolder []*model.TreeNode, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -128,7 +129,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := graph.QueryEntities(codeGraph, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(treeHolder, parsedQuery)
 	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results

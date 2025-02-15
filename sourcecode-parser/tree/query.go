@@ -155,7 +155,7 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+func QueryEntities(treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
 	result := make([][]*model.Node, 0)
 
 	// log query select list alone
@@ -163,7 +163,7 @@ func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*model.Node,
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	cartesianProduct := generateCartesianProduct(graph, query.SelectList, query.Condition)
+	cartesianProduct := generateCartesianProduct(treeHolder, query.SelectList, query.Condition)
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
@@ -220,7 +220,7 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 	return output, nil
 }
 
-func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*model.Node {
+func generateCartesianProduct(treeHolder []*model.TreeNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
 	typeIndex := make(map[string][]*model.Node)
 
 	// value and reference based reducing search space
@@ -230,8 +230,8 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 		// if there are multiple entities in select list, the condition is hard to reduce the search space,
 		// but I have tried my best using O(n^2) time complexity to reduce the search space
 		if len(selectList) > 1 {
-			lhsNodes := graph.FindNodesByType(selectList[0].Entity)
-			rhsNodes := graph.FindNodesByType(selectList[1].Entity)
+			lhsNodes := treeHolder.FindNodesByType(selectList[0].Entity)
+			rhsNodes := treeHolder.FindNodesByType(selectList[1].Entity)
 			for _, lhsNode := range lhsNodes {
 				for _, rhsNode := range rhsNodes {
 					if FilterEntities([]*model.Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
@@ -241,7 +241,7 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 				}
 			}
 		} else {
-			filteredNodes := graph.FindNodesByType(selectList[0].Entity)
+			filteredNodes := treeHolder.FindNodesByType(selectList[0].Entity)
 			for _, node := range filteredNodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
 				if FilterEntities([]*model.Node{node}, query) {
@@ -252,7 +252,7 @@ func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, 
 	}
 
 	if len(conditions) == 0 {
-		for _, node := range graph.Nodes {
+		for _, node := range treeHolder.Nodes {
 			typeIndex[node.Type] = append(typeIndex[node.Type], node)
 		}
 	}
