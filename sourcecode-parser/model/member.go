@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 )
@@ -196,4 +197,70 @@ func (m *Method) SameParamTypes(other *Method) bool {
 		}
 	}
 	return true
+}
+
+// Add these methods to the existing Method struct
+func (m *Method) Insert(db *sql.DB) error {
+	query := `INSERT INTO methods (
+        name, qualified_name, return_type, parameters, parameter_names,
+        visibility, is_abstract, is_strictfp, is_static, is_final,
+        is_constructor, source_declaration
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := db.Exec(query,
+		m.Name, m.QualifiedName, m.ReturnType,
+		strings.Join(m.Parameters, ","),
+		strings.Join(m.ParameterNames, ","),
+		m.Visibility, m.IsAbstract, m.IsStrictfp,
+		m.IsStatic, m.IsFinal, m.IsConstructor,
+		m.SourceDeclaration)
+	return err
+}
+
+func (m *Method) Update(db *sql.DB) error {
+	query := `UPDATE methods SET 
+        qualified_name = ?, return_type = ?, parameters = ?,
+        parameter_names = ?, visibility = ?, is_abstract = ?,
+        is_strictfp = ?, is_static = ?, is_final = ?,
+        is_constructor = ?, source_declaration = ?
+        WHERE name = ?`
+
+	_, err := db.Exec(query,
+		m.QualifiedName, m.ReturnType,
+		strings.Join(m.Parameters, ","),
+		strings.Join(m.ParameterNames, ","),
+		m.Visibility, m.IsAbstract, m.IsStrictfp,
+		m.IsStatic, m.IsFinal, m.IsConstructor,
+		m.SourceDeclaration, m.Name)
+	return err
+}
+
+func (m *Method) Delete(db *sql.DB) error {
+	query := `DELETE FROM methods WHERE name = ? AND qualified_name = ?`
+	_, err := db.Exec(query, m.Name, m.QualifiedName)
+	return err
+}
+
+// Query helper methods
+func FindMethodByName(db *sql.DB, name string) (*Method, error) {
+	query := `SELECT * FROM methods WHERE name = ?`
+	row := db.QueryRow(query, name)
+
+	method := &Method{}
+	var params, paramNames string
+
+	err := row.Scan(&method.Name, &method.QualifiedName,
+		&method.ReturnType, &params, &paramNames,
+		&method.Visibility, &method.IsAbstract,
+		&method.IsStrictfp, &method.IsStatic,
+		&method.IsFinal, &method.IsConstructor,
+		&method.SourceDeclaration)
+
+	if err != nil {
+		return nil, err
+	}
+
+	method.Parameters = strings.Split(params, ",")
+	method.ParameterNames = strings.Split(paramNames, ",")
+	return method, nil
 }

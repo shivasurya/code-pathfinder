@@ -70,15 +70,16 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
-func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Node {
-	var javadoc *model.Node
-	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
-		commentContent := node.PrevSibling().Content(sourceCode)
-		if strings.HasPrefix(commentContent, "/*") {
-			javadoc = ParseJavadocTags(node, sourceCode, file)
-		}
-	}
-	methodName, methodID := extractMethodName(node, sourceCode, file)
+func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Method {
+	// var javadoc *model.Javadoc
+	// var methodNode *model.Method
+	// if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
+	// 	commentContent := node.PrevSibling().Content(sourceCode)
+	// 	if strings.HasPrefix(commentContent, "/*") {
+	// 		javadoc = ParseJavadocTags(node, sourceCode, file)
+	// 	}
+	// }
+	methodName, _ := extractMethodName(node, sourceCode, file)
 	modifiers := ""
 	returnType := ""
 	throws := []string{}
@@ -124,27 +125,25 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		}
 	}
 
-	invokedNode := &model.Node{
-		ID:                   methodID, // In a real scenario, you would construct a unique ID, possibly using the method signature
-		Type:                 "method_declaration",
-		Name:                 methodName,
-		CodeSnippet:          node.Content(sourceCode),
-		LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-		Modifier:             ExtractVisibilityModifier(modifiers),
-		ReturnType:           returnType,
-		MethodArgumentsType:  methodArgumentType,
-		MethodArgumentsValue: methodArgumentValue,
-		File:                 file,
-		IsJavaSourceFile:     IsJavaSourceFile(file),
-		ThrowsExceptions:     throws,
-		Annotation:           annotationMarkers,
-		JavaDoc:              javadoc.JavaDoc,
+	methodNode := &model.Method{
+		Name:              methodName,
+		ReturnType:        returnType,
+		ParameterNames:    methodArgumentType,
+		Parameters:        methodArgumentValue,
+		Visibility:        modifiers,
+		IsAbstract:        false,
+		IsStatic:          false,
+		IsFinal:           false,
+		IsConstructor:     false,
+		SourceDeclaration: file,
 	}
-	return invokedNode
+
+	return methodNode
 }
 
-func ParseMethodInvoker(node *sitter.Node, sourceCode []byte, file string) *model.Node {
-	methodName, methodID := extractMethodName(node, sourceCode, file)
+func ParseMethodInvoker(node *sitter.Node, sourceCode []byte, file string) *model.MethodCall {
+	var methodCall *model.MethodCall
+	methodName, _ := extractMethodName(node, sourceCode, file)
 	arguments := []string{}
 	// get argument list from arguments node iterate for child node
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -166,17 +165,9 @@ func ParseMethodInvoker(node *sitter.Node, sourceCode []byte, file string) *mode
 			}
 		}
 	}
-
-	invokedNode := &model.Node{
-		ID:                   methodID,
-		Type:                 "method_invocation",
-		Name:                 methodName,
-		IsExternal:           true,
-		CodeSnippet:          node.Content(sourceCode),
-		LineNumber:           node.StartPoint().Row + 1, // Lines start from 0 in the AST
-		MethodArgumentsValue: arguments,
-		File:                 file,
-		IsJavaSourceFile:     IsJavaSourceFile(file),
+	methodCall = &model.MethodCall{
+		MethodName: methodName,
+		Arguments:  arguments,
 	}
-	return invokedNode
+	return methodCall
 }

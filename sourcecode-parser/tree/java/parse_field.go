@@ -1,20 +1,18 @@
 package java
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	util "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseVariableOrField(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+func ParseField(node *sitter.Node, sourceCode []byte, file string) *model.FieldDeclaration {
+	var fieldDeclaration *model.FieldDeclaration
 	variableName := ""
 	variableType := ""
 	variableModifier := ""
 	variableValue := ""
-	var scope string
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		switch child.Type() {
@@ -44,26 +42,11 @@ func ParseVariableOrField(node *sitter.Node, sourceCode []byte, file string) *mo
 			variableType = child.Content(sourceCode)
 		}
 	}
-	if node.Type() == "local_variable_declaration" {
-		scope = "local"
-		//nolint:all
-		// hasAccessValue = hasAccess(node.NextSibling(), variableName, sourceCode)
-	} else {
-		scope = "field"
-	}
 	// Create a new node for the variable
-	variableNode := &model.Node{
-		ID:               util.GenerateSha256(node.Content(sourceCode) + file + strconv.Itoa(int(node.StartPoint().Row)+1)),
-		Type:             "variable_declaration",
-		Name:             variableName,
-		CodeSnippet:      node.Content(sourceCode),
-		LineNumber:       node.StartPoint().Row + 1,
-		Modifier:         ExtractVisibilityModifier(variableModifier),
-		DataType:         variableType,
-		Scope:            scope,
-		VariableValue:    variableValue,
-		File:             file,
-		IsJavaSourceFile: IsJavaSourceFile(file),
+	fieldDeclaration = &model.FieldDeclaration{
+		Type:       variableType,
+		FieldNames: []string{variableName},
+		Visibility: variableModifier,
 	}
-	return variableNode
+	return fieldDeclaration
 }

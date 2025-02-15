@@ -1,14 +1,11 @@
 package java
 
 import (
-	"fmt"
-
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	util "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseIfStatement(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+func ParseIfStatement(node *sitter.Node, sourceCode []byte, file string) *model.IfStmt {
 	ifNode := &model.IfStmt{}
 	// get the condition of the if statement
 	conditionNode := node.Child(1)
@@ -26,19 +23,7 @@ func ParseIfStatement(node *sitter.Node, sourceCode []byte, file string) *model.
 		ifNode.Else = model.Stmt{NodeString: elseNode.Content(sourceCode)}
 	}
 
-	methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// methodID := fmt.Sprintf("ifstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	// add node to graph
-	ifStmtNode := &model.Node{
-		ID:               util.GenerateSha256(methodID),
-		Type:             "IfStmt",
-		Name:             "IfStmt",
-		IsExternal:       true,
-		CodeSnippet:      node.Content(sourceCode),
-		LineNumber:       node.StartPoint().Row + 1,
-		File:             file,
-		IsJavaSourceFile: IsJavaSourceFile(file),
-		IfStmt:           ifNode,
-	}
-
-	return ifStmtNode
+	return ifNode
 }

@@ -1,23 +1,12 @@
 package java
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	util "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
-	var javadoc *model.Node
+func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class {
 	var classDeclaration *model.Class
-	if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
-		commentContent := node.PrevSibling().Content(sourceCode)
-		if strings.HasPrefix(commentContent, "/*") {
-			javadoc = ParseJavadocTags(node, sourceCode, file)
-		}
-	}
 	className := node.ChildByFieldName("name").Content(sourceCode)
 	packageName := ""
 	accessModifier := ""
@@ -58,28 +47,12 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Node {
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}
 
-	classNode := &model.Node{
-		ID:               util.GenerateMethodID(className, []string{}, file),
-		Type:             "class_declaration",
-		Name:             className,
-		CodeSnippet:      node.Content(sourceCode),
-		LineNumber:       node.StartPoint().Row + 1,
-		PackageName:      packageName,
-		Modifier:         ExtractVisibilityModifier(accessModifier),
-		SuperClass:       superClass,
-		Interface:        implementedInterface,
-		File:             file,
-		IsJavaSourceFile: IsJavaSourceFile(file),
-		JavaDoc:          javadoc.JavaDoc,
-		Annotation:       annotationMarkers,
-	}
-
-	return classNode
+	return classDeclaration
 }
 
-func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) *model.Node {
+func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) *model.ClassInstanceExpr {
 	className := ""
-	classInstanceExpression := model.ClassInstanceExpr{
+	classInstanceExpression := &model.ClassInstanceExpr{
 		ClassName: "",
 		Args:      []*model.Expr{},
 	}
@@ -112,15 +85,5 @@ func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) 
 		}
 	}
 
-	objectNode := &model.Node{
-		ID:                util.GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
-		Type:              "ClassInstanceExpr",
-		Name:              className,
-		CodeSnippet:       node.Content(sourceCode),
-		LineNumber:        node.StartPoint().Row + 1,
-		File:              file,
-		IsJavaSourceFile:  IsJavaSourceFile(file),
-		ClassInstanceExpr: &classInstanceExpression,
-	}
-	return objectNode
+	return classInstanceExpression
 }

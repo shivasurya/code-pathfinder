@@ -1,10 +1,14 @@
 package db
 
 import (
+	"database/sql"
+	"log"
+
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 type StorageNode struct {
+	DB         *sql.DB
 	Package    []*model.Package
 	ImportDecl []*model.ImportType
 	Annotation []*model.Annotation
@@ -15,6 +19,34 @@ type StorageNode struct {
 	Variable   []*model.LocalVariableDecl
 	BinaryExpr []*model.BinaryExpr
 	JavaDoc    []*model.Javadoc
+}
+
+func NewStorageNode(databasePath string) *StorageNode {
+	dbName := "pathfinder.db"
+	if databasePath != "" {
+		databasePath = databasePath + "/" + dbName
+	}
+	database, err := sql.Open("sqlite3", databasePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create queries table
+	createQueriesTable := `
+	CREATE TABLE IF NOT EXISTS queries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		query_text TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(name, query_text)
+	);`
+
+	_, err = database.Exec(createQueriesTable)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &StorageNode{DB: database}
 }
 
 func (s *StorageNode) AddPackage(node *model.Package) {
@@ -31,6 +63,8 @@ func (s *StorageNode) AddClassDecl(node *model.ClassOrInterface) {
 
 func (s *StorageNode) AddMethodDecl(node *model.Method) {
 	s.MethodDecl = append(s.MethodDecl, node)
+	// save method node to database if not exist
+	node.Insert(s.DB)
 }
 
 func (s *StorageNode) AddFieldDecl(node *model.FieldDeclaration) {
