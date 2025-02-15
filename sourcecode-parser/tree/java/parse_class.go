@@ -6,7 +6,7 @@ import (
 )
 
 func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class {
-	var classDeclaration *model.Class
+	var classDeclaration model.Class
 	className := node.ChildByFieldName("name").Content(sourceCode)
 	packageName := ""
 	accessModifier := ""
@@ -47,12 +47,12 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}
 
-	return classDeclaration
+	return &classDeclaration
 }
 
 func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) *model.ClassInstanceExpr {
 	className := ""
-	classInstanceExpression := &model.ClassInstanceExpr{
+	classInstanceExpression := model.ClassInstanceExpr{
 		ClassName: "",
 		Args:      []*model.Expr{},
 	}
@@ -85,5 +85,5 @@ func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) 
 		}
 	}
 
-	return classInstanceExpression
+	return &classInstanceExpression
 }
