@@ -23,7 +23,11 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 	switch node.Type() {
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
-		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode}, Parent: parentNode})
+		blockStmtTreeNode := &model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode}, Parent: parentNode}
+		parentNode.AddChild(blockStmtTreeNode)
+		for i := 0; i < int(node.ChildCount()); i++ {
+			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, blockStmtTreeNode, storageNode)
+		}
 	case "return_statement":
 		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ReturnStmt: returnStmtNode}, Parent: parentNode})
