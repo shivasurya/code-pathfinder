@@ -19,14 +19,14 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *model.Node, file string, parentNode *model.TreeNode, storageNode *db.StorageNode) {
+func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode, storageNode *db.StorageNode) {
 	switch node.Type() {
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
 		blockStmtTreeNode := &model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode}, Parent: parentNode}
 		parentNode.AddChild(blockStmtTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, blockStmtTreeNode, storageNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, file, blockStmtTreeNode, storageNode)
 		}
 	case "return_statement":
 		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode, file)
@@ -64,21 +64,21 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 		parentNode.AddChild(methodNode)
 		storageNode.AddMethodDecl(methodDeclaration)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, methodNode, storageNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, file, methodNode, storageNode)
 		}
 	case "method_invocation":
 		methodInvokedNode := javalang.ParseMethodInvoker(node, sourceCode, file)
 		methodInvocationTreeNode := &model.TreeNode{Node: &model.Node{MethodCall: methodInvokedNode}, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, methodInvocationTreeNode, storageNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, file, methodInvocationTreeNode, storageNode)
 		}
 	case "class_declaration":
 		classNode := javalang.ParseClass(node, sourceCode, file)
 		classTreeNode := &model.TreeNode{Node: &model.Node{ClassDecl: classNode}, Children: nil, Parent: parentNode}
 		parentNode.AddChild(classTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, classTreeNode, storageNode)
+			buildQLTreeFromAST(node.Child(i), sourceCode, file, classTreeNode, storageNode)
 		}
 	case "block_comment":
 		// Parse block comments
@@ -96,7 +96,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, currentContext *mo
 	}
 	// Recursively process child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
-		buildQLTreeFromAST(node.Child(i), sourceCode, currentContext, file, parentNode, storageNode)
+		buildQLTreeFromAST(node.Child(i), sourceCode, file, parentNode, storageNode)
 	}
 }
 
@@ -180,7 +180,7 @@ func Initialize(directory string) []*model.TreeNode {
 				},
 			}
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildQLTreeFromAST(rootNode, sourceCode, nil, file, localTree, storageNode)
+			buildQLTreeFromAST(rootNode, sourceCode, file, localTree, storageNode)
 			treeHolder = append(treeHolder, localTree)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 

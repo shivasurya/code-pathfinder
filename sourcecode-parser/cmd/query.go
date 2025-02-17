@@ -139,9 +139,10 @@ func processQuery(input string, treeHolder []*model.TreeNode, output string) (st
 		for _, entity := range entities {
 			for _, entityObject := range entity {
 				result := make(map[string]interface{})
-				result["file"] = entityObject.File
-				result["line"] = entityObject.LineNumber
-				result["code"] = entityObject.CodeSnippet
+				fmt.Println(entityObject)
+				// result["file"] = entityObject.File
+				// result["line"] = entityObject.LineNumber
+				// result["code"] = entityObject.CodeSnippet
 
 				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
 			}
@@ -154,11 +155,11 @@ func processQuery(input string, treeHolder []*model.TreeNode, output string) (st
 	}
 	result := ""
 	verticalLine := "|"
-	yellowCode := color.New(color.FgYellow).SprintFunc()
+	// := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
 	for i, entity := range entities {
 		for _, entityObject := range entity {
-			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject.File), greenCode(entityObject.LineNumber))
+			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject), greenCode(entityObject))
 			// add formatted output to result
 			output := "\tResult: "
 			for _, outputObject := range formattedOutput[i] {
@@ -169,11 +170,11 @@ func processQuery(input string, treeHolder []*model.TreeNode, output string) (st
 			header += output + "\n"
 			result += header
 			result += "\n"
-			codeSnippetArray := strings.Split(entityObject.CodeSnippet, "\n")
-			for i := 0; i < len(codeSnippetArray); i++ {
-				lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
-				result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
-			}
+			// codeSnippetArray := strings.Split(entityObject, "\n")
+			// for i := 0; i < len(codeSnippetArray); i++ {
+			// 	lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
+			// 	result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+			// }
 			result += "\n"
 		}
 	}

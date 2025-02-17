@@ -8,6 +8,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 )
@@ -155,7 +156,7 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+func QueryEntities(db *db.StorageNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
 	result := make([][]*model.Node, 0)
 
 	// log query select list alone
@@ -163,7 +164,7 @@ func QueryEntities(treeHolder []*model.TreeNode, query parser.Query) (nodes [][]
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	cartesianProduct := generateCartesianProduct(treeHolder, query.SelectList, query.Condition)
+	cartesianProduct := generateCartesianProduct(db, query.SelectList, query.Condition)
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
@@ -220,7 +221,7 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 	return output, nil
 }
 
-func generateCartesianProduct(treeHolder []*model.TreeNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
+func generateCartesianProduct(db *db.StorageNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
 	typeIndex := make(map[string][]*model.Node)
 
 	// value and reference based reducing search space
@@ -230,18 +231,13 @@ func generateCartesianProduct(treeHolder []*model.TreeNode, selectList []parser.
 		// if there are multiple entities in select list, the condition is hard to reduce the search space,
 		// but I have tried my best using O(n^2) time complexity to reduce the search space
 		if len(selectList) > 1 {
-			lhsNodes := treeHolder.FindNodesByType(selectList[0].Entity)
-			rhsNodes := treeHolder.FindNodesByType(selectList[1].Entity)
-			for _, lhsNode := range lhsNodes {
-				for _, rhsNode := range rhsNodes {
-					if FilterEntities([]*model.Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
-						typeIndex[lhsNode.Type] = utilities.AppendUnique(typeIndex[lhsNode.Type], lhsNode)
-						typeIndex[rhsNode.Type] = utilities.AppendUnique(typeIndex[rhsNode.Type], rhsNode)
-					}
-				}
-			}
+			// get all entities from the database based on select list (n items)
+			// based on condition (a condition can have multiple entities)
+			// use the entity to join the entity to reduce the search space instead of generrating cartesian product
+			// ideally it should be less than O(n^2) time complexity
+
 		} else {
-			filteredNodes := treeHolder.FindNodesByType(selectList[0].Entity)
+			filteredNodes := db.GetEntity(selectList[0].Entity)
 			for _, node := range filteredNodes {
 				query := parser.Query{Expression: condition, SelectList: selectList}
 				if FilterEntities([]*model.Node{node}, query) {
