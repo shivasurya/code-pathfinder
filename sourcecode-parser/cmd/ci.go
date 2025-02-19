@@ -61,11 +61,11 @@ var ciCmd = &cobra.Command{
 			}
 			os.Exit(1)
 		}
-		codeGraph := initializeProject(projectInput)
+		treeHolder, db := initializeProject(projectInput)
 		for _, rule := range ruleset {
 			queryInput := ParseQuery(rule)
 			rulesetResult := make(map[string]interface{})
-			result, err := processQuery(queryInput.Query, codeGraph, output)
+			result, err := processQuery(queryInput.Query, treeHolder, db, output)
 
 			if output == "json" || output == "sarif" {
 				var resultObject map[string]interface{}

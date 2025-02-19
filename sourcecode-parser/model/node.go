@@ -1,6 +1,7 @@
 package model
 
 type Node struct {
+	NodeType               string
 	AddExpr                *AddExpr
 	AndLogicalExpr         *AndLogicalExpr
 	AssertStmt             *AssertStmt

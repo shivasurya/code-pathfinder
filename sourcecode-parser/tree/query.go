@@ -66,7 +66,7 @@ func (env *Env) GetThrowsTypes() []string {
 }
 
 func (env *Env) IsJavaSourceFile() bool {
-	return env.Node.IsJavaSourceFile
+	return true
 }
 
 func (env *Env) GetDoc() *model.Javadoc {
@@ -85,23 +85,42 @@ func (env *Env) GetLeftOperand() string {
 }
 
 func (env *Env) ToString() string {
-	return fmt.Sprintf("Node{Type: %s, Name: %s, Modifier: %s, Annotation: %v, ReturnType: %s, MethodArgumentsType: %v, MethodArgumentsValue: %v, SuperClass: %s, Interface: %v, Scope: %s, VariableValue: %s, DataType: %s, ThrowsExceptions: %v, hasAccess: %t, isJavaSourceFile: %t, JavaDoc: %+v, BinaryExpr: %+v}",
-		env.Node.Type,
-		env.Node.Name,
-		env.Node.Modifier,
-		env.Node.Annotation,
-		env.Node.ReturnType,
-		env.Node.MethodArgumentsType,
-		env.Node.MethodArgumentsValue,
-		env.Node.SuperClass,
-		env.Node.Interface,
-		env.Node.Scope,
-		env.Node.VariableValue,
-		env.Node.DataType,
-		env.Node.ThrowsExceptions,
-		env.Node.IsJavaSourceFile,
-		env.Node.JavaDoc,
-		env.Node.BinaryExpr)
+	node := env.Node
+	if node == nil {
+		return ""
+	}
+
+	if node.AddExpr != nil {
+		return node.AddExpr.LeftOperand.NodeString + " + " + node.AddExpr.RightOperand.NodeString
+	} else if node.SubExpr != nil {
+		return node.SubExpr.LeftOperand.NodeString + " - " + node.SubExpr.RightOperand.NodeString
+	} else if node.MulExpr != nil {
+		return node.MulExpr.LeftOperand.NodeString + " * " + node.MulExpr.RightOperand.NodeString
+	} else if node.DivExpr != nil {
+		return node.DivExpr.LeftOperand.NodeString + " / " + node.DivExpr.RightOperand.NodeString
+	} else if node.MethodDecl != nil {
+		return node.MethodDecl.Name
+	} else if node.MethodCall != nil {
+		return node.MethodCall.MethodName
+	} else if node.ClassInstanceExpr != nil {
+		return node.ClassInstanceExpr.ClassName
+	} else if node.IfStmt != nil {
+		return node.IfStmt.Condition.NodeString
+	} else if node.WhileStmt != nil {
+		return "while"
+	} else if node.DoStmt != nil {
+		return "do"
+	} else if node.ForStmt != nil {
+		return "for"
+	} else if node.BreakStmt != nil {
+		return "break"
+	} else if node.ContinueStmt != nil {
+		return "continue"
+	} else if node.ReturnStmt != nil {
+		return "return"
+	}
+
+	return ""
 }
 
 func (env *Env) GetRightOperand() string {

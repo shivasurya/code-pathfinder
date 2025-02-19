@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	tree "github.com/shivasurya/code-pathfinder/sourcecode-parser/tree"
 	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
@@ -73,16 +74,17 @@ func init() {
 	queryCmd.Flags().String("query-file", "", "File containing query to execute")
 }
 
-func initializeProject(project string) []*model.TreeNode {
+func initializeProject(project string) ([]*model.TreeNode, *db.StorageNode) {
 	treeHolder := []*model.TreeNode{}
+	db := db.NewStorageNode(project)
 	if project != "" {
 		treeHolder = tree.Initialize(project)
 	}
-	return treeHolder
+	return treeHolder, db
 }
 
 func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
-	treeHolder := initializeProject(project)
+	treeHolder, db := initializeProject(project)
 
 	if stdin {
 		// read from stdin
@@ -99,7 +101,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, treeHolder, output)
+			result, err := processQuery(input, treeHolder, db, output)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
 				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -110,7 +112,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		}
 	} else {
 		// read from command line
-		result, err := processQuery(query, treeHolder, output)
+		result, err := processQuery(query, treeHolder, db, output)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
 			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -119,7 +121,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, treeHolder []*model.TreeNode, output string) (string, error) {
+func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -129,7 +131,7 @@ func processQuery(input string, treeHolder []*model.TreeNode, output string) (st
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := tree.QueryEntities(treeHolder, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(db, parsedQuery)
 	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results
