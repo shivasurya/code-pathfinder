@@ -10,60 +10,59 @@ import (
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 )
 
 type Env struct {
 	Node *model.Node
 }
 
-func (env *Env) GetVisibility() string {
-	return env.Node.Modifier
-}
+// func (env *Env) GetVisibility() string {
+// 	return env.Node.Modifier
+// }
 
-func (env *Env) GetAnnotations() []string {
-	return env.Node.Annotation
-}
+// func (env *Env) GetAnnotations() []string {
+// 	return env.Node.Annotation
+// }
 
-func (env *Env) GetReturnType() string {
-	return env.Node.ReturnType
-}
+// func (env *Env) GetReturnType() string {
+// 	return env.Node.ReturnType
+// }
 
-func (env *Env) GetName() string {
-	return env.Node.Name
-}
+// func (env *Env) GetName() string {
+// 	return env.Node.Name
+// }
 
-func (env *Env) GetArgumentTypes() []string {
-	return env.Node.MethodArgumentsType
-}
+// func (env *Env) GetArgumentTypes() []string {
+// 	return env.Node.MethodArgumentsType
+// }
 
-func (env *Env) GetArgumentNames() []string {
-	return env.Node.MethodArgumentsValue
-}
+// func (env *Env) GetArgumentNames() []string {
+// 	return env.Node.MethodArgumentsValue
+// }
 
-func (env *Env) GetSuperClass() string {
-	return env.Node.SuperClass
-}
+// func (env *Env) GetSuperClass() string {
+// 	return env.Node.SuperClass
+// }
 
-func (env *Env) GetInterfaces() []string {
-	return env.Node.Interface
-}
+// func (env *Env) GetInterfaces() []string {
+// 	return env.Node.Interface
+// }
 
-func (env *Env) GetScope() string {
-	return env.Node.Scope
-}
+// func (env *Env) GetScope() string {
+// 	return env.Node.Scope
+// }
 
-func (env *Env) GetVariableValue() string {
-	return env.Node.VariableValue
-}
+// func (env *Env) GetVariableValue() string {
+// 	return env.Node.VariableValue
+// }
 
-func (env *Env) GetVariableDataType() string {
-	return env.Node.DataType
-}
+// func (env *Env) GetVariableDataType() string {
+// 	return env.Node.DataType
+// }
 
-func (env *Env) GetThrowsTypes() []string {
-	return env.Node.ThrowsExceptions
-}
+// func (env *Env) GetThrowsTypes() []string {
+// 	return env.Node.ThrowsExceptions
+// }
 
 func (env *Env) IsJavaSourceFile() bool {
 	return true
@@ -244,33 +243,33 @@ func generateCartesianProduct(db *db.StorageNode, selectList []parser.SelectList
 	typeIndex := make(map[string][]*model.Node)
 
 	// value and reference based reducing search space
-	for _, condition := range conditions {
-		// this code helps to reduce search space
-		// if there is single entity in select list, the condition is easy to reduce the search space
-		// if there are multiple entities in select list, the condition is hard to reduce the search space,
-		// but I have tried my best using O(n^2) time complexity to reduce the search space
-		if len(selectList) > 1 {
-			// get all entities from the database based on select list (n items)
-			// based on condition (a condition can have multiple entities)
-			// use the entity to join the entity to reduce the search space instead of generrating cartesian product
-			// ideally it should be less than O(n^2) time complexity
+	// for _, condition := range conditions {
+	// 	// this code helps to reduce search space
+	// 	// if there is single entity in select list, the condition is easy to reduce the search space
+	// 	// if there are multiple entities in select list, the condition is hard to reduce the search space,
+	// 	// but I have tried my best using O(n^2) time complexity to reduce the search space
+	// 	if len(selectList) > 1 {
+	// 		// get all entities from the database based on select list (n items)
+	// 		// based on condition (a condition can have multiple entities)
+	// 		// use the entity to join the entity to reduce the search space instead of generrating cartesian product
+	// 		// ideally it should be less than O(n^2) time complexity
 
-		} else {
-			filteredNodes := db.GetEntity(selectList[0].Entity)
-			for _, node := range filteredNodes {
-				query := parser.Query{Expression: condition, SelectList: selectList}
-				if FilterEntities([]*model.Node{node}, query) {
-					typeIndex[node.Type] = utilities.AppendUnique(typeIndex[node.Type], node)
-				}
-			}
-		}
-	}
+	// 	} else {
+	// 		// filteredNodes := db.MethodDecl
+	// 		// for _, node := range filteredNodes {
+	// 		// 	query := parser.Query{Expression: condition, SelectList: selectList}
+	// 		// 	// if FilterEntities([]*model.Node{{MethodDecl: node}}, query) {
+	// 		// 	// 	//typeIndex[node.Type] = utilities.AppendUnique(typeIndex[node.Type], node)
+	// 		// 	// }
+	// 		// }
+	// 	}
+	// }
 
-	if len(conditions) == 0 {
-		for _, node := range treeHolder.Nodes {
-			typeIndex[node.Type] = append(typeIndex[node.Type], node)
-		}
-	}
+	// if len(conditions) == 0 {
+	// 	for _, node := range treeHolder.Nodes {
+	// 		typeIndex[node.Type] = append(typeIndex[node.Type], node)
+	// 	}
+	// }
 
 	sets := make([][]interface{}, 0, len(selectList))
 
@@ -428,39 +427,39 @@ func generateProxyEnv(node *model.Node, query parser.Query) map[string]interface
 	env := map[string]interface{}{
 		"isJavaSourceFile": proxyenv.IsJavaSourceFile(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility":   proxyenv.GetVisibility,
-			"getAnnotation":   proxyenv.GetAnnotations,
-			"getReturnType":   proxyenv.GetReturnType,
-			"getName":         proxyenv.GetName,
-			"getArgumentType": proxyenv.GetArgumentTypes,
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getThrowsType":   proxyenv.GetThrowsTypes,
-			"getDoc":          proxyenv.GetDoc,
-			"toString":        proxyenv.ToString,
+			// "getVisibility":   proxyenv.GetVisibility,
+			// "getAnnotation":   proxyenv.GetAnnotations,
+			// "getReturnType":   proxyenv.GetReturnType,
+			// "getName":         proxyenv.GetName,
+			// "getArgumentType": proxyenv.GetArgumentTypes,
+			// "getArgumentName": proxyenv.GetArgumentNames,
+			// "getThrowsType":   proxyenv.GetThrowsTypes,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		classDeclaration: map[string]interface{}{
-			"getSuperClass": proxyenv.GetSuperClass,
-			"getName":       proxyenv.GetName,
-			"getAnnotation": proxyenv.GetAnnotations,
-			"getVisibility": proxyenv.GetVisibility,
-			"getInterface":  proxyenv.GetInterfaces,
-			"getDoc":        proxyenv.GetDoc,
-			"toString":      proxyenv.ToString,
+			// "getSuperClass": proxyenv.GetSuperClass,
+			// "getName":       proxyenv.GetName,
+			// "getAnnotation": proxyenv.GetAnnotations,
+			// "getVisibility": proxyenv.GetVisibility,
+			// "getInterface":  proxyenv.GetInterfaces,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getName":         proxyenv.GetName,
-			"getDoc":          proxyenv.GetDoc,
-			"toString":        proxyenv.ToString,
+			// "getArgumentName": proxyenv.GetArgumentNames,
+			// "getName":         proxyenv.GetName,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		variableDeclaration: map[string]interface{}{
-			"getName":             proxyenv.GetName,
-			"getVisibility":       proxyenv.GetVisibility,
-			"getVariableValue":    proxyenv.GetVariableValue,
-			"getVariableDataType": proxyenv.GetVariableDataType,
-			"getScope":            proxyenv.GetScope,
-			"getDoc":              proxyenv.GetDoc,
-			"toString":            proxyenv.ToString,
+			// "getName":             proxyenv.GetName,
+			// "getVisibility":       proxyenv.GetVisibility,
+			// "getVariableValue":    proxyenv.GetVariableValue,
+			// "getVariableDataType": proxyenv.GetVariableDataType,
+			// "getScope":            proxyenv.GetScope,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		binaryExpression: map[string]interface{}{
 			"getLeftOperand":  proxyenv.GetLeftOperand,
@@ -548,7 +547,7 @@ func generateProxyEnv(node *model.Node, query parser.Query) map[string]interface
 			"toString":      proxyenv.ToString,
 		},
 		classInstanceExpression: map[string]interface{}{
-			"getName":              proxyenv.GetName,
+			// "getName":              proxyenv.GetName,
 			"getDoc":               proxyenv.GetDoc,
 			"toString":             proxyenv.ToString,
 			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
