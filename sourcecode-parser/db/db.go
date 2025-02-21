@@ -66,7 +66,7 @@ const (
 		file_path TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(import_type, import_name, file_path)
-		;`
+		);`
 
 	CREATE_TABLE_ANNOTATION = `
 	CREATE TABLE IF NOT EXISTS annotation (
@@ -74,7 +74,7 @@ const (
 		annotation_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(annotation_name)
-		;`
+		);`
 
 	CREATE_TABLE_CLASS_DECL = `
 	CREATE TABLE IF NOT EXISTS class_decl (
@@ -109,12 +109,12 @@ const (
 		);`
 
 	CREATE_TABLE_METHOD_CALL = `
-		REATE TABLE IF NOT EXISTS method_call (
+		CREATE TABLE IF NOT EXISTS method_call (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		method_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(method_name)
-		;`
+		);`
 
 	CREATE_TABLE_FIELD_DECL = `
 		CREATE TABLE IF NOT EXISTS field_decl (
@@ -122,7 +122,7 @@ const (
 		field_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(field_name)
-		;`
+		);`
 
 	CREATE_TABLE_LOCAL_VARIABLE_DECL = `
 		CREATE TABLE IF NOT EXISTS local_variable_decl (
@@ -130,7 +130,7 @@ const (
 		local_variable_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(local_variable_name)
-		;`
+		);`
 
 	CREATE_TABLE_BINARY_EXPR = `
 		CREATE TABLE IF NOT EXISTS binary_expr (
@@ -138,7 +138,7 @@ const (
 		binary_expr_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(binary_expr_name)
-		;`
+		);`
 
 	CREATE_TABLE_JAVADOC = `
 	CREATE TABLE IF NOT EXISTS javadoc (
@@ -146,7 +146,7 @@ const (
 		javadoc_name TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(javadoc_name)
-		;`
+		);`
 )
 
 func NewStorageNode(databasePath string) *StorageNode {
