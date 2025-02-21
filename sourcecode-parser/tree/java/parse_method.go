@@ -127,6 +127,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 
 	methodNode := &model.Method{
 		Name:              methodName,
+		QualifiedName:     methodName,
 		ReturnType:        returnType,
 		ParameterNames:    methodArgumentType,
 		Parameters:        methodArgumentValue,
@@ -135,6 +136,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		IsStatic:          false,
 		IsFinal:           false,
 		IsConstructor:     false,
+		IsStrictfp:        false,
 		SourceDeclaration: file,
 	}
 

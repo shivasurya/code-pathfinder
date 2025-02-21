@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -201,22 +202,48 @@ func (m *Method) SameParamTypes(other *Method) bool {
 
 // Add these methods to the existing Method struct
 func (m *Method) Insert(db *sql.DB) error {
-	query := `INSERT INTO methods (
+	query := `INSERT INTO method_decl (
         name, qualified_name, return_type, parameters, parameter_names,
         visibility, is_abstract, is_strictfp, is_static, is_final,
         is_constructor, source_declaration
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := db.Exec(query,
+	fmt.Println("Inserting method:", m.Name)
+	fmt.Println("Qualified Name:", m.QualifiedName)
+	fmt.Println("Return Type:", m.ReturnType)
+	fmt.Println("Parameters:", m.Parameters)
+	fmt.Println("Parameter Names:", m.ParameterNames)
+	fmt.Println("Visibility:", m.Visibility)
+	fmt.Println("Is Abstract:", m.IsAbstract)
+	fmt.Println("Is Strictfp:", m.IsStrictfp)
+	fmt.Println("Is Static:", m.IsStatic)
+	fmt.Println("Is Final:", m.IsFinal)
+	fmt.Println("Is Constructor:", m.IsConstructor)
+	fmt.Println("Source Declaration:", m.SourceDeclaration)
+
+	s, err := db.Exec(query,
 		m.Name, m.QualifiedName, m.ReturnType,
 		strings.Join(m.Parameters, ","),
 		strings.Join(m.ParameterNames, ","),
 		m.Visibility, m.IsAbstract, m.IsStrictfp,
 		m.IsStatic, m.IsFinal, m.IsConstructor,
 		m.SourceDeclaration)
-	return err
-}
 
+	if err != nil {
+		log.Printf("Failed to insert method: %v", err)
+		return err
+	}
+
+	lastInsertID, err := s.LastInsertId()
+	if err != nil {
+		log.Printf("Failed to get last insert ID: %v", err)
+		return err
+	}
+
+	fmt.Printf("Inserted ID: %d", lastInsertID)
+
+	return nil
+}
 func (m *Method) Update(db *sql.DB) error {
 	query := `UPDATE methods SET 
         qualified_name = ?, return_type = ?, parameters = ?,

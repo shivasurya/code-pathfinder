@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -101,11 +102,7 @@ const (
 		is_final BOOLEAN NOT NULL,
 		is_constructor BOOLEAN NOT NULL,
 		source_declaration TEXT,
-		class_name TEXT NOT NULL,
-		package_name TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(qualified_name, class_name, package_name),
-		FOREIGN KEY (class_name, package_name) REFERENCES class_decl(class_name, package_name)
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`
 
 	CREATE_TABLE_METHOD_CALL = `
@@ -189,7 +186,10 @@ func (s *StorageNode) AddClassDecl(node *model.Class) {
 func (s *StorageNode) AddMethodDecl(node *model.Method) {
 	s.MethodDecl = append(s.MethodDecl, node)
 	// save method node to database if not exist
-	node.Insert(s.DB)
+	err := node.Insert(s.DB)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func (s *StorageNode) AddFieldDecl(node *model.FieldDeclaration) {
