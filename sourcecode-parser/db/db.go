@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -185,11 +184,6 @@ func (s *StorageNode) AddClassDecl(node *model.Class) {
 
 func (s *StorageNode) AddMethodDecl(node *model.Method) {
 	s.MethodDecl = append(s.MethodDecl, node)
-	// save method node to database if not exist
-	err := node.Insert(s.DB)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 func (s *StorageNode) AddFieldDecl(node *model.FieldDeclaration) {

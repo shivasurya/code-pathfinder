@@ -28,6 +28,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, blockStmtTreeNode, storageNode)
 		}
+		return
 	case "return_statement":
 		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ReturnStmt: returnStmtNode}, Parent: parentNode})
@@ -60,12 +61,14 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BinaryExpr: binaryExprNode}, Parent: parentNode})
 	case "method_declaration":
 		methodDeclaration := javalang.ParseMethodDeclaration(node, sourceCode, file)
+		utilities.Log("Processing method:", methodDeclaration.Name, "in file:", file)
 		methodNode := &model.TreeNode{Node: &model.Node{MethodDecl: methodDeclaration}, Parent: parentNode}
 		parentNode.AddChild(methodNode)
 		storageNode.AddMethodDecl(methodDeclaration)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, methodNode, storageNode)
 		}
+		return
 	case "method_invocation":
 		methodInvokedNode := javalang.ParseMethodInvoker(node, sourceCode, file)
 		methodInvocationTreeNode := &model.TreeNode{Node: &model.Node{MethodCall: methodInvokedNode}, Parent: parentNode}
@@ -73,6 +76,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, methodInvocationTreeNode, storageNode)
 		}
+		return
 	case "class_declaration":
 		classNode := javalang.ParseClass(node, sourceCode, file)
 		classTreeNode := &model.TreeNode{Node: &model.Node{ClassDecl: classNode}, Children: nil, Parent: parentNode}
@@ -80,6 +84,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, classTreeNode, storageNode)
 		}
+		return
 	case "block_comment":
 		// Parse block comments
 		if strings.HasPrefix(node.Content(sourceCode), "/*") {
@@ -127,6 +132,7 @@ func readFile(path string) ([]byte, error) {
 
 func Initialize(directory string) []*model.TreeNode {
 	treeHolder := []*model.TreeNode{}
+	storageNode := db.NewStorageNode("")
 	// record start time
 	start := time.Now()
 
@@ -172,7 +178,6 @@ func Initialize(directory string) []*model.TreeNode {
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
-			storageNode := db.NewStorageNode("")
 			localTree := &model.TreeNode{
 				Parent: nil,
 				Node: &model.Node{
@@ -228,18 +233,14 @@ func Initialize(directory string) []*model.TreeNode {
 		}
 	}()
 
-	// Wait for all workers to finish
-	go func() {
-		wg.Wait()
-		close(statusChan)
-		close(progressChan)
-		close(treeChan)
-	}()
+	wg.Wait()
+	close(statusChan)
+	close(progressChan)
+	close(treeChan)
 
-	// Print tree structure recursively from treeChan
-	// for treeNode := range treeChan {
-	// 	printTree(treeNode, 0)
-	// }
+	for _, method := range storageNode.MethodDecl {
+		utilities.Log("Method: ", method.ReturnType, " ", method.Name, " ", method.Parameters, " ", method.SourceDeclaration)
+	}
 
 	end := time.Now()
 	elapsed := end.Sub(start)
@@ -248,13 +249,3 @@ func Initialize(directory string) []*model.TreeNode {
 
 	return treeHolder
 }
-
-// func printTree(node *model.TreeNode, level int) {
-// 	tab := strings.Repeat("\t", level)
-// 	fmt.Println(tab+"Value:", node.NodeType)
-// 	fmt.Println(tab+"Code:", node.Node.CodeSnippet)
-// 	fmt.Println(tab + "-------------------------------------")
-// 	for _, child := range node.Children {
-// 		printTree(child, level+1)
-// 	}
-// }
