@@ -186,6 +186,10 @@ func (s *StorageNode) AddMethodDecl(node *model.Method) {
 	s.MethodDecl = append(s.MethodDecl, node)
 }
 
+func (s *StorageNode) AddMethodCall(node *model.MethodCall) {
+	s.MethodCall = append(s.MethodCall, node)
+}
+
 func (s *StorageNode) AddFieldDecl(node *model.FieldDeclaration) {
 	s.Field = append(s.Field, node)
 }

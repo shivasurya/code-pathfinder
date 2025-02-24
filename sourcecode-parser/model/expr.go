@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -57,6 +58,12 @@ type BinaryExpr struct {
 	Op           string
 	LeftOperand  *Expr
 	RightOperand *Expr
+}
+
+func (e *BinaryExpr) Insert(db *sql.DB) error {
+	query := "INSERT INTO binary_expr (binary_expr_name) VALUES (?)"
+	_, err := db.Exec(query, e.NodeString)
+	return err
 }
 
 func (e *BinaryExpr) GetLeftOperand() *Expr {
@@ -498,6 +505,12 @@ type MethodCall struct {
 	IsOwnMethodCall   bool     // Whether this is a call to an instance method of 'this'
 }
 
+func (m *MethodCall) Insert(db *sql.DB) error {
+	query := `INSERT INTO method_call (method_name) VALUES (?)`
+	_, err := db.Exec(query, m.MethodName)
+	return err
+}
+
 // NewMethodCall initializes a new MethodCall instance.
 func NewMethodCall(primaryQlClass string, methodName string, qualifiedMethod string, arguments []string, typeArguments []string, qualifier string, receiverType string, enclosingCallable string, enclosingStmt string, hasQualifier bool, isEnclosingCall bool, isOwnMethodCall bool) *MethodCall {
 	return &MethodCall{
@@ -613,6 +626,15 @@ type FieldDeclaration struct {
 	IsVolatile        bool     // Whether the field is volatile
 	IsTransient       bool     // Whether the field is transient
 	SourceDeclaration string   // Location of the field declaration
+}
+
+func (f *FieldDeclaration) Insert(db *sql.DB) error {
+	query := `
+		INSERT INTO field_decl (field_name)
+		VALUES (?)
+	`
+	_, err := db.Exec(query, f.FieldNames[0])
+	return err
 }
 
 // NewFieldDeclaration initializes a new FieldDeclaration instance.

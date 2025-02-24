@@ -1,11 +1,35 @@
 package model
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // ImportType represents a single-type import declaration in Java.
 type ImportType struct {
 	ImportedType      string // The fully qualified name of the imported type
 	SourceDeclaration string // Location of the import statement
+}
+
+func (it *ImportType) Insert(db *sql.DB) error {
+	query := `
+	INSERT INTO import_decl (
+		import_type,
+		import_name,
+		file_path
+	) VALUES (?, ?, ?)
+	`
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(it.ImportedType, it.ImportedType, it.SourceDeclaration)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewImportType initializes a new ImportType instance.

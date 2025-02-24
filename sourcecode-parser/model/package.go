@@ -1,5 +1,7 @@
 package model
 
+import "database/sql"
+
 // Package represents a Java package, grouping multiple types.
 type Package struct {
 	QualifiedName string   // Fully qualified package name (e.g., "com.example")
@@ -7,6 +9,15 @@ type Package struct {
 	FromSource    bool     // Whether at least one reference type originates from source
 	Metrics       string   // Placeholder for package-level metrics
 	URL           string   // Dummy URL for the package (for debugging or references)
+}
+
+func (p *Package) Insert(db *sql.DB) error {
+	query := `INSERT INTO packages (package_name) VALUES (?)`
+	_, err := db.Exec(query, p.QualifiedName)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewPackage initializes a new Package instance.

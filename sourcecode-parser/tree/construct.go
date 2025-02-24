@@ -59,6 +59,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 	case "binary_expression":
 		binaryExprNode := javalang.ParseExpr(node, sourceCode, file, parentNode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BinaryExpr: binaryExprNode}, Parent: parentNode})
+		storageNode.AddBinaryExpr(binaryExprNode)
 	case "method_declaration":
 		methodDeclaration := javalang.ParseMethodDeclaration(node, sourceCode, file)
 		utilities.Log("Processing method:", methodDeclaration.Name, "in file:", file)
@@ -73,6 +74,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		methodInvokedNode := javalang.ParseMethodInvoker(node, sourceCode, file)
 		methodInvocationTreeNode := &model.TreeNode{Node: &model.Node{MethodCall: methodInvokedNode}, Parent: parentNode}
 		parentNode.AddChild(methodInvocationTreeNode)
+		storageNode.AddMethodCall(methodInvokedNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, methodInvocationTreeNode, storageNode)
 		}
@@ -81,6 +83,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		classNode := javalang.ParseClass(node, sourceCode, file)
 		classTreeNode := &model.TreeNode{Node: &model.Node{ClassDecl: classNode}, Children: nil, Parent: parentNode}
 		parentNode.AddChild(classTreeNode)
+		storageNode.AddClassDecl(classNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			buildQLTreeFromAST(node.Child(i), sourceCode, file, classTreeNode, storageNode)
 		}
@@ -238,10 +241,28 @@ func Initialize(directory string) []*model.TreeNode {
 	close(progressChan)
 	close(treeChan)
 
-	// TODO:bulk insert into db
+	for _, packageDeclaration := range storageNode.Package {
+		packageDeclaration.Insert(storageNode.DB)
+	}
+	for _, importDeclaration := range storageNode.ImportDecl {
+		importDeclaration.Insert(storageNode.DB)
+	}
+	for _, classDeclaration := range storageNode.ClassDecl {
+		classDeclaration.Insert(storageNode.DB)
+	}
+	for _, fieldDeclaration := range storageNode.Field {
+		fieldDeclaration.Insert(storageNode.DB)
+	}
 	for _, methodDeclaration := range storageNode.MethodDecl {
 		methodDeclaration.Insert(storageNode.DB)
 	}
+	for _, methodCallDeclaration := range storageNode.MethodCall {
+		methodCallDeclaration.Insert(storageNode.DB)
+	}
+	for _, binaryExpression := range storageNode.BinaryExpr {
+		binaryExpression.Insert(storageNode.DB)
+	}
+
 	storageNode.DB.Close()
 
 	end := time.Now()

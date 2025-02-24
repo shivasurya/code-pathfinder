@@ -1,6 +1,9 @@
 package model
 
-import "strings"
+import (
+	"database/sql"
+	"strings"
+)
 
 // Modifiable represents a Java syntax element that may have modifiers.
 type Modifiable struct {
@@ -336,6 +339,26 @@ type Class struct {
 	// Class type properties
 	IsAnonymous bool // Whether this is an anonymous class
 	IsFileClass bool // Whether this is a Kotlin file class (e.g., FooKt for Foo.kt)
+}
+
+func (c *Class) Insert(db *sql.DB) error {
+	query := `
+	INSERT INTO class_decl (
+			class_name,
+			package_name)
+	VALUES (?, ?)
+	`
+
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(c.ClassOrInterface.QualifiedName, c.ClassOrInterface.Package)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewClass initializes a new Class instance.
