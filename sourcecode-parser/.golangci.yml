@@ -157,7 +157,7 @@ linters:
     - tagliatelle
 
     # Test-related checks. All of them are good.
-    - tenv
+    - usetesting
     - testableexamples
     - thelper
     - tparallel

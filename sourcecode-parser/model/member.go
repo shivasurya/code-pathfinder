@@ -200,7 +200,7 @@ func (m *Method) SameParamTypes(other *Method) bool {
 	return true
 }
 
-// Add these methods to the existing Method struct
+// Add these methods to the existing Method struct.
 func (m *Method) Insert(db *sql.DB) error {
 	query := `INSERT INTO method_decl (
         name, qualified_name, return_type, parameters, parameter_names,
@@ -215,7 +215,6 @@ func (m *Method) Insert(db *sql.DB) error {
 		m.Visibility, m.IsAbstract, m.IsStrictfp,
 		m.IsStatic, m.IsFinal, m.IsConstructor,
 		m.SourceDeclaration)
-
 	if err != nil {
 		log.Printf("Failed to insert method: %v", err)
 		return err
@@ -223,6 +222,7 @@ func (m *Method) Insert(db *sql.DB) error {
 
 	return nil
 }
+
 func (m *Method) Update(db *sql.DB) error {
 	query := `UPDATE methods SET 
         qualified_name = ?, return_type = ?, parameters = ?,
@@ -247,7 +247,7 @@ func (m *Method) Delete(db *sql.DB) error {
 	return err
 }
 
-// Query helper methods
+// Query helper methods.
 func FindMethodByName(db *sql.DB, name string) (*Method, error) {
 	query := `SELECT * FROM methods WHERE name = ?`
 	row := db.QueryRow(query, name)
@@ -261,7 +261,6 @@ func FindMethodByName(db *sql.DB, name string) (*Method, error) {
 		&method.IsStrictfp, &method.IsStatic,
 		&method.IsFinal, &method.IsConstructor,
 		&method.SourceDeclaration)
-
 	if err != nil {
 		return nil, err
 	}

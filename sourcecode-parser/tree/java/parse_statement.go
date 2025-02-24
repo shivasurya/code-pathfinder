@@ -33,7 +33,7 @@ func ParseYieldStatement(node *sitter.Node, sourceCode []byte, file string) *mod
 	yieldStmt := &model.YieldStmt{}
 	yieldStmtExpr := &model.Expr{NodeString: node.Child(1).Content(sourceCode)}
 	yieldStmt.Value = yieldStmtExpr
-	//uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	return yieldStmt
 }
 
@@ -44,7 +44,7 @@ func ParseAssertStatement(node *sitter.Node, sourceCode []byte, file string) *mo
 		assertStmt.Message = &model.Expr{NodeString: node.Child(3).Content(sourceCode)}
 	}
 
-	//niqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+	// niqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	return assertStmt
 }
 
