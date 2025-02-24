@@ -132,7 +132,7 @@ func readFile(path string) ([]byte, error) {
 
 func Initialize(directory string) []*model.TreeNode {
 	treeHolder := []*model.TreeNode{}
-	storageNode := db.NewStorageNode("")
+	storageNode := db.NewStorageNode(directory)
 	// record start time
 	start := time.Now()
 
@@ -238,9 +238,11 @@ func Initialize(directory string) []*model.TreeNode {
 	close(progressChan)
 	close(treeChan)
 
-	for _, method := range storageNode.MethodDecl {
-		utilities.Log("Method: ", method.ReturnType, " ", method.Name, " ", method.Parameters, " ", method.SourceDeclaration)
+	// TODO:bulk insert into db
+	for _, methodDeclaration := range storageNode.MethodDecl {
+		methodDeclaration.Insert(storageNode.DB)
 	}
+	storageNode.DB.Close()
 
 	end := time.Now()
 	elapsed := end.Sub(start)

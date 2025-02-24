@@ -208,20 +208,7 @@ func (m *Method) Insert(db *sql.DB) error {
         is_constructor, source_declaration
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	fmt.Println("Inserting method:", m.Name)
-	fmt.Println("Qualified Name:", m.QualifiedName)
-	fmt.Println("Return Type:", m.ReturnType)
-	fmt.Println("Parameters:", m.Parameters)
-	fmt.Println("Parameter Names:", m.ParameterNames)
-	fmt.Println("Visibility:", m.Visibility)
-	fmt.Println("Is Abstract:", m.IsAbstract)
-	fmt.Println("Is Strictfp:", m.IsStrictfp)
-	fmt.Println("Is Static:", m.IsStatic)
-	fmt.Println("Is Final:", m.IsFinal)
-	fmt.Println("Is Constructor:", m.IsConstructor)
-	fmt.Println("Source Declaration:", m.SourceDeclaration)
-
-	s, err := db.Exec(query,
+	_, err := db.Exec(query,
 		m.Name, m.QualifiedName, m.ReturnType,
 		strings.Join(m.Parameters, ","),
 		strings.Join(m.ParameterNames, ","),
@@ -233,14 +220,6 @@ func (m *Method) Insert(db *sql.DB) error {
 		log.Printf("Failed to insert method: %v", err)
 		return err
 	}
-
-	lastInsertID, err := s.LastInsertId()
-	if err != nil {
-		log.Printf("Failed to get last insert ID: %v", err)
-		return err
-	}
-
-	fmt.Printf("Inserted ID: %d", lastInsertID)
 
 	return nil
 }
