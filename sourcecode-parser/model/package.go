@@ -12,7 +12,7 @@ type Package struct {
 }
 
 func (p *Package) Insert(db *sql.DB) error {
-	query := `INSERT INTO packages (package_name) VALUES (?)`
+	query := `INSERT INTO package (package_name) VALUES (?)`
 	_, err := db.Exec(query, p.QualifiedName)
 	if err != nil {
 		return err

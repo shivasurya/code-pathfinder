@@ -25,6 +25,10 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ImportType: importDeclNode}, Parent: parentNode})
 		storageNode.AddImportDecl(importDeclNode)
+	case "package_declaration":
+		packageDeclNode := javalang.ParsePackageDeclaration(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: &model.Node{Package: packageDeclNode}, Parent: parentNode})
+		storageNode.AddPackage(packageDeclNode)
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
 		blockStmtTreeNode := &model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode}, Parent: parentNode}

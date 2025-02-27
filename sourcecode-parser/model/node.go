@@ -28,6 +28,7 @@ type Node struct {
 	MulExpr                *MulExpr
 	NEExpr                 *NEExpr
 	OrLogicalExpr          *OrLogicalExpr
+	Package                *Package
 	RightShiftExpr         *RightShiftExpr
 	RemExpr                *RemExpr
 	ReturnStmt             *ReturnStmt

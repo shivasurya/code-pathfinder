@@ -15,3 +15,14 @@ func ParseImportDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 	}
 	return importType
 }
+
+func ParsePackageDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Package {
+	packageType := &model.Package{}
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == "scoped_identifier" || child.Type() == "identifier" {
+			packageType.QualifiedName = child.Content(sourceCode)
+		}
+	}
+	return packageType
+}
