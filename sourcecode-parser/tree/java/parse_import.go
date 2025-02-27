@@ -17,12 +17,16 @@ func ParseImportDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 }
 
 func ParsePackageDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Package {
-	packageType := &model.Package{}
+	pkg := &model.Package{}
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		if child.Type() == "scoped_identifier" || child.Type() == "identifier" {
-			packageType.QualifiedName = child.Content(sourceCode)
+		if isIdentifier(child) {
+			pkg.QualifiedName = child.Content(sourceCode)
 		}
 	}
-	return packageType
+	return pkg
+}
+
+func isIdentifier(node *sitter.Node) bool {
+	return node.Type() == "scoped_identifier" || node.Type() == "identifier"
 }
