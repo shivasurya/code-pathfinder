@@ -70,17 +70,44 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
+func parseModifers(modifiers string) []string {
+	// modifier string can be like "@Override\n public strictfp"
+	// trim modifier and split by new line and then by space
+	modifiers = strings.TrimSpace(modifiers)
+	modifiers = strings.ReplaceAll(modifiers, "\n", " ")
+
+	modifiersArray := strings.Split(modifiers, " ")
+
+	for i := 0; i < len(modifiersArray); i++ {
+		modifiersArray[i] = strings.TrimSpace(modifiersArray[i])
+	}
+
+	return modifiersArray
+}
+
+func extractVisibilityModifier(accessModifiers []string) string {
+	visibilityTypes := []string{"public", "private", "protected"}
+	for _, currentModifier := range accessModifiers {
+		for _, visibilityType := range visibilityTypes {
+			if currentModifier == visibilityType {
+				return currentModifier
+			}
+		}
+	}
+	return ""
+}
+func hasModifier(modifiers []string, targetModifier string) bool {
+	for _, modifier := range modifiers {
+		if modifier == targetModifier {
+			return true
+		}
+	}
+	return false
+}
+
 func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Method {
-	// var javadoc *model.Javadoc
-	// var methodNode *model.Method
-	// if node.PrevSibling() != nil && node.PrevSibling().Type() == "block_comment" {
-	// 	commentContent := node.PrevSibling().Content(sourceCode)
-	// 	if strings.HasPrefix(commentContent, "/*") {
-	// 		javadoc = ParseJavadocTags(node, sourceCode, file)
-	// 	}
-	// }
 	methodName, _ := extractMethodName(node, sourceCode, file)
-	modifiers := ""
+	modifiers := []string{}
 	returnType := ""
 	throws := []string{}
 	methodArgumentType := []string{}
@@ -101,7 +128,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 				}
 			}
 		case "modifiers":
-			modifiers = childNode.Content(sourceCode)
+			modifiers = parseModifers(childNode.Content(sourceCode))
 			for j := 0; j < int(childNode.ChildCount()); j++ {
 				if childNode.Child(j).Type() == "marker_annotation" {
 					annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode))
@@ -131,12 +158,12 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		ReturnType:        returnType,
 		ParameterNames:    methodArgumentType,
 		Parameters:        methodArgumentValue,
-		Visibility:        modifiers,
-		IsAbstract:        false,
-		IsStatic:          false,
-		IsFinal:           false,
+		Visibility:        extractVisibilityModifier(modifiers),
+		IsAbstract:        hasModifier(modifiers, "abstract"),
+		IsStatic:          hasModifier(modifiers, "static"),
+		IsFinal:           hasModifier(modifiers, "final"),
 		IsConstructor:     false,
-		IsStrictfp:        false,
+		IsStrictfp:        hasModifier(modifiers, "strictfp"),
 		SourceDeclaration: file,
 	}
 

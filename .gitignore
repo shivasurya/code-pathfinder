@@ -33,3 +33,4 @@ docs/public/rules/*.json
 node_modules
 
 test-src/android/pathfinder.db
+.vscode/cody.json

@@ -241,6 +241,7 @@ func Initialize(directory string) []*model.TreeNode {
 	close(progressChan)
 	close(treeChan)
 
+	//TODO: fix all method_decl, class with all atributes first
 	for _, packageDeclaration := range storageNode.Package {
 		packageDeclaration.Insert(storageNode.DB)
 	}
