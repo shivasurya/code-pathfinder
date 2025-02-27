@@ -21,6 +21,10 @@ import (
 
 func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode, storageNode *db.StorageNode) {
 	switch node.Type() {
+	case "import_declaration":
+		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode, file)
+		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ImportType: importDeclNode}, Parent: parentNode})
+		storageNode.AddImportDecl(importDeclNode)
 	case "block":
 		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
 		blockStmtTreeNode := &model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode}, Parent: parentNode}

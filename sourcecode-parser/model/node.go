@@ -20,6 +20,7 @@ type Node struct {
 	FileNode               *File
 	ForStmt                *ForStmt
 	IfStmt                 *IfStmt
+	ImportType             *ImportType
 	JavaDoc                *Javadoc
 	LeftShiftExpr          *LeftShiftExpr
 	MethodDecl             *Method
