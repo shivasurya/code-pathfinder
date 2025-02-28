@@ -506,9 +506,13 @@ type MethodCall struct {
 }
 
 func (m *MethodCall) Insert(db *sql.DB) error {
-	query := `INSERT INTO method_call (method_name) VALUES (?)`
-	_, err := db.Exec(query, m.MethodName)
-	return err
+	query := `INSERT INTO method_call (method_name, qualified_name, parameters, parameters_names) VALUES (?, ?, ?, ?)`
+	_, err := db.Exec(query, m.MethodName, m.QualifiedMethod, strings.Join(m.Arguments, ","), strings.Join(m.TypeArguments, ","))
+	if err != nil {
+		fmt.Println("Error inserting method call:", err)
+		return err
+	}
+	return nil
 }
 
 // NewMethodCall initializes a new MethodCall instance.

@@ -195,8 +195,10 @@ func ParseMethodInvoker(node *sitter.Node, sourceCode []byte, file string) *mode
 		}
 	}
 	methodCall = &model.MethodCall{
-		MethodName: methodName,
-		Arguments:  arguments,
+		MethodName:      methodName,
+		Arguments:       arguments,
+		QualifiedMethod: methodName,
+		TypeArguments:   []string{},
 	}
 	return methodCall
 }
