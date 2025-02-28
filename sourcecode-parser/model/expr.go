@@ -55,15 +55,20 @@ func (e *Expr) GetKind() int {
 
 type BinaryExpr struct {
 	Expr
-	Op           string
-	LeftOperand  *Expr
-	RightOperand *Expr
+	Op                string
+	LeftOperand       *Expr
+	RightOperand      *Expr
+	SourceDeclaration string
 }
 
 func (e *BinaryExpr) Insert(db *sql.DB) error {
-	query := "INSERT INTO binary_expr (binary_expr_name) VALUES (?)"
-	_, err := db.Exec(query, e.NodeString)
-	return err
+	query := "INSERT INTO binary_expr (left_operand, right_operand, operator, source_declaration) VALUES (?, ?, ?, ?)"
+	_, err := db.Exec(query, e.GetLeftOperandString(), e.GetRightOperandString(), e.Op, e.SourceDeclaration)
+	if err != nil {
+		fmt.Println("Error inserting binary expression:", err)
+		return err
+	}
+	return nil
 }
 
 func (e *BinaryExpr) GetLeftOperand() *Expr {

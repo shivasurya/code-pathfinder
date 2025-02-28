@@ -143,9 +143,11 @@ const (
 	CREATE_TABLE_BINARY_EXPR = `
 		CREATE TABLE IF NOT EXISTS binary_expr (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		binary_expr_name TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(binary_expr_name)
+		left_operand TEXT NOT NULL,
+		right_operand TEXT NOT NULL,
+		operator TEXT NOT NULL,
+		source_declaration TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
 	CREATE_TABLE_JAVADOC = `
