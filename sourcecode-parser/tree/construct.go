@@ -106,6 +106,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		// Extract variable name, type, and modifiers
 		fieldNode := javalang.ParseField(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{Field: fieldNode}, Children: nil, Parent: parentNode})
+		storageNode.AddFieldDecl(fieldNode)
 	case "object_creation_expression":
 		classInstanceNode := javalang.ParseObjectCreationExpr(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ClassInstanceExpr: classInstanceNode}, Children: nil, Parent: parentNode})
@@ -255,7 +256,6 @@ func Initialize(directory string) []*model.TreeNode {
 	for _, importDeclaration := range storageNode.ImportDecl {
 		importDeclaration.Insert(storageNode.DB)
 	}
-	//TODO: class decl, field, method call, binary expr pending
 	for _, classDeclaration := range storageNode.ClassDecl {
 		classDeclaration.Insert(storageNode.DB)
 	}
@@ -265,6 +265,7 @@ func Initialize(directory string) []*model.TreeNode {
 	for _, methodDeclaration := range storageNode.MethodDecl {
 		methodDeclaration.Insert(storageNode.DB)
 	}
+	//TODO: method call, binary expr pending
 	for _, methodCallDeclaration := range storageNode.MethodCall {
 		methodCallDeclaration.Insert(storageNode.DB)
 	}

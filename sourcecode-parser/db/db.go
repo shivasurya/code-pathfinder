@@ -120,8 +120,14 @@ const (
 		CREATE TABLE IF NOT EXISTS field_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		field_name TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(field_name)
+		type TEXT NOT NULL,
+		visibility TEXT NOT NULL,
+		is_static BOOLEAN NOT NULL,
+		is_final BOOLEAN NOT NULL,
+		is_transient BOOLEAN NOT NULL,
+		is_volatile BOOLEAN NOT NULL,
+		source_declaration TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);`
 
 	CREATE_TABLE_LOCAL_VARIABLE_DECL = `

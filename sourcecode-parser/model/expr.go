@@ -630,11 +630,17 @@ type FieldDeclaration struct {
 
 func (f *FieldDeclaration) Insert(db *sql.DB) error {
 	query := `
-		INSERT INTO field_decl (field_name)
-		VALUES (?)
+		INSERT INTO field_decl (field_name, type, visibility, is_static, is_final, is_transient, is_volatile, source_declaration)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := db.Exec(query, f.FieldNames[0])
-	return err
+	for _, fieldName := range f.FieldNames {
+		_, err := db.Exec(query, fieldName, f.Type, f.Visibility, f.IsStatic, f.IsFinal, f.IsTransient, f.IsVolatile, f.SourceDeclaration)
+		if err != nil {
+			fmt.Println("Error inserting field:", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // NewFieldDeclaration initializes a new FieldDeclaration instance.
