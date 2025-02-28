@@ -81,8 +81,12 @@ const (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		class_name TEXT NOT NULL,
 		package_name TEXT NOT NULL,
+		source_declaration TEXT,
+		super_types TEXT,
+		annotations TEXT,
+		modifiers TEXT,
+		is_top_level BOOLEAN NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(class_name, package_name),
 		FOREIGN KEY (package_name) REFERENCES package(package_name)
 		);`
 

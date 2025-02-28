@@ -13,7 +13,7 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	superClass := ""
 	annotationMarkers := []string{}
 	implementedInterface := []string{}
-	classDeclaration.ClassOrInterface.QualifiedName = className
+	classDeclaration.QualifiedName = className
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		if child.Type() == "modifiers" {

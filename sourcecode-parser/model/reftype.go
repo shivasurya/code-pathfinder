@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 )
 
@@ -343,19 +344,26 @@ type Class struct {
 
 func (c *Class) Insert(db *sql.DB) error {
 	query := `
-	INSERT INTO class_decl (
-			class_name,
-			package_name)
-	VALUES (?, ?)
-	`
+		INSERT INTO class_decl (
+				class_name,
+				package_name,
+				source_declaration,
+				super_types,
+				annotations,
+				modifiers,
+				is_top_level
+				)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		`
 
 	stmt, err := db.Prepare(query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(c.ClassOrInterface.QualifiedName, c.ClassOrInterface.Package)
+	_, err = stmt.Exec(c.QualifiedName, c.Package, c.SourceFile, strings.Join(c.SuperTypes, " "), strings.Join(c.Annotations, " "), strings.Join(c.Modifiers, " "), !c.IsLocal)
 	if err != nil {
+		fmt.Println("Error inserting class:", err)
 		return err
 	}
 	return nil
