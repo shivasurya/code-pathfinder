@@ -265,7 +265,6 @@ func Initialize(directory string) []*model.TreeNode {
 	for _, methodDeclaration := range storageNode.MethodDecl {
 		methodDeclaration.Insert(storageNode.DB)
 	}
-	//TODO: method call, binary expr pending
 	for _, methodCallDeclaration := range storageNode.MethodCall {
 		methodCallDeclaration.Insert(storageNode.DB)
 	}
