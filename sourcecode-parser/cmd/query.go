@@ -131,7 +131,7 @@ func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := tree.QueryEntities(db, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(db, treeHolder, parsedQuery)
 	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results

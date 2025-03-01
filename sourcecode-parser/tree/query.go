@@ -174,7 +174,7 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(db *db.StorageNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
 	result := make([][]*model.Node, 0)
 
 	// log query select list alone
@@ -182,7 +182,7 @@ func QueryEntities(db *db.StorageNode, query parser.Query) (nodes [][]*model.Nod
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	cartesianProduct := generateCartesianProduct(db, query.SelectList, query.Condition)
+	cartesianProduct := generateCartesianProduct(db, treeHolder, query.SelectList, query.Condition)
 
 	for _, nodeSet := range cartesianProduct {
 		if FilterEntities(nodeSet, query) {
@@ -238,66 +238,21 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 	}
 	return output, nil
 }
+func generateCartesianProduct(db *db.StorageNode, treeHolder []*model.TreeNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
 
-func generateCartesianProduct(db *db.StorageNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
-	typeIndex := make(map[string][]*model.Node)
+	// select list may contain multiple entities, create holder for each entity
+	ts := make([][]interface{}, 0, len(selectList))
+	// for each entity, get all nodes
+	for _, entity := range selectList {
+		ts = append(ts, db.GetTypedSlice(entity.Entity))
+	}
 
-	// value and reference based reducing search space
-	// for _, condition := range conditions {
-	// 	// this code helps to reduce search space
-	// 	// if there is single entity in select list, the condition is easy to reduce the search space
-	// 	// if there are multiple entities in select list, the condition is hard to reduce the search space,
-	// 	// but I have tried my best using O(n^2) time complexity to reduce the search space
-	// 	if len(selectList) > 1 {
-	// 		// get all entities from the database based on select list (n items)
-	// 		// based on condition (a condition can have multiple entities)
-	// 		// use the entity to join the entity to reduce the search space instead of generrating cartesian product
-	// 		// ideally it should be less than O(n^2) time complexity
-
-	// 	} else {
-	// 		// filteredNodes := db.MethodDecl
-	// 		// for _, node := range filteredNodes {
-	// 		// 	query := parser.Query{Expression: condition, SelectList: selectList}
-	// 		// 	// if FilterEntities([]*model.Node{{MethodDecl: node}}, query) {
-	// 		// 	// 	//typeIndex[node.Type] = utilities.AppendUnique(typeIndex[node.Type], node)
-	// 		// 	// }
-	// 		// }
-	// 	}
-	// }
-
-	// if len(conditions) == 0 {
-	// 	for _, node := range treeHolder.Nodes {
-	// 		typeIndex[node.Type] = append(typeIndex[node.Type], node)
-	// 	}
-	// }
+	// figure out way to join entity nodes together using relationships
+	// at worst case is cartesian product
 
 	sets := make([][]interface{}, 0, len(selectList))
 
-	for _, entity := range selectList {
-		set := make([]interface{}, 0)
-		if nodes, ok := typeIndex[entity.Entity]; ok {
-			for _, node := range nodes {
-				set = append(set, node)
-			}
-		}
-		sets = append(sets, set)
-	}
-
 	product := cartesianProduct(sets)
-
-	result := make([][]*model.Node, len(product))
-	for i, p := range product {
-		result[i] = make([]*model.Node, len(p))
-		for j, node := range p {
-			if n, ok := node.(*model.Node); ok {
-				result[i][j] = n
-			} else {
-				// Handle the error case, e.g., skip this node or log an error
-				// You might want to customize this part based on your error handling strategy
-				log.Printf("Warning: Expected *model.Node type, got %T", node)
-			}
-		}
-	}
 
 	return result
 }

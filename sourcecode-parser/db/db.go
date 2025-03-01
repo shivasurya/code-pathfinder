@@ -220,6 +220,14 @@ func (s *StorageNode) AddJavaDoc(node *model.Javadoc) {
 	s.JavaDoc = append(s.JavaDoc, node)
 }
 
+func (s *StorageNode) GetTypedSlice(entityType string) []any {
+	result := s.GetEntity(entityType)
+	if result == nil {
+		return nil
+	}
+	return result.([]any)
+}
+
 func (s *StorageNode) GetEntity(entityType string) interface{} {
 	switch entityType {
 	case "package":
