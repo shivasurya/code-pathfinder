@@ -2,6 +2,7 @@ package model
 
 type Node struct {
 	NodeType               string
+	NodeID                 int64
 	AddExpr                *AddExpr
 	AndLogicalExpr         *AndLogicalExpr
 	AssertStmt             *AssertStmt

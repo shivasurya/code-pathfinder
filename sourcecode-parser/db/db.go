@@ -157,6 +157,21 @@ const (
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(javadoc_name)
 	);`
+
+	CREATE_TABLE_ENTITY = `
+	CREATE TABLE IF NOT EXISTS entity (
+		id INTEGER PRIMARY KEY,
+		name TEXT UNIQUE
+	);`
+
+	CREATE_TABLE_CLOSURE = `
+	CREATE TABLE IF NOT EXISTS closure_table (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ancestor INTEGER,
+		descendant INTEGER,
+		depth INTEGER,
+		file TEXT
+	);`
 )
 
 func NewStorageNode(databasePath string) *StorageNode {
@@ -180,6 +195,8 @@ func NewStorageNode(databasePath string) *StorageNode {
 	database.Exec(CREATE_TABLE_LOCAL_VARIABLE_DECL)
 	database.Exec(CREATE_TABLE_BINARY_EXPR)
 	database.Exec(CREATE_TABLE_JAVADOC)
+	database.Exec(CREATE_TABLE_ENTITY)
+	database.Exec(CREATE_TABLE_CLOSURE)
 
 	return &StorageNode{DB: database}
 }

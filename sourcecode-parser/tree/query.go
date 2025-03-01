@@ -239,24 +239,33 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 	return output, nil
 }
 func generateCartesianProduct(db *db.StorageNode, treeHolder []*model.TreeNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
-
 	// select list may contain multiple entities, create holder for each entity
 	ts := make([][]interface{}, 0, len(selectList))
 	// for each entity, get all nodes
 	for _, entity := range selectList {
 		ts = append(ts, db.GetTypedSlice(entity.Entity))
 	}
-
 	// figure out way to join entity nodes together using relationships
 	// at worst case is cartesian product
 
 	sets := make([][]interface{}, 0, len(selectList))
+	sets = append(sets, ts...)
 
 	product := cartesianProduct(sets)
 
+	// Convert [][]interface{} to [][]*model.Node
+	result := make([][]*model.Node, len(product))
+	for i, row := range product {
+		result[i] = make([]*model.Node, len(row))
+		for j, item := range row {
+			if node, ok := item.(*model.Node); ok {
+				result[i][j] = node
+			}
+		}
+	}
+
 	return result
 }
-
 func cartesianProduct(sets [][]interface{}) [][]interface{} {
 	result := [][]interface{}{{}}
 	for _, set := range sets {
