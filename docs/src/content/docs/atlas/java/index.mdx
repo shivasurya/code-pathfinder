@@ -1,0 +1,69 @@
+---
+title: Java Rules
+description: Language-specific rules for Java applications
+---
+
+import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
+
+# Java Rules
+
+Browse our comprehensive collection of Java-specific rules designed to identify vulnerabilities and code quality issues in your Java applications.
+
+## Featured Rules
+
+<CardGrid>
+  <Card title="SQL Injection" icon="warning">
+    **Severity: Critical**  
+    Detects potential SQL injection vulnerabilities in Java applications.
+    ```java
+    String query = "SELECT * FROM users WHERE name = '" + userInput + "'";
+    Statement stmt = connection.createStatement();
+    ResultSet rs = stmt.executeQuery(query);
+    ```
+  </Card>
+  
+  <Card title="Insecure Random" icon="warning">
+    **Severity: High**  
+    Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
+    ```java
+    Random random = new Random(); // Insecure for cryptographic purposes
+    byte[] bytes = new byte[20];
+    random.nextBytes(bytes);
+    ```
+  </Card>
+  
+  <Card title="Hardcoded Credentials" icon="warning">
+    **Severity: Critical**  
+    Detects hardcoded credentials in Java source code.
+    ```java
+    String password = "hardcoded_password"; // Security risk
+    connection.authenticate(username, password);
+    ```
+  </Card>
+  
+  <Card title="Unsafe Deserialization" icon="warning">
+    **Severity: High**  
+    Identifies unsafe deserialization of untrusted data.
+    ```java
+    ObjectInputStream in = new ObjectInputStream(inputStream);
+    Object obj = in.readObject(); // Potentially unsafe
+    ```
+  </Card>
+</CardGrid>
+
+## Rule Categories
+
+- **Security Vulnerabilities**: Rules for detecting security issues like XSS, CSRF, and more
+- **Performance Issues**: Rules for identifying performance bottlenecks
+- **Code Quality**: Rules for ensuring code maintainability and readability
+- **Best Practices**: Rules for enforcing Java best practices and conventions
+
+## How to Use
+
+To run these rules against your Java codebase:
+
+```bash
+code-pathfinder scan --lang java --rules java/security /path/to/your/project
+```
+
+For more information on using Code PathFinder with Java, see our [Java documentation](/docs/java).

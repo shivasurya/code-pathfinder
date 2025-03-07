@@ -1,0 +1,86 @@
+---
+title: Code PathFinder Atlas
+description: Comprehensive mapping of code patterns and rules
+template: splash
+hero:
+  tagline: Explore the comprehensive collection of code pattern rules
+  image:
+    file: ../../../assets/treasure-map.png
+  actions:
+    - text: Install Now
+      link: /quickstart
+      icon: right-arrow
+      variant: primary
+    - text: Documentation
+      link: /overview
+      icon: open-book
+---
+
+import { Card, CardGrid, Icon, LinkCard } from '@astrojs/starlight/components';
+import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import Footer from '../../../components/Footer.astro';
+
+<PostHogLayout/>
+<div class="content-wrapper">
+  <div class="rule-categories">
+    <center>
+    <h2>Rule Categories</h2>
+    <p>Browse our collection of rules organized by technology and language</p>
+    </center>
+    
+    <CardGrid>
+      {/* Java Card */}
+      <Card title="Java" icon="seti:java">
+        42 rules for Java applications
+      </Card>
+
+      {/* Android Card */}
+      <Card title="Android" icon="phone">
+        36 rules for Android development
+      </Card>
+
+      {/* Docker Card */}
+      <Card title="Docker" icon="seti:docker">
+        28 rules for container security
+      </Card>
+
+      {/* YAML Card */}
+      <Card title="YAML" icon="seti:yml">
+        24 rules for infrastructure code
+      </Card>
+
+      {/* Kotlin Card */}
+      <Card title="Kotlin" icon="seti:kotlin">
+        32 rules for Kotlin development
+      </Card>
+
+      {/* Go Card */}
+      <Card title="Go" icon="seti:go">
+        30 rules for Go applications
+      </Card>
+    </CardGrid>
+  </div>
+
+  <div class="features-section">
+    <h2>Features</h2>
+    <p>Discover the powerful features of our rule collection</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <Icon name="magnifier" size="2rem" />
+        <h3>Smart Search</h3>
+        <p>Quickly find rules with our intelligent search system</p>
+      </div>
+      <div class="feature-card">
+        <Icon name="document" size="2rem" />
+        <h3>Detailed Documentation</h3>
+        <p>Comprehensive guides and examples for each rule</p>
+      </div>
+      <div class="feature-card">
+        <Icon name="astro" size="2rem" />
+        <h3>Regular Updates</h3>
+        <p>Weekly updates with new rules and improvements</p>
+      </div>
+    </div>
+  </div>
+
+</div>
