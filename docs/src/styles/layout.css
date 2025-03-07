@@ -16,8 +16,10 @@
     background: var(--sl-color-bg-nav);
     color: var(--sl-color-text);
     padding: 3rem 0 1rem;
-    margin-top: 4rem;
+    margin: 4rem 0 1.5rem;
     width: 100%;
+    border-radius: 1.5rem;
+    overflow: hidden;
 }
 
 .footer-container {
