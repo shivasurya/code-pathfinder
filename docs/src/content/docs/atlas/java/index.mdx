@@ -7,6 +7,7 @@ description: Language-specific rules for Java applications
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
+import RuleSearch from '../../../../components/RuleSearch.astro';
 
 export const sqlInjectionExample = `// ❌ Vulnerable: SQL Injection risk
 String query = "SELECT * FROM users WHERE id = '" + userId + "'";
@@ -20,25 +21,44 @@ stmt.setString(1, userId);`;
 
 Browse our comprehensive collection of Java-specific rules designed to identify vulnerabilities and code quality issues in your Java applications.
 
+#### Test Locally
+
+To run these rules against your Java codebase:
+
+```bash
+codepathfinder ci --project /src/code-pathfinder/test-src --ruleset cpf/java
+```
+
 ## Featured Rules
 
-<Card title="SQL Injection" icon="warning">
-    **Severity: Critical**  
-    Detects potential SQL injection vulnerabilities in Java applications where user input is directly concatenated into SQL queries.
-    <CollapsibleCode 
-        code={sqlInjectionExample}
-        lang="java"
-        title="SQL Injection Example"
-        marks={['Vulnerable', 'Safe']}
-    />
-</Card>
+<RuleSearch placeholder="Search security rules and patterns..." />
+
+<div class="rule-card" data-severity="critical" data-type="security">
+  <Card title="SQL Injection" icon="warning">
+      <div class="title">SQL Injection</div>
+      <div class="description">
+      **Severity: Critical**  
+      Detects potential SQL injection vulnerabilities in Java applications where user input is directly concatenated into SQL queries.
+      </div>
+      <CollapsibleCode 
+          code={sqlInjectionExample}
+          lang="java"
+          title="SQL Injection Example"
+          marks={['Vulnerable', 'Safe']}
+      />
+  </Card>
+</div>
  
   
-  <Card title="Insecure Random" icon="warning">
-    **Severity: High**  
-    Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
-    <CollapsibleCode 
-      code={`// ❌ Vulnerable: Predictable random numbers
+  <div class="rule-card" data-severity="high" data-type="security">
+    <Card title="Insecure Random" icon="warning">
+      <div class="title">Insecure Random</div>
+      <div class="description">
+        **Severity: High**  
+        Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
+      </div>
+      <CollapsibleCode 
+        code={`// ❌ Vulnerable: Predictable random numbers
 Random random = new Random();
 byte[] token = new byte[32];
 random.nextBytes(token);
@@ -47,17 +67,22 @@ random.nextBytes(token);
 SecureRandom secureRandom = new SecureRandom();
 byte[] secureToken = new byte[32];
 secureRandom.nextBytes(secureToken);`}
-      lang="java"
-      title="Insecure Random Example"
-      marks={['Vulnerable', 'Safe']}
-    />
-  </Card>
+        lang="java"
+        title="Insecure Random Example"
+        marks={['Vulnerable', 'Safe']}
+      />
+    </Card>
+  </div>
   
-  <Card title="Hardcoded Credentials" icon="warning">
-    **Severity: Critical**  
-    Detects hardcoded credentials in Java source code that could be exposed in version control or decompiled code.
-    <CollapsibleCode 
-      code={`// ❌ Vulnerable: Hardcoded credentials
+  <div class="rule-card" data-severity="critical" data-type="security">
+    <Card title="Hardcoded Credentials" icon="warning">
+      <div class="title">Hardcoded Credentials</div>
+      <div class="description">
+        **Severity: Critical**  
+        Detects hardcoded credentials in Java source code that could be exposed in version control or decompiled code.
+      </div>
+      <CollapsibleCode 
+        code={`// ❌ Vulnerable: Hardcoded credentials
 private static final String PASSWORD = "super_secret_123";
 
 // ✅ Safe: Environment variables
@@ -66,42 +91,33 @@ String password = System.getenv("DB_PASSWORD");
 // ✅ Safe: Configuration management
 @Value("app.db.password")
 private String configPassword;`}
-      lang="java"
-      title="Hardcoded Credentials Example"
-      marks={['Vulnerable', 'Safe']}
-    />
-  </Card>
+        lang="java"
+        title="Hardcoded Credentials Example"
+        marks={['Vulnerable', 'Safe']}
+      />
+    </Card>
+  </div>
   
-  <Card title="Unsafe Deserialization" icon="warning">
-    **Severity: High**  
-    Identifies unsafe deserialization of untrusted data that could lead to remote code execution.
-    <CollapsibleCode 
-      code={`// ❌ Vulnerable: Unsafe deserialization
+  <div class="rule-card" data-severity="high" data-type="security">
+    <Card title="Unsafe Deserialization" icon="warning">
+      <div class="title">Unsafe Deserialization</div>
+      <div class="description">
+        **Severity: High**  
+        Identifies unsafe deserialization of untrusted data that could lead to remote code execution.
+      </div>
+      <CollapsibleCode 
+        code={`// ❌ Vulnerable: Unsafe deserialization
 ObjectInputStream ois = new ObjectInputStream(input);
 Object data = ois.readObject(); // RCE risk
 
 // ✅ Safe: Type-safe deserialization
 ObjectMapper mapper = new ObjectMapper();
 UserData data = mapper.readValue(json, UserData.class);`}
-      lang="java"
-      title="Unsafe Deserialization Example"
-      marks={['Vulnerable', 'Safe']}
-    />
-  </Card>
-
-## Rule Categories
-
-- **Security Vulnerabilities**: Rules for detecting security issues like XSS, CSRF, and more
-- **Performance Issues**: Rules for identifying performance bottlenecks
-- **Code Quality**: Rules for ensuring code maintainability and readability
-- **Best Practices**: Rules for enforcing Java best practices and conventions
-
-## How to Use
-
-To run these rules against your Java codebase:
-
-```bash
-code-pathfinder scan --lang java --rules java/security /path/to/your/project
-```
+        lang="java"
+        title="Unsafe Deserialization Example"
+        marks={['Vulnerable', 'Safe']}
+      />
+    </Card>
+  </div>
 
 For more information on using Code PathFinder with Java, see our [Java documentation](/docs/java).
