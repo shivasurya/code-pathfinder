@@ -1,11 +1,13 @@
 ---
 title: Java Rules
+template: splash
 description: Language-specific rules for Java applications
 ---
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 
-# Java Rules
+<PostHogLayout/>
 
 Browse our comprehensive collection of Java-specific rules designed to identify vulnerabilities and code quality issues in your Java applications.
 
@@ -15,39 +17,21 @@ Browse our comprehensive collection of Java-specific rules designed to identify 
   <Card title="SQL Injection" icon="warning">
     **Severity: Critical**  
     Detects potential SQL injection vulnerabilities in Java applications.
-    ```java
-    String query = "SELECT * FROM users WHERE name = '" + userInput + "'";
-    Statement stmt = connection.createStatement();
-    ResultSet rs = stmt.executeQuery(query);
-    ```
   </Card>
   
   <Card title="Insecure Random" icon="warning">
     **Severity: High**  
     Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
-    ```java
-    Random random = new Random(); // Insecure for cryptographic purposes
-    byte[] bytes = new byte[20];
-    random.nextBytes(bytes);
-    ```
   </Card>
   
   <Card title="Hardcoded Credentials" icon="warning">
     **Severity: Critical**  
     Detects hardcoded credentials in Java source code.
-    ```java
-    String password = "hardcoded_password"; // Security risk
-    connection.authenticate(username, password);
-    ```
   </Card>
   
   <Card title="Unsafe Deserialization" icon="warning">
     **Severity: High**  
     Identifies unsafe deserialization of untrusted data.
-    ```java
-    ObjectInputStream in = new ObjectInputStream(inputStream);
-    Object obj = in.readObject(); // Potentially unsafe
-    ```
   </Card>
 </CardGrid>
 
