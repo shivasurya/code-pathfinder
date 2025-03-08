@@ -171,6 +171,10 @@
     margin: 0;
   }
 
+  .second-card {
+    margin-top: 0rem !important; 
+  }
+
   .saas-footer {
     background: var(--sl-color-bg-nav);
     color: var(--sl-color-text);
