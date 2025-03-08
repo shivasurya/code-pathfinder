@@ -7,23 +7,113 @@ const { placeholder = "Search rules..." } = Astro.props;
 ---
 
 <div class="rule-search">
-  <div class="search-wrapper">
-    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"></circle>
-      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-    </svg>
-    <input 
-      type="search" 
-      placeholder={placeholder}
-      class="search-input"
-      aria-label="Search rules"
-    />
+  <div class="search-bar">
+    <div class="search-wrapper">
+      <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input 
+        type="search" 
+        placeholder={placeholder}
+        class="search-input"
+        aria-label="Search rules"
+      />
+    </div>
   </div>
-  <div class="search-tags">
-    <button class="tag" data-severity="critical">Critical</button>
-    <button class="tag" data-severity="high">High</button>
-    <button class="tag" data-type="security">Security</button>
-    <button class="tag" data-type="quality">Quality</button>
+  
+  <div class="filter-controls">
+       <div class="filter-dropdown">
+        <button class="filter-button" id="type-filter">
+          Type
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="dropdown-content" id="type-dropdown">
+          <div class="dropdown-header">
+            <span>Type</span>
+            <button class="clear-btn" data-filter="type">(clear all)</button>
+          </div>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="security" />
+            <span>SECURITY</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="quality" />
+            <span>QUALITY</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="performance" />
+            <span>PERFORMANCE</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-dropdown second">
+          <button class="filter-button" id="severity-filter">
+            Severity
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="dropdown-content" id="severity-dropdown">
+            <div class="dropdown-header">
+              <span>Severity</span>
+              <button class="clear-btn" data-filter="severity">(clear all)</button>
+            </div>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="critical" />
+              <span>CRITICAL</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="high" />
+              <span>HIGH</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="medium" />
+              <span>MEDIUM</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="low" />
+              <span>LOW</span>
+            </label>
+          </div>
+      </div>
+
+      <div class="filter-dropdown second">
+        <button class="filter-button" id="owasp-filter">
+          OWASP
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="dropdown-content" id="owasp-dropdown">
+          <div class="dropdown-header">
+            <span>OWASP</span>
+            <button class="clear-btn" data-filter="owasp">(clear all)</button>
+          </div>
+          <label class="dropdown-item">
+            <input type="checkbox" data-owasp="broken-access-control" />
+            <span>Broken Access Control</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-owasp="broken-authentication" />
+            <span>Broken Authentication</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-owasp="cross-site-scripting" />
+            <span>Cross-Site Scripting (XSS)</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-owasp="cryptographic-failures" />
+            <span>Cryptographic Failures</span>
+          </label>
+        </div>
+      </div>
+      
+     
+    </div>
   </div>
 </div>
 
@@ -31,6 +121,12 @@ const { placeholder = "Search rules..." } = Astro.props;
   .rule-search {
     margin-bottom: 2rem;
     width: 100%;
+  }
+
+  .search-bar {
+    display: flex;
+    width: 100%;
+    margin-bottom: 1rem;
   }
 
   .search-wrapper {
@@ -49,13 +145,14 @@ const { placeholder = "Search rules..." } = Astro.props;
 
   .search-input {
     width: 100%;
-    padding: 0.875rem 1rem 0.875rem 3rem;
-    border: 2px solid var(--sl-color-gray-5);
-    border-radius: 0.75rem;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
     background: var(--sl-color-bg);
     color: var(--sl-color-text);
-    font-size: 1rem;
+    font-size: 0.9rem;
     transition: all 0.2s ease;
+    min-height: 42px;
   }
 
   .search-input:focus {
@@ -68,54 +165,100 @@ const { placeholder = "Search rules..." } = Astro.props;
     color: var(--sl-color-gray-3);
   }
 
-  .search-tags {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+  .filter-controls {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    width: 100%;
     margin-top: 0.75rem;
   }
 
-  .tag {
-    padding: 0.375rem 0.875rem;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 1rem;
-    background: var(--sl-color-bg);
-    color: var(--sl-color-text);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  .filter-dropdown {
+    position: relative;
+    width: 100%;
   }
 
-  .tag:hover {
+  .second {
+    margin-top: 0rem !important;
+  }
+
+  .filter-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 42px;
+    padding: 0 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .filter-button:hover {
     background: var(--sl-color-gray-6);
     border-color: var(--sl-color-gray-4);
   }
 
-  .tag[data-severity="critical"] {
-    border-color: rgb(var(--sl-color-red));
-    color: rgb(var(--sl-color-red));
+  .dropdown-content {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    min-width: 200px;
+    padding: 0.5rem 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    display: none;
   }
 
-  .tag[data-severity="high"] {
-    border-color: rgb(var(--sl-color-orange));
-    color: rgb(var(--sl-color-orange));
+  .dropdown-content.show {
+    display: block;
   }
 
-  .tag[data-type="security"] {
-    border-color: rgb(var(--sl-color-blue));
-    color: rgb(var(--sl-color-blue));
+  .dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    margin-bottom: 0.5rem;
   }
 
-  .tag[data-type="quality"] {
-    border-color: rgb(var(--sl-color-green));
-    color: rgb(var(--sl-color-green));
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--sl-color-accent);
+    font-size: 0.75rem;
+    cursor: pointer;
   }
 
-  /* Active state for tags */
-  .tag[aria-pressed="true"] {
-    background: var(--sl-color-accent);
-    border-color: var(--sl-color-accent);
-    color: var(--sl-color-white);
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .dropdown-item:hover {
+    background: var(--sl-color-gray-6);
+  }
+
+  .dropdown-item input {
+    margin: 0;
+  }
+
+  .dropdown-item span {
+    font-size: 0.875rem;
   }
 
   /* Hide filtered cards */
@@ -127,42 +270,92 @@ const { placeholder = "Search rules..." } = Astro.props;
 <script>
   function setupRuleSearch() {
     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
-    const tags = document.querySelectorAll('.tag');
+    const filterButtons = document.querySelectorAll('.filter-button');
+    const dropdowns = document.querySelectorAll('.dropdown-content');
+    const checkboxes = document.querySelectorAll('.dropdown-item input[type="checkbox"]');
+    const clearButtons = document.querySelectorAll('.clear-btn');
     const cards = document.querySelectorAll('.rule-card');
     
     function filterCards() {
       const searchTerm = searchInput?.value.toLowerCase() || '';
-      const activeTags = Array.from(tags)
-        .filter(tag => tag.getAttribute('aria-pressed') === 'true')
-        .map(tag => ({
-          type: tag.getAttribute('data-type'),
-          severity: tag.getAttribute('data-severity')
-        }));
+      
+      // Get all checked severity filters
+      const severityFilters = Array.from(document.querySelectorAll('input[data-severity]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-severity'));
+      
+      // Get all checked type filters
+      const typeFilters = Array.from(document.querySelectorAll('input[data-type]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-type'));
 
       cards.forEach(card => {
         const title = card.querySelector('.title')?.textContent?.toLowerCase() || '';
         const description = card.querySelector('.description')?.textContent?.toLowerCase() || '';
-        const severity = card.getAttribute('data-severity');
-        const type = card.getAttribute('data-type');
+        const cardSeverity = card.getAttribute('data-severity');
+        const cardType = card.getAttribute('data-type');
 
         const matchesSearch = searchTerm === '' || 
           title.includes(searchTerm) || 
           description.includes(searchTerm);
 
-        const matchesTags = activeTags.length === 0 || 
-          activeTags.some(tag => 
-            (tag.severity === severity) || (tag.type === type)
-          );
+        const matchesSeverity = severityFilters.length === 0 || 
+          severityFilters.includes(cardSeverity);
 
-        card.classList.toggle('hidden', !matchesSearch || !matchesTags);
+        const matchesType = typeFilters.length === 0 || 
+          typeFilters.includes(cardType);
+
+        card.classList.toggle('hidden', !matchesSearch || !matchesSeverity || !matchesType);
       });
     }
 
-    // Toggle tag selection
-    tags.forEach(tag => {
-      tag.addEventListener('click', () => {
-        const isPressed = tag.getAttribute('aria-pressed') === 'true';
-        tag.setAttribute('aria-pressed', (!isPressed).toString());
+    // Toggle dropdowns
+    filterButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const targetId = button.id.replace('-filter', '-dropdown');
+        const targetDropdown = document.getElementById(targetId);
+        
+        // Close all other dropdowns
+        dropdowns.forEach(dropdown => {
+          if (dropdown.id !== targetId) {
+            dropdown.classList.remove('show');
+          }
+        });
+        
+        // Toggle current dropdown
+        targetDropdown?.classList.toggle('show');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      dropdowns.forEach(dropdown => {
+        dropdown.classList.remove('show');
+      });
+    });
+
+    // Prevent dropdown from closing when clicking inside it
+    dropdowns.forEach(dropdown => {
+      dropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    });
+
+    // Handle checkbox changes
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', filterCards);
+    });
+
+    // Handle clear buttons
+    clearButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const filterType = button.getAttribute('data-filter');
+        const selector = `input[data-${filterType}]`;
+        const filtersToReset = document.querySelectorAll(selector);
+        
+        filtersToReset.forEach(filter => {
+          (filter as HTMLInputElement).checked = false;
+        });
+        
         filterCards();
       });
     });
