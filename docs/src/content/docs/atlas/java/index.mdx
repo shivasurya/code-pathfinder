@@ -1,11 +1,20 @@
 ---
-title: Java Rules
+title: Java - Code Pathfinder Atlas
 template: splash
 description: Language-specific rules for Java applications
 ---
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
+
+export const sqlInjectionExample = `// ❌ Vulnerable: SQL Injection risk
+String query = "SELECT * FROM users WHERE id = '" + userId + "'";
+
+// ✅ Safe: Using PreparedStatement
+String query = "SELECT * FROM users WHERE id = ?";
+PreparedStatement stmt = conn.prepareStatement(query);
+stmt.setString(1, userId);`;
 
 <PostHogLayout/>
 
@@ -13,27 +22,72 @@ Browse our comprehensive collection of Java-specific rules designed to identify 
 
 ## Featured Rules
 
-<CardGrid>
-  <Card title="SQL Injection" icon="warning">
+<Card title="SQL Injection" icon="warning">
     **Severity: Critical**  
-    Detects potential SQL injection vulnerabilities in Java applications.
-  </Card>
+    Detects potential SQL injection vulnerabilities in Java applications where user input is directly concatenated into SQL queries.
+    <CollapsibleCode 
+        code={sqlInjectionExample}
+        lang="java"
+        title="SQL Injection Example"
+        marks={['Vulnerable', 'Safe']}
+    />
+</Card>
+ 
   
   <Card title="Insecure Random" icon="warning">
     **Severity: High**  
     Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
+    <CollapsibleCode 
+      code={`// ❌ Vulnerable: Predictable random numbers
+Random random = new Random();
+byte[] token = new byte[32];
+random.nextBytes(token);
+
+// ✅ Safe: Cryptographically secure random
+SecureRandom secureRandom = new SecureRandom();
+byte[] secureToken = new byte[32];
+secureRandom.nextBytes(secureToken);`}
+      lang="java"
+      title="Insecure Random Example"
+      marks={['Vulnerable', 'Safe']}
+    />
   </Card>
   
   <Card title="Hardcoded Credentials" icon="warning">
     **Severity: Critical**  
-    Detects hardcoded credentials in Java source code.
+    Detects hardcoded credentials in Java source code that could be exposed in version control or decompiled code.
+    <CollapsibleCode 
+      code={`// ❌ Vulnerable: Hardcoded credentials
+private static final String PASSWORD = "super_secret_123";
+
+// ✅ Safe: Environment variables
+String password = System.getenv("DB_PASSWORD");
+
+// ✅ Safe: Configuration management
+@Value("app.db.password")
+private String configPassword;`}
+      lang="java"
+      title="Hardcoded Credentials Example"
+      marks={['Vulnerable', 'Safe']}
+    />
   </Card>
   
   <Card title="Unsafe Deserialization" icon="warning">
     **Severity: High**  
-    Identifies unsafe deserialization of untrusted data.
+    Identifies unsafe deserialization of untrusted data that could lead to remote code execution.
+    <CollapsibleCode 
+      code={`// ❌ Vulnerable: Unsafe deserialization
+ObjectInputStream ois = new ObjectInputStream(input);
+Object data = ois.readObject(); // RCE risk
+
+// ✅ Safe: Type-safe deserialization
+ObjectMapper mapper = new ObjectMapper();
+UserData data = mapper.readValue(json, UserData.class);`}
+      lang="java"
+      title="Unsafe Deserialization Example"
+      marks={['Vulnerable', 'Safe']}
+    />
   </Card>
-</CardGrid>
 
 ## Rule Categories
 
