@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Structure Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>Code-Pathfinder Visualizer</h1>
+        </div>
+        <div class="main-content">
+            <div class="gutter gutter-horizontal"></div>
+            <div class="left-panel">
+                <div class="panel-header">
+                    <h2>Code Editor</h2>
+                </div>
+                <div class="editor-container">
+                    <div id="codeEditor"></div>
+                </div>
+            </div>
+            <div class="right-panel">
+                <div class="panel-header">
+                    <h2>Visualization</h2>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="dot class"></span>
+                            <span>Class</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="dot method"></span>
+                            <span>Method</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="dot field"></span>
+                            <span>Field</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="dot declaration"></span>
+                            <span>Declaration</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="visualization-container">
+                    <div id="visualization"></div>
+                </div>
+                <div class="query-console">
+                    <div class="panel-header">
+                        <h2>Code-PathFinder Query Console</h2>
+                    </div>
+                    <div class="query-input-container">
+                        <div id="queryEditor"></div>
+                        <div class="button-group">
+                            <button id="executeQuery" class="action-btn" title="Execute Query">
+                                <svg class="btn-icon" viewBox="0 0 16 16" width="16" height="16">
+                                    <path fill="currentColor" d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                                </svg>
+                                Execute Query
+                            </button>
+                            <button id="parseAST" class="action-btn" title="Parse AST">
+                                <svg class="btn-icon" viewBox="0 0 16 16" width="16" height="16">
+                                    <path fill="currentColor" d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
+                                </svg>
+                                Parse AST
+                            </button>
+                        </div>
+                    </div>
+                    <div class="query-results">
+                        <pre id="queryResults"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
