@@ -27,6 +27,7 @@ jobs:
         run: |
             echo "PUBLIC_ANALYTICS_KEY=${{ secrets.POSTHOG_WEB_ANALYTICS }}" >> docs/.env
             cd docs
+            rm -rf node_modules package-lock.json
             npm install
             cd ../pathfinder-rules/gen-script
             go mod download
