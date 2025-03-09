@@ -234,6 +234,8 @@ const { placeholder = "Search rules..." } = Astro.props;
     left: 0;
     width: 100%;
     min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
     padding: 0.5rem 0;
     border: 1px solid var(--sl-color-gray-5);
     border-radius: 0.5rem;
@@ -241,6 +243,15 @@ const { placeholder = "Search rules..." } = Astro.props;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     z-index: 10;
     display: none;
+  }
+
+  @media (max-width: 768px) {
+    .dropdown-content {
+      max-height: 250px;
+      width: 250px;
+      right: 0;
+      left: auto;
+    }
   }
 
   .dropdown-content.show {
@@ -311,11 +322,16 @@ const { placeholder = "Search rules..." } = Astro.props;
       const typeFilters = Array.from(document.querySelectorAll('input[data-type]:checked'))
         .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-type'));
 
+      // Get all checked OWASP filters
+      const owaspFilters = Array.from(document.querySelectorAll('input[data-owasp]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-owasp'));
+
       cards.forEach(card => {
         const title = card.querySelector('.title')?.textContent?.toLowerCase() || '';
         const description = card.querySelector('.description')?.textContent?.toLowerCase() || '';
         const cardSeverity = card.getAttribute('data-severity');
         const cardType = card.getAttribute('data-type');
+        const cardOwasp = card.getAttribute('data-owasp');
 
         const matchesSearch = searchTerm === '' || 
           title.includes(searchTerm) || 
@@ -327,7 +343,10 @@ const { placeholder = "Search rules..." } = Astro.props;
         const matchesType = typeFilters.length === 0 || 
           typeFilters.includes(cardType);
 
-        card.classList.toggle('hidden', !matchesSearch || !matchesSeverity || !matchesType);
+        const matchesOwasp = owaspFilters.length === 0 ||
+          owaspFilters.includes(cardOwasp);
+
+        card.classList.toggle('hidden', !matchesSearch || !matchesSeverity || !matchesType || !matchesOwasp);
       });
     }
 
@@ -371,7 +390,8 @@ const { placeholder = "Search rules..." } = Astro.props;
 
     // Handle clear buttons
     clearButtons.forEach(button => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
         const filterType = button.getAttribute('data-filter');
         const selector = `input[data-${filterType}]`;
         const filtersToReset = document.querySelectorAll(selector);
@@ -381,6 +401,10 @@ const { placeholder = "Search rules..." } = Astro.props;
         });
         
         filterCards();
+
+        // Close the dropdown after clearing
+        const dropdown = button.closest('.dropdown-content');
+        dropdown?.classList.remove('show');
       });
     });
 
