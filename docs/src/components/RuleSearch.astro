@@ -81,36 +81,60 @@ const { placeholder = "Search rules..." } = Astro.props;
           </div>
       </div>
 
-      <div class="filter-dropdown second">
-        <button class="filter-button" id="owasp-filter">
-          OWASP
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
-        </button>
-        <div class="dropdown-content" id="owasp-dropdown">
-          <div class="dropdown-header">
-            <span>OWASP</span>
-            <button class="clear-btn" data-filter="owasp">(clear all)</button>
-          </div>
-          <label class="dropdown-item">
-            <input type="checkbox" data-owasp="broken-access-control" />
-            <span>Broken Access Control</span>
-          </label>
-          <label class="dropdown-item">
-            <input type="checkbox" data-owasp="broken-authentication" />
-            <span>Broken Authentication</span>
-          </label>
-          <label class="dropdown-item">
-            <input type="checkbox" data-owasp="cross-site-scripting" />
-            <span>Cross-Site Scripting (XSS)</span>
-          </label>
-          <label class="dropdown-item">
-            <input type="checkbox" data-owasp="cryptographic-failures" />
-            <span>Cryptographic Failures</span>
-          </label>
-        </div>
-      </div>
+     <div class="filter-dropdown second">
+  <button class="filter-button" id="owasp-filter">
+    OWASP
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6 6-6"/>
+    </svg>
+  </button>
+  <div class="dropdown-content" id="owasp-dropdown">
+    <div class="dropdown-header">
+      <span>OWASP</span>
+      <button class="clear-btn" data-filter="owasp">(clear all)</button>
+    </div>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="broken-access-control" />
+      <span>Broken Access Control</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="cryptographic-failures" />
+      <span>Cryptographic Failures</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="injection" />
+      <span>Injection</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="insecure-design" />
+      <span>Insecure Design</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="security-misconfiguration" />
+      <span>Security Misconfiguration</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="vulnerable-and-outdated-components" />
+      <span>Vulnerable and Outdated Components</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="identification-and-authentication-failures" />
+      <span>Identification and Authentication Failures</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="software-and-data-integrity-failures" />
+      <span>Software and Data Integrity Failures</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="security-logging-and-monitoring-failures" />
+      <span>Security Logging and Monitoring Failures</span>
+    </label>
+    <label class="dropdown-item">
+      <input type="checkbox" data-owasp="server-side-request-forgery" />
+      <span>Server-Side Request Forgery (SSRF)</span>
+    </label>
+  </div>
+</div>
       
      
     </div>
