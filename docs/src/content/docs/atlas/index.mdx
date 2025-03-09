@@ -1,0 +1,93 @@
+---
+title: Code PathFinder Atlas
+description: Comprehensive mapping of code patterns and rules
+template: splash
+hero:
+  tagline: Explore the comprehensive collection of code pattern rules
+  actions:
+    - text: Install Now
+      link: /quickstart
+      icon: right-arrow
+      variant: primary
+    - text: Documentation
+      link: /overview
+      icon: open-book
+---
+
+import { Card, CardGrid, Icon, LinkCard } from '@astrojs/starlight/components';
+import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import Footer from '../../../components/Footer.astro';
+
+<PostHogLayout/>
+<div class="content-wrapper">
+  <div class="rule-categories">
+    <center>
+    <h2>Rule Categories</h2>
+    <p>Browse our collection of rules organized by technology and language</p>
+    </center>
+    
+    <CardGrid>
+      {/* Java Card */}
+      <Card title="Java" icon="seti:java">
+        6 rules for Java applications
+        <div>
+          <a href="/atlas/java" class="view-docs-link">View Rules</a>
+        </div>
+      </Card>
+
+      {/* Android Card */}
+      <Card title="Android" icon="phone">
+        5 rules for Android development
+        <div>
+          <a href="/atlas/android" class="view-docs-link">View Rules</a>
+        </div>
+      </Card>
+
+      {/* Docker Card */}
+      <Card title="Docker" icon="seti:docker">
+        10 rules for container security
+        <div class="coming-soon-badge">Coming soon</div>
+      </Card>
+
+      {/* YAML Card */}
+      <Card title="YAML" icon="seti:yml">
+        10 rules for infrastructure code
+        <div class="coming-soon-badge">Coming soon</div>
+      </Card>
+
+      {/* Kotlin Card */}
+      <Card title="Kotlin" icon="seti:kotlin">
+        10 rules for Kotlin development
+        <div class="coming-soon-badge">Coming soon</div>
+      </Card>
+
+      {/* Go Card */}
+      <Card title="Go" icon="seti:go">
+        10 rules for Go applications
+        <div class="coming-soon-badge">Coming soon</div>
+      </Card>
+    </CardGrid>
+  </div>
+
+  <div class="features-section">
+    <h2>Features</h2>
+    <p>Explore the unmatched flexibility and accuracy of Code-Pathfinder rulesets</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <Icon name="pencil" size="2rem" />
+        <h4>Flexible Rule Writing</h4>
+        <p>Offers greater flexibility and ease of customization</p>
+      </div>
+      <div class="feature-card second-card">
+        <Icon name="seti:prolog" size="2rem" />
+        <h4>Fewer False Positives</h4>
+        <p>Optimized detection to minimize noise and improve reliability</p>
+      </div>
+      <div class="feature-card second-card">
+        <Icon name="rocket" size="2rem" />
+        <h4>Speed & Accuracy</h4>
+        <p>Engineered for precision with high-performance scanning</p>
+      </div>
+    </div>
+    </div>
+</div>

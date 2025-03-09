@@ -1,0 +1,470 @@
+---
+interface Props {
+  placeholder?: string;
+  owaspType?: 'mobile' | 'web';
+}
+
+const { placeholder = "Search rules...", owaspType = 'web' } = Astro.props;
+---
+
+<div class="rule-search">
+  <div class="search-bar">
+    <div class="search-wrapper">
+      <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input 
+        type="search" 
+        placeholder={placeholder}
+        class="search-input"
+        aria-label="Search rules"
+      />
+    </div>
+  </div>
+  
+  <div class="filter-controls">
+       <div class="filter-dropdown">
+        <button class="filter-button" id="type-filter">
+          Type
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="dropdown-content" id="type-dropdown">
+          <div class="dropdown-header">
+            <span>Type</span>
+            <button class="clear-btn" data-filter="type">(clear all)</button>
+          </div>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="security" />
+            <span>SECURITY</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="quality" />
+            <span>QUALITY</span>
+          </label>
+          <label class="dropdown-item">
+            <input type="checkbox" data-type="performance" />
+            <span>PERFORMANCE</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-dropdown second">
+          <button class="filter-button" id="severity-filter">
+            Severity
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="dropdown-content" id="severity-dropdown">
+            <div class="dropdown-header">
+              <span>Severity</span>
+              <button class="clear-btn" data-filter="severity">(clear all)</button>
+            </div>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="critical" />
+              <span>CRITICAL</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="high" />
+              <span>HIGH</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="medium" />
+              <span>MEDIUM</span>
+            </label>
+            <label class="dropdown-item">
+              <input type="checkbox" data-severity="low" />
+              <span>LOW</span>
+            </label>
+          </div>
+      </div>
+
+     <div class="filter-dropdown second">
+  <button class="filter-button" id="owasp-filter">
+    OWASP
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6 6-6"/>
+    </svg>
+  </button>
+  <div class="dropdown-content" id="owasp-dropdown">
+    <div class="dropdown-header">
+      <span>OWASP {owaspType === 'mobile' ? 'Mobile Top 10' : 'Top 10'}</span>
+      <button class="clear-btn" data-filter="owasp">(clear all)</button>
+    </div>
+    {owaspType === 'mobile' ? (
+      <>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="improper-platform-usage" />
+          <span>M1: Improper Platform Usage</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insecure-data-storage" />
+          <span>M2: Insecure Data Storage</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insecure-communication" />
+          <span>M3: Insecure Communication</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insecure-authentication" />
+          <span>M4: Insecure Authentication</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insufficient-cryptography" />
+          <span>M5: Insufficient Cryptography</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insecure-authorization" />
+          <span>M6: Insecure Authorization</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="client-code-quality" />
+          <span>M7: Client Code Quality</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="code-tampering" />
+          <span>M8: Code Tampering</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="reverse-engineering" />
+          <span>M9: Reverse Engineering</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="extraneous-functionality" />
+          <span>M10: Extraneous Functionality</span>
+        </label>
+      </>
+    ) : (
+      <>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="broken-access-control" />
+          <span>Broken Access Control</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="cryptographic-failures" />
+          <span>Cryptographic Failures</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="injection" />
+          <span>Injection</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="insecure-design" />
+          <span>Insecure Design</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="security-misconfiguration" />
+          <span>Security Misconfiguration</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="vulnerable-and-outdated-components" />
+          <span>Vulnerable and Outdated Components</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="identification-and-authentication-failures" />
+          <span>Identification and Authentication Failures</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="software-and-data-integrity-failures" />
+          <span>Software and Data Integrity Failures</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="security-logging-and-monitoring-failures" />
+          <span>Security Logging and Monitoring Failures</span>
+        </label>
+        <label class="dropdown-item">
+          <input type="checkbox" data-owasp="server-side-request-forgery" />
+          <span>Server-Side Request Forgery (SSRF)</span>
+        </label>
+      </>
+    )}
+  </div>
+</div>
+      
+     
+    </div>
+  </div>
+</div>
+
+<style>
+  .rule-search {
+    margin-bottom: 2rem;
+    width: 100%;
+  }
+
+  .search-bar {
+    display: flex;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  .search-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--sl-color-gray-3);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    min-height: 42px;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--sl-color-accent);
+    box-shadow: 0 0 0 3px rgb(var(--sl-color-accent) / 0.2);
+  }
+
+  .search-input::placeholder {
+    color: var(--sl-color-gray-3);
+  }
+
+  .filter-controls {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+
+  .filter-dropdown {
+    position: relative;
+    width: 100%;
+  }
+
+  .second {
+    margin-top: 0rem !important;
+  }
+
+  .filter-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 42px;
+    padding: 0 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .filter-button:hover {
+    background: var(--sl-color-gray-6);
+    border-color: var(--sl-color-gray-4);
+  }
+
+  .dropdown-content {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .dropdown-content {
+      max-height: 250px;
+      width: 250px;
+      right: 0;
+      left: auto;
+    }
+  }
+
+  .dropdown-content.show {
+    display: block;
+  }
+
+  .dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    margin-bottom: 0.5rem;
+  }
+
+  .clear-btn {
+    background: none;
+    border: none;
+    color: var(--sl-color-accent);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .dropdown-item:hover {
+    background: var(--sl-color-gray-6);
+  }
+
+  .dropdown-item input {
+    margin: 0;
+  }
+
+  .dropdown-item span {
+    font-size: 0.875rem;
+  }
+
+  /* Hide filtered cards */
+  :global(.rule-card.hidden) {
+    display: none;
+  }
+</style>
+
+<script>
+  function setupRuleSearch() {
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    const filterButtons = document.querySelectorAll('.filter-button');
+    const dropdowns = document.querySelectorAll('.dropdown-content');
+    const checkboxes = document.querySelectorAll('.dropdown-item input[type="checkbox"]');
+    const clearButtons = document.querySelectorAll('.clear-btn');
+    const cards = document.querySelectorAll('.rule-card');
+    
+    function filterCards() {
+      const searchTerm = searchInput?.value.toLowerCase() || '';
+      
+      // Get all checked severity filters
+      const severityFilters = Array.from(document.querySelectorAll('input[data-severity]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-severity'));
+      
+      // Get all checked type filters
+      const typeFilters = Array.from(document.querySelectorAll('input[data-type]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-type'));
+
+      // Get all checked OWASP filters
+      const owaspFilters = Array.from(document.querySelectorAll('input[data-owasp]:checked'))
+        .map(checkbox => (checkbox as HTMLInputElement).getAttribute('data-owasp'));
+
+      cards.forEach(card => {
+        const title = card.querySelector('.title')?.textContent?.toLowerCase() || '';
+        const description = card.querySelector('.description')?.textContent?.toLowerCase() || '';
+        const cardSeverity = card.getAttribute('data-severity');
+        const cardType = card.getAttribute('data-type');
+        const cardOwasp = card.getAttribute('data-owasp');
+
+        const matchesSearch = searchTerm === '' || 
+          title.includes(searchTerm) || 
+          description.includes(searchTerm);
+
+        const matchesSeverity = severityFilters.length === 0 || 
+          severityFilters.includes(cardSeverity);
+
+        const matchesType = typeFilters.length === 0 || 
+          typeFilters.includes(cardType);
+
+        const matchesOwasp = owaspFilters.length === 0 ||
+          owaspFilters.includes(cardOwasp);
+
+        card.classList.toggle('hidden', !matchesSearch || !matchesSeverity || !matchesType || !matchesOwasp);
+      });
+    }
+
+    // Toggle dropdowns
+    filterButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const targetId = button.id.replace('-filter', '-dropdown');
+        const targetDropdown = document.getElementById(targetId);
+        
+        // Close all other dropdowns
+        dropdowns.forEach(dropdown => {
+          if (dropdown.id !== targetId) {
+            dropdown.classList.remove('show');
+          }
+        });
+        
+        // Toggle current dropdown
+        targetDropdown?.classList.toggle('show');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      dropdowns.forEach(dropdown => {
+        dropdown.classList.remove('show');
+      });
+    });
+
+    // Prevent dropdown from closing when clicking inside it
+    dropdowns.forEach(dropdown => {
+      dropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    });
+
+    // Handle checkbox changes
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', filterCards);
+    });
+
+    // Handle clear buttons
+    clearButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const filterType = button.getAttribute('data-filter');
+        const selector = `input[data-${filterType}]`;
+        const filtersToReset = document.querySelectorAll(selector);
+        
+        filtersToReset.forEach(filter => {
+          (filter as HTMLInputElement).checked = false;
+        });
+        
+        filterCards();
+
+        // Close the dropdown after clearing
+        const dropdown = button.closest('.dropdown-content');
+        dropdown?.classList.remove('show');
+      });
+    });
+
+    // Handle search input
+    if (searchInput) {
+      searchInput.addEventListener('input', filterCards);
+    }
+  }
+
+  // Setup on initial load
+  setupRuleSearch();
+
+  // Setup on client-side navigation
+  document.addEventListener('astro:page-load', setupRuleSearch);
+</script>
