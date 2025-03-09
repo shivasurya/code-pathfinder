@@ -1,286 +1,152 @@
 ---
-title: Android Rules
-description: Code PathFinder rules for Android applications
+title: Android - Code Pathfinder Atlas
 template: splash
+description: Explore our comprehensive collection of Android-specific rules designed to help you write better, more secure Android applications.
 ---
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
-import Footer from '../../../../components/Footer.astro';
+import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
+import RuleSearch from '../../../../components/RuleSearch.astro';
 
-<PostHogLayout>
-<div class="android-rules-content">
-  <h1>Android Rules</h1>
-  <p>Explore our comprehensive collection of Android-specific rules designed to help you write better, more secure Android applications.</p>
+<PostHogLayout/>
 
-  <div class="rules-categories">
-    <div class="rule-category security">
-      <h2>Security</h2>
-      <ul>
-        <li>Best practices for secure data storage</li>
-        <li>Network security configurations</li>
-        <li>Permission handling</li>
-      </ul>
-    </div>
+Browse our specialized collection of Android WebView security rules designed to detect common vulnerabilities in WebView implementations. Our rules focus on two key OWASP Mobile Top 10 categories: M7 (Client Code Quality) for JavaScript-related risks and M1 (Improper Platform Usage) for access control issues. All rules target CWE-079 (Cross-site Scripting) vulnerabilities with medium precision.
 
-    <div class="rule-category performance">
-      <h2>Performance</h2>
-      <ul>
-        <li>Memory leak prevention</li>
-        <li>UI responsiveness</li>
-        <li>Battery optimization</li>
-      </ul>
-    </div>
+#### Test Locally
 
-    <div class="rule-category best-practices">
-      <h2>Best Practices</h2>
-      <ul>
-        <li>Activity/Fragment lifecycle</li>
-        <li>Resource management</li>
-        <li>Material Design guidelines</li>
-      </ul>
-    </div>
-  </div>
+To run these rules against your Android codebase:
 
-  <div class="featured-rules">
-    <h2>Featured Rules</h2>
-    <div class="rule-grid">
-      <div class="rule-card">
-        <div class="rule-header">
-          <Icon name="warning" size="1.5rem" />
-          <h3>WebView Misconfiguration</h3>
-          <span class="severity high">High Severity</span>
-        </div>
-        <p>Detects insecure WebView configurations that could lead to JavaScript injection.</p>
-        <div class="code-block">
-          <pre><code class="language-java">WebView webView = new WebView(context);
-WebSettings settings = webView.getSettings();
-settings.setJavaScriptEnabled(true); // Potentially insecure</code></pre>
-        </div>
+```bash
+codepathfinder ci --project /src/project --ruleset cpf/android
+```
+
+#### Rules (5)
+
+<RuleSearch placeholder="Search security rules..." />
+
+<div class="rule-cards-grid">
+<div class="rule-card" data-severity="medium" data-type="security" data-owasp="client-code-quality">
+  <Card title="WebView JavaScript Enabled" icon="warning">
+      <div class="description">
+      **Rule ID**: java/Android/webview-javascript-enabled  
+      **Severity: Medium** | **CWE: 079**  
+      Enabling JavaScript execution in a WebView can result in cross-site scripting attacks.
       </div>
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: JavaScript enabled without safeguards
+WebView webView = new WebView(context);
+webView.getSettings().setJavaScriptEnabled(true);
 
-      <div class="rule-card">
-        <div class="rule-header">
-          <Icon name="warning" size="1.5rem" />
-          <h3>Insecure File Access</h3>
-          <span class="severity high">High Severity</span>
-        </div>
-        <p>Identifies insecure file access in Android applications.</p>
-        <div class="code-block">
-          <pre><code class="language-java">File file = new File(getExternalStorageDirectory(), "sensitive_data.txt");
-FileOutputStream fos = new FileOutputStream(file); // Potentially insecure</code></pre>
-        </div>
+// ✅ Safe: JavaScript disabled by default
+WebView webView = new WebView(context);
+// JavaScript remains disabled
+webView.loadUrl("https://trusted-domain.com");`}
+            lang="java"
+            title="WebView JavaScript Example"
+            marks={['Vulnerable', 'Safe']}
+        />
       </div>
-
-      <div class="rule-card">
-        <div class="rule-header">
-          <Icon name="warning" size="1.5rem" />
-          <h3>Implicit Intents</h3>
-          <span class="severity medium">Medium Severity</span>
-        </div>
-        <p>Detects potentially insecure implicit intents.</p>
-        <div class="code-block">
-          <pre><code class="language-java">Intent intent = new Intent(Intent.ACTION_VIEW);
-intent.setData(Uri.parse(userControlledUrl)); // Potentially insecure
-startActivity(intent);</code></pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="usage-section">
-    <h2>How to Use</h2>
-    <p>Run these rules against your Android codebase using the following command:</p>
-    <div class="code-block command">
-      <pre><code class="language-bash">code-pathfinder scan --lang java --rules android/security /path/to/your/android/project</code></pre>
-    </div>
-    <p>For more information, see our <a href="/docs/android">Android documentation</a>.</p>
-  </div>
+  </Card>
 </div>
 
-<Footer />
-</PostHogLayout>
+<div class="rule-card" data-severity="medium" data-type="security" data-owasp="client-code-quality">
+  <Card title="WebView JavaScript Interface" icon="warning">
+      <div class="description">
+      **Rule ID**: java/Android/webview-javascript-interface
+      **Severity: Medium** | **CWE: 079**  
+      Enabling addJavascriptInterface exposes java methods to JavaScript.
+      </div>
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Exposing Java interface to JavaScript
+webView.addJavascriptInterface(new JavaScriptInterface(), "Android");
 
-<style>
-  .android-rules-content {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
+// ✅ Safe: Using modern API methods
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+    webView.evaluateJavascript("javascript:processData()", null);
+}`}
+            lang="java"
+            title="JavaScript Interface Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
 
-  .android-rules-content h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    color: var(--sl-color-white);
-    text-align: center;
-  }
+<div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
+  <Card title="WebView Content Access" icon="warning">
+      <div class="description">
+      **Rule ID**: java/Android/webview-set-allow-content-access  
+      **Severity: Medium** | **Security-Severity: 6.1** | **CWE: 079**  
+      Enabling setAllowContentAccess enables content:// access from webpages.
+      </div>
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Enabling content access
+webView.getSettings().setAllowContentAccess(true);
 
-  .android-rules-content > p {
-    color: var(--sl-color-gray-2);
-    text-align: center;
-    margin-bottom: 3rem;
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-  }
+// ✅ Safe: Content access disabled
+WebView webView = new WebView(context);
+webView.getSettings().setAllowContentAccess(false);
+// Only load trusted content`}
+            lang="java"
+            title="Content Access Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
 
-  .rules-categories {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 4rem;
-  }
+<div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
+  <Card title="WebView File Access" icon="warning">
+      <div class="description">
+      **Rule ID**: java/Android/webview-set-allow-file-access  
+      **Severity: Medium** | **Security-Severity: 6.1** | **CWE: 079**  
+      Enabling setAllowFileAccess enables webview access to file:/// URLs.
+      </div>
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Enabling file access
+webView.getSettings().setAllowFileAccess(true);
 
-  @media (min-width: 768px) {
-    .rules-categories {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
+// ✅ Safe: File access disabled
+WebView webView = new WebView(context);
+webView.getSettings().setAllowFileAccess(false);
+// Use content providers for controlled file access`}
+            lang="java"
+            title="File Access Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
 
-  .rule-category {
-    background: var(--sl-color-bg-nav);
-    border-radius: 12px;
-    padding: 2rem;
-    transition: transform 0.3s ease;
-  }
+<div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
+  <Card title="WebView File URL Access" icon="warning">
+      <div class="description">
+      **Rule ID**: java/Android/webview-set-allow-file-access-from-file-urls  
+      **Severity: Medium** | **Security-Severity: 6.1** | **CWE: 079**  
+      Enabling setAllowFileAccessFromFileURLs leaks sandbox access to file:/// URLs.
+      </div>
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Enabling file URL access
+webView.getSettings().setAllowFileAccessFromFileURLs(true);
 
-  .rule-category:hover {
-    transform: translateY(-5px);
-  }
+// ✅ Safe: File URL access disabled
+WebView webView = new WebView(context);
+webView.getSettings().setAllowFileAccessFromFileURLs(false);
+// Implement proper file access controls`}
+            lang="java"
+            title="File URL Access Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
 
-  .rule-category h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-    color: var(--sl-color-white);
-  }
+</div>
 
-  .rule-category ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .rule-category li {
-    color: var(--sl-color-gray-2);
-    margin-bottom: 0.75rem;
-    padding-left: 1.5rem;
-    position: relative;
-  }
-
-  .rule-category li::before {
-    content: "→";
-    color: var(--sl-color-accent);
-    position: absolute;
-    left: 0;
-  }
-
-  .featured-rules {
-    margin: 4rem 0;
-  }
-
-  .featured-rules h2 {
-    font-size: 2rem;
-    text-align: center;
-    margin-bottom: 2rem;
-    color: var(--sl-color-white);
-  }
-
-  .rule-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-  }
-
-  @media (min-width: 768px) {
-    .rule-grid {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
-  .rule-card {
-    background: var(--sl-color-bg-nav);
-    border-radius: 12px;
-    padding: 1.5rem;
-    transition: transform 0.3s ease;
-  }
-
-  .rule-card:hover {
-    transform: translateY(-5px);
-  }
-
-  .rule-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .rule-header h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: var(--sl-color-white);
-  }
-
-  .severity {
-    font-size: 0.875rem;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    margin-left: auto;
-  }
-
-  .severity.high {
-    background-color: var(--sl-color-red-high);
-    color: var(--sl-color-white);
-  }
-
-  .severity.medium {
-    background-color: var(--sl-color-orange);
-    color: var(--sl-color-white);
-  }
-
-  .code-block {
-    background: var(--sl-color-bg-inline-code);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-top: 1rem;
-    overflow-x: auto;
-  }
-
-  .code-block.command {
-    background: var(--sl-color-bg-inline-code);
-    border-left: 4px solid var(--sl-color-accent);
-  }
-
-  .code-block pre {
-    margin: 0;
-    font-family: var(--sl-font-mono);
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
-
-  .usage-section {
-    margin: 4rem 0;
-    text-align: center;
-  }
-
-  .usage-section h2 {
-    font-size: 2rem;
-    margin-bottom: 1.5rem;
-    color: var(--sl-color-white);
-  }
-
-  .usage-section p {
-    color: var(--sl-color-gray-2);
-    margin-bottom: 2rem;
-  }
-
-  .usage-section a {
-    color: var(--sl-color-accent);
-    text-decoration: none;
-    transition: color 0.2s;
-  }
-
-  .usage-section a:hover {
-    color: var(--sl-color-accent-high);
-  }
-</style>
+For more information on using Code PathFinder with Android, see our [documentation](/overview).

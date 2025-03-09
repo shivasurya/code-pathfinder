@@ -2,7 +2,7 @@
  * @name Android WebView JavaScript settings
  * @description Enabling setAllowContentAccess enables content:// access from webpages.
  * @kind problem
- * @id java/Android/webview-javascript-enabled
+ * @id java/Android/webview-set-allow-content-access
  * @problem.severity warning
  * @security-severity 6.1
  * @precision medium
