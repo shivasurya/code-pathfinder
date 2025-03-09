@@ -1,7 +1,7 @@
 ---
 title: Java - Code Pathfinder Atlas
 template: splash
-description: Language-specific rules for Java applications
+description: Detect cryptographic vulnerabilities and secure coding issues in Java applications
 ---
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
@@ -9,17 +9,9 @@ import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
 import RuleSearch from '../../../../components/RuleSearch.astro';
 
-export const sqlInjectionExample = `// ❌ Vulnerable: SQL Injection risk
-String query = "SELECT * FROM users WHERE id = '" + userId + "'";
-
-// ✅ Safe: Using PreparedStatement
-String query = "SELECT * FROM users WHERE id = ?";
-PreparedStatement stmt = conn.prepareStatement(query);
-stmt.setString(1, userId);`;
-
 <PostHogLayout/>
 
-Browse our comprehensive collection of Java-specific rules designed to identify vulnerabilities and code quality issues in your Java applications.
+Browse our specialized collection of Java security rules designed to detect cryptographic vulnerabilities, secure communication issues, and OWASP Top 10 risks. Our rules help identify common security pitfalls in Java applications, with a focus on modern cryptography, secure networking, and industry best practices.
 
 #### Test Locally
 
@@ -29,95 +21,102 @@ To run these rules against your Java codebase:
 codepathfinder ci --project /src/project --ruleset cpf/java
 ```
 
-#### Featured Rules
+#### Rules (3)
 
 <RuleSearch placeholder="Search security rules and patterns..." />
 
-<div class="rule-card" data-severity="critical" data-type="security">
-  <Card title="SQL Injection" icon="warning">
-      <div class="title">SQL Injection</div>
+<div class="rule-cards-grid">
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="Insecure Random" icon="warning">
       <div class="description">
-      **Severity: Critical**  
-      Detects potential SQL injection vulnerabilities in Java applications where user input is directly concatenated into SQL queries.
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Identifies usage of Math.random() which is not cryptographically secure and could lead to predictable values in security-critical contexts.
       </div>
-      <CollapsibleCode 
-          code={sqlInjectionExample}
-          lang="java"
-          title="SQL Injection Example"
-          marks={['Vulnerable', 'Safe']}
-      />
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Not cryptographically secure
+double value = Math.random();
+
+// ✅ Safe: Using SecureRandom
+SecureRandom secureRandom = new SecureRandom();
+double value = secureRandom.nextDouble();`}
+            lang="java"
+            title="Insecure Random Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
   </Card>
 </div>
- 
-  
-  <div class="rule-card" data-severity="high" data-type="security">
-    <Card title="Insecure Random" icon="warning">
-      <div class="title">Insecure Random</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="Weak Cryptography" icon="warning">
       <div class="description">
-        **Severity: High**  
-        Identifies usage of java.util.Random for security-sensitive operations instead of SecureRandom.
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Detects usage of deprecated or weak cryptographic algorithms (RC4, RC2, SHA1, Blowfish) that are vulnerable to known attacks.
       </div>
-      <CollapsibleCode 
-        code={`// ❌ Vulnerable: Predictable random numbers
-Random random = new Random();
-byte[] token = new byte[32];
-random.nextBytes(token);
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Weak algorithms
+Cipher rc4Cipher = Cipher.getInstance("RC4");
+MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+Cipher blowfish = Cipher.getInstance("Blowfish");
 
-// ✅ Safe: Cryptographically secure random
-SecureRandom secureRandom = new SecureRandom();
-byte[] secureToken = new byte[32];
-secureRandom.nextBytes(secureToken);`}
-        lang="java"
-        title="Insecure Random Example"
-        marks={['Vulnerable', 'Safe']}
-      />
-    </Card>
-  </div>
-  
-  <div class="rule-card" data-severity="critical" data-type="security">
-    <Card title="Hardcoded Credentials" icon="warning">
-      <div class="title">Hardcoded Credentials</div>
+// ✅ Safe: Strong algorithms
+Cipher aesCipher = Cipher.getInstance("AES/GCM/NoPadding");
+MessageDigest sha256 = MessageDigest.getInstance("SHA-256");`}
+            lang="java"
+            title="Weak Cryptography Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="broken-authentication">
+  <Card title="Insecure HTTP Client" icon="warning">
       <div class="description">
-        **Severity: Critical**  
-        Detects hardcoded credentials in Java source code that could be exposed in version control or decompiled code.
+      **Severity: High** | **OWASP: Broken Authentication**  
+      Identifies usage of deprecated DefaultHttpClient which lacks modern security features and proper certificate validation.
       </div>
-      <CollapsibleCode 
-        code={`// ❌ Vulnerable: Hardcoded credentials
-private static final String PASSWORD = "super_secret_123";
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Deprecated client
+HttpClient client = new DefaultHttpClient();
 
-// ✅ Safe: Environment variables
-String password = System.getenv("DB_PASSWORD");
+// ✅ Safe: Modern HTTP client
+HttpClient client = HttpClientBuilder.create()
+    .setSSLContext(SSLContexts.createDefault())
+    .build();`}
+            lang="java"
+            title="HTTP Client Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
 
-// ✅ Safe: Configuration management
-@Value("app.db.password")
-private String configPassword;`}
-        lang="java"
-        title="Hardcoded Credentials Example"
-        marks={['Vulnerable', 'Safe']}
-      />
-    </Card>
-  </div>
-  
-  <div class="rule-card" data-severity="high" data-type="security">
-    <Card title="Unsafe Deserialization" icon="warning">
-      <div class="title">Unsafe Deserialization</div>
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="Unencrypted Socket" icon="warning">
       <div class="description">
-        **Severity: High**  
-        Identifies unsafe deserialization of untrusted data that could lead to remote code execution.
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Detects usage of unencrypted socket connections that could expose sensitive data to network-level attacks.
       </div>
-      <CollapsibleCode 
-        code={`// ❌ Vulnerable: Unsafe deserialization
-ObjectInputStream ois = new ObjectInputStream(input);
-Object data = ois.readObject(); // RCE risk
+      <div class="code-section">
+        <CollapsibleCode 
+            code={`// ❌ Vulnerable: Unencrypted socket
+Socket socket = new Socket("example.com", 80);
 
-// ✅ Safe: Type-safe deserialization
-ObjectMapper mapper = new ObjectMapper();
-UserData data = mapper.readValue(json, UserData.class);`}
-        lang="java"
-        title="Unsafe Deserialization Example"
-        marks={['Vulnerable', 'Safe']}
-      />
-    </Card>
-  </div>
+// ✅ Safe: SSL/TLS socket
+SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`}
+            lang="java"
+            title="Socket Connection Example"
+            marks={['Vulnerable', 'Safe']}
+        />
+      </div>
+  </Card>
+</div>
+
+</div>
 
 For more information on using Code PathFinder with Java, see our [Java documentation](/docs/java).
