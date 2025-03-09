@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
@@ -263,6 +264,7 @@ func sendJSONResponse(w http.ResponseWriter, response interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
 // buildAST converts a CodeGraph into an AST structure
 func buildAST(codeGraph *graph.CodeGraph) *ASTNode {
 	if codeGraph == nil {
@@ -297,18 +299,102 @@ func buildAST(codeGraph *graph.CodeGraph) *ASTNode {
 	return root
 }
 
+// loggingMiddleware logs request details with security context
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Get client IP with security checks
+		clientIP := r.Header.Get("X-Real-IP")
+		if clientIP == "" {
+			clientIP = r.Header.Get("X-Forwarded-For")
+			if clientIP == "" {
+				// Extract IP without port
+				clientIP = strings.Split(r.RemoteAddr, ":")[0]
+			}
+		}
+
+		// Get user agent (sanitized)
+		userAgent := strings.ReplaceAll(r.Header.Get("User-Agent"), "\n", "")
+
+		// Get request ID or generate one
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+
+		// Add request ID to response headers for tracing
+		w.Header().Set("X-Request-ID", requestID)
+
+		// Create a response writer that captures the status code
+		lrw := &loggingResponseWriter{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
+
+		// Call the next handler
+		next.ServeHTTP(lrw, r)
+
+		// Calculate request duration
+		duration := time.Since(start)
+
+		// Get content length
+		contentLength := r.Header.Get("Content-Length")
+
+		// Log request details with security context
+		log.Printf("[%s] [%s] Method=%s Path=%s IP=%s Status=%d Duration=%v Size=%s UA=%s Referer=%s Protocol=%s Host=%s",
+			time.Now().Format(time.RFC3339),
+			requestID,
+			r.Method,
+			r.URL.Path,
+			clientIP,
+			lrw.statusCode,
+			duration,
+			contentLength,
+			userAgent,
+			r.Referer(),
+			r.Proto,
+			r.Host,
+		)
+	})
+}
+
+// loggingResponseWriter is a custom response writer that captures the status code
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
 func main() {
-	// Serve static files
+	// Create a new mux for better control over middleware
+	mux := http.NewServeMux()
+
+	// Serve static files with security and logging middleware
 	fs := http.FileServer(http.Dir("public/static"))
-	http.Handle("/", fs)
+	mux.Handle("/", loggingMiddleware(fs))
 
-	// API endpoints
-	http.HandleFunc("/analyze", analyzeHandler)
-	http.HandleFunc("/parse", parseHandler)
+	// API endpoints with security and logging middleware
+	mux.Handle("/analyze", loggingMiddleware(http.HandlerFunc(analyzeHandler)))
+	mux.Handle("/parse", loggingMiddleware(http.HandlerFunc(parseHandler)))
 
-	port := ":8080"
+	// Get port from environment variable or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Ensure port starts with :
+	if !strings.HasPrefix(port, ":") {
+		port = ":" + port
+	}
+
 	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	if err := http.ListenAndServe(port, mux); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
