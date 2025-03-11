@@ -147,6 +147,56 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeNetworkEvents();
     }
 
+    // Function to parse and visualize code
+    const parseAndVisualizeCode = async (javaSource) => {
+        try {
+            const response = await fetch('/api/parse', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code: javaSource }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                // Show error message to user
+                const errorMsg = data.error || 'Failed to parse code';
+                document.getElementById('errorMessage').textContent = errorMsg;
+                document.getElementById('errorMessage').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('errorMessage').style.display = 'none';
+                }, 5000);
+                return;
+            }
+
+            // Clear any previous error messages
+            document.getElementById('errorMessage').style.display = 'none';
+
+            const visNodes = [];
+            const visEdges = [];
+
+            // Process AST nodes and update visualization
+            if (data.ast) {
+                processNode(data.ast);
+                updateVisualization(visNodes, visEdges);
+                updateASTList(visNodes);
+            } else {
+                throw new Error('Invalid AST structure received');
+            }
+        } catch (error) {
+            console.error('Error parsing code:', error);
+            document.getElementById('errorMessage').textContent = 'Failed to process code: ' + error.message;
+            document.getElementById('errorMessage').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('errorMessage').style.display = 'none';
+            }, 5000);
+        }
+    };
+
+    // Create debounced version of parse function
+    const debouncedParse = debounce(parseAndVisualizeCode, 1000);
+
     // Initialize main CodeMirror
     editor = CodeMirror(document.getElementById('codeEditor'), {
         mode: 'text/x-java',
@@ -154,6 +204,11 @@ document.addEventListener('DOMContentLoaded', () => {
         lineNumbers: true,
         autoCloseBrackets: true,
         matchBrackets: true,
+        // Add change event handler for automatic parsing
+        onChange: (cm) => {
+            const code = cm.getValue();
+            debouncedParse(code);
+        },
         value: `public class UserService {
     private final UserRepository userRepository;
     private final Logger logger;
@@ -196,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Execute query
-            const response = await fetch('/analyze', {
+            const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -236,13 +291,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Parse AST
-            const response = await fetch('/parse', {
+            const response = await fetch('/api/parse', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    javaSource,
+                    code: javaSource,
                 }),
             });
 
@@ -342,7 +397,7 @@ select m, "Found getter method returning String"`
 
     // Trigger initial parse
     const initialCode = editor.getValue();
-    fetch('/parse', {
+    fetch('/api/parse', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -361,7 +416,7 @@ select m, "Found getter method returning String"`
     editor.on('change', debounce(async () => {
         try {
             const code = editor.getValue();
-            const response = await fetch('/parse', {
+            const response = await fetch('/api/parse', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -492,7 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Execute query
-            const response = await fetch('/analyze', {
+            const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -522,13 +577,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Parse AST
-            const response = await fetch('/parse', {
+            const response = await fetch('/api/parse', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    javaSource
+                    code: javaSource
                 })
             });
 
@@ -545,7 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const nodeId = node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
                 visNodes.push({
                     id: nodeId,
-                    label: `${node.type}\n${node.name || ''}`,
+                    label: `${node.type}`,
                     type: node.type,
                     line: node.line
                 });
