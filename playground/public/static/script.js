@@ -136,7 +136,7 @@ let currentEdges = [];
 const options = {
     nodes: {
         shape: 'dot',
-        size: 16,
+        size: 20,
         borderWidth: 2,
         color: {
             border: '#61dafb',
@@ -673,13 +673,14 @@ function updateVisualization(newNodes = [], newEdges = []) {
         color: getNodeColor(node.type),
         font: {
             color: '#ffffff',
-            size: 14,
+            size: 20,
             face: 'Inter'
         },
-        shape: 'box',
-        margin: 10,
+        shape: 'dot',
+        size: 25,
         shadow: true,
-        title: node.line ? `Line: ${node.line}` : undefined
+        title: node.line ? `Line: ${node.line}` : undefined,
+        mass: 1,
     })));
 
     // Create DataSet for edges with consistent styling
@@ -722,7 +723,7 @@ function getNodeColor(type) {
             highlight: { background: '#42A5F5', border: '#42A5F5' },
             hover: { background: '#42A5F5', border: '#42A5F5' }
         },
-        'MethodDeclaration': {
+        'methoddeclaration': {
             background: '#2196F3',
             border: '#2196F3',
             highlight: { background: '#42A5F5', border: '#42A5F5' },

@@ -409,17 +409,17 @@ body {
 
 .dot.method {
     background-color: #2196F3;
-    border: 2px solid hsl(189, 38%, 62%);
+    border: 2px solid #2196F3;
 }
 
 .dot.field {
-    background-color: #E9C07B;
-    border: 2px solid #e5c07b;
+    background-color: #FF9800;
+    border: 2px solid #FF9800;
 }
 
 .dot.variable {
-    background-color: #ec8c4cb3;
-    border: 2px solid #c678dd;
+    background-color: #FF5722;
+    border: 2px solid #FF5722;
 }
 /* Legend styling */
 .legend-item {
@@ -438,12 +438,6 @@ body {
     display: inline-block;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
-
-/* Node colors following Atlas design principles */
-.node.class circle { fill: rgba(97, 218, 251, 0.7); stroke: #61dafb; }
-.node.method circle { fill: rgba(152, 195, 121, 0.7); stroke: #98c379; }
-.node.field circle { fill: rgba(229, 192, 123, 0.7); stroke: #e5c07b; }
-.node.variable circle { fill: rgba(198, 120, 221, 0.7); stroke: #c678dd; }
 
 /* Zoom controls */
 .zoom-controls {
@@ -524,7 +518,6 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
 }
 
 .button-group {
