@@ -53,65 +53,275 @@ function initResizablePanel() {
     });
 }
 
-// Keep track of current graph data
-let currentNodes = [];
-let currentEdges = [];
+// UI State Management
+const UIState = {
+    activeTab: 'visualization',
+    setActiveTab(tabName) {
+        this.activeTab = tabName;
+        this.updateTabUI();
+    },
+    updateTabUI() {
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.toggle('active', button.dataset.tab === this.activeTab);
+        });
+        document.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.toggle('active', pane.id === `${this.activeTab}-tab`);
+        });
+    }
+};
+
+// AST Processing Service
+const ASTService = {
+    async parseAndVisualize(javaSource) {
+        try {
+            const response = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: javaSource })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to parse code');
+            }
+
+            if (!data.ast) {
+                throw new Error('Invalid AST structure received');
+            }
+
+            const { nodes, edges } = this.processASTData(data.ast);
+            this.updateVisualization(nodes, edges);
+            return { nodes, edges };
+        } catch (error) {
+            this.handleError('Error parsing code:', error);
+            return null;
+        }
+    },
+
+    processASTData(node, parentId = null, nodes = [], edges = []) {
+        const nodeId = "sss";
+        
+        nodes.push({
+            id: nodeId,
+            label: `${node.name || node.type}\n${node.kind || ''}`,
+            color: this.getNodeColor(node.name),
+            title: this.generateNodeTooltip(node),
+            type: node.type,
+            font: {
+                size: 14,
+                face: 'Inter',
+                multi: 'html',
+                bold: category === 'Rule' || category === 'TechnologyRule'
+            },
+            borderWidth: 2,
+            shadow: {
+                enabled: true,
+                color: 'rgba(97, 218, 251, 0.2)',
+                size: 4,
+                x: 0,
+                y: 2
+            }
+        });
+
+        if (parentId) {
+            edges.push({
+                from: parentId,
+                to: nodeId,
+                arrows: 'to'
+            });
+        }
+
+        if (node.children) {
+            node.children.forEach(child => {
+                this.processASTData(child, nodeId, nodes, edges);
+            });
+        }
+
+        return { nodes, edges };
+    },
+
+    getNodeColor(type) {
+        // Colors based on Code-Pathfinder rule categories
+        const colors = {
+            // Technology-based bundles (e.g., android/)
+            'TechnologyRule': '#61dafb',
+            'AndroidRule': '#61dafb',
+            'WebRule': '#61dafb',
+            
+            // Language-based bundles (e.g., java/)
+            'LanguageRule': '#98c379',
+            'JavaRule': '#98c379',
+            'KotlinRule': '#98c379',
+            
+            // Rule types
+            'Rule': '#c678dd',
+            'CQLRule': '#c678dd',
+            'QueryRule': '#c678dd',
+            
+            // Metadata and others
+            'RuleMetadata': '#e5c07b',
+            'RuleProvider': '#e5c07b',
+            'RuleBundle': '#e5c07b',
+            'default': '#4d4d4d'
+        };
+        return colors[type] || colors.default;
+    },
+
+    generateNodeTooltip(node) {
+        const details = [];
+        if (node.type) details.push(`Type: ${node.type}`);
+        if (node.name) details.push(`Name: ${node.name}`);
+        if (node.kind) details.push(`Kind: ${node.kind}`);
+        if (node.severity) details.push(`Severity: ${node.severity}`);
+        if (node.securitySeverity) details.push(`Security Severity: ${node.securitySeverity}`);
+        if (node.precision) details.push(`Precision: ${node.precision}`);
+        if (node.tags && node.tags.length > 0) details.push(`Tags: ${node.tags.join(', ')}`);
+        if (node.ruleProvider) details.push(`Provider: ${node.ruleProvider}`);
+        if (node.description) details.push(`\nDescription: ${node.description}`);
+        return details.join('\n');
+    },
+
+
+
+    handleError(message, error) {
+        console.error(message, error);
+        const errorElement = document.getElementById('errorMessage');
+        errorElement.textContent = error.message;
+        errorElement.style.display = 'block';
+        setTimeout(() => {
+            errorElement.style.display = 'none';
+        }, 5000);
+    }
+};
+
+// Network Visualization Service
+const VisualizationService = {
+    updateVisualization(nodes, edges) {
+        if (!network) return;
+
+        const data = {
+            nodes: new vis.DataSet(nodes),
+            edges: new vis.DataSet(edges)
+        };
+
+        network.setData(data);
+        currentNodes = nodes;
+        currentEdges = edges;
+
+        // Fit the network view
+        network.fit({
+            animation: {
+                duration: 1000,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    },
+
+    initializeNetwork(container) {
+        network = new vis.Network(container, {
+            nodes: new vis.DataSet([]),
+            edges: new vis.DataSet([])
+        }, options);
+
+        this.initializeNetworkEvents();
+    },
+
+    initializeNetworkEvents() {
+        if (!network) return;
+
+        network.on('click', (params) => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = currentNodes.find(n => n.id === nodeId);
+                if (node) {
+                    console.log('Selected node:', node);
+                }
+            }
+        });
+
+        network.on('stabilizationProgress', (params) => {
+            console.log('Layout stabilization:', Math.round(params.iterations / params.total * 100), '%');
+        });
+
+        network.on('stabilizationIterationsDone', () => {
+            console.log('Layout stabilization finished');
+        });
+    }
+};
 
 // Initialize global variables
 let network = null;
 let editor = null;
 let queryEditor = null;
+let currentNodes = [];
+let currentEdges = [];
 
 // Network visualization options
 const options = {
     nodes: {
-        shape: 'dot',
-        size: 20,
+        shape: 'circle',
+        margin: 10,
+        widthConstraint: {
+            maximum: 200
+        },
+        borderWidth: 2,
+        color: {
+            border: '#61dafb',
+            background: '#1e1e1e'
+        },
         font: {
             face: 'Inter',
             size: 14,
             color: '#ffffff',
-            strokeWidth: 0
+            multi: true,
+            bold: {
+                color: '#61dafb',
+                size: 15
+            }
         },
-        borderWidth: 0,
         shadow: {
             enabled: true,
-            color: 'rgba(0,0,0,0.2)',
-            size: 5,
+            color: 'rgba(97, 218, 251, 0.2)',
+            size: 4,
             x: 0,
             y: 2
         }
     },
     edges: {
         color: {
-            color: '#4f4f4f',
-            highlight: '#666666',
-            hover: '#666666'
+            color: '#4d4d4d',
+            highlight: '#61dafb',
+            hover: '#61dafb'
         },
-        width: 1,
+        width: 1.5,
         smooth: {
-            type: 'continuous',
-            roundness: 0.5
+            type: 'cubicBezier',
+            forceDirection: 'vertical',
+            roundness: 0.3
         },
         arrows: {
             to: {
                 enabled: true,
-                scaleFactor: 0.5
+                scaleFactor: 0.8,
+                type: 'arrow'
             }
         },
-        dashes: true
+        selectionWidth: 2,
+        hoverWidth: 2
     },
     physics: {
         enabled: true,
-        solver: 'forceAtlas2Based',
-        forceAtlas2Based: {
-            gravitationalConstant: -50,
-            springLength: 200,
-            springConstant: 0.1
+        hierarchicalRepulsion: {
+            nodeDistance: 150,
+            springLength: 150,
+            springConstant: 0.2,
+            damping: 0.09
         },
         stabilization: {
             enabled: true,
-            iterations: 1000
+            iterations: 1000,
+            updateInterval: 50,
+            fit: true
         }
     },
     interaction: {
@@ -122,93 +332,37 @@ const options = {
     },
     layout: {
         improvedLayout: true,
-        hierarchical: false
+        hierarchical: {
+            enabled: true,
+            direction: 'UD',
+            sortMethod: 'directed',
+            nodeSpacing: 120,
+            levelSeparation: 150,
+            blockShifting: true,
+            edgeMinimization: true,
+            parentCentralization: true,
+            treeSpacing: 100
+        }
     }
 };
 
-// Initialize visualization and editors when DOM is loaded
+// Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize resizable panels
     initResizablePanel();
 
-    // Initialize network container
     const container = document.getElementById('visualization');
     if (container) {
-        // Create the network
-        network = new vis.Network(container, {
-            nodes: new vis.DataSet([]),
-            edges: new vis.DataSet([])
-        }, options);
-
-        // Add zoom controls to the container
-        container.appendChild(zoomControls);
-
-        // Initialize network events
-        initializeNetworkEvents();
+        VisualizationService.initializeNetwork(container);
     }
 
-    // Function to parse and visualize code
-    const parseAndVisualizeCode = async (javaSource) => {
-        try {
-            const response = await fetch('/api/parse', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ code: javaSource }),
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                // Show error message to user
-                const errorMsg = data.error || 'Failed to parse code';
-                document.getElementById('errorMessage').textContent = errorMsg;
-                document.getElementById('errorMessage').style.display = 'block';
-                setTimeout(() => {
-                    document.getElementById('errorMessage').style.display = 'none';
-                }, 5000);
-                return;
-            }
-
-            // Clear any previous error messages
-            document.getElementById('errorMessage').style.display = 'none';
-
-            const visNodes = [];
-            const visEdges = [];
-
-            // Process AST nodes and update visualization
-            if (data.ast) {
-                processNode(data.ast);
-                updateVisualization(visNodes, visEdges);
-                updateASTList(visNodes);
-            } else {
-                throw new Error('Invalid AST structure received');
-            }
-        } catch (error) {
-            console.error('Error parsing code:', error);
-            document.getElementById('errorMessage').textContent = 'Failed to process code: ' + error.message;
-            document.getElementById('errorMessage').style.display = 'block';
-            setTimeout(() => {
-                document.getElementById('errorMessage').style.display = 'none';
-            }, 5000);
-        }
-    };
-
-    // Create debounced version of parse function
-    const debouncedParse = debounce(parseAndVisualizeCode, 1000);
-
-    // Initialize main CodeMirror
+    // Initialize editors
     editor = CodeMirror(document.getElementById('codeEditor'), {
         mode: 'text/x-java',
         theme: 'monokai',
         lineNumbers: true,
-        autoCloseBrackets: true,
-        matchBrackets: true,
-        // Add change event handler for automatic parsing
-        onChange: (cm) => {
-            const code = cm.getValue();
-            debouncedParse(code);
-        },
+        lineWrapping: true,
+        scrollbarStyle: 'native',
+        viewportMargin: Infinity,
         value: `public class UserService {
     private final UserRepository userRepository;
     private final Logger logger;
@@ -241,201 +395,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         userRepository.deleteById(id);
     }
-}`,
+}`
     });
 
-    // Add execute button event listener
-    document.getElementById('executeQuery').addEventListener('click', async () => {
-        const javaSource = editor.getValue();
-        const query = queryEditor.getValue();
-
-        try {
-            // Execute query
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    javaSource,
-                    query,
-                }),
-            });
-
-            const data = await response.json();
-            if (data.error) {
-                console.error('Query error:', data.error);
-                return;
-            }
-
-            // Display results
-            const resultsContainer = document.getElementById('queryResults');
-            resultsContainer.innerHTML = '';
-            data.results.forEach(result => {
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'result-item';
-                resultDiv.innerHTML = `
-                    <div class="result-location">Line ${result.line}: ${result.file}</div>
-                    <pre class="result-snippet">${result.snippet}</pre>
-                `;
-                resultsContainer.appendChild(resultDiv);
-            });
-        } catch (error) {
-            console.error('Failed to execute query:', error);
-        }
-    });
-
-    // Add parse button event listener
-    document.getElementById('parseAST')?.addEventListener('click', async () => {
-        const javaSource = editor.getValue();
-
-        try {
-            // Parse AST
-            const response = await fetch('/api/parse', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    code: javaSource,
-                }),
-            });
-
-            const data = await response.json();
-            if (data.error) {
-                console.error('Parse error:', data.error);
-                return;
-            }
-
-            // Convert AST to vis.js format
-            const visNodes = [];
-            const visEdges = [];
-            let nodeId = 1;
-
-            function processNode(node, parentId = null) {
-                const currentId = nodeId++;
-                visNodes.push({
-                    id: currentId,
-                    label: `${node.type}\n${node.name || ''}`,
-                    color: getNodeColor(node.type),
-                    title: `Line: ${node.line}`,
-                });
-
-                if (parentId !== null) {
-                    visEdges.push({
-                        from: parentId,
-                        to: currentId,
-                    });
-                }
-
-                if (node.children) {
-                    node.children.forEach(child => processNode(child, currentId));
-                }
-            }
-
-            processNode(data.ast);
-
-            // Update visualization
-            updateVisualization(visNodes, visEdges);
-        } catch (error) {
-            console.error('Failed to parse AST:', error);
-        }
-    });
-
-    // Initialize query editor
     queryEditor = CodeMirror(document.getElementById('queryEditor'), {
         mode: 'text/x-java',
         theme: 'monokai',
         lineNumbers: true,
-        placeholder: 'Enter your query here...',
         lineWrapping: true,
-        value: `from Method m
-where m.hasName("get") and m.getReturnType() instanceof TypeString
-select m, "Found getter method returning String"`
+        placeholder: 'Enter your query here...'
     });
 
-    // Handle window resize
-    window.addEventListener('resize', () => {
-        editor.refresh();
-        queryEditor.refresh();
+    // Add event listeners
+    document.getElementById('parseAST').addEventListener('click', () => {
+        const code = editor.getValue();
+        ASTService.parseAndVisualize(code);
     });
 
-    // Handle query execution
-    document.getElementById('executeQuery')?.addEventListener('click', async () => {
+    document.getElementById('executeQuery').addEventListener('click', async () => {
+        const code = editor.getValue();
         const query = queryEditor.getValue();
-        const results = document.getElementById('queryResults');
-        
-        try {
-            const response = await fetch('/query', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    code: editor.getValue(),
-                    query: query
-                }),
-            });
-
-            const data = await response.json();
-            
-            if (data.error) {
-                results.innerHTML = `<span style="color: #ff6b6b;">Error: ${data.error}</span>`;
-                return;
-            }
-
-            // Highlight matching nodes in the visualization
-            highlightNodes(data.matches);
-
-            // Display results
-            results.innerHTML = formatQueryResults(data);
-        } catch (error) {
-            results.innerHTML = `<span style="color: #ff6b6b;">Error: ${error.message}</span>`;
-        }
+        await executeQuery(code, query);
+        UIState.setActiveTab('results');
     });
 
+    // Initialize tab switching
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            UIState.setActiveTab(button.dataset.tab);
+        });
+    });
 
-    // Trigger initial parse
-    const initialCode = editor.getValue();
-    fetch('/api/parse', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code: initialCode }),
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.error) {
-            updateVisualization(data.nodes, data.edges);
-        }
-    })
-    .catch(error => console.error('Error:', error));
-
-    // Auto-parse on editor changes
-    editor.on('change', debounce(async () => {
-        try {
-            const code = editor.getValue();
-            const response = await fetch('/api/parse', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ code }),
-            });
-            const data = await response.json();
-            if (data.error) {
-                console.error('Error parsing code:', data.error);
-                return;
-            }
-            updateVisualization(data.nodes, data.edges);
-        } catch (error) {
-            console.error('Error:', error);
-        }
+    // Add automatic parsing on code change
+    editor.on('change', debounce(() => {
+        const code = editor.getValue();
+        ASTService.parseAndVisualize(code);
     }, 1000));
 });
-
-
 
 // Create zoom controls for the visualization
 const zoomControls = document.createElement('div');
@@ -487,58 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // Initialize CodeMirror editor
-    editor = CodeMirror(document.getElementById('codeEditor'), {
-        mode: 'text/x-java',
-        theme: 'monokai',
-        lineNumbers: true,
-        autoCloseBrackets: true,
-        matchBrackets: true,
-        value: `public class UserService {
-    private final UserRepository userRepository;
-    private final Logger logger;
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-        this.logger = LoggerFactory.getLogger(UserService.class);
-    }
-
-    public User getUserById(String id) {
-        logger.info("Fetching user with id: {}", id);
-        return userRepository.findById(id)
-            .orElseThrow(() -> new UserNotFoundException("User not found"));
-    }
-
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    public User createUser(User user) {
-        if (userRepository.existsByEmail(user.getEmail())) {
-            throw new DuplicateEmailException("Email already exists");
-        }
-        return userRepository.save(user);
-    }
-
-    public void deleteUser(String id) {
-        if (!userRepository.existsById(id)) {
-            throw new UserNotFoundException("User not found");
-        }
-        userRepository.deleteById(id);
-    }
-}`
-    });
-
-    // Initialize query editor
-    queryEditor = CodeMirror(document.getElementById('queryEditor'), {
-        mode: 'text/x-java',
-        theme: 'monokai',
-        lineNumbers: true,
-        autoCloseBrackets: true,
-        matchBrackets: true,
-        value: '// Enter your CodeQL query here'
-    });
 
     // Add event listeners for buttons
     document.getElementById('executeQuery')?.addEventListener('click', async () => {
@@ -600,9 +544,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const nodeId = node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
                 visNodes.push({
                     id: nodeId,
-                    label: `${node.type}`,
-                    type: node.type,
-                    line: node.line
+                    label: node.name || node.type,
+                    type: node.type
                 });
 
                 if (parentId) {
@@ -717,7 +660,6 @@ function updateVisualization(newNodes = [], newEdges = []) {
     network.stabilize();
     network.fit();
 }
-
 
 function getNodeColor(type) {
     if (!type) return '#FF5722';
