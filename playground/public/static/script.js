@@ -90,7 +90,7 @@ const ASTService = {
             }
 
             const { nodes, edges } = this.processASTData(data.ast);
-            this.updateVisualization(nodes, edges);
+            VisualizationService.updateVisualization(nodes, edges);
             return { nodes, edges };
         } catch (error) {
             this.handleError('Error parsing code:', error);
@@ -101,17 +101,42 @@ const ASTService = {
     processASTData(node, parentId = null, nodes = [], edges = []) {
         const nodeId = "sss";
         
+        // Filter for specific node types
+        const validTypes = ['ClassDeclaration', 'ClassOrInterfaceDeclaration',
+                            'MethodDeclaration', 'ConstructorDeclaration',
+                            'VariableDeclaration', 'VariableDeclarator',
+                            'Parameter', 'LocalVariable',
+                            'FieldDeclaration', 'FieldAccess'];
+        
+        if (!validTypes.includes(node.type)) {
+            return { nodes, edges };
+        }
+
+        // Determine node category based on Java AST node types
+        let category = 'expressions';
+        
+        if (node.type === 'ClassDeclaration' || node.type === 'ClassOrInterfaceDeclaration') {
+            category = 'class';
+        } else if (node.type === 'MethodDeclaration' || node.type === 'ConstructorDeclaration') {
+            category = 'constructor-method';
+        } else if (node.type === 'VariableDeclaration' || node.type === 'VariableDeclarator' || 
+                   node.type === 'Parameter' || node.type === 'LocalVariable') {
+            category = 'variables';
+        } else if (node.type === 'FieldDeclaration' || node.type === 'FieldAccess') {
+            category = 'fields';
+        }
+        
         nodes.push({
             id: nodeId,
             label: `${node.name || node.type}\n${node.kind || ''}`,
-            color: this.getNodeColor(node.name),
+            group: category,  // Use group to apply CSS classes
             title: this.generateNodeTooltip(node),
             type: node.type,
             font: {
                 size: 14,
                 face: 'Inter',
                 multi: 'html',
-                bold: category === 'Rule' || category === 'TechnologyRule'
+                bold: category === 'class'
             },
             borderWidth: 2,
             shadow: {
@@ -141,47 +166,15 @@ const ASTService = {
     },
 
     getNodeColor(type) {
-        // Colors based on Code-Pathfinder rule categories
-        const colors = {
-            // Technology-based bundles (e.g., android/)
-            'TechnologyRule': '#61dafb',
-            'AndroidRule': '#61dafb',
-            'WebRule': '#61dafb',
-            
-            // Language-based bundles (e.g., java/)
-            'LanguageRule': '#98c379',
-            'JavaRule': '#98c379',
-            'KotlinRule': '#98c379',
-            
-            // Rule types
-            'Rule': '#c678dd',
-            'CQLRule': '#c678dd',
-            'QueryRule': '#c678dd',
-            
-            // Metadata and others
-            'RuleMetadata': '#e5c07b',
-            'RuleProvider': '#e5c07b',
-            'RuleBundle': '#e5c07b',
-            'default': '#4d4d4d'
-        };
-        return colors[type] || colors.default;
+        return colors.default;
     },
 
     generateNodeTooltip(node) {
         const details = [];
         if (node.type) details.push(`Type: ${node.type}`);
         if (node.name) details.push(`Name: ${node.name}`);
-        if (node.kind) details.push(`Kind: ${node.kind}`);
-        if (node.severity) details.push(`Severity: ${node.severity}`);
-        if (node.securitySeverity) details.push(`Security Severity: ${node.securitySeverity}`);
-        if (node.precision) details.push(`Precision: ${node.precision}`);
-        if (node.tags && node.tags.length > 0) details.push(`Tags: ${node.tags.join(', ')}`);
-        if (node.ruleProvider) details.push(`Provider: ${node.ruleProvider}`);
-        if (node.description) details.push(`\nDescription: ${node.description}`);
         return details.join('\n');
     },
-
-
 
     handleError(message, error) {
         console.error(message, error);
@@ -404,12 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
         lineNumbers: true,
         lineWrapping: true,
         placeholder: 'Enter your query here...'
-    });
-
-    // Add event listeners
-    document.getElementById('parseAST').addEventListener('click', () => {
-        const code = editor.getValue();
-        ASTService.parseAndVisualize(code);
     });
 
     document.getElementById('executeQuery').addEventListener('click', async () => {
