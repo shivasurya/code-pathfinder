@@ -388,8 +388,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: 0.75rem;
     letter-spacing: 0.3px;
     color: #e2e2e2;
 }
@@ -421,15 +420,6 @@ body {
 .dot.variable {
     background-color: #FF5722;
     border: 2px solid #FF5722;
-}
-/* Legend styling */
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    color: #e2e2e2;
-    font-weight: 500;
 }
 
 .dot {

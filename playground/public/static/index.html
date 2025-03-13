@@ -3,14 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Structure Visualizer</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Code-Pathfinder</title>
+
+    <!-- Atlas Design System Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Atlas Design System Styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Vis.js Network Visualization -->
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+
+    <!-- CodeMirror Core -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css" rel="stylesheet">
+
+    <!-- CodeMirror Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/comment/comment.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -90,6 +108,12 @@
             </div>
         </div>
     </div>
-    <script src="script.js"></script>
+    <!-- Application Modules -->
+    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/services/VisualizationService.js"></script>
+    <script type="module" src="js/services/ASTService.js"></script>
+    <script type="module" src="js/services/EditorService.js"></script>
+    <script type="module" src="js/components/UIComponents.js"></script>
+    <script type="module" src="js/utils/helpers.js"></script>
 </body>
 </html>
