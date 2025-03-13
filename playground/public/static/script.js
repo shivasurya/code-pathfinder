@@ -70,123 +70,6 @@ const UIState = {
     }
 };
 
-// AST Processing Service
-const ASTService = {
-    async parseAndVisualize(javaSource) {
-        try {
-            const response = await fetch('/api/parse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: javaSource })
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to parse code');
-            }
-
-            if (!data.ast) {
-                throw new Error('Invalid AST structure received');
-            }
-
-            const { nodes, edges } = this.processASTData(data.ast);
-            VisualizationService.updateVisualization(nodes, edges);
-            return { nodes, edges };
-        } catch (error) {
-            this.handleError('Error parsing code:', error);
-            return null;
-        }
-    },
-
-    processASTData(node, parentId = null, nodes = [], edges = []) {
-        const nodeId = "sss";
-        
-        // Filter for specific node types
-        const validTypes = ['ClassDeclaration', 'ClassOrInterfaceDeclaration',
-                            'MethodDeclaration', 'ConstructorDeclaration',
-                            'VariableDeclaration', 'VariableDeclarator',
-                            'Parameter', 'LocalVariable',
-                            'FieldDeclaration', 'FieldAccess'];
-        
-        if (!validTypes.includes(node.type)) {
-            return { nodes, edges };
-        }
-
-        // Determine node category based on Java AST node types
-        let category = 'expressions';
-        
-        if (node.type === 'ClassDeclaration' || node.type === 'ClassOrInterfaceDeclaration') {
-            category = 'class';
-        } else if (node.type === 'MethodDeclaration' || node.type === 'ConstructorDeclaration') {
-            category = 'constructor-method';
-        } else if (node.type === 'VariableDeclaration' || node.type === 'VariableDeclarator' || 
-                   node.type === 'Parameter' || node.type === 'LocalVariable') {
-            category = 'variables';
-        } else if (node.type === 'FieldDeclaration' || node.type === 'FieldAccess') {
-            category = 'fields';
-        }
-        
-        nodes.push({
-            id: nodeId,
-            label: `${node.name || node.type}\n${node.kind || ''}`,
-            group: category,  // Use group to apply CSS classes
-            title: this.generateNodeTooltip(node),
-            type: node.type,
-            font: {
-                size: 14,
-                face: 'Inter',
-                multi: 'html',
-                bold: category === 'class'
-            },
-            borderWidth: 2,
-            shadow: {
-                enabled: true,
-                color: 'rgba(97, 218, 251, 0.2)',
-                size: 4,
-                x: 0,
-                y: 2
-            }
-        });
-
-        if (parentId) {
-            edges.push({
-                from: parentId,
-                to: nodeId,
-                arrows: 'to'
-            });
-        }
-
-        if (node.children) {
-            node.children.forEach(child => {
-                this.processASTData(child, nodeId, nodes, edges);
-            });
-        }
-
-        return { nodes, edges };
-    },
-
-    getNodeColor(type) {
-        return colors.default;
-    },
-
-    generateNodeTooltip(node) {
-        const details = [];
-        if (node.type) details.push(`Type: ${node.type}`);
-        if (node.name) details.push(`Name: ${node.name}`);
-        return details.join('\n');
-    },
-
-    handleError(message, error) {
-        console.error(message, error);
-        const errorElement = document.getElementById('errorMessage');
-        errorElement.textContent = error.message;
-        errorElement.style.display = 'block';
-        setTimeout(() => {
-            errorElement.style.display = 'none';
-        }, 5000);
-    }
-};
-
 // Network Visualization Service
 const VisualizationService = {
     updateVisualization(nodes, edges) {
@@ -416,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add automatic parsing on code change
     editor.on('change', debounce(() => {
         const code = editor.getValue();
-        ASTService.parseAndVisualize(code);
+        //ASTService.parseAndVisualize(code);
     }, 1000));
 });
 
@@ -527,23 +410,54 @@ document.addEventListener('DOMContentLoaded', () => {
             const visEdges = [];
 
             // Process AST nodes
-            function processNode(node, parentId = null) {
-                const nodeId = node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
-                visNodes.push({
-                    id: nodeId,
-                    label: node.name || node.type,
-                    type: node.type
-                });
+            function processNode(node, parentId = null, lastValidParentId = null) {
+                const validTypes = ['ClassDeclaration', 'ClassOrInterfaceDeclaration',
+                                  'MethodDeclaration', 'ConstructorDeclaration',
+                                  'VariableDeclaration', 'VariableDeclarator',
+                                  'Parameter', 'LocalVariable',
+                                  'FieldDeclaration', 'FieldAccess'];
 
-                if (parentId) {
-                    visEdges.push({
-                        from: parentId,
-                        to: nodeId
+                const nodeId = node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
+                let currentValidParentId = lastValidParentId;
+
+                // Determine node category and add to visualization if it's a valid type
+                if (validTypes.includes(node.type)) {
+                    let category = 'expressions';
+
+                    if (node.type === 'ClassDeclaration' || node.type === 'ClassOrInterfaceDeclaration') {
+                        category = 'class';
+                    } else if (node.type === 'MethodDeclaration' || node.type === 'ConstructorDeclaration') {
+                        category = 'constructor-method';
+                    } else if (node.type === 'VariableDeclaration' || node.type === 'VariableDeclarator' || 
+                            node.type === 'Parameter' || node.type === 'LocalVariable') {
+                        category = 'variables';
+                    } else if (node.type === 'FieldDeclaration' || node.type === 'FieldAccess') {
+                        category = 'fields';
+                    }
+
+                    visNodes.push({
+                        id: nodeId,
+                        label: node.name || node.type,
+                        type: node.type,
+                        group: category
                     });
+
+                    // Connect to the last valid parent if it exists
+                    if (lastValidParentId) {
+                        visEdges.push({
+                            from: lastValidParentId,
+                            to: nodeId,
+                            arrows: 'to'
+                        });
+                    }
+
+                    // Update the last valid parent ID for children
+                    currentValidParentId = nodeId;
                 }
 
+                // Process children with the current valid parent ID
                 if (node.children) {
-                    node.children.forEach(child => processNode(child, nodeId));
+                    node.children.forEach(child => processNode(child, nodeId, currentValidParentId));
                 }
             }
 
