@@ -135,11 +135,8 @@ let currentEdges = [];
 // Network visualization options
 const options = {
     nodes: {
-        shape: 'circle',
-        margin: 10,
-        widthConstraint: {
-            maximum: 200
-        },
+        shape: 'dot',
+        size: 16,
         borderWidth: 2,
         color: {
             border: '#61dafb',
@@ -148,12 +145,7 @@ const options = {
         font: {
             face: 'Inter',
             size: 14,
-            color: '#ffffff',
-            multi: true,
-            bold: {
-                color: '#61dafb',
-                size: 15
-            }
+            color: '#ffffff'
         },
         shadow: {
             enabled: true,
@@ -166,58 +158,183 @@ const options = {
     edges: {
         color: {
             color: '#4d4d4d',
+            opacity: 0.6,
             highlight: '#61dafb',
             hover: '#61dafb'
         },
-        width: 1.5,
+        width: 2,
         smooth: {
-            type: 'cubicBezier',
-            forceDirection: 'vertical',
-            roundness: 0.3
+            type: 'curvedCW',
+            roundness: 0.2,
+            forceDirection: 'none'
         },
         arrows: {
             to: {
                 enabled: true,
-                scaleFactor: 0.8,
-                type: 'arrow'
+                scaleFactor: 0.7,
+                type: 'circle'
             }
         },
-        selectionWidth: 2,
-        hoverWidth: 2
+        shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.2)',
+            size: 5,
+            x: 2,
+            y: 2
+        }
     },
     physics: {
         enabled: true,
-        hierarchicalRepulsion: {
-            nodeDistance: 150,
-            springLength: 150,
-            springConstant: 0.2,
-            damping: 0.09
+        solver: 'barnesHut',            // Changed to barnesHut for more stability
+        barnesHut: {
+            gravitationalConstant: -10000,
+            centralGravity: 1.5,         // Very strong center pull
+            springLength: 300,
+            springConstant: 0.5,         // Very stiff springs
+            damping: 0.9,                // High damping to prevent movement
+            avoidOverlap: 1
         },
         stabilization: {
             enabled: true,
             iterations: 1000,
-            updateInterval: 50,
+            updateInterval: 10,
+            onlyDynamicEdges: false,
             fit: true
-        }
+        },
+        minVelocity: 0.01,              // Very low min velocity
+        maxVelocity: 10,                // Very low max velocity
+        timestep: 0.1,                  // Very slow physics
+        adaptiveTimestep: true
     },
     interaction: {
         hover: true,
         tooltipDelay: 200,
         zoomView: true,
-        dragView: true
+        dragView: true,
+        dragNodes: true,
+        multiselect: true
     },
     layout: {
         improvedLayout: true,
+        randomSeed: 42,
         hierarchical: {
-            enabled: true,
-            direction: 'UD',
+            enabled: false,
+            direction: 'LR',
             sortMethod: 'directed',
-            nodeSpacing: 120,
-            levelSeparation: 150,
-            blockShifting: true,
-            edgeMinimization: true,
-            parentCentralization: true,
-            treeSpacing: 100
+            nodeSpacing: 200,
+            levelSeparation: 300
+        }
+    },
+    groups: {
+        class: {
+            color: { 
+                background: 'rgba(97, 218, 251, 0.7)',
+                border: '#61dafb',
+                highlight: { background: '#61dafb', border: '#61dafb' },
+                hover: { background: '#61dafb', border: '#61dafb' }
+            },
+            shape: 'dot',
+            size: 50,
+            font: {
+                size: 18,
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            },
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 10,
+                x: 4,
+                y: 4
+            }
+        },
+        'constructor-method': {
+            color: { 
+                background: 'rgba(152, 195, 121, 0.7)',
+                border: '#98c379',
+                highlight: { background: '#98c379', border: '#98c379' },
+                hover: { background: '#98c379', border: '#98c379' }
+            },
+            shape: 'dot',
+            size: 45,
+            font: {
+                size: 16,
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            },
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 8,
+                x: 3,
+                y: 3
+            }
+        },
+        fields: {
+            color: { 
+                background: 'rgba(229, 192, 123, 0.7)',
+                border: '#e5c07b',
+                highlight: { background: '#e5c07b', border: '#e5c07b' },
+                hover: { background: '#e5c07b', border: '#e5c07b' }
+            },
+            shape: 'dot',
+            size: 40,
+            font: {
+                size: 16,
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            },
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 8,
+                x: 3,
+                y: 3
+            }
+        },
+        variables: {
+            color: { 
+                background: 'rgba(198, 120, 221, 0.7)',
+                border: '#c678dd',
+                highlight: { background: '#c678dd', border: '#c678dd' },
+                hover: { background: '#c678dd', border: '#c678dd' }
+            },
+            shape: 'dot',
+            size: 35,
+            font: {
+                size: 14,
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            },
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 8,
+                x: 3,
+                y: 3
+            }
+        },
+        'method-calls': {
+            color: { 
+                background: 'rgba(95, 179, 179, 0.7)',
+                border: '#5fb3b3',
+                highlight: { background: '#5fb3b3', border: '#5fb3b3' },
+                hover: { background: '#5fb3b3', border: '#5fb3b3' }
+            },
+            shape: 'dot',
+            size: 35,
+            font: {
+                size: 14,
+                strokeWidth: 2,
+                strokeColor: '#000000'
+            },
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 8,
+                x: 3,
+                y: 3
+            }
         }
     }
 };
@@ -266,7 +383,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     public void deleteUser(String id) {
-        if (!userRepository.existsById(id)) {
+        int i = 0;
+        if (!userRepository.existsById(id, i)) {
             throw new UserNotFoundException("User not found");
         }
         userRepository.deleteById(id);
@@ -409,37 +527,52 @@ document.addEventListener('DOMContentLoaded', () => {
             const visNodes = [];
             const visEdges = [];
 
-            // Process AST nodes
+            // Process AST nodes with clustering support
             function processNode(node, parentId = null, lastValidParentId = null) {
                 const validTypes = ['ClassDeclaration', 'ClassOrInterfaceDeclaration',
                                   'MethodDeclaration', 'ConstructorDeclaration',
                                   'VariableDeclaration', 'VariableDeclarator',
                                   'Parameter', 'LocalVariable',
-                                  'FieldDeclaration', 'FieldAccess'];
+                                  'FieldDeclaration', 'FieldAccess', 'MethodInvocation'];
 
                 const nodeId = node.id || `node_${Math.random().toString(36).substr(2, 9)}`;
                 let currentValidParentId = lastValidParentId;
-
-                // Determine node category and add to visualization if it's a valid type
+                
                 if (validTypes.includes(node.type)) {
-                    let category = 'expressions';
+                    console.log(node.type);
+                    let category;
+                    let mass = 1; // Base mass for node physics
 
                     if (node.type === 'ClassDeclaration' || node.type === 'ClassOrInterfaceDeclaration') {
                         category = 'class';
+                        mass = 3; // Make classes more stable
                     } else if (node.type === 'MethodDeclaration' || node.type === 'ConstructorDeclaration') {
                         category = 'constructor-method';
+                        mass = 2; // Methods slightly more stable
                     } else if (node.type === 'VariableDeclaration' || node.type === 'VariableDeclarator' || 
                             node.type === 'Parameter' || node.type === 'LocalVariable') {
                         category = 'variables';
                     } else if (node.type === 'FieldDeclaration' || node.type === 'FieldAccess') {
                         category = 'fields';
+                        mass = 1.5; // Fields slightly more stable than variables
+                    } else if (node.type === 'MethodInvocation') {
+                        category = 'method-calls';
                     }
 
                     visNodes.push({
                         id: nodeId,
                         label: node.name || node.type,
                         type: node.type,
-                        group: category
+                        group: category,
+                        mass: mass,
+                        value: mass * 5,
+                        font: {
+                            size: 14,
+                            color: '#ffffff',
+                            face: 'Inter'
+                        },
+                        title: `${node.type}${node.name ? ': ' + node.name : ''}
+${node.line ? 'Line: ' + node.line : ''}`
                     });
 
                     // Connect to the last valid parent if it exists
@@ -447,7 +580,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         visEdges.push({
                             from: lastValidParentId,
                             to: nodeId,
-                            arrows: 'to'
+                            arrows: {
+                                to: {
+                                    enabled: true,
+                                    scaleFactor: 0.5
+                                }
+                            },
+                            length: 200,
+                            value: 1 / mass,
+                            smooth: {
+                                type: 'continuous',
+                                roundness: 0.5
+                            }
                         });
                     }
 
@@ -572,7 +716,13 @@ function getNodeColor(type) {
             highlight: { background: '#66BB6A', border: '#66BB6A' },
             hover: { background: '#66BB6A', border: '#66BB6A' }
         },
-        'methoddeclaration': {
+        'constructordeclaration': {
+            background: '#2196F3',
+            border: '#2196F3',
+            highlight: { background: '#42A5F5', border: '#42A5F5' },
+            hover: { background: '#42A5F5', border: '#42A5F5' }
+        },
+        'MethodDeclaration': {
             background: '#2196F3',
             border: '#2196F3',
             highlight: { background: '#42A5F5', border: '#42A5F5' },
@@ -584,7 +734,7 @@ function getNodeColor(type) {
             highlight: { background: '#FFA726', border: '#FFA726' },
             hover: { background: '#FFA726', border: '#FFA726' }
         },
-        'compilationunit': {
+        'methodinvocation': {
             background: '#9C27B0',
             border: '#9C27B0',
             highlight: { background: '#AB47BC', border: '#AB47BC' },
@@ -600,9 +750,11 @@ function getNodeColor(type) {
 
     const nodeType = type.toLowerCase();
     if (nodeType.includes('class')) return colors.classdeclaration;
-    if (nodeType.includes('method')) return colors.methoddeclaration;
+    if (nodeType.includes('methoddeclaration')) return colors.methoddeclaration;
     if (nodeType.includes('field')) return colors.fielddeclaration;
     if (nodeType.includes('compilation')) return colors.compilationunit;
+    if (nodeType.includes('methodinvocation')) return colors.methodinvocation;
+    if (nodeType.includes('constructor')) return colors.constructordeclaration;
     return colors.default;
 }
 

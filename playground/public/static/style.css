@@ -402,52 +402,48 @@ body {
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-.dot.technology {
-    background-color: #61dafb;
-    border: 2px solid rgba(97, 218, 251, 0.3);
+.dot.class {
+    background-color: #4CAF50;
+    border: 2px solid hsl(134, 73%, 65%);
 }
 
-.dot.language {
-    background-color: #98c379;
-    border: 2px solid rgba(152, 195, 121, 0.3);
+.dot.method {
+    background-color: #2196F3;
+    border: 2px solid hsl(189, 38%, 62%);
 }
 
-.dot.rule {
-    background-color: #c678dd;
-    border: 2px solid rgba(198, 120, 221, 0.3);
+.dot.field {
+    background-color: #E9C07B;
+    border: 2px solid #e5c07b;
 }
 
-.dot.metadata {
-    background-color: #e5c07b;
-    border: 2px solid rgba(229, 192, 123, 0.3);
+.dot.variable {
+    background-color: #ec8c4cb3;
+    border: 2px solid #c678dd;
 }
-.dot.method { background-color: #2196F3; }
-.dot.field { background-color: #FF9800; }
-.dot.declaration { background-color: #FF5722; }
-
+/* Legend styling */
 .legend-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.8rem;
-    color: #cccccc;
+    font-size: 0.85rem;
+    color: #e2e2e2;
+    font-weight: 500;
 }
 
 .dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     display: inline-block;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-.dot.function { background-color: #61dafb; }
-.dot.variable { background-color: #c678dd; }
-.dot.expression { background-color: #98c379; }
-
-/* Node colors for different types */
-.node.function circle { fill: #61dafb; }
-.node.variable circle { fill: #c678dd; }
-.node.expression circle { fill: #98c379; }
+/* Node colors following Atlas design principles */
+.node.class circle { fill: rgba(97, 218, 251, 0.7); stroke: #61dafb; }
+.node.method circle { fill: rgba(152, 195, 121, 0.7); stroke: #98c379; }
+.node.field circle { fill: rgba(229, 192, 123, 0.7); stroke: #e5c07b; }
+.node.variable circle { fill: rgba(198, 120, 221, 0.7); stroke: #c678dd; }
 
 /* Zoom controls */
 .zoom-controls {

@@ -2,10 +2,11 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/java"
 	"github.com/shivasurya/code-pathfinder/playground/pkg/models"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
 )
 
 // ParseJavaSource parses Java source code into an AST using tree-sitter
@@ -68,6 +69,13 @@ func buildASTFromTreeSitter(node *sitter.Node, sourceBytes []byte) *models.ASTNo
 		}
 		astNode.Modifier = getModifiers(node, sourceBytes)
 
+	case "constructor_declaration":
+		astNode.Type = "ConstructorDeclaration"
+		if nameNode := node.ChildByFieldName("name"); nameNode != nil {
+			astNode.Name = getNodeText(nameNode, sourceBytes)
+		}
+		astNode.Arguments = getMethodParameters(node, sourceBytes)
+		astNode.Modifier = getModifiers(node, sourceBytes)
 	case "method_declaration":
 		astNode.Type = "MethodDeclaration"
 		if nameNode := node.ChildByFieldName("name"); nameNode != nil {
@@ -90,7 +98,7 @@ func buildASTFromTreeSitter(node *sitter.Node, sourceBytes []byte) *models.ASTNo
 		astNode.Modifier = getModifiers(node, sourceBytes)
 		astNode.Value = getInitializer(node, sourceBytes)
 
-	case "variable_declaration":
+	case "local_variable_declaration":
 		astNode.Type = "VariableDeclaration"
 		if nameNode := node.ChildByFieldName("name"); nameNode != nil {
 			astNode.Name = getNodeText(nameNode, sourceBytes)
@@ -98,6 +106,23 @@ func buildASTFromTreeSitter(node *sitter.Node, sourceBytes []byte) *models.ASTNo
 		if typeNode := node.ChildByFieldName("type"); typeNode != nil {
 			astNode.DataType = getNodeText(typeNode, sourceBytes)
 		}
+		astNode.Value = getInitializer(node, sourceBytes)
+
+	case "method_invocation":
+		astNode.Type = "MethodInvocation"
+		if nameNode := node.ChildByFieldName("name"); nameNode != nil {
+			var args []string
+			if paramNode := node.ChildByFieldName("arguments"); paramNode != nil {
+				args = getMethodParameters(paramNode, sourceBytes)
+			}
+			// print full method invocation with arguments
+			astNode.Name = fmt.Sprintf("%s(%s)", getNodeText(nameNode, sourceBytes), strings.Join(args, ", "))
+		}
+		if typeNode := node.ChildByFieldName("type"); typeNode != nil {
+			astNode.ReturnType = getNodeText(typeNode, sourceBytes)
+		}
+		astNode.Arguments = getMethodParameters(node, sourceBytes)
+		astNode.Modifier = getModifiers(node, sourceBytes)
 		astNode.Value = getInitializer(node, sourceBytes)
 	}
 
