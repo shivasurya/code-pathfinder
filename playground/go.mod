@@ -1,6 +1,6 @@
 module github.com/shivasurya/code-pathfinder/playground
 
-go 1.23
+go 1.24.1
 
 replace github.com/shivasurya/code-pathfinder/sourcecode-parser => ../sourcecode-parser
 
