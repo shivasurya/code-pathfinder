@@ -114,14 +114,6 @@ const VisualizationService = {
                 }
             }
         });
-
-        network.on('stabilizationProgress', (params) => {
-            console.log('Layout stabilization:', Math.round(params.iterations / params.total * 100), '%');
-        });
-
-        network.on('stabilizationIterationsDone', () => {
-            console.log('Layout stabilization finished');
-        });
     }
 };
 
@@ -539,7 +531,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 let currentValidParentId = lastValidParentId;
                 
                 if (validTypes.includes(node.type)) {
-                    console.log(node.type);
                     let category;
                     let mass = 1; // Base mass for node physics
 

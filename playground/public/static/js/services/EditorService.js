@@ -37,6 +37,9 @@ export class EditorService {
         userRepository.deleteById(id);
     }
 }`;
+        this.defaultQuery = `FROM method_declaration AS md
+WHERE md.getVisibility() == "public"
+SELECT md, "Listing all public methods"`;
     }
 
     async initializeEditors() {
@@ -58,14 +61,17 @@ export class EditorService {
         let queryEditorElement = document.getElementById('queryEditor');
         if (queryEditorElement) {
             this.queryEditor = CodeMirror(queryEditorElement, {
-                mode: 'text/x-java',
+                mode: 'text/x-sql',
                 theme: 'monokai',
                 lineNumbers: true,
                 autoCloseBrackets: true,
                 matchBrackets: true,
                 indentUnit: 4,
                 tabSize: 4,
-                lineWrapping: true
+                lineWrapping: true,
+                scrollbarStyle: 'native',
+                viewportMargin: Infinity,
+                value: this.defaultQuery
             });
         }
 
@@ -102,5 +108,29 @@ export class EditorService {
             console.error('Error parsing code:', error);
             throw error;
         }
+    }
+
+    highlightCodeLines(results) {
+        if (!this.editor) return;
+        
+        // Clear any existing highlights
+        this.editor.getAllMarks().forEach(mark => mark.clear());
+        
+        results.forEach(result => {
+            // Add a gutter marker
+            const marker = document.createElement('div');
+            marker.className = 'CodeMirror-search-marker';
+            this.editor.setGutterMarker(result.line - 1, 'CodeMirror-search-markers', marker);
+            
+            // Highlight the line
+            this.editor.addLineClass(result.line - 1, 'background', 'CodeMirror-search-match');
+            
+            // Mark the text for better visibility
+            this.editor.markText(
+                {line: result.line - 1, ch: 0},
+                {line: result.line - 1, ch: this.editor.getLine(result.line - 1).length},
+                {className: 'CodeMirror-search-text'}
+            );
+        });
     }
 }

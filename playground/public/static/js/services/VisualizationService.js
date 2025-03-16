@@ -149,14 +149,6 @@ export class VisualizationService {
                 }
             }
         });
-
-        this.network.on('stabilizationProgress', (params) => {
-            console.log('Layout stabilization:', Math.round(params.iterations / params.total * 100), '%');
-        });
-
-        this.network.on('stabilizationIterationsDone', () => {
-            console.log('Layout stabilization finished');
-        });
     }
 
     updateVisualization(newNodes = [], newEdges = []) {
@@ -218,10 +210,10 @@ export class VisualizationService {
         return colors.default;
     }
 
-    highlightNodes(matches) {
-        if (!this.network || !matches || !matches.length) return;
+    highlightNodes(results) {
+        if (!this.network || !results || !results.length) return;
 
-        const matchIds = new Set(matches.map(m => m.id));
+        const matchIds = new Set(results.map(r => r.line));
         const allNodes = this.network.body.data.nodes.get();
         const allEdges = this.network.body.data.edges.get();
 

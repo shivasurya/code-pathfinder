@@ -4,10 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/playground/pkg/models"
 	"github.com/shivasurya/code-pathfinder/playground/pkg/utils"
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
 
 const (
@@ -57,7 +60,9 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SendJSONResponse(w, models.AnalyzeResponse{Results: results})
+	utils.SendJSONResponse(w, models.AnalyzeResponse{
+		Results: results,
+	})
 }
 
 // executeQueryWithTimeout executes the query with a timeout
@@ -79,19 +84,42 @@ func executeQueryWithTimeout(tmpDir, queryStr string) ([]models.QueryResult, err
 
 // executeQuery performs the actual query execution
 func executeQuery(tmpDir, queryStr string, resultsChan resultChannel, errorChan chan error) {
-	// TODO: This is a placeholder implementation
-	// In a real implementation, this would use the code-pathfinder library
-	// to execute the query and analyze the code
+	// Initialize code graph with the temporary directory
+	codeGraph := graph.Initialize(tmpDir)
 
-	// For now, we'll look for WebView security issues in the source code
+	// Parse the query
+	parsedQuery, err := parser.ParseQuery(queryStr)
+	if err != nil {
+		errorChan <- err
+		return
+	}
+
+	// Extract WHERE clause
+	parts := strings.SplitN(queryStr, "WHERE", 2)
+	if len(parts) > 1 {
+		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
+	}
+
+	// Execute query on the graph
+	entities, _ := graph.QueryEntities(codeGraph, parsedQuery)
+
+	// Convert results to QueryResult format
 	var results []models.QueryResult
+	for _, entity := range entities {
+		for _, entityObject := range entity {
 
-	// Add a dummy result for testing
-	results = append(results, models.QueryResult{
-		File:    "MainActivity.java",
-		Line:    42,
-		Snippet: "setJavaScriptEnabled(true)",
-	})
+			// Create QueryResult
+			result := models.QueryResult{
+				File:    "Main.java",
+				Line:    int64(entityObject.LineNumber),
+				Snippet: entityObject.CodeSnippet,
+				Kind:    entityObject.Type, // Use the Type field from entityObject
+			}
+
+			// Add the result to the list
+			results = append(results, result)
+		}
+	}
 
 	resultsChan <- results
 }

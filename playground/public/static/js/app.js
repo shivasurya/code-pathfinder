@@ -108,8 +108,12 @@ class CodePathfinder {
             }
 
             const data = await response.json();
+            // sort the data.results based on result.line
+            data.results.sort((a, b) => a.line - b.line);
             document.getElementById('queryResults').innerHTML = this.astService.formatQueryResults(data);
-            this.visualizationService.highlightNodes(data.matches);
+            this.visualizationService.highlightNodes(data.results);
+            // highlight code line number from result.line
+            this.editorService.highlightCodeLines(data.results);
         } catch (error) {
             console.error('Error executing query:', error);
             document.getElementById('queryResults').innerHTML = `

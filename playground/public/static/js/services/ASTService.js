@@ -15,7 +15,6 @@ export class ASTService {
         let currentValidParentId = lastValidParentId;
         
         if (this.validTypes.includes(node.type)) {
-            console.log(node.type);
             let category;
             let mass = 1; // Base mass for node physics
 
@@ -82,14 +81,55 @@ export class ASTService {
     }
 
     formatQueryResults(data) {
-        if (!data || !data.matches) return '';
+        if (!data || !data.results) return '';
         
-        return data.matches.map(match => `
-            <div class="match-item">
-                <div class="match-type">${match.type}</div>
-                <div class="match-name">${match.name || ''}</div>
-                ${match.line ? `<div class="match-line">Line: ${match.line}</div>` : ''}
-            </div>
-        `).join('');
+        const tableHeader = `
+            <tr class="results-table-header">
+                <th>File</th>
+                <th>Line</th>
+                <th>Type</th>
+            </tr>`;
+            
+        const tableRows = data.results.map(result => {
+            const kind = result.kind || '';
+            const category = this.getCategory(kind);
+            
+            return `
+                <tr class="results-table-row">
+                    <td class="file-cell" title="${result.file}">${result.file.split('/').pop()}</td>
+                    <td class="line-cell">${result.line || '-'}</td>
+                    <td class="kind-cell" data-category="${category}">${kind || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        return `
+            <table class="results-table">
+                ${tableHeader}
+                ${tableRows}
+            </table>
+        `;
+    }
+    
+    getCategory(kind) {
+        // Java language-based types
+        const javaTypes = [
+            'method_declaration',
+            'class_declaration',
+            'interface_declaration',
+            'field_declaration',
+            'constructor_declaration',
+            'variable_declaration',
+            'parameter',
+            'annotation',
+            'enum_declaration',
+            'package_declaration',
+            'import_declaration'
+        ];
+        
+        // Check if the kind matches any of our known types
+        const kindLower = kind.toLowerCase();
+        if (javaTypes.some(type => kindLower.includes(type))) return 'java';
+        return 'other';
     }
 }
