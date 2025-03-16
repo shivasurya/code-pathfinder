@@ -209,32 +209,4 @@ export class VisualizationService {
         if (nodeType.includes('constructor')) return colors.constructordeclaration;
         return colors.default;
     }
-
-    highlightNodes(results) {
-        if (!this.network || !results || !results.length) return;
-
-        const matchIds = new Set(results.map(r => r.line));
-        const allNodes = this.network.body.data.nodes.get();
-        const allEdges = this.network.body.data.edges.get();
-
-        allNodes.forEach(node => {
-            const isHighlighted = matchIds.has(node.id);
-            this.network.body.data.nodes.update({
-                id: node.id,
-                opacity: isHighlighted ? 1 : 0.2,
-                font: {
-                    ...node.font,
-                    color: isHighlighted ? '#ffffff' : 'rgba(255,255,255,0.3)'
-                }
-            });
-        });
-
-        allEdges.forEach(edge => {
-            const isHighlighted = matchIds.has(edge.from) && matchIds.has(edge.to);
-            this.network.body.data.edges.update({
-                id: edge.id,
-                opacity: isHighlighted ? 0.8 : 0.1
-            });
-        });
-    }
 }
