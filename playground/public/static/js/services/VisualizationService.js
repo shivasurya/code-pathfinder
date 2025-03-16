@@ -193,12 +193,12 @@ export class VisualizationService {
         const nodeType = type.toLowerCase();
         const colors = {
             classdeclaration: { background: '#4CAF50', border: '#66BB6A' },
-            methoddeclaration: { background: '#2196F3', border: '#42A5F5' },
-            fielddeclaration: { background: '#E9C07B', border: '#e5c07b' },
+            methoddeclaration: { background: '#2196F3', border: '#2196F3' },
+            fielddeclaration: { background: '#FF9800', border: '#FF9800' },
             compilationunit: { background: '#ec8c4c', border: '#c678dd' },
-            constructordeclaration: { background: '#2196F3', border: '#42A5F5' },
+            constructordeclaration: { background: '#2196F3', border: '#2196F3' },
             methodinvocation: { background: '#9C27B0', border: '#AB47BC' },
-            default: { background: '#1e1e1e', border: '#4d4d4d' }
+            default: { background: '#FF5722', border: '#FF5722' }
         };
 
         if (nodeType.includes('class')) return colors.classdeclaration;
