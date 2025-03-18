@@ -47,6 +47,7 @@ export default defineConfig({
     customCss: ["./src/styles/font.css", "./src/styles/layout.css"],
     components: {
       Footer: './src/components/Footer.astro',
+      Header: './src/components/Header.astro',
     },
   }), sitemap()]
 });
