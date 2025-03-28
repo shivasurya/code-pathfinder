@@ -13,7 +13,7 @@ type ClosureTableRow struct {
 	Depth      int64
 }
 
-// Convert Tree into Closure Table entries
+// Convert Tree into Closure Table entries.
 func BuildClosureTable(node *model.TreeNode, ancestors []int64, depth int64, closure []ClosureTableRow) []ClosureTableRow {
 	if node == nil {
 		return closure

@@ -96,6 +96,7 @@ func extractVisibilityModifier(accessModifiers []string) string {
 	}
 	return ""
 }
+
 func hasModifier(modifiers []string, targetModifier string) bool {
 	for _, modifier := range modifiers {
 		if modifier == targetModifier {

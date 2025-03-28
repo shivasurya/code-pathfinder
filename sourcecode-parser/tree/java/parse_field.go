@@ -33,6 +33,7 @@ func extractFieldVisibilityModifier(accessModifiers []string) string {
 	}
 	return ""
 }
+
 func hasFieldModifier(modifiers []string, targetModifier string) bool {
 	for _, modifier := range modifiers {
 		if modifier == targetModifier {
