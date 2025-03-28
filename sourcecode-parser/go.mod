@@ -6,7 +6,7 @@ require github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.1
-	github.com/expr-lang/expr v1.16.9
+	github.com/expr-lang/expr v1.17.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/posthog/posthog-go v1.2.24

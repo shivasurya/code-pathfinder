@@ -45,8 +45,9 @@ export default defineConfig({
       slug: 'changelog'
     },],
     customCss: ["./src/styles/font.css", "./src/styles/layout.css"],
-    editLink: {
-      baseUrl: "https://github.com/shivasurya/code-pathfinder/edit/main/docs/"
-    }
+    components: {
+      Footer: './src/components/Footer.astro',
+      Header: './src/components/Header.astro',
+    },
   }), sitemap()]
 });

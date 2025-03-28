@@ -2,7 +2,7 @@
  * @name Android WebView JavaScript settings
  * @description Enabling addJavascriptInterface exposes java methods to JavaScript.
  * @kind problem
- * @id java/Android/webview-javascript-enabled
+ * @id java/Android/webview-javascript-interface
  * @problem.severity warning
  * @security-severity 8.1
  * @precision medium

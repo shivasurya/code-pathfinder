@@ -1,0 +1,87 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  code: string;
+  lang: string;
+  title: string;
+  marks?: string[];
+}
+
+const { code, lang, title, marks } = Astro.props;
+---
+
+<div class="collapsible-code">
+  <button class="code-toggle" aria-expanded="false">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-icon">
+      <path d="M6 9l6 6 6-6"/>
+    </svg>
+    <span>View Code</span>
+  </button>
+  <div class="code-content" hidden>
+    <Code code={code} lang={lang} title={title} mark={marks} />
+  </div>
+</div>
+
+<style>
+  .collapsible-code {
+    margin: 1rem 0;
+  }
+
+  .code-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-gray-2);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .code-toggle:hover {
+    background: var(--sl-color-gray-5);
+    border-color: var(--sl-color-gray-4);
+  }
+
+  .toggle-icon {
+    transition: transform 0.2s ease;
+  }
+
+  .code-toggle[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
+  }
+
+  .code-content {
+    margin-top: 0.5rem;
+  }
+
+  .code-content[hidden] {
+    display: none;
+  }
+</style>
+
+<script>
+  function setupCollapsibleCode() {
+    const toggles = document.querySelectorAll('.code-toggle');
+    
+    toggles.forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+        const content = toggle.nextElementSibling;
+        
+        toggle.setAttribute('aria-expanded', !isExpanded);
+        content.hidden = isExpanded;
+      });
+    });
+  }
+
+  // Setup on initial load
+  setupCollapsibleCode();
+
+  // Setup on client-side navigation
+  document.addEventListener('astro:page-load', setupCollapsibleCode);
+</script>
