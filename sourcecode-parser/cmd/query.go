@@ -10,7 +10,10 @@ import (
 	"github.com/fatih/color"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	tree "github.com/shivasurya/code-pathfinder/sourcecode-parser/tree"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	"github.com/spf13/cobra"
 )
 
@@ -71,16 +74,17 @@ func init() {
 	queryCmd.Flags().String("query-file", "", "File containing query to execute")
 }
 
-func initializeProject(project string) *graph.CodeGraph {
-	codeGraph := graph.NewCodeGraph()
+func initializeProject(project string) ([]*model.TreeNode, *db.StorageNode) {
+	treeHolder := []*model.TreeNode{}
+	db := db.NewStorageNode(project)
 	if project != "" {
-		codeGraph = graph.Initialize(project)
+		treeHolder = tree.Initialize(project)
 	}
-	return codeGraph
+	return treeHolder, db
 }
 
 func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
-	codeGraph := initializeProject(project)
+	treeHolder, db := initializeProject(project)
 
 	if stdin {
 		// read from stdin
@@ -97,7 +101,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, codeGraph, output)
+			result, err := processQuery(input, treeHolder, db, output)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
 				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -108,7 +112,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		}
 	} else {
 		// read from command line
-		result, err := processQuery(query, codeGraph, output)
+		result, err := processQuery(query, treeHolder, db, output)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
 			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -117,7 +121,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, codeGraph *graph.CodeGraph, output string) (string, error) {
+func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode, output string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -127,7 +131,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := graph.QueryEntities(codeGraph, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(db, treeHolder, parsedQuery)
 	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results
@@ -137,9 +141,10 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 		for _, entity := range entities {
 			for _, entityObject := range entity {
 				result := make(map[string]interface{})
-				result["file"] = entityObject.File
-				result["line"] = entityObject.LineNumber
-				result["code"] = entityObject.CodeSnippet
+				fmt.Println(entityObject)
+				// result["file"] = entityObject.File
+				// result["line"] = entityObject.LineNumber
+				// result["code"] = entityObject.CodeSnippet
 
 				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
 			}
@@ -152,26 +157,26 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 	}
 	result := ""
 	verticalLine := "|"
-	yellowCode := color.New(color.FgYellow).SprintFunc()
+	// := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
 	for i, entity := range entities {
 		for _, entityObject := range entity {
-			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject.File), greenCode(entityObject.LineNumber))
+			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject), greenCode(entityObject))
 			// add formatted output to result
 			output := "\tResult: "
 			for _, outputObject := range formattedOutput[i] {
-				output += graph.FormatType(outputObject)
+				output += utilities.FormatType(outputObject)
 				output += " "
 				output += verticalLine + " "
 			}
 			header += output + "\n"
 			result += header
 			result += "\n"
-			codeSnippetArray := strings.Split(entityObject.CodeSnippet, "\n")
-			for i := 0; i < len(codeSnippetArray); i++ {
-				lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
-				result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
-			}
+			// codeSnippetArray := strings.Split(entityObject, "\n")
+			// for i := 0; i < len(codeSnippetArray); i++ {
+			// 	lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
+			// 	result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+			// }
 			result += "\n"
 		}
 	}
