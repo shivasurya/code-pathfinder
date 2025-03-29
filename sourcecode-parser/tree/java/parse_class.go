@@ -47,6 +47,9 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}
 
+	// append implemented interface to supertypes
+	classDeclaration.SuperTypes = append(classDeclaration.SuperTypes, implementedInterface...)
+
 	return &classDeclaration
 }
 
