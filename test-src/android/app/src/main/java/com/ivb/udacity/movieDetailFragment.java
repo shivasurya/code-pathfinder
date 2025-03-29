@@ -173,6 +173,10 @@ public class movieDetailFragment extends Fragment {
             @Override
             public void success(movieYoutubeModal movieYoutubeModal, Response response) {
                 youtubeViewHolder.setPadding(5, 10, 5, 0);
+                DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+                dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false);
+                dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", true);
+                dbf.newDocumentBuilder();
                 com.ivb.udacity.modal.trailer.Results[] trailer = movieYoutubeModal.getResults();
                 if (trailer.length > 0) {
                     shareYoutubeID = trailer[0].getKey();
@@ -211,6 +215,14 @@ public class movieDetailFragment extends Fragment {
                     errmsg.setLayoutParams(params);
                     errmsg.setText("That's Bad Luck,No Trailers Found!Check later");
                     youtubeViewHolder.addView(errmsg);
+
+                    DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+                    dbf.setFeature("http://xml.org/sax/features/external-general-entities", true);
+                    dbf.newDocumentBuilder();
+
+                    DocumentBuilderFactory dbf2 = DocumentBuilderFactory.newInstance();
+                    dbf2.setFeature("http://xml.org/sax/features/external-parameter-entities", true);
+                    dbf2.newDocumentBuilder();
                 }
             }
 
