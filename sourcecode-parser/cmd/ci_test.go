@@ -122,7 +122,7 @@ func TestLoadRules(t *testing.T) {
 			name:           "Local rules directory",
 			rulesDirectory: "../../pathfinder-rules",
 			isHosted:       false,
-			expectedRules:  12,
+			expectedRules:  13,
 			expectError:    false,
 		},
 		{
