@@ -9,7 +9,78 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
+
+func TestAppendUnique(t *testing.T) {
+	// Import the model package for Node type
+
+	// Create a mock implementation of model.Node for testing
+	node1 := &model.Node{NodeID: 1}
+	node2 := &model.Node{NodeID: 2}
+	node3 := &model.Node{NodeID: 3}
+
+	tests := []struct {
+		name     string
+		slice    []*model.Node
+		node     *model.Node
+		expected int // expected length after operation
+	}{
+		{
+			name:     "Add to empty slice",
+			slice:    []*model.Node{},
+			node:     node1,
+			expected: 1,
+		},
+		{
+			name:     "Add new node to non-empty slice",
+			slice:    []*model.Node{node1},
+			node:     node2,
+			expected: 2,
+		},
+		{
+			name:     "Add duplicate node",
+			slice:    []*model.Node{node1, node2},
+			node:     node1, // duplicate
+			expected: 2,     // length should not change
+		},
+		{
+			name:     "Add to slice with multiple nodes",
+			slice:    []*model.Node{node1, node2, node3},
+			node:     &model.Node{NodeID: 4},
+			expected: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := AppendUnique(tt.slice, tt.node)
+
+			// Check length
+			if len(result) != tt.expected {
+				t.Errorf("AppendUnique() returned slice with incorrect length, got %d, want %d",
+					len(result), tt.expected)
+			}
+
+			// Check if node was added when it should be
+			if tt.expected > len(tt.slice) {
+				if result[len(result)-1] != tt.node {
+					t.Errorf("AppendUnique() did not append the node correctly")
+				}
+			}
+
+			// Check for duplicates
+			nodeMap := make(map[*model.Node]bool)
+			for _, n := range result {
+				if nodeMap[n] {
+					t.Errorf("AppendUnique() resulted in duplicate nodes")
+				}
+				nodeMap[n] = true
+			}
+		})
+	}
+}
 
 func TestGenerateMethodID(t *testing.T) {
 	tests := []struct {
