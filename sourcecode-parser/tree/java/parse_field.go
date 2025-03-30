@@ -7,21 +7,6 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func parseFieldModifers(modifiers string) []string {
-	// modifier string can be like "@Override\n public strictfp"
-	// trim modifier and split by new line and then by space
-	modifiers = strings.TrimSpace(modifiers)
-	modifiers = strings.ReplaceAll(modifiers, "\n", " ")
-
-	modifiersArray := strings.Split(modifiers, " ")
-
-	for i := 0; i < len(modifiersArray); i++ {
-		modifiersArray[i] = strings.TrimSpace(modifiersArray[i])
-	}
-
-	return modifiersArray
-}
-
 func extractFieldVisibilityModifier(accessModifiers []string) string {
 	visibilityTypes := []string{"public", "private", "protected"}
 	for _, currentModifier := range accessModifiers {
