@@ -104,7 +104,7 @@ func ParseForLoopStatement(node *sitter.Node, sourceCode []byte, file string) *m
 	if conditionNode != nil {
 		forNode.Condition = &model.Expr{Node: *conditionNode, NodeString: conditionNode.Content(sourceCode)}
 	}
-	incrementNode := node.ChildByFieldName("increment")
+	incrementNode := node.ChildByFieldName("update")
 	if incrementNode != nil {
 		forNode.Increment = &model.Expr{Node: *incrementNode, NodeString: incrementNode.Content(sourceCode)}
 	}
