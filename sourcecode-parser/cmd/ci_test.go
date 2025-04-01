@@ -129,7 +129,7 @@ func TestLoadRules(t *testing.T) {
 			name:           "Hosted rules",
 			rulesDirectory: "cpf/java",
 			isHosted:       true,
-			expectedRules:  6,
+			expectedRules:  7,
 			expectError:    false,
 		},
 		{
