@@ -182,6 +182,12 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		analytics.ReportEvent(entity.Entity)
 	}
 
+	// match select entity with conditions and predicate usage for single entity
+	// if two or three entities based condition, then use relationship query using join
+	// apply the single entity filter on dataset
+	// apply multi entity filter on dataset
+	// if no conditions, predicates, then use cartesian product
+
 	cartesianProduct := generateCartesianProduct(db, treeHolder, query.SelectList, query.Condition)
 
 	for _, nodeSet := range cartesianProduct {
