@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -25,11 +27,22 @@ type PredicateInvocation struct {
 	Predicate     Predicate
 }
 
+// ExpressionNode represents a node in the expression tree
+type ExpressionNode struct {
+	Type     string      `json:"type"`     // Type of node: "binary", "unary", "literal", "variable", "method_call", "predicate_call"
+	Operator string      `json:"operator"` // Operator for binary/unary operations
+	Value    string      `json:"value"`    // Value for literals, variable names, method names
+	Left     *ExpressionNode `json:"left,omitempty"`  // Left operand for binary operations
+	Right    *ExpressionNode `json:"right,omitempty"` // Right operand for binary operations
+	Args     []ExpressionNode `json:"args,omitempty"` // Arguments for method/predicate calls
+}
+
 type Query struct {
 	Classes             []ClassDeclaration
 	SelectList          []SelectList
 	Expression          string
 	Condition           []string
+	ExpressionTree      *ExpressionNode    // New field to store the expression tree
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
 	SelectOutput        []SelectOutput
@@ -45,6 +58,8 @@ type CustomQueryListener struct {
 	Classes             []ClassDeclaration
 	State               State
 	SelectOutput        []SelectOutput
+	ExpressionTree      *ExpressionNode    // New field to store the expression tree
+	currentExpression   []*ExpressionNode  // Stack to track current expression being built
 }
 
 func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) { //nolint:all
@@ -237,6 +252,37 @@ func (l *CustomQueryListener) EnterEqualityExpression(ctx *EqualityExpressionCon
 		conditionText := ctx.GetText()
 		if !l.State.isInPredicateDeclaration {
 			l.condition = append(l.condition, conditionText)
+			
+			// Create a binary expression node for equality operations
+			// We'll simplify this to avoid type issues
+			if strings.Contains(conditionText, "==") {
+				node := &ExpressionNode{
+					Type:     "binary",
+					Operator: "==",
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			} else if strings.Contains(conditionText, "!=") {
+				node := &ExpressionNode{
+					Type:     "binary",
+					Operator: "!=",
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			}
+		}
+	}
+}
+
+func (l *CustomQueryListener) ExitEqualityExpression(ctx *EqualityExpressionContext) {
+	if ctx.GetChildCount() > 1 && !l.State.isInPredicateDeclaration {
+		// Build the expression tree for equality operations
+		if len(l.currentExpression) >= 3 {
+			// Get the equality node
+			eqNode := l.currentExpression[len(l.currentExpression)-3]
+			// Set left and right children
+			eqNode.Left = l.currentExpression[len(l.currentExpression)-2]
+			eqNode.Right = l.currentExpression[len(l.currentExpression)-1]
+			// Remove the children from the stack
+			l.currentExpression = l.currentExpression[:len(l.currentExpression)-2]
 		}
 	}
 }
@@ -246,7 +292,87 @@ func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressio
 		conditionText := ctx.GetText()
 		if !l.State.isInPredicateDeclaration {
 			l.condition = append(l.condition, conditionText)
+			
+			// Create a binary expression node for relational operations
+			// We'll simplify this to avoid type issues
+			var operator string
+			if strings.Contains(conditionText, "<") && !strings.Contains(conditionText, "<=") {
+				operator = "<"
+			} else if strings.Contains(conditionText, ">") && !strings.Contains(conditionText, ">=") {
+				operator = ">"
+			} else if strings.Contains(conditionText, "<=") {
+				operator = "<="
+			} else if strings.Contains(conditionText, ">=") {
+				operator = ">="
+			} else if strings.Contains(conditionText, " in ") {
+				operator = "in"
+			}
+			
+			if operator != "" {
+				node := &ExpressionNode{
+					Type:     "binary",
+					Operator: operator,
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			}
 		}
+	}
+}
+
+func (l *CustomQueryListener) ExitRelationalExpression(ctx *RelationalExpressionContext) {
+	if ctx.GetChildCount() > 1 && !l.State.isInPredicateDeclaration {
+		// Build the expression tree for relational operations
+		if len(l.currentExpression) >= 3 {
+			// Get the relational node
+			relNode := l.currentExpression[len(l.currentExpression)-3]
+			// Set left and right children
+			relNode.Left = l.currentExpression[len(l.currentExpression)-2]
+			relNode.Right = l.currentExpression[len(l.currentExpression)-1]
+			// Remove the children from the stack
+			l.currentExpression = l.currentExpression[:len(l.currentExpression)-2]
+		}
+	}
+}
+
+func (l *CustomQueryListener) EnterPrimary(ctx *PrimaryContext) {
+	if !l.State.isInPredicateDeclaration {
+		// Handle different types of primary expressions
+		if ctx.Operand() != nil {
+			// Handle operands (values, variables, method chains)
+			operand := ctx.Operand()
+			if operand.Value() != nil {
+				// Handle literal values
+				node := &ExpressionNode{
+					Type:  "literal",
+					Value: operand.Value().GetText(),
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			} else if operand.Variable() != nil {
+				// Handle variables
+				node := &ExpressionNode{
+					Type:  "variable",
+					Value: operand.Variable().GetText(),
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			} else if operand.Method_chain() != nil {
+				// Handle method chains
+				methodChain := operand.Method_chain()
+				node := &ExpressionNode{
+					Type:  "method_call",
+					Value: methodChain.GetText(),
+				}
+				l.currentExpression = append(l.currentExpression, node)
+			}
+		} else if ctx.Predicate_invocation() != nil {
+			// Handle predicate invocations
+			predInvocation := ctx.Predicate_invocation()
+			node := &ExpressionNode{
+				Type:  "predicate_call",
+				Value: predInvocation.GetText(),
+			}
+			l.currentExpression = append(l.currentExpression, node)
+		}
+		// We'll skip the parenthesized expression check for now
 	}
 }
 
@@ -255,6 +381,47 @@ func (l *CustomQueryListener) EnterExpression(ctx *ExpressionContext) {
 		l.expression.WriteString(" ")
 	}
 	l.expression.WriteString(ctx.GetText())
+	
+	// Only build the expression tree for the WHERE clause, not for predicates
+	if !l.State.isInPredicateDeclaration && ctx.GetParent() != nil {
+		// Check if this is the root expression of the WHERE clause
+		parent := ctx.GetParent()
+		if _, ok := parent.(*QueryContext); ok {
+			// Initialize the expression tree
+			l.currentExpression = make([]*ExpressionNode, 0)
+		}
+	}
+}
+
+func (l *CustomQueryListener) ExitExpression(ctx *ExpressionContext) {
+	// Only build the expression tree for the WHERE clause, not for predicates
+	if !l.State.isInPredicateDeclaration && ctx.GetParent() != nil {
+		// Check if this is the root expression of the WHERE clause
+		parent := ctx.GetParent()
+		if _, ok := parent.(*QueryContext); ok {
+			// Set the root of the expression tree
+			if len(l.currentExpression) > 0 {
+				l.ExpressionTree = l.currentExpression[len(l.currentExpression)-1]
+				
+				// Log the expression tree for debugging
+				treeJSON, err := json.MarshalIndent(l.ExpressionTree, "", "  ")
+				if err == nil {
+					log.Printf("Expression Tree: %s", string(treeJSON))
+				}
+			}
+		}
+	}
+}
+
+func (l *CustomQueryListener) EnterOrExpression(ctx *OrExpressionContext) {
+	if ctx.GetChildCount() > 1 && !l.State.isInPredicateDeclaration {
+		// Create a binary expression node for OR operation
+		node := &ExpressionNode{
+			Type:     "binary",
+			Operator: "||",
+		}
+		l.currentExpression = append(l.currentExpression, node)
+	}
 }
 
 func (l *CustomQueryListener) ExitOrExpression(ctx *OrExpressionContext) {
@@ -270,6 +437,28 @@ func (l *CustomQueryListener) ExitOrExpression(ctx *OrExpressionContext) {
 		}
 		l.expression.Reset()
 		l.expression.WriteString(result.String())
+		
+		// Build the expression tree for OR operations
+		if !l.State.isInPredicateDeclaration && len(l.currentExpression) >= 3 {
+			// Get the OR node
+			orNode := l.currentExpression[len(l.currentExpression)-3]
+			// Set left and right children
+			orNode.Left = l.currentExpression[len(l.currentExpression)-2]
+			orNode.Right = l.currentExpression[len(l.currentExpression)-1]
+			// Remove the children from the stack
+			l.currentExpression = l.currentExpression[:len(l.currentExpression)-2]
+		}
+	}
+}
+
+func (l *CustomQueryListener) EnterAndExpression(ctx *AndExpressionContext) {
+	if ctx.GetChildCount() > 1 && !l.State.isInPredicateDeclaration {
+		// Create a binary expression node for AND operation
+		node := &ExpressionNode{
+			Type:     "binary",
+			Operator: "&&",
+		}
+		l.currentExpression = append(l.currentExpression, node)
 	}
 }
 
@@ -286,6 +475,17 @@ func (l *CustomQueryListener) ExitAndExpression(ctx *AndExpressionContext) {
 		}
 		l.expression.Reset()
 		l.expression.WriteString(result.String())
+		
+		// Build the expression tree for AND operations
+		if !l.State.isInPredicateDeclaration && len(l.currentExpression) >= 3 {
+			// Get the AND node
+			andNode := l.currentExpression[len(l.currentExpression)-3]
+			// Set left and right children
+			andNode.Left = l.currentExpression[len(l.currentExpression)-2]
+			andNode.Right = l.currentExpression[len(l.currentExpression)-1]
+			// Remove the children from the stack
+			l.currentExpression = l.currentExpression[:len(l.currentExpression)-2]
+		}
 	}
 }
 
@@ -377,11 +577,20 @@ func ParseQuery(inputQuery string) (Query, error) {
 
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
+	// Log the expression tree for debugging
+	if listener.ExpressionTree != nil {
+		treeJSON, err := json.MarshalIndent(listener.ExpressionTree, "", "  ")
+		if err == nil {
+			log.Printf("Expression Tree: %s", string(treeJSON))
+		}
+	}
+
 	return Query{
 		Classes:             listener.Classes,
 		SelectList:          listener.selectList,
 		Expression:          listener.expression.String(),
 		Condition:           listener.condition,
+		ExpressionTree:      listener.ExpressionTree,
 		Predicate:           listener.Predicate,
 		PredicateInvocation: listener.PredicateInvocation,
 		SelectOutput:        listener.SelectOutput,

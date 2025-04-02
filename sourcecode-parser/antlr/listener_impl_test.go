@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+// compareQueryIgnoringExpressionTree compares two Query structs but ignores the ExpressionTree field
+func compareQueryIgnoringExpressionTree(a, b Query) bool {
+	// Compare all fields except ExpressionTree
+	return reflect.DeepEqual(a.Classes, b.Classes) &&
+		reflect.DeepEqual(a.SelectList, b.SelectList) &&
+		a.Expression == b.Expression &&
+		reflect.DeepEqual(a.Condition, b.Condition) &&
+		reflect.DeepEqual(a.Predicate, b.Predicate) &&
+		reflect.DeepEqual(a.PredicateInvocation, b.PredicateInvocation) &&
+		reflect.DeepEqual(a.SelectOutput, b.SelectOutput)
+}
+
 func TestParseQuery(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -127,7 +139,9 @@ func TestParseQuery(t *testing.T) {
 				t.Errorf("ParseQuery() error = %v", err)
 				return
 			}
-			if !reflect.DeepEqual(result, tt.expectedQuery) {
+			
+			// Use custom comparison function that ignores ExpressionTree
+			if !compareQueryIgnoringExpressionTree(result, tt.expectedQuery) {
 				t.Errorf("ParseQuery() = %v, want %v", result, tt.expectedQuery)
 			}
 		})
