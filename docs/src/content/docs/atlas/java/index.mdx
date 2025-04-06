@@ -46,13 +46,13 @@ double value = Math.random();
 // ✅ Safe: Using SecureRandom
 SecureRandom secureRandom = new SecureRandom();
 double value = secureRandom.nextDouble();`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/InsecureRandom.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -76,13 +76,13 @@ Cipher cipher = Cipher.getInstance("Blowfish");
 
 // ✅ Safe: Using AES
 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/BlowfishUsage.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -108,13 +108,13 @@ HttpClient client = new DefaultHttpClient();
 HttpClient client = HttpClientBuilder.create()
     .setSSLContext(SSLContexts.createDefault())
     .build();`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/DefaultHttpClient.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -138,13 +138,13 @@ Cipher cipher = Cipher.getInstance("RC4");
 
 // ✅ Safe: Using AES
 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/RC4Usage.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -168,13 +168,13 @@ MessageDigest md = MessageDigest.getInstance("SHA-1");
 
 // ✅ Safe: Using SHA-256
 MessageDigest md = MessageDigest.getInstance("SHA-256");`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/SHA1Usage.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -199,13 +199,13 @@ Socket socket = new Socket("example.com", 80);
 // ✅ Safe: Using SSL socket
 SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
 SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/UnencryptedSocket.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -234,13 +234,13 @@ factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
 factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
 factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
 DocumentBuilder builder = factory.newDocumentBuilder();`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/XXE.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -267,13 +267,13 @@ Cipher bf = Cipher.getInstance("Blowfish");
 // ✅ Safe: Using strong algorithms
 Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
 MessageDigest sha256 = MessageDigest.getInstance("SHA-256");`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/RC4Usage.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -299,13 +299,13 @@ HttpClient client = new DefaultHttpClient();
 HttpClient client = HttpClientBuilder.create()
     .setSSLContext(SSLContexts.createDefault())
     .build();`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/DefaultHttpClient.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -330,13 +330,13 @@ Socket socket = new Socket("example.com", 80);
 // ✅ Safe: SSL socket
 SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
 SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/UnencryptedSocket.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />
@@ -368,13 +368,13 @@ dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
 dbf.setXIncludeAware(false);
 dbf.setExpandEntityReferences(false);
 DocumentBuilder builder = dbf.newDocumentBuilder();`,
-            lang: "java",
+            lang: "text/x-java",
             marks: ['Vulnerable', 'Vulnerable', 'Safe']
           },
           {
             label: "Rule",
             code: ruleContent.get('/pathfinder-rules/java/XXE.cql'),
-            lang: "cql"
+            lang: "text/x-sql"
           }
         ]}
       />

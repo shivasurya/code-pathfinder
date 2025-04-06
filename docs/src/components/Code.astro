@@ -1,94 +1,142 @@
 ---
-interface Props {
+export type Props = {
   code: string;
   lang: string;
   mark?: number[];
-  highlights?: { line: number; message: string }[];
 }
 
-const { code, lang, mark = [], highlights = [] } = Astro.props;
-
-// Convert highlights to line numbers array
-const highlightedLines = highlights.map(h => h.line);
-
-// Combine mark and highlights for the final set of highlighted lines
-const allHighlights = [...new Set([...mark, ...highlightedLines])];
+const { code, lang, mark = [] } = Astro.props;
 ---
 
 <div class="code-block">
-  <pre
-    class:list={[
-      'astro-code',
-      `language-${lang}`,
-      { 'has-highlights': highlights.length > 0 }
-    ]}
-    style="background-color: var(--astro-code-color-background)"
-    tabindex="0"
-    data-highlights={JSON.stringify(highlights)}
-  ><code>{code}</code></pre>
+  <div class="editor" data-code={code} data-lang={lang}></div>
 </div>
 
-<style>
-  .code-block {
-    position: relative;
-    margin: 1rem 0;
-  }
-
-  pre {
-    margin: 0;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    overflow-x: auto;
-  }
-
-  .has-highlights .line-highlight {
-    background-color: var(--sl-color-accent-low);
-    position: absolute;
-    left: 0;
-    right: 0;
-    pointer-events: none;
-  }
-
-  .line-highlight::before {
-    content: attr(data-message);
-    position: absolute;
-    right: 0.5rem;
-    font-size: 0.8rem;
-    color: var(--sl-color-text-accent);
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-
-  .line-highlight:hover::before {
-    opacity: 1;
-  }
-</style>
-
 <script>
-  function highlightCode() {
-    const codeBlocks = document.querySelectorAll('pre.has-highlights');
-    
-    codeBlocks.forEach(block => {
-      const highlights = JSON.parse(block.getAttribute('data-highlights') || '[]');
-      const code = block.querySelector('code');
-      if (!code) return;
+  import { EditorView, minimalSetup } from 'codemirror';
+  import { java } from '@codemirror/lang-java';
+  import { sql } from '@codemirror/lang-sql';
+  import { lineNumbers } from '@codemirror/view';
+  import { monokai } from '@uiw/codemirror-theme-monokai';
+  import { indentUnit } from '@codemirror/language';
+  import { bracketMatching } from '@codemirror/language';
+  import { closeBrackets } from '@codemirror/autocomplete';
 
-      // Split code into lines and wrap each in a span
-      const lines = code.textContent?.split('\n') || [];
-      code.innerHTML = lines
-        .map((line, i) => {
-          const highlight = highlights.find(h => h.line === i + 1);
-          const className = highlight ? 'line-highlight' : '';
-          const message = highlight?.message || '';
-          return `<span class="line ${className}" ${message ? `data-message="${message}"` : ''}>${line}</span>`;
-        })
-        .join('\n');
+  // Store editor instances
+  const editorInstances = new WeakMap();
+
+  function setupCodeMirror() {
+    const editors = document.querySelectorAll('.editor');
+    
+    editors.forEach(editor => {
+      // Clean up existing instance if it exists
+      const existingView = editorInstances.get(editor);
+      if (existingView) {
+        existingView.destroy();
+        editorInstances.delete(editor);
+      }
+
+      // Clear the editor's content
+      editor.innerHTML = '';
+
+      const code = editor.getAttribute('data-code') || '';
+      const lang = editor.getAttribute('data-lang');
+
+      // Get language support
+      const langSupport = lang === 'text/x-java' ? java() : 
+                         lang === 'text/x-sql' ? sql() : [];
+
+      // Create the editor view
+      const view = new EditorView({
+        doc: code,
+        extensions: [
+          minimalSetup,
+          langSupport,
+          EditorView.editable.of(false),
+          lineNumbers(),
+          monokai,
+          indentUnit.of('    '),
+          bracketMatching(),
+          closeBrackets(),
+          EditorView.theme({
+            '&': { 
+              fontSize: '12px',
+              height: 'auto'
+            },
+            '.cm-content': { 
+              padding: '10px',
+              fontFamily: 'var(--font-mono)'
+            },
+            '.cm-gutters': {
+              backgroundColor: 'var(--sl-color-bg-code)',
+              border: 'none',
+              borderRight: '1px solid var(--sl-color-border)'
+            },
+            '.cm-lineNumbers': {
+              color: 'var(--sl-color-text-code)'
+            },
+            '.cm-line': {
+              padding: '0 2px'
+            },
+            '.cm-line.highlight': {
+              backgroundColor: 'var(--sl-color-accent-low)',
+              borderRadius: '2px'
+            }
+          }),
+        ],
+        parent: editor
+      });
+
+      // Store the instance
+      editorInstances.set(editor, view);
     });
   }
 
   // Run on page load
-  highlightCode();
+  setupCodeMirror();
 
   // Re-run when content updates (for client routing)
-  document.addEventListener('astro:page-load', highlightCode);
+  document.addEventListener('astro:page-load', setupCodeMirror);
+
+  // Clean up on page unload
+  document.addEventListener('astro:before-swap', () => {
+    document.querySelectorAll('.editor').forEach(editor => {
+      const view = editorInstances.get(editor);
+      if (view) {
+        view.destroy();
+        editorInstances.delete(editor);
+      }
+    });
+  });
+
+  // Export highlight function for CollapsibleCode
+  window.highlightCodeLines = function(editor, results) {
+    const view = editorInstances.get(editor);
+    if (!view) return;
+
+    // Clear existing highlights
+    const doc = view.state.doc;
+    const lineCount = doc.lines;
+    for (let i = 1; i <= lineCount; i++) {
+      const line = doc.line(i);
+      const { node } = view.domAtPos(line.from);
+      const lineElement = node.nodeType === Node.TEXT_NODE ? node.parentElement.closest('.cm-line') : node.closest('.cm-line');
+      if (lineElement) {
+        lineElement.classList.remove('highlight');
+        lineElement.removeAttribute('title');
+      }
+    }
+
+    // Add new highlights
+    results.forEach(result => {
+      const lineNum = parseInt(result.line);
+      const line = doc.line(lineNum);
+      const { node } = view.domAtPos(line.from);
+      const lineElement = node.nodeType === Node.TEXT_NODE ? node.parentElement.closest('.cm-line') : node.closest('.cm-line');
+      if (lineElement) {
+        lineElement.classList.add('highlight');
+        lineElement.setAttribute('title', result.snippet || 'Potential vulnerability detected');
+      }
+    });
+  };
 </script>
