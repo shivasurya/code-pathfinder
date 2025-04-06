@@ -20,9 +20,9 @@ func main() {
 	fs := http.FileServer(http.Dir("public/static"))
 	mux.Handle("/", middleware.LoggingMiddleware(fs))
 
-	// API endpoints with security and logging middleware
-	mux.Handle("/api/analyze", middleware.LoggingMiddleware(http.HandlerFunc(handlers.AnalyzeHandler)))
-	mux.Handle("/api/parse", middleware.LoggingMiddleware(http.HandlerFunc(handlers.ParseHandler)))
+	// API endpoints with security, logging, and CORS middleware
+	mux.Handle("/api/analyze", middleware.CorsMiddleware(middleware.LoggingMiddleware(http.HandlerFunc(handlers.AnalyzeHandler))))
+	mux.Handle("/api/parse", middleware.CorsMiddleware(middleware.LoggingMiddleware(http.HandlerFunc(handlers.ParseHandler))))
 
 	// Get port from environment variable or use default
 	port := os.Getenv("PORT")

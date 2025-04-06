@@ -1,0 +1,94 @@
+---
+interface Props {
+  code: string;
+  lang: string;
+  mark?: number[];
+  highlights?: { line: number; message: string }[];
+}
+
+const { code, lang, mark = [], highlights = [] } = Astro.props;
+
+// Convert highlights to line numbers array
+const highlightedLines = highlights.map(h => h.line);
+
+// Combine mark and highlights for the final set of highlighted lines
+const allHighlights = [...new Set([...mark, ...highlightedLines])];
+---
+
+<div class="code-block">
+  <pre
+    class:list={[
+      'astro-code',
+      `language-${lang}`,
+      { 'has-highlights': highlights.length > 0 }
+    ]}
+    style="background-color: var(--astro-code-color-background)"
+    tabindex="0"
+    data-highlights={JSON.stringify(highlights)}
+  ><code>{code}</code></pre>
+</div>
+
+<style>
+  .code-block {
+    position: relative;
+    margin: 1rem 0;
+  }
+
+  pre {
+    margin: 0;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+
+  .has-highlights .line-highlight {
+    background-color: var(--sl-color-accent-low);
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+  }
+
+  .line-highlight::before {
+    content: attr(data-message);
+    position: absolute;
+    right: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--sl-color-text-accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .line-highlight:hover::before {
+    opacity: 1;
+  }
+</style>
+
+<script>
+  function highlightCode() {
+    const codeBlocks = document.querySelectorAll('pre.has-highlights');
+    
+    codeBlocks.forEach(block => {
+      const highlights = JSON.parse(block.getAttribute('data-highlights') || '[]');
+      const code = block.querySelector('code');
+      if (!code) return;
+
+      // Split code into lines and wrap each in a span
+      const lines = code.textContent?.split('\n') || [];
+      code.innerHTML = lines
+        .map((line, i) => {
+          const highlight = highlights.find(h => h.line === i + 1);
+          const className = highlight ? 'line-highlight' : '';
+          const message = highlight?.message || '';
+          return `<span class="line ${className}" ${message ? `data-message="${message}"` : ''}>${line}</span>`;
+        })
+        .join('\n');
+    });
+  }
+
+  // Run on page load
+  highlightCode();
+
+  // Re-run when content updates (for client routing)
+  document.addEventListener('astro:page-load', highlightCode);
+</script>

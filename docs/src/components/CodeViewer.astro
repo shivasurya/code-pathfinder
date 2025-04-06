@@ -9,36 +9,14 @@ const { filePath } = Astro.props;
 export const ruleContent = new Map([
   [
     '/pathfinder-rules/java/InsecureRandom.cql',
-    `/**
- * @name InsecureRandom
- * @description Usage of Math.random() which is not cryptographically secure
- * @kind problem
- * @id java/insecure-random
- * @problem.severity high
- * @security-severity 8.9
- * @precision high
- * @tags security
- */
-
-FROM method_invocation AS mi
+    `FROM method_invocation AS mi
 WHERE mi.getName() == "Math.random"
 SELECT mi.getName(), "Usage of Math.random() detected. Use SecureRandom.nextBytes() instead
   which is cryptographically secure."`
   ],
   [
     '/pathfinder-rules/java/BlowfishUsage.cql',
-    `/**
- * @name BlowfishUsage
- * @description Use of Blowfish was detected. Blowfish uses a 64-bit block size
- * @kind problem
- * @id java/BlowfishUsage
- * @problem.severity warning
- * @security-severity 3.1
- * @precision medium
- * @tags security
- *       external/cwe/cwe-327
- */
-
+    `
 FROM method_invocation AS mi
 WHERE mi.getName() == "Cipher.getInstance"
 && "Blowfish" in mi.getArgumentName()
@@ -47,17 +25,7 @@ SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block
   ],
   [
     '/pathfinder-rules/java/DefaultHttpClient.cql',
-    `/**
- * @name DefaultHttpClient
- * @description Usage of DefaultHttpClient which lacks modern security features
- * @kind problem
- * @id java/default-http-client
- * @problem.severity warning
- * @security-severity 4.0
- * @precision high
- * @tags security
- */
-
+    `
 FROM class_instance_creation AS cic
 WHERE cic.getType().getName() == "DefaultHttpClient"
 SELECT cic, "Usage of DefaultHttpClient detected. Use HttpClientBuilder instead
@@ -65,17 +33,7 @@ SELECT cic, "Usage of DefaultHttpClient detected. Use HttpClientBuilder instead
   ],
   [
     '/pathfinder-rules/java/RC4Usage.cql',
-    `/**
- * @name RC4Usage
- * @description Use of RC4 encryption was detected
- * @kind problem
- * @id java/rc4-usage
- * @problem.severity warning
- * @security-severity 5.0
- * @precision high
- * @tags security
- */
-
+    `
 FROM method_invocation AS mi
 WHERE mi.getName() == "Cipher.getInstance"
 && "RC4" in mi.getArgumentName()
@@ -84,17 +42,7 @@ SELECT mi, "Use of RC4 encryption detected. RC4 is cryptographically broken
   ],
   [
     '/pathfinder-rules/java/SHA1Usage.cql',
-    `/**
- * @name SHA1Usage
- * @description Use of SHA-1 hash function was detected
- * @kind problem
- * @id java/sha1-usage
- * @problem.severity warning
- * @security-severity 4.0
- * @precision high
- * @tags security
- */
-
+    `
 FROM method_invocation AS mi
 WHERE mi.getName() == "MessageDigest.getInstance"
 && "SHA-1" in mi.getArgumentName()
@@ -103,17 +51,7 @@ SELECT mi, "Use of SHA-1 hash function detected. SHA-1 is cryptographically brok
   ],
   [
     '/pathfinder-rules/java/UnencryptedSocket.cql',
-    `/**
- * @name UnencryptedSocket
- * @description Use of unencrypted Socket instead of SSLSocket
- * @kind problem
- * @id java/unencrypted-socket
- * @problem.severity warning
- * @security-severity 6.0
- * @precision high
- * @tags security
- */
-
+    `
 FROM class_instance_creation AS cic
 WHERE cic.getType().getName() == "Socket"
 SELECT cic, "Use of unencrypted Socket detected. Consider using SSLSocket
@@ -121,17 +59,7 @@ SELECT cic, "Use of unencrypted Socket detected. Consider using SSLSocket
   ],
   [
     '/pathfinder-rules/java/XXE.cql',
-    `/**
- * @name XXE
- * @description XML parsing vulnerable to XXE attacks
- * @kind problem
- * @id java/xxe
- * @problem.severity high
- * @security-severity 8.0
- * @precision high
- * @tags security
- */
-
+    `
 FROM method_invocation AS mi
 WHERE mi.getName() == "DocumentBuilderFactory.newInstance"
 SELECT mi, "XML parsing may be vulnerable to XXE attacks. Set feature 'http://apache.org/xml/features/disallow-doctype-decl'
