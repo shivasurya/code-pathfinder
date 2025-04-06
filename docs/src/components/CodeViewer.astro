@@ -11,59 +11,54 @@ export const ruleContent = new Map([
     '/pathfinder-rules/java/InsecureRandom.cql',
     `FROM method_invocation AS mi
 WHERE mi.getName() == "Math.random"
-SELECT mi.getName(), "Usage of Math.random() detected. Use SecureRandom.nextBytes() instead
-  which is cryptographically secure."`
+SELECT mi.getName(), "Math.random() is not cryptographically secure. Use SecureRandom instead."`
   ],
   [
     '/pathfinder-rules/java/BlowfishUsage.cql',
-    `
-FROM method_invocation AS mi
+    `FROM method_invocation AS mi
 WHERE mi.getName() == "Cipher.getInstance"
 && "Blowfish" in mi.getArgumentName()
 SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block size
-  that makes it vulnerable to birthday attacks."`
+    that  makes it vulnerable to birthday attacks, and is therefore considered
+      non-compliant."`
   ],
   [
     '/pathfinder-rules/java/DefaultHttpClient.cql',
-    `
-FROM class_instance_creation AS cic
-WHERE cic.getType().getName() == "DefaultHttpClient"
-SELECT cic, "Usage of DefaultHttpClient detected. Use HttpClientBuilder instead
-  which provides better security features and certificate validation."`
+    `FROM ClassInstanceExpr AS cie
+ WHERE cie.getClassInstanceExpr().GetClassName() == "DefaultHttpClient"
+ SELECT cie.getName(), "The DefaultHttpClient is deprecated. Use HttpClientBuilder instead."`
   ],
   [
     '/pathfinder-rules/java/RC4Usage.cql',
-    `
-FROM method_invocation AS mi
+    `FROM method_invocation AS mi
 WHERE mi.getName() == "Cipher.getInstance"
-&& "RC4" in mi.getArgumentName()
-SELECT mi, "Use of RC4 encryption detected. RC4 is cryptographically broken
-  and should not be used in new applications."`
+&& ("RC4" in mi.getArgumentName() || "RC2" in mi.getArgumentName())
+SELECT mi.getName(), "RC4/RC2 is insecure. Use an alternative cipher suite."`
   ],
   [
     '/pathfinder-rules/java/SHA1Usage.cql',
-    `
-FROM method_invocation AS mi
+    `FROM method_invocation AS mi
 WHERE mi.getName() == "MessageDigest.getInstance"
-&& "SHA-1" in mi.getArgumentName()
-SELECT mi, "Use of SHA-1 hash function detected. SHA-1 is cryptographically broken
-  and should not be used for security-critical operations."`
+&& ("SHA1" in mi.getArgumentName() || "SHA-1" in mi.getArgumentName())
+SELECT mi.getName(), "SHA1 is not collision resistant and is therefore not suitable as a cryptographic signature"`
   ],
   [
     '/pathfinder-rules/java/UnencryptedSocket.cql',
-    `
-FROM class_instance_creation AS cic
-WHERE cic.getType().getName() == "Socket"
-SELECT cic, "Use of unencrypted Socket detected. Consider using SSLSocket
-  for encrypted communication."`
+    `FROM ClassInstanceExpr AS cie
+WHERE cie.getClassInstanceExpr().GetClassName() == "Socket" || cie.getClassInstanceExpr().GetClassName() == "ServerSocket"
+SELECT cie.getName(), "This socket is not encrypted. Use an SSLSocket created by SSLSocketFactory or SSLServerSocketFactory instead"`
   ],
   [
     '/pathfinder-rules/java/XXE.cql',
-    `
-FROM method_invocation AS mi
-WHERE mi.getName() == "DocumentBuilderFactory.newInstance"
-SELECT mi, "XML parsing may be vulnerable to XXE attacks. Set feature 'http://apache.org/xml/features/disallow-doctype-decl'
-  to true and disable external entity processing to prevent XXE attacks."`
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setFeature" &&
+    ("http://xml.org/sax/features/external-parameter-entities" in mi.getArgumentName() &&
+     "true" in mi.getArgumentName()) ||
+    ("http://xml.org/sax/features/external-general-entities" in mi.getArgumentName() && 
+     "true" in mi.getArgumentName()) ||
+    ("http://apache.org/xml/features/disallow-doctype-decl" in mi.getArgumentName() &&
+     "false" in mi.getArgumentName())
+SELECT mi.getName(), "XML External Entity (XXE) attack vulnerability"`
   ]
 ]);
 
