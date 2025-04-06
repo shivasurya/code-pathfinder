@@ -7,6 +7,39 @@ const { filePath } = Astro.props;
 
 // Hardcoded rule content mapping
 export const ruleContent = new Map([
+  // Android Rules
+  [
+    '/pathfinder-rules/android/WebViewJavaScriptEnabled.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "JavaScript enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewaddJavascriptInterface.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "addJavascriptInterface"
+SELECT mi.getName(), "JavaScript interface exposed"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowContentAccess.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "Content access enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowFileAccess.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "File access enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowFileAccessFromFileURLs.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "File access enabled"`
+  ],
+
+  // Java Rules
   [
     '/pathfinder-rules/java/InsecureRandom.cql',
     `FROM method_invocation AS mi
@@ -18,15 +51,13 @@ SELECT mi.getName(), "Math.random() is not cryptographically secure. Use SecureR
     `FROM method_invocation AS mi
 WHERE mi.getName() == "Cipher.getInstance"
 && "Blowfish" in mi.getArgumentName()
-SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block size
-    that  makes it vulnerable to birthday attacks, and is therefore considered
-      non-compliant."`
+SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block size makes it vulnerable to birthday attacks."`
   ],
   [
     '/pathfinder-rules/java/DefaultHttpClient.cql',
     `FROM ClassInstanceExpr AS cie
- WHERE cie.getClassInstanceExpr().GetClassName() == "DefaultHttpClient"
- SELECT cie.getName(), "The DefaultHttpClient is deprecated. Use HttpClientBuilder instead."`
+WHERE cie.getClassInstanceExpr().GetClassName() == "DefaultHttpClient"
+SELECT cie.getName(), "The DefaultHttpClient is deprecated. Use HttpClientBuilder instead."`
   ],
   [
     '/pathfinder-rules/java/RC4Usage.cql',
