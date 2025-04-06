@@ -52,36 +52,16 @@ const { code, lang, mark = [] } = Astro.props;
         extensions: [
           minimalSetup,
           langSupport,
-          EditorView.editable.of(false),
+          EditorView.editable.of(true),
           lineNumbers(),
           monokai,
           indentUnit.of('    '),
           bracketMatching(),
           closeBrackets(),
-          EditorView.theme({
-            '&': { 
-              fontSize: '12px',
-              height: 'auto'
-            },
-            '.cm-content': { 
-              padding: '10px',
-              fontFamily: 'var(--font-mono)'
-            },
-            '.cm-gutters': {
-              backgroundColor: 'var(--sl-color-bg-code)',
-              border: 'none',
-              borderRight: '1px solid var(--sl-color-border)'
-            },
-            '.cm-lineNumbers': {
-              color: 'var(--sl-color-text-code)'
-            },
-            '.cm-line': {
-              padding: '0 2px'
-            },
-            '.cm-line.highlight': {
-              backgroundColor: 'var(--sl-color-accent-low)',
-              borderRadius: '2px'
-            }
+          EditorView.contentAttributes.of({
+            'spellcheck': 'false',
+            'autocorrect': 'off',
+            'autocapitalize': 'off'
           }),
         ],
         parent: editor
