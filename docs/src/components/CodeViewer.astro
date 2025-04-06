@@ -1,0 +1,165 @@
+---
+interface Props {
+  filePath: string;
+}
+
+const { filePath } = Astro.props;
+
+// Hardcoded rule content mapping
+export const ruleContent = new Map([
+  // Android Rules
+  [
+    '/pathfinder-rules/android/WebViewJavaScriptEnabled.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setJavaScriptEnabled" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "JavaScript enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewaddJavascriptInterface.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "addJavascriptInterface"
+SELECT mi.getName(), "JavaScript interface exposed"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowContentAccess.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowContentAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "Content access enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowFileAccess.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccess" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "File access enabled"`
+  ],
+  [
+    '/pathfinder-rules/android/WebViewsetAllowFileAccessFromFileURLs.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setAllowFileAccessFromFileURLs" && "true" in mi.getArgumentName()
+SELECT mi.getName(), "File access enabled"`
+  ],
+
+  // Java Rules
+  [
+    '/pathfinder-rules/java/InsecureRandom.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "Math.random"
+SELECT mi.getName(), "Math.random() is not cryptographically secure. Use SecureRandom instead."`
+  ],
+  [
+    '/pathfinder-rules/java/BlowfishUsage.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "Cipher.getInstance"
+&& "Blowfish" in mi.getArgumentName()
+SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block size makes it vulnerable to birthday attacks."`
+  ],
+  [
+    '/pathfinder-rules/java/DefaultHttpClient.cql',
+    `FROM ClassInstanceExpr AS cie
+WHERE cie.getClassInstanceExpr().GetClassName() == "DefaultHttpClient"
+SELECT cie.getName(), "The DefaultHttpClient is deprecated. Use HttpClientBuilder instead."`
+  ],
+  [
+    '/pathfinder-rules/java/RC4Usage.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "Cipher.getInstance"
+&& ("RC4" in mi.getArgumentName() || "RC2" in mi.getArgumentName())
+SELECT mi.getName(), "RC4/RC2 is insecure. Use an alternative cipher suite."`
+  ],
+  [
+    '/pathfinder-rules/java/SHA1Usage.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "MessageDigest.getInstance"
+&& ("SHA1" in mi.getArgumentName() || "SHA-1" in mi.getArgumentName())
+SELECT mi.getName(), "SHA1 is not collision resistant and is therefore not suitable as a cryptographic signature"`
+  ],
+  [
+    '/pathfinder-rules/java/UnencryptedSocket.cql',
+    `FROM ClassInstanceExpr AS cie
+WHERE cie.getClassInstanceExpr().GetClassName() == "Socket" || cie.getClassInstanceExpr().GetClassName() == "ServerSocket"
+SELECT cie.getName(), "This socket is not encrypted. Use an SSLSocket created by SSLSocketFactory or SSLServerSocketFactory instead"`
+  ],
+  [
+    '/pathfinder-rules/java/XXE.cql',
+    `FROM method_invocation AS mi
+WHERE mi.getName() == "setFeature" &&
+    ("http://xml.org/sax/features/external-parameter-entities" in mi.getArgumentName() &&
+     "true" in mi.getArgumentName()) ||
+    ("http://xml.org/sax/features/external-general-entities" in mi.getArgumentName() && 
+     "true" in mi.getArgumentName()) ||
+    ("http://apache.org/xml/features/disallow-doctype-decl" in mi.getArgumentName() &&
+     "false" in mi.getArgumentName())
+SELECT mi.getName(), "XML External Entity (XXE) attack vulnerability"`
+  ]
+]);
+
+const content = ruleContent.get(filePath) || '// Rule content not found';
+
+---
+
+<div class="code-viewer">
+  <div class="code-header">
+    <span class="file-name">{filePath.split('/').pop()}</span>
+  </div>
+  <pre><code class="language-cql" set:html={content} /></pre>
+</div>
+
+<style>
+  .code-viewer {
+    width: 100%;
+    overflow: hidden;
+    background: var(--sl-color-bg-nav);
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--sl-color-bg-sidebar);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .file-name {
+    font-family: var(--sl-font-mono);
+    font-size: 0.85em;
+    color: var(--sl-color-gray-2);
+  }
+
+  .code-viewer pre {
+    margin: 0;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .code-viewer code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+    line-height: 1.4;
+    color: var(--sl-color-text);
+  }
+
+  /* Syntax highlighting */
+  .code-viewer :global(.comment),
+  .code-viewer :global(.docstring) {
+    color: var(--sl-color-gray-3);
+    font-style: italic;
+  }
+
+  .code-viewer :global(.keyword) {
+    color: var(--sl-color-accent);
+  }
+
+  .code-viewer :global(.string) {
+    color: var(--sl-color-green);
+  }
+
+  .code-viewer :global(.function) {
+    color: var(--sl-color-blue);
+  }
+
+  .code-viewer :global(.tag) {
+    color: var(--sl-color-red);
+  }
+</style>

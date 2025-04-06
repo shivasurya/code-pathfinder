@@ -4,10 +4,11 @@ template: splash
 description: Explore our comprehensive collection of Android-specific rules designed to help you write better, more secure Android applications.
 ---
 
-import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
+import { Card, CardGrid, Icon, Tabs, TabItem } from '@astrojs/starlight/components';
 import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
 import RuleSearch from '../../../../components/RuleSearch.astro';
+import { ruleContent } from '../../../../components/CodeViewer.astro';
 
 <PostHogLayout/>
 
@@ -23,30 +24,40 @@ codepathfinder ci --project /src/project --ruleset cpf/android
 
 #### Rules (5)
 
-<RuleSearch placeholder="Search security rules..." owaspType="mobile" />
+Browse our collection of Android security rules. Each rule includes example code and the actual rule implementation.
+
+<RuleSearch placeholder="Search security rules and patterns..." />
 
 <div class="rule-cards-grid">
 <div class="rule-card" data-severity="medium" data-type="security" data-owasp="client-code-quality">
   <Card title="WebView JavaScript Enabled" icon="warning">
       <div class="description">
-      **Rule ID**: java/android/webview-javascript-enabled  
-      **Severity: Medium** | **CWE: 079**  
+      **Severity: Medium** | **OWASP: Client Code Quality**  
       Enabling JavaScript execution in a WebView can result in cross-site scripting attacks.
       </div>
       <div class="code-section">
         <CollapsibleCode 
-            code={`// ❌ Vulnerable: JavaScript enabled without safeguards
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: JavaScript enabled without safeguards
 WebView webView = new WebView(context);
 webView.getSettings().setJavaScriptEnabled(true);
 
 // ✅ Safe: JavaScript disabled by default
 WebView webView = new WebView(context);
 // JavaScript remains disabled
-webView.loadUrl("https://trusted-domain.com");`}
-            lang="java"
-            title="WebView JavaScript Example"
-            marks={['Vulnerable', 'Safe']}
-        />
+webView.loadUrl("https://trusted-domain.com");`,
+            lang: "text/x-java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/android/WebViewJavaScriptEnabled.cql'),
+            lang: "text/x-sql"
+          }
+        ]}
+      />
       </div>
   </Card>
 </div>
@@ -54,23 +65,31 @@ webView.loadUrl("https://trusted-domain.com");`}
 <div class="rule-card" data-severity="medium" data-type="security" data-owasp="client-code-quality">
   <Card title="WebView JavaScript Interface" icon="warning">
       <div class="description">
-      **Rule ID**: java/android/webview-javascript-interface <br/>
-      **Severity: Medium** | **CWE: 079**  
+      **Severity: Medium** | **OWASP: Client Code Quality**  
       Enabling addJavascriptInterface exposes java methods to JavaScript.
       </div>
       <div class="code-section">
         <CollapsibleCode 
-            code={`// ❌ Vulnerable: Exposing Java interface to JavaScript
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Exposing Java interface to JavaScript
 webView.addJavascriptInterface(new JavaScriptInterface(), "Android");
 
 // ✅ Safe: Using modern API methods
 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
     webView.evaluateJavascript("javascript:processData()", null);
-}`}
-            lang="java"
-            title="JavaScript Interface Example"
-            marks={['Vulnerable', 'Safe']}
-        />
+}`,
+            lang: "text/x-java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/android/WebViewaddJavascriptInterface.cql'),
+            lang: "text/x-sql"
+          }
+        ]}
+      />
       </div>
   </Card>
 </div>
@@ -78,23 +97,31 @@ if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
 <div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
   <Card title="WebView Content Access" icon="warning">
       <div class="description">
-      **Rule ID**: java/android/webview-set-allow-content-access <br/>
-      **Severity: Medium** | **CWE: 079**  
+      **Severity: Medium** | **OWASP: Improper Platform Usage**  
       Enabling setAllowContentAccess enables content:// access from webpages.
       </div>
       <div class="code-section">
         <CollapsibleCode 
-            code={`// ❌ Vulnerable: Enabling content access
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Enabling content access
 webView.getSettings().setAllowContentAccess(true);
 
 // ✅ Safe: Content access disabled
 WebView webView = new WebView(context);
 webView.getSettings().setAllowContentAccess(false);
-// Only load trusted content`}
-            lang="java"
-            title="Content Access Example"
-            marks={['Vulnerable', 'Safe']}
-        />
+// Only load trusted content`,
+            lang: "text/x-java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/android/WebViewsetAllowContentAccess.cql'),
+            lang: "text/x-sql"
+          }
+        ]}
+      />
       </div>
   </Card>
 </div>
@@ -102,23 +129,31 @@ webView.getSettings().setAllowContentAccess(false);
 <div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
   <Card title="WebView File Access" icon="warning">
       <div class="description">
-      **Rule ID**: java/android/webview-set-allow-file-access <br/>
-      **Severity: Medium** | **CWE: 079**  
+      **Severity: Medium** | **OWASP: Improper Platform Usage**  
       Enabling setAllowFileAccess enables webview access to file:/// URLs.
       </div>
       <div class="code-section">
         <CollapsibleCode 
-            code={`// ❌ Vulnerable: Enabling file access
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Enabling file access
 webView.getSettings().setAllowFileAccess(true);
 
 // ✅ Safe: File access disabled
 WebView webView = new WebView(context);
 webView.getSettings().setAllowFileAccess(false);
-// Use content providers for controlled file access`}
-            lang="java"
-            title="File Access Example"
-            marks={['Vulnerable', 'Safe']}
-        />
+// Use content providers for controlled file access`,
+            lang: "text/x-java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/android/WebViewsetAllowFileAccess.cql'),
+            lang: "text/x-sql"
+          }
+        ]}
+      />
       </div>
   </Card>
 </div>
@@ -126,23 +161,31 @@ webView.getSettings().setAllowFileAccess(false);
 <div class="rule-card" data-severity="medium" data-type="security" data-owasp="improper-platform-usage">
   <Card title="WebView File URL Access" icon="warning">
       <div class="description">
-      **Rule ID**: java/android/webview-set-allow-file-access-from-file-urls <br/>
-      **Severity: Medium** | **CWE: 079**  
+      **Severity: Medium** | **OWASP: Improper Platform Usage**  
       Enabling setAllowFileAccessFromFileURLs leaks sandbox access to file:/// URLs.
       </div>
       <div class="code-section">
         <CollapsibleCode 
-            code={`// ❌ Vulnerable: Enabling file URL access
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Enabling file URL access
 webView.getSettings().setAllowFileAccessFromFileURLs(true);
 
 // ✅ Safe: File URL access disabled
 WebView webView = new WebView(context);
 webView.getSettings().setAllowFileAccessFromFileURLs(false);
-// Implement proper file access controls`}
-            lang="java"
-            title="File URL Access Example"
-            marks={['Vulnerable', 'Safe']}
-        />
+// Implement proper file access controls`,
+            lang: "text/x-java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/android/WebViewsetAllowFileAccessFromFileURLs.cql'),
+            lang: "text/x-sql"
+          }
+        ]}
+      />
       </div>
   </Card>
 </div>
