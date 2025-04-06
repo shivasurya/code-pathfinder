@@ -201,6 +201,61 @@
     .technology-grid :global(.card:hover) {
       transform: none;
     }
+}
+
+  /* CodeMirror Editor Styles */
+  .code-block {
+    position: relative;
+    margin: 1rem 0;
+  }
+
+  .code-block .editor {
+    height: auto;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .cm-editor {
+    height: 100%;
+    font-family: var(--font-mono);
+    background: var(--sl-color-bg-code);
+  }
+
+  .cm-line.highlight {
+    background-color: var(--sl-color-accent-low);
+    position: relative;
+    border-left: 3px solid var(--sl-color-accent);
+    padding-left: 1px !important;
+  }
+
+  .cm-line.highlight:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--sl-color-accent);
+    font-size: 0.9em;
+    white-space: nowrap;
+    z-index: 10;
+    margin-left: 8px;
+  }
+
+  .cm-tooltip {
+    background-color: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    border: 1px solid var(--sl-color-border);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .cm-content {
+    padding: 1rem !important;
   }
 
   .features-section {
@@ -433,6 +488,8 @@
   .rule-card:not(:last-child) {
     margin-bottom: 0.5rem;
   }
+
+
 
   .rule-card[data-owasp="cryptographic-failures"] {
     background: linear-gradient(
