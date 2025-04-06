@@ -201,7 +201,7 @@
     .technology-grid :global(.card:hover) {
       transform: none;
     }
-  }
+}
 
   .features-section {
     padding: 4rem 2rem;
@@ -433,6 +433,8 @@
   .rule-card:not(:last-child) {
     margin-bottom: 0.5rem;
   }
+
+
 
   .rule-card[data-owasp="cryptographic-failures"] {
     background: linear-gradient(

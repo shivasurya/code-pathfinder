@@ -4,10 +4,11 @@ template: splash
 description: Detect cryptographic vulnerabilities and secure coding issues in Java applications
 ---
 
-import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
-import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
+import { Card, CardGrid, Icon, Tabs, TabItem } from '@astrojs/starlight/components';
 import CollapsibleCode from '../../../../components/CollapsibleCode.astro';
 import RuleSearch from '../../../../components/RuleSearch.astro';
+import { ruleContent } from '../../../../components/CodeViewer.astro';
+import PostHogLayout from '../../../../layouts/PostHogLayout.astro';
 
 <PostHogLayout/>
 
@@ -23,111 +24,338 @@ codepathfinder ci --project /src/project --ruleset cpf/java
 
 #### Rules (7)
 
+Browse our collection of Java security rules. Each rule includes example code and the actual rule implementation.
+
 <RuleSearch placeholder="Search security rules and patterns..." />
 
 <div class="rule-cards-grid">
 <div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
   <Card title="Insecure Random" icon="warning">
-      <div class="description">
+    <div class="description">
       **Severity: High** | **OWASP: Cryptographic Failures**  
       Identifies usage of Math.random() which is not cryptographically secure and could lead to predictable values in security-critical contexts.
-      </div>
-      <div class="code-section">
-        <CollapsibleCode 
-            code={`// ❌ Vulnerable: Not cryptographically secure
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Not cryptographically secure
 double value = Math.random();
 
 // ✅ Safe: Using SecureRandom
 SecureRandom secureRandom = new SecureRandom();
-double value = secureRandom.nextDouble();`}
-            lang="java"
-            title="Insecure Random Example"
-            marks={['Vulnerable', 'Safe']}
-        />
-      </div>
+double value = secureRandom.nextDouble();`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/InsecureRandom.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
   </Card>
 </div>
 
 <div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
-  <Card title="Weak Cryptography" icon="warning">
-      <div class="description">
+  <Card title="Blowfish Usage" icon="warning">
+    <div class="description">
       **Severity: High** | **OWASP: Cryptographic Failures**  
-      Detects usage of deprecated or weak cryptographic algorithms (RC4, RC2, SHA1, Blowfish) that are vulnerable to known attacks.
-      </div>
-      <div class="code-section">
-        <CollapsibleCode 
-            code={`// ❌ Vulnerable: Weak algorithms
-Cipher rc4Cipher = Cipher.getInstance("RC4");
-MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-Cipher blowfish = Cipher.getInstance("Blowfish");
+      Detects usage of Blowfish encryption which uses a 64-bit block size, making it vulnerable to birthday attacks.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Using Blowfish
+Cipher cipher = Cipher.getInstance("Blowfish");
 
-// ✅ Safe: Strong algorithms
-Cipher aesCipher = Cipher.getInstance("AES/GCM/NoPadding");
-MessageDigest sha256 = MessageDigest.getInstance("SHA-256");`}
-            lang="java"
-            title="Weak Cryptography Example"
-            marks={['Vulnerable', 'Safe']}
-        />
-      </div>
+// ✅ Safe: Using AES
+Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/BlowfishUsage.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
   </Card>
 </div>
 
 <div class="rule-card" data-severity="high" data-type="security" data-owasp="identification-and-authentication-failures">
-  <Card title="Insecure HTTP Client" icon="warning">
-      <div class="description">
+  <Card title="Default HTTP Client" icon="warning">
+    <div class="description">
       **Severity: High** | **OWASP: Identification and Authentication Failures**  
       Identifies usage of deprecated DefaultHttpClient which lacks modern security features and proper certificate validation.
-      </div>
-      <div class="code-section">
-        <CollapsibleCode 
-            code={`// ❌ Vulnerable: Deprecated client
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Deprecated client
 HttpClient client = new DefaultHttpClient();
 
 // ✅ Safe: Modern HTTP client
 HttpClient client = HttpClientBuilder.create()
     .setSSLContext(SSLContexts.createDefault())
-    .build();`}
-            lang="java"
-            title="HTTP Client Example"
-            marks={['Vulnerable', 'Safe']}
-        />
-      </div>
+    .build();`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/DefaultHttpClient.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="RC4 Usage" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Detects usage of RC4 cipher which is cryptographically broken and should not be used.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Using RC4
+Cipher cipher = Cipher.getInstance("RC4");
+
+// ✅ Safe: Using AES
+Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/RC4Usage.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="SHA-1 Usage" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Identifies usage of SHA-1 hash function which is cryptographically broken and should not be used.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Using SHA-1
+MessageDigest md = MessageDigest.getInstance("SHA-1");
+
+// ✅ Safe: Using SHA-256
+MessageDigest md = MessageDigest.getInstance("SHA-256");`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/SHA1Usage.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
   </Card>
 </div>
 
 <div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
   <Card title="Unencrypted Socket" icon="warning">
-      <div class="description">
+    <div class="description">
       **Severity: High** | **OWASP: Cryptographic Failures**  
-      Detects usage of unencrypted socket connections that could expose sensitive data to network-level attacks.
-      </div>
-      <div class="code-section">
-        <CollapsibleCode 
-            code={`// ❌ Vulnerable: Unencrypted socket
+      Detects usage of unencrypted Socket instead of SSLSocket for network communication.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Unencrypted socket
 Socket socket = new Socket("example.com", 80);
 
-// ✅ Safe: SSL/TLS socket
+// ✅ Safe: Using SSL socket
 SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`}
-            lang="java"
-            title="Socket Connection Example"
-            marks={['Vulnerable', 'Safe']}
-        />
-      </div>
+SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/UnencryptedSocket.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
   </Card>
 </div>
 
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="injection">
+  <Card title="XML External Entity (XXE)" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Injection**  
+      Identifies XML parsers that may be vulnerable to XXE attacks due to insecure configuration.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Default parser configuration
+DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+DocumentBuilder builder = factory.newDocumentBuilder();
+
+// ✅ Safe: Secure parser configuration
+DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+DocumentBuilder builder = factory.newDocumentBuilder();`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/XXE.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="Weak Cryptography" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Detects usage of deprecated or weak cryptographic algorithms (RC4, RC2, SHA1, Blowfish) that are vulnerable to known attacks.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Using weak algorithms
+Cipher rc4 = Cipher.getInstance("RC4");
+MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+Cipher bf = Cipher.getInstance("Blowfish");
+
+// ✅ Safe: Using strong algorithms
+Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
+MessageDigest sha256 = MessageDigest.getInstance("SHA-256");`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/RC4Usage.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="identification-and-authentication-failures">
+  <Card title="Insecure HTTP Client" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Identification and Authentication Failures**  
+      Identifies usage of deprecated DefaultHttpClient which lacks modern security features and proper certificate validation.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Using deprecated client
+HttpClient client = new DefaultHttpClient();
+
+// ✅ Safe: Modern HTTP client
+HttpClient client = HttpClientBuilder.create()
+    .setSSLContext(SSLContexts.createDefault())
+    .build();`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/DefaultHttpClient.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
+
+<div class="rule-card" data-severity="high" data-type="security" data-owasp="cryptographic-failures">
+  <Card title="Unencrypted Socket" icon="warning">
+    <div class="description">
+      **Severity: High** | **OWASP: Cryptographic Failures**  
+      Detects usage of unencrypted socket connections that could expose sensitive data to network-level attacks.
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Unencrypted socket
+Socket socket = new Socket("example.com", 80);
+
+// ✅ Safe: SSL socket
+SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+SSLSocket socket = (SSLSocket) factory.createSocket("example.com", 443);`,
+            lang: "java",
+            marks: ['Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/UnencryptedSocket.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
+  </Card>
+</div>
 
 <div class="rule-card" data-severity="high" data-type="security" data-owasp="xml-external-entities">
   <Card title="XML External Entity (XXE) Vulnerability" icon="warning">
-      <div class="description">
+    <div class="description">
       **Severity: High** | **OWASP: XML External Entities (XXE)**  
       Identifies insecure XML parser configurations that could allow XXE attacks, potentially leading to data disclosure, denial of service, or server-side request forgery.
-      </div>
-      <div class="code-section">
-        <CollapsibleCode 
-            code={`
-// ❌ Vulnerable: Disabling protection
+    </div>
+    <div class="code-section">
+      <CollapsibleCode 
+        tabs={[
+          {
+            label: "Example",
+            code: `// ❌ Vulnerable: Disabling protection
 DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false);
 DocumentBuilder builder = dbf.newDocumentBuilder();
@@ -139,12 +367,18 @@ dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
 dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
 dbf.setXIncludeAware(false);
 dbf.setExpandEntityReferences(false);
-DocumentBuilder builder = dbf.newDocumentBuilder();`}
-            lang="java"
-            title="XML Parser Configuration Example"
-            marks={['Vulnerable', 'Vulnerable', 'Safe']}
-        />
-      </div>
+DocumentBuilder builder = dbf.newDocumentBuilder();`,
+            lang: "java",
+            marks: ['Vulnerable', 'Vulnerable', 'Safe']
+          },
+          {
+            label: "Rule",
+            code: ruleContent.get('/pathfinder-rules/java/XXE.cql'),
+            lang: "cql"
+          }
+        ]}
+      />
+    </div>
   </Card>
 </div>
 

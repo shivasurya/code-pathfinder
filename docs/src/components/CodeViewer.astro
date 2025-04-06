@@ -1,0 +1,211 @@
+---
+interface Props {
+  filePath: string;
+}
+
+const { filePath } = Astro.props;
+
+// Hardcoded rule content mapping
+export const ruleContent = new Map([
+  [
+    '/pathfinder-rules/java/InsecureRandom.cql',
+    `/**
+ * @name InsecureRandom
+ * @description Usage of Math.random() which is not cryptographically secure
+ * @kind problem
+ * @id java/insecure-random
+ * @problem.severity high
+ * @security-severity 8.9
+ * @precision high
+ * @tags security
+ */
+
+FROM method_invocation AS mi
+WHERE mi.getName() == "Math.random"
+SELECT mi.getName(), "Usage of Math.random() detected. Use SecureRandom.nextBytes() instead
+  which is cryptographically secure."`
+  ],
+  [
+    '/pathfinder-rules/java/BlowfishUsage.cql',
+    `/**
+ * @name BlowfishUsage
+ * @description Use of Blowfish was detected. Blowfish uses a 64-bit block size
+ * @kind problem
+ * @id java/BlowfishUsage
+ * @problem.severity warning
+ * @security-severity 3.1
+ * @precision medium
+ * @tags security
+ *       external/cwe/cwe-327
+ */
+
+FROM method_invocation AS mi
+WHERE mi.getName() == "Cipher.getInstance"
+&& "Blowfish" in mi.getArgumentName()
+SELECT mi.getName(), "Use of Blowfish was detected. Blowfish uses a 64-bit block size
+  that makes it vulnerable to birthday attacks."`
+  ],
+  [
+    '/pathfinder-rules/java/DefaultHttpClient.cql',
+    `/**
+ * @name DefaultHttpClient
+ * @description Usage of DefaultHttpClient which lacks modern security features
+ * @kind problem
+ * @id java/default-http-client
+ * @problem.severity warning
+ * @security-severity 4.0
+ * @precision high
+ * @tags security
+ */
+
+FROM class_instance_creation AS cic
+WHERE cic.getType().getName() == "DefaultHttpClient"
+SELECT cic, "Usage of DefaultHttpClient detected. Use HttpClientBuilder instead
+  which provides better security features and certificate validation."`
+  ],
+  [
+    '/pathfinder-rules/java/RC4Usage.cql',
+    `/**
+ * @name RC4Usage
+ * @description Use of RC4 encryption was detected
+ * @kind problem
+ * @id java/rc4-usage
+ * @problem.severity warning
+ * @security-severity 5.0
+ * @precision high
+ * @tags security
+ */
+
+FROM method_invocation AS mi
+WHERE mi.getName() == "Cipher.getInstance"
+&& "RC4" in mi.getArgumentName()
+SELECT mi, "Use of RC4 encryption detected. RC4 is cryptographically broken
+  and should not be used in new applications."`
+  ],
+  [
+    '/pathfinder-rules/java/SHA1Usage.cql',
+    `/**
+ * @name SHA1Usage
+ * @description Use of SHA-1 hash function was detected
+ * @kind problem
+ * @id java/sha1-usage
+ * @problem.severity warning
+ * @security-severity 4.0
+ * @precision high
+ * @tags security
+ */
+
+FROM method_invocation AS mi
+WHERE mi.getName() == "MessageDigest.getInstance"
+&& "SHA-1" in mi.getArgumentName()
+SELECT mi, "Use of SHA-1 hash function detected. SHA-1 is cryptographically broken
+  and should not be used for security-critical operations."`
+  ],
+  [
+    '/pathfinder-rules/java/UnencryptedSocket.cql',
+    `/**
+ * @name UnencryptedSocket
+ * @description Use of unencrypted Socket instead of SSLSocket
+ * @kind problem
+ * @id java/unencrypted-socket
+ * @problem.severity warning
+ * @security-severity 6.0
+ * @precision high
+ * @tags security
+ */
+
+FROM class_instance_creation AS cic
+WHERE cic.getType().getName() == "Socket"
+SELECT cic, "Use of unencrypted Socket detected. Consider using SSLSocket
+  for encrypted communication."`
+  ],
+  [
+    '/pathfinder-rules/java/XXE.cql',
+    `/**
+ * @name XXE
+ * @description XML parsing vulnerable to XXE attacks
+ * @kind problem
+ * @id java/xxe
+ * @problem.severity high
+ * @security-severity 8.0
+ * @precision high
+ * @tags security
+ */
+
+FROM method_invocation AS mi
+WHERE mi.getName() == "DocumentBuilderFactory.newInstance"
+SELECT mi, "XML parsing may be vulnerable to XXE attacks. Set feature 'http://apache.org/xml/features/disallow-doctype-decl'
+  to true and disable external entity processing to prevent XXE attacks."`
+  ]
+]);
+
+const content = ruleContent.get(filePath) || '// Rule content not found';
+
+---
+
+<div class="code-viewer">
+  <div class="code-header">
+    <span class="file-name">{filePath.split('/').pop()}</span>
+  </div>
+  <pre><code class="language-cql" set:html={content} /></pre>
+</div>
+
+<style>
+  .code-viewer {
+    width: 100%;
+    overflow: hidden;
+    background: var(--sl-color-bg-nav);
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--sl-color-bg-sidebar);
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+
+  .file-name {
+    font-family: var(--sl-font-mono);
+    font-size: 0.85em;
+    color: var(--sl-color-gray-2);
+  }
+
+  .code-viewer pre {
+    margin: 0;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .code-viewer code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+    line-height: 1.4;
+    color: var(--sl-color-text);
+  }
+
+  /* Syntax highlighting */
+  .code-viewer :global(.comment),
+  .code-viewer :global(.docstring) {
+    color: var(--sl-color-gray-3);
+    font-style: italic;
+  }
+
+  .code-viewer :global(.keyword) {
+    color: var(--sl-color-accent);
+  }
+
+  .code-viewer :global(.string) {
+    color: var(--sl-color-green);
+  }
+
+  .code-viewer :global(.function) {
+    color: var(--sl-color-blue);
+  }
+
+  .code-viewer :global(.tag) {
+    color: var(--sl-color-red);
+  }
+</style>
