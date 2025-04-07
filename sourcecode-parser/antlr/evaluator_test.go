@@ -175,6 +175,141 @@ func TestEvaluateExpressionTree(t *testing.T) {
 	}
 }
 
+func TestRelationshipMap(t *testing.T) {
+	// Create a relationship map
+	rm := NewRelationshipMap()
+
+	// Add some relationships
+	rm.AddRelationship("class", "methods", []string{"method", "function"})
+	rm.AddRelationship("method", "parameters", []string{"parameter", "variable"})
+	rm.AddRelationship("function", "returns", []string{"type", "class"})
+
+	tests := []struct {
+		name     string
+		entity1  string
+		entity2  string
+		expected bool
+	}{
+		{
+			name:     "direct relationship exists",
+			entity1:  "class",
+			entity2:  "method",
+			expected: true,
+		},
+		{
+			name:     "reverse relationship exists",
+			entity1:  "function",
+			entity2:  "class",
+			expected: true,
+		},
+		{
+			name:     "no relationship exists",
+			entity1:  "class",
+			entity2:  "parameter",
+			expected: false,
+		},
+		{
+			name:     "unknown entity",
+			entity1:  "unknown",
+			entity2:  "class",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := rm.HasRelationship(tt.entity1, tt.entity2)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestCheckExpressionRelationship(t *testing.T) {
+	// Create a relationship map
+	rm := NewRelationshipMap()
+	rm.AddRelationship("class", "methods", []string{"method"})
+
+	tests := []struct {
+		name     string
+		node     *ExpressionNode
+		expected bool
+		wantErr  bool
+	}{
+		{
+			name: "related entities comparison",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: "==",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "class",
+				},
+				Right: &ExpressionNode{
+					Type:  "variable",
+					Value: "method",
+				},
+			},
+			expected: true,
+			wantErr:  false,
+		},
+		{
+			name: "unrelated entities comparison",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: "==",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "class",
+				},
+				Right: &ExpressionNode{
+					Type:  "variable",
+					Value: "unrelated",
+				},
+			},
+			expected: false,
+			wantErr:  false,
+		},
+		{
+			name: "single entity comparison",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: ">",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "class",
+				},
+				Right: &ExpressionNode{
+					Type:  "literal",
+					Value: "10",
+				},
+			},
+			expected: false,
+			wantErr:  false,
+		},
+		{
+			name: "non-binary node",
+			node: &ExpressionNode{
+				Type:  "literal",
+				Value: "25",
+			},
+			expected: false,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckExpressionRelationship(tt.node, rm)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestDetectComparisonType(t *testing.T) {
 	tests := []struct {
 		name     string

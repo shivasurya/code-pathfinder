@@ -7,6 +7,82 @@ import (
 	"github.com/expr-lang/expr"
 )
 
+// RelationshipMap represents relationships between entities and their attributes
+type RelationshipMap struct {
+	// map[EntityName]map[AttributeName][]RelatedEntity
+	// Example: {"class": {"methods": ["method", "function"]}}
+	Relationships map[string]map[string][]string
+}
+
+// NewRelationshipMap creates a new RelationshipMap
+func NewRelationshipMap() *RelationshipMap {
+	return &RelationshipMap{
+		Relationships: make(map[string]map[string][]string),
+	}
+}
+
+// AddRelationship adds a relationship between an entity and its related entities through an attribute
+func (rm *RelationshipMap) AddRelationship(entity, attribute string, relatedEntities []string) {
+	if rm.Relationships[entity] == nil {
+		rm.Relationships[entity] = make(map[string][]string)
+	}
+	rm.Relationships[entity][attribute] = relatedEntities
+}
+
+// HasRelationship checks if two entities are related through any attribute
+func (rm *RelationshipMap) HasRelationship(entity1, entity2 string) bool {
+	// Check direct relationships from entity1 to entity2
+	if attrs, ok := rm.Relationships[entity1]; ok {
+		for _, relatedEntities := range attrs {
+			for _, related := range relatedEntities {
+				if related == entity2 {
+					return true
+				}
+			}
+		}
+	}
+
+	// Check direct relationships from entity2 to entity1
+	if attrs, ok := rm.Relationships[entity2]; ok {
+		for _, relatedEntities := range attrs {
+			for _, related := range relatedEntities {
+				if related == entity1 {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// CheckExpressionRelationship checks if a binary expression involves related entities
+func CheckExpressionRelationship(node *ExpressionNode, relationshipMap *RelationshipMap) (bool, error) {
+	// First check if it's a dual entity comparison
+	compType, err := DetectComparisonType(node)
+	if err != nil {
+		return false, fmt.Errorf("failed to detect comparison type: %w", err)
+	}
+
+	if compType != DUAL_ENTITY {
+		return false, nil // Not a dual entity comparison
+	}
+
+	// Get entity names from both sides
+	leftEntity, err := getEntityName(node.Left)
+	if err != nil {
+		return false, fmt.Errorf("failed to get left entity: %w", err)
+	}
+
+	rightEntity, err := getEntityName(node.Right)
+	if err != nil {
+		return false, fmt.Errorf("failed to get right entity: %w", err)
+	}
+
+	// Check if entities are related
+	return relationshipMap.HasRelationship(leftEntity, rightEntity), nil
+}
+
 // ComparisonType represents the type of comparison in an expression
 type ComparisonType string
 
