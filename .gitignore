@@ -37,3 +37,5 @@ test-src/android/pathfinder.db
 
 coverage.out
 coverage.html
+
+.windsurfrules
