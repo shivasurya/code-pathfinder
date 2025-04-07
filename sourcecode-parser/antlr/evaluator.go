@@ -3,7 +3,18 @@ package parser
 import (
 	"fmt"
 	"strings"
+
 	"github.com/expr-lang/expr"
+)
+
+// ComparisonType represents the type of comparison in an expression
+type ComparisonType string
+
+const (
+	// SINGLE_ENTITY represents comparison between one entity and a static value
+	SINGLE_ENTITY ComparisonType = "SINGLE_ENTITY"
+	// DUAL_ENTITY represents comparison between two different entities
+	DUAL_ENTITY ComparisonType = "DUAL_ENTITY"
 )
 
 // EvaluateExpressionTree evaluates the expression tree against input data
@@ -19,7 +30,7 @@ func EvaluateExpressionTree(tree *ExpressionNode, data []map[string]interface{})
 		if err != nil {
 			return nil, fmt.Errorf("evaluation error: %w", err)
 		}
-		
+
 		// Only include items that match the expression
 		if matches.(bool) {
 			result = append(result, item)
@@ -57,16 +68,73 @@ func evaluateNode(node *ExpressionNode, data map[string]interface{}) (interface{
 }
 
 // nodeToExprString converts an ExpressionNode to an expr-lang expression string
+// DetectComparisonType analyzes a binary expression node and determines if it's comparing
+// a single entity with a static value or comparing two different entities
+func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
+	if node == nil {
+		return "", fmt.Errorf("nil node")
+	}
+
+	// Only analyze binary nodes
+	if node.Type != "binary" {
+		return "", fmt.Errorf("not a binary node")
+	}
+
+	// Get entity names from left and right sides
+	leftEntity, err := getEntityName(node.Left)
+	if err != nil {
+		return "", fmt.Errorf("failed to get left entity: %w", err)
+	}
+
+	rightEntity, err := getEntityName(node.Right)
+	if err != nil {
+		return "", fmt.Errorf("failed to get right entity: %w", err)
+	}
+
+	// If either side is empty (literal/static value) or they're the same entity,
+	// it's a SINGLE_ENTITY comparison
+	if leftEntity == "" || rightEntity == "" || leftEntity == rightEntity {
+		return SINGLE_ENTITY, nil
+	}
+
+	// Different entities are being compared
+	return DUAL_ENTITY, nil
+}
+
+// getEntityName extracts the entity name from a node.
+// Returns empty string for literals and static values.
+func getEntityName(node *ExpressionNode) (string, error) {
+	if node == nil {
+		return "", fmt.Errorf("nil node")
+	}
+
+	switch node.Type {
+	case "variable":
+		return node.Value, nil
+	case "method_call":
+		// For method calls, consider the target object as the entity
+		parts := strings.Split(node.Value, ".")
+		if len(parts) > 0 {
+			return parts[0], nil
+		}
+		return "", nil
+	case "literal":
+		return "", nil // Literals are static values
+	default:
+		return "", fmt.Errorf("unsupported node type: %s", node.Type)
+	}
+}
+
 func nodeToExprString(node *ExpressionNode) (string, error) {
 	switch node.Type {
 	case "binary":
 		left, err := nodeToExprString(node.Left)
 		if err != nil {
-		return "", err
+			return "", err
 		}
 		right, err := nodeToExprString(node.Right)
 		if err != nil {
-		return "", err
+			return "", err
 		}
 		return fmt.Sprintf("(%s %s %s)", left, node.Operator, right), nil
 
@@ -111,5 +179,3 @@ func nodeToExprString(node *ExpressionNode) (string, error) {
 		return "", fmt.Errorf("unknown node type: %s", node.Type)
 	}
 }
-
-

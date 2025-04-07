@@ -175,6 +175,111 @@ func TestEvaluateExpressionTree(t *testing.T) {
 	}
 }
 
+func TestDetectComparisonType(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     *ExpressionNode
+		expected ComparisonType
+		wantErr  bool
+	}{
+		{
+			name: "single entity with literal",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: ">",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "age",
+				},
+				Right: &ExpressionNode{
+					Type:  "literal",
+					Value: "25",
+				},
+			},
+			expected: SINGLE_ENTITY,
+			wantErr:  false,
+		},
+		{
+			name: "dual entity comparison",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: "==",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "age",
+				},
+				Right: &ExpressionNode{
+					Type:  "variable",
+					Value: "count",
+				},
+			},
+			expected: DUAL_ENTITY,
+			wantErr:  false,
+		},
+		{
+			name: "single entity method call",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: ">",
+				Left: &ExpressionNode{
+					Type:  "method_call",
+					Value: "method.complexity",
+				},
+				Right: &ExpressionNode{
+					Type:  "literal",
+					Value: "10",
+				},
+			},
+			expected: SINGLE_ENTITY,
+			wantErr:  false,
+		},
+		{
+			name: "dual entity method calls",
+			node: &ExpressionNode{
+				Type:     "binary",
+				Operator: "==",
+				Left: &ExpressionNode{
+					Type:  "method_call",
+					Value: "method1.complexity",
+				},
+				Right: &ExpressionNode{
+					Type:  "method_call",
+					Value: "method2.complexity",
+				},
+			},
+			expected: DUAL_ENTITY,
+			wantErr:  false,
+		},
+		{
+			name: "non-binary node",
+			node: &ExpressionNode{
+				Type:  "literal",
+				Value: "25",
+			},
+			expected: "",
+			wantErr:  true,
+		},
+		{
+			name: "nil node",
+			node:     nil,
+			expected: "",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DetectComparisonType(tt.node)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestEvaluateNode(t *testing.T) {
 	// Mock data with method and predicate functions
 	testData := map[string]interface{}{
