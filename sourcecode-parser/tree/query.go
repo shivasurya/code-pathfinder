@@ -175,29 +175,141 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 }
 
 func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
-	result := make([][]*model.Node, 0)
+	// Create evaluation context
+	ctx := &parser.EvaluationContext{
+		RelationshipMap: buildRelationshipMap(),
+		EntityData:      make(map[string][]map[string]interface{}),
+	}
 
-	// log query select list alone
+	// Log query select list
 	for _, entity := range query.SelectList {
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	// match select entity with conditions and predicate usage for single entity
-	// if two or three entities based condition, then use relationship query using join
-	// apply the single entity filter on dataset
-	// apply multi entity filter on dataset
-	// if no conditions, predicates, then use cartesian product
+	// Prepare entity data
+	for _, entity := range query.SelectList {
+		entityData := make([]map[string]interface{}, 0)
+		// Get nodes for this entity type
+		nodes := getNodesForEntity(db, treeHolder, entity)
+		// Convert nodes to map[string]interface{}
+		for _, node := range nodes {
+			entityData = append(entityData, nodeToMap(node))
+		}
+		ctx.EntityData[entity.Entity] = entityData
+	}
 
-	cartesianProduct := generateCartesianProduct(db, treeHolder, query.SelectList, query.Condition)
+	// Use the expression tree from the query
+	if query.ExpressionTree == nil {
+		return nil, nil
+	}
 
-	for _, nodeSet := range cartesianProduct {
-		if FilterEntities(nodeSet, query) {
-			result = append(result, nodeSet)
+	// Evaluate the condition
+	result, err := parser.EvaluateExpressionTree(query.ExpressionTree, ctx)
+	if err != nil {
+		// Handle error appropriately
+		return nil, nil
+	}
+
+	// Convert result data back to nodes
+	resultNodes := make([][]*model.Node, 0)
+	for _, data := range result.Data {
+		nodeSet := make([]*model.Node, 0)
+		for _, entity := range query.SelectList {
+			if node := findNodeByData(db, treeHolder, entity, data); node != nil {
+				nodeSet = append(nodeSet, node)
+			}
+		}
+		if len(nodeSet) == len(query.SelectList) {
+			resultNodes = append(resultNodes, nodeSet)
 		}
 	}
-	output = generateOutput(result, query)
-	nodes = result
-	return nodes, output
+
+	output = generateOutput(resultNodes, query)
+	return resultNodes, output
+}
+
+// buildRelationshipMap creates a relationship map for the entities
+func buildRelationshipMap() *parser.RelationshipMap {
+	rm := parser.NewRelationshipMap()
+	// Add relationships between entities
+	// For example:
+	rm.AddRelationship("class", "methods", []string{"method"})
+	rm.AddRelationship("method", "class", []string{"class"})
+	return rm
+}
+
+// getNodesForEntity returns all nodes for a given entity type
+func getNodesForEntity(db *db.StorageNode, treeHolder []*model.TreeNode, entity parser.SelectList) []*model.Node {
+	// Get nodes for this entity type
+	nodes := make([]*model.Node, 0)
+	for _, tree := range treeHolder {
+		if tree.Node.NodeType == entity.Entity {
+			nodes = append(nodes, tree.Node)
+		}
+	}
+	return nodes
+}
+
+// nodeToMap converts a node to a map[string]interface{}
+func nodeToMap(node *model.Node) map[string]interface{} {
+	result := make(map[string]interface{})
+	// Add basic node properties
+	result["id"] = node.NodeID
+	result["type"] = node.NodeType
+	// Add other properties based on node type
+	switch node.NodeType {
+	case "class":
+		if node.ClassDecl != nil {
+			result["name"] = node.ClassDecl.QualifiedName
+		}
+	case "method":
+		if node.MethodDecl != nil {
+			result["name"] = node.MethodDecl.QualifiedName
+		}
+	}
+	return result
+}
+
+// findNodeByData finds a node that matches the given data
+func findNodeByData(db *db.StorageNode, treeHolder []*model.TreeNode, entity parser.SelectList, data map[string]interface{}) *model.Node {
+	// Get all nodes for this entity type
+	nodes := getNodesForEntity(db, treeHolder, entity)
+	
+	// Find the node that matches the data
+	for _, node := range nodes {
+		if matchesData(node, data) {
+			return node
+		}
+	}
+	return nil
+}
+
+// matchesData checks if a node matches the given data
+func matchesData(node *model.Node, data map[string]interface{}) bool {
+	// Check if basic properties match
+	if id, ok := data["id"]; ok {
+		if id != node.NodeID {
+			return false
+		}
+	}
+	if nodeType, ok := data["type"]; ok {
+		if nodeType != node.NodeType {
+			return false
+		}
+	}
+	if name, ok := data["name"]; ok {
+		switch node.NodeType {
+		case "class":
+			if node.ClassDecl == nil || name != node.ClassDecl.QualifiedName {
+				return false
+			}
+		case "method":
+			if node.MethodDecl == nil || name != node.MethodDecl.QualifiedName {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func generateOutput(nodeSet [][]*model.Node, query parser.Query) [][]interface{} {

@@ -2,10 +2,22 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-
-	"github.com/expr-lang/expr"
 )
+
+// EvaluationResult represents the result of evaluating an expression
+type EvaluationResult struct {
+	Data     []map[string]interface{} // The filtered data after evaluation
+	Entities []string                // The entities involved in this evaluation
+	Err      error                   // Any error that occurred during evaluation
+}
+
+// EvaluationContext holds the context for expression evaluation
+type EvaluationContext struct {
+	RelationshipMap *RelationshipMap
+	EntityData      map[string][]map[string]interface{} // map[EntityType][]EntityData
+}
 
 // RelationshipMap represents relationships between entities and their attributes
 type RelationshipMap struct {
@@ -95,24 +107,201 @@ const (
 
 // EvaluateExpressionTree evaluates the expression tree against input data
 // and returns filtered data based on the expression conditions
-func EvaluateExpressionTree(tree *ExpressionNode, data []map[string]interface{}) ([]map[string]interface{}, error) {
+func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*EvaluationResult, error) {
 	if tree == nil {
-		return data, nil
+		return &EvaluationResult{}, nil
 	}
 
-	var result []map[string]interface{}
-	for _, item := range data {
-		matches, err := evaluateNode(tree, item)
+	// Detect the type of comparison
+	compType, err := DetectComparisonType(tree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect comparison type: %w", err)
+	}
+
+	// Get entities involved
+	leftEntity, rightEntity, err := getInvolvedEntities(tree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get involved entities: %w", err)
+	}
+
+	// Handle different comparison types
+	switch compType {
+	case SINGLE_ENTITY:
+		return evaluateSingleEntity(tree, leftEntity, ctx)
+
+	case DUAL_ENTITY:
+		// Check if entities are related
+		isRelated := ctx.RelationshipMap.HasRelationship(leftEntity, rightEntity)
+		if isRelated {
+			return evaluateRelatedEntities(tree, leftEntity, rightEntity, ctx)
+		}
+		return evaluateUnrelatedEntities(tree, leftEntity, rightEntity, ctx)
+
+	default:
+		return nil, fmt.Errorf("unsupported comparison type")
+	}
+}
+
+// getInvolvedEntities returns the entity types involved in an expression
+func getInvolvedEntities(node *ExpressionNode) (leftEntity, rightEntity string, err error) {
+	if node == nil {
+		return "", "", fmt.Errorf("nil node")
+	}
+
+	switch node.Type {
+	case "binary":
+		leftEntity, err = getEntityName(node.Left)
 		if err != nil {
-			return nil, fmt.Errorf("evaluation error: %w", err)
+			return "", "", fmt.Errorf("failed to get left entity: %w", err)
 		}
 
-		// Only include items that match the expression
+		rightEntity, err = getEntityName(node.Right)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get right entity: %w", err)
+		}
+
+		return leftEntity, rightEntity, nil
+
+	default:
+		return "", "", fmt.Errorf("unsupported node type for getting entities: %s", node.Type)
+	}
+}
+
+// evaluateSingleEntity handles evaluation of expressions involving a single entity type
+func evaluateSingleEntity(node *ExpressionNode, entity string, ctx *EvaluationContext) (*EvaluationResult, error) {
+	// Get data for the entity
+	data, ok := ctx.EntityData[entity]
+	if !ok {
+		return nil, fmt.Errorf("no data found for entity: %s", entity)
+	}
+
+
+
+	// Filter data based on the expression
+	result := make([]map[string]interface{}, 0)
+	for _, item := range data {
+		// Evaluate the expression for this item
+		matches, err := evaluateNode(node, item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate node: %w", err)
+		}
+
+		// Include item if it matches
 		if matches.(bool) {
 			result = append(result, item)
 		}
 	}
-	return result, nil
+
+	return &EvaluationResult{
+		Data:     result,
+		Entities: []string{entity},
+	}, nil
+}
+
+// evaluateRelatedEntities handles evaluation of expressions involving two related entities
+func evaluateRelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx *EvaluationContext) (*EvaluationResult, error) {
+	// Get data for both entities
+	data1, ok1 := ctx.EntityData[entity1]
+	data2, ok2 := ctx.EntityData[entity2]
+	if !ok1 || !ok2 {
+		return nil, fmt.Errorf("missing data for entities: %s, %s", entity1, entity2)
+	}
+
+	// Perform a join operation based on the relationship
+	result := make([]map[string]interface{}, 0)
+	for _, item1 := range data1 {
+		for _, item2 := range data2 {
+			// Check if these items are related (this would depend on your data structure)
+			if areItemsRelated(item1, item2, entity1, entity2) {
+				// Merge the items
+				mergedItem := mergeItems(item1, item2)
+
+				// Evaluate the expression on the merged item
+				matches, err := evaluateNode(node, mergedItem)
+				if err != nil {
+					return nil, fmt.Errorf("failed to evaluate node: %w", err)
+				}
+
+				// Include item if it matches
+				if matches.(bool) {
+					result = append(result, mergedItem)
+				}
+			}
+		}
+	}
+
+	return &EvaluationResult{
+		Data:     result,
+		Entities: []string{entity1, entity2},
+	}, nil
+}
+
+// evaluateUnrelatedEntities handles evaluation of expressions involving two unrelated entities
+func evaluateUnrelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx *EvaluationContext) (*EvaluationResult, error) {
+	// Get data for both entities
+	data1, ok1 := ctx.EntityData[entity1]
+	data2, ok2 := ctx.EntityData[entity2]
+	if !ok1 || !ok2 {
+		return nil, fmt.Errorf("missing data for entities: %s, %s", entity1, entity2)
+	}
+
+	// Perform a cartesian product
+	result := make([]map[string]interface{}, 0)
+	for _, item1 := range data1 {
+		for _, item2 := range data2 {
+			// Merge the items
+			mergedItem := mergeItems(item1, item2)
+
+			// Evaluate the expression on the merged item
+			matches, err := evaluateNode(node, mergedItem)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate node: %w", err)
+			}
+
+			// Include item if it matches
+			if matches.(bool) {
+				result = append(result, mergedItem)
+			}
+		}
+	}
+
+	return &EvaluationResult{
+		Data:     result,
+		Entities: []string{entity1, entity2},
+	}, nil
+}
+
+// areItemsRelated checks if two items are related based on their entity types
+func areItemsRelated(item1, item2 map[string]interface{}, entity1, entity2 string) bool {
+	// This is a placeholder. The actual implementation would depend on your data structure
+	// For example, if entity1 is "class" and entity2 is "method",
+	// you might check if item2["class_id"] == item1["id"]
+
+	// For now, we'll assume they're related if they have matching IDs
+	id1, ok1 := item1["id"]
+	id2, ok2 := item2[entity1+"_id"]
+	if !ok1 || !ok2 {
+		return false
+	}
+
+	return id1 == id2
+}
+
+// mergeItems merges two items into a single map
+func mergeItems(item1, item2 map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// Copy all items from item1
+	for k, v := range item1 {
+		result[k] = v
+	}
+
+	// Copy all items from item2, prefixing keys to avoid conflicts
+	for k, v := range item2 {
+		result[k] = v
+	}
+
+	return result
 }
 
 // evaluateNode recursively evaluates a single node in the expression tree
@@ -122,25 +311,131 @@ func evaluateNode(node *ExpressionNode, data map[string]interface{}) (interface{
 		return nil, fmt.Errorf("nil node")
 	}
 
-	// Convert expression node to expr-lang expression string
-	exprStr, err := nodeToExprString(node)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert node to expr: %w", err)
-	}
+	switch node.Type {
+	case "binary":
+		left, err := evaluateNode(node.Left, data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate left node: %w", err)
+		}
 
-	// Compile the expression
-	program, err := expr.Compile(exprStr, expr.Env(data))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile expression: %w", err)
-	}
+		right, err := evaluateNode(node.Right, data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate right node: %w", err)
+		}
 
-	// Run the expression with the data
-	result, err := expr.Run(program, data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
+		// Handle comparison operators
+		switch node.Operator {
+		case "==":
+			return left == right, nil
+		case "!=":
+			return left != right, nil
+		case ">":
+			// Convert to float64 for numeric comparison
+			leftNum, leftOk := toFloat64(left)
+			rightNum, rightOk := toFloat64(right)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot compare non-numeric values with >")
+			}
+			return leftNum > rightNum, nil
+		case "<":
+			leftNum, leftOk := toFloat64(left)
+			rightNum, rightOk := toFloat64(right)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot compare non-numeric values with <")
+			}
+			return leftNum < rightNum, nil
+		case ">=":
+			leftNum, leftOk := toFloat64(left)
+			rightNum, rightOk := toFloat64(right)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot compare non-numeric values with >=")
+			}
+			return leftNum >= rightNum, nil
+		case "<=":
+			leftNum, leftOk := toFloat64(left)
+			rightNum, rightOk := toFloat64(right)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot compare non-numeric values with <=")
+			}
+			return leftNum <= rightNum, nil
+		case "&&":
+			leftBool, leftOk := left.(bool)
+			rightBool, rightOk := right.(bool)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot perform logical AND on non-boolean values")
+			}
+			return leftBool && rightBool, nil
+		case "||":
+			leftBool, leftOk := left.(bool)
+			rightBool, rightOk := right.(bool)
+			if !leftOk || !rightOk {
+				return nil, fmt.Errorf("cannot perform logical OR on non-boolean values")
+			}
+			return leftBool || rightBool, nil
+		default:
+			return nil, fmt.Errorf("unsupported operator: %s", node.Operator)
+		}
 
-	return result, nil
+	case "variable":
+		// Handle entity paths (e.g., "class.name")
+		parts := strings.Split(node.Value, ".")
+		if len(parts) > 1 {
+			// Extract field
+			field := parts[1]
+
+			// Get the value from data
+			val, ok := data[field]
+			if !ok {
+				return nil, fmt.Errorf("field not found: %s", field)
+			}
+			return val, nil
+		}
+
+		// Regular variable
+		val, ok := data[node.Value]
+		if !ok {
+			return nil, fmt.Errorf("variable not found: %s", node.Value)
+		}
+		return val, nil
+
+	case "literal":
+		// Try to parse the literal value
+		if strings.HasPrefix(node.Value, "\"") && strings.HasSuffix(node.Value, "\"") {
+			// String literal
+			return strings.Trim(node.Value, "\""), nil
+		}
+
+		// Try to parse as number
+		if val, err := strconv.ParseFloat(node.Value, 64); err == nil {
+			return val, nil
+		}
+
+		return node.Value, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported node type: %s", node.Type)
+	}
+}
+
+// toFloat64 converts an interface{} to a float64 if possible
+func toFloat64(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case string:
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
 }
 
 // nodeToExprString converts an ExpressionNode to an expr-lang expression string
@@ -177,8 +472,7 @@ func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
 	return DUAL_ENTITY, nil
 }
 
-// getEntityName extracts the entity name from a node.
-// Returns empty string for literals and static values.
+// getEntityName extracts the entity name from a variable path (e.g. "class.name" -> "class")
 func getEntityName(node *ExpressionNode) (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("nil node")
@@ -186,16 +480,11 @@ func getEntityName(node *ExpressionNode) (string, error) {
 
 	switch node.Type {
 	case "variable":
-		return node.Value, nil
-	case "method_call":
-		// For method calls, consider the target object as the entity
+		// Split on dot and take the first part
 		parts := strings.Split(node.Value, ".")
-		if len(parts) > 0 {
-			return parts[0], nil
-		}
-		return "", nil
+		return parts[0], nil
 	case "literal":
-		return "", nil // Literals are static values
+		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported node type: %s", node.Type)
 	}
