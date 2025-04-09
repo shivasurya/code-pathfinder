@@ -360,8 +360,6 @@ func evaluateSingleEntity(node *ExpressionNode, entity string, ctx *EvaluationCo
 		return nil, fmt.Errorf("no data found for entity: %s", entity)
 	}
 
-
-
 	// Filter data based on the expression
 	result := make([]map[string]interface{}, 0)
 	for _, item := range data {
@@ -465,6 +463,7 @@ func areItemsRelated(item1, item2 map[string]interface{}, entity1, entity2 strin
 	// For now, we'll assume they're related if they have matching IDs
 	id1, ok1 := item1["id"]
 	id2, ok2 := item2[entity1+"_id"]
+	fmt.Println("Checking relationship:", id1, id2)
 	if !ok1 || !ok2 {
 		return false
 	}
@@ -478,14 +477,14 @@ func mergeItems(item1, item2 map[string]interface{}) map[string]interface{} {
 
 	// Copy all items from item1
 	for k, v := range item1 {
-		result[k] = v
+		result["class."+k] = v
 	}
 
 	// Copy all items from item2, prefixing keys to avoid conflicts
 	for k, v := range item2 {
-		result[k] = v
+		result["method."+k] = v
 	}
-
+	fmt.Println("Merged item:", result)
 	return result
 }
 
@@ -569,7 +568,7 @@ func evaluateNode(node *ExpressionNode, data map[string]interface{}) (interface{
 			field := parts[1]
 
 			// Get the value from data
-			val, ok := data[field]
+			val, ok := data[node.Value]
 			if !ok {
 				return nil, fmt.Errorf("field not found: %s", field)
 			}

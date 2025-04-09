@@ -39,6 +39,24 @@ func TestEvaluateExpressionTree(t *testing.T) {
 			},
 		},
 		{
+			name: "dual entity comparison",
+			expr: &ExpressionNode{
+				Type:     "binary",
+				Operator: "==",
+				Left: &ExpressionNode{
+					Type:  "variable",
+					Value: "class.name",
+				},
+				Right: &ExpressionNode{
+					Type:  "variable",
+					Value: "method.name",
+				},
+			},
+			expectedData: []map[string]interface{}{
+				{"class.id": 1, "class.name": "OtherClass", "type": "class", "methodCount": 1, "method.id": 4, "method.name": "OtherClass", "method.type": "method", "method.class_id": 2},
+			},
+		},
+		{
 			name: "complex AND condition",
 			expr: &ExpressionNode{
 				Type:     "binary",
@@ -111,10 +129,10 @@ func TestEvaluateExpressionTree(t *testing.T) {
 					"type":        "class",
 				},
 				{
-					"classId": 1,
-					"id":      1,
-					"name":    "doSomething",
-					"type":    "method",
+					"class_id": 1,
+					"id":       1,
+					"name":     "doSomething",
+					"type":     "method",
 				},
 			},
 		},
@@ -162,10 +180,10 @@ func buildTestEntityData() map[string][]map[string]interface{} {
 			{"id": 2, "name": "OtherClass", "type": "class", "methodCount": 1},
 		},
 		"method": {
-			{"id": 1, "name": "doSomething", "type": "method", "classId": 1},
-			{"id": 2, "name": "doOther", "type": "method", "classId": 1},
-			{"id": 3, "name": "doThird", "type": "method", "classId": 1},
-			{"id": 4, "name": "doSingle", "type": "method", "classId": 2},
+			{"id": 1, "name": "doSomething", "type": "method", "class_id": 1},
+			{"id": 2, "name": "doOther", "type": "method", "class_id": 1},
+			{"id": 3, "name": "doThird", "type": "method", "class_id": 1},
+			{"id": 4, "name": "OtherClass", "type": "method", "class_id": 2},
 		},
 	}
 }
