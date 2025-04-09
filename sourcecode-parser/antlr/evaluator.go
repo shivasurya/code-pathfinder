@@ -6,11 +6,23 @@ import (
 	"strings"
 )
 
-// EvaluationResult represents the result of evaluating an expression
+// IntermediateResult represents intermediate evaluation state at each node
+type IntermediateResult struct {
+	NodeType    string                   // Type of the node (binary, unary, literal, etc)
+	Operator    string                   // Operator if binary/unary node
+	Data        []map[string]interface{} // Filtered data at this node
+	Entities    []string                 // Entities involved at this node
+	LeftResult  *IntermediateResult      // Result from left subtree
+	RightResult *IntermediateResult      // Result from right subtree
+	Err         error                    // Any error at this node
+}
+
+// EvaluationResult represents the final result of evaluating an expression
 type EvaluationResult struct {
-	Data     []map[string]interface{} // The filtered data after evaluation
-	Entities []string                // The entities involved in this evaluation
-	Err      error                   // Any error that occurred during evaluation
+	Data          []map[string]interface{} // The filtered data after evaluation
+	Entities      []string                 // The entities involved in this evaluation
+	Err           error                    // Any error that occurred during evaluation
+	Intermediates []*IntermediateResult    // Intermediate results for debugging
 }
 
 // EvaluationContext holds the context for expression evaluation
@@ -112,34 +124,207 @@ func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*Eval
 		return &EvaluationResult{}, nil
 	}
 
-	// Detect the type of comparison
-	compType, err := DetectComparisonType(tree)
+	// Evaluate the tree bottom-up
+	intermediate, err := evaluateTreeNode(tree, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate tree: %w", err)
+	}
+
+	// Convert intermediate result to final result
+	result := &EvaluationResult{
+		Data:          intermediate.Data,
+		Entities:      intermediate.Entities,
+		Err:           intermediate.Err,
+		Intermediates: collectIntermediates(intermediate),
+	}
+
+	return result, nil
+}
+
+// evaluateTreeNode evaluates a single node in the expression tree
+// and returns an intermediate result
+func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
+	if node == nil {
+		return nil, fmt.Errorf("nil node")
+	}
+
+	result := &IntermediateResult{
+		NodeType: node.Type,
+		Operator: node.Operator,
+	}
+
+	switch node.Type {
+	case "binary":
+		// For binary nodes, evaluate both sides first
+		var leftResult, rightResult *IntermediateResult
+		var err error
+
+		if node.Left != nil {
+			leftResult, err = evaluateTreeNode(node.Left, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate left subtree: %w", err)
+			}
+			result.LeftResult = leftResult
+		}
+
+		if node.Right != nil {
+			rightResult, err = evaluateTreeNode(node.Right, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate right subtree: %w", err)
+			}
+			result.RightResult = rightResult
+		}
+
+		// Now evaluate the binary operation
+		if node.Operator == "&&" || node.Operator == "||" {
+			// For logical operators, evaluate both sides and combine results
+			if leftResult != nil {
+				result.Data = append(result.Data, leftResult.Data...)
+				result.Entities = append(result.Entities, leftResult.Entities...)
+			}
+			if rightResult != nil {
+				result.Data = append(result.Data, rightResult.Data...)
+				result.Entities = append(result.Entities, rightResult.Entities...)
+			}
+		} else {
+			// For comparison operators, evaluate normally
+			result, err = evaluateBinaryNode(node, leftResult, rightResult, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate binary node: %w", err)
+			}
+		}
+
+	case "variable":
+		// For variable nodes, evaluate directly
+		var err error
+		result, err = evaluateVariableNode(node, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate variable node: %w", err)
+		}
+
+	case "literal":
+		// For literal nodes, evaluate directly
+		var err error
+		result, err = evaluateLiteralNode(node)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate literal node: %w", err)
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported node type: %s", node.Type)
+	}
+
+	return result, nil
+}
+
+// evaluateBinaryNode evaluates a binary operation node
+func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, ctx *EvaluationContext) (*IntermediateResult, error) {
+	// First determine if this is a single entity or dual entity comparison
+	compType, err := DetectComparisonType(node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect comparison type: %w", err)
 	}
 
 	// Get entities involved
-	leftEntity, rightEntity, err := getInvolvedEntities(tree)
+	leftEntity, rightEntity, err := getInvolvedEntities(node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get involved entities: %w", err)
 	}
 
+	var result *IntermediateResult
+
 	// Handle different comparison types
 	switch compType {
 	case SINGLE_ENTITY:
-		return evaluateSingleEntity(tree, leftEntity, ctx)
+		eval, err := evaluateSingleEntity(node, leftEntity, ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = &IntermediateResult{
+			NodeType: node.Type,
+			Operator: node.Operator,
+			Data:     eval.Data,
+			Entities: eval.Entities,
+			Err:      eval.Err,
+		}
 
 	case DUAL_ENTITY:
 		// Check if entities are related
-		isRelated := ctx.RelationshipMap.HasRelationship(leftEntity, rightEntity)
-		if isRelated {
-			return evaluateRelatedEntities(tree, leftEntity, rightEntity, ctx)
+		hasRelation := ctx.RelationshipMap.HasRelationship(leftEntity, rightEntity)
+
+		var eval *EvaluationResult
+		if hasRelation {
+			eval, err = evaluateRelatedEntities(node, leftEntity, rightEntity, ctx)
+		} else {
+			eval, err = evaluateUnrelatedEntities(node, leftEntity, rightEntity, ctx)
 		}
-		return evaluateUnrelatedEntities(tree, leftEntity, rightEntity, ctx)
+		if err != nil {
+			return nil, err
+		}
+		result = &IntermediateResult{
+			NodeType: node.Type,
+			Operator: node.Operator,
+			Data:     eval.Data,
+			Entities: eval.Entities,
+			Err:      eval.Err,
+		}
 
 	default:
-		return nil, fmt.Errorf("unsupported comparison type")
+		return nil, fmt.Errorf("unknown comparison type: %s", compType)
 	}
+
+	// Store left and right results
+	result.LeftResult = left
+	result.RightResult = right
+
+	return result, nil
+}
+
+// evaluateVariableNode evaluates a variable node
+func evaluateVariableNode(node *ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
+	// Get entity name
+	entityName, err := getEntityName(node)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entity name: %w", err)
+	}
+
+	// Get entity data
+	data, ok := ctx.EntityData[entityName]
+	if !ok {
+		return nil, fmt.Errorf("entity data not found: %s", entityName)
+	}
+
+	return &IntermediateResult{
+		NodeType: node.Type,
+		Data:     data,
+		Entities: []string{entityName},
+	}, nil
+}
+
+// evaluateLiteralNode evaluates a literal node
+func evaluateLiteralNode(node *ExpressionNode) (*IntermediateResult, error) {
+	return &IntermediateResult{
+		NodeType: node.Type,
+		Data:     []map[string]interface{}{{"value": node.Value}},
+	}, nil
+}
+
+// collectIntermediates collects all intermediate results into a flat list
+func collectIntermediates(result *IntermediateResult) []*IntermediateResult {
+	if result == nil {
+		return nil
+	}
+
+	results := []*IntermediateResult{result}
+
+	if result.LeftResult != nil {
+		results = append(results, collectIntermediates(result.LeftResult)...)
+	}
+	if result.RightResult != nil {
+		results = append(results, collectIntermediates(result.RightResult)...)
+	}
+
+	return results
 }
 
 // getInvolvedEntities returns the entity types involved in an expression
@@ -451,7 +636,26 @@ func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
 		return "", fmt.Errorf("not a binary node")
 	}
 
-	// Get entity names from left and right sides
+	// For logical operators (&&, ||), check both sides recursively
+	if node.Operator == "&&" || node.Operator == "||" {
+		leftType, err := DetectComparisonType(node.Left)
+		if err != nil {
+			return "", fmt.Errorf("failed to detect left comparison type: %w", err)
+		}
+
+		rightType, err := DetectComparisonType(node.Right)
+		if err != nil {
+			return "", fmt.Errorf("failed to detect right comparison type: %w", err)
+		}
+
+		// If either side is DUAL_ENTITY, the whole expression is DUAL_ENTITY
+		if leftType == DUAL_ENTITY || rightType == DUAL_ENTITY {
+			return DUAL_ENTITY, nil
+		}
+		return SINGLE_ENTITY, nil
+	}
+
+	// For comparison operators, check entity names
 	leftEntity, err := getEntityName(node.Left)
 	if err != nil {
 		return "", fmt.Errorf("failed to get left entity: %w", err)

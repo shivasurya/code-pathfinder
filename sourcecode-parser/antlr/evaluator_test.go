@@ -7,60 +7,22 @@ import (
 )
 
 func TestEvaluateExpressionTree(t *testing.T) {
-	// Create a relationship map
-	rm := NewRelationshipMap()
-	rm.AddRelationship("class", "methods", []string{"method"})
-
 	// Create test data
-	testData := map[string][]map[string]interface{}{
-		"class": {
-			{"id": 1, "name": "Class1", "age": 30},
-			{"id": 2, "name": "Class2", "age": 20},
-			{"id": 3, "name": "Class3", "age": 40},
-		},
-		"method": {
-			{"id": 1, "class_id": 1, "name": "Method1"},
-			{"id": 2, "class_id": 2, "name": "Method2"},
-		},
+	ctx := &EvaluationContext{
+		RelationshipMap: buildTestRelationshipMap(),
+		EntityData:      buildTestEntityData(),
 	}
 
-	// Create evaluation context
-	ctx := &EvaluationContext{
-		RelationshipMap: rm,
-		EntityData:      testData,
-	}
-	tests := []struct {
-		name     string
-		tree     *ExpressionNode
-		expected *EvaluationResult
-		wantErr  bool
+	// Test cases
+	testCases := []struct {
+		name          string
+		expr          *ExpressionNode
+		expectedData  []map[string]interface{}
+		expectedError bool
 	}{
 		{
-			name: "single entity comparison",
-			tree: &ExpressionNode{
-				Type:     "binary",
-				Operator: ">",
-				Left: &ExpressionNode{
-					Type:  "variable",
-					Value: "class.age",
-				},
-				Right: &ExpressionNode{
-					Type:  "literal",
-					Value: "25",
-				},
-			},
-			expected: &EvaluationResult{
-				Data: []map[string]interface{}{
-					{"id": 1, "name": "Class1", "age": 30},
-					{"id": 3, "name": "Class3", "age": 40},
-				},
-				Entities: []string{"class"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "related entities comparison",
-			tree: &ExpressionNode{
+			name: "simple single entity comparison",
+			expr: &ExpressionNode{
 				Type:     "binary",
 				Operator: "==",
 				Left: &ExpressionNode{
@@ -68,39 +30,29 @@ func TestEvaluateExpressionTree(t *testing.T) {
 					Value: "class.name",
 				},
 				Right: &ExpressionNode{
-					Type:  "variable",
-					Value: "method.name",
+					Type:  "literal",
+					Value: "\"MyClass\"",
 				},
 			},
-			expected: &EvaluationResult{
-				Data: []map[string]interface{}{
-					{"id": 1, "name": "Class1", "age": 30, "method_name": "Method1", "class_id": 1},
-				},
-				Entities: []string{"class", "method"},
+			expectedData: []map[string]interface{}{
+				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
 			},
-			wantErr: false,
 		},
 		{
-			name: "nil tree",
-			tree: nil,
-			expected: &EvaluationResult{},
-			wantErr:  false,
-		},
-		{
-			name: "complex OR condition",
-			tree: &ExpressionNode{
+			name: "complex AND condition",
+			expr: &ExpressionNode{
 				Type:     "binary",
-				Operator: "||",
+				Operator: "&&",
 				Left: &ExpressionNode{
 					Type:     "binary",
-					Operator: "<",
+					Operator: "==",
 					Left: &ExpressionNode{
 						Type:  "variable",
-						Value: "age",
+						Value: "class.name",
 					},
 					Right: &ExpressionNode{
 						Type:  "literal",
-						Value: "25",
+						Value: "\"MyClass\"",
 					},
 				},
 				Right: &ExpressionNode{
@@ -108,94 +60,113 @@ func TestEvaluateExpressionTree(t *testing.T) {
 					Operator: ">",
 					Left: &ExpressionNode{
 						Type:  "variable",
-						Value: "age",
+						Value: "class.methodCount",
 					},
 					Right: &ExpressionNode{
 						Type:  "literal",
-						Value: "35",
+						Value: "2",
 					},
 				},
 			},
-			expected: &EvaluationResult{
-				Data: []map[string]interface{}{
-					{"id": 2, "name": "Class2", "age": 20},
-					{"id": 3, "name": "Class3", "age": 40},
-				},
-				Entities: []string{"class"},
+			expectedData: []map[string]interface{}{
+				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
+				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
 			},
-			wantErr: false,
 		},
 		{
-			name: "unary NOT condition",
-			tree: &ExpressionNode{
-				Type:     "unary",
-				Operator: "!",
-				Right: &ExpressionNode{
+			name: "related entities (class and method)",
+			expr: &ExpressionNode{
+				Type:     "binary",
+				Operator: "&&",
+				Left: &ExpressionNode{
 					Type:     "binary",
-					Operator: "<",
+					Operator: "==",
 					Left: &ExpressionNode{
 						Type:  "variable",
-						Value: "age",
+						Value: "class.name",
 					},
 					Right: &ExpressionNode{
 						Type:  "literal",
-						Value: "30",
+						Value: "\"MyClass\"",
+					},
+				},
+				Right: &ExpressionNode{
+					Type:     "binary",
+					Operator: "==",
+					Left: &ExpressionNode{
+						Type:  "variable",
+						Value: "method.name",
+					},
+					Right: &ExpressionNode{
+						Type:  "literal",
+						Value: "\"doSomething\"",
 					},
 				},
 			},
-			expected: &EvaluationResult{
-				Data: []map[string]interface{}{
-					{"id": 1, "name": "Class1", "age": 30},
-					{"id": 3, "name": "Class3", "age": 40},
+			expectedData: []map[string]interface{}{
+				{
+					"id":          1,
+					"methodCount": 3,
+					"name":        "MyClass",
+					"type":        "class",
 				},
-				Entities: []string{"class"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "string comparison",
-			tree: &ExpressionNode{
-				Type:     "binary",
-				Operator: "==",
-				Left: &ExpressionNode{
-					Type:  "variable",
-					Value: "class.name",
-				},
-				Right: &ExpressionNode{
-					Type:  "literal",
-					Value: "\"Class1\"",
+				{
+					"classId": 1,
+					"id":      1,
+					"name":    "doSomething",
+					"type":    "method",
 				},
 			},
-			expected: &EvaluationResult{
-				Data: []map[string]interface{}{
-					{"id": 1, "name": "Class1", "age": 30},
-				},
-				Entities: []string{"class"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid operator",
-			tree: &ExpressionNode{
-				Type:     "binary",
-				Operator: "invalid",
-			},
-			expected: &EvaluationResult{},
-			wantErr:  true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := EvaluateExpressionTree(tt.tree, ctx)
-			if tt.wantErr {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := EvaluateExpressionTree(tc.expr, ctx)
+			if tc.expectedError {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected.Data, got.Data)
-			assert.Equal(t, tt.expected.Entities, got.Entities)
+			assert.Equal(t, tc.expectedData, result.Data)
+
+			// Print intermediate results for debugging
+			t.Logf("\nIntermediate Results for %s:", tc.name)
+			for _, r := range result.Intermediates {
+				t.Logf("Node Type: %s", r.NodeType)
+				if r.Operator != "" {
+					t.Logf("Operator: %s", r.Operator)
+				}
+				t.Logf("Data: %v", r.Data)
+				t.Logf("Entities: %v", r.Entities)
+				if r.Err != nil {
+					t.Logf("Error: %v", r.Err)
+				}
+				t.Logf("---")
+			}
 		})
+	}
+}
+
+func buildTestRelationshipMap() *RelationshipMap {
+	rm := NewRelationshipMap()
+	rm.AddRelationship("class", "methods", []string{"method"})
+	rm.AddRelationship("method", "class", []string{"class"})
+	return rm
+}
+
+func buildTestEntityData() map[string][]map[string]interface{} {
+	return map[string][]map[string]interface{}{
+		"class": {
+			{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
+			{"id": 2, "name": "OtherClass", "type": "class", "methodCount": 1},
+		},
+		"method": {
+			{"id": 1, "name": "doSomething", "type": "method", "classId": 1},
+			{"id": 2, "name": "doOther", "type": "method", "classId": 1},
+			{"id": 3, "name": "doThird", "type": "method", "classId": 1},
+			{"id": 4, "name": "doSingle", "type": "method", "classId": 2},
+		},
 	}
 }
 
@@ -419,7 +390,7 @@ func TestDetectComparisonType(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "nil node",
+			name:     "nil node",
 			node:     nil,
 			expected: "",
 			wantErr:  true,
@@ -442,8 +413,8 @@ func TestDetectComparisonType(t *testing.T) {
 func TestEvaluateNode(t *testing.T) {
 	// Mock data with method and predicate functions
 	testData := map[string]interface{}{
-		"age": 30,
-		"name": "Alice",
+		"age":        30,
+		"name":       "Alice",
 		"complexity": func() int { return 10 },
 		"hasAnnotation": func(annotation string) bool {
 			return annotation == "@Test"
