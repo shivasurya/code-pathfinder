@@ -186,15 +186,78 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	// Prepare entity data
+	// Prepare entity data by processing tree relationships
 	for _, entity := range query.SelectList {
-		entityData := make([]map[string]interface{}, 0)
-		// Get nodes for this entity type
-		nodes := getNodesForEntity(db, treeHolder, entity)
-		// Convert nodes to map[string]interface{}
-		for _, node := range nodes {
-			entityData = append(entityData, nodeToMap(node))
+		entityData := []map[string]interface{}{}
+
+		// Process each file's tree nodes
+		for _, fileTree := range treeHolder {
+			// Process the tree recursively
+			var processNode func(*model.TreeNode)
+			processNode = func(node *model.TreeNode) {
+				if node == nil || node.Node == nil {
+					return
+				}
+
+				// Check if this node matches the entity type
+				if node.Node.NodeType == entity.Entity {
+					// Convert node data to map format
+					nodeData := map[string]interface{}{
+						"id":   node.Node.NodeID,
+						"type": node.Node.NodeType,
+					}
+
+					// Add specific fields based on node type
+					switch entity.Entity {
+					case "method":
+						if node.Node.MethodDecl != nil {
+							nodeData["name"] = node.Node.MethodDecl.Name
+							nodeData["return_type"] = node.Node.MethodDecl.ReturnType
+							nodeData["parameters"] = node.Node.MethodDecl.Parameters
+						}
+					case "class":
+						if node.Node.ClassDecl != nil {
+							class := node.Node.ClassDecl
+							nodeData["name"] = class.QualifiedName
+							nodeData["package"] = class.Package
+							// Get visibility from modifiers
+							if class.IsPublic() {
+								nodeData["visibility"] = "public"
+							} else if class.IsPrivate() {
+								nodeData["visibility"] = "private"
+							} else if class.IsProtected() {
+								nodeData["visibility"] = "protected"
+							} else {
+								nodeData["visibility"] = "package"
+							}
+							nodeData["is_abstract"] = class.IsAbstract()
+							nodeData["super_types"] = class.SuperTypes
+						}
+					case "field":
+						if node.Node.Field != nil {
+							field := node.Node.Field
+							// Use first field name if available
+							if len(field.FieldNames) > 0 {
+								nodeData["name"] = field.FieldNames[0]
+							}
+							nodeData["type"] = field.Type
+							nodeData["visibility"] = field.Visibility
+						}
+					}
+
+					entityData = append(entityData, nodeData)
+				}
+
+				// Process children
+				for _, child := range node.Children {
+					processNode(child)
+				}
+			}
+
+			// Start processing from the root
+			processNode(fileTree)
 		}
+
 		ctx.EntityData[entity.Entity] = entityData
 	}
 
@@ -215,7 +278,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	for _, data := range result.Data {
 		nodeSet := make([]*model.Node, 0)
 		for _, entity := range query.SelectList {
-			if node := findNodeByData(db, treeHolder, entity, data); node != nil {
+			if node := findNodeByData(treeHolder, entity, data); node != nil {
 				nodeSet = append(nodeSet, node)
 			}
 		}
@@ -239,7 +302,7 @@ func buildRelationshipMap() *parser.RelationshipMap {
 }
 
 // getNodesForEntity returns all nodes for a given entity type
-func getNodesForEntity(db *db.StorageNode, treeHolder []*model.TreeNode, entity parser.SelectList) []*model.Node {
+func getNodesForEntity(treeHolder []*model.TreeNode, entity parser.SelectList) []*model.Node {
 	// Get nodes for this entity type
 	nodes := make([]*model.Node, 0)
 	for _, tree := range treeHolder {
@@ -250,31 +313,11 @@ func getNodesForEntity(db *db.StorageNode, treeHolder []*model.TreeNode, entity 
 	return nodes
 }
 
-// nodeToMap converts a node to a map[string]interface{}
-func nodeToMap(node *model.Node) map[string]interface{} {
-	result := make(map[string]interface{})
-	// Add basic node properties
-	result["id"] = node.NodeID
-	result["type"] = node.NodeType
-	// Add other properties based on node type
-	switch node.NodeType {
-	case "class":
-		if node.ClassDecl != nil {
-			result["name"] = node.ClassDecl.QualifiedName
-		}
-	case "method":
-		if node.MethodDecl != nil {
-			result["name"] = node.MethodDecl.QualifiedName
-		}
-	}
-	return result
-}
-
 // findNodeByData finds a node that matches the given data
-func findNodeByData(db *db.StorageNode, treeHolder []*model.TreeNode, entity parser.SelectList, data map[string]interface{}) *model.Node {
+func findNodeByData(treeHolder []*model.TreeNode, entity parser.SelectList, data map[string]interface{}) *model.Node {
 	// Get all nodes for this entity type
-	nodes := getNodesForEntity(db, treeHolder, entity)
-	
+	nodes := getNodesForEntity(treeHolder, entity)
+
 	// Find the node that matches the data
 	for _, node := range nodes {
 		if matchesData(node, data) {
@@ -355,53 +398,6 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 		return "", err
 	}
 	return output, nil
-}
-
-func generateCartesianProduct(db *db.StorageNode, treeHolder []*model.TreeNode, selectList []parser.SelectList, conditions []string) [][]*model.Node {
-	// select list may contain multiple entities, create holder for each entity
-	ts := make([][]interface{}, 0, len(selectList))
-	// for each entity, get all nodes
-	for _, entity := range selectList {
-		ts = append(ts, db.GetTypedSlice(entity.Entity))
-	}
-	// figure out way to join entity nodes together using relationships
-	// at worst case is cartesian product
-
-	sets := make([][]interface{}, 0, len(selectList))
-	sets = append(sets, ts...)
-
-	product := cartesianProduct(sets)
-
-	// Convert [][]interface{} to [][]*model.Node
-	result := make([][]*model.Node, len(product))
-	for i, row := range product {
-		result[i] = make([]*model.Node, len(row))
-		for j, item := range row {
-			if node, ok := item.(*model.Node); ok {
-				result[i][j] = node
-			}
-		}
-	}
-
-	return result
-}
-
-func cartesianProduct(sets [][]interface{}) [][]interface{} {
-	result := [][]interface{}{{}}
-	for _, set := range sets {
-		var newResult [][]interface{}
-		for _, item := range set {
-			for _, subResult := range result {
-				newSubResult := make([]interface{}, len(subResult), len(subResult)+1)
-				copy(newSubResult, subResult)
-				newSubResult = append(newSubResult, item)
-				newResult = append(newResult, newSubResult)
-			}
-		}
-		result = newResult
-	}
-
-	return result
 }
 
 func generateProxyEnv(node *model.Node, query parser.Query) map[string]interface{} {

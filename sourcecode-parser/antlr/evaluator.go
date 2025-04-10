@@ -395,7 +395,7 @@ func evaluateRelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx 
 	for _, item1 := range data1 {
 		for _, item2 := range data2 {
 			// Check if these items are related (this would depend on your data structure)
-			if areItemsRelated(item1, item2, entity1, entity2) {
+			if areItemsRelated(item1, item2, entity1) {
 				// Merge the items
 				mergedItem := mergeItems(item1, item2)
 
@@ -455,7 +455,7 @@ func evaluateUnrelatedEntities(node *ExpressionNode, entity1, entity2 string, ct
 }
 
 // areItemsRelated checks if two items are related based on their entity types
-func areItemsRelated(item1, item2 map[string]interface{}, entity1, entity2 string) bool {
+func areItemsRelated(item1, item2 map[string]interface{}, entity1 string) bool {
 	// This is a placeholder. The actual implementation would depend on your data structure
 	// For example, if entity1 is "class" and entity2 is "method",
 	// you might check if item2["class_id"] == item1["id"]
@@ -690,60 +690,5 @@ func getEntityName(node *ExpressionNode) (string, error) {
 		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported node type: %s", node.Type)
-	}
-}
-
-func nodeToExprString(node *ExpressionNode) (string, error) {
-	switch node.Type {
-	case "binary":
-		left, err := nodeToExprString(node.Left)
-		if err != nil {
-			return "", err
-		}
-		right, err := nodeToExprString(node.Right)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("(%s %s %s)", left, node.Operator, right), nil
-
-	case "literal":
-		return node.Value, nil
-
-	case "method_call":
-		// Format method call with arguments
-		args := make([]string, 0, len(node.Args))
-		for _, arg := range node.Args {
-			argStr, err := nodeToExprString(&arg)
-			if err != nil {
-				return "", err
-			}
-			args = append(args, argStr)
-		}
-		return fmt.Sprintf("%s(%s)", node.Value, strings.Join(args, ", ")), nil
-
-	case "predicate_call":
-		// Similar to method_call
-		args := make([]string, 0, len(node.Args))
-		for _, arg := range node.Args {
-			argStr, err := nodeToExprString(&arg)
-			if err != nil {
-				return "", err
-			}
-			args = append(args, argStr)
-		}
-		return fmt.Sprintf("%s(%s)", node.Value, strings.Join(args, ", ")), nil
-
-	case "variable":
-		return node.Value, nil
-
-	case "unary":
-		right, err := nodeToExprString(node.Right)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%s%s", node.Operator, right), nil
-
-	default:
-		return "", fmt.Errorf("unknown node type: %s", node.Type)
 	}
 }
