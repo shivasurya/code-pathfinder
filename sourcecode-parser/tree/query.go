@@ -209,7 +209,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 
 					// Add specific fields based on node type
 					switch entity.Entity {
-					case "method":
+					case "method_declaration":
 						if node.Node.MethodDecl != nil {
 							nodeData["name"] = node.Node.MethodDecl.Name
 							nodeData["return_type"] = node.Node.MethodDecl.ReturnType
@@ -244,7 +244,6 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 							nodeData["visibility"] = field.Visibility
 						}
 					}
-
 					entityData = append(entityData, nodeData)
 				}
 
@@ -257,7 +256,6 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 			// Start processing from the root
 			processNode(fileTree)
 		}
-
 		ctx.EntityData[entity.Entity] = entityData
 	}
 
@@ -270,8 +268,11 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	result, err := parser.EvaluateExpressionTree(query.ExpressionTree, ctx)
 	if err != nil {
 		// Handle error appropriately
+		fmt.Println("Error evaluating expression tree:", err)
 		return nil, nil
 	}
+
+	fmt.Printf("Result: %+v\n", result)
 
 	// Convert result data back to nodes
 	resultNodes := make([][]*model.Node, 0)
