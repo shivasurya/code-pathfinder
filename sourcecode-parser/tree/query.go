@@ -8,67 +8,64 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 type Env struct {
-	Node *Node
+	Node *model.Node
 }
 
-func (env *Env) GetVisibility() string {
-	return env.Node.Modifier
-}
+// func (env *Env) GetVisibility() string {
+// 	return env.Node.Modifier
+// }
 
-func (env *Env) GetAnnotations() []string {
-	return env.Node.Annotation
-}
+// func (env *Env) GetAnnotations() []string {
+// 	return env.Node.Annotation
+// }
 
-func (env *Env) GetReturnType() string {
-	return env.Node.ReturnType
-}
+// func (env *Env) GetReturnType() string {
+// 	return env.Node.ReturnType
+// }
 
-func (env *Env) GetName() string {
-	return env.Node.Name
-}
+// func (env *Env) GetName() string {
+// 	return env.Node.Name
+// }
 
-func (env *Env) GetArgumentTypes() []string {
-	return env.Node.MethodArgumentsType
-}
+// func (env *Env) GetArgumentTypes() []string {
+// 	return env.Node.MethodArgumentsType
+// }
 
-func (env *Env) GetArgumentNames() []string {
-	return env.Node.MethodArgumentsValue
-}
+// func (env *Env) GetArgumentNames() []string {
+// 	return env.Node.MethodArgumentsValue
+// }
 
-func (env *Env) GetSuperClass() string {
-	return env.Node.SuperClass
-}
+// func (env *Env) GetSuperClass() string {
+// 	return env.Node.SuperClass
+// }
 
-func (env *Env) GetInterfaces() []string {
-	return env.Node.Interface
-}
+// func (env *Env) GetInterfaces() []string {
+// 	return env.Node.Interface
+// }
 
-func (env *Env) GetScope() string {
-	return env.Node.Scope
-}
+// func (env *Env) GetScope() string {
+// 	return env.Node.Scope
+// }
 
-func (env *Env) GetVariableValue() string {
-	return env.Node.VariableValue
-}
+// func (env *Env) GetVariableValue() string {
+// 	return env.Node.VariableValue
+// }
 
-func (env *Env) GetVariableDataType() string {
-	return env.Node.DataType
-}
+// func (env *Env) GetVariableDataType() string {
+// 	return env.Node.DataType
+// }
 
-func (env *Env) GetThrowsTypes() []string {
-	return env.Node.ThrowsExceptions
-}
-
-func (env *Env) HasAccess() bool {
-	return env.Node.hasAccess
-}
+// func (env *Env) GetThrowsTypes() []string {
+// 	return env.Node.ThrowsExceptions
+// }
 
 func (env *Env) IsJavaSourceFile() bool {
-	return env.Node.isJavaSourceFile
+	return true
 }
 
 func (env *Env) GetDoc() *model.Javadoc {
@@ -87,24 +84,42 @@ func (env *Env) GetLeftOperand() string {
 }
 
 func (env *Env) ToString() string {
-	return fmt.Sprintf("Node{Type: %s, Name: %s, Modifier: %s, Annotation: %v, ReturnType: %s, MethodArgumentsType: %v, MethodArgumentsValue: %v, SuperClass: %s, Interface: %v, Scope: %s, VariableValue: %s, DataType: %s, ThrowsExceptions: %v, hasAccess: %t, isJavaSourceFile: %t, JavaDoc: %+v, BinaryExpr: %+v}",
-		env.Node.Type,
-		env.Node.Name,
-		env.Node.Modifier,
-		env.Node.Annotation,
-		env.Node.ReturnType,
-		env.Node.MethodArgumentsType,
-		env.Node.MethodArgumentsValue,
-		env.Node.SuperClass,
-		env.Node.Interface,
-		env.Node.Scope,
-		env.Node.VariableValue,
-		env.Node.DataType,
-		env.Node.ThrowsExceptions,
-		env.Node.hasAccess,
-		env.Node.isJavaSourceFile,
-		env.Node.JavaDoc,
-		env.Node.BinaryExpr)
+	node := env.Node
+	if node == nil {
+		return ""
+	}
+
+	if node.AddExpr != nil {
+		return node.AddExpr.LeftOperand.NodeString + " + " + node.AddExpr.RightOperand.NodeString
+	} else if node.SubExpr != nil {
+		return node.SubExpr.LeftOperand.NodeString + " - " + node.SubExpr.RightOperand.NodeString
+	} else if node.MulExpr != nil {
+		return node.MulExpr.LeftOperand.NodeString + " * " + node.MulExpr.RightOperand.NodeString
+	} else if node.DivExpr != nil {
+		return node.DivExpr.LeftOperand.NodeString + " / " + node.DivExpr.RightOperand.NodeString
+	} else if node.MethodDecl != nil {
+		return node.MethodDecl.Name
+	} else if node.MethodCall != nil {
+		return node.MethodCall.MethodName
+	} else if node.ClassInstanceExpr != nil {
+		return node.ClassInstanceExpr.ClassName
+	} else if node.IfStmt != nil {
+		return node.IfStmt.Condition.NodeString
+	} else if node.WhileStmt != nil {
+		return "while"
+	} else if node.DoStmt != nil {
+		return "do"
+	} else if node.ForStmt != nil {
+		return "for"
+	} else if node.BreakStmt != nil {
+		return "break"
+	} else if node.ContinueStmt != nil {
+		return "continue"
+	} else if node.ReturnStmt != nil {
+		return "return"
+	}
+
+	return ""
 }
 
 func (env *Env) GetRightOperand() string {
@@ -159,27 +174,279 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
-	result := make([][]*Node, 0)
+func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+	// Create evaluation context
+	ctx := &parser.EvaluationContext{
+		RelationshipMap: buildRelationshipMap(),
+		EntityData:      make(map[string][]map[string]interface{}),
+	}
 
-	// log query select list alone
+	// Log query select list
 	for _, entity := range query.SelectList {
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	cartesianProduct := generateCartesianProduct(graph, query.SelectList, query.Condition)
+	// Prepare entity data by using db.StorageNode getter methods
+	for _, entity := range query.SelectList {
+		entityData := []map[string]interface{}{}
 
-	for _, nodeSet := range cartesianProduct {
-		if FilterEntities(nodeSet, query) {
-			result = append(result, nodeSet)
+		// Use appropriate getter method based on entity type
+		switch entity.Entity {
+		case "method_declaration":
+			// Get method declarations from db
+			methods := db.GetMethodDecls()
+			for _, method := range methods {
+				nodeData := map[string]interface{}{
+					"id":          method.QualifiedName, // Use qualified name as ID
+					"type":        "method_declaration",
+					"name":        method.Name,
+					"return_type": method.ReturnType,
+					"parameters":  method.Parameters,
+				}
+				entityData = append(entityData, nodeData)
+			}
+
+		case "class":
+			// Get class declarations from db
+			classes := db.GetClassDecls()
+			for _, class := range classes {
+				nodeData := map[string]interface{}{
+					"id":      class.QualifiedName, // Use qualified name as ID
+					"type":    "class",
+					"name":    class.QualifiedName,
+					"package": class.Package,
+				}
+
+				// Get visibility from modifiers
+				if class.IsPublic() {
+					nodeData["visibility"] = "public"
+				} else if class.IsPrivate() {
+					nodeData["visibility"] = "private"
+				} else if class.IsProtected() {
+					nodeData["visibility"] = "protected"
+				} else {
+					nodeData["visibility"] = "package"
+				}
+
+				nodeData["is_abstract"] = class.IsAbstract()
+				nodeData["super_types"] = class.SuperTypes
+				entityData = append(entityData, nodeData)
+			}
+
+		case "field":
+			// Get field declarations from db
+			fields := db.GetFields()
+			for _, field := range fields {
+				nodeData := map[string]interface{}{
+					"id":   field.SourceDeclaration, // Use source declaration as ID
+					"type": "field",
+				}
+
+				// Use first field name if available
+				if len(field.FieldNames) > 0 {
+					nodeData["name"] = field.FieldNames[0]
+				}
+
+				nodeData["type"] = field.Type
+				nodeData["visibility"] = field.Visibility
+				entityData = append(entityData, nodeData)
+			}
+
+		case "method_invocation":
+			// Get method calls from db
+			methodCalls := db.GetMethodCalls()
+			for _, call := range methodCalls {
+				nodeData := map[string]interface{}{
+					"id":   call.MethodName, // Use method name as ID
+					"type": "method_invocation",
+					"name": call.MethodName,
+				}
+				entityData = append(entityData, nodeData)
+			}
+
+		case "binary_expression":
+			// Get binary expressions from db
+			binaryExprs := db.GetBinaryExprs()
+			for _, expr := range binaryExprs {
+				nodeData := map[string]interface{}{
+					"id":            expr.SourceDeclaration, // Use source declaration as ID
+					"type":          "binary_expression",
+					"left_operand":  expr.LeftOperand.String(),
+					"right_operand": expr.RightOperand.String(),
+					"operator":      expr.Op, // Use Op field instead of Operator
+				}
+				entityData = append(entityData, nodeData)
+			}
+
+		default:
+			// For entities without direct getter methods, fall back to tree traversal
+			for _, fileTree := range treeHolder {
+				// Use recursive tree traversal for other entity types
+				processTreeRecursively(fileTree, entity.Entity, &entityData)
+			}
+		}
+
+		ctx.EntityData[entity.Entity] = entityData
+	}
+
+	// Use the expression tree from the query
+	if query.ExpressionTree == nil {
+		return nil, nil
+	}
+
+	// Evaluate the condition
+	result, err := parser.EvaluateExpressionTree(query.ExpressionTree, ctx)
+	if err != nil {
+		// Handle error appropriately
+		fmt.Println("Error evaluating expression tree:", err)
+		return nil, nil
+	}
+
+	fmt.Printf("Result: %+v\n", result)
+
+	// Convert result data back to nodes
+	resultNodes := make([][]*model.Node, 0)
+	for _, data := range result.Data {
+		nodeSet := make([]*model.Node, 0)
+		for _, entity := range query.SelectList {
+			if node := findNodeByData(treeHolder, entity, data); node != nil {
+				nodeSet = append(nodeSet, node)
+			}
+		}
+		if len(nodeSet) == len(query.SelectList) {
+			resultNodes = append(resultNodes, nodeSet)
 		}
 	}
-	output = generateOutput(result, query)
-	nodes = result
-	return nodes, output
+
+	output = generateOutput(resultNodes, query)
+	return resultNodes, output
 }
 
-func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
+// buildRelationshipMap creates a relationship map for the entities
+func buildRelationshipMap() *parser.RelationshipMap {
+	rm := parser.NewRelationshipMap()
+	// Add relationships between entities
+	// For example:
+	rm.AddRelationship("class", "methods", []string{"method"})
+	rm.AddRelationship("method", "class", []string{"class"})
+	return rm
+}
+
+// getNodesForEntity returns all nodes for a given entity type
+func getNodesForEntity(treeHolder []*model.TreeNode, entity parser.SelectList) []*model.Node {
+	// Get nodes for this entity type
+	nodes := make([]*model.Node, 0)
+	for _, tree := range treeHolder {
+		if tree.Node.NodeType == entity.Entity {
+			nodes = append(nodes, tree.Node)
+		}
+	}
+	return nodes
+}
+
+// findNodeByData finds a node that matches the given data
+func findNodeByData(treeHolder []*model.TreeNode, entity parser.SelectList, data map[string]interface{}) *model.Node {
+	// Get all nodes for this entity type
+	nodes := getNodesForEntity(treeHolder, entity)
+
+	// Find the node that matches the data
+	for _, node := range nodes {
+		if matchesData(node, data) {
+			return node
+		}
+	}
+	return nil
+}
+
+// matchesData checks if a node matches the given data
+// processTreeRecursively traverses the tree recursively to find entities of the specified type
+func processTreeRecursively(node *model.TreeNode, entityType string, entityData *[]map[string]interface{}) {
+	if node == nil || node.Node == nil {
+		return
+	}
+
+	// Check if this node matches the entity type
+	if node.Node.NodeType == entityType {
+		// Convert node data to map format
+		nodeData := map[string]interface{}{
+			"id":   node.Node.NodeID,
+			"type": node.Node.NodeType,
+		}
+
+		// Add specific fields based on node type
+		switch entityType {
+		case "method_declaration":
+			if node.Node.MethodDecl != nil {
+				nodeData["name"] = node.Node.MethodDecl.Name
+				nodeData["return_type"] = node.Node.MethodDecl.ReturnType
+				nodeData["parameters"] = node.Node.MethodDecl.Parameters
+			}
+		case "class":
+			if node.Node.ClassDecl != nil {
+				class := node.Node.ClassDecl
+				nodeData["name"] = class.QualifiedName
+				nodeData["package"] = class.Package
+				// Get visibility from modifiers
+				if class.IsPublic() {
+					nodeData["visibility"] = "public"
+				} else if class.IsPrivate() {
+					nodeData["visibility"] = "private"
+				} else if class.IsProtected() {
+					nodeData["visibility"] = "protected"
+				} else {
+					nodeData["visibility"] = "package"
+				}
+				nodeData["is_abstract"] = class.IsAbstract()
+				nodeData["super_types"] = class.SuperTypes
+			}
+		case "field":
+			if node.Node.Field != nil {
+				field := node.Node.Field
+				// Use first field name if available
+				if len(field.FieldNames) > 0 {
+					nodeData["name"] = field.FieldNames[0]
+				}
+				nodeData["type"] = field.Type
+				nodeData["visibility"] = field.Visibility
+			}
+		}
+		*entityData = append(*entityData, nodeData)
+	}
+
+	// Process children
+	for _, child := range node.Children {
+		processTreeRecursively(child, entityType, entityData)
+	}
+}
+
+func matchesData(node *model.Node, data map[string]interface{}) bool {
+	// Check if basic properties match
+	if id, ok := data["id"]; ok {
+		if id != node.NodeID {
+			return false
+		}
+	}
+	if nodeType, ok := data["type"]; ok {
+		if nodeType != node.NodeType {
+			return false
+		}
+	}
+	if name, ok := data["name"]; ok {
+		switch node.NodeType {
+		case "class":
+			if node.ClassDecl == nil || name != node.ClassDecl.QualifiedName {
+				return false
+			}
+		case "method":
+			if node.MethodDecl == nil || name != node.MethodDecl.QualifiedName {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func generateOutput(nodeSet [][]*model.Node, query parser.Query) [][]interface{} {
 	results := make([][]interface{}, 0, len(nodeSet))
 	for _, nodeSet := range nodeSet {
 		var result []interface{}
@@ -208,7 +475,7 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
 	return results
 }
 
-func evaluateExpression(node []*Node, expression string, query parser.Query) (interface{}, error) {
+func evaluateExpression(node []*model.Node, expression string, query parser.Query) (interface{}, error) {
 	env := generateProxyEnvForSet(node, query)
 
 	program, err := expr.Compile(expression, expr.Env(env))
@@ -224,93 +491,7 @@ func evaluateExpression(node []*Node, expression string, query parser.Query) (in
 	return output, nil
 }
 
-func generateCartesianProduct(graph *CodeGraph, selectList []parser.SelectList, conditions []string) [][]*Node {
-	typeIndex := make(map[string][]*Node)
-
-	// value and reference based reducing search space
-	for _, condition := range conditions {
-		// this code helps to reduce search space
-		// if there is single entity in select list, the condition is easy to reduce the search space
-		// if there are multiple entities in select list, the condition is hard to reduce the search space,
-		// but I have tried my best using O(n^2) time complexity to reduce the search space
-		if len(selectList) > 1 {
-			lhsNodes := graph.FindNodesByType(selectList[0].Entity)
-			rhsNodes := graph.FindNodesByType(selectList[1].Entity)
-			for _, lhsNode := range lhsNodes {
-				for _, rhsNode := range rhsNodes {
-					if FilterEntities([]*Node{lhsNode, rhsNode}, parser.Query{Expression: condition, SelectList: selectList}) {
-						typeIndex[lhsNode.Type] = appendUnique(typeIndex[lhsNode.Type], lhsNode)
-						typeIndex[rhsNode.Type] = appendUnique(typeIndex[rhsNode.Type], rhsNode)
-					}
-				}
-			}
-		} else {
-			filteredNodes := graph.FindNodesByType(selectList[0].Entity)
-			for _, node := range filteredNodes {
-				query := parser.Query{Expression: condition, SelectList: selectList}
-				if FilterEntities([]*Node{node}, query) {
-					typeIndex[node.Type] = appendUnique(typeIndex[node.Type], node)
-				}
-			}
-		}
-	}
-
-	if len(conditions) == 0 {
-		for _, node := range graph.Nodes {
-			typeIndex[node.Type] = append(typeIndex[node.Type], node)
-		}
-	}
-
-	sets := make([][]interface{}, 0, len(selectList))
-
-	for _, entity := range selectList {
-		set := make([]interface{}, 0)
-		if nodes, ok := typeIndex[entity.Entity]; ok {
-			for _, node := range nodes {
-				set = append(set, node)
-			}
-		}
-		sets = append(sets, set)
-	}
-
-	product := cartesianProduct(sets)
-
-	result := make([][]*Node, len(product))
-	for i, p := range product {
-		result[i] = make([]*Node, len(p))
-		for j, node := range p {
-			if n, ok := node.(*Node); ok {
-				result[i][j] = n
-			} else {
-				// Handle the error case, e.g., skip this node or log an error
-				// You might want to customize this part based on your error handling strategy
-				log.Printf("Warning: Expected *Node type, got %T", node)
-			}
-		}
-	}
-
-	return result
-}
-
-func cartesianProduct(sets [][]interface{}) [][]interface{} {
-	result := [][]interface{}{{}}
-	for _, set := range sets {
-		var newResult [][]interface{}
-		for _, item := range set {
-			for _, subResult := range result {
-				newSubResult := make([]interface{}, len(subResult), len(subResult)+1)
-				copy(newSubResult, subResult)
-				newSubResult = append(newSubResult, item)
-				newResult = append(newResult, newSubResult)
-			}
-		}
-		result = newResult
-	}
-
-	return result
-}
-
-func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
+func generateProxyEnv(node *model.Node, query parser.Query) map[string]interface{} {
 	proxyenv := Env{Node: node}
 	methodDeclaration := "method_declaration"
 	classDeclaration := "class_declaration"
@@ -417,39 +598,39 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	env := map[string]interface{}{
 		"isJavaSourceFile": proxyenv.IsJavaSourceFile(),
 		methodDeclaration: map[string]interface{}{
-			"getVisibility":   proxyenv.GetVisibility,
-			"getAnnotation":   proxyenv.GetAnnotations,
-			"getReturnType":   proxyenv.GetReturnType,
-			"getName":         proxyenv.GetName,
-			"getArgumentType": proxyenv.GetArgumentTypes,
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getThrowsType":   proxyenv.GetThrowsTypes,
-			"getDoc":          proxyenv.GetDoc,
-			"toString":        proxyenv.ToString,
+			// "getVisibility":   proxyenv.GetVisibility,
+			// "getAnnotation":   proxyenv.GetAnnotations,
+			// "getReturnType":   proxyenv.GetReturnType,
+			// "getName":         proxyenv.GetName,
+			// "getArgumentType": proxyenv.GetArgumentTypes,
+			// "getArgumentName": proxyenv.GetArgumentNames,
+			// "getThrowsType":   proxyenv.GetThrowsTypes,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		classDeclaration: map[string]interface{}{
-			"getSuperClass": proxyenv.GetSuperClass,
-			"getName":       proxyenv.GetName,
-			"getAnnotation": proxyenv.GetAnnotations,
-			"getVisibility": proxyenv.GetVisibility,
-			"getInterface":  proxyenv.GetInterfaces,
-			"getDoc":        proxyenv.GetDoc,
-			"toString":      proxyenv.ToString,
+			// "getSuperClass": proxyenv.GetSuperClass,
+			// "getName":       proxyenv.GetName,
+			// "getAnnotation": proxyenv.GetAnnotations,
+			// "getVisibility": proxyenv.GetVisibility,
+			// "getInterface":  proxyenv.GetInterfaces,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		methodInvocation: map[string]interface{}{
-			"getArgumentName": proxyenv.GetArgumentNames,
-			"getName":         proxyenv.GetName,
-			"getDoc":          proxyenv.GetDoc,
-			"toString":        proxyenv.ToString,
+			// "getArgumentName": proxyenv.GetArgumentNames,
+			// "getName":         proxyenv.GetName,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		variableDeclaration: map[string]interface{}{
-			"getName":             proxyenv.GetName,
-			"getVisibility":       proxyenv.GetVisibility,
-			"getVariableValue":    proxyenv.GetVariableValue,
-			"getVariableDataType": proxyenv.GetVariableDataType,
-			"getScope":            proxyenv.GetScope,
-			"getDoc":              proxyenv.GetDoc,
-			"toString":            proxyenv.ToString,
+			// "getName":             proxyenv.GetName,
+			// "getVisibility":       proxyenv.GetVisibility,
+			// "getVariableValue":    proxyenv.GetVariableValue,
+			// "getVariableDataType": proxyenv.GetVariableDataType,
+			// "getScope":            proxyenv.GetScope,
+			"getDoc":   proxyenv.GetDoc,
+			"toString": proxyenv.ToString,
 		},
 		binaryExpression: map[string]interface{}{
 			"getLeftOperand":  proxyenv.GetLeftOperand,
@@ -537,7 +718,7 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"toString":      proxyenv.ToString,
 		},
 		classInstanceExpression: map[string]interface{}{
-			"getName":              proxyenv.GetName,
+			// "getName":              proxyenv.GetName,
 			"getDoc":               proxyenv.GetDoc,
 			"toString":             proxyenv.ToString,
 			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
@@ -612,7 +793,7 @@ func ReplacePredicateVariables(query parser.Query) string {
 	return expression
 }
 
-func FilterEntities(node []*Node, query parser.Query) bool {
+func FilterEntities(node []*model.Node, query parser.Query) bool {
 	expression := query.Expression
 	if expression == "" {
 		return true
@@ -643,7 +824,7 @@ type classInstance struct {
 	Methods map[string]string // method name -> result
 }
 
-func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
+func generateProxyEnvForSet(nodeSet []*model.Node, query parser.Query) map[string]interface{} {
 	env := make(map[string]interface{})
 
 	for i, entity := range query.SelectList {
