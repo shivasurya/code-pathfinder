@@ -141,9 +141,8 @@ func readFile(path string) ([]byte, error) {
 	return content, nil
 }
 
-func Initialize(directory string) []*model.TreeNode {
+func Initialize(directory string, storageNode *db.StorageNode) []*model.TreeNode {
 	treeHolder := []*model.TreeNode{}
-	storageNode := db.NewStorageNode(directory)
 	// record start time
 	start := time.Now()
 

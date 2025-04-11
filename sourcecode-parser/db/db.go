@@ -205,6 +205,14 @@ func (s *StorageNode) AddPackage(node *model.Package) {
 	s.Package = append(s.Package, node)
 }
 
+func (s *StorageNode) GetPackages() []*model.Package {
+	return s.Package
+}
+
+func (s *StorageNode) GetImportDecls() []*model.ImportType {
+	return s.ImportDecl
+}
+
 func (s *StorageNode) AddImportDecl(node *model.ImportType) {
 	s.ImportDecl = append(s.ImportDecl, node)
 }
@@ -213,113 +221,54 @@ func (s *StorageNode) AddClassDecl(node *model.Class) {
 	s.ClassDecl = append(s.ClassDecl, node)
 }
 
+func (s *StorageNode) GetClassDecls() []*model.Class {
+	return s.ClassDecl
+}
+
 func (s *StorageNode) AddMethodDecl(node *model.Method) {
 	s.MethodDecl = append(s.MethodDecl, node)
+}
+
+func (s *StorageNode) GetMethodDecls() []*model.Method {
+	return s.MethodDecl
 }
 
 func (s *StorageNode) AddMethodCall(node *model.MethodCall) {
 	s.MethodCall = append(s.MethodCall, node)
 }
 
+func (s *StorageNode) GetMethodCalls() []*model.MethodCall {
+	return s.MethodCall
+}
+
 func (s *StorageNode) AddFieldDecl(node *model.FieldDeclaration) {
 	s.Field = append(s.Field, node)
+}
+
+func (s *StorageNode) GetFields() []*model.FieldDeclaration {
+	return s.Field
 }
 
 func (s *StorageNode) AddBinaryExpr(node *model.BinaryExpr) {
 	s.BinaryExpr = append(s.BinaryExpr, node)
 }
 
+func (s *StorageNode) GetBinaryExprs() []*model.BinaryExpr {
+	return s.BinaryExpr
+}
+
 func (s *StorageNode) AddAnnotation(node *model.Annotation) {
 	s.Annotation = append(s.Annotation, node)
+}
+
+func (s *StorageNode) GetAnnotations() []*model.Annotation {
+	return s.Annotation
 }
 
 func (s *StorageNode) AddJavaDoc(node *model.Javadoc) {
 	s.JavaDoc = append(s.JavaDoc, node)
 }
 
-func (s *StorageNode) GetTypedSlice(entityType string) []any {
-	result := s.GetEntity(entityType)
-	if result == nil {
-		return nil
-	}
-	return result.([]any)
-}
-
-func (s *StorageNode) GetEntity(entityType string) interface{} {
-	switch entityType {
-	case "package":
-		return s.Package
-	case "import":
-		return s.ImportDecl
-	case "annotation":
-		return s.Annotation
-	case "add_expr":
-		return s.AddExpr
-	case "and_logical_expr":
-		return s.AndLogicalExpr
-	case "assert_stmt":
-		return s.AssertStmt
-	case "binary_expr":
-		return s.BinaryExpr
-	case "and_bitwise_expr":
-		return s.AndBitwiseExpr
-	case "block_stmt":
-		return s.BlockStmt
-	case "break_stmt":
-		return s.BreakStmt
-	case "class":
-		return s.ClassDecl
-	case "class_instance_expr":
-		return s.ClassInstanceExpr
-	case "comparison_expr":
-		return s.ComparisonExpr
-	case "continue_stmt":
-		return s.ContinueStmt
-	case "div_expr":
-		return s.DivExpr
-	case "do_stmt":
-		return s.DoStmt
-	case "eq_expr":
-		return s.EQExpr
-	case "field":
-		return s.Field
-	case "file":
-		return s.FileNode
-	case "for_stmt":
-		return s.ForStmt
-	case "if_stmt":
-		return s.IfStmt
-	case "javadoc":
-		return s.JavaDoc
-	case "left_shift_expr":
-		return s.LeftShiftExpr
-	case "method":
-		return s.MethodDecl
-	case "method_call":
-		return s.MethodCall
-	case "mul_expr":
-		return s.MulExpr
-	case "ne_expr":
-		return s.NEExpr
-	case "or_logical_expr":
-		return s.OrLogicalExpr
-	case "right_shift_expr":
-		return s.RightShiftExpr
-	case "rem_expr":
-		return s.RemExpr
-	case "return_stmt":
-		return s.ReturnStmt
-	case "sub_expr":
-		return s.SubExpr
-	case "unsigned_right_shift_expr":
-		return s.UnsignedRightShiftExpr
-	case "while_stmt":
-		return s.WhileStmt
-	case "xor_bitwise_expr":
-		return s.XorBitwiseExpr
-	case "yield_stmt":
-		return s.YieldStmt
-	default:
-		return nil
-	}
+func (s *StorageNode) GetJavaDocs() []*model.Javadoc {
+	return s.JavaDoc
 }

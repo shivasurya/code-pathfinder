@@ -186,76 +186,106 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		analytics.ReportEvent(entity.Entity)
 	}
 
-	// Prepare entity data by processing tree relationships
+	// Prepare entity data by using db.StorageNode getter methods
 	for _, entity := range query.SelectList {
 		entityData := []map[string]interface{}{}
 
-		// Process each file's tree nodes
-		for _, fileTree := range treeHolder {
-			// Process the tree recursively
-			var processNode func(*model.TreeNode)
-			processNode = func(node *model.TreeNode) {
-				if node == nil || node.Node == nil {
-					return
+		// Use appropriate getter method based on entity type
+		switch entity.Entity {
+		case "method_declaration":
+			// Get method declarations from db
+			methods := db.GetMethodDecls()
+			for _, method := range methods {
+				nodeData := map[string]interface{}{
+					"id":          method.QualifiedName, // Use qualified name as ID
+					"type":        "method_declaration",
+					"name":        method.Name,
+					"return_type": method.ReturnType,
+					"parameters":  method.Parameters,
 				}
-
-				// Check if this node matches the entity type
-				if node.Node.NodeType == entity.Entity {
-					// Convert node data to map format
-					nodeData := map[string]interface{}{
-						"id":   node.Node.NodeID,
-						"type": node.Node.NodeType,
-					}
-
-					// Add specific fields based on node type
-					switch entity.Entity {
-					case "method_declaration":
-						if node.Node.MethodDecl != nil {
-							nodeData["name"] = node.Node.MethodDecl.Name
-							nodeData["return_type"] = node.Node.MethodDecl.ReturnType
-							nodeData["parameters"] = node.Node.MethodDecl.Parameters
-						}
-					case "class":
-						if node.Node.ClassDecl != nil {
-							class := node.Node.ClassDecl
-							nodeData["name"] = class.QualifiedName
-							nodeData["package"] = class.Package
-							// Get visibility from modifiers
-							if class.IsPublic() {
-								nodeData["visibility"] = "public"
-							} else if class.IsPrivate() {
-								nodeData["visibility"] = "private"
-							} else if class.IsProtected() {
-								nodeData["visibility"] = "protected"
-							} else {
-								nodeData["visibility"] = "package"
-							}
-							nodeData["is_abstract"] = class.IsAbstract()
-							nodeData["super_types"] = class.SuperTypes
-						}
-					case "field":
-						if node.Node.Field != nil {
-							field := node.Node.Field
-							// Use first field name if available
-							if len(field.FieldNames) > 0 {
-								nodeData["name"] = field.FieldNames[0]
-							}
-							nodeData["type"] = field.Type
-							nodeData["visibility"] = field.Visibility
-						}
-					}
-					entityData = append(entityData, nodeData)
-				}
-
-				// Process children
-				for _, child := range node.Children {
-					processNode(child)
-				}
+				entityData = append(entityData, nodeData)
 			}
 
-			// Start processing from the root
-			processNode(fileTree)
+		case "class":
+			// Get class declarations from db
+			classes := db.GetClassDecls()
+			for _, class := range classes {
+				nodeData := map[string]interface{}{
+					"id":      class.QualifiedName, // Use qualified name as ID
+					"type":    "class",
+					"name":    class.QualifiedName,
+					"package": class.Package,
+				}
+
+				// Get visibility from modifiers
+				if class.IsPublic() {
+					nodeData["visibility"] = "public"
+				} else if class.IsPrivate() {
+					nodeData["visibility"] = "private"
+				} else if class.IsProtected() {
+					nodeData["visibility"] = "protected"
+				} else {
+					nodeData["visibility"] = "package"
+				}
+
+				nodeData["is_abstract"] = class.IsAbstract()
+				nodeData["super_types"] = class.SuperTypes
+				entityData = append(entityData, nodeData)
+			}
+
+		case "field":
+			// Get field declarations from db
+			fields := db.GetFields()
+			for _, field := range fields {
+				nodeData := map[string]interface{}{
+					"id":   field.SourceDeclaration, // Use source declaration as ID
+					"type": "field",
+				}
+
+				// Use first field name if available
+				if len(field.FieldNames) > 0 {
+					nodeData["name"] = field.FieldNames[0]
+				}
+
+				nodeData["type"] = field.Type
+				nodeData["visibility"] = field.Visibility
+				entityData = append(entityData, nodeData)
+			}
+
+		case "method_invocation":
+			// Get method calls from db
+			methodCalls := db.GetMethodCalls()
+			for _, call := range methodCalls {
+				nodeData := map[string]interface{}{
+					"id":   call.MethodName, // Use method name as ID
+					"type": "method_invocation",
+					"name": call.MethodName,
+				}
+				entityData = append(entityData, nodeData)
+			}
+
+		case "binary_expression":
+			// Get binary expressions from db
+			binaryExprs := db.GetBinaryExprs()
+			for _, expr := range binaryExprs {
+				nodeData := map[string]interface{}{
+					"id":            expr.SourceDeclaration, // Use source declaration as ID
+					"type":          "binary_expression",
+					"left_operand":  expr.LeftOperand.String(),
+					"right_operand": expr.RightOperand.String(),
+					"operator":      expr.Op, // Use Op field instead of Operator
+				}
+				entityData = append(entityData, nodeData)
+			}
+
+		default:
+			// For entities without direct getter methods, fall back to tree traversal
+			for _, fileTree := range treeHolder {
+				// Use recursive tree traversal for other entity types
+				processTreeRecursively(fileTree, entity.Entity, &entityData)
+			}
 		}
+
 		ctx.EntityData[entity.Entity] = entityData
 	}
 
@@ -329,6 +359,66 @@ func findNodeByData(treeHolder []*model.TreeNode, entity parser.SelectList, data
 }
 
 // matchesData checks if a node matches the given data
+// processTreeRecursively traverses the tree recursively to find entities of the specified type
+func processTreeRecursively(node *model.TreeNode, entityType string, entityData *[]map[string]interface{}) {
+	if node == nil || node.Node == nil {
+		return
+	}
+
+	// Check if this node matches the entity type
+	if node.Node.NodeType == entityType {
+		// Convert node data to map format
+		nodeData := map[string]interface{}{
+			"id":   node.Node.NodeID,
+			"type": node.Node.NodeType,
+		}
+
+		// Add specific fields based on node type
+		switch entityType {
+		case "method_declaration":
+			if node.Node.MethodDecl != nil {
+				nodeData["name"] = node.Node.MethodDecl.Name
+				nodeData["return_type"] = node.Node.MethodDecl.ReturnType
+				nodeData["parameters"] = node.Node.MethodDecl.Parameters
+			}
+		case "class":
+			if node.Node.ClassDecl != nil {
+				class := node.Node.ClassDecl
+				nodeData["name"] = class.QualifiedName
+				nodeData["package"] = class.Package
+				// Get visibility from modifiers
+				if class.IsPublic() {
+					nodeData["visibility"] = "public"
+				} else if class.IsPrivate() {
+					nodeData["visibility"] = "private"
+				} else if class.IsProtected() {
+					nodeData["visibility"] = "protected"
+				} else {
+					nodeData["visibility"] = "package"
+				}
+				nodeData["is_abstract"] = class.IsAbstract()
+				nodeData["super_types"] = class.SuperTypes
+			}
+		case "field":
+			if node.Node.Field != nil {
+				field := node.Node.Field
+				// Use first field name if available
+				if len(field.FieldNames) > 0 {
+					nodeData["name"] = field.FieldNames[0]
+				}
+				nodeData["type"] = field.Type
+				nodeData["visibility"] = field.Visibility
+			}
+		}
+		*entityData = append(*entityData, nodeData)
+	}
+
+	// Process children
+	for _, child := range node.Children {
+		processTreeRecursively(child, entityType, entityData)
+	}
+}
+
 func matchesData(node *model.Node, data map[string]interface{}) bool {
 	// Check if basic properties match
 	if id, ok := data["id"]; ok {

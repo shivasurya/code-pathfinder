@@ -78,7 +78,7 @@ func initializeProject(project string) ([]*model.TreeNode, *db.StorageNode) {
 	treeHolder := []*model.TreeNode{}
 	db := db.NewStorageNode(project)
 	if project != "" {
-		treeHolder = tree.Initialize(project)
+		treeHolder = tree.Initialize(project, db)
 	}
 	return treeHolder, db
 }
