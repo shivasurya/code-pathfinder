@@ -288,16 +288,23 @@ func evaluateVariableNode(node *ExpressionNode, ctx *EvaluationContext) (*Interm
 		return nil, fmt.Errorf("failed to get entity name: %w", err)
 	}
 
-	// Get entity data
-	data, ok := ctx.EntityData[entityName]
+	entityData, ok := ctx.EntityData["method_declaration"]
 	if !ok {
 		return nil, fmt.Errorf("entity data not found: %s", entityName)
 	}
 
+	var result []map[string]interface{}
+	for _, data := range entityData {
+		//fmt.Println(data)
+		if data[entityName] != nil && data[entityName] == node.Value {
+			result = append(result, data)
+		}
+	}
+
 	return &IntermediateResult{
 		NodeType: node.Type,
-		Data:     data,
-		Entities: []string{entityName},
+		Data:     result,
+		Entities: []string{"method_declaration"},
 	}, nil
 }
 
@@ -355,7 +362,7 @@ func getInvolvedEntities(node *ExpressionNode) (leftEntity, rightEntity string, 
 // evaluateSingleEntity handles evaluation of expressions involving a single entity type
 func evaluateSingleEntity(node *ExpressionNode, entity string, ctx *EvaluationContext) (*EvaluationResult, error) {
 	// Get data for the entity
-	data, ok := ctx.EntityData[entity]
+	data, ok := ctx.EntityData["method_declaration"]
 	if !ok {
 		return nil, fmt.Errorf("no data found for entity: %s", entity)
 	}

@@ -1,9 +1,7 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -29,12 +27,12 @@ type PredicateInvocation struct {
 
 // ExpressionNode represents a node in the expression tree
 type ExpressionNode struct {
-	Type     string      `json:"type"`     // Type of node: "binary", "unary", "literal", "variable", "method_call", "predicate_call"
-	Operator string      `json:"operator"` // Operator for binary/unary operations
-	Value    string      `json:"value"`    // Value for literals, variable names, method names
-	Left     *ExpressionNode `json:"left,omitempty"`  // Left operand for binary operations
-	Right    *ExpressionNode `json:"right,omitempty"` // Right operand for binary operations
-	Args     []ExpressionNode `json:"args,omitempty"` // Arguments for method/predicate calls
+	Type     string           `json:"type"`            // Type of node: "binary", "unary", "literal", "variable", "method_call", "predicate_call"
+	Operator string           `json:"operator"`        // Operator for binary/unary operations
+	Value    string           `json:"value"`           // Value for literals, variable names, method names
+	Left     *ExpressionNode  `json:"left,omitempty"`  // Left operand for binary operations
+	Right    *ExpressionNode  `json:"right,omitempty"` // Right operand for binary operations
+	Args     []ExpressionNode `json:"args,omitempty"`  // Arguments for method/predicate calls
 }
 
 type Query struct {
@@ -42,7 +40,7 @@ type Query struct {
 	SelectList          []SelectList
 	Expression          string
 	Condition           []string
-	ExpressionTree      *ExpressionNode    // New field to store the expression tree
+	ExpressionTree      *ExpressionNode // New field to store the expression tree
 	Predicate           []Predicate
 	PredicateInvocation []PredicateInvocation
 	SelectOutput        []SelectOutput
@@ -58,8 +56,8 @@ type CustomQueryListener struct {
 	Classes             []ClassDeclaration
 	State               State
 	SelectOutput        []SelectOutput
-	ExpressionTree      *ExpressionNode    // New field to store the expression tree
-	currentExpression   []*ExpressionNode  // Stack to track current expression being built
+	ExpressionTree      *ExpressionNode   // New field to store the expression tree
+	currentExpression   []*ExpressionNode // Stack to track current expression being built
 }
 
 func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) { //nolint:all
@@ -252,7 +250,7 @@ func (l *CustomQueryListener) EnterEqualityExpression(ctx *EqualityExpressionCon
 		conditionText := ctx.GetText()
 		if !l.State.isInPredicateDeclaration {
 			l.condition = append(l.condition, conditionText)
-			
+
 			// Create a binary expression node for equality operations
 			// We'll simplify this to avoid type issues
 			if strings.Contains(conditionText, "==") {
@@ -292,7 +290,7 @@ func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressio
 		conditionText := ctx.GetText()
 		if !l.State.isInPredicateDeclaration {
 			l.condition = append(l.condition, conditionText)
-			
+
 			// Create a binary expression node for relational operations
 			// We'll simplify this to avoid type issues
 			var operator string
@@ -307,7 +305,7 @@ func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressio
 			} else if strings.Contains(conditionText, " in ") {
 				operator = "in"
 			}
-			
+
 			if operator != "" {
 				node := &ExpressionNode{
 					Type:     "binary",
@@ -381,7 +379,7 @@ func (l *CustomQueryListener) EnterExpression(ctx *ExpressionContext) {
 		l.expression.WriteString(" ")
 	}
 	l.expression.WriteString(ctx.GetText())
-	
+
 	// Only build the expression tree for the WHERE clause, not for predicates
 	if !l.State.isInPredicateDeclaration && ctx.GetParent() != nil {
 		// Check if this is the root expression of the WHERE clause
@@ -402,12 +400,12 @@ func (l *CustomQueryListener) ExitExpression(ctx *ExpressionContext) {
 			// Set the root of the expression tree
 			if len(l.currentExpression) > 0 {
 				l.ExpressionTree = l.currentExpression[len(l.currentExpression)-1]
-				
+
 				// Log the expression tree for debugging
-				treeJSON, err := json.MarshalIndent(l.ExpressionTree, "", "  ")
-				if err == nil {
-					log.Printf("Expression Tree: %s", string(treeJSON))
-				}
+				// treeJSON, err := json.MarshalIndent(l.ExpressionTree, "", "  ")
+				// if err == nil {
+				// 	log.Printf("Expression Tree: %s", string(treeJSON))
+				// }
 			}
 		}
 	}
@@ -437,7 +435,7 @@ func (l *CustomQueryListener) ExitOrExpression(ctx *OrExpressionContext) {
 		}
 		l.expression.Reset()
 		l.expression.WriteString(result.String())
-		
+
 		// Build the expression tree for OR operations
 		if !l.State.isInPredicateDeclaration && len(l.currentExpression) >= 3 {
 			// Get the OR node
@@ -475,7 +473,7 @@ func (l *CustomQueryListener) ExitAndExpression(ctx *AndExpressionContext) {
 		}
 		l.expression.Reset()
 		l.expression.WriteString(result.String())
-		
+
 		// Build the expression tree for AND operations
 		if !l.State.isInPredicateDeclaration && len(l.currentExpression) >= 3 {
 			// Get the AND node
@@ -578,12 +576,12 @@ func ParseQuery(inputQuery string) (Query, error) {
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
 	// Log the expression tree for debugging
-	if listener.ExpressionTree != nil {
-		treeJSON, err := json.MarshalIndent(listener.ExpressionTree, "", "  ")
-		if err == nil {
-			log.Printf("Expression Tree: %s", string(treeJSON))
-		}
-	}
+	// if listener.ExpressionTree != nil {
+	// 	treeJSON, err := json.MarshalIndent(listener.ExpressionTree, "", "  ")
+	// 	if err == nil {
+	// 		log.Printf("Expression Tree: %s", string(treeJSON))
+	// 	}
+	// }
 
 	return Query{
 		Classes:             listener.Classes,
