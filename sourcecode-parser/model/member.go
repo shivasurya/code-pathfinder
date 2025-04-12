@@ -157,6 +157,40 @@ func (m *Method) GetAPrimaryQlClass() string {
 	return "Method"
 }
 
+func (m *Method) GetName() string {
+	return m.Name
+}
+
+func (m *Method) GetFullyQualifiedName() string {
+	return m.QualifiedName
+}
+
+func (m *Method) GetReturnType() string {
+	return m.ReturnType
+}
+
+func (m *Method) GetParameters() []string {
+	return m.Parameters
+}
+
+func (m *Method) GetParameterNames() []string {
+	return m.ParameterNames
+}
+
+func (m *Method) GetVisibility() string {
+	return m.Visibility
+}
+
+func (m *Method) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"getVisibility":     m.GetVisibility,
+		"getReturnType":     m.GetReturnType,
+		"getName":           m.GetName,
+		"getParameters":     m.GetParameters,
+		"getParameterNames": m.GetParameterNames,
+	}
+}
+
 // GetSignature returns the fully qualified method signature.
 func (m *Method) GetSignature() string {
 	return fmt.Sprintf("%s %s(%v)", m.ReturnType, m.Name, strings.Join(m.Parameters, ", "))

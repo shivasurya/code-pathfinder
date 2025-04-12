@@ -2,8 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/expr-lang/expr"
 )
 
 // IntermediateResult represents intermediate evaluation state at each node
@@ -29,6 +30,7 @@ type EvaluationResult struct {
 type EvaluationContext struct {
 	RelationshipMap *RelationshipMap
 	EntityData      map[string][]map[string]interface{} // map[EntityType][]EntityData
+	ProxyEnv        map[string][]map[string]interface{}
 }
 
 // RelationshipMap represents relationships between entities and their attributes
@@ -209,9 +211,6 @@ func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*Intermedia
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate literal node: %w", err)
 		}
-
-	default:
-		return nil, fmt.Errorf("unsupported node type: %s", node.Type)
 	}
 
 	return result, nil
@@ -369,9 +368,10 @@ func evaluateSingleEntity(node *ExpressionNode, entity string, ctx *EvaluationCo
 
 	// Filter data based on the expression
 	result := make([]map[string]interface{}, 0)
-	for _, item := range data {
+	for i, item := range data {
 		// Evaluate the expression for this item
-		matches, err := evaluateNode(node, item)
+		fmt.Println("Entity:", entity, "Item:", item)
+		matches, err := evaluateNode(node, ctx.ProxyEnv["method_declaration"][i])
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate node: %w", err)
 		}
@@ -407,7 +407,7 @@ func evaluateRelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx 
 				mergedItem := mergeItems(item1, item2)
 
 				// Evaluate the expression on the merged item
-				matches, err := evaluateNode(node, mergedItem)
+				matches, err := evaluateNode(node, ctx.ProxyEnv[entity1][0])
 				if err != nil {
 					return nil, fmt.Errorf("failed to evaluate node: %w", err)
 				}
@@ -443,7 +443,7 @@ func evaluateUnrelatedEntities(node *ExpressionNode, entity1, entity2 string, ct
 			mergedItem := mergeItems(item1, item2)
 
 			// Evaluate the expression on the merged item
-			matches, err := evaluateNode(node, mergedItem)
+			matches, err := evaluateNode(node, ctx.ProxyEnv[entity1][0])
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate node: %w", err)
 			}
@@ -497,136 +497,21 @@ func mergeItems(item1, item2 map[string]interface{}) map[string]interface{} {
 
 // evaluateNode recursively evaluates a single node in the expression tree
 // returns interface{} to support different types (bool, string, number)
-func evaluateNode(node *ExpressionNode, data map[string]interface{}) (interface{}, error) {
+func evaluateNode(node *ExpressionNode, proxyEnv map[string]interface{}) (interface{}, error) {
 	if node == nil {
 		return nil, fmt.Errorf("nil node")
 	}
 
-	switch node.Type {
-	case "binary":
-		left, err := evaluateNode(node.Left, data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate left node: %w", err)
-		}
+	expression := fmt.Sprintf("%s %s %s", node.Left.Value, node.Operator, node.Right.Value)
 
-		right, err := evaluateNode(node.Right, data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate right node: %w", err)
-		}
+	fmt.Println("Expression:", expression)
+	// cast data to model.Method
 
-		// Handle comparison operators
-		switch node.Operator {
-		case "==":
-			return left == right, nil
-		case "!=":
-			return left != right, nil
-		case ">":
-			// Convert to float64 for numeric comparison
-			leftNum, leftOk := toFloat64(left)
-			rightNum, rightOk := toFloat64(right)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot compare non-numeric values with >")
-			}
-			return leftNum > rightNum, nil
-		case "<":
-			leftNum, leftOk := toFloat64(left)
-			rightNum, rightOk := toFloat64(right)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot compare non-numeric values with <")
-			}
-			return leftNum < rightNum, nil
-		case ">=":
-			leftNum, leftOk := toFloat64(left)
-			rightNum, rightOk := toFloat64(right)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot compare non-numeric values with >=")
-			}
-			return leftNum >= rightNum, nil
-		case "<=":
-			leftNum, leftOk := toFloat64(left)
-			rightNum, rightOk := toFloat64(right)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot compare non-numeric values with <=")
-			}
-			return leftNum <= rightNum, nil
-		case "&&":
-			leftBool, leftOk := left.(bool)
-			rightBool, rightOk := right.(bool)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot perform logical AND on non-boolean values")
-			}
-			return leftBool && rightBool, nil
-		case "||":
-			leftBool, leftOk := left.(bool)
-			rightBool, rightOk := right.(bool)
-			if !leftOk || !rightOk {
-				return nil, fmt.Errorf("cannot perform logical OR on non-boolean values")
-			}
-			return leftBool || rightBool, nil
-		default:
-			return nil, fmt.Errorf("unsupported operator: %s", node.Operator)
-		}
-
-	case "variable":
-		// Handle entity paths (e.g., "class.name")
-		parts := strings.Split(node.Value, ".")
-		if len(parts) > 1 {
-			// Extract field
-			field := parts[1]
-
-			// Get the value from data
-			val, ok := data[node.Value]
-			if !ok {
-				return nil, fmt.Errorf("field not found: %s", field)
-			}
-			return val, nil
-		}
-
-		// Regular variable
-		val, ok := data[node.Value]
-		if !ok {
-			return nil, fmt.Errorf("variable not found: %s", node.Value)
-		}
-		return val, nil
-
-	case "literal":
-		// Try to parse the literal value
-		if strings.HasPrefix(node.Value, "\"") && strings.HasSuffix(node.Value, "\"") {
-			// String literal
-			return strings.Trim(node.Value, "\""), nil
-		}
-
-		// Try to parse as number
-		if val, err := strconv.ParseFloat(node.Value, 64); err == nil {
-			return val, nil
-		}
-
-		return node.Value, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported node type: %s", node.Type)
+	result, err := expr.Compile(expression, expr.Env(proxyEnv))
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile expression: %w", err)
 	}
-}
-
-// toFloat64 converts an interface{} to a float64 if possible
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	case string:
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			return f, true
-		}
-	}
-	return 0, false
+	return expr.Run(result, proxyEnv)
 }
 
 // nodeToExprString converts an ExpressionNode to an expr-lang expression string
@@ -694,6 +579,8 @@ func getEntityName(node *ExpressionNode) (string, error) {
 		parts := strings.Split(node.Value, ".")
 		return parts[0], nil
 	case "literal":
+		return "", nil
+	case "method_call":
 		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported node type: %s", node.Type)

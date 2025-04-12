@@ -179,6 +179,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	ctx := &parser.EvaluationContext{
 		RelationshipMap: buildRelationshipMap(),
 		EntityData:      make(map[string][]map[string]interface{}),
+		ProxyEnv:        make(map[string][]map[string]interface{}),
 	}
 
 	// Log query select list
@@ -195,6 +196,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		case "method_declaration":
 			// Get method declarations from db
 			methods := db.GetMethodDecls()
+			methodProxyEnv := []map[string]interface{}{}
 			for _, method := range methods {
 				nodeData := map[string]interface{}{
 					"id":          method.QualifiedName, // Use qualified name as ID
@@ -202,9 +204,12 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 					"name":        method.Name,
 					"return_type": method.ReturnType,
 					"parameters":  method.Parameters,
+					"file":        method.File,
 				}
 				entityData = append(entityData, nodeData)
+				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())
 			}
+			ctx.ProxyEnv[entity.Entity] = methodProxyEnv
 
 		case "class":
 			// Get class declarations from db
@@ -285,7 +290,6 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 				processTreeRecursively(fileTree, entity.Entity, &entityData)
 			}
 		}
-
 		ctx.EntityData[entity.Entity] = entityData
 	}
 
@@ -302,7 +306,10 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		return nil, nil
 	}
 
-	fmt.Printf("Result: %+v\n", result)
+	// loop over result.Data and print each item
+	for _, data := range result.Data {
+		fmt.Println(data)
+	}
 
 	// Convert result data back to nodes
 	resultNodes := make([][]*model.Node, 0)
