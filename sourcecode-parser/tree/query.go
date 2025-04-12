@@ -205,6 +205,9 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 					"return_type": method.ReturnType,
 					"parameters":  method.Parameters,
 					"file":        method.SourceDeclaration,
+					"visibility":  method.Visibility,
+					"is_abstract": method.IsAbstract,
+					"is_strictfp": method.IsStrictfp,
 				}
 				entityData = append(entityData, nodeData)
 				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())
