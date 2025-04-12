@@ -199,12 +199,12 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 			methodProxyEnv := []map[string]interface{}{}
 			for _, method := range methods {
 				nodeData := map[string]interface{}{
-					"id":          method.QualifiedName, // Use qualified name as ID
+					"id":          method.ID,
 					"type":        "method_declaration",
 					"name":        method.Name,
 					"return_type": method.ReturnType,
 					"parameters":  method.Parameters,
-					"file":        method.File,
+					"file":        method.SourceDeclaration,
 				}
 				entityData = append(entityData, nodeData)
 				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())

@@ -66,7 +66,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	columnNumber := int(node.StartPoint().Column) + 1
 	// convert to string and merge
 	content += " " + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber)
-	methodID = util.GenerateMethodID(methodName, parameters, filepath+"/"+content)
+	methodID = util.GenerateMethodID(methodName, parameters, filepath+"/"+content+"/"+strconv.Itoa(lineNumber)+":"+strconv.Itoa(columnNumber))
 	return methodName, methodID
 }
 
@@ -107,7 +107,7 @@ func hasModifier(modifiers []string, targetModifier string) bool {
 }
 
 func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Method {
-	methodName, _ := extractMethodName(node, sourceCode, file)
+	methodName, methodID := extractMethodName(node, sourceCode, file)
 	modifiers := []string{}
 	returnType := ""
 	throws := []string{}
@@ -166,6 +166,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		IsConstructor:     false,
 		IsStrictfp:        hasModifier(modifiers, "strictfp"),
 		SourceDeclaration: file,
+		ID:                methodID,
 	}
 
 	return methodNode

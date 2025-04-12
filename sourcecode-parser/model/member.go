@@ -130,6 +130,7 @@ type Method struct {
 	IsFinal           bool     // Whether this method is final
 	IsConstructor     bool     // Whether this method is a constructor
 	SourceDeclaration string   // Location of the source declaration
+	ID                string   // ID of the method
 }
 
 // NewMethod initializes a new Method instance.
