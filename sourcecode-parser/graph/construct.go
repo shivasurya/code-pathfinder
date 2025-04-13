@@ -13,9 +13,9 @@ import (
 	javalang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/java"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
-	"github.com/smacker/go-tree-sitter/java"
 
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
 	//nolint:all
 )
 
@@ -110,7 +110,7 @@ func extractVisibilityModifier(modifiers string) string {
 }
 
 func isJavaSourceFile(filename string) bool {
-	return filepath.Ext(filename) == ".java"
+	return filepath.Ext(filename) == ".ql"
 }
 
 //nolint:all
@@ -1063,7 +1063,7 @@ func getFiles(directory string) ([]string, error) {
 		}
 		if !info.IsDir() {
 			// append only java files
-			if filepath.Ext(path) == ".java" {
+			if filepath.Ext(path) == ".ql" {
 				files = append(files, path)
 			}
 		}
