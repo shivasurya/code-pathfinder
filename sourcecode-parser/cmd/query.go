@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -132,53 +131,51 @@ func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
 	entities, formattedOutput := tree.QueryEntities(db, treeHolder, parsedQuery)
-	if output == "json" || output == "sarif" {
-		analytics.ReportEvent(analytics.QueryCommandJSON)
-		// convert struct to query_results
-		results := make(map[string]interface{})
-		results["result_set"] = make([]map[string]interface{}, 0)
-		results["output"] = formattedOutput
-		for _, entity := range entities {
-			for _, entityObject := range entity {
-				result := make(map[string]interface{})
-				fmt.Println(entityObject)
-				// result["file"] = entityObject.File
-				// result["line"] = entityObject.LineNumber
-				// result["code"] = entityObject.CodeSnippet
+	// if output == "json" || output == "sarif" {
+	// 	analytics.ReportEvent(analytics.QueryCommandJSON)
+	// 	// convert struct to query_results
+	// 	results := make(map[string]interface{})
+	// 	results["result_set"] = make([]map[string]interface{}, 0)
+	// 	results["output"] = formattedOutput
+	// 	for _, entity := range entities {
+	// 		for _, entityObject := range entity {
+	// 			result := make(map[string]interface{})
+	// 			fmt.Println(entityObject)
+	// 			// result["file"] = entityObject.File
+	// 			// result["line"] = entityObject.LineNumber
+	// 			// result["code"] = entityObject.CodeSnippet
 
-				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
-			}
-		}
-		queryResults, err := json.Marshal(results)
-		if err != nil {
-			return "", fmt.Errorf("error processing query results: %w", err)
-		}
-		return string(queryResults), nil
-	}
+	// 			results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
+	// 		}
+	// 	}
+	// 	queryResults, err := json.Marshal(results)
+	// 	if err != nil {
+	// 		return "", fmt.Errorf("error processing query results: %w", err)
+	// 	}
+	// 	return string(queryResults), nil
+	// }
 	result := ""
 	verticalLine := "|"
 	// := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
 	for i, entity := range entities {
-		for _, entityObject := range entity {
-			header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entityObject), greenCode(entityObject))
-			// add formatted output to result
-			output := "\tResult: "
-			for _, outputObject := range formattedOutput[i] {
-				output += utilities.FormatType(outputObject)
-				output += " "
-				output += verticalLine + " "
-			}
-			header += output + "\n"
-			result += header
-			result += "\n"
-			// codeSnippetArray := strings.Split(entityObject, "\n")
-			// for i := 0; i < len(codeSnippetArray); i++ {
-			// 	lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
-			// 	result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
-			// }
-			result += "\n"
+		header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entity), greenCode(entity))
+		// add formatted output to result
+		output := "\tResult: "
+		for _, outputObject := range formattedOutput[i] {
+			output += utilities.FormatType(outputObject)
+			output += " "
+			output += verticalLine + " "
 		}
+		header += output + "\n"
+		result += header
+		result += "\n"
+		// codeSnippetArray := strings.Split(entityObject, "\n")
+		// for i := 0; i < len(codeSnippetArray); i++ {
+		// 	lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
+		// 	result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
+		// }
+		result += "\n"
 	}
 	return result, nil
 }

@@ -174,7 +174,7 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
-func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes [][]*model.Node, output [][]interface{}) {
+func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes []*model.Node, output [][]interface{}) {
 	// Create evaluation context
 	ctx := &parser.EvaluationContext{
 		RelationshipMap: buildRelationshipMap(),
@@ -285,13 +285,6 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 				}
 				entityData = append(entityData, nodeData)
 			}
-
-		default:
-			// For entities without direct getter methods, fall back to tree traversal
-			for _, fileTree := range treeHolder {
-				// Use recursive tree traversal for other entity types
-				processTreeRecursively(fileTree, entity.Entity, &entityData)
-			}
 		}
 		ctx.EntityData[entity.Entity] = entityData
 	}
@@ -315,17 +308,20 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	}
 
 	// Convert result data back to nodes
-	resultNodes := make([][]*model.Node, 0)
+	resultNodes := make([]*model.Node, 0)
 	for _, data := range result.Data {
-		nodeSet := make([]*model.Node, 0)
-		for _, entity := range query.SelectList {
-			if node := findNodeByData(treeHolder, entity, data); node != nil {
-				nodeSet = append(nodeSet, node)
-			}
+		node := &model.Node{}
+		node.NodeType = data["type"].(string)
+		node.MethodDecl = &model.Method{
+			Name:              data["name"].(string),
+			ReturnType:        data["return_type"].(string),
+			Parameters:        data["parameters"].([]string),
+			SourceDeclaration: data["file"].(string),
+			Visibility:        data["visibility"].(string),
+			IsAbstract:        data["is_abstract"].(bool),
+			IsStrictfp:        data["is_strictfp"].(bool),
 		}
-		if len(nodeSet) == len(query.SelectList) {
-			resultNodes = append(resultNodes, nodeSet)
-		}
+		resultNodes = append(resultNodes, node)
 	}
 
 	output = generateOutput(resultNodes, query)
@@ -342,151 +338,58 @@ func buildRelationshipMap() *parser.RelationshipMap {
 	return rm
 }
 
-// getNodesForEntity returns all nodes for a given entity type
-func getNodesForEntity(treeHolder []*model.TreeNode, entity parser.SelectList) []*model.Node {
-	// Get nodes for this entity type
-	nodes := make([]*model.Node, 0)
-	for _, tree := range treeHolder {
-		if tree.Node.NodeType == entity.Entity {
-			nodes = append(nodes, tree.Node)
-		}
-	}
-	return nodes
-}
+func generateOutput(nodes []*model.Node, query parser.Query) [][]interface{} {
+	results := make([][]interface{}, 0, len(nodes))
 
-// findNodeByData finds a node that matches the given data
-func findNodeByData(treeHolder []*model.TreeNode, entity parser.SelectList, data map[string]interface{}) *model.Node {
-	// Get all nodes for this entity type
-	nodes := getNodesForEntity(treeHolder, entity)
-
-	// Find the node that matches the data
 	for _, node := range nodes {
-		if matchesData(node, data) {
-			return node
-		}
-	}
-	return nil
-}
-
-// matchesData checks if a node matches the given data
-// processTreeRecursively traverses the tree recursively to find entities of the specified type
-func processTreeRecursively(node *model.TreeNode, entityType string, entityData *[]map[string]interface{}) {
-	if node == nil || node.Node == nil {
-		return
-	}
-
-	// Check if this node matches the entity type
-	if node.Node.NodeType == entityType {
-		// Convert node data to map format
-		nodeData := map[string]interface{}{
-			"id":   node.Node.NodeID,
-			"type": node.Node.NodeType,
-		}
-
-		// Add specific fields based on node type
-		switch entityType {
-		case "method_declaration":
-			if node.Node.MethodDecl != nil {
-				nodeData["name"] = node.Node.MethodDecl.Name
-				nodeData["return_type"] = node.Node.MethodDecl.ReturnType
-				nodeData["parameters"] = node.Node.MethodDecl.Parameters
-			}
-		case "class":
-			if node.Node.ClassDecl != nil {
-				class := node.Node.ClassDecl
-				nodeData["name"] = class.QualifiedName
-				nodeData["package"] = class.Package
-				// Get visibility from modifiers
-				if class.IsPublic() {
-					nodeData["visibility"] = "public"
-				} else if class.IsPrivate() {
-					nodeData["visibility"] = "private"
-				} else if class.IsProtected() {
-					nodeData["visibility"] = "protected"
-				} else {
-					nodeData["visibility"] = "package"
-				}
-				nodeData["is_abstract"] = class.IsAbstract()
-				nodeData["super_types"] = class.SuperTypes
-			}
-		case "field":
-			if node.Node.Field != nil {
-				field := node.Node.Field
-				// Use first field name if available
-				if len(field.FieldNames) > 0 {
-					nodeData["name"] = field.FieldNames[0]
-				}
-				nodeData["type"] = field.Type
-				nodeData["visibility"] = field.Visibility
-			}
-		}
-		*entityData = append(*entityData, nodeData)
-	}
-
-	// Process children
-	for _, child := range node.Children {
-		processTreeRecursively(child, entityType, entityData)
-	}
-}
-
-func matchesData(node *model.Node, data map[string]interface{}) bool {
-	// Check if basic properties match
-	if id, ok := data["id"]; ok {
-		if id != node.NodeID {
-			return false
-		}
-	}
-	if nodeType, ok := data["type"]; ok {
-		if nodeType != node.NodeType {
-			return false
-		}
-	}
-	if name, ok := data["name"]; ok {
-		switch node.NodeType {
-		case "class":
-			if node.ClassDecl == nil || name != node.ClassDecl.QualifiedName {
-				return false
-			}
-		case "method":
-			if node.MethodDecl == nil || name != node.MethodDecl.QualifiedName {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func generateOutput(nodeSet [][]*model.Node, query parser.Query) [][]interface{} {
-	results := make([][]interface{}, 0, len(nodeSet))
-	for _, nodeSet := range nodeSet {
 		var result []interface{}
+
 		for _, outputFormat := range query.SelectOutput {
 			switch outputFormat.Type {
 			case "string":
-				outputFormat.SelectEntity = strings.ReplaceAll(outputFormat.SelectEntity, "\"", "")
-				result = append(result, outputFormat.SelectEntity)
-			case "method_chain", "variable":
-				if outputFormat.Type == "variable" {
-					outputFormat.SelectEntity += ".toString()"
-				} else if outputFormat.Type == "method_chain" {
-					if !strings.Contains(outputFormat.SelectEntity, ".") {
-						continue
-					}
+				// Remove quotes from string literals
+				cleanedString := strings.ReplaceAll(outputFormat.SelectEntity, "\"", "")
+				result = append(result, cleanedString)
+
+			case "variable", "method_chain":
+				// Add toString method for variables if not present
+				expression := outputFormat.SelectEntity
+				if outputFormat.Type == "variable" && !strings.HasSuffix(expression, ".toString()") {
+					expression += ".toString()"
 				}
-				response, err := evaluateExpression(nodeSet, outputFormat.SelectEntity, query)
+
+				// Skip invalid method chains
+				if outputFormat.Type == "method_chain" && !strings.Contains(expression, ".") {
+					continue
+				}
+
+				if outputFormat.Type == "method_chain" {
+					// remove md.
+					expression = strings.ReplaceAll(expression, "md.", "")
+				}
+
+				// Evaluate the expression
+				response, err := evaluateExpression([]*model.Node{node}, expression, query)
 				if err != nil {
-					log.Print(err)
+					log.Printf("Error evaluating expression %s: %v", expression, err)
+					result = append(result, "") // Add empty string on error
+				} else {
+					result = append(result, response)
 				}
-				result = append(result, response)
 			}
 		}
+
 		results = append(results, result)
 	}
+
 	return results
 }
 
 func evaluateExpression(node []*model.Node, expression string, query parser.Query) (interface{}, error) {
-	env := generateProxyEnvForSet(node, query)
+	var env map[string]interface{}
+	for _, n := range node {
+		env = n.MethodDecl.GetProxyEnv()
+	}
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
