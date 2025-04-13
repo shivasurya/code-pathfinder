@@ -289,11 +289,11 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 			}
 
 			// For each left item, directly access related right items using the index
-			for _, leftItem := range leftData {
+			for i, leftItem := range leftData {
 				// fmt.Println("leftItem:", leftItem)
 				if id, ok := leftItem["id"].(string); ok {
 					// Get only the related items instead of scanning all
-					for _, rightItem := range rightItemIndex[id] {
+					for j, rightItem := range rightItemIndex[id] {
 						// Merge the items
 						mergedItem := mergeItems(leftItem, rightItem)
 
@@ -306,6 +306,16 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 						proxyEnv := make(map[string]interface{})
 						for k, v := range mergedItem {
 							proxyEnv[k] = v
+							proxyEnv["cd"] = ctx.ProxyEnv[node.Left.Entity][i]
+							proxyEnv["md"] = ctx.ProxyEnv[node.Right.Entity][j]
+						}
+
+						// Add "cd." and "md." prefixes only if they're not already present
+						if !strings.HasPrefix(node.Left.Value, "cd.") {
+							node.Left.Value = fmt.Sprintf("%s.%s", "cd", node.Left.Value)
+						}
+						if !strings.HasPrefix(node.Right.Value, "md.") {
+							node.Right.Value = fmt.Sprintf("%s.%s", "md", node.Right.Value)
 						}
 
 						// Evaluate the expression

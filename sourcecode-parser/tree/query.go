@@ -214,6 +214,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		case "class_declaration":
 			// Get class declarations from db
 			classes := db.GetClassDecls()
+			classProxyEnv := []map[string]interface{}{}
 			for _, class := range classes {
 				nodeData := map[string]interface{}{
 					"id":      class.ClassId,
@@ -236,7 +237,9 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 				nodeData["is_abstract"] = class.IsAbstract()
 				nodeData["super_types"] = class.SuperTypes
 				entityData = append(entityData, nodeData)
+				classProxyEnv = append(classProxyEnv, class.GetProxyEnv())
 			}
+			ctx.ProxyEnv[entity.Entity] = classProxyEnv
 
 		case "field":
 			// Get field declarations from db

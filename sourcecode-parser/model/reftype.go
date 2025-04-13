@@ -370,6 +370,17 @@ func (c *Class) Insert(db *sql.DB) error {
 	return nil
 }
 
+func (m *Class) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"getPrimaryQlClass": m.GetAPrimaryQlClass,
+		"getAnnotations":    m.GetAnAnnotation,
+		"getIsAnonymous":    m.GetIsAnonymous,
+		"getIsFileClass":    m.GetIsFileClass,
+		"getQualifiedName":  m.GetQualifiedName,
+		"getName":           m.GetQualifiedName,
+	}
+}
+
 // NewClass initializes a new Class instance.
 func NewClass(primaryQlClass string, annotations []string, isAnonymous bool, isFileClass bool, classOrInterface ClassOrInterface) *Class {
 	return &Class{
