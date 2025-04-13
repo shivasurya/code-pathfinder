@@ -116,6 +116,39 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 	}
 }
 
+// Process a single file and return its tree
+func processFile(parser *sitter.Parser, file string, fileName string, storageNode *db.StorageNode, workerID int, statusChan chan<- string) *model.TreeNode {
+	sourceCode, err := readFile(file)
+	if err != nil {
+		utilities.Log("File not found:", err)
+		return nil
+	}
+
+	// Parse the source code
+	tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
+	if err != nil {
+		utilities.Log("Error parsing file:", err)
+		return nil
+	}
+	defer tree.Close()
+
+	rootNode := tree.RootNode()
+	localTree := &model.TreeNode{
+		Parent: nil,
+		Node: &model.Node{
+			FileNode: &model.File{File: fileName},
+			NodeType: "File",
+			NodeID:   20,
+		},
+	}
+
+	statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
+	buildQLTreeFromAST(rootNode, sourceCode, file, localTree, storageNode)
+	statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
+
+	return localTree
+}
+
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
@@ -173,36 +206,14 @@ func Initialize(directory string, storageNode *db.StorageNode) []*model.TreeNode
 		for file := range fileChan {
 			fileName := filepath.Base(file)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
-			sourceCode, err := readFile(file)
-			if err != nil {
-				utilities.Log("File not found:", err)
-				continue
-			}
-			// Parse the source code
-			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
-			if err != nil {
-				utilities.Log("Error parsing file:", err)
-				continue
-			}
-			//nolint:all
-			defer tree.Close()
 
-			rootNode := tree.RootNode()
-			localTree := &model.TreeNode{
-				Parent: nil,
-				Node: &model.Node{
-					FileNode: &model.File{File: fileName},
-					NodeType: "File",
-					NodeID:   20,
-				},
+			// Process file in a separate function to ensure proper cleanup
+			localTree := processFile(parser, file, fileName, storageNode, workerID, statusChan)
+			if localTree != nil {
+				treeHolder = append(treeHolder, localTree)
+				treeChan <- localTree
+				progressChan <- 1
 			}
-			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
-			buildQLTreeFromAST(rootNode, sourceCode, file, localTree, storageNode)
-			treeHolder = append(treeHolder, localTree)
-			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
-
-			treeChan <- localTree
-			progressChan <- 1
 		}
 		wg.Done()
 	}
