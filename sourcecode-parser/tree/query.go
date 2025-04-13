@@ -330,8 +330,8 @@ func buildRelationshipMap() *parser.RelationshipMap {
 	rm := parser.NewRelationshipMap()
 	// Add relationships between entities
 	// For example:
-	rm.AddRelationship("class_declaration", "method_declaration", []string{"class_id"})
-	rm.AddRelationship("method_declaration", "class_declaration", []string{"class_id"})
+	rm.AddRelationship("class_declaration", "class_id", []string{"method_declaration"})
+	rm.AddRelationship("method_declaration", "class_id", []string{"class_declaration"})
 	return rm
 }
 

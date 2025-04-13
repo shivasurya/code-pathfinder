@@ -154,7 +154,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, p
 		}
 	}
 
-	if parentNode == nil {
+	if parentNode != nil && parentNode.Node.ClassDecl != nil && parentNode.Node.ClassDecl.ClassId != "" {
 		classId = parentNode.Node.ClassDecl.ClassId
 	}
 

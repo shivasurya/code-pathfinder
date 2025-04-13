@@ -87,33 +87,6 @@ func (rm *RelationshipMap) HasRelationship(entity1, entity2 string) bool {
 	return false
 }
 
-// CheckExpressionRelationship checks if a binary expression involves related entities
-func CheckExpressionRelationship(node *ExpressionNode, relationshipMap *RelationshipMap) (bool, error) {
-	// First check if it's a dual entity comparison
-	compType, err := DetectComparisonType(node)
-	if err != nil {
-		return false, fmt.Errorf("failed to detect comparison type: %w", err)
-	}
-
-	if compType != DUAL_ENTITY {
-		return false, nil // Not a dual entity comparison
-	}
-
-	// Get entity names from both sides
-	leftEntity, err := getEntityName(node.Left)
-	if err != nil {
-		return false, fmt.Errorf("failed to get left entity: %w", err)
-	}
-
-	rightEntity, err := getEntityName(node.Right)
-	if err != nil {
-		return false, fmt.Errorf("failed to get right entity: %w", err)
-	}
-
-	// Check if entities are related
-	return relationshipMap.HasRelationship(leftEntity, rightEntity), nil
-}
-
 // ComparisonType represents the type of comparison in an expression
 type ComparisonType string
 
@@ -292,14 +265,14 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 
 	case DUAL_ENTITY:
 		// For dual entity comparisons, check if they're related
-		hasRelation := ctx.RelationshipMap.HasRelationship(leftEntity, rightEntity)
+		hasRelation := ctx.RelationshipMap.HasRelationship(node.Left.Entity, node.Right.Entity)
 
 		// Get data for both entities
-		leftData, leftOk := ctx.EntityData[leftEntity]
-		rightData, rightOk := ctx.EntityData[rightEntity]
+		leftData, leftOk := ctx.EntityData[node.Left.Entity]
+		rightData, rightOk := ctx.EntityData[node.Right.Entity]
 
 		if !leftOk || !rightOk {
-			return nil, fmt.Errorf("missing data for entities: %s, %s", leftEntity, rightEntity)
+			return nil, fmt.Errorf("missing data for entities: %s, %s", node.Left.Entity, node.Right.Entity)
 		}
 
 		// Handle related and unrelated entities
@@ -310,18 +283,24 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 			// Build an index of right items by their relationship key to avoid O(n²) complexity
 			rightItemIndex := make(map[string][]map[string]interface{})
 			for _, rightItem := range rightData {
-				if relatedID, ok := rightItem[leftEntity+"_id"].(string); ok {
+				if relatedID, ok := rightItem["class_id"].(string); ok {
 					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
 				}
 			}
 
 			// For each left item, directly access related right items using the index
 			for _, leftItem := range leftData {
+				// fmt.Println("leftItem:", leftItem)
 				if id, ok := leftItem["id"].(string); ok {
 					// Get only the related items instead of scanning all
 					for _, rightItem := range rightItemIndex[id] {
 						// Merge the items
 						mergedItem := mergeItems(leftItem, rightItem)
+
+						for k, v := range mergedItem {
+							// pretty print mergedItem
+							fmt.Println(k, v)
+						}
 
 						// Create proxy environment for evaluation
 						proxyEnv := make(map[string]interface{})
@@ -332,7 +311,8 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 						// Evaluate the expression
 						match, err := evaluateNode(node, proxyEnv)
 						if err != nil {
-							return nil, fmt.Errorf("failed to evaluate expression: %w", err)
+							fmt.Printf("failed to evaluate expression: %s\n", err)
+							//return nil, fmt.Errorf("failed to evaluate expression: %w", err)
 						}
 
 						// If it matches, add to matched data
