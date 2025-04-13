@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd"
 	ql "github.com/shivasurya/code-pathfinder/sourcecode-parser/internal/ql/go"
 	sitter "github.com/smacker/go-tree-sitter"
 )
@@ -34,8 +35,8 @@ func main() {
 	fmt.Println("Root node child count:", rootNode.ChildCount())
 	fmt.Println(rootNode.String())
 
-	// if err := cmd.Execute(); err != nil {
-	// 	fmt.Println(err)
-	// 	os.Exit(1)
-	// }
+	if err := cmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
