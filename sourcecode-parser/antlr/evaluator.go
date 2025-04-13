@@ -580,7 +580,7 @@ func getEntityName(node *ExpressionNode) (string, error) {
 	case "literal":
 		return "", nil
 	case "method_call":
-		return "", nil
+		return node.Entity, nil
 	default:
 		return "", fmt.Errorf("unsupported node type: %s", node.Type)
 	}
