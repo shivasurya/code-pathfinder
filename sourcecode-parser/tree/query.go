@@ -182,13 +182,9 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 		ProxyEnv:        make(map[string][]map[string]interface{}),
 	}
 
-	// Log query select list
-	for _, entity := range query.SelectList {
-		analytics.ReportEvent(entity.Entity)
-	}
-
 	// Prepare entity data by using db.StorageNode getter methods
 	for _, entity := range query.SelectList {
+		analytics.ReportEvent(entity.Entity)
 		entityData := []map[string]interface{}{}
 
 		// Use appropriate getter method based on entity type
@@ -208,19 +204,20 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 					"visibility":  method.Visibility,
 					"is_abstract": method.IsAbstract,
 					"is_strictfp": method.IsStrictfp,
+					"class_id":    method.ClassId,
 				}
 				entityData = append(entityData, nodeData)
 				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())
 			}
 			ctx.ProxyEnv[entity.Entity] = methodProxyEnv
 
-		case "class":
+		case "class_declaration":
 			// Get class declarations from db
 			classes := db.GetClassDecls()
 			for _, class := range classes {
 				nodeData := map[string]interface{}{
-					"id":      class.QualifiedName, // Use qualified name as ID
-					"type":    "class",
+					"id":      class.ClassId,
+					"type":    "class_declaration",
 					"name":    class.QualifiedName,
 					"package": class.Package,
 				}
@@ -333,8 +330,8 @@ func buildRelationshipMap() *parser.RelationshipMap {
 	rm := parser.NewRelationshipMap()
 	// Add relationships between entities
 	// For example:
-	rm.AddRelationship("class", "methods", []string{"method"})
-	rm.AddRelationship("method", "class", []string{"class"})
+	rm.AddRelationship("class_declaration", "method_declaration", []string{"class_id"})
+	rm.AddRelationship("method_declaration", "class_declaration", []string{"class_id"})
 	return rm
 }
 

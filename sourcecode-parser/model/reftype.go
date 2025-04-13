@@ -333,6 +333,7 @@ func (c *ClassOrInterface) GetIsPackageProtected() bool {
 type Class struct {
 	ClassOrInterface
 
+	ClassId string
 	// CodeQL metadata
 	PrimaryQlClass string   // Name of the primary CodeQL class
 	Annotations    []string // Annotations applied to this class

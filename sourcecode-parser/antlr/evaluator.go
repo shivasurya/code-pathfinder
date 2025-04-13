@@ -36,47 +36,51 @@ type EvaluationContext struct {
 
 // RelationshipMap represents relationships between entities and their attributes
 type RelationshipMap struct {
-	// map[EntityName]map[AttributeName][]RelatedEntity
-	// Example: {"class": {"methods": ["method", "function"]}}
+	// Direct mapping between entities for faster lookups
+	// map[EntityName]map[RelatedEntityName]bool
+	DirectRelationships map[string]map[string]bool
+	// Original relationships for attribute-based queries
 	Relationships map[string]map[string][]string
 }
 
 // NewRelationshipMap creates a new RelationshipMap
 func NewRelationshipMap() *RelationshipMap {
 	return &RelationshipMap{
-		Relationships: make(map[string]map[string][]string),
+		DirectRelationships: make(map[string]map[string]bool),
+		Relationships:       make(map[string]map[string][]string),
 	}
 }
 
 // AddRelationship adds a relationship between an entity and its related entities through an attribute
 func (rm *RelationshipMap) AddRelationship(entity, attribute string, relatedEntities []string) {
+	// Store the original relationship structure
 	if rm.Relationships[entity] == nil {
 		rm.Relationships[entity] = make(map[string][]string)
 	}
 	rm.Relationships[entity][attribute] = relatedEntities
+
+	// Also store direct entity-to-entity relationships for faster lookups
+	for _, related := range relatedEntities {
+		// Create entity1 -> entity2 relationship
+		if rm.DirectRelationships[entity] == nil {
+			rm.DirectRelationships[entity] = make(map[string]bool)
+		}
+		rm.DirectRelationships[entity][related] = true
+
+		// Create entity2 -> entity1 relationship (bidirectional)
+		if rm.DirectRelationships[related] == nil {
+			rm.DirectRelationships[related] = make(map[string]bool)
+		}
+		rm.DirectRelationships[related][entity] = true
+	}
 }
 
 // HasRelationship checks if two entities are related through any attribute
 func (rm *RelationshipMap) HasRelationship(entity1, entity2 string) bool {
-	// Check direct relationships from entity1 to entity2
-	if attrs, ok := rm.Relationships[entity1]; ok {
-		for _, relatedEntities := range attrs {
-			for _, related := range relatedEntities {
-				if related == entity2 {
-					return true
-				}
-			}
-		}
-	}
-
-	// Check direct relationships from entity2 to entity1
-	if attrs, ok := rm.Relationships[entity2]; ok {
-		for _, relatedEntities := range attrs {
-			for _, related := range relatedEntities {
-				if related == entity1 {
-					return true
-				}
-			}
+	// Use the optimized direct relationship lookup
+	if relatedEntities, ok := rm.DirectRelationships[entity1]; ok {
+		if _, related := relatedEntities[entity2]; related {
+			return true
 		}
 	}
 
@@ -258,23 +262,22 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 	// Handle different comparison types
 	switch compType {
 	case SINGLE_ENTITY:
-		// For single entity comparisons, evaluate directly
-		entityToUse := leftEntity
-		if entityToUse == "" {
-			entityToUse = rightEntity
+		if node.Entity == "" {
+			if node.Left != nil && node.Left.Entity != "" {
+				node.Entity = node.Left.Entity
+			} else if node.Right != nil && node.Right.Entity != "" {
+				node.Entity = node.Right.Entity
+			}
 		}
-
-		// Get data for this entity
-		entityData, ok := ctx.EntityData["method_declaration"]
+		entityData, ok := ctx.EntityData[node.Entity]
 		if !ok {
-			return nil, fmt.Errorf("no data for entity: %s", entityToUse)
+			return nil, fmt.Errorf("no data for entity : %s", node.Entity)
 		}
 
 		// Filter data based on the expression
 		var filteredData []map[string]interface{}
 		for i, item := range entityData {
-			// Evaluate the expression
-			match, err := evaluateNode(node, ctx.ProxyEnv["method_declaration"][i])
+			match, err := evaluateNode(node, ctx.ProxyEnv[node.Entity][i])
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate expression: %w", err)
 			}
@@ -301,14 +304,22 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 
 		// Handle related and unrelated entities
 		if hasRelation {
-			// For related entities, find matching pairs
+			// For related entities, find matching pairs with optimized approach
 			var matchedData []map[string]interface{}
 
-			// For each left item, find related right items
+			// Build an index of right items by their relationship key to avoid O(n²) complexity
+			rightItemIndex := make(map[string][]map[string]interface{})
+			for _, rightItem := range rightData {
+				if relatedID, ok := rightItem[leftEntity+"_id"].(string); ok {
+					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
+				}
+			}
+
+			// For each left item, directly access related right items using the index
 			for _, leftItem := range leftData {
-				for _, rightItem := range rightData {
-					// Check if items are related
-					if areItemsRelated(leftItem, rightItem, leftEntity) {
+				if id, ok := leftItem["id"].(string); ok {
+					// Get only the related items instead of scanning all
+					for _, rightItem := range rightItemIndex[id] {
 						// Merge the items
 						mergedItem := mergeItems(leftItem, rightItem)
 
@@ -372,42 +383,6 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 	return result, nil
 }
 
-// evaluateVariableNode evaluates a variable node
-func evaluateVariableNode(node *ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
-	// Get entity name
-	entityName, err := getEntityName(node)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entity name: %w", err)
-	}
-
-	entityData, ok := ctx.EntityData["method_declaration"]
-	if !ok {
-		return nil, fmt.Errorf("entity data not found: %s", entityName)
-	}
-
-	var result []map[string]interface{}
-	for _, data := range entityData {
-		//fmt.Println(data)
-		if data[entityName] != nil && data[entityName] == node.Value {
-			result = append(result, data)
-		}
-	}
-
-	return &IntermediateResult{
-		NodeType: node.Type,
-		Data:     result,
-		Entities: []string{"method_declaration"},
-	}, nil
-}
-
-// evaluateLiteralNode evaluates a literal node
-func evaluateLiteralNode(node *ExpressionNode) (*IntermediateResult, error) {
-	return &IntermediateResult{
-		NodeType: node.Type,
-		Data:     []map[string]interface{}{{"value": node.Value}},
-	}, nil
-}
-
 // collectIntermediates collects all intermediate results into a flat list
 func collectIntermediates(result *IntermediateResult) []*IntermediateResult {
 	if result == nil {
@@ -449,108 +424,6 @@ func getInvolvedEntities(node *ExpressionNode) (leftEntity, rightEntity string, 
 	default:
 		return "", "", fmt.Errorf("unsupported node type for getting entities: %s", node.Type)
 	}
-}
-
-// evaluateSingleEntity handles evaluation of expressions involving a single entity type
-func evaluateSingleEntity(node *ExpressionNode, entity string, ctx *EvaluationContext) (*EvaluationResult, error) {
-	// Get data for the entity
-	data, ok := ctx.EntityData["method_declaration"]
-	if !ok {
-		return nil, fmt.Errorf("no data found for entity: %s", entity)
-	}
-
-	// Filter data based on the expression
-	result := make([]map[string]interface{}, 0)
-	for i, item := range data {
-		// Evaluate the expression for this item
-		matches, err := evaluateNode(node, ctx.ProxyEnv["method_declaration"][i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate node: %w", err)
-		}
-
-		// Include item if it matches
-		if matches.(bool) {
-			result = append(result, item)
-		}
-	}
-
-	return &EvaluationResult{
-		Data:     result,
-		Entities: []string{entity},
-	}, nil
-}
-
-// evaluateRelatedEntities handles evaluation of expressions involving two related entities
-func evaluateRelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx *EvaluationContext) (*EvaluationResult, error) {
-	// Get data for both entities
-	data1, ok1 := ctx.EntityData[entity1]
-	data2, ok2 := ctx.EntityData[entity2]
-	if !ok1 || !ok2 {
-		return nil, fmt.Errorf("missing data for entities: %s, %s", entity1, entity2)
-	}
-
-	// Perform a join operation based on the relationship
-	result := make([]map[string]interface{}, 0)
-	for _, item1 := range data1 {
-		for _, item2 := range data2 {
-			// Check if these items are related (this would depend on your data structure)
-			if areItemsRelated(item1, item2, entity1) {
-				// Merge the items
-				mergedItem := mergeItems(item1, item2)
-
-				// Evaluate the expression on the merged item
-				matches, err := evaluateNode(node, ctx.ProxyEnv[entity1][0])
-				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate node: %w", err)
-				}
-
-				// Include item if it matches
-				if matches.(bool) {
-					result = append(result, mergedItem)
-				}
-			}
-		}
-	}
-
-	return &EvaluationResult{
-		Data:     result,
-		Entities: []string{entity1, entity2},
-	}, nil
-}
-
-// evaluateUnrelatedEntities handles evaluation of expressions involving two unrelated entities
-func evaluateUnrelatedEntities(node *ExpressionNode, entity1, entity2 string, ctx *EvaluationContext) (*EvaluationResult, error) {
-	// Get data for both entities
-	data1, ok1 := ctx.EntityData[entity1]
-	data2, ok2 := ctx.EntityData[entity2]
-	if !ok1 || !ok2 {
-		return nil, fmt.Errorf("missing data for entities: %s, %s", entity1, entity2)
-	}
-
-	// Perform a cartesian product
-	result := make([]map[string]interface{}, 0)
-	for _, item1 := range data1 {
-		for _, item2 := range data2 {
-			// Merge the items
-			mergedItem := mergeItems(item1, item2)
-
-			// Evaluate the expression on the merged item
-			matches, err := evaluateNode(node, ctx.ProxyEnv[entity1][0])
-			if err != nil {
-				return nil, fmt.Errorf("failed to evaluate node: %w", err)
-			}
-
-			// Include item if it matches
-			if matches.(bool) {
-				result = append(result, mergedItem)
-			}
-		}
-	}
-
-	return &EvaluationResult{
-		Data:     result,
-		Entities: []string{entity1, entity2},
-	}, nil
 }
 
 // findIntersection finds the intersection of two data sets based on ID
@@ -608,18 +481,6 @@ func findUnion(data1, data2 []map[string]interface{}) []map[string]interface{} {
 	return result
 }
 
-// areItemsRelated checks if two items are related based on their entity types
-func areItemsRelated(item1, item2 map[string]interface{}, entity1 string) bool {
-	// Check if items are related based on their IDs
-	id1, ok1 := item1["id"].(string)
-	id2, ok2 := item2[entity1+"_id"].(string)
-	if !ok1 || !ok2 {
-		return false
-	}
-
-	return id1 == id2
-}
-
 // mergeItems merges two items into a single map
 func mergeItems(item1, item2 map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
@@ -656,9 +517,6 @@ func evaluateNode(node *ExpressionNode, proxyEnv map[string]interface{}) (interf
 	return expr.Run(result, proxyEnv)
 }
 
-// nodeToExprString converts an ExpressionNode to an expr-lang expression string
-// DetectComparisonType analyzes a binary expression node and determines if it's comparing
-// a single entity with a static value or comparing two different entities
 func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
 	if node == nil {
 		return "", fmt.Errorf("nil node")
@@ -709,7 +567,6 @@ func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
 	return DUAL_ENTITY, nil
 }
 
-// getEntityName extracts the entity name from a variable path (e.g. "class.name" -> "class")
 func getEntityName(node *ExpressionNode) (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("nil node")

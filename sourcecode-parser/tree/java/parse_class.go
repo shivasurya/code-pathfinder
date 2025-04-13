@@ -1,7 +1,10 @@
 package java
 
 import (
+	"strconv"
+
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
+	utilities "github.com/shivasurya/code-pathfinder/sourcecode-parser/util"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -41,11 +44,15 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 			}
 		}
 	}
+	lineNumber := int(node.StartPoint().Row) + 1
+	columnNumber := int(node.StartPoint().Column) + 1
+
 	classDeclaration.Annotations = annotationMarkers
 	classDeclaration.ClassOrInterface.Package = packageName
 	classDeclaration.SourceFile = file
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}
+	classDeclaration.ClassId = utilities.GenerateSha256(className + "/" + packageName + "/" + file + "/" + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber))
 
 	// append implemented interface to supertypes
 	classDeclaration.SuperTypes = append(classDeclaration.SuperTypes, implementedInterface...)

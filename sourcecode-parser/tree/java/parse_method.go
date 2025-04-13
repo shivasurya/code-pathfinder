@@ -106,7 +106,7 @@ func hasModifier(modifiers []string, targetModifier string) bool {
 	return false
 }
 
-func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Method {
+func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode) *model.Method {
 	methodName, methodID := extractMethodName(node, sourceCode, file)
 	modifiers := []string{}
 	returnType := ""
@@ -114,6 +114,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 	methodArgumentType := []string{}
 	methodArgumentValue := []string{}
 	annotationMarkers := []string{}
+	classId := ""
 
 	for i := 0; i < int(node.ChildCount()); i++ {
 		childNode := node.Child(i)
@@ -153,6 +154,10 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		}
 	}
 
+	if parentNode == nil {
+		classId = parentNode.Node.ClassDecl.ClassId
+	}
+
 	methodNode := &model.Method{
 		Name:              methodName,
 		QualifiedName:     methodName,
@@ -167,6 +172,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 		IsStrictfp:        hasModifier(modifiers, "strictfp"),
 		SourceDeclaration: file,
 		ID:                methodID,
+		ClassId:           classId,
 	}
 
 	return methodNode

@@ -131,6 +131,7 @@ type Method struct {
 	IsConstructor     bool     // Whether this method is a constructor
 	SourceDeclaration string   // Location of the source declaration
 	ID                string   // ID of the method
+	ClassId           string   // ID of the class
 }
 
 // NewMethod initializes a new Method instance.

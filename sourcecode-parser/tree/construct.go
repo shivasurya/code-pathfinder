@@ -69,7 +69,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BinaryExpr: binaryExprNode, NodeType: "BinaryExpr", NodeID: 13}, Parent: parentNode})
 		storageNode.AddBinaryExpr(binaryExprNode)
 	case "method_declaration":
-		methodDeclaration := javalang.ParseMethodDeclaration(node, sourceCode, file)
+		methodDeclaration := javalang.ParseMethodDeclaration(node, sourceCode, file, parentNode)
 		methodNode := &model.TreeNode{Node: &model.Node{MethodDecl: methodDeclaration, NodeType: "method_declaration", NodeID: 14}, Parent: parentNode}
 		parentNode.AddChild(methodNode)
 		storageNode.AddMethodDecl(methodDeclaration)

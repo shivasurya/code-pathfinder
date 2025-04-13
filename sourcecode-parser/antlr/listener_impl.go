@@ -30,6 +30,7 @@ type ExpressionNode struct {
 	Type     string           `json:"type"`            // Type of node: "binary", "unary", "literal", "variable", "method_call", "predicate_call"
 	Operator string           `json:"operator"`        // Operator for binary/unary operations
 	Value    string           `json:"value"`           // Value for literals, variable names, method names
+	Entity   string           `json:"entity"`          // Entity name
 	Left     *ExpressionNode  `json:"left,omitempty"`  // Left operand for binary operations
 	Right    *ExpressionNode  `json:"right,omitempty"` // Right operand for binary operations
 	Args     []ExpressionNode `json:"args,omitempty"`  // Arguments for method/predicate calls
@@ -354,10 +355,18 @@ func (l *CustomQueryListener) EnterPrimary(ctx *PrimaryContext) {
 				l.currentExpression = append(l.currentExpression, node)
 			} else if operand.Method_chain() != nil {
 				// Handle method chains
-				methodChain := operand.Method_chain()
+				methodValue := operand.Method_chain().GetText()
+				alias := operand.Alias().GetText()
+				entity := ""
+				for _, selectNode := range l.selectList {
+					if selectNode.Alias == alias {
+						entity = selectNode.Entity
+					}
+				}
 				node := &ExpressionNode{
-					Type:  "method_call",
-					Value: methodChain.GetText(),
+					Type:   "method_call",
+					Value:  methodValue,
+					Entity: entity,
 				}
 				l.currentExpression = append(l.currentExpression, node)
 			}
