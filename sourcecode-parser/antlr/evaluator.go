@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
 // IntermediateResult represents intermediate evaluation state at each node
 type IntermediateResult struct {
 	NodeType    string
 	Operator    string
-	Data        []map[string]interface{}
+	Data        []interface{}
 	Entities    []string
 	LeftResult  *IntermediateResult
 	RightResult *IntermediateResult
@@ -21,22 +22,21 @@ type IntermediateResult struct {
 
 // EvaluationResult represents the final result of evaluating an expression
 type EvaluationResult struct {
-	Data          []map[string]interface{} // The filtered data after evaluation
-	Entities      []string                 // The entities involved in this evaluation
-	Err           error                    // Any error that occurred during evaluation
-	Intermediates []*IntermediateResult    // Intermediate results for debugging
+	Data          []interface{}         // The filtered data after evaluation
+	Entities      []string              // The entities involved in this evaluation
+	Err           error                 // Any error that occurred during evaluation
+	Intermediates []*IntermediateResult // Intermediate results for debugging
 }
 
 // EvaluationContext holds the context for expression evaluation
 type EvaluationContext struct {
 	RelationshipMap *RelationshipMap
-	EntityData      map[string][]map[string]interface{} // map[EntityType][]EntityData
 	ProxyEnv        map[string][]map[string]interface{}
+	EntityModel     map[string][]interface{}
 }
 
 // RelationshipMap represents relationships between entities and their attributes
 type RelationshipMap struct {
-	// Direct mapping between entities for faster lookups
 	// map[EntityName]map[RelatedEntityName]bool
 	DirectRelationships map[string]map[string]bool
 	// Original relationships for attribute-based queries
@@ -97,8 +97,6 @@ const (
 	DUAL_ENTITY ComparisonType = "DUAL_ENTITY"
 )
 
-// EvaluateExpressionTree evaluates the expression tree against input data
-// and returns filtered data based on the expression conditions
 func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*EvaluationResult, error) {
 	if tree == nil {
 		return &EvaluationResult{}, nil
@@ -121,8 +119,6 @@ func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*Eval
 	return result, nil
 }
 
-// evaluateTreeNode evaluates a single node in the expression tree
-// and returns an intermediate result
 func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
 	result := &IntermediateResult{}
 
@@ -159,21 +155,15 @@ func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*Intermedia
 		// Handle logical operators
 		if node.Operator == "&&" || node.Operator == "||" {
 			// Get the filtered data from both sides
-			var leftData, rightData []map[string]interface{}
+			var leftData, rightData []interface{}
 
 			if leftResult != nil && len(leftResult.Data) > 0 {
 				leftData = leftResult.Data
 			}
 
-			// print leftData
-			fmt.Println("leftData:", leftData)
-
 			if rightResult != nil && len(rightResult.Data) > 0 {
 				rightData = rightResult.Data
 			}
-
-			// print rightData
-			fmt.Println("rightData:", rightData)
 
 			// For AND, find intersection
 			if node.Operator == "&&" {
@@ -238,19 +228,18 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 		if node.Entity == "" {
 			if node.Left != nil && node.Left.Entity != "" {
 				node.Entity = node.Left.Entity
+				node.Alias = node.Left.Alias
 			} else if node.Right != nil && node.Right.Entity != "" {
 				node.Entity = node.Right.Entity
+				node.Alias = node.Right.Alias
 			}
 		}
-		entityData, ok := ctx.EntityData[node.Entity]
-		if !ok {
-			return nil, fmt.Errorf("no data for entity : %s", node.Entity)
-		}
-
 		// Filter data based on the expression
-		var filteredData []map[string]interface{}
-		for i, item := range entityData {
-			match, err := evaluateNode(node, ctx.ProxyEnv[node.Entity][i])
+		var filteredData []interface{}
+		for _, item := range ctx.ProxyEnv[node.Entity] {
+			proxyEnv := make(map[string]interface{})
+			proxyEnv[node.Alias] = item
+			match, err := evaluateNode(node, proxyEnv)
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate expression: %w", err)
 			}
@@ -268,8 +257,8 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 		hasRelation := ctx.RelationshipMap.HasRelationship(node.Left.Entity, node.Right.Entity)
 
 		// Get data for both entities
-		leftData, leftOk := ctx.EntityData[node.Left.Entity]
-		rightData, rightOk := ctx.EntityData[node.Right.Entity]
+		leftData, leftOk := ctx.ProxyEnv[node.Left.Entity]
+		rightData, rightOk := ctx.ProxyEnv[node.Right.Entity]
 
 		if !leftOk || !rightOk {
 			return nil, fmt.Errorf("missing data for entities: %s, %s", node.Left.Entity, node.Right.Entity)
@@ -278,56 +267,38 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 		// Handle related and unrelated entities
 		if hasRelation {
 			// For related entities, find matching pairs with optimized approach
-			var matchedData []map[string]interface{}
+			var matchedData []interface{}
 
 			// Build an index of right items by their relationship key to avoid O(n²) complexity
-			rightItemIndex := make(map[string][]map[string]interface{})
+			rightItemIndex := make(map[string][]interface{})
 			for _, rightItem := range rightData {
 				if relatedID, ok := rightItem["class_id"].(string); ok {
 					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
 				}
 			}
+			fmt.Println("Right item index:", rightItemIndex)
 
 			// For each left item, directly access related right items using the index
-			for i, leftItem := range leftData {
-				// fmt.Println("leftItem:", leftItem)
+			for _, leftItem := range leftData {
 				if id, ok := leftItem["id"].(string); ok {
 					// Get only the related items instead of scanning all
-					for j, rightItem := range rightItemIndex[id] {
-						// Merge the items
-						mergedItem := mergeItems(leftItem, rightItem)
-
-						for k, v := range mergedItem {
-							// pretty print mergedItem
-							fmt.Println(k, v)
-						}
+					for _, rightItem := range rightItemIndex[id] {
 
 						// Create proxy environment for evaluation
 						proxyEnv := make(map[string]interface{})
-						for k, v := range mergedItem {
-							proxyEnv[k] = v
-							proxyEnv["cd"] = ctx.ProxyEnv[node.Left.Entity][i]
-							proxyEnv["md"] = ctx.ProxyEnv[node.Right.Entity][j]
-						}
-
-						// Add "cd." and "md." prefixes only if they're not already present
-						if !strings.HasPrefix(node.Left.Value, "cd.") {
-							node.Left.Value = fmt.Sprintf("%s.%s", "cd", node.Left.Value)
-						}
-						if !strings.HasPrefix(node.Right.Value, "md.") {
-							node.Right.Value = fmt.Sprintf("%s.%s", "md", node.Right.Value)
-						}
+						proxyEnv[node.Left.Alias] = leftItem
+						proxyEnv[node.Right.Alias] = rightItem
 
 						// Evaluate the expression
 						match, err := evaluateNode(node, proxyEnv)
 						if err != nil {
-							fmt.Printf("failed to evaluate expression: %s\n", err)
-							//return nil, fmt.Errorf("failed to evaluate expression: %w", err)
+							return nil, fmt.Errorf("failed to evaluate expression: %w", err)
 						}
 
 						// If it matches, add to matched data
 						if matchBool, ok := match.(bool); ok && matchBool {
-							matchedData = append(matchedData, mergedItem)
+							matchedData = append(matchedData, leftItem)
+							matchedData = append(matchedData, rightItem)
 						}
 					}
 				}
@@ -336,19 +307,15 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 			result.Data = matchedData
 		} else {
 			// For unrelated entities, use cross product
-			var matchedData []map[string]interface{}
+			var matchedData []interface{}
 
 			// For each left item, check against each right item
 			for _, leftItem := range leftData {
 				for _, rightItem := range rightData {
-					// Merge the items
-					mergedItem := mergeItems(leftItem, rightItem)
-
 					// Create proxy environment for evaluation
 					proxyEnv := make(map[string]interface{})
-					for k, v := range mergedItem {
-						proxyEnv[k] = v
-					}
+					proxyEnv[node.Left.Alias] = leftItem
+					proxyEnv[node.Right.Alias] = rightItem
 
 					// Evaluate the expression
 					match, err := evaluateNode(node, proxyEnv)
@@ -358,7 +325,8 @@ func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, c
 
 					// If it matches, add to matched data
 					if matchBool, ok := match.(bool); ok && matchBool {
-						matchedData = append(matchedData, mergedItem)
+						matchedData = append(matchedData, rightItem)
+						matchedData = append(matchedData, leftItem)
 					}
 				}
 			}
@@ -416,26 +384,28 @@ func getInvolvedEntities(node *ExpressionNode) (leftEntity, rightEntity string, 
 	}
 }
 
-// findIntersection finds the intersection of two data sets based on ID
-func findIntersection(data1, data2 []map[string]interface{}) []map[string]interface{} {
-	if len(data1) == 0 || len(data2) == 0 {
-		return []map[string]interface{}{}
-	}
+func findUnion(a, b []interface{}) []interface{} {
+	seen := make(map[string]bool)
+	var result []interface{}
 
-	// Create a map for faster lookups
-	idMap := make(map[string]map[string]interface{})
-	for _, item := range data1 {
-		if id, ok := item["id"].(string); ok {
-			idMap[id] = item
+	// Add items from the first slice
+	for _, item := range a {
+		if val, ok := item.(model.Identifiable); ok {
+			id := val.GetID()
+			if !seen[id] {
+				result = append(result, item)
+				seen[id] = true
+			}
 		}
 	}
 
-	// Find items that exist in both sets
-	result := []map[string]interface{}{}
-	for _, item := range data2 {
-		if id, ok := item["id"].(string); ok {
-			if _, exists := idMap[id]; exists {
+	// Add items from the second slice if not already present
+	for _, item := range b {
+		if val, ok := item.(model.Identifiable); ok {
+			id := val.GetID()
+			if !seen[id] {
 				result = append(result, item)
+				seen[id] = true
 			}
 		}
 	}
@@ -443,48 +413,25 @@ func findIntersection(data1, data2 []map[string]interface{}) []map[string]interf
 	return result
 }
 
-// findUnion finds the union of two data sets based on ID
-func findUnion(data1, data2 []map[string]interface{}) []map[string]interface{} {
-	// Create a map to avoid duplicates
-	idMap := make(map[string]map[string]interface{})
+func findIntersection(a []interface{}, b []interface{}) []interface{} {
+	idSet := make(map[string]bool)
+	var result []interface{}
 
-	// Add all items from first set
-	for _, item := range data1 {
-		if id, ok := item["id"].(string); ok {
-			idMap[id] = item
+	// Collect IDs from first slice
+	for _, item := range a {
+		if val, ok := item.(model.Identifiable); ok {
+			idSet[val.GetID()] = true
 		}
 	}
 
-	// Add all items from second set
-	for _, item := range data2 {
-		if id, ok := item["id"].(string); ok {
-			idMap[id] = item
+	// Check intersection with second slice
+	for _, item := range b {
+		if val, ok := item.(model.Identifiable); ok {
+			if idSet[val.GetID()] {
+				result = append(result, item)
+			}
 		}
 	}
-
-	// Convert map back to slice
-	result := []map[string]interface{}{}
-	for _, item := range idMap {
-		result = append(result, item)
-	}
-
-	return result
-}
-
-// mergeItems merges two items into a single map
-func mergeItems(item1, item2 map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	// Copy all items from item1
-	for k, v := range item1 {
-		result["class."+k] = v
-	}
-
-	// Copy all items from item2, prefixing keys to avoid conflicts
-	for k, v := range item2 {
-		result["method."+k] = v
-	}
-	fmt.Println("Merged item:", result)
 	return result
 }
 
@@ -494,11 +441,22 @@ func evaluateNode(node *ExpressionNode, proxyEnv map[string]interface{}) (interf
 	if node == nil {
 		return nil, fmt.Errorf("nil node")
 	}
+	var expression string
 
-	expression := fmt.Sprintf("%s %s %s", node.Left.Value, node.Operator, node.Right.Value)
+	leftExpr := node.Left.Value
+	rightExpr := node.Right.Value
+
+	if node.Left.Alias != "" {
+		leftExpr = fmt.Sprintf("%s.%s", node.Left.Alias, node.Left.Value)
+	}
+
+	if node.Right.Alias != "" {
+		rightExpr = fmt.Sprintf("%s.%s", node.Right.Alias, node.Right.Value)
+	}
+
+	expression = fmt.Sprintf("%s %s %s", leftExpr, node.Operator, rightExpr)
 
 	fmt.Println("Expression:", expression)
-	// cast data to model.Method
 
 	result, err := expr.Compile(expression, expr.Env(proxyEnv))
 	if err != nil {

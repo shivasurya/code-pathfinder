@@ -343,6 +343,10 @@ type Class struct {
 	IsFileClass bool // Whether this is a Kotlin file class (e.g., FooKt for Foo.kt)
 }
 
+func (c *Class) GetID() string {
+	return c.ClassId
+}
+
 func (c *Class) Insert(db *sql.DB) error {
 	query := `
 		INSERT INTO class_decl (

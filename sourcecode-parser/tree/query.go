@@ -178,35 +178,22 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	// Create evaluation context
 	ctx := &parser.EvaluationContext{
 		RelationshipMap: buildRelationshipMap(),
-		EntityData:      make(map[string][]map[string]interface{}),
 		ProxyEnv:        make(map[string][]map[string]interface{}),
+		EntityModel:     make(map[string][]interface{}),
 	}
 
 	// Prepare entity data by using db.StorageNode getter methods
 	for _, entity := range query.SelectList {
 		analytics.ReportEvent(entity.Entity)
-		entityData := []map[string]interface{}{}
 
-		// Use appropriate getter method based on entity type
 		switch entity.Entity {
 		case "method_declaration":
 			// Get method declarations from db
 			methods := db.GetMethodDecls()
 			methodProxyEnv := []map[string]interface{}{}
+			ctx.EntityModel[entity.Entity] = make([]interface{}, len(methods))
 			for _, method := range methods {
-				nodeData := map[string]interface{}{
-					"id":          method.ID,
-					"type":        "method_declaration",
-					"name":        method.Name,
-					"return_type": method.ReturnType,
-					"parameters":  method.Parameters,
-					"file":        method.SourceDeclaration,
-					"visibility":  method.Visibility,
-					"is_abstract": method.IsAbstract,
-					"is_strictfp": method.IsStrictfp,
-					"class_id":    method.ClassId,
-				}
-				entityData = append(entityData, nodeData)
+				ctx.EntityModel[entity.Entity] = append(ctx.EntityModel[entity.Entity], method)
 				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())
 			}
 			ctx.ProxyEnv[entity.Entity] = methodProxyEnv
@@ -215,78 +202,23 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 			// Get class declarations from db
 			classes := db.GetClassDecls()
 			classProxyEnv := []map[string]interface{}{}
+			ctx.EntityModel[entity.Entity] = make([]interface{}, len(classes))
 			for _, class := range classes {
-				nodeData := map[string]interface{}{
-					"id":      class.ClassId,
-					"type":    "class_declaration",
-					"name":    class.QualifiedName,
-					"package": class.Package,
-				}
-
-				// Get visibility from modifiers
-				if class.IsPublic() {
-					nodeData["visibility"] = "public"
-				} else if class.IsPrivate() {
-					nodeData["visibility"] = "private"
-				} else if class.IsProtected() {
-					nodeData["visibility"] = "protected"
-				} else {
-					nodeData["visibility"] = "package"
-				}
-
-				nodeData["is_abstract"] = class.IsAbstract()
-				nodeData["super_types"] = class.SuperTypes
-				entityData = append(entityData, nodeData)
+				ctx.EntityModel[entity.Entity] = append(ctx.EntityModel[entity.Entity], class)
 				classProxyEnv = append(classProxyEnv, class.GetProxyEnv())
 			}
 			ctx.ProxyEnv[entity.Entity] = classProxyEnv
-
 		case "field":
 			// Get field declarations from db
 			fields := db.GetFields()
+			ctx.EntityModel[entity.Entity] = make([]interface{}, len(fields))
+			fieldProxyEnv := []map[string]interface{}{}
 			for _, field := range fields {
-				nodeData := map[string]interface{}{
-					"id":   field.SourceDeclaration, // Use source declaration as ID
-					"type": "field",
-				}
-
-				// Use first field name if available
-				if len(field.FieldNames) > 0 {
-					nodeData["name"] = field.FieldNames[0]
-				}
-
-				nodeData["type"] = field.Type
-				nodeData["visibility"] = field.Visibility
-				entityData = append(entityData, nodeData)
+				ctx.EntityModel[entity.Entity] = append(ctx.EntityModel[entity.Entity], field)
+				fieldProxyEnv = append(fieldProxyEnv, field.GetProxyEnv())
 			}
-
-		case "method_invocation":
-			// Get method calls from db
-			methodCalls := db.GetMethodCalls()
-			for _, call := range methodCalls {
-				nodeData := map[string]interface{}{
-					"id":   call.MethodName, // Use method name as ID
-					"type": "method_invocation",
-					"name": call.MethodName,
-				}
-				entityData = append(entityData, nodeData)
-			}
-
-		case "binary_expression":
-			// Get binary expressions from db
-			binaryExprs := db.GetBinaryExprs()
-			for _, expr := range binaryExprs {
-				nodeData := map[string]interface{}{
-					"id":            expr.SourceDeclaration, // Use source declaration as ID
-					"type":          "binary_expression",
-					"left_operand":  expr.LeftOperand.String(),
-					"right_operand": expr.RightOperand.String(),
-					"operator":      expr.Op, // Use Op field instead of Operator
-				}
-				entityData = append(entityData, nodeData)
-			}
+			ctx.ProxyEnv[entity.Entity] = fieldProxyEnv
 		}
-		ctx.EntityData[entity.Entity] = entityData
 	}
 
 	// Use the expression tree from the query
@@ -311,15 +243,10 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	resultNodes := make([]*model.Node, 0)
 	for _, data := range result.Data {
 		node := &model.Node{}
-		node.NodeType = data["type"].(string)
-		node.MethodDecl = &model.Method{
-			Name:              data["name"].(string),
-			ReturnType:        data["return_type"].(string),
-			Parameters:        data["parameters"].([]string),
-			SourceDeclaration: data["file"].(string),
-			Visibility:        data["visibility"].(string),
-			IsAbstract:        data["is_abstract"].(bool),
-			IsStrictfp:        data["is_strictfp"].(bool),
+		//node.NodeType = data["type"].(string)
+		// if data casts to model.Method, set node.MethodDecl
+		if method, ok := data.(model.Method); ok {
+			node.MethodDecl = &method
 		}
 		resultNodes = append(resultNodes, node)
 	}

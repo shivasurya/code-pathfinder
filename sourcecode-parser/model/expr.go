@@ -637,6 +637,19 @@ type FieldDeclaration struct {
 	SourceDeclaration string   // Location of the field declaration
 }
 
+func (f *FieldDeclaration) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"id":           f.SourceDeclaration,
+		"name":         f.FieldNames[0],
+		"type":         f.Type,
+		"visibility":   f.Visibility,
+		"is_static":    f.IsStatic,
+		"is_final":     f.IsFinal,
+		"is_transient": f.IsTransient,
+		"is_volatile":  f.IsVolatile,
+	}
+}
+
 func (f *FieldDeclaration) Insert(db *sql.DB) error {
 	query := `
 		INSERT INTO field_decl (field_name, type, visibility, is_static, is_final, is_transient, is_volatile, source_declaration)

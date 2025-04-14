@@ -31,6 +31,7 @@ type ExpressionNode struct {
 	Operator string           `json:"operator"`        // Operator for binary/unary operations
 	Value    string           `json:"value"`           // Value for literals, variable names, method names
 	Entity   string           `json:"entity"`          // Entity name
+	Alias    string           `json:"alias"`           // Alias for entities
 	Left     *ExpressionNode  `json:"left,omitempty"`  // Left operand for binary operations
 	Right    *ExpressionNode  `json:"right,omitempty"` // Right operand for binary operations
 	Args     []ExpressionNode `json:"args,omitempty"`  // Arguments for method/predicate calls
@@ -367,6 +368,7 @@ func (l *CustomQueryListener) EnterPrimary(ctx *PrimaryContext) {
 					Type:   "method_call",
 					Value:  methodValue,
 					Entity: entity,
+					Alias:  alias,
 				}
 				l.currentExpression = append(l.currentExpression, node)
 			}

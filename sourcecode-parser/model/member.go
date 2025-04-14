@@ -134,6 +134,10 @@ type Method struct {
 	ClassId           string   // ID of the class
 }
 
+func (m *Method) GetID() string {
+	return m.ID
+}
+
 // NewMethod initializes a new Method instance.
 func NewMethod(name, qualifiedName, returnType string, parameters []string, parameterNames []string, visibility string, isAbstract, isStrictfp, isStatic, isFinal, isConstructor bool, sourceDeclaration string) *Method {
 	return &Method{
