@@ -192,13 +192,13 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 			// Get method declarations from db
 			methods := db.GetMethodDecls()
 			methodProxyEnv := []map[string]interface{}{}
-			ctx.EntityModel[entity.Entity] = make([]interface{}, len(methods))
+			entityModel := []interface{}{}
 			for _, method := range methods {
-				ctx.EntityModel[entity.Entity] = append(ctx.EntityModel[entity.Entity], method)
+				entityModel = append(entityModel, method)
 				methodProxyEnv = append(methodProxyEnv, method.GetProxyEnv())
 			}
 			ctx.ProxyEnv[entity.Entity] = methodProxyEnv
-
+			ctx.EntityModel[entity.Entity] = entityModel
 		case "class_declaration":
 			// Get class declarations from db
 			classes := db.GetClassDecls()

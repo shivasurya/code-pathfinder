@@ -185,7 +185,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 		}
 		// Filter data based on the expression
 		var filteredData []interface{}
-		for _, item := range ctx.ProxyEnv[node.Entity] {
+		for i, item := range ctx.ProxyEnv[node.Entity] {
 			proxyEnv := make(map[string]interface{})
 			proxyEnv[node.Alias] = item
 			match, err := evaluateNode(node, proxyEnv)
@@ -195,10 +195,15 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 
 			// If it matches, add to filtered data
 			if matchBool, ok := match.(bool); ok && matchBool {
-				filteredData = append(filteredData, item)
+				fmt.Println("Entity:", ctx.EntityModel[node.Entity])
+				filteredData = append(filteredData, ctx.EntityModel[node.Entity][i])
+				entity := ctx.EntityModel[node.Entity][i]
+				// cast entity to model.Method
+				method := entity.(*model.Method)
+				fmt.Println("Entity:", method.GetName())
 			}
 		}
-
+		fmt.Println("Filtered data:", filteredData)
 		result.Data = filteredData
 
 	case DUAL_ENTITY:
@@ -225,7 +230,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
 				}
 			}
-			fmt.Println("Right item index:", rightItemIndex)
+			//fmt.Println("Right item index:", rightItemIndex)
 
 			// For each left item, directly access related right items using the index
 			for _, leftItem := range leftData {
@@ -405,7 +410,7 @@ func evaluateNode(node *parser.ExpressionNode, proxyEnv map[string]interface{}) 
 
 	expression = fmt.Sprintf("%s %s %s", leftExpr, node.Operator, rightExpr)
 
-	fmt.Println("Expression:", expression)
+	//fmt.Println("Expression:", expression)
 
 	result, err := expr.Compile(expression, expr.Env(proxyEnv))
 	if err != nil {
