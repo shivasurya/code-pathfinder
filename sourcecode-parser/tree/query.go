@@ -9,6 +9,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/db"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/eval"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
@@ -176,7 +177,7 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 
 func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parser.Query) (nodes []*model.Node, output [][]interface{}) {
 	// Create evaluation context
-	ctx := &parser.EvaluationContext{
+	ctx := &eval.EvaluationContext{
 		RelationshipMap: buildRelationshipMap(),
 		ProxyEnv:        make(map[string][]map[string]interface{}),
 		EntityModel:     make(map[string][]interface{}),
@@ -227,7 +228,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	}
 
 	// Evaluate the condition
-	result, err := parser.EvaluateExpressionTree(query.ExpressionTree, ctx)
+	result, err := eval.EvaluateExpressionTree(query.ExpressionTree, ctx)
 	if err != nil {
 		// Handle error appropriately
 		fmt.Println("Error evaluating expression tree:", err)
@@ -256,8 +257,8 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 }
 
 // buildRelationshipMap creates a relationship map for the entities
-func buildRelationshipMap() *parser.RelationshipMap {
-	rm := parser.NewRelationshipMap()
+func buildRelationshipMap() *eval.RelationshipMap {
+	rm := eval.NewRelationshipMap()
 	// Add relationships between entities
 	// For example:
 	rm.AddRelationship("class_declaration", "class_id", []string{"method_declaration"})
