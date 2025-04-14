@@ -20,7 +20,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "TestClass.java")
+		method := ParseMethodDeclaration(node, sourceCode, "TestClass.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
@@ -48,7 +48,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "Person.java")
+		method := ParseMethodDeclaration(node, sourceCode, "Person.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
@@ -69,7 +69,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "Calculator.java")
+		method := ParseMethodDeclaration(node, sourceCode, "Calculator.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
@@ -93,7 +93,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "Handler.java")
+		method := ParseMethodDeclaration(node, sourceCode, "Handler.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
@@ -112,7 +112,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "AbstractWorker.java")
+		method := ParseMethodDeclaration(node, sourceCode, "AbstractWorker.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
@@ -132,7 +132,7 @@ func TestParseMethodDeclaration(t *testing.T) {
 		node := rootNode.Child(0)
 
 		// Call the function with our parsed data
-		method := ParseMethodDeclaration(node, sourceCode, "PreciseCalculator.java")
+		method := ParseMethodDeclaration(node, sourceCode, "PreciseCalculator.java", nil)
 
 		// Assertions
 		assert.NotNil(t, method)
