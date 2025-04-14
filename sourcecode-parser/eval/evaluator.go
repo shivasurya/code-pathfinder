@@ -1,10 +1,11 @@
-package parser
+package eval
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/expr-lang/expr"
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
@@ -35,58 +36,6 @@ type EvaluationContext struct {
 	EntityModel     map[string][]interface{}
 }
 
-// RelationshipMap represents relationships between entities and their attributes
-type RelationshipMap struct {
-	// map[EntityName]map[RelatedEntityName]bool
-	DirectRelationships map[string]map[string]bool
-	// Original relationships for attribute-based queries
-	Relationships map[string]map[string][]string
-}
-
-// NewRelationshipMap creates a new RelationshipMap
-func NewRelationshipMap() *RelationshipMap {
-	return &RelationshipMap{
-		DirectRelationships: make(map[string]map[string]bool),
-		Relationships:       make(map[string]map[string][]string),
-	}
-}
-
-// AddRelationship adds a relationship between an entity and its related entities through an attribute
-func (rm *RelationshipMap) AddRelationship(entity, attribute string, relatedEntities []string) {
-	// Store the original relationship structure
-	if rm.Relationships[entity] == nil {
-		rm.Relationships[entity] = make(map[string][]string)
-	}
-	rm.Relationships[entity][attribute] = relatedEntities
-
-	// Also store direct entity-to-entity relationships for faster lookups
-	for _, related := range relatedEntities {
-		// Create entity1 -> entity2 relationship
-		if rm.DirectRelationships[entity] == nil {
-			rm.DirectRelationships[entity] = make(map[string]bool)
-		}
-		rm.DirectRelationships[entity][related] = true
-
-		// Create entity2 -> entity1 relationship (bidirectional)
-		if rm.DirectRelationships[related] == nil {
-			rm.DirectRelationships[related] = make(map[string]bool)
-		}
-		rm.DirectRelationships[related][entity] = true
-	}
-}
-
-// HasRelationship checks if two entities are related through any attribute
-func (rm *RelationshipMap) HasRelationship(entity1, entity2 string) bool {
-	// Use the optimized direct relationship lookup
-	if relatedEntities, ok := rm.DirectRelationships[entity1]; ok {
-		if _, related := relatedEntities[entity2]; related {
-			return true
-		}
-	}
-
-	return false
-}
-
 // ComparisonType represents the type of comparison in an expression
 type ComparisonType string
 
@@ -97,7 +46,7 @@ const (
 	DUAL_ENTITY ComparisonType = "DUAL_ENTITY"
 )
 
-func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*EvaluationResult, error) {
+func EvaluateExpressionTree(tree *parser.ExpressionNode, ctx *EvaluationContext) (*EvaluationResult, error) {
 	if tree == nil {
 		return &EvaluationResult{}, nil
 	}
@@ -119,7 +68,7 @@ func EvaluateExpressionTree(tree *ExpressionNode, ctx *EvaluationContext) (*Eval
 	return result, nil
 }
 
-func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
+func evaluateTreeNode(node *parser.ExpressionNode, ctx *EvaluationContext) (*IntermediateResult, error) {
 	result := &IntermediateResult{}
 
 	// Handle nil node
@@ -192,7 +141,7 @@ func evaluateTreeNode(node *ExpressionNode, ctx *EvaluationContext) (*Intermedia
 }
 
 // evaluateBinaryNode evaluates a binary operation node
-func evaluateBinaryNode(node *ExpressionNode, left, right *IntermediateResult, ctx *EvaluationContext) (*IntermediateResult, error) {
+func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateResult, ctx *EvaluationContext) (*IntermediateResult, error) {
 	// Determine the type of comparison
 	compType, err := DetectComparisonType(node)
 	if err != nil {
@@ -360,7 +309,7 @@ func collectIntermediates(result *IntermediateResult) []*IntermediateResult {
 }
 
 // getInvolvedEntities returns the entity types involved in an expression
-func getInvolvedEntities(node *ExpressionNode) (leftEntity, rightEntity string, err error) {
+func getInvolvedEntities(node *parser.ExpressionNode) (leftEntity, rightEntity string, err error) {
 	if node == nil {
 		return "", "", fmt.Errorf("nil node")
 	}
@@ -437,7 +386,7 @@ func findIntersection(a []interface{}, b []interface{}) []interface{} {
 
 // evaluateNode recursively evaluates a single node in the expression tree
 // returns interface{} to support different types (bool, string, number)
-func evaluateNode(node *ExpressionNode, proxyEnv map[string]interface{}) (interface{}, error) {
+func evaluateNode(node *parser.ExpressionNode, proxyEnv map[string]interface{}) (interface{}, error) {
 	if node == nil {
 		return nil, fmt.Errorf("nil node")
 	}
@@ -465,7 +414,7 @@ func evaluateNode(node *ExpressionNode, proxyEnv map[string]interface{}) (interf
 	return expr.Run(result, proxyEnv)
 }
 
-func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
+func DetectComparisonType(node *parser.ExpressionNode) (ComparisonType, error) {
 	if node == nil {
 		return "", fmt.Errorf("nil node")
 	}
@@ -515,7 +464,7 @@ func DetectComparisonType(node *ExpressionNode) (ComparisonType, error) {
 	return DUAL_ENTITY, nil
 }
 
-func getEntityName(node *ExpressionNode) (string, error) {
+func getEntityName(node *parser.ExpressionNode) (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("nil node")
 	}

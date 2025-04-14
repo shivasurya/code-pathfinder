@@ -1,8 +1,9 @@
-package parser
+package eval
 
 import (
 	"testing"
 
+	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -10,26 +11,26 @@ func TestEvaluateExpressionTree(t *testing.T) {
 	// Create test data
 	ctx := &EvaluationContext{
 		RelationshipMap: buildTestRelationshipMap(),
-		EntityData:      buildTestEntityData(),
+		ProxyEnv:        buildTestEntityData(),
 	}
 
 	// Test cases
 	testCases := []struct {
 		name          string
-		expr          *ExpressionNode
+		expr          *parser.ExpressionNode
 		expectedData  []map[string]interface{}
 		expectedError bool
 	}{
 		{
 			name: "simple single entity comparison",
-			expr: &ExpressionNode{
+			expr: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "==",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "class.name",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "literal",
 					Value: "\"MyClass\"",
 				},
@@ -40,14 +41,14 @@ func TestEvaluateExpressionTree(t *testing.T) {
 		},
 		{
 			name: "dual entity comparison",
-			expr: &ExpressionNode{
+			expr: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "==",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "class.name",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "method.name",
 				},
@@ -58,29 +59,29 @@ func TestEvaluateExpressionTree(t *testing.T) {
 		},
 		{
 			name: "complex AND condition",
-			expr: &ExpressionNode{
+			expr: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "&&",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:     "binary",
 					Operator: "==",
-					Left: &ExpressionNode{
+					Left: &parser.ExpressionNode{
 						Type:  "variable",
 						Value: "class.name",
 					},
-					Right: &ExpressionNode{
+					Right: &parser.ExpressionNode{
 						Type:  "literal",
 						Value: "\"MyClass\"",
 					},
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:     "binary",
 					Operator: ">",
-					Left: &ExpressionNode{
+					Left: &parser.ExpressionNode{
 						Type:  "variable",
 						Value: "class.methodCount",
 					},
-					Right: &ExpressionNode{
+					Right: &parser.ExpressionNode{
 						Type:  "literal",
 						Value: "2",
 					},
@@ -93,29 +94,29 @@ func TestEvaluateExpressionTree(t *testing.T) {
 		},
 		{
 			name: "related entities (class and method)",
-			expr: &ExpressionNode{
+			expr: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "&&",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:     "binary",
 					Operator: "==",
-					Left: &ExpressionNode{
+					Left: &parser.ExpressionNode{
 						Type:  "variable",
 						Value: "class.name",
 					},
-					Right: &ExpressionNode{
+					Right: &parser.ExpressionNode{
 						Type:  "literal",
 						Value: "\"MyClass\"",
 					},
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:     "binary",
 					Operator: "==",
-					Left: &ExpressionNode{
+					Left: &parser.ExpressionNode{
 						Type:  "variable",
 						Value: "method.name",
 					},
-					Right: &ExpressionNode{
+					Right: &parser.ExpressionNode{
 						Type:  "literal",
 						Value: "\"doSomething\"",
 					},
@@ -237,109 +238,23 @@ func TestRelationshipMap(t *testing.T) {
 	}
 }
 
-func TestCheckExpressionRelationship(t *testing.T) {
-	// Create a relationship map
-	rm := NewRelationshipMap()
-	rm.AddRelationship("class", "methods", []string{"method"})
-
-	tests := []struct {
-		name     string
-		node     *ExpressionNode
-		expected bool
-		wantErr  bool
-	}{
-		{
-			name: "related entities comparison",
-			node: &ExpressionNode{
-				Type:     "binary",
-				Operator: "==",
-				Left: &ExpressionNode{
-					Type:  "variable",
-					Value: "class",
-				},
-				Right: &ExpressionNode{
-					Type:  "variable",
-					Value: "method",
-				},
-			},
-			expected: true,
-			wantErr:  false,
-		},
-		{
-			name: "unrelated entities comparison",
-			node: &ExpressionNode{
-				Type:     "binary",
-				Operator: "==",
-				Left: &ExpressionNode{
-					Type:  "variable",
-					Value: "class",
-				},
-				Right: &ExpressionNode{
-					Type:  "variable",
-					Value: "unrelated",
-				},
-			},
-			expected: false,
-			wantErr:  false,
-		},
-		{
-			name: "single entity comparison",
-			node: &ExpressionNode{
-				Type:     "binary",
-				Operator: ">",
-				Left: &ExpressionNode{
-					Type:  "variable",
-					Value: "class",
-				},
-				Right: &ExpressionNode{
-					Type:  "literal",
-					Value: "10",
-				},
-			},
-			expected: false,
-			wantErr:  false,
-		},
-		{
-			name: "non-binary node",
-			node: &ExpressionNode{
-				Type:  "literal",
-				Value: "25",
-			},
-			expected: false,
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// got, err := CheckExpressionRelationship(tt.node, rm)
-			// if tt.wantErr {
-			// 	assert.Error(t, err)
-			// 	return
-			// }
-			// assert.NoError(t, err)
-			// assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestDetectComparisonType(t *testing.T) {
 	tests := []struct {
 		name     string
-		node     *ExpressionNode
+		node     *parser.ExpressionNode
 		expected ComparisonType
 		wantErr  bool
 	}{
 		{
 			name: "single entity with literal",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: ">",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "age",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "literal",
 					Value: "25",
 				},
@@ -349,14 +264,14 @@ func TestDetectComparisonType(t *testing.T) {
 		},
 		{
 			name: "dual entity comparison",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "==",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "age",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "variable",
 					Value: "count",
 				},
@@ -366,14 +281,14 @@ func TestDetectComparisonType(t *testing.T) {
 		},
 		{
 			name: "single entity method call",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: ">",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "method_call",
 					Value: "method.complexity",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "literal",
 					Value: "10",
 				},
@@ -383,14 +298,14 @@ func TestDetectComparisonType(t *testing.T) {
 		},
 		{
 			name: "dual entity method calls",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "==",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:  "method_call",
 					Value: "method1.complexity",
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "method_call",
 					Value: "method2.complexity",
 				},
@@ -400,7 +315,7 @@ func TestDetectComparisonType(t *testing.T) {
 		},
 		{
 			name: "non-binary node",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:  "literal",
 				Value: "25",
 			},
@@ -440,14 +355,14 @@ func TestEvaluateNode(t *testing.T) {
 	}
 	tests := []struct {
 		name     string
-		node     *ExpressionNode
+		node     *parser.ExpressionNode
 		data     map[string]interface{}
 		expected interface{}
 		wantErr  bool
 	}{
 		{
 			name: "simple variable",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:  "variable",
 				Value: "age",
 			},
@@ -457,7 +372,7 @@ func TestEvaluateNode(t *testing.T) {
 		},
 		{
 			name: "simple literal",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:  "literal",
 				Value: "25",
 			},
@@ -467,7 +382,7 @@ func TestEvaluateNode(t *testing.T) {
 		},
 		{
 			name: "method call",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:  "method_call",
 				Value: "complexity",
 			},
@@ -477,10 +392,10 @@ func TestEvaluateNode(t *testing.T) {
 		},
 		{
 			name: "method call with args",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:  "method_call",
 				Value: "hasAnnotation",
-				Args: []ExpressionNode{
+				Args: []parser.ExpressionNode{
 					{
 						Type:  "literal",
 						Value: "\"@Test\"",
@@ -493,25 +408,25 @@ func TestEvaluateNode(t *testing.T) {
 		},
 		{
 			name: "complex expression with method call",
-			node: &ExpressionNode{
+			node: &parser.ExpressionNode{
 				Type:     "binary",
 				Operator: "&&",
-				Left: &ExpressionNode{
+				Left: &parser.ExpressionNode{
 					Type:     "binary",
 					Operator: ">",
-					Left: &ExpressionNode{
+					Left: &parser.ExpressionNode{
 						Type:  "method_call",
 						Value: "complexity",
 					},
-					Right: &ExpressionNode{
+					Right: &parser.ExpressionNode{
 						Type:  "literal",
 						Value: "5",
 					},
 				},
-				Right: &ExpressionNode{
+				Right: &parser.ExpressionNode{
 					Type:  "method_call",
 					Value: "hasAnnotation",
-					Args: []ExpressionNode{
+					Args: []parser.ExpressionNode{
 						{
 							Type:  "literal",
 							Value: "\"@Test\"",
