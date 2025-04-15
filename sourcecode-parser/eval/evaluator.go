@@ -9,7 +9,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
-// IntermediateResult represents intermediate evaluation state at each node
+// IntermediateResult represents intermediate evaluation state at each node.
 type IntermediateResult struct {
 	NodeType    string
 	Operator    string
@@ -21,7 +21,7 @@ type IntermediateResult struct {
 	Err         error
 }
 
-// EvaluationResult represents the final result of evaluating an expression
+// EvaluationResult represents the final result of evaluating an expression.
 type EvaluationResult struct {
 	Data          []interface{}         // The filtered data after evaluation
 	Entities      []string              // The entities involved in this evaluation
@@ -29,20 +29,20 @@ type EvaluationResult struct {
 	Intermediates []*IntermediateResult // Intermediate results for debugging
 }
 
-// EvaluationContext holds the context for expression evaluation
+// EvaluationContext holds the context for expression evaluation.
 type EvaluationContext struct {
 	RelationshipMap *RelationshipMap
 	ProxyEnv        map[string][]map[string]interface{}
 	EntityModel     map[string][]interface{}
 }
 
-// ComparisonType represents the type of comparison in an expression
+// ComparisonType represents the type of comparison in an expression.
 type ComparisonType string
 
 const (
-	// SINGLE_ENTITY represents comparison between one entity and a static value
+	// SINGLE_ENTITY represents comparison between one entity and a static value.
 	SINGLE_ENTITY ComparisonType = "SINGLE_ENTITY"
-	// DUAL_ENTITY represents comparison between two different entities
+	// DUAL_ENTITY represents comparison between two different entities.
 	DUAL_ENTITY ComparisonType = "DUAL_ENTITY"
 )
 
@@ -140,7 +140,7 @@ func evaluateTreeNode(node *parser.ExpressionNode, ctx *EvaluationContext) (*Int
 	return result, nil
 }
 
-// evaluateBinaryNode evaluates a binary operation node
+// evaluateBinaryNode evaluates a binary operation node.
 func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateResult, ctx *EvaluationContext) (*IntermediateResult, error) {
 	// Determine the type of comparison
 	compType, err := DetectComparisonType(node)
@@ -223,7 +223,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
 				}
 			}
-			//fmt.Println("Right item index:", rightItemIndex)
+			// fmt.Println("Right item index:", rightItemIndex)
 
 			// For each left item, directly access related right items using the index
 			for _, leftItem := range leftData {
@@ -288,7 +288,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 	return result, nil
 }
 
-// collectIntermediates collects all intermediate results into a flat list
+// collectIntermediates collects all intermediate results into a flat list.
 func collectIntermediates(result *IntermediateResult) []*IntermediateResult {
 	if result == nil {
 		return nil
@@ -306,7 +306,7 @@ func collectIntermediates(result *IntermediateResult) []*IntermediateResult {
 	return results
 }
 
-// getInvolvedEntities returns the entity types involved in an expression
+// getInvolvedEntities returns the entity types involved in an expression.
 func getInvolvedEntities(node *parser.ExpressionNode) (leftEntity, rightEntity string, err error) {
 	if node == nil {
 		return "", "", fmt.Errorf("nil node")
@@ -382,8 +382,7 @@ func findIntersection(a []interface{}, b []interface{}) []interface{} {
 	return result
 }
 
-// evaluateNode recursively evaluates a single node in the expression tree
-// returns interface{} to support different types (bool, string, number)
+// returns interface{} to support different types (bool, string, number).
 func evaluateNode(node *parser.ExpressionNode, proxyEnv map[string]interface{}) (interface{}, error) {
 	if node == nil {
 		return nil, fmt.Errorf("nil node")
@@ -403,7 +402,7 @@ func evaluateNode(node *parser.ExpressionNode, proxyEnv map[string]interface{}) 
 
 	expression = fmt.Sprintf("%s %s %s", leftExpr, node.Operator, rightExpr)
 
-	//fmt.Println("Expression:", expression)
+	// fmt.Println("Expression:", expression)
 
 	result, err := expr.Compile(expression, expr.Env(proxyEnv))
 	if err != nil {

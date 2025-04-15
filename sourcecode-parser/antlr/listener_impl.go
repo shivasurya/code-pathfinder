@@ -25,7 +25,7 @@ type PredicateInvocation struct {
 	Predicate     Predicate
 }
 
-// ExpressionNode represents a node in the expression tree
+// ExpressionNode represents a node in the expression tree.
 type ExpressionNode struct {
 	Type     string           `json:"type"`            // Type of node: "binary", "unary", "literal", "variable", "method_call", "predicate_call"
 	Operator string           `json:"operator"`        // Operator for binary/unary operations

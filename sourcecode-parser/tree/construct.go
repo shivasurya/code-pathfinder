@@ -116,7 +116,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 	}
 }
 
-// Process a single file and return its tree
+// Process a single file and return its tree.
 func processFile(parser *sitter.Parser, file string, fileName string, storageNode *db.StorageNode, workerID int, statusChan chan<- string) *model.TreeNode {
 	sourceCode, err := readFile(file)
 	if err != nil {

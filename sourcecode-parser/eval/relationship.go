@@ -1,6 +1,6 @@
 package eval
 
-// RelationshipMap represents relationships between entities and their attributes
+// RelationshipMap represents relationships between entities and their attributes.
 type RelationshipMap struct {
 	// map[EntityName]map[RelatedEntityName]bool
 	DirectRelationships map[string]map[string]bool
@@ -8,7 +8,7 @@ type RelationshipMap struct {
 	Relationships map[string]map[string][]string
 }
 
-// NewRelationshipMap creates a new RelationshipMap
+// NewRelationshipMap creates a new RelationshipMap.
 func NewRelationshipMap() *RelationshipMap {
 	return &RelationshipMap{
 		DirectRelationships: make(map[string]map[string]bool),
@@ -16,7 +16,7 @@ func NewRelationshipMap() *RelationshipMap {
 	}
 }
 
-// AddRelationship adds a relationship between an entity and its related entities through an attribute
+// AddRelationship adds a relationship between an entity and its related entities through an attribute.
 func (rm *RelationshipMap) AddRelationship(entity, attribute string, relatedEntities []string) {
 	// Store the original relationship structure
 	if rm.Relationships[entity] == nil {
@@ -40,7 +40,7 @@ func (rm *RelationshipMap) AddRelationship(entity, attribute string, relatedEnti
 	}
 }
 
-// HasRelationship checks if two entities are related through any attribute
+// HasRelationship checks if two entities are related through any attribute.
 func (rm *RelationshipMap) HasRelationship(entity1, entity2 string) bool {
 	// Use the optimized direct relationship lookup
 	if relatedEntities, ok := rm.DirectRelationships[entity1]; ok {

@@ -254,7 +254,7 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	return resultNodes, output
 }
 
-// buildRelationshipMap creates a relationship map for the entities
+// buildRelationshipMap creates a relationship map for the entities.
 func buildRelationshipMap() *eval.RelationshipMap {
 	rm := eval.NewRelationshipMap()
 	// Add relationships between entities
