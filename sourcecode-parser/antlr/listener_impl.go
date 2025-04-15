@@ -62,38 +62,6 @@ type CustomQueryListener struct {
 	currentExpression   []*ExpressionNode // Stack to track current expression being built
 }
 
-func (l *CustomQueryListener) EnterMethod_chain(ctx *Method_chainContext) { //nolint:all
-	// Handle class method calls
-	// if ctx.Class_name() != nil {
-	// 	className := ctx.Class_name().GetText()
-	// 	methodName := ctx.Method_name().GetText()
-
-	// 	// Find the class and method
-	// 	for _, class := range l.Classes {
-	// 		if class.Name == className {
-	// 			for _, method := range class.Methods {
-	// 				if method.Name == methodName {
-	// 					// Store method call information
-	// 					l.SelectOutput = append(l.SelectOutput, SelectOutput{
-	// 						SelectEntity: ctx.GetText(),
-	// 						Type:         "class_method",
-	// 					})
-	// 					return
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	// // Handle existing method chain logic
-	// if ctx.Method_name() != nil {
-	// 	l.SelectOutput = append(l.SelectOutput, SelectOutput{
-	// 		SelectEntity: ctx.GetText(),
-	// 		Type:         "method_chain",
-	// 	})
-	// }
-}
-
 type State struct {
 	isInPredicateDeclaration bool
 }
