@@ -7,8 +7,8 @@ import (
 )
 
 func TestBinaryExpr(t *testing.T) {
-	leftExpr := &Expr{Kind: 0}
-	rightExpr := &Expr{Kind: 0}
+	leftExpr := &Expr{Kind: 0, NodeString: "left"}
+	rightExpr := &Expr{Kind: 0, NodeString: "right"}
 	binaryExpr := &BinaryExpr{
 		Op:           "+",
 		LeftOperand:  leftExpr,
@@ -39,6 +39,22 @@ func TestBinaryExpr(t *testing.T) {
 		assert.True(t, binaryExpr.HasOperands(leftExpr, rightExpr))
 		assert.False(t, binaryExpr.HasOperands(rightExpr, leftExpr))
 	})
+
+	t.Run("GetLeftOperandString", func(t *testing.T) {
+		assert.Equal(t, "left", binaryExpr.GetLeftOperandString())
+	})
+
+	t.Run("GetRightOperandString", func(t *testing.T) {
+		assert.Equal(t, "right", binaryExpr.GetRightOperandString())
+	})
+
+	t.Run("ToString", func(t *testing.T) {
+		str := binaryExpr.ToString()
+		assert.Contains(t, str, "BinaryExpr(")
+		assert.Contains(t, str, "+")
+		assert.Contains(t, str, "left")
+		assert.Contains(t, str, "right")
+	})
 }
 
 func TestAddExpr(t *testing.T) {
@@ -50,6 +66,37 @@ func TestAddExpr(t *testing.T) {
 	assert.Equal(t, "+", addExpr.GetOp())
 }
 
+func TestOtherBinaryExprTypes_GetOp(t *testing.T) {
+	types := []struct {
+		name string
+		expr interface{ GetOp() string }
+		expected string
+	}{
+		{"SubExpr", &SubExpr{op: "-"}, "-"},
+		{"DivExpr", &DivExpr{op: "/"}, "/"},
+		{"MulExpr", &MulExpr{op: "*"}, "*"},
+		{"RemExpr", &RemExpr{op: "%"}, "%"},
+		{"EqExpr", &EqExpr{op: "=="}, "=="},
+		{"NEExpr", &NEExpr{op: "!="}, "!="},
+		{"GTExpr", &GTExpr{op: ">"}, ">"},
+		{"GEExpr", &GEExpr{op: ">="}, ">="},
+		{"LTExpr", &LTExpr{op: "<"}, "<"},
+		{"LEExpr", &LEExpr{op: "<="}, "<="},
+		{"AndBitwiseExpr", &AndBitwiseExpr{op: "&"}, "&"},
+		{"OrBitwiseExpr", &OrBitwiseExpr{op: "|"}, "|"},
+		{"LeftShiftExpr", &LeftShiftExpr{op: "<<"}, "<<"},
+		{"RightShiftExpr", &RightShiftExpr{op: ">>"}, ">>"},
+		{"UnsignedRightShiftExpr", &UnsignedRightShiftExpr{op: ">>>"}, ">>>"},
+		{"AndLogicalExpr", &AndLogicalExpr{op: "&&"}, "&&"},
+		{"OrLogicalExpr", &OrLogicalExpr{op: "||"}, "||"},
+	}
+	for _, tc := range types {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.expr.GetOp())
+		})
+	}
+}
+
 func TestComparisonExpr(t *testing.T) {
 	compExpr := &ComparisonExpr{}
 
@@ -59,7 +106,7 @@ func TestComparisonExpr(t *testing.T) {
 }
 
 func TestExpr(t *testing.T) {
-	expr := &Expr{Kind: 42}
+	expr := &Expr{Kind: 42, NodeString: "foo"}
 
 	t.Run("GetAChildExpr", func(t *testing.T) {
 		assert.Equal(t, expr, expr.GetAChildExpr())
@@ -75,6 +122,10 @@ func TestExpr(t *testing.T) {
 
 	t.Run("GetKind", func(t *testing.T) {
 		assert.Equal(t, 42, expr.GetKind())
+	})
+
+	t.Run("String", func(t *testing.T) {
+		assert.Equal(t, "Expr(foo)", expr.String())
 	})
 }
 
@@ -93,21 +144,9 @@ func TestClassInstanceExpr(t *testing.T) {
 			expr     *ClassInstanceExpr
 			expected string
 		}{
-			{
-				name:     "Normal class name",
-				expr:     &ClassInstanceExpr{ClassName: "MyClass"},
-				expected: "MyClass",
-			},
-			{
-				name:     "Empty class name",
-				expr:     &ClassInstanceExpr{ClassName: ""},
-				expected: "",
-			},
-			{
-				name:     "Class name with special characters",
-				expr:     &ClassInstanceExpr{ClassName: "My_Class$123"},
-				expected: "My_Class$123",
-			},
+			{"Normal class name", &ClassInstanceExpr{ClassName: "MyClass"}, "MyClass"},
+			{"Empty class name", &ClassInstanceExpr{ClassName: ""}, ""},
+			{"Class name with special characters", &ClassInstanceExpr{ClassName: "My_Class$123"}, "My_Class$123"},
 		}
 
 		for _, tc := range testCases {
