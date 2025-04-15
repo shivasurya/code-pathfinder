@@ -5,7 +5,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseIfStatement(node *sitter.Node, sourceCode []byte, file string) *model.IfStmt {
+func ParseIfStatement(node *sitter.Node, sourceCode []byte) *model.IfStmt {
 	ifNode := &model.IfStmt{}
 	// get the condition of the if statement
 	conditionNode := node.Child(1)

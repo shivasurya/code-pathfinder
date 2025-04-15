@@ -22,7 +22,7 @@ func TestParseIfStatement(t *testing.T) {
 		assert.NotNil(t, ifNode)
 
 		// Call the function with our parsed node
-		ifStmt := ParseIfStatement(ifNode, sourceCode, "Test.java")
+		ifStmt := ParseIfStatement(ifNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, ifStmt)
@@ -45,7 +45,7 @@ func TestParseIfStatement(t *testing.T) {
 		assert.NotNil(t, ifNode)
 
 		// Call the function with our parsed node
-		ifStmt := ParseIfStatement(ifNode, sourceCode, "Test.java")
+		ifStmt := ParseIfStatement(ifNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, ifStmt)
@@ -69,7 +69,7 @@ func TestParseIfStatement(t *testing.T) {
 		assert.NotNil(t, ifNode)
 
 		// Call the function with our parsed node
-		ifStmt := ParseIfStatement(ifNode, sourceCode, "Test.java")
+		ifStmt := ParseIfStatement(ifNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, ifStmt)
@@ -92,7 +92,7 @@ func TestParseIfStatement(t *testing.T) {
 		assert.NotNil(t, ifNode)
 
 		// Call the function with our parsed node
-		ifStmt := ParseIfStatement(ifNode, sourceCode, "Test.java")
+		ifStmt := ParseIfStatement(ifNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, ifStmt)

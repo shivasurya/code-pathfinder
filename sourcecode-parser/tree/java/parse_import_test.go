@@ -22,7 +22,7 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode, "Test.java")
+		importType := ParseImportDeclaration(importNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, importType)
@@ -41,7 +41,7 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode, "Test.java")
+		importType := ParseImportDeclaration(importNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, importType)
@@ -60,7 +60,7 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode, "Test.java")
+		importType := ParseImportDeclaration(importNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, importType)
@@ -79,7 +79,7 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode, "Test.java")
+		importType := ParseImportDeclaration(importNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, importType)
@@ -101,7 +101,7 @@ func TestParsePackageDeclaration(t *testing.T) {
 		assert.NotNil(t, packageNode)
 
 		// Call the function with our parsed node
-		pkg := ParsePackageDeclaration(packageNode, sourceCode, "Test.java")
+		pkg := ParsePackageDeclaration(packageNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, pkg)
@@ -120,7 +120,7 @@ func TestParsePackageDeclaration(t *testing.T) {
 		assert.NotNil(t, packageNode)
 
 		// Call the function with our parsed node
-		pkg := ParsePackageDeclaration(packageNode, sourceCode, "Test.java")
+		pkg := ParsePackageDeclaration(packageNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, pkg)
@@ -139,7 +139,7 @@ func TestParsePackageDeclaration(t *testing.T) {
 		assert.NotNil(t, packageNode)
 
 		// Call the function with our parsed node
-		pkg := ParsePackageDeclaration(packageNode, sourceCode, "Test.java")
+		pkg := ParsePackageDeclaration(packageNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, pkg)
@@ -151,28 +151,28 @@ func TestParsePackageDeclaration(t *testing.T) {
 func TestIsIdentifier(t *testing.T) {
 	// Since we can't easily create tree-sitter nodes with specific types for testing,
 	// we'll test the function by creating a simple Java code that produces the node types we need
-	
+
 	t.Run("Test with identifier", func(t *testing.T) {
 		// Parse a simple identifier
 		sourceCode := []byte("public class Test { }")
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
-		
+
 		// Find the class name identifier node
 		classNode := findNodeByType(rootNode, "class_declaration")
 		identifierNode := classNode.ChildByFieldName("name")
-		
+
 		// Test the function
 		assert.True(t, isIdentifier(identifierNode))
 	})
-	
+
 	t.Run("Test with non-identifier", func(t *testing.T) {
 		// Parse code with a non-identifier node
 		sourceCode := []byte("public class Test { }")
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
-		
+
 		// Use the class_declaration node itself (not an identifier)
 		classNode := findNodeByType(rootNode, "class_declaration")
-		
+
 		// Test the function
 		assert.False(t, isIdentifier(classNode))
 	})

@@ -120,7 +120,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode, output string) (string, error) {
+func processQuery(input string, _ []*model.TreeNode, db *db.StorageNode, _ string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -130,7 +130,7 @@ func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := tree.QueryEntities(db, treeHolder, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(db, parsedQuery)
 	// if output == "json" || output == "sarif" {
 	// 	analytics.ReportEvent(analytics.QueryCommandJSON)
 	// 	// convert struct to query_results
@@ -169,12 +169,6 @@ func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode
 		}
 		header += output + "\n"
 		result += header
-		result += "\n"
-		// codeSnippetArray := strings.Split(entityObject, "\n")
-		// for i := 0; i < len(codeSnippetArray); i++ {
-		// 	lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
-		// 	result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))
-		// }
 		result += "\n"
 	}
 	return result, nil

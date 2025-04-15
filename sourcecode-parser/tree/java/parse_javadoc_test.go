@@ -21,7 +21,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "TestClass.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)
@@ -47,7 +47,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "MultiTagClass.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)
@@ -85,7 +85,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "MethodJavadoc.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)
@@ -134,7 +134,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "EmptyJavadoc.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)
@@ -155,7 +155,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "MalformedJavadoc.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)
@@ -177,7 +177,7 @@ func TestParseJavadocTags(t *testing.T) {
 		rootNode := sitter.Parse(sourceCode, java.GetLanguage())
 
 		// Call the function with our parsed node
-		javadoc := ParseJavadocTags(rootNode, sourceCode, "CustomTagJavadoc.java")
+		javadoc := ParseJavadocTags(rootNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, javadoc)

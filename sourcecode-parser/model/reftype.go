@@ -132,7 +132,7 @@ type TypeResolver struct {
 	TypeHierarchy map[string][]string // Supertype -> Subtype mappings
 }
 
-func NewRefType(qualifiedName, pkg, sourceFile string, topLevel bool, superTypes []string, fields []string, methods []Method, constructors []Method, nestedTypes []string, enclosingType string, arrayType bool, typeDescriptor string, resolver *TypeResolver) *RefType {
+func NewRefType(qualifiedName, pkg, sourceFile string, topLevel bool, superTypes, fields []string, methods, constructors []Method, nestedTypes []string, enclosingType string, arrayType bool, typeDescriptor string, resolver *TypeResolver) *RefType {
 	return &RefType{
 		QualifiedName:   qualifiedName,
 		Package:         pkg,
@@ -289,7 +289,7 @@ type ClassOrInterface struct {
 }
 
 // NewClassOrInterface initializes a new ClassOrInterface instance.
-func NewClassOrInterface(isSealed bool, permittedSubtypes []string, companionObject string, isLocal bool, isPackageProtected bool) *ClassOrInterface {
+func NewClassOrInterface(isSealed bool, permittedSubtypes []string, companionObject string, isLocal, isPackageProtected bool) *ClassOrInterface {
 	return &ClassOrInterface{
 		IsSealed:           isSealed,
 		PermittedSubtypes:  permittedSubtypes,
@@ -333,7 +333,7 @@ func (c *ClassOrInterface) GetIsPackageProtected() bool {
 type Class struct {
 	ClassOrInterface
 
-	ClassId string
+	ClassID string
 	// CodeQL metadata
 	PrimaryQlClass string   // Name of the primary CodeQL class
 	Annotations    []string // Annotations applied to this class
@@ -344,7 +344,7 @@ type Class struct {
 }
 
 func (c *Class) GetID() string {
-	return c.ClassId
+	return c.ClassID
 }
 
 func (c *Class) Insert(db *sql.DB) error {
@@ -374,19 +374,19 @@ func (c *Class) Insert(db *sql.DB) error {
 	return nil
 }
 
-func (m *Class) GetProxyEnv() map[string]interface{} {
+func (c *Class) GetProxyEnv() map[string]interface{} {
 	return map[string]interface{}{
-		"getPrimaryQlClass": m.GetAPrimaryQlClass,
-		"getAnnotations":    m.GetAnAnnotation,
-		"getIsAnonymous":    m.GetIsAnonymous,
-		"getIsFileClass":    m.GetIsFileClass,
-		"getQualifiedName":  m.GetQualifiedName,
-		"getName":           m.GetQualifiedName,
+		"getPrimaryQlClass": c.GetAPrimaryQlClass,
+		"getAnnotations":    c.GetAnAnnotation,
+		"getIsAnonymous":    c.GetIsAnonymous,
+		"getIsFileClass":    c.GetIsFileClass,
+		"getQualifiedName":  c.GetQualifiedName,
+		"getName":           c.GetQualifiedName,
 	}
 }
 
 // NewClass initializes a new Class instance.
-func NewClass(primaryQlClass string, annotations []string, isAnonymous bool, isFileClass bool, classOrInterface ClassOrInterface) *Class {
+func NewClass(primaryQlClass string, annotations []string, isAnonymous, isFileClass bool, classOrInterface ClassOrInterface) *Class {
 	return &Class{
 		ClassOrInterface: classOrInterface,
 		PrimaryQlClass:   primaryQlClass,

@@ -5,7 +5,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseExpr(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode) *model.BinaryExpr {
+func ParseExpr(node *sitter.Node, sourceCode []byte, parentNode *model.TreeNode) *model.BinaryExpr {
 	leftNode := node.ChildByFieldName("left")
 	rightNode := node.ChildByFieldName("right")
 	operator := node.ChildByFieldName("operator")

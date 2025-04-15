@@ -52,7 +52,7 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	classDeclaration.SourceFile = file
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}
-	classDeclaration.ClassId = utilities.GenerateSha256(className + "/" + packageName + "/" + file + "/" + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber))
+	classDeclaration.ClassID = utilities.GenerateSha256(className + "/" + packageName + "/" + file + "/" + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber))
 
 	// append implemented interface to supertypes
 	classDeclaration.SuperTypes = append(classDeclaration.SuperTypes, implementedInterface...)
@@ -60,8 +60,8 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	return &classDeclaration
 }
 
-func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte, file string) *model.ClassInstanceExpr {
-	className := ""
+func ParseObjectCreationExpr(node *sitter.Node, sourceCode []byte) *model.ClassInstanceExpr {
+	className := "" //nolint:all
 	classInstanceExpression := model.ClassInstanceExpr{
 		ClassName: "",
 		Args:      []*model.Expr{},

@@ -7,7 +7,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseJavadocTags(node *sitter.Node, sourceCode []byte, file string) *model.Javadoc {
+func ParseJavadocTags(node *sitter.Node, sourceCode []byte) *model.Javadoc {
 	javaDoc := &model.Javadoc{}
 	var javadocTags []*model.JavadocTag
 

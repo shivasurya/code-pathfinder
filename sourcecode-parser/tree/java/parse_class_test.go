@@ -104,7 +104,7 @@ func TestParseObjectCreationExpr(t *testing.T) {
 		objectCreationNode := findObjectCreationNode(tree)
 
 		// Call the function with our parsed node
-		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode, "Test.java")
+		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -122,7 +122,7 @@ func TestParseObjectCreationExpr(t *testing.T) {
 		objectCreationNode := findObjectCreationNode(tree)
 
 		// Call the function
-		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode, "Test.java")
+		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -141,7 +141,7 @@ func TestParseObjectCreationExpr(t *testing.T) {
 		objectCreationNode := findObjectCreationNode(tree)
 
 		// Call the function
-		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode, "Test.java")
+		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -161,7 +161,7 @@ func TestParseObjectCreationExpr(t *testing.T) {
 		objectCreationNode := findObjectCreationNode(tree)
 
 		// Call the function
-		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode, "Test.java")
+		expr := ParseObjectCreationExpr(objectCreationNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, expr)

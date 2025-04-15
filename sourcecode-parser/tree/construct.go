@@ -22,15 +22,15 @@ import (
 func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode, storageNode *db.StorageNode) {
 	switch node.Type() {
 	case "import_declaration":
-		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode, file)
+		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ImportType: importDeclNode, NodeType: "ImportType", NodeID: 1}, Parent: parentNode})
 		storageNode.AddImportDecl(importDeclNode)
 	case "package_declaration":
-		packageDeclNode := javalang.ParsePackageDeclaration(node, sourceCode, file)
+		packageDeclNode := javalang.ParsePackageDeclaration(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{Package: packageDeclNode, NodeType: "Package", NodeID: 2}, Parent: parentNode})
 		storageNode.AddPackage(packageDeclNode)
 	case "block":
-		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode, file)
+		blockStmtNode := javalang.ParseBlockStatement(node, sourceCode)
 		blockStmtTreeNode := &model.TreeNode{Node: &model.Node{BlockStmt: blockStmtNode, NodeType: "BlockStmt", NodeID: 3}, Parent: parentNode}
 		parentNode.AddChild(blockStmtTreeNode)
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -38,34 +38,34 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		}
 		return
 	case "return_statement":
-		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode, file)
+		returnStmtNode := javalang.ParseReturnStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ReturnStmt: returnStmtNode, NodeType: "ReturnStmt", NodeID: 4}, Parent: parentNode})
 	case "assert_statement":
-		assertStmtNode := javalang.ParseAssertStatement(node, sourceCode, file)
+		assertStmtNode := javalang.ParseAssertStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{AssertStmt: assertStmtNode, NodeType: "AssertStmt", NodeID: 5}, Parent: parentNode})
 	case "yield_statement":
-		yieldStmtNode := javalang.ParseYieldStatement(node, sourceCode, file)
+		yieldStmtNode := javalang.ParseYieldStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{YieldStmt: yieldStmtNode, NodeType: "YieldStmt", NodeID: 6}, Parent: parentNode})
 	case "break_statement":
-		breakStmtNode := javalang.ParseBreakStatement(node, sourceCode, file)
+		breakStmtNode := javalang.ParseBreakStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BreakStmt: breakStmtNode, NodeType: "BreakStmt", NodeID: 7}, Parent: parentNode})
 	case "continue_statement":
-		continueNode := javalang.ParseContinueStatement(node, sourceCode, file)
+		continueNode := javalang.ParseContinueStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ContinueStmt: continueNode, NodeType: "ContinueStmt", NodeID: 8}, Parent: parentNode})
 	case "if_statement":
-		IfNode := javalang.ParseIfStatement(node, sourceCode, file)
+		IfNode := javalang.ParseIfStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{IfStmt: IfNode, NodeType: "IfStmt", NodeID: 9}, Parent: parentNode})
 	case "while_statement":
-		whileStmtNode := javalang.ParseWhileStatement(node, sourceCode, file)
+		whileStmtNode := javalang.ParseWhileStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{WhileStmt: whileStmtNode, NodeType: "WhileStmt", NodeID: 10}, Parent: parentNode})
 	case "do_statement":
-		doWhileStmtNode := javalang.ParseDoWhileStatement(node, sourceCode, file)
+		doWhileStmtNode := javalang.ParseDoWhileStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{DoStmt: doWhileStmtNode, NodeType: "DoWhileStmt", NodeID: 11}, Parent: parentNode})
 	case "for_statement":
-		forStmtNode := javalang.ParseForLoopStatement(node, sourceCode, file)
+		forStmtNode := javalang.ParseForLoopStatement(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ForStmt: forStmtNode, NodeType: "ForStmt", NodeID: 12}, Parent: parentNode})
 	case "binary_expression":
-		binaryExprNode := javalang.ParseExpr(node, sourceCode, file, parentNode)
+		binaryExprNode := javalang.ParseExpr(node, sourceCode, parentNode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{BinaryExpr: binaryExprNode, NodeType: "BinaryExpr", NodeID: 13}, Parent: parentNode})
 		storageNode.AddBinaryExpr(binaryExprNode)
 	case "method_declaration":
@@ -98,7 +98,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 	case "block_comment":
 		// Parse block comments
 		if strings.HasPrefix(node.Content(sourceCode), "/*") {
-			javadocTags := javalang.ParseJavadocTags(node, sourceCode, file)
+			javadocTags := javalang.ParseJavadocTags(node, sourceCode)
 			parentNode.AddChild(&model.TreeNode{Node: &model.Node{JavaDoc: javadocTags, NodeType: "BlockComment", NodeID: 17}, Parent: parentNode})
 		}
 	case "local_variable_declaration", "field_declaration":
@@ -107,7 +107,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{Field: fieldNode, NodeType: "FieldDeclaration", NodeID: 18}, Children: nil, Parent: parentNode})
 		storageNode.AddFieldDecl(fieldNode)
 	case "object_creation_expression":
-		classInstanceNode := javalang.ParseObjectCreationExpr(node, sourceCode, file)
+		classInstanceNode := javalang.ParseObjectCreationExpr(node, sourceCode)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ClassInstanceExpr: classInstanceNode, NodeType: "ObjectCreationExpr", NodeID: 19}, Children: nil, Parent: parentNode})
 	}
 	// Recursively process child nodes
@@ -117,7 +117,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 }
 
 // Process a single file and return its tree.
-func processFile(parser *sitter.Parser, file string, fileName string, storageNode *db.StorageNode, workerID int, statusChan chan<- string) *model.TreeNode {
+func processFile(parser *sitter.Parser, file, fileName string, storageNode *db.StorageNode, workerID int, statusChan chan<- string) *model.TreeNode {
 	sourceCode, err := readFile(file)
 	if err != nil {
 		utilities.Log("File not found:", err)
@@ -262,25 +262,46 @@ func Initialize(directory string, storageNode *db.StorageNode) []*model.TreeNode
 	close(treeChan)
 
 	for _, packageDeclaration := range storageNode.Package {
-		packageDeclaration.Insert(storageNode.DB)
+		err := packageDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting package:", err)
+		}
 	}
 	for _, importDeclaration := range storageNode.ImportDecl {
-		importDeclaration.Insert(storageNode.DB)
+		err := importDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting import:", err)
+		}
 	}
 	for _, classDeclaration := range storageNode.ClassDecl {
-		classDeclaration.Insert(storageNode.DB)
+		err := classDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting class:", err)
+		}
 	}
 	for _, fieldDeclaration := range storageNode.Field {
-		fieldDeclaration.Insert(storageNode.DB)
+		err := fieldDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting field:", err)
+		}
 	}
 	for _, methodDeclaration := range storageNode.MethodDecl {
-		methodDeclaration.Insert(storageNode.DB)
+		err := methodDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting method:", err)
+		}
 	}
 	for _, methodCallDeclaration := range storageNode.MethodCall {
-		methodCallDeclaration.Insert(storageNode.DB)
+		err := methodCallDeclaration.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting method call:", err)
+		}
 	}
 	for _, binaryExpression := range storageNode.BinaryExpr {
-		binaryExpression.Insert(storageNode.DB)
+		err := binaryExpression.Insert(storageNode.DB)
+		if err != nil {
+			utilities.Log("Error inserting binary expression:", err)
+		}
 	}
 
 	for _, tree := range treeHolder {

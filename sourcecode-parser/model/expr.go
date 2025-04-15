@@ -336,7 +336,7 @@ type Annotation struct {
 }
 
 // NewAnnotation initializes a new Annotation instance.
-func NewAnnotation(qualifiedName string, annotatedElement string, annotationType string, values map[string]any, isDeclAnnotation bool, isTypeAnnotation bool, halsteadID string) *Annotation {
+func NewAnnotation(qualifiedName, annotatedElement, annotationType string, values map[string]any, isDeclAnnotation, isTypeAnnotation bool, halsteadID string) *Annotation {
 	return &Annotation{
 		QualifiedName:    qualifiedName,
 		AnnotatedElement: annotatedElement,
@@ -521,7 +521,7 @@ func (m *MethodCall) Insert(db *sql.DB) error {
 }
 
 // NewMethodCall initializes a new MethodCall instance.
-func NewMethodCall(primaryQlClass string, methodName string, qualifiedMethod string, arguments []string, typeArguments []string, qualifier string, receiverType string, enclosingCallable string, enclosingStmt string, hasQualifier bool, isEnclosingCall bool, isOwnMethodCall bool) *MethodCall {
+func NewMethodCall(primaryQlClass, methodName, qualifiedMethod string, arguments, typeArguments []string, qualifier, receiverType, enclosingCallable, enclosingStmt string, hasQualifier, isEnclosingCall, isOwnMethodCall bool) *MethodCall {
 	return &MethodCall{
 		PrimaryQlClass:    primaryQlClass,
 		MethodName:        methodName,
@@ -541,87 +541,87 @@ func NewMethodCall(primaryQlClass string, methodName string, qualifiedMethod str
 // ✅ Implementing the Predicates for `MethodCall`
 
 // GetAPrimaryQlClass returns the primary CodeQL class name.
-func (mc *MethodCall) GetAPrimaryQlClass() string {
-	return mc.PrimaryQlClass
+func (m *MethodCall) GetAPrimaryQlClass() string {
+	return m.PrimaryQlClass
 }
 
 // GetATypeArgument retrieves a type argument in this method call, if any.
-func (mc *MethodCall) GetATypeArgument() []string {
-	return mc.TypeArguments
+func (m *MethodCall) GetATypeArgument() []string {
+	return m.TypeArguments
 }
 
 // GetAnArgument retrieves all arguments supplied to this method call.
-func (mc *MethodCall) GetAnArgument() []string {
-	return mc.Arguments
+func (m *MethodCall) GetAnArgument() []string {
+	return m.Arguments
 }
 
 // GetArgument retrieves an argument at the specified index.
-func (mc *MethodCall) GetArgument(index int) string {
-	if index >= 0 && index < len(mc.Arguments) {
-		return mc.Arguments[index]
+func (m *MethodCall) GetArgument(index int) string {
+	if index >= 0 && index < len(m.Arguments) {
+		return m.Arguments[index]
 	}
 	return ""
 }
 
 // GetEnclosingCallable retrieves the callable that contains this method call.
-func (mc *MethodCall) GetEnclosingCallable() string {
-	return mc.EnclosingCallable
+func (m *MethodCall) GetEnclosingCallable() string {
+	return m.EnclosingCallable
 }
 
 // GetEnclosingStmt retrieves the statement that contains this method call.
-func (mc *MethodCall) GetEnclosingStmt() string {
-	return mc.EnclosingStmt
+func (m *MethodCall) GetEnclosingStmt() string {
+	return m.EnclosingStmt
 }
 
 // GetMethod retrieves the fully qualified name of the method being called.
-func (mc *MethodCall) GetMethod() string {
-	return mc.QualifiedMethod
+func (m *MethodCall) GetMethod() string {
+	return m.QualifiedMethod
 }
 
 // GetQualifier retrieves the qualifier of the method call, if any.
-func (mc *MethodCall) GetQualifier() string {
-	return mc.Qualifier
+func (m *MethodCall) GetQualifier() string {
+	return m.Qualifier
 }
 
 // GetReceiverType retrieves the receiver type of the method call.
-func (mc *MethodCall) GetReceiverType() string {
-	return mc.ReceiverType
+func (m *MethodCall) GetReceiverType() string {
+	return m.ReceiverType
 }
 
 // GetTypeArgument retrieves a specific type argument at the specified index.
-func (mc *MethodCall) GetTypeArgument(index int) string {
-	if index >= 0 && index < len(mc.TypeArguments) {
-		return mc.TypeArguments[index]
+func (m *MethodCall) GetTypeArgument(index int) string {
+	if index >= 0 && index < len(m.TypeArguments) {
+		return m.TypeArguments[index]
 	}
 	return ""
 }
 
 // HasQualifier checks if the method call has a qualifier.
-func (mc *MethodCall) GetHasQualifier() bool {
-	return mc.HasQualifier
+func (m *MethodCall) GetHasQualifier() bool {
+	return m.HasQualifier
 }
 
 // IsEnclosingMethodCall checks if this is a call to an instance method of the enclosing class.
-func (mc *MethodCall) IsEnclosingMethodCall() bool {
-	return mc.IsEnclosingCall
+func (m *MethodCall) GetIsEnclosingMethodCall() bool {
+	return m.IsEnclosingCall
 }
 
 // IsOwnMethodCall checks if this is a call to an instance method of `this`.
-func (mc *MethodCall) GetIsOwnMethodCall() bool {
-	return mc.IsOwnMethodCall
+func (m *MethodCall) GetIsOwnMethodCall() bool {
+	return m.IsOwnMethodCall
 }
 
 // PrintAccess returns a printable representation of the method call.
-func (mc *MethodCall) PrintAccess() string {
-	if mc.HasQualifier {
-		return fmt.Sprintf("%s.%s(%v)", mc.Qualifier, mc.MethodName, mc.Arguments)
+func (m *MethodCall) PrintAccess() string {
+	if m.HasQualifier {
+		return fmt.Sprintf("%s.%s(%v)", m.Qualifier, m.MethodName, m.Arguments)
 	}
-	return fmt.Sprintf("%s(%v)", mc.MethodName, mc.Arguments)
+	return fmt.Sprintf("%s(%v)", m.MethodName, m.Arguments)
 }
 
 // ToString returns a textual representation of the method call.
-func (mc *MethodCall) ToString() string {
-	return mc.PrintAccess()
+func (m *MethodCall) ToString() string {
+	return m.PrintAccess()
 }
 
 // FieldDeclaration represents a declaration of one or more fields in a class.

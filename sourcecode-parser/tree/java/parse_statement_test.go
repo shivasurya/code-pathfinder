@@ -22,7 +22,7 @@ func TestParseBreakStatement(t *testing.T) {
 		assert.NotNil(t, breakNode)
 
 		// Call the function with our parsed node
-		breakStmt := ParseBreakStatement(breakNode, sourceCode, "Test.java")
+		breakStmt := ParseBreakStatement(breakNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, breakStmt)
@@ -41,7 +41,7 @@ func TestParseBreakStatement(t *testing.T) {
 		assert.NotNil(t, breakNode)
 
 		// Call the function with our parsed node
-		breakStmt := ParseBreakStatement(breakNode, sourceCode, "Test.java")
+		breakStmt := ParseBreakStatement(breakNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, breakStmt)
@@ -63,7 +63,7 @@ func TestParseContinueStatement(t *testing.T) {
 		assert.NotNil(t, continueNode)
 
 		// Call the function with our parsed node
-		continueStmt := ParseContinueStatement(continueNode, sourceCode, "Test.java")
+		continueStmt := ParseContinueStatement(continueNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, continueStmt)
@@ -82,7 +82,7 @@ func TestParseContinueStatement(t *testing.T) {
 		assert.NotNil(t, continueNode)
 
 		// Call the function with our parsed node
-		continueStmt := ParseContinueStatement(continueNode, sourceCode, "Test.java")
+		continueStmt := ParseContinueStatement(continueNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, continueStmt)
@@ -104,7 +104,7 @@ func TestParseYieldStatement(t *testing.T) {
 		assert.NotNil(t, yieldNode)
 
 		// Call the function with our parsed node
-		yieldStmt := ParseYieldStatement(yieldNode, sourceCode, "Test.java")
+		yieldStmt := ParseYieldStatement(yieldNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, yieldStmt)
@@ -127,7 +127,7 @@ func TestParseAssertStatement(t *testing.T) {
 		assert.NotNil(t, assertNode)
 
 		// Call the function with our parsed node
-		assertStmt := ParseAssertStatement(assertNode, sourceCode, "Test.java")
+		assertStmt := ParseAssertStatement(assertNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, assertStmt)
@@ -148,7 +148,7 @@ func TestParseAssertStatement(t *testing.T) {
 		assert.NotNil(t, assertNode)
 
 		// Call the function with our parsed node
-		assertStmt := ParseAssertStatement(assertNode, sourceCode, "Test.java")
+		assertStmt := ParseAssertStatement(assertNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, assertStmt)
@@ -173,7 +173,7 @@ func TestParseReturnStatement(t *testing.T) {
 		assert.NotNil(t, returnNode)
 
 		// Call the function with our parsed node
-		returnStmt := ParseReturnStatement(returnNode, sourceCode, "Test.java")
+		returnStmt := ParseReturnStatement(returnNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, returnStmt)
@@ -195,7 +195,7 @@ func TestParseReturnStatement(t *testing.T) {
 		assert.NotNil(t, returnNode)
 
 		// Call the function with our parsed node
-		returnStmt := ParseReturnStatement(returnNode, sourceCode, "Test.java")
+		returnStmt := ParseReturnStatement(returnNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, returnStmt)
@@ -218,7 +218,7 @@ func TestParseBlockStatement(t *testing.T) {
 		assert.NotNil(t, blockNode)
 
 		// Call the function with our parsed node
-		blockStmt := ParseBlockStatement(blockNode, sourceCode, "Test.java")
+		blockStmt := ParseBlockStatement(blockNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, blockStmt)
@@ -240,7 +240,7 @@ func TestParseBlockStatement(t *testing.T) {
 		assert.NotNil(t, blockNode)
 
 		// Call the function with our parsed node
-		blockStmt := ParseBlockStatement(blockNode, sourceCode, "Test.java")
+		blockStmt := ParseBlockStatement(blockNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, blockStmt)
@@ -265,7 +265,7 @@ func TestParseWhileStatement(t *testing.T) {
 		assert.NotNil(t, whileNode)
 
 		// Call the function with our parsed node
-		whileStmt := ParseWhileStatement(whileNode, sourceCode, "Test.java")
+		whileStmt := ParseWhileStatement(whileNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, whileStmt)
@@ -288,7 +288,7 @@ func TestParseDoWhileStatement(t *testing.T) {
 		assert.NotNil(t, doNode)
 
 		// Call the function with our parsed node
-		doStmt := ParseDoWhileStatement(doNode, sourceCode, "Test.java")
+		doStmt := ParseDoWhileStatement(doNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, doStmt)
@@ -312,7 +312,7 @@ func TestParseForLoopStatement(t *testing.T) {
 		assert.NotNil(t, forNode)
 
 		// Call the function with our parsed node
-		forStmt := ParseForLoopStatement(forNode, sourceCode, "Test.java")
+		forStmt := ParseForLoopStatement(forNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, forStmt)
@@ -340,7 +340,7 @@ func TestParseForLoopStatement(t *testing.T) {
 		assert.NotNil(t, forNode)
 
 		// Call the function with our parsed node
-		forStmt := ParseForLoopStatement(forNode, sourceCode, "Test.java")
+		forStmt := ParseForLoopStatement(forNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, forStmt)
@@ -362,7 +362,7 @@ func TestParseForLoopStatement(t *testing.T) {
 		assert.NotNil(t, forNode)
 
 		// Call the function with our parsed node
-		forStmt := ParseForLoopStatement(forNode, sourceCode, "Test.java")
+		forStmt := ParseForLoopStatement(forNode, sourceCode)
 
 		// Assertions
 		assert.NotNil(t, forStmt)

@@ -28,7 +28,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -62,7 +62,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -96,7 +96,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -130,7 +130,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -164,7 +164,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -198,7 +198,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -232,7 +232,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -266,7 +266,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -300,7 +300,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -334,7 +334,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -368,7 +368,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -402,7 +402,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -436,7 +436,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -470,7 +470,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -502,7 +502,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)
@@ -536,7 +536,7 @@ func TestParseExpr(t *testing.T) {
 		}
 
 		// Call the function with our parsed node
-		expr := ParseExpr(binaryExprNode, sourceCode, "Test.java", parentNode)
+		expr := ParseExpr(binaryExprNode, sourceCode, parentNode)
 
 		// Assertions
 		assert.NotNil(t, expr)

@@ -5,7 +5,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func ParseImportDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.ImportType {
+func ParseImportDeclaration(node *sitter.Node, sourceCode []byte) *model.ImportType {
 	importType := &model.ImportType{}
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
@@ -16,7 +16,7 @@ func ParseImportDeclaration(node *sitter.Node, sourceCode []byte, file string) *
 	return importType
 }
 
-func ParsePackageDeclaration(node *sitter.Node, sourceCode []byte, file string) *model.Package {
+func ParsePackageDeclaration(node *sitter.Node, sourceCode []byte) *model.Package {
 	pkg := &model.Package{}
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)

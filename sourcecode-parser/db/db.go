@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // required for sqlite3
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
@@ -50,7 +50,7 @@ type StorageNode struct {
 }
 
 const (
-	CREATE_TABLE_PACKAGE = `
+	createTablePackage = `
 	CREATE TABLE IF NOT EXISTS package (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		package_name TEXT NOT NULL,
@@ -58,7 +58,7 @@ const (
 		UNIQUE(package_name)
 	);`
 
-	CREATE_TABLE_IMPORT_DECL = `
+	createTableImportDecl = `
 	CREATE TABLE IF NOT EXISTS import_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		import_type TEXT NOT NULL,
@@ -68,7 +68,7 @@ const (
 		UNIQUE(import_type, import_name, file_path)
 	);`
 
-	CREATE_TABLE_ANNOTATION = `
+	createTableAnnotation = `
 	CREATE TABLE IF NOT EXISTS annotation (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		annotation_name TEXT NOT NULL,
@@ -76,7 +76,7 @@ const (
 		UNIQUE(annotation_name)
 	);`
 
-	CREATE_TABLE_CLASS_DECL = `
+	createTableClassDecl = `
 	CREATE TABLE IF NOT EXISTS class_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		class_name TEXT NOT NULL,
@@ -90,7 +90,7 @@ const (
 		FOREIGN KEY (package_name) REFERENCES package(package_name)
 	);`
 
-	CREATE_TABLE_METHOD_DECL = `
+	createTableMethodDecl = `
 	CREATE TABLE IF NOT EXISTS method_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
@@ -108,7 +108,7 @@ const (
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
-	CREATE_TABLE_METHOD_CALL = `
+	createTableMethodCall = `
 		CREATE TABLE IF NOT EXISTS method_call (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			method_name TEXT NOT NULL,
@@ -118,7 +118,7 @@ const (
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
-	CREATE_TABLE_FIELD_DECL = `
+	createTableFieldDecl = `
 		CREATE TABLE IF NOT EXISTS field_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		field_name TEXT NOT NULL,
@@ -132,7 +132,7 @@ const (
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
-	CREATE_TABLE_LOCAL_VARIABLE_DECL = `
+	createTableLocalVariableDecl = `
 		CREATE TABLE IF NOT EXISTS local_variable_decl (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		local_variable_name TEXT NOT NULL,
@@ -140,7 +140,7 @@ const (
 		UNIQUE(local_variable_name)
 	);`
 
-	CREATE_TABLE_BINARY_EXPR = `
+	createTableBinaryExpr = `
 		CREATE TABLE IF NOT EXISTS binary_expr (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		left_operand TEXT NOT NULL,
@@ -150,7 +150,7 @@ const (
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
-	CREATE_TABLE_JAVADOC = `
+	createTableJavadoc = `
 	CREATE TABLE IF NOT EXISTS javadoc (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		javadoc_name TEXT NOT NULL,
@@ -158,13 +158,13 @@ const (
 		UNIQUE(javadoc_name)
 	);`
 
-	CREATE_TABLE_ENTITY = `
+	createTableEntity = `
 	CREATE TABLE IF NOT EXISTS entity (
 		id INTEGER PRIMARY KEY,
 		name TEXT UNIQUE
 	);`
 
-	CREATE_TABLE_CLOSURE = `
+	createTableClosure = `
 	CREATE TABLE IF NOT EXISTS closure_table (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		ancestor INTEGER,
@@ -185,18 +185,42 @@ func NewStorageNode(databasePath string) *StorageNode {
 	}
 
 	// create table if not exist
-	database.Exec(CREATE_TABLE_PACKAGE)
-	database.Exec(CREATE_TABLE_IMPORT_DECL)
-	database.Exec(CREATE_TABLE_ANNOTATION)
-	database.Exec(CREATE_TABLE_CLASS_DECL)
-	database.Exec(CREATE_TABLE_METHOD_DECL)
-	database.Exec(CREATE_TABLE_METHOD_CALL)
-	database.Exec(CREATE_TABLE_FIELD_DECL)
-	database.Exec(CREATE_TABLE_LOCAL_VARIABLE_DECL)
-	database.Exec(CREATE_TABLE_BINARY_EXPR)
-	database.Exec(CREATE_TABLE_JAVADOC)
-	database.Exec(CREATE_TABLE_ENTITY)
-	database.Exec(CREATE_TABLE_CLOSURE)
+	if _, err := database.Exec(createTablePackage); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableImportDecl); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableAnnotation); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableClassDecl); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableMethodDecl); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableMethodCall); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableFieldDecl); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableLocalVariableDecl); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableBinaryExpr); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableJavadoc); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableEntity); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := database.Exec(createTableClosure); err != nil {
+		log.Fatal(err)
+	}
 
 	return &StorageNode{DB: database}
 }

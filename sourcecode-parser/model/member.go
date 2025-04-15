@@ -20,7 +20,7 @@ type Callable struct {
 }
 
 // NewCallable initializes a new Callable instance.
-func NewCallable(name, qualifiedName, returnType string, parameters []string, parameterNames []string, isVarargs bool, sourceDeclaration string) *Callable {
+func NewCallable(name, qualifiedName, returnType string, parameters, parameterNames []string, isVarargs bool, sourceDeclaration string) *Callable {
 	return &Callable{
 		Name:              name,
 		QualifiedName:     qualifiedName,
@@ -131,7 +131,7 @@ type Method struct {
 	IsConstructor     bool     // Whether this method is a constructor
 	SourceDeclaration string   // Location of the source declaration
 	ID                string   // ID of the method
-	ClassId           string   // ID of the class
+	ClassID           string   // ID of the class
 }
 
 func (m *Method) GetID() string {
@@ -139,7 +139,7 @@ func (m *Method) GetID() string {
 }
 
 // NewMethod initializes a new Method instance.
-func NewMethod(name, qualifiedName, returnType string, parameters []string, parameterNames []string, visibility string, isAbstract, isStrictfp, isStatic, isFinal, isConstructor bool, sourceDeclaration string) *Method {
+func NewMethod(name, qualifiedName, returnType string, parameters, parameterNames []string, visibility string, isAbstract, isStrictfp, isStatic, isFinal, isConstructor bool, sourceDeclaration string) *Method {
 	return &Method{
 		Name:              name,
 		QualifiedName:     qualifiedName,

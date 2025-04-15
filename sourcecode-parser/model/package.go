@@ -21,7 +21,7 @@ func (p *Package) Insert(db *sql.DB) error {
 }
 
 // NewPackage initializes a new Package instance.
-func NewPackage(qualifiedName string, topLevelTypes []string, fromSource bool, metrics string, url string) *Package {
+func NewPackage(qualifiedName string, topLevelTypes []string, fromSource bool, metrics, url string) *Package {
 	return &Package{
 		QualifiedName: qualifiedName,
 		TopLevelTypes: topLevelTypes,

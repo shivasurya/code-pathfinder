@@ -264,15 +264,17 @@ func (l *CustomQueryListener) EnterRelationalExpression(ctx *RelationalExpressio
 			// Create a binary expression node for relational operations
 			// We'll simplify this to avoid type issues
 			var operator string
-			if strings.Contains(conditionText, "<") && !strings.Contains(conditionText, "<=") {
-				operator = "<"
-			} else if strings.Contains(conditionText, ">") && !strings.Contains(conditionText, ">=") {
-				operator = ">"
-			} else if strings.Contains(conditionText, "<=") {
+			operator = ""
+			switch {
+			case strings.Contains(conditionText, "<="):
 				operator = "<="
-			} else if strings.Contains(conditionText, ">=") {
+			case strings.Contains(conditionText, ">="):
 				operator = ">="
-			} else if strings.Contains(conditionText, " in ") {
+			case strings.Contains(conditionText, "<"):
+				operator = "<"
+			case strings.Contains(conditionText, ">"):
+				operator = ">"
+			case strings.Contains(conditionText, " in "):
 				operator = "in"
 			}
 
@@ -308,7 +310,7 @@ func (l *CustomQueryListener) EnterPrimary(ctx *PrimaryContext) {
 		if ctx.Operand() != nil {
 			// Handle operands (values, variables, method chains)
 			operand := ctx.Operand()
-			if operand.Value() != nil {
+			if operand.Value() != nil { //nolint: gocritic
 				// Handle literal values
 				node := &ExpressionNode{
 					Type:  "literal",

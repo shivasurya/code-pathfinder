@@ -75,7 +75,7 @@ func buildTestEntityModel() map[string][]interface{} {
 	return map[string][]interface{}{
 		"class_declaration": {
 			model.Class{
-				ClassId: "1",
+				ClassID: "1",
 				ClassOrInterface: model.ClassOrInterface{
 					RefType: model.RefType{
 						QualifiedName: "MyClass",
@@ -84,7 +84,7 @@ func buildTestEntityModel() map[string][]interface{} {
 				},
 			},
 			model.Class{
-				ClassId: "2",
+				ClassID: "2",
 				ClassOrInterface: model.ClassOrInterface{
 					RefType: model.RefType{
 						QualifiedName: "OtherClass",
@@ -124,7 +124,7 @@ func buildTestEntityModel() map[string][]interface{} {
 
 func buildTestEntityData() map[string][]map[string]interface{} {
 	class1 := model.Class{
-		ClassId: "1",
+		ClassID: "1",
 		ClassOrInterface: model.ClassOrInterface{
 			RefType: model.RefType{
 				QualifiedName: "MyClass",
@@ -133,7 +133,7 @@ func buildTestEntityData() map[string][]map[string]interface{} {
 		},
 	}
 	class2 := model.Class{
-		ClassId: "2",
+		ClassID: "2",
 		ClassOrInterface: model.ClassOrInterface{
 			RefType: model.RefType{
 				QualifiedName: "OtherClass",
@@ -251,7 +251,7 @@ func TestDetectComparisonType(t *testing.T) {
 					Value: "onClick",
 				},
 			},
-			expected: SINGLE_ENTITY,
+			expected: SingleEntity,
 			wantErr:  false,
 		},
 		{
@@ -272,7 +272,7 @@ func TestDetectComparisonType(t *testing.T) {
 					Entity: "class_declaration",
 				},
 			},
-			expected: DUAL_ENTITY,
+			expected: DualEntity,
 			wantErr:  false,
 		},
 		{

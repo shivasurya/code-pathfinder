@@ -9,7 +9,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (string, string) {
+func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (string, string) { //nolint:all
 	var methodID string
 
 	// if the child node is method_declaration, extract method name, modifiers, parameters, and return type
@@ -114,7 +114,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, p
 	methodArgumentType := []string{}
 	methodArgumentValue := []string{}
 	annotationMarkers := []string{}
-	classId := ""
+	classID := ""
 
 	for i := 0; i < int(node.ChildCount()); i++ {
 		childNode := node.Child(i)
@@ -126,14 +126,14 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, p
 			for j := 0; j < int(childNode.NamedChildCount()); j++ {
 				namedChild := childNode.NamedChild(j)
 				if namedChild.Type() == "type_identifier" {
-					throws = append(throws, namedChild.Content(sourceCode))
+					throws = append(throws, namedChild.Content(sourceCode)) //nolint:all
 				}
 			}
 		case "modifiers":
 			modifiers = parseModifers(childNode.Content(sourceCode))
 			for j := 0; j < int(childNode.ChildCount()); j++ {
 				if childNode.Child(j).Type() == "marker_annotation" {
-					annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode))
+					annotationMarkers = append(annotationMarkers, childNode.Child(j).Content(sourceCode)) //nolint:all
 				}
 			}
 		case "void_type", "type_identifier":
@@ -154,8 +154,8 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, p
 		}
 	}
 
-	if parentNode != nil && parentNode.Node.ClassDecl != nil && parentNode.Node.ClassDecl.ClassId != "" {
-		classId = parentNode.Node.ClassDecl.ClassId
+	if parentNode != nil && parentNode.Node.ClassDecl != nil && parentNode.Node.ClassDecl.ClassID != "" {
+		classID = parentNode.Node.ClassDecl.ClassID
 	}
 
 	methodNode := &model.Method{
@@ -172,7 +172,7 @@ func ParseMethodDeclaration(node *sitter.Node, sourceCode []byte, file string, p
 		IsStrictfp:        hasModifier(modifiers, "strictfp"),
 		SourceDeclaration: file,
 		ID:                methodID,
-		ClassId:           classId,
+		ClassID:           classID,
 	}
 
 	return methodNode

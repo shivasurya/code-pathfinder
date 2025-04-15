@@ -36,7 +36,7 @@ func BuildClosureTable(node *model.TreeNode, ancestors []int64, depth int64, clo
 
 	// Recursively process children
 	for _, child := range node.Children {
-		newAncestors := append(ancestors, node.Node.NodeID) // Pass the entire chain of ancestors
+		newAncestors := append(ancestors, node.Node.NodeID) //nolint: gocritic
 		closure = BuildClosureTable(child, newAncestors, depth+1, closure)
 	}
 

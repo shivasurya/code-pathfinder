@@ -40,10 +40,10 @@ type EvaluationContext struct {
 type ComparisonType string
 
 const (
-	// SINGLE_ENTITY represents comparison between one entity and a static value.
-	SINGLE_ENTITY ComparisonType = "SINGLE_ENTITY"
-	// DUAL_ENTITY represents comparison between two different entities.
-	DUAL_ENTITY ComparisonType = "DUAL_ENTITY"
+	// SingleEntity represents comparison between one entity and a static value.
+	SingleEntity ComparisonType = "SINGLE_ENTITY"
+	// DualEntity represents comparison between two different entities.
+	DualEntity ComparisonType = "DUAL_ENTITY"
 )
 
 func EvaluateExpressionTree(tree *parser.ExpressionNode, ctx *EvaluationContext) (*EvaluationResult, error) {
@@ -173,7 +173,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 
 	// Handle different comparison types
 	switch compType {
-	case SINGLE_ENTITY:
+	case SingleEntity:
 		if node.Entity == "" {
 			if node.Left != nil && node.Left.Entity != "" {
 				node.Entity = node.Left.Entity
@@ -199,7 +199,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 		}
 		result.Data = filteredData
 
-	case DUAL_ENTITY:
+	case DualEntity:
 		// For dual entity comparisons, check if they're related
 		hasRelation := ctx.RelationshipMap.HasRelationship(node.Left.Entity, node.Right.Entity)
 
@@ -223,7 +223,6 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 					rightItemIndex[relatedID] = append(rightItemIndex[relatedID], rightItem)
 				}
 			}
-			// fmt.Println("Right item index:", rightItemIndex)
 
 			// For each left item, directly access related right items using the index
 			for _, leftItem := range leftData {
@@ -244,8 +243,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 
 						// If it matches, add to matched data
 						if matchBool, ok := match.(bool); ok && matchBool {
-							matchedData = append(matchedData, leftItem)
-							matchedData = append(matchedData, rightItem)
+							matchedData = append(matchedData, leftItem, rightItem)
 						}
 					}
 				}
@@ -272,8 +270,7 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 
 					// If it matches, add to matched data
 					if matchBool, ok := match.(bool); ok && matchBool {
-						matchedData = append(matchedData, rightItem)
-						matchedData = append(matchedData, leftItem)
+						matchedData = append(matchedData, leftItem, rightItem)
 					}
 				}
 			}
@@ -360,7 +357,7 @@ func findUnion(a, b []interface{}) []interface{} {
 	return result
 }
 
-func findIntersection(a []interface{}, b []interface{}) []interface{} {
+func findIntersection(a, b []interface{}) []interface{} {
 	idSet := make(map[string]bool)
 	var result []interface{}
 
@@ -402,8 +399,6 @@ func evaluateNode(node *parser.ExpressionNode, proxyEnv map[string]interface{}) 
 
 	expression = fmt.Sprintf("%s %s %s", leftExpr, node.Operator, rightExpr)
 
-	// fmt.Println("Expression:", expression)
-
 	result, err := expr.Compile(expression, expr.Env(proxyEnv))
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile expression: %w", err)
@@ -434,10 +429,10 @@ func DetectComparisonType(node *parser.ExpressionNode) (ComparisonType, error) {
 		}
 
 		// If either side is DUAL_ENTITY, the whole expression is DUAL_ENTITY
-		if leftType == DUAL_ENTITY || rightType == DUAL_ENTITY {
-			return DUAL_ENTITY, nil
+		if leftType == DualEntity || rightType == DualEntity {
+			return DualEntity, nil
 		}
-		return SINGLE_ENTITY, nil
+		return SingleEntity, nil
 	}
 
 	// For comparison operators, check entity names
@@ -454,11 +449,11 @@ func DetectComparisonType(node *parser.ExpressionNode) (ComparisonType, error) {
 	// If either side is empty (literal/static value) or they're the same entity,
 	// it's a SINGLE_ENTITY comparison
 	if leftEntity == "" || rightEntity == "" || leftEntity == rightEntity {
-		return SINGLE_ENTITY, nil
+		return SingleEntity, nil
 	}
 
 	// Different entities are being compared
-	return DUAL_ENTITY, nil
+	return DualEntity, nil
 }
 
 func getEntityName(node *parser.ExpressionNode) (string, error) {
