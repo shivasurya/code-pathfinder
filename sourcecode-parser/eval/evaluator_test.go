@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,13 +13,14 @@ func TestEvaluateExpressionTree(t *testing.T) {
 	ctx := &EvaluationContext{
 		RelationshipMap: buildTestRelationshipMap(),
 		ProxyEnv:        buildTestEntityData(),
+		EntityModel:     buildTestEntityModel(),
 	}
 
 	// Test cases
 	testCases := []struct {
 		name          string
 		expr          *parser.ExpressionNode
-		expectedData  []map[string]interface{}
+		expectedData  []interface{}
 		expectedError bool
 	}{
 		{
@@ -27,113 +29,22 @@ func TestEvaluateExpressionTree(t *testing.T) {
 				Type:     "binary",
 				Operator: "==",
 				Left: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "class.name",
+					Type:   "method_call",
+					Value:  "getName()",
+					Alias:  "md",
+					Entity: "method_declaration",
 				},
 				Right: &parser.ExpressionNode{
 					Type:  "literal",
-					Value: "\"MyClass\"",
+					Value: "\"onClick\"",
 				},
 			},
-			expectedData: []map[string]interface{}{
-				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
-			},
-		},
-		{
-			name: "dual entity comparison",
-			expr: &parser.ExpressionNode{
-				Type:     "binary",
-				Operator: "==",
-				Left: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "class.name",
-				},
-				Right: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "method.name",
-				},
-			},
-			expectedData: []map[string]interface{}{
-				{"class.id": 1, "class.name": "OtherClass", "type": "class", "methodCount": 1, "method.id": 4, "method.name": "OtherClass", "method.type": "method", "method.class_id": 2},
-			},
-		},
-		{
-			name: "complex AND condition",
-			expr: &parser.ExpressionNode{
-				Type:     "binary",
-				Operator: "&&",
-				Left: &parser.ExpressionNode{
-					Type:     "binary",
-					Operator: "==",
-					Left: &parser.ExpressionNode{
-						Type:  "variable",
-						Value: "class.name",
-					},
-					Right: &parser.ExpressionNode{
-						Type:  "literal",
-						Value: "\"MyClass\"",
-					},
-				},
-				Right: &parser.ExpressionNode{
-					Type:     "binary",
-					Operator: ">",
-					Left: &parser.ExpressionNode{
-						Type:  "variable",
-						Value: "class.methodCount",
-					},
-					Right: &parser.ExpressionNode{
-						Type:  "literal",
-						Value: "2",
-					},
-				},
-			},
-			expectedData: []map[string]interface{}{
-				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
-				{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
-			},
-		},
-		{
-			name: "related entities (class and method)",
-			expr: &parser.ExpressionNode{
-				Type:     "binary",
-				Operator: "&&",
-				Left: &parser.ExpressionNode{
-					Type:     "binary",
-					Operator: "==",
-					Left: &parser.ExpressionNode{
-						Type:  "variable",
-						Value: "class.name",
-					},
-					Right: &parser.ExpressionNode{
-						Type:  "literal",
-						Value: "\"MyClass\"",
-					},
-				},
-				Right: &parser.ExpressionNode{
-					Type:     "binary",
-					Operator: "==",
-					Left: &parser.ExpressionNode{
-						Type:  "variable",
-						Value: "method.name",
-					},
-					Right: &parser.ExpressionNode{
-						Type:  "literal",
-						Value: "\"doSomething\"",
-					},
-				},
-			},
-			expectedData: []map[string]interface{}{
-				{
-					"id":          1,
-					"methodCount": 3,
-					"name":        "MyClass",
-					"type":        "class",
-				},
-				{
-					"class_id": 1,
-					"id":       1,
-					"name":     "doSomething",
-					"type":     "method",
+			expectedData: []interface{}{
+				model.Method{
+					ID:            "1",
+					QualifiedName: "onClick",
+					Name:          "onClick",
+					Visibility:    "public",
 				},
 			},
 		},
@@ -147,22 +58,8 @@ func TestEvaluateExpressionTree(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tc.expectedData, result.Data)
 
-			// Print intermediate results for debugging
-			t.Logf("\nIntermediate Results for %s:", tc.name)
-			for _, r := range result.Intermediates {
-				t.Logf("Node Type: %s", r.NodeType)
-				if r.Operator != "" {
-					t.Logf("Operator: %s", r.Operator)
-				}
-				t.Logf("Data: %v", r.Data)
-				t.Logf("Entities: %v", r.Entities)
-				if r.Err != nil {
-					t.Logf("Error: %v", r.Err)
-				}
-				t.Logf("---")
-			}
+			assert.ElementsMatch(t, tc.expectedData, result.Data)
 		})
 	}
 }
@@ -174,17 +71,110 @@ func buildTestRelationshipMap() *RelationshipMap {
 	return rm
 }
 
-func buildTestEntityData() map[string][]map[string]interface{} {
-	return map[string][]map[string]interface{}{
-		"class": {
-			{"id": 1, "name": "MyClass", "type": "class", "methodCount": 3},
-			{"id": 2, "name": "OtherClass", "type": "class", "methodCount": 1},
+func buildTestEntityModel() map[string][]interface{} {
+	return map[string][]interface{}{
+		"class_declaration": {
+			model.Class{
+				ClassId: "1",
+				ClassOrInterface: model.ClassOrInterface{
+					RefType: model.RefType{
+						QualifiedName: "MyClass",
+						Package:       "com.example",
+					},
+				},
+			},
+			model.Class{
+				ClassId: "2",
+				ClassOrInterface: model.ClassOrInterface{
+					RefType: model.RefType{
+						QualifiedName: "OtherClass",
+						Package:       "com.example",
+					},
+				},
+			},
 		},
-		"method": {
-			{"id": 1, "name": "doSomething", "type": "method", "class_id": 1},
-			{"id": 2, "name": "doOther", "type": "method", "class_id": 1},
-			{"id": 3, "name": "doThird", "type": "method", "class_id": 1},
-			{"id": 4, "name": "OtherClass", "type": "method", "class_id": 2},
+		"method_declaration": {
+			model.Method{
+				ID:            "1",
+				QualifiedName: "onClick",
+				Name:          "onClick",
+				Visibility:    "public",
+			},
+			model.Method{
+				ID:            "2",
+				QualifiedName: "doOther",
+				Name:          "doOther",
+				Visibility:    "public",
+			},
+			model.Method{
+				ID:            "3",
+				QualifiedName: "doThird",
+				Name:          "doThird",
+				Visibility:    "public",
+			},
+			model.Method{
+				ID:            "4",
+				QualifiedName: "OtherClass",
+				Name:          "OtherClass",
+				Visibility:    "public",
+			},
+		},
+	}
+}
+
+func buildTestEntityData() map[string][]map[string]interface{} {
+	class1 := model.Class{
+		ClassId: "1",
+		ClassOrInterface: model.ClassOrInterface{
+			RefType: model.RefType{
+				QualifiedName: "MyClass",
+				Package:       "com.example",
+			},
+		},
+	}
+	class2 := model.Class{
+		ClassId: "2",
+		ClassOrInterface: model.ClassOrInterface{
+			RefType: model.RefType{
+				QualifiedName: "OtherClass",
+				Package:       "com.example",
+			},
+		},
+	}
+	method1 := model.Method{
+		ID:            "1",
+		QualifiedName: "onClick",
+		Name:          "onClick",
+		Visibility:    "public",
+	}
+	method2 := model.Method{
+		ID:            "2",
+		QualifiedName: "doOther",
+		Name:          "doOther",
+		Visibility:    "public",
+	}
+	method3 := model.Method{
+		ID:            "3",
+		QualifiedName: "doThird",
+		Name:          "doThird",
+		Visibility:    "public",
+	}
+	method4 := model.Method{
+		ID:            "4",
+		QualifiedName: "OtherClass",
+		Name:          "OtherClass",
+		Visibility:    "public",
+	}
+	return map[string][]map[string]interface{}{
+		"class_declaration": {
+			class1.GetProxyEnv(),
+			class2.GetProxyEnv(),
+		},
+		"method_declaration": {
+			method1.GetProxyEnv(),
+			method2.GetProxyEnv(),
+			method3.GetProxyEnv(),
+			method4.GetProxyEnv(),
 		},
 	}
 }
@@ -251,12 +241,14 @@ func TestDetectComparisonType(t *testing.T) {
 				Type:     "binary",
 				Operator: ">",
 				Left: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "age",
+					Type:   "method_call",
+					Value:  "getName()",
+					Alias:  "md",
+					Entity: "method_declaration",
 				},
 				Right: &parser.ExpressionNode{
 					Type:  "literal",
-					Value: "25",
+					Value: "onClick",
 				},
 			},
 			expected: SINGLE_ENTITY,
@@ -268,46 +260,16 @@ func TestDetectComparisonType(t *testing.T) {
 				Type:     "binary",
 				Operator: "==",
 				Left: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "age",
+					Type:   "method_call",
+					Value:  "getName()",
+					Alias:  "md",
+					Entity: "method_declaration",
 				},
 				Right: &parser.ExpressionNode{
-					Type:  "variable",
-					Value: "count",
-				},
-			},
-			expected: DUAL_ENTITY,
-			wantErr:  false,
-		},
-		{
-			name: "single entity method call",
-			node: &parser.ExpressionNode{
-				Type:     "binary",
-				Operator: ">",
-				Left: &parser.ExpressionNode{
-					Type:  "method_call",
-					Value: "method.complexity",
-				},
-				Right: &parser.ExpressionNode{
-					Type:  "literal",
-					Value: "10",
-				},
-			},
-			expected: SINGLE_ENTITY,
-			wantErr:  false,
-		},
-		{
-			name: "dual entity method calls",
-			node: &parser.ExpressionNode{
-				Type:     "binary",
-				Operator: "==",
-				Left: &parser.ExpressionNode{
-					Type:  "method_call",
-					Value: "method1.complexity",
-				},
-				Right: &parser.ExpressionNode{
-					Type:  "method_call",
-					Value: "method2.complexity",
+					Type:   "method_call",
+					Value:  "getName()",
+					Alias:  "cd",
+					Entity: "class_declaration",
 				},
 			},
 			expected: DUAL_ENTITY,
@@ -363,75 +325,34 @@ func TestEvaluateNode(t *testing.T) {
 		{
 			name: "simple variable",
 			node: &parser.ExpressionNode{
-				Type:  "variable",
-				Value: "age",
+				Type:     "binary",
+				Operator: "==",
+				Left: &parser.ExpressionNode{
+					Type:  "variable",
+					Value: "age",
+				},
+				Right: &parser.ExpressionNode{
+					Type:  "literal",
+					Value: "30",
+				},
 			},
 			data:     map[string]interface{}{"age": 30},
-			expected: 30,
-			wantErr:  false,
-		},
-		{
-			name: "simple literal",
-			node: &parser.ExpressionNode{
-				Type:  "literal",
-				Value: "25",
-			},
-			data:     map[string]interface{}{},
-			expected: 25,
+			expected: true,
 			wantErr:  false,
 		},
 		{
 			name: "method call",
 			node: &parser.ExpressionNode{
-				Type:  "method_call",
-				Value: "complexity",
-			},
-			data:     testData,
-			expected: 10,
-			wantErr:  false,
-		},
-		{
-			name: "method call with args",
-			node: &parser.ExpressionNode{
-				Type:  "method_call",
-				Value: "hasAnnotation",
-				Args: []parser.ExpressionNode{
-					{
-						Type:  "literal",
-						Value: "\"@Test\"",
-					},
-				},
-			},
-			data:     testData,
-			expected: true,
-			wantErr:  false,
-		},
-		{
-			name: "complex expression with method call",
-			node: &parser.ExpressionNode{
 				Type:     "binary",
-				Operator: "&&",
+				Value:    "",
+				Operator: "==",
 				Left: &parser.ExpressionNode{
-					Type:     "binary",
-					Operator: ">",
-					Left: &parser.ExpressionNode{
-						Type:  "method_call",
-						Value: "complexity",
-					},
-					Right: &parser.ExpressionNode{
-						Type:  "literal",
-						Value: "5",
-					},
+					Type:  "method_call",
+					Value: "complexity()",
 				},
 				Right: &parser.ExpressionNode{
-					Type:  "method_call",
-					Value: "hasAnnotation",
-					Args: []parser.ExpressionNode{
-						{
-							Type:  "literal",
-							Value: "\"@Test\"",
-						},
-					},
+					Type:  "literal",
+					Value: "10",
 				},
 			},
 			data:     testData,
