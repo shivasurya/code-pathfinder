@@ -236,18 +236,16 @@ func QueryEntities(db *db.StorageNode, treeHolder []*model.TreeNode, query parse
 	}
 
 	// loop over result.Data and print each item
-	for _, data := range result.Data {
-		fmt.Println(data)
-	}
+	// for _, data := range result.Data {
+	// 	fmt.Println(data)
+	// }
 
 	// Convert result data back to nodes
 	resultNodes := make([]*model.Node, 0)
 	for _, data := range result.Data {
 		node := &model.Node{}
-		//node.NodeType = data["type"].(string)
-		// if data casts to model.Method, set node.MethodDecl
-		if method, ok := data.(model.Method); ok {
-			node.MethodDecl = &method
+		if method, ok := data.(*model.Method); ok {
+			node.MethodDecl = method
 		}
 		resultNodes = append(resultNodes, node)
 	}
@@ -271,7 +269,6 @@ func generateOutput(nodes []*model.Node, query parser.Query) [][]interface{} {
 
 	for _, node := range nodes {
 		var result []interface{}
-
 		for _, outputFormat := range query.SelectOutput {
 			switch outputFormat.Type {
 			case "string":
@@ -306,7 +303,6 @@ func generateOutput(nodes []*model.Node, query parser.Query) [][]interface{} {
 				}
 			}
 		}
-
 		results = append(results, result)
 	}
 
@@ -318,7 +314,6 @@ func evaluateExpression(node []*model.Node, expression string, query parser.Quer
 	for _, n := range node {
 		env = n.MethodDecl.GetProxyEnv()
 	}
-
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
 		fmt.Println("Error compiling expression: ", err)

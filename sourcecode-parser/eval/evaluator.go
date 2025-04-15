@@ -192,18 +192,11 @@ func evaluateBinaryNode(node *parser.ExpressionNode, left, right *IntermediateRe
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate expression: %w", err)
 			}
-
 			// If it matches, add to filtered data
 			if matchBool, ok := match.(bool); ok && matchBool {
-				fmt.Println("Entity:", ctx.EntityModel[node.Entity])
 				filteredData = append(filteredData, ctx.EntityModel[node.Entity][i])
-				entity := ctx.EntityModel[node.Entity][i]
-				// cast entity to model.Method
-				method := entity.(*model.Method)
-				fmt.Println("Entity:", method.GetName())
 			}
 		}
-		fmt.Println("Filtered data:", filteredData)
 		result.Data = filteredData
 
 	case DUAL_ENTITY:

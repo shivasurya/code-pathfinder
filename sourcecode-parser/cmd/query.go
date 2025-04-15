@@ -159,7 +159,7 @@ func processQuery(input string, treeHolder []*model.TreeNode, db *db.StorageNode
 	// := color.New(color.FgYellow).SprintFunc()
 	greenCode := color.New(color.FgGreen).SprintFunc()
 	for i, entity := range entities {
-		header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entity), greenCode(entity))
+		header := fmt.Sprintf("\tFile: %s, Line: %s \n", greenCode(entity.MethodDecl.SourceDeclaration), greenCode(entity.MethodDecl.ID))
 		// add formatted output to result
 		output := "\tResult: "
 		for _, outputObject := range formattedOutput[i] {
