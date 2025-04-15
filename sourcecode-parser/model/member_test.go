@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,7 +31,7 @@ func TestNewCallableAndMethods(t *testing.T) {
 	assert.False(t, NewCallable("bar", "Bar.bar", "int", nil, nil, false, "Bar.java:1").GetIsVarargs())
 	assert.False(t, NewCallable("bar", "Bar.bar", "int", nil, nil, false, "Bar.java:1").IsVarargs)
 	assert.True(t, callable.GetIsVarargs())
-	assert.Equal(t, false, NewCallable("bar", "Bar.bar", "int", nil, nil, false, "Bar.java:1").HasNoParameters())
+	assert.Equal(t, true, NewCallable("bar", "Bar.bar", "int", nil, nil, false, "Bar.java:1").HasNoParameters())
 	assert.True(t, NewCallable("bar", "Bar.bar", "int", []string{}, []string{}, false, "Bar.java:1").HasNoParameters())
 	assert.Equal(t, "(int, String)", callable.ParamsString())
 	assert.Equal(t, "()", NewCallable("bar", "Bar.bar", "int", nil, nil, false, "Bar.java:1").ParamsString())
