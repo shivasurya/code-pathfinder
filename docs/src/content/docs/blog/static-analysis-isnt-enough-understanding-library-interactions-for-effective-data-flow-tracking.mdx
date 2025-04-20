@@ -6,15 +6,11 @@ author: "@sshivasurya"
 pubDate: "2025-04-17"
 ---
 
-import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import CombinedLayout from '../../../layouts/CombinedLayout.astro';
 import { Card } from '@astrojs/starlight/components';
 
-<PostHogLayout>
-</PostHogLayout>
+<CombinedLayout frontmatter={frontmatter}>
 
-
-<Card title="">
-    <div style=" margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
 [Static Application Security Testing (SAST)](https://codepathfinder.dev) tools have become indispensable in modern software development, promising to find vulnerabilities like SQL Injection, Remote Code Execution (RCE), Cross-Site Scripting (XSS), and XML External Entity (XXE) injection by analyzing source code. A core technique powering many SAST tools is **data flow analysis**, which tracks how data moves through an application, from potentially untrusted sources to sensitive sinks.
 
 While these tools excel at analyzing the code *you* write, they often face a significant challenge: the vast ecosystem of standard libraries, third-party frameworks, and operating system APIs that nearly every application relies upon. When data flow analysis encounters a call to an external library function, say `someFramework.processUserData(input)`, what happens next? Without specific knowledge, the library call becomes a **"black box."** The analyzer sees data go in, but does it know where that data came from if the library function *introduces* it? Does it know if the function sanitizes the data, passes it to another dangerous function, or simply stores it somewhere?
@@ -117,6 +113,6 @@ This AI-driven approach is still emerging. Significant challenges remain around 
 Static data flow analysis is a powerful technique for finding vulnerabilities, but it cannot operate effectively in isolation. Real-world applications are complex ecosystems built upon layers of libraries and frameworks. Accurately modeling how data interacts with these external components – identifying sources, sinks, sanitizers, propagators, and crucial configuration states – is not just beneficial, it's essential for minimizing both false positives and false negatives.
 
 While manual modeling provides high precision, it faces scaling challenges. The future likely lies in a synergistic approach, combining expert human insights with AI/LLM assistance to generate and maintain library models more efficiently. When evaluating or implementing SAST solutions, always consider how external library interactions are handled – it's often the key differentiator between a noisy tool and one that delivers truly actionable security insights.
-    </div>
-</Card>
+
+</CombinedLayout>
 
