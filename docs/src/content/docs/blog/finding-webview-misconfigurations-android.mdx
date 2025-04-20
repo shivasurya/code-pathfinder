@@ -4,17 +4,14 @@ description: "A short blog post about finding WebView misconfigurations in Andro
 template: splash
 author: "@sshivasurya"
 pubDate: "2024-10-20"
+tags: ["SAST", "Security", "Android"]
 ---
 
-import PostHogLayout from '../../../layouts/PostHogLayout.astro';
+import CombinedLayout from '../../../layouts/CombinedLayout.astro';
 import { Card } from '@astrojs/starlight/components';
 
-<PostHogLayout>
-</PostHogLayout>
+<CombinedLayout frontmatter={frontmatter}>
 
-
-  <Card title="">
-    <div style=" margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
       ## Introduction
 
       Android WebView is a component that allows you to display web content in your Android application. It's fairly complex to configure and easy to misconfigure. From browsers to
@@ -140,6 +137,6 @@ import { Card } from '@astrojs/starlight/components';
 
       If you are interested in contributing to Code-PathFinder, please check out the [Code-PathFinder](https://github.com/shivasurya/code-pathfinder) repository.
       Give it a try and file an issue if you find any bugs or have any suggestions.
-      </div>
-  </Card>
+
+</CombinedLayout>
 
