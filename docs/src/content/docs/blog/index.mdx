@@ -30,17 +30,46 @@ export const allPosts = await getCollection('docs', ({ id, data }) => {
   return id.startsWith('blog/');
 });
 
+export const blogEntries = [...allPosts].sort((a, b) => {
+  const dateA = new Date(a.data.pubDate || '1970-01-01');
+  const dateB = new Date(b.data.pubDate || '1970-01-01');
+  return dateB - dateA;
+});
+
 <PostHogLayout />
-<div style="margin: 2rem auto; padding: 0 1.5rem; max-width: 800px;">
-
-
-  {allPosts.map((post) => (
-      <ul style="list-style-type: none;">
-      <li> <h3><a href={`/${post.slug}`} style="text-decoration:none">{post.data.title}</a></h3></li>
-      {post.data.description}
-     <p style="font-size: 0.8rem;">Crafted by <a href="https://x.com/sshivasurya">@sshivasurya</a></p>
-     <hr />
-     </ul>
-  ))}
-
+<div style="margin: 3rem auto; padding: 0 1.5rem; max-width: 800px;">
+  
+  <div style="display: grid; gap: 2rem;">
+    {blogEntries.map((post) => (
+      <div style="border-radius: 8px; border: 1px solid #e2e8f0; padding: 1.5rem; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+        <h2 style="margin-top: 0; margin-bottom: 0.75rem;">
+          <a href={`/${post.slug}`} style="text-decoration: none; color: #4c6ef5; font-size: 1.5rem;">
+            {post.data.title}
+          </a>
+        </h2>
+        <p style="font-size: 1.1rem; margin-bottom: 1rem;">
+          {post.data.description}
+        </p>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
+          <div style="display: flex; align-items: center;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; margin-right: 0.75rem;">
+              <img src={`https://www.gravatar.com/avatar/93047f1d8e343ca3af1451616829ceb1?s=150`} alt={frontmatter.author} style="width: 100%; height: 100%; object-fit: cover;" />
+            </div>
+            <span style="color: #718096;"><a href="https://x.com/sshivasurya">{post.data.author || "@sshivasurya"}</a></span>
+          </div>
+          
+          {post.data.pubDate && (
+            <div style="color: #718096; font-style: italic;">
+              {new Date(post.data.pubDate).toLocaleDateString('en-US', {
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric'
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
 </div>
