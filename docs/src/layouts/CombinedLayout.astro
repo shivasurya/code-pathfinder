@@ -1,0 +1,14 @@
+---
+// CombinedLayout.astro - A wrapper that combines PostHogLayout for analytics with BlogPostLayout for styling
+// This solves the duplicate title issue when using template: splash
+
+import PostHogLayout from './PostHogLayout.astro';
+import BlogPostLayout from './BlogPostLayout.astro';
+
+const { frontmatter } = Astro.props;
+---
+
+<PostHogLayout />
+<BlogPostLayout frontmatter={frontmatter}>
+  <slot />
+</BlogPostLayout>
