@@ -12,6 +12,30 @@ import { Card } from '@astrojs/starlight/components';
 
 <CombinedLayout frontmatter={frontmatter}>
 
+<h2>TL;DR</h2>
+
+Here are six practical steps to reduce SAST noise effectively:
+
+1. **Baseline & Scope**  
+  Measure where alerts originate and focus scans on high-value code.
+
+2. **Tune Built-in Rules**  
+  Adjust severity, confidence levels, and use predefined profiles to reduce irrelevant findings.
+
+3. **Leverage Ignore/Suppress Features**  
+  Exclude safe code or irrelevant findings, but ensure every suppression is well-documented for future reference.
+
+4. **Write Custom Rules & Sanitizers**  
+  Enhance the tool's understanding by defining your application's unique patterns and security functions.
+
+5. **Model Libraries & Frameworks**  
+  Keep rule packs updated or create custom models for critical external dependencies.
+
+6. **Close the Feedback Loop**  
+  Gather developer feedback, revisit tuning after each release, and regularly review suppressions to ensure continuous improvement.
+
+<hr/>
+
 <a href="https://codepathfinder.dev/" style="color: #4c6ef5; text-decoration: none; font-weight: 500;">Static Application Security Testing</a> (SAST) tools are powerful allies in the modern software development lifecycle. They promise to automatically scan source code or compiled binaries, identifying potential security vulnerabilities like SQL Injection, Cross-Site Scripting (XSS), and XML External Entity (XXE) injection before they reach production. Yet, ask any team that relies heavily on SAST, and you'll likely hear about its double-edged sword: alongside valuable true positives, these tools often generate a significant amount of noise – the dreaded **false positives**.
 
 These aren't just minor inconveniences. False positives drain precious developer and security team time with fruitless investigations, erode trust in the security tooling ("the scanner always cries wolf!"), delay critical releases, and, most dangerously, can bury genuine, high-risk vulnerabilities under a mountain of irrelevant alerts. Transforming raw SAST output into truly actionable security intelligence requires a deliberate, systematic effort to reduce this noise.
@@ -55,7 +79,7 @@ Leverage the standard tuning mechanisms provided by your SAST tool – these are
 
 - **Adjust Severity/Confidence:** Most tools assign severity (High, Medium, Low) and/or confidence levels.
   - Consider lowering the default severity for rules consistently finding low-impact issues or FPs in your context.
-  - Filter out or de-prioritize "Low" confidence findings initially, revisiting them later if needed. *Caution:* Don't disable entire critical categories (like SQL Injection) based solely on low confidence; investigate the *reason* for low confidence first.
+  - Many SAST tools assign confidence levels to findings. Filter out or de-prioritize "Low" confidence findings initially, revisiting them later if needed. *Caution:* Don't disable entire critical categories (like SQL Injection) based solely on low confidence; investigate the *reason* for low confidence first.
 
 - **Use Pre-defined Profiles:** Check for scanning profiles like "High Confidence Only," "OWASP Top 10," or framework-specific sets. A focused profile can reduce noise from less relevant rules.
 
@@ -84,15 +108,15 @@ When built-in rules lack the necessary precision for your specific codebase or f
         ```ql
             // ... import relevant Java and DataFlow libraries ...
             override predicate isSink(DataFlow::Node sink) {
-            exists(MethodAccess executeCall, Method method |
-                // Sink is an argument to Statement.execute/executeQuery/executeUpdate
-                executeCall = sink.asExpr().(Call).getAnArgument() and
-                method = executeCall.getMethod() and
-                (method.hasName("execute") or method.hasName("executeQuery") or method.hasName("executeUpdate")) and
-                // Only target java.sql.Statement, not its safer subclass PreparedStatement
-                method.getDeclaringType().hasQualifiedName("java.sql", "Statement") and
-                not method.getDeclaringType().getASupertype*().hasQualifiedName("java.sql", "PreparedStatement")
-            )
+              exists(MethodAccess executeCall, Method method |
+                  // Sink is an argument to Statement.execute/executeQuery/executeUpdate
+                  executeCall = sink.asExpr().(Call).getAnArgument() and
+                  method = executeCall.getMethod() and
+                  (method.hasName("execute") or method.hasName("executeQuery") or method.hasName("executeUpdate")) and
+                  // Only target java.sql.Statement, not its safer subclass PreparedStatement
+                  method.getDeclaringType().hasQualifiedName("java.sql", "Statement") and
+                  not method.getDeclaringType().getASupertype*().hasQualifiedName("java.sql", "PreparedStatement")
+              )
             }
             // ... rest of taint tracking configuration ...
         ```
@@ -104,15 +128,15 @@ When built-in rules lack the necessary precision for your specific codebase or f
         // ... import relevant Java and DataFlow libraries ...
         // Define the custom sanitizer method call
         class MyCustomSanitizer extends DataFlow::SanitizerGuardNode {
-        MyCustomSanitizer() {
-            exists(MethodAccess ma | ma = this.asExpr() |
-            ma.getMethod().hasQualifiedName("com.mycompany.utils", "InputValidator", "isValidSQLFragment")
-            )
-        }
+          MyCustomSanitizer() {
+              exists(MethodAccess ma | ma = this.asExpr() |
+                ma.getMethod().hasQualifiedName("com.mycompany.utils", "InputValidator", "isValidSQLFragment")
+              )
+          }
         }
         // In your TaintTracking Configuration:
         override predicate isSanitizerGuard(DataFlow::SanitizerGuardNode guard) {
-        guard instanceof MyCustomSanitizer
+            guard instanceof MyCustomSanitizer
         }
         ```
 
@@ -140,9 +164,9 @@ Often the root cause of noise! Accurate models of external dependencies are cruc
             db.parse(potentiallyTaintedSource); // Should NOT be flagged as XXE
         ```
 
-- **The AI Potential:** Keep watching the development of AI/LLMs for potential assistance in auto-generating basic library models, which could significantly ease this burden in the future.
+- **The AI Potential:** Keep watching the development of AI-powered SAST enhancements for potential assistance in auto-generating basic library models, reducing false positives, which could significantly ease this burden in the future.
 
-## Step 6: Feedback Loops & Continuous Improvement
+## Step 6: Feedback Loops & Continuous Improvement to reduce SAST noise over time
 
 Tuning is an ongoing process, not a one-time fix.
 
