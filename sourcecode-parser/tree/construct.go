@@ -22,7 +22,7 @@ import (
 func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, parentNode *model.TreeNode, storageNode *db.StorageNode) {
 	switch node.Type() {
 	case "import_declaration":
-		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode)
+		importDeclNode := javalang.ParseImportDeclaration(node, sourceCode, file)
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ImportType: importDeclNode, NodeType: "ImportType", NodeID: 1}, Parent: parentNode})
 		storageNode.AddImportDecl(importDeclNode)
 	case "package_declaration":
@@ -111,7 +111,7 @@ func buildQLTreeFromAST(node *sitter.Node, sourceCode []byte, file string, paren
 		parentNode.AddChild(&model.TreeNode{Node: &model.Node{ClassInstanceExpr: classInstanceNode, NodeType: "ObjectCreationExpr", NodeID: 19}, Children: nil, Parent: parentNode})
 	}
 	// Recursively process child nodes
-	for i := 0; i < int(node.ChildCount()); i++ {
+	for i := range int(node.ChildCount()) {
 		buildQLTreeFromAST(node.Child(i), sourceCode, file, parentNode, storageNode)
 	}
 }
@@ -302,12 +302,6 @@ func Initialize(directory string, storageNode *db.StorageNode) []*model.TreeNode
 		if err != nil {
 			utilities.Log("Error inserting binary expression:", err)
 		}
-	}
-
-	for _, tree := range treeHolder {
-		closureTableRows := []db.ClosureTableRow{}
-		closureTableRows = db.BuildClosureTable(tree, []int64{}, 0, closureTableRows)
-		db.StoreClosureTable(storageNode.DB, closureTableRows, tree.Node.FileNode.File)
 	}
 
 	storageNode.DB.Close()

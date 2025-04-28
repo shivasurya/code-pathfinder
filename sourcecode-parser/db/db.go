@@ -163,15 +163,6 @@ const (
 		id INTEGER PRIMARY KEY,
 		name TEXT UNIQUE
 	);`
-
-	createTableClosure = `
-	CREATE TABLE IF NOT EXISTS closure_table (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		ancestor INTEGER,
-		descendant INTEGER,
-		depth INTEGER,
-		file TEXT
-	);`
 )
 
 func NewStorageNode(databasePath string) *StorageNode {
@@ -218,14 +209,17 @@ func NewStorageNode(databasePath string) *StorageNode {
 	if _, err := database.Exec(createTableEntity); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := database.Exec(createTableClosure); err != nil {
-		log.Fatal(err)
-	}
 
 	return &StorageNode{DB: database}
 }
 
 func (s *StorageNode) AddPackage(node *model.Package) {
+	// Check if the package already exists
+	for _, existingPackage := range s.Package {
+		if existingPackage.QualifiedName == node.QualifiedName {
+			return
+		}
+	}
 	s.Package = append(s.Package, node)
 }
 

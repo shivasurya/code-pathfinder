@@ -22,6 +22,10 @@ func (e *ExprParent) GetNumChildExpr() int64 {
 	return 0
 }
 
+func (e *ExprParent) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{}
+}
+
 type Expr struct {
 	ExprParent
 	Kind       int
@@ -51,6 +55,13 @@ func (e *Expr) GetBoolValue() {
 
 func (e *Expr) GetKind() int {
 	return e.Kind
+}
+
+func (e *Expr) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetID":   e.Node.ID(),
+		"GetType": e.Type,
+	}
 }
 
 type BinaryExpr struct {
@@ -108,6 +119,14 @@ func (e *BinaryExpr) GetAnOperand() *Expr {
 
 func (e *BinaryExpr) HasOperands(expr1, expr2 *Expr) bool {
 	return e.LeftOperand == expr1 && e.RightOperand == expr2
+}
+
+func (e *BinaryExpr) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetLeftOperand":  e.LeftOperand,
+		"GetRightOperand": e.RightOperand,
+		"GetOp":           e.GetOp(),
+	}
 }
 
 type AddExpr struct {
@@ -323,6 +342,15 @@ func (e *ClassInstanceExpr) String() string {
 	return fmt.Sprintf("ClassInstanceExpr(%s, %v)", e.ClassName, e.Args)
 }
 
+func (e *ClassInstanceExpr) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetClassName": e.ClassName,
+		"GetArgs":      e.Args,
+		"GetNumArgs":   len(e.Args),
+		"GetArg":       e.GetArg,
+	}
+}
+
 // Annotation represents a Java annotation applied to language elements.
 type Annotation struct {
 	Expr
@@ -494,6 +522,17 @@ func (a *Annotation) ToString() string {
 	return "@" + a.QualifiedName
 }
 
+func (a *Annotation) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetQualifiedName":    a.QualifiedName,
+		"GetAnnotatedElement": a.AnnotatedElement,
+		"GetAnnotationType":   a.AnnotationType,
+		"GetValues":           a.Values,
+		"GetIsDeclAnnotation": a.IsDeclAnnotation,
+		"GetIsTypeAnnotation": a.IsTypeAnnotation,
+	}
+}
+
 // MethodCall represents an invocation of a method with arguments.
 type MethodCall struct {
 	PrimaryQlClass    string   // Primary CodeQL class name
@@ -624,6 +663,19 @@ func (m *MethodCall) ToString() string {
 	return m.PrintAccess()
 }
 
+func (m *MethodCall) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetMethodName":        m.MethodName,
+		"GetQualifiedMethod":   m.QualifiedMethod,
+		"GetArguments":         m.Arguments,
+		"GetTypeArguments":     m.TypeArguments,
+		"GetQualifier":         m.Qualifier,
+		"GetReceiverType":      m.ReceiverType,
+		"GetEnclosingCallable": m.EnclosingCallable,
+		"GetEnclosingStmt":     m.EnclosingStmt,
+	}
+}
+
 // FieldDeclaration represents a declaration of one or more fields in a class.
 type FieldDeclaration struct {
 	ExprParent
@@ -635,19 +687,6 @@ type FieldDeclaration struct {
 	IsVolatile        bool     // Whether the field is volatile
 	IsTransient       bool     // Whether the field is transient
 	SourceDeclaration string   // Location of the field declaration
-}
-
-func (f *FieldDeclaration) GetProxyEnv() map[string]interface{} {
-	return map[string]interface{}{
-		"id":           f.SourceDeclaration,
-		"name":         f.FieldNames[0],
-		"type":         f.Type,
-		"visibility":   f.Visibility,
-		"is_static":    f.IsStatic,
-		"is_final":     f.IsFinal,
-		"is_transient": f.IsTransient,
-		"is_volatile":  f.IsVolatile,
-	}
 }
 
 func (f *FieldDeclaration) Insert(db *sql.DB) error {
@@ -729,4 +768,17 @@ func (f *FieldDeclaration) ToString() string {
 	}
 
 	return fmt.Sprintf("%s %s %s;", strings.Join(modifiers, " "), f.Type, strings.Join(f.FieldNames, ", "))
+}
+
+func (f *FieldDeclaration) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetFieldNames":        f.FieldNames,
+		"GetVisibility":        f.Visibility,
+		"GetType":              f.Type,
+		"GetIsStatic":          f.IsStatic,
+		"GetIsFinal":           f.IsFinal,
+		"GetIsVolatile":        f.IsVolatile,
+		"GetIsTransient":       f.IsTransient,
+		"GetSourceDeclaration": f.SourceDeclaration,
+	}
 }

@@ -56,3 +56,11 @@ func (it *ImportType) GetImportedType() string {
 func (it *ImportType) ToString() string {
 	return fmt.Sprintf("import %s;", it.ImportedType)
 }
+
+func (it *ImportType) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetImportType":        it.ImportedType,
+		"GetSourceDeclaration": it.SourceDeclaration,
+		"GetAPrimaryQlClass":   it.GetAPrimaryQlClass(),
+	}
+}

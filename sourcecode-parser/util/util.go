@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
@@ -57,7 +56,11 @@ func EnableVerboseLogging() {
 
 func Log(message string, args ...interface{}) {
 	if verboseFlag {
-		log.Println(message, args)
+		if len(args) > 0 {
+			fmt.Println(message, args)
+		} else {
+			fmt.Println(message)
+		}
 	}
 }
 

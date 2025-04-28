@@ -87,3 +87,18 @@ func (j *Javadoc) GetCommentReturn() string {
 	}
 	return ""
 }
+
+func (j *Javadoc) GetProxyEnv() map[string]interface{} {
+	return map[string]interface{}{
+		"GetNumberOfCommentLines":  j.NumberOfCommentLines,
+		"GetCommentedCodeElements": j.CommentedCodeElements,
+		"GetCommentAuthor":         j.GetCommentAuthor(),
+		"GetCommentVersion":        j.GetCommentVersion(),
+		"GetCommentReturn":         j.GetCommentReturn(),
+		"GetCommentSee":            j.GetCommentSee(),
+		"GetCommentSince":          j.GetCommentSince(),
+		"GetCommentParam":          j.GetCommentParam(),
+		"GetCommentThrows":         j.GetCommentThrows(),
+		"GetPrimaryQlClass":        "Javadoc",
+	}
+}
