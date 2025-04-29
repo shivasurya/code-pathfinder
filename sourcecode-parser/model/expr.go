@@ -438,6 +438,11 @@ func (a *Annotation) GetAnnotationElement(name string) any {
 
 // GetArrayValue retrieves a specific index value from an annotation array.
 func (a *Annotation) GetArrayValue(name string, index int) any {
+	// Try string array first
+	if val, ok := a.Values[name].([]string); ok && index < len(val) {
+		return val[index]
+	}
+	// Then try interface array
 	if val, ok := a.Values[name].([]any); ok && index < len(val) {
 		return val[index]
 	}
@@ -522,6 +527,7 @@ func (a *Annotation) ToString() string {
 	return "@" + a.QualifiedName
 }
 
+// GetProxyEnv returns a map of getter method names to their values
 func (a *Annotation) GetProxyEnv() map[string]interface{} {
 	return map[string]interface{}{
 		"GetQualifiedName":    a.QualifiedName,
@@ -665,14 +671,14 @@ func (m *MethodCall) ToString() string {
 
 func (m *MethodCall) GetProxyEnv() map[string]interface{} {
 	return map[string]interface{}{
-		"GetMethodName":        m.MethodName,
-		"GetQualifiedMethod":   m.QualifiedMethod,
+		"GetMethod":            m.QualifiedMethod,
+		"GetQualifier":         m.Qualifier,
 		"GetArguments":         m.Arguments,
 		"GetTypeArguments":     m.TypeArguments,
-		"GetQualifier":         m.Qualifier,
-		"GetReceiverType":      m.ReceiverType,
 		"GetEnclosingCallable": m.EnclosingCallable,
 		"GetEnclosingStmt":     m.EnclosingStmt,
+		"GetHasQualifier":      m.HasQualifier,
+		"GetIsOwnMethodCall":   m.IsOwnMethodCall,
 	}
 }
 
@@ -772,13 +778,12 @@ func (f *FieldDeclaration) ToString() string {
 
 func (f *FieldDeclaration) GetProxyEnv() map[string]interface{} {
 	return map[string]interface{}{
-		"GetFieldNames":        f.FieldNames,
-		"GetVisibility":        f.Visibility,
-		"GetType":              f.Type,
-		"GetIsStatic":          f.IsStatic,
-		"GetIsFinal":           f.IsFinal,
-		"GetIsVolatile":        f.IsVolatile,
-		"GetIsTransient":       f.IsTransient,
-		"GetSourceDeclaration": f.SourceDeclaration,
+		"GetTypeAccess":  f.Type,
+		"GetAField":      f.FieldNames,
+		"GetVisibility":  f.Visibility,
+		"GetIsStatic":    f.IsStatic,
+		"GetIsFinal":     f.IsFinal,
+		"GetIsVolatile":  f.IsVolatile,
+		"GetIsTransient": f.IsTransient,
 	}
 }
