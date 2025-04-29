@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -102,19 +103,19 @@ func TestTreeNode(t *testing.T) {
 		root := &TreeNode{
 			Node: &Node{NodeType: "root", NodeID: 1},
 		}
-		
+
 		child1 := &TreeNode{
-			Node: &Node{NodeType: "child1", NodeID: 2},
+			Node:   &Node{NodeType: "child1", NodeID: 2},
 			Parent: root,
 		}
-		
+
 		child2 := &TreeNode{
-			Node: &Node{NodeType: "child2", NodeID: 3},
+			Node:   &Node{NodeType: "child2", NodeID: 3},
 			Parent: root,
 		}
-		
+
 		grandchild1 := &TreeNode{
-			Node: &Node{NodeType: "grandchild1", NodeID: 4},
+			Node:   &Node{NodeType: "grandchild1", NodeID: 4},
 			Parent: child1,
 		}
 
