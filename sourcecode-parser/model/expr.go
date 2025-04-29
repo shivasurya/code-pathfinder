@@ -527,7 +527,7 @@ func (a *Annotation) ToString() string {
 	return "@" + a.QualifiedName
 }
 
-// GetProxyEnv returns a map of getter method names to their values
+// GetProxyEnv returns a map of getter method names to their values.
 func (a *Annotation) GetProxyEnv() map[string]interface{} {
 	return map[string]interface{}{
 		"GetQualifiedName":    a.QualifiedName,

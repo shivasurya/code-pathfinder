@@ -83,7 +83,8 @@ var ciCmd = &cobra.Command{
 		}
 
 		// TODO: Add sarif file support
-		if output == "json" {
+		switch output {
+		case "json":
 			if outputFile != "" {
 				if utilities.IsGitHubActions() {
 					// append GITHUB_WORKSPACE to output file path
@@ -110,7 +111,7 @@ var ciCmd = &cobra.Command{
 					fmt.Println("Error writing output file: ", err)
 				}
 			}
-		} else if output == "sarif" {
+		case "sarif":
 			sarifReport, err := generateSarifReport(outputResult)
 			if err != nil {
 				fmt.Println("Error generating sarif report: ", err)

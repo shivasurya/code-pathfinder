@@ -48,7 +48,7 @@ func ParseClass(node *sitter.Node, sourceCode []byte, file string) *model.Class 
 	columnNumber := int(node.StartPoint().Column) + 1
 
 	classDeclaration.Annotations = annotationMarkers
-	classDeclaration.ClassOrInterface.Package = packageName
+	classDeclaration.Package = packageName
 	classDeclaration.SourceFile = file
 	classDeclaration.Modifiers = []string{ExtractVisibilityModifier(accessModifier)}
 	classDeclaration.SuperTypes = []string{superClass}

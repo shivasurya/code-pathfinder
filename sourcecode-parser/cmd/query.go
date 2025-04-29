@@ -75,15 +75,15 @@ func init() {
 
 func initializeProject(project string) ([]*model.TreeNode, *db.StorageNode) {
 	treeHolder := []*model.TreeNode{}
-	db := db.NewStorageNode(project)
+	codeDB := db.NewStorageNode(project)
 	if project != "" {
-		treeHolder = tree.Initialize(project, db)
+		treeHolder = tree.Initialize(project, codeDB)
 	}
-	return treeHolder, db
+	return treeHolder, codeDB
 }
 
 func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
-	treeHolder, db := initializeProject(project)
+	treeHolder, codeDB := initializeProject(project)
 
 	if stdin {
 		// read from stdin
@@ -100,7 +100,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, treeHolder, db, output)
+			result, err := processQuery(input, treeHolder, codeDB, output)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
 				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -111,7 +111,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		}
 	} else {
 		// read from command line
-		result, err := processQuery(query, treeHolder, db, output)
+		result, err := processQuery(query, treeHolder, codeDB, output)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
 			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -120,7 +120,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, _ []*model.TreeNode, db *db.StorageNode, _ string) (string, error) {
+func processQuery(input string, _ []*model.TreeNode, codeDB *db.StorageNode, _ string) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -130,7 +130,7 @@ func processQuery(input string, _ []*model.TreeNode, db *db.StorageNode, _ strin
 	if len(parts) > 1 {
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
-	entities, formattedOutput := tree.QueryEntities(db, parsedQuery)
+	entities, formattedOutput := tree.QueryEntities(codeDB, parsedQuery)
 	// if output == "json" || output == "sarif" {
 	// 	analytics.ReportEvent(analytics.QueryCommandJSON)
 	// 	// convert struct to query_results

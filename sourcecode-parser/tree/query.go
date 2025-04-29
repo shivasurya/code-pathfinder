@@ -13,7 +13,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 )
 
-func QueryEntities(db *db.StorageNode, query parser.Query) (nodes []*model.Node, output [][]interface{}) {
+func QueryEntities(codeDB *db.StorageNode, query parser.Query) (nodes []*model.Node, output [][]interface{}) {
 	// Create evaluation context
 	ctx := &eval.EvaluationContext{
 		RelationshipMap: buildRelationshipMap(),
@@ -28,7 +28,7 @@ func QueryEntities(db *db.StorageNode, query parser.Query) (nodes []*model.Node,
 		switch entity.Entity {
 		case "method_declaration":
 			// Get method declarations from db
-			methods := db.GetMethodDecls()
+			methods := codeDB.GetMethodDecls()
 			methodProxyEnv := []map[string]interface{}{}
 			entityModel := []interface{}{}
 			for _, method := range methods {
@@ -39,7 +39,7 @@ func QueryEntities(db *db.StorageNode, query parser.Query) (nodes []*model.Node,
 			ctx.EntityModel[entity.Entity] = entityModel
 		case "class_declaration":
 			// Get class declarations from db
-			classes := db.GetClassDecls()
+			classes := codeDB.GetClassDecls()
 			classProxyEnv := []map[string]interface{}{}
 			ctx.EntityModel[entity.Entity] = make([]interface{}, len(classes))
 			for _, class := range classes {
@@ -49,7 +49,7 @@ func QueryEntities(db *db.StorageNode, query parser.Query) (nodes []*model.Node,
 			ctx.ProxyEnv[entity.Entity] = classProxyEnv
 		case "field":
 			// Get field declarations from db
-			fields := db.GetFields()
+			fields := codeDB.GetFields()
 			ctx.EntityModel[entity.Entity] = make([]interface{}, len(fields))
 			fieldProxyEnv := []map[string]interface{}{}
 			for _, field := range fields {
