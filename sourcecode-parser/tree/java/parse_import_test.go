@@ -22,11 +22,12 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode)
+		importType := ParseImportDeclaration(importNode, sourceCode, "Sample.java")
 
 		// Assertions
 		assert.NotNil(t, importType)
 		assert.Equal(t, "java.util.List", importType.ImportedType)
+		assert.Equal(t, "Sample.java", importType.SourceDeclaration)
 	})
 
 	t.Run("Import with static keyword", func(t *testing.T) {
@@ -41,11 +42,12 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode)
+		importType := ParseImportDeclaration(importNode, sourceCode, "Sample.java")
 
 		// Assertions
 		assert.NotNil(t, importType)
 		assert.Equal(t, "java.util.Collections.sort", importType.ImportedType)
+		assert.Equal(t, "Sample.java", importType.SourceDeclaration)
 	})
 
 	t.Run("Import with wildcard", func(t *testing.T) {
@@ -60,11 +62,12 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode)
+		importType := ParseImportDeclaration(importNode, sourceCode, "Sample.java")
 
 		// Assertions
 		assert.NotNil(t, importType)
 		assert.Equal(t, "java.util", importType.ImportedType)
+		assert.Equal(t, "Sample.java", importType.SourceDeclaration)
 	})
 
 	t.Run("Import with single identifier", func(t *testing.T) {
@@ -79,11 +82,12 @@ func TestParseImportDeclaration(t *testing.T) {
 		assert.NotNil(t, importNode)
 
 		// Call the function with our parsed node
-		importType := ParseImportDeclaration(importNode, sourceCode)
+		importType := ParseImportDeclaration(importNode, sourceCode, "Sample.java")
 
 		// Assertions
 		assert.NotNil(t, importType)
 		assert.Equal(t, "String", importType.ImportedType)
+		assert.Equal(t, "Sample.java", importType.SourceDeclaration)
 	})
 }
 
