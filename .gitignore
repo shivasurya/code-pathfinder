@@ -31,3 +31,11 @@ docs/public/rules/*.json
 .DS_Store
 
 node_modules
+
+test-src/android/pathfinder.db
+.vscode/cody.json
+
+coverage.out
+coverage.html
+
+.windsurfrules

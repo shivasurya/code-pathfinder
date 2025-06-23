@@ -1,0 +1,3 @@
+#! /bin/zsh
+
+go run . query --stdin --project ../test-src/android --verbose
