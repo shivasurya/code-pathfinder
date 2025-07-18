@@ -3,6 +3,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import { SecurityIssue } from './models/security-issue';
 import { performSecurityAnalysis } from './security-analyzer';
+import { SettingsManager } from './settings-manager';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
@@ -110,13 +111,15 @@ async function executeCommand(command: string, cwd: string): Promise<string> {
 }
 
 /**
- * Registers the SecureFlow review command and status bar button
- * @param context Extension context
+ * Registers the SecureFlow review command for git changes
+ * @param context VSCode extension context
  * @param outputChannel Output channel for displaying results
+ * @param settingsManager Settings manager for the extension
  */
 export function registerSecureFlowReviewCommand(
-    context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel
+    context: vscode.ExtensionContext, 
+    outputChannel: vscode.OutputChannel,
+    settingsManager: SettingsManager
 ): void {
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(
@@ -158,6 +161,10 @@ export function registerSecureFlowReviewCommand(
                         outputChannel.show(true);
                         outputChannel.appendLine('🔍 SecureFlow: Scanning git changes for security issues...\n');
                         
+                        // Get the selected AI Model
+                        const selectedModel = settingsManager.getSelectedAIModel();
+                        outputChannel.appendLine(`🤖 Using AI Model: ${selectedModel}`);
+                        
                         // Report progress
                         progress.report({ increment: 0 });
                         
@@ -186,8 +193,8 @@ export function registerSecureFlowReviewCommand(
                             outputChannel.appendLine(`Lines: ${change.startLine}-${change.startLine + change.lineCount - 1}`);
                             outputChannel.appendLine(`Changes:\n${change.content}\n`);
                             
-                            // Analyze the change content
-                            const issues = performSecurityAnalysis(change.content);
+                            // Analyze the change content with the selected AI Model
+                            const issues = performSecurityAnalysis(change.content, selectedModel);
                             
                             // Map issues to include file path and line number
                             const mappedIssues = issues.map((issue: SecurityIssue) => ({

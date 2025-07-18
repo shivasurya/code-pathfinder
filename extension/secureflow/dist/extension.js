@@ -46,12 +46,15 @@ exports.deactivate = deactivate;
 const vscode = __importStar(__webpack_require__(1));
 const security_analyzer_1 = __webpack_require__(5);
 const git_changes_1 = __webpack_require__(2);
+const settings_manager_1 = __webpack_require__(6);
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 function activate(context) {
     console.log('SecureFlow extension is now active!');
     // Create an output channel for security diagnostics
     const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
+    // Initialize the settings manager
+    const settingsManager = new settings_manager_1.SettingsManager(context);
     // Register the command that will be triggered with cmd+l
     const analyzeSelectionCommand = vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
         // Get the active text editor
@@ -77,6 +80,9 @@ function activate(context) {
             outputChannel.clear();
             outputChannel.show(true);
             outputChannel.appendLine('🔍 Analyzing code for security vulnerabilities...');
+            // Get the selected AI Model
+            const selectedModel = settingsManager.getSelectedAIModel();
+            outputChannel.appendLine(`🤖 Using AI Model: ${selectedModel}`);
             // Simulate scanning process with some delay
             progress.report({ increment: 0 });
             // First stage - initial scanning
@@ -91,8 +97,9 @@ function activate(context) {
             await new Promise(resolve => setTimeout(resolve, 800));
             progress.report({ increment: 50, message: "Finalizing analysis..." });
             outputChannel.appendLine('⏳ Running final security checks...');
-            // Analyze the selected code
-            const securityIssues = (0, security_analyzer_1.performSecurityAnalysis)(selectedText);
+            // Analyze the selected code with the chosen AI Model
+            const aiModel = settingsManager.getSelectedAIModel();
+            const securityIssues = (0, security_analyzer_1.performSecurityAnalysis)(selectedText, aiModel);
             // Complete the progress
             await new Promise(resolve => setTimeout(resolve, 500));
             // Display results
@@ -112,7 +119,7 @@ function activate(context) {
         });
     });
     // Register the git changes review command and status bar button
-    (0, git_changes_1.registerSecureFlowReviewCommand)(context, outputChannel);
+    (0, git_changes_1.registerSecureFlowReviewCommand)(context, outputChannel, settingsManager);
     // Add command to context subscriptions
     context.subscriptions.push(analyzeSelectionCommand);
 }
@@ -266,11 +273,12 @@ async function executeCommand(command, cwd) {
     });
 }
 /**
- * Registers the SecureFlow review command and status bar button
- * @param context Extension context
+ * Registers the SecureFlow review command for git changes
+ * @param context VSCode extension context
  * @param outputChannel Output channel for displaying results
+ * @param settingsManager Settings manager for the extension
  */
-function registerSecureFlowReviewCommand(context, outputChannel) {
+function registerSecureFlowReviewCommand(context, outputChannel, settingsManager) {
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.text = "$(shield) SecureFlow";
@@ -301,6 +309,9 @@ function registerSecureFlowReviewCommand(context, outputChannel) {
                 outputChannel.clear();
                 outputChannel.show(true);
                 outputChannel.appendLine('🔍 SecureFlow: Scanning git changes for security issues...\n');
+                // Get the selected AI Model
+                const selectedModel = settingsManager.getSelectedAIModel();
+                outputChannel.appendLine(`🤖 Using AI Model: ${selectedModel}`);
                 // Report progress
                 progress.report({ increment: 0 });
                 // Get git changes
@@ -322,8 +333,8 @@ function registerSecureFlowReviewCommand(context, outputChannel) {
                     outputChannel.appendLine(`File: ${path.basename(change.filePath)}`);
                     outputChannel.appendLine(`Lines: ${change.startLine}-${change.startLine + change.lineCount - 1}`);
                     outputChannel.appendLine(`Changes:\n${change.content}\n`);
-                    // Analyze the change content
-                    const issues = (0, security_analyzer_1.performSecurityAnalysis)(change.content);
+                    // Analyze the change content with the selected AI Model
+                    const issues = (0, security_analyzer_1.performSecurityAnalysis)(change.content, selectedModel);
                     // Map issues to include file path and line number
                     const mappedIssues = issues.map((issue) => ({
                         issue,
@@ -398,9 +409,12 @@ exports.performSecurityAnalysis = performSecurityAnalysis;
 /**
  * Performs security analysis on the given code snippet
  * @param code The code to analyze
+ * @param aiModel Optional parameter to specify which AI Model to use
  * @returns Array of security issues found
  */
-function performSecurityAnalysis(code) {
+function performSecurityAnalysis(code, aiModel) {
+    // Log which AI Model would be used (for future implementation)
+    console.log(`Using AI Model for analysis: ${aiModel || 'default'}`);
     // This is a mock implementation. In a real extension, you would implement actual code analysis.
     const issues = [];
     // Check for SQL injection vulnerability pattern
@@ -469,6 +483,96 @@ function performSecurityAnalysis(code) {
     }
     return issues;
 }
+
+
+/***/ }),
+/* 6 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SettingsManager = void 0;
+const vscode = __importStar(__webpack_require__(1));
+/**
+ * Settings manager for SecureFlow extension
+ */
+class SettingsManager {
+    context;
+    constructor(context) {
+        this.context = context;
+    }
+    /**
+     * Get the selected AI Model from user preferences
+     */
+    getSelectedAIModel() {
+        const config = vscode.workspace.getConfiguration('secureflow');
+        return config.get('AIModel') || 'gpt-4';
+    }
+    /**
+     * Get the API Key for the selected model
+     */
+    async getApiKey() {
+        const selectedModel = this.getSelectedAIModel();
+        const key = `secureflow.APIKey.${selectedModel}`;
+        // Try to get the key from secure storage first
+        let apiKey = await this.context.secrets.get(key);
+        // If not found in secure storage, check if it's in settings
+        if (!apiKey) {
+            const config = vscode.workspace.getConfiguration('secureflow');
+            const configKey = config.get('APIKey');
+            // If found in settings, store it securely and clear from settings
+            if (configKey) {
+                await this.context.secrets.store(key, configKey);
+                // Clear the key from settings to keep it secure
+                await config.update('APIKey', '', vscode.ConfigurationTarget.Global);
+                apiKey = configKey;
+            }
+        }
+        return apiKey;
+    }
+    /**
+     * Store API Key securely
+     */
+    async storeApiKey(apiKey) {
+        const selectedModel = this.getSelectedAIModel();
+        const key = `secureflow.APIKey.${selectedModel}`;
+        await this.context.secrets.store(key, apiKey);
+    }
+}
+exports.SettingsManager = SettingsManager;
 
 
 /***/ })

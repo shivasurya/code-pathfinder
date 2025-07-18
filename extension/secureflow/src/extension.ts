@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { SecurityIssue } from './models/security-issue';
 import { performSecurityAnalysis } from './security-analyzer';
 import { registerSecureFlowReviewCommand } from './git-changes';
+import { SettingsManager } from './settings-manager';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -12,6 +13,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create an output channel for security diagnostics
 	const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
+	
+	// Initialize the settings manager
+	const settingsManager = new SettingsManager(context);
 	
 	// Register the command that will be triggered with cmd+l
 	const analyzeSelectionCommand = vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
@@ -42,6 +46,10 @@ export function activate(context: vscode.ExtensionContext) {
 			outputChannel.show(true);
 			outputChannel.appendLine('🔍 Analyzing code for security vulnerabilities...');
 			
+			// Get the selected AI Model
+			const selectedModel = settingsManager.getSelectedAIModel();
+			outputChannel.appendLine(`🤖 Using AI Model: ${selectedModel}`);
+			
 			// Simulate scanning process with some delay
 			progress.report({ increment: 0 });
 			
@@ -60,8 +68,9 @@ export function activate(context: vscode.ExtensionContext) {
 			progress.report({ increment: 50, message: "Finalizing analysis..." });
 			outputChannel.appendLine('⏳ Running final security checks...');
 			
-			// Analyze the selected code
-			const securityIssues = performSecurityAnalysis(selectedText);
+			// Analyze the selected code with the chosen AI Model
+			const aiModel = settingsManager.getSelectedAIModel();
+			const securityIssues = performSecurityAnalysis(selectedText, aiModel);
 			
 			// Complete the progress
 			await new Promise(resolve => setTimeout(resolve, 500));
@@ -84,7 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	
 	// Register the git changes review command and status bar button
-	registerSecureFlowReviewCommand(context, outputChannel);
+	registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
 
 	// Add command to context subscriptions
 	context.subscriptions.push(analyzeSelectionCommand);

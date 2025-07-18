@@ -1,11 +1,16 @@
 import { SecurityIssue } from './models/security-issue';
+import { AIModel } from './settings-manager';
 
 /**
  * Performs security analysis on the given code snippet
  * @param code The code to analyze
+ * @param aiModel Optional parameter to specify which AI Model to use
  * @returns Array of security issues found
  */
-export function performSecurityAnalysis(code: string): SecurityIssue[] {
+export function performSecurityAnalysis(code: string, aiModel?: AIModel): SecurityIssue[] {
+    // Log which AI Model would be used (for future implementation)
+    console.log(`Using AI Model for analysis: ${aiModel || 'default'}`);
+
     // This is a mock implementation. In a real extension, you would implement actual code analysis.
     const issues: SecurityIssue[] = [];
     
