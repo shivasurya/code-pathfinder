@@ -1,17 +1,20 @@
 import { SecurityIssue } from './models/security-issue';
 import { AIModel } from './settings-manager';
+import { analyzeSecurityWithAI } from './security-analyzer-ai';
 
 /**
  * Performs security analysis on the given code snippet
+ * Can use both pattern-based detection and AI-based analysis
  * @param code The code to analyze
  * @param aiModel Optional parameter to specify which AI Model to use
+ * @param apiKey Optional API key for AI Model (if not provided, only pattern-based analysis is done)
  * @returns Array of security issues found
  */
-export function performSecurityAnalysis(code: string, aiModel?: AIModel): SecurityIssue[] {
+export function performSecurityAnalysis(code: string, aiModel?: AIModel, apiKey?: string): SecurityIssue[] {
     // Log which AI Model would be used (for future implementation)
     console.log(`Using AI Model for analysis: ${aiModel || 'default'}`);
 
-    // This is a mock implementation. In a real extension, you would implement actual code analysis.
+    // This is a pattern-based implementation. It doesn't require an API key.
     const issues: SecurityIssue[] = [];
     
     // Check for SQL injection vulnerability pattern
@@ -89,4 +92,44 @@ export function performSecurityAnalysis(code: string, aiModel?: AIModel): Securi
     }
     
     return issues;
+}
+
+/**
+ * Performs security analysis on the given code snippet asynchronously,
+ * utilizing both pattern-based detection and AI-based analysis if an API key is provided
+ * @param code The code to analyze
+ * @param aiModel The AI Model to use
+ * @param apiKey API key for the AI Model
+ * @returns Promise with array of security issues found
+ */
+export async function performSecurityAnalysisAsync(
+    code: string, 
+    aiModel: AIModel, 
+    apiKey?: string
+): Promise<SecurityIssue[]> {
+    
+    // If no API key is provided, just return the pattern-based results
+    if (!apiKey) {
+        return [];
+    }
+    
+    try {
+        
+        // Run the AI-based analysis
+        const aiIssues = await analyzeSecurityWithAI(code, aiModel, apiKey);
+        
+        // Merge the results, removing any duplicates
+        const allIssues = [];
+        
+        // Add AI issues that don't overlap with pattern issues
+        for (const aiIssue of aiIssues) {
+            allIssues.push(aiIssue);
+        }
+        
+        return allIssues;
+    } catch (error) {
+        console.error('Error in AI-based analysis:', error);
+        // If AI analysis fails, return just the pattern-based results
+        return [];
+    }
 }

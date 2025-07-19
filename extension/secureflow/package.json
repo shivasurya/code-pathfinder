@@ -20,12 +20,13 @@
       "properties": {
         "secureflow.AIModel": {
           "type": "string",
-            "default": "claude-3.5-sonnet-20240229",
-            "enum": ["gpt-4", "claude-3.5-sonnet-20240229", "claude-3.7-sonnet-20240315", "gemini-pro"],
+            "default": "openai",
+            "enum": ["openai", "claude", "gemini", "claude-3-5-sonnet-20241022"],
           "enumDescriptions": [
             "Use OpenAI models for security analysis",
             "Use Anthropic Claude models for security analysis",
-            "Use Google Gemini models for security analysis"
+            "Use Google Gemini models for security analysis",
+            "Use Anthropic Claude 3.5 Sonnet models for security analysis"
           ],
           "description": "Select the AI Model to use for security analysis"
         },
@@ -48,6 +49,10 @@
           "light": "resources/light/shield.svg",
           "dark": "resources/dark/shield.svg"
         }
+      },
+      {
+        "command": "secureflow.setApiKey",
+        "title": "SecureFlow: Set API Key for Selected AI Model"
       }
     ],
     "keybindings": [

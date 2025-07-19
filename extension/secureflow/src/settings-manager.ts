@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type AIModel = 'gpt-4' | 'claude-3.5-sonnet-20240229' | 'claude-3.7-sonnet-20240315' | 'gemini-pro';
+export type AIModel = 'claude-3-5-sonnet-20241022' | 'claude' | 'gemini' | 'openai';
 
 /**
  * Settings manager for SecureFlow extension
@@ -17,16 +17,15 @@ export class SettingsManager {
      */
     public getSelectedAIModel(): AIModel {
         const config = vscode.workspace.getConfiguration('secureflow');
-        return config.get<AIModel>('AIModel') || 'gpt-4';
+        return config.get<AIModel>('AIModel') || 'openai';
     }
     
     /**
      * Get the API Key for the selected model
      */
     public async getApiKey(): Promise<string | undefined> {
-        const selectedModel = this.getSelectedAIModel();
-        const key = `secureflow.APIKey.${selectedModel}`;
-        
+        const key = `secureflow.APIKey`;
+
         // Try to get the key from secure storage first
         let apiKey = await this.context.secrets.get(key);
         
@@ -51,8 +50,7 @@ export class SettingsManager {
      * Store API Key securely
      */
     public async storeApiKey(apiKey: string): Promise<void> {
-        const selectedModel = this.getSelectedAIModel();
-        const key = `secureflow.APIKey.${selectedModel}`;
+        const key = `secureflow.APIKey`;
         await this.context.secrets.store(key, apiKey);
     }
 }

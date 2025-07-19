@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { SecurityIssue } from './models/security-issue';
-import { performSecurityAnalysis } from './security-analyzer';
+import { performSecurityAnalysis, performSecurityAnalysisAsync } from './security-analyzer';
 import { registerSecureFlowReviewCommand } from './git-changes';
 import { SettingsManager } from './settings-manager';
 
@@ -68,9 +68,29 @@ export function activate(context: vscode.ExtensionContext) {
 			progress.report({ increment: 50, message: "Finalizing analysis..." });
 			outputChannel.appendLine('⏳ Running final security checks...');
 			
-			// Analyze the selected code with the chosen AI Model
+			// Get the API key for the selected AI Model
 			const aiModel = settingsManager.getSelectedAIModel();
-			const securityIssues = performSecurityAnalysis(selectedText, aiModel);
+			let securityIssues: SecurityIssue[] = [];
+			
+			try {
+				// Try to get the API key for the selected model
+				const apiKey = await settingsManager.getApiKey();
+				
+				if (apiKey) {
+					// If we have an API key, use the AI-powered analysis
+					outputChannel.appendLine(`⏳ Running AI-powered analysis with ${aiModel}...`);
+					securityIssues = await performSecurityAnalysisAsync(selectedText, aiModel, apiKey);
+				} else {
+					// Fallback to pattern-based analysis if no API key
+					outputChannel.appendLine('⚠️ No API key found for the selected AI Model. Using pattern-based analysis only.');
+					securityIssues = performSecurityAnalysis(selectedText, aiModel);
+				}
+			} catch (error) {
+				// If there's an error with the API key or AI analysis, fallback to pattern-based
+				console.error('Error with AI analysis:', error);
+				outputChannel.appendLine(`⚠️ Error connecting to ${aiModel}: ${error}. Using pattern-based analysis only.`);
+				securityIssues = performSecurityAnalysis(selectedText, aiModel);
+			}
 			
 			// Complete the progress
 			await new Promise(resolve => setTimeout(resolve, 500));
@@ -94,9 +114,25 @@ export function activate(context: vscode.ExtensionContext) {
 	
 	// Register the git changes review command and status bar button
 	registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
+	
+	// Register command to set API key
+	const setApiKeyCommand = vscode.commands.registerCommand('secureflow.setApiKey', async () => {
+		const aiModel = settingsManager.getSelectedAIModel();
+		const apiKey = await vscode.window.showInputBox({
+			prompt: `Enter API Key for ${aiModel}`,
+			password: true,
+			ignoreFocusOut: true,
+			placeHolder: 'API Key'
+		});
+		
+		if (apiKey) {
+			await settingsManager.storeApiKey(apiKey);
+			vscode.window.showInformationMessage(`API Key for ${aiModel} has been stored securely.`);
+		}
+	});
 
-	// Add command to context subscriptions
-	context.subscriptions.push(analyzeSelectionCommand);
+	// Add commands to context subscriptions
+	context.subscriptions.push(analyzeSelectionCommand, setApiKeyCommand);
 }
 
 // This method is called when your extension is deactivated

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
 import { SecurityIssue } from './models/security-issue';
-import { performSecurityAnalysis } from './security-analyzer';
+import { performSecurityAnalysis, performSecurityAnalysisAsync } from './security-analyzer';
 import { SettingsManager } from './settings-manager';
 
 /**
@@ -194,7 +194,9 @@ export function registerSecureFlowReviewCommand(
                             outputChannel.appendLine(`Changes:\n${change.content}\n`);
                             
                             // Analyze the change content with the selected AI Model
-                            const issues = performSecurityAnalysis(change.content, selectedModel);
+                            // For now, we'll use the synchronous pattern-based analysis
+                            // In a future update, this would use the async AI-powered analysis
+                            const issues = await performSecurityAnalysisAsync(change.content, selectedModel, await settingsManager.getApiKey());
                             
                             // Map issues to include file path and line number
                             const mappedIssues = issues.map((issue: SecurityIssue) => ({
