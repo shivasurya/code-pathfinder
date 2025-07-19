@@ -31,7 +31,6 @@ Output your analysis in JSON format with the following structure:
   "languages": ["javascript", "typescript"],
   "frameworks": ["react", "express"],
   "buildTools": ["webpack", "babel"],
-  "promptPath": "path/to/appropriate/prompt"
 }
 
 The promptPath should point to the most appropriate prompt directory for security analysis.
