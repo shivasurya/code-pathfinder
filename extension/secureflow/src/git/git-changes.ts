@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
-import { SecurityIssue } from './models/security-issue';
-import { performSecurityAnalysis, performSecurityAnalysisAsync } from './security-analyzer';
-import { SettingsManager } from './settings-manager';
+import { SecurityIssue } from '../models/security-issue';
+import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
+import { SettingsManager } from '../settings/settings-manager';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
  * @param filePath Optional path to a specific file
  * @returns Array of change information objects
  */
-export async function getGitChanges(filePath?: string): Promise<GitChangeInfo[]> {
+export async function getGitChanges(): Promise<GitChangeInfo[]> {
     try {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -22,10 +22,6 @@ export async function getGitChanges(filePath?: string): Promise<GitChangeInfo[]>
 
         // Construct the git diff command
         let command = 'git diff --unified=0';
-        if (filePath) {
-            const relativePath = path.relative(repoPath, filePath);
-            command += ` -- "${relativePath}"`;
-        }
 
         // Execute git command
         const output = await executeCommand(command, repoPath);
@@ -135,17 +131,6 @@ export function registerSecureFlowReviewCommand(
     const reviewCommand = vscode.commands.registerCommand(
         "secureflow.reviewChanges",
         async (uri?: vscode.Uri) => {
-            // Get the file path from the URI if provided (from SCM view)
-            let currentFilePath: string | undefined;
-            
-            if (uri && uri.fsPath) {
-                // If command was triggered from SCM view with a specific file
-                currentFilePath = uri.fsPath;
-            } else {
-                // Otherwise use the active editor file
-                const editor = vscode.window.activeTextEditor;
-                currentFilePath = editor?.document.uri.fsPath;
-            }
             
             try {
                 // Show progress indicator
@@ -170,7 +155,7 @@ export function registerSecureFlowReviewCommand(
                         
                         // Get git changes
                         outputChannel.appendLine('⏳ Collecting git changes...');
-                        const changes = await getGitChanges(currentFilePath);
+                        const changes = await getGitChanges();
                         
                         if (changes.length === 0) {
                             outputChannel.appendLine('\n⚠️ No git changes found to scan.');

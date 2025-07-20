@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { SecurityIssue } from './models/security-issue';
-import { AIClientFactory } from './clients/ai-client-factory';
-import { AIModel } from './settings-manager';
+import { SecurityIssue } from '../models/security-issue';
+import { AIClientFactory } from '../clients/ai-client-factory';
+import { AIModel } from '../settings/settings-manager';
 
 /**
  * Analyzes code for security issues using AI models

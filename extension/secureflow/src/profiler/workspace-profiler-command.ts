@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { ProjectProfiler, ApplicationProfile } from './project-profiler';
-import { getPromptPath } from './prompts';
-import { loadPrompt } from './prompts/prompt-loader';
-import { SettingsManager } from './settings-manager';
+import { getPromptPath } from '../prompts';
+import { loadPrompt } from '../prompts/prompt-loader';
+import { SettingsManager } from '../settings/settings-manager';
 
 /**
  * Command handler for workspace profiling and analysis
@@ -62,10 +62,17 @@ export class WorkspaceProfilerCommand {
           outputChannel.appendLine(`⏳ ${message}`);
           progress.report({ increment: 20, message });
         };
-        
+
+        // Get the API key from the settings manager
+        const apiKey = await this.settingsManager.getApiKey();
+        if (!apiKey) {
+          outputChannel.appendLine('❌ No API key configured. Please set your AI API key in the settings.');
+          vscode.window.showErrorMessage('No API key configured. Please set your AI API key in the settings.');
+          return;
+        }
         // Run the profiler
-        const applications = await profiler.profileWorkspace(updateProgress, await this.settingsManager.getApiKey());
-        
+        const applications = await profiler.profileWorkspace(apiKey, updateProgress);
+
         // No applications detected
         if (applications.length === 0) {
           outputChannel.appendLine('❓ Could not determine the application type');

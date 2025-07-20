@@ -2,7 +2,7 @@ import { AIClient } from './ai-client';
 import { ClaudeClient } from './claude-client';
 import { GeminiClient } from './gemini-client';
 import { OpenAIClient } from './openai-client';
-import { AIModel } from '../settings-manager';
+import { AIModel } from '../settings/settings-manager';
 
 /**
  * Factory class for creating AI clients

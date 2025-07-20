@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AIClientFactory } from './clients';
-import { AIClient } from './clients/ai-client';
-import { getPromptForAppType } from './prompts/prompt-loader';
-import { loadPrompt } from './prompts/prompt-loader';
-import { SettingsManager } from './settings-manager';
+import { AIClientFactory } from '../clients';
+import { AIClient } from '../clients/ai-client';
+import { getPromptForAppType } from '../prompts/prompt-loader';
+import { loadPrompt } from '../prompts/prompt-loader';
+import { SettingsManager } from '../settings/settings-manager';
 
 /**
  * Interface representing a detected application in the workspace
@@ -98,7 +98,7 @@ export class ProjectProfiler {
   /**
    * Profile the workspace and detect application types
    */
-  public async profileWorkspace(progressCallback?: (message: string) => void, secretApiKey?: string): Promise<ApplicationProfile[]> {
+  public async profileWorkspace(secretApiKey: string,progressCallback?: (message: string) => void): Promise<ApplicationProfile[]> {
     try {
       // First collect the project structure
       progressCallback?.('Collecting project structure...');
@@ -113,7 +113,7 @@ export class ProjectProfiler {
 
       // Use AI to determine the project type
       progressCallback?.('Determining project type...');
-      const applicationProfiles = await this.determineProjectTypes(projectStructure, keyFileContents, progressCallback, secretApiKey);
+      const applicationProfiles = await this.determineProjectTypes(projectStructure, keyFileContents, secretApiKey, progressCallback);
 
       return applicationProfiles;
     } catch (error) {
@@ -256,8 +256,8 @@ export class ProjectProfiler {
   private async determineProjectTypes(
     projectStructure: any,
     keyFileContents: any[],
+    secretApiKey: string,
     progressCallback?: (message: string) => void,
-    secretApiKey: string
   ): Promise<ApplicationProfile[]> {
     try {
       // Create a condensed representation of the project
