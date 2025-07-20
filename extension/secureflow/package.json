@@ -1,8 +1,30 @@
 {
   "name": "secureflow",
-  "displayName": "secureflow",
-  "description": "Your AI security co-pilot for smarter, safer code, right in your editor",
+  "displayName": "SecureFlow",
+  "description": "AI-powered security co-pilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
   "version": "0.0.1",
+  "publisher": "codepathfinder",
+  "author": {
+    "name": "Shivasurya"
+  },
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shivasurya/code-pathfinder"
+  },
+  "keywords": [
+    "security",
+    "code-analysis",
+    "ai",
+    "threat-modeling",
+    "vulnerability-detection",
+    "static-analysis"
+  ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.102.0"
   },
