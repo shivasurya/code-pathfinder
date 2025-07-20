@@ -3,6 +3,7 @@ import { ProjectProfiler, ApplicationProfile } from './project-profiler';
 import { getPromptPath } from '../prompts';
 import { loadPrompt } from '../prompts/prompt-loader';
 import { SettingsManager } from '../settings/settings-manager';
+import { ProfileStorageService } from '../services/profile-storage-service';
 
 /**
  * Command handler for workspace profiling and analysis
@@ -115,6 +116,11 @@ export class WorkspaceProfilerCommand {
           // Get the appropriate prompt path
           const promptPath = getPromptPath(app.category, app.subcategory, app.technology);
           outputChannel.appendLine(`\nSelected prompt: ${promptPath}`);
+          
+          // store the profile using profile storage service
+          const profileStorageService = new ProfileStorageService(this.context);
+          const storedProfile = await profileStorageService.storeProfile(app, workspaceFolder.uri.toString(), true);
+          outputChannel.appendLine(`Stored profile with ID: ${storedProfile.id}`);
         }
         
         vscode.window.showInformationMessage(`Workspace profiling complete. ${selectedApplications.length === 1 ? '1 application' : `${selectedApplications.length} applications`} detected.`);
