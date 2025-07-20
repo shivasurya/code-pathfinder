@@ -2,10 +2,11 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { SecurityIssue } from './models/security-issue';
-import { performSecurityAnalysis, performSecurityAnalysisAsync } from './security-analyzer';
-import { registerSecureFlowReviewCommand } from './git-changes';
-import { SettingsManager } from './settings-manager';
-import { WorkspaceProfilerCommand } from './workspace-profiler-command';
+import { performSecurityAnalysisAsync } from './analysis/security-analyzer';
+import { registerSecureFlowReviewCommand } from './git/git-changes';
+import { SettingsManager } from './settings/settings-manager';
+import { WorkspaceProfilerCommand } from './profiler/workspace-profiler-command';
+import { SecureFlowExplorer } from './ui/secureflow-explorer';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -23,8 +24,24 @@ export function activate(context: vscode.ExtensionContext) {
 	const workspaceProfilerDisposable = workspaceProfilerCommand.register();
 	context.subscriptions.push(workspaceProfilerDisposable);
 	
-	// Register the command that will be triggered with cmd+l
-	const analyzeSelectionCommand = vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
+	// Register analyze selection command
+	const analyzeSelectionCommand = registerAnalyzeSelectionCommand(outputChannel, settingsManager);
+	
+	// Register the git changes review command and status bar button
+	registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
+
+	// Add commands to context subscriptions
+	context.subscriptions.push(analyzeSelectionCommand);
+
+	// Register the SecureFlow Explorer webview
+	SecureFlowExplorer.register(context);
+}
+
+function registerAnalyzeSelectionCommand(
+	outputChannel: vscode.OutputChannel, 
+	settingsManager: SettingsManager
+): vscode.Disposable {
+	return vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
 		// Get the active text editor
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
@@ -89,13 +106,11 @@ export function activate(context: vscode.ExtensionContext) {
 				} else {
 					// Fallback to pattern-based analysis if no API key
 					outputChannel.appendLine('⚠️ No API key found for the selected AI Model. Using pattern-based analysis only.');
-					securityIssues = performSecurityAnalysis(selectedText, aiModel);
 				}
 			} catch (error) {
 				// If there's an error with the API key or AI analysis, fallback to pattern-based
 				console.error('Error with AI analysis:', error);
 				outputChannel.appendLine(`⚠️ Error connecting to ${aiModel}: ${error}. Using pattern-based analysis only.`);
-				securityIssues = performSecurityAnalysis(selectedText, aiModel);
 			}
 			
 			// Complete the progress
@@ -117,28 +132,6 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		});
 	});
-	
-	// Register the git changes review command and status bar button
-	registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
-	
-	// Register command to set API key
-	const setApiKeyCommand = vscode.commands.registerCommand('secureflow.setApiKey', async () => {
-		const aiModel = settingsManager.getSelectedAIModel();
-		const apiKey = await vscode.window.showInputBox({
-			prompt: `Enter API Key for ${aiModel}`,
-			password: true,
-			ignoreFocusOut: true,
-			placeHolder: 'API Key'
-		});
-		
-		if (apiKey) {
-			await settingsManager.storeApiKey(apiKey);
-			vscode.window.showInformationMessage(`API Key for ${aiModel} has been stored securely.`);
-		}
-	});
-
-	// Add commands to context subscriptions
-	context.subscriptions.push(analyzeSelectionCommand, setApiKeyCommand);
 }
 
 // This method is called when your extension is deactivated

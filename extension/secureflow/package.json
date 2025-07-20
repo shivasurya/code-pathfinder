@@ -15,6 +15,24 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "secureflow-explorer",
+          "title": "SecureFlow",
+          "icon": "resources/dark/shield.svg"
+        }
+      ]
+    },
+    "views": {
+      "secureflow-explorer": [
+        {
+          "type": "webview",
+          "id": "secureflow.mainView",
+          "name": "SecureFlow"
+        }
+      ]
+    },
     "configuration": {
       "title": "SecureFlow",
       "properties": {
@@ -53,10 +71,6 @@
       {
         "command": "secureflow.profileWorkspace",
         "title": "SecureFlow: Profile Workspace for Security Analysis"
-      },
-      {
-        "command": "secureflow.setApiKey",
-        "title": "SecureFlow: Set API Key for Selected AI Model"
       }
     ],
     "keybindings": [

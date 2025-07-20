@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getPromptPath } from './prompts';
-import { loadPrompt } from './prompts/prompt-loader';
-import { AIClientFactory } from './clients';
-import { AIClient } from './clients/ai-client';
-import { SettingsManager } from './settings-manager';
+import { getPromptPath } from '../prompts';
+import { loadPrompt } from '../prompts/prompt-loader';
+import { AIClientFactory } from '../clients';
+import { AIClient } from '../clients/ai-client';
+import { SettingsManager } from '../settings/settings-manager';
 
 interface ProjectApplication {
   name: string;
