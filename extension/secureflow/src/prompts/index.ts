@@ -103,7 +103,7 @@ const promptMappings: PromptMapping[] = [
   { 
     category: 'desktop', 
     subcategory: 'electron', 
-    promptPath: 'frontend/electron/electron-app.txt' 
+    promptPath: 'desktop/electron/electron-app.txt' 
   },
   
   // Libraries

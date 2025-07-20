@@ -3,6 +3,7 @@ sourcecode-parser/pathfinder
 .idea/
 .gradle/
 build/
+extension/secureflow/dist/
 
 .env
 
