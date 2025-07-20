@@ -51,6 +51,10 @@
         }
       },
       {
+        "command": "secureflow.profileWorkspace",
+        "title": "SecureFlow: Profile Workspace for Security Analysis"
+      },
+      {
         "command": "secureflow.setApiKey",
         "title": "SecureFlow: Set API Key for Selected AI Model"
       }

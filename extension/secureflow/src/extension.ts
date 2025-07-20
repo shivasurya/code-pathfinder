@@ -5,6 +5,7 @@ import { SecurityIssue } from './models/security-issue';
 import { performSecurityAnalysis, performSecurityAnalysisAsync } from './security-analyzer';
 import { registerSecureFlowReviewCommand } from './git-changes';
 import { SettingsManager } from './settings-manager';
+import { WorkspaceProfilerCommand } from './workspace-profiler-command';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -16,6 +17,11 @@ export function activate(context: vscode.ExtensionContext) {
 	
 	// Initialize the settings manager
 	const settingsManager = new SettingsManager(context);
+	
+	// Register workspace profiler command
+	const workspaceProfilerCommand = new WorkspaceProfilerCommand(context);
+	const workspaceProfilerDisposable = workspaceProfilerCommand.register();
+	context.subscriptions.push(workspaceProfilerDisposable);
 	
 	// Register the command that will be triggered with cmd+l
 	const analyzeSelectionCommand = vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
