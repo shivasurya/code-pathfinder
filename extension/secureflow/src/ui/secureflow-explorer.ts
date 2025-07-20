@@ -210,7 +210,6 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                                 '<div><strong>Path:</strong> ' + profile.path + '</div>' +
                                 '<div><strong>Languages:</strong> ' + profile.languages.join(', ') + '</div>' +
                                 '<div><strong>Confidence:</strong> ' + (profile.confidence).toFixed(1) + '%</div>' +
-                                '<div><strong>Status:</strong> ' + (profile.isActive ? 'Active' : 'Inactive') + '</div>' +
                                 '<div><strong>Last Updated:</strong> ' + profile.timestamp + '</div>';
                         }
 
