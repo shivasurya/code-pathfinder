@@ -94,6 +94,33 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                     break;
+                case 'confirmDelete':
+                    const answer = await vscode.window.showWarningMessage(
+                        'Are you sure you want to delete this profile?',
+                        { modal: true },
+                        'Delete',
+                        'Cancel'
+                    );
+                    if (answer === 'Delete') {
+                        try {
+                            await this._profileService.deleteProfile(message.profileId);
+                            await this.loadProfiles();
+                            if (this._view) {
+                                this._view.webview.postMessage({
+                                    type: 'deleteSuccess',
+                                    profileId: message.profileId
+                                });
+                            }
+                        } catch (error) {
+                            if (this._view) {
+                                this._view.webview.postMessage({
+                                    type: 'error',
+                                    message: 'Failed to delete profile'
+                                });
+                            }
+                        }
+                    }
+                    break;
             }
         });
 
@@ -134,15 +161,71 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                         border: 1px solid var(--vscode-panel-border);
                         padding: 12px;
                         margin-top: 12px;
-                        border-radius: 4px;
+                        border-radius: 6px;
                     }
                     .profile-details h2 {
                         font-size: 1.1em;
-                        margin-top: 0;
-                        margin-bottom: 8px;
+                        margin: 0 0 12px 0;
+                        padding-bottom: 8px;
+                        border-bottom: 1px solid var(--vscode-panel-border);
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
                     }
-                    .profile-details div {
-                        margin-bottom: 8px;
+                    .profile-details .detail-row {
+                        display: flex;
+                        margin-bottom: 4px;
+                        padding: 6px 8px;
+                        border-radius: 3px;
+                        transition: background-color 0.1s ease;
+                    }
+                    .profile-details .detail-row:last-child {
+                        margin-bottom: 0;
+                    }
+                    .profile-details .detail-row:hover {
+                        background: var(--vscode-list-hoverBackground);
+                    }
+                    .profile-details .label {
+                        flex: 0 0 100px;
+                        color: var(--vscode-foreground);
+                        opacity: 0.7;
+                        font-size: 0.95em;
+                        padding-right: 8px;
+                    }
+                    .profile-details .value {
+                        flex: 1;
+                        color: var(--vscode-foreground);
+                        font-size: 0.95em;
+                        line-height: 1.4;
+                    }
+                    .profile-details .badge {
+                        display: inline-block;
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-size: 0.85em;
+                        background: var(--vscode-badge-background);
+                        color: var(--vscode-badge-foreground);
+                        margin: 0 4px 4px 0;
+                    }
+                    .delete-btn {
+                        background: none;
+                        border: none;
+                        color: var(--vscode-errorForeground);
+                        cursor: pointer;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                        font-size: 12px;
+                    }
+                    .delete-btn:hover {
+                        background: var(--vscode-errorForeground);
+                        color: var(--vscode-editor-background);
+                    }
+                    .delete-btn span {
+                        font-family: codicon;
+                        font-size: 14px;
                     }
                 </style>
             </head>
@@ -152,7 +235,12 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     <option value="">Select a profile...</option>
                 </select>
                 <div id="profileDetails" class="profile-details" style="display: none;">
-                    <h2>Profile Details</h2>
+                    <h2>
+                        Profile Details
+                        <button id="deleteProfile" class="delete-btn" style="display: none;">
+                            <span>✖</span> Delete Profile
+                        </button>
+                    </h2>
                     <div id="profileContent"></div>
                 </div>
                 <script>
@@ -179,6 +267,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                                     profileContent.innerHTML = '<div style="color: var(--vscode-errorForeground);">' + 
                                         message.message + '</div>';
                                     break;
+                                case 'deleteSuccess':
+                                    profileDetails.style.display = 'none';
+                                    profileSelect.value = '';
+                                    break;
                             }
                         });
 
@@ -196,22 +288,57 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                                 option.textContent = profile.name || 'Unnamed Profile';
                                 profileSelect.appendChild(option);
                             });
+
+                            // Auto-select first profile if available
+                            if (profiles.length > 0) {
+                                profileSelect.value = profiles[0].id;
+                                vscode.postMessage({
+                                    type: 'profileSelected',
+                                    profileId: profiles[0].id
+                                });
+                            }
                         }
 
                         // Display profile details
                         function displayProfileDetails(profile) {
                             profileDetails.style.display = 'block';
+                            const deleteBtn = document.getElementById('deleteProfile');
+                            deleteBtn.style.display = 'flex';
+
+                            const createDetailRow = (label, value, type = 'text') => {
+                                let valueHtml = value;
+                                if (type === 'array' && Array.isArray(value)) {
+                                    valueHtml = value.map(v => '<span class="badge">' + v + '</span>').join('');
+                                } else if (type === 'percentage') {
+                                    valueHtml = '<span class="badge">' + value.toFixed(1) + '%</span>';
+                                }
+                                return '<div class="detail-row">' +
+                                    '<div class="label">' + label + '</div>' +
+                                    '<div class="value">' + valueHtml + '</div>' +
+                                    '</div>';
+                            };
+
                             profileContent.innerHTML = 
-                                '<div><strong>ID:</strong> ' + profile.id + '</div>' +
-                                '<div><strong>Name:</strong> ' + profile.name + '</div>' +
-                                '<div><strong>Category:</strong> ' + profile.category + '</div>' +
-                                '<div><strong>Subcategory:</strong> ' + profile.subcategory + '</div>' +
-                                '<div><strong>Technology:</strong> ' + profile.technology + '</div>' +
-                                '<div><strong>Path:</strong> ' + profile.path + '</div>' +
-                                '<div><strong>Languages:</strong> ' + profile.languages.join(', ') + '</div>' +
-                                '<div><strong>Confidence:</strong> ' + (profile.confidence).toFixed(1) + '%</div>' +
-                                '<div><strong>Last Updated:</strong> ' + profile.timestamp + '</div>';
+                                createDetailRow('Name', profile.name) +
+                                createDetailRow('Category', profile.category) +
+                                createDetailRow('Subcategory', profile.subcategory) +
+                                createDetailRow('Technology', profile.technology) +
+                                createDetailRow('Path', profile.path) +
+                                createDetailRow('Languages', profile.languages, 'array') +
+                                createDetailRow('Confidence', profile.confidence, 'percentage') +
+                                createDetailRow('Last Updated', profile.timestamp);
                         }
+
+                        // Handle delete button click
+                        document.getElementById('deleteProfile').addEventListener('click', () => {
+                            const selectedId = profileSelect.value;
+                            if (selectedId) {
+                                vscode.postMessage({
+                                    type: 'confirmDelete',
+                                    profileId: selectedId
+                                });
+                            }
+                        });
 
                         // Handle profile selection
                         profileSelect.addEventListener('change', () => {
