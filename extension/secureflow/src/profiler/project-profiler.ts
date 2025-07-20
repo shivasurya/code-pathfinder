@@ -104,9 +104,6 @@ export class ProjectProfiler {
       progressCallback?.('Collecting project structure...');
       const projectStructure = await this.collectProjectStructure(progressCallback);
 
-      // log the collected structure for debugging in progressCallback
-      progressCallback?.(`Project structure collected: ${JSON.stringify(projectStructure, null, 2)}`);
-
       // Next, read critical files for deeper analysis
       progressCallback?.('Analyzing key project files...');
       const keyFileContents = await this.readKeyProjectFiles(projectStructure);
@@ -320,8 +317,6 @@ export class ProjectProfiler {
       `;
 
       progressCallback?.('Sending request to AI service...');
-      // add prompt to progressCallback
-      progressCallback?.(`AI prompt: ${prompt}`);
 
       try {
         // Call the AI client to analyze the workspace
@@ -337,7 +332,7 @@ export class ProjectProfiler {
           const jsonMatch = response.content.match(/\{[\s\S]*\}/);
           if (!jsonMatch) {
             console.error('No JSON found in response:', response.content);
-            return this.getMockProfiles(); // Fallback to mock profiles
+            return []; // Fallback to empty array
           }
           
           const jsonContent = jsonMatch[0];
@@ -345,43 +340,23 @@ export class ProjectProfiler {
           
           if (!result.applications || !Array.isArray(result.applications)) {
             console.error('Invalid response format, missing applications array:', result);
-            return this.getMockProfiles(); // Fallback to mock profiles
+            return []; // Fallback to empty array
           }
           
           return result.applications;
         } catch (parseError) {
           console.error('Error parsing AI response:', parseError);
           console.error('Response content:', response.content);
-          return this.getMockProfiles(); // Fallback to mock profiles
+          return []; // Fallback to empty array
         }
       } catch (aiError) {
         console.error('Error calling AI service:', aiError);
-        return this.getMockProfiles(); // Fallback to mock profiles
+        return []; // Fallback to empty array
       }
     } catch (error) {
       console.error('Error determining project types:', error);
       throw error;
     }
-  }
-  
-  /**
-   * Mock implementation for testing
-   */
-  private getMockProfiles(): ApplicationProfile[] {
-    return [
-      {
-        name: "Sample Express API",
-        path: "/",
-        category: "backend",
-        subcategory: "http",
-        technology: "express",
-        confidence: 85,
-        languages: ["javascript", "typescript"],
-        frameworks: ["express"],
-        buildTools: ["webpack"],
-        evidence: ["Found package.json with express dependency", "Server routing patterns detected"]
-      }
-    ];
   }
 }
 
