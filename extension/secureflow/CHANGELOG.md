@@ -11,7 +11,7 @@
 - **Multi-AI Support**: Choose your preferred AI engine:
   - OpenAI
   - Claude
-  - Gemini
+  - Gemini Pro 2.5
   - Claude 3.5 Sonnet
 
 ### 🛡️ Key Features

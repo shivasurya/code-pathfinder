@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type AIModel = 'claude-3-5-sonnet-20241022' | 'claude' | 'gemini' | 'openai';
+export type AIModel = 'claude-3-5-sonnet-20241022' | 'claude' | 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'openai';
 
 /**
  * Settings manager for SecureFlow extension
