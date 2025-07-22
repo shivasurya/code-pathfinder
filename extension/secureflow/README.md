@@ -12,7 +12,7 @@ This extension is licensed under the GNU Affero General Public License v3.0 (AGP
 - For full license terms, see the [LICENSE](LICENSE) file
 
 ## Features
-
+ 
 - **Quick Security Analysis**: Select any code snippet and press `Cmd+L` (Mac) to analyze it for security vulnerabilities
 - **Real-time Feedback**: Get immediate feedback on potential security issues
 - **Detailed Reports**: View comprehensive reports with severity ratings, descriptions, and recommendations

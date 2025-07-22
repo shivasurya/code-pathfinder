@@ -1,13 +1,19 @@
 {
   "name": "secureflow",
-  "displayName": "SecureFlow",
-  "description": "AI-powered security co-pilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
+  "displayName": "SecureFlow Code Reviewer",
+  "description": "AI-powered security copilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
   "version": "0.0.1",
   "publisher": "codepathfinder",
   "author": {
-    "name": "Shivasurya"
+    "name": "Shivasurya",
+    "email": "support@codepathfinder.dev"
   },
   "license": "AGPL-3.0",
+  "homepage": "https://codepathfinder.dev/secureflow-ai",
+  "bugs": {
+    "url": "https://github.com/shivasurya/code-pathfinder/issues",
+    "email": "support@codepathfinder.dev"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/shivasurya/code-pathfinder"
@@ -52,8 +58,9 @@
     "vscode": "^1.102.0"
   },
   "categories": [
-    "Other",
-    "Linters"
+    "AI",
+    "Linters",
+    "Machine Learning"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -83,7 +90,7 @@
       "properties": {
         "secureflow.AIModel": {
             "type": "string",
-            "default": "openai",
+            "default": "claude-3-5-sonnet-20241022",
             "enum": ["gpt-4o", "gpt-4o-mini", "o1-mini", "o1", "gpt-4.1-2025-04-14", "o3-mini-2025-01-31", "gemini-2.5-pro", "gemini-2.5-flash", "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
             "enumDescriptions": [
             "OpenAI GPT-4 O",

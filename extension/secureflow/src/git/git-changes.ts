@@ -127,12 +127,30 @@ export function registerSecureFlowReviewCommand(
     statusBarItem.command = "secureflow.reviewChanges";
     statusBarItem.show();
     
+    let resultsPanel: vscode.WebviewPanel | undefined;
+
     // Register command
     const reviewCommand = vscode.commands.registerCommand(
         "secureflow.reviewChanges",
         async (uri?: vscode.Uri) => {
-            
             try {
+                // Create or show WebView panel
+                if (!resultsPanel) {
+                    resultsPanel = vscode.window.createWebviewPanel(
+                        'secureflowResults',
+                        'SecureFlow Results',
+                        vscode.ViewColumn.Two,
+                        {
+                            enableScripts: true,
+                            retainContextWhenHidden: true
+                        }
+                    );
+
+                    resultsPanel.onDidDispose(() => {
+                        resultsPanel = undefined;
+                    });
+                }
+
                 // Show progress indicator
                 await vscode.window.withProgress(
                     {
@@ -141,49 +159,27 @@ export function registerSecureFlowReviewCommand(
                         cancellable: true
                     },
                     async (progress, token) => {
-                        // Clear and show output channel
-                        outputChannel.clear();
-                        outputChannel.show(true);
-                        outputChannel.appendLine('🔍 SecureFlow: Scanning git changes for security issues...\n');
-                        
                         // Get the selected AI Model
                         const selectedModel = settingsManager.getSelectedAIModel();
-                        outputChannel.appendLine(`🤖 Using AI Model: ${selectedModel}`);
-                        
-                        // Report progress
-                        progress.report({ increment: 0 });
                         
                         // Get git changes
-                        outputChannel.appendLine('⏳ Collecting git changes...');
                         const changes = await getGitChanges();
                         
                         if (changes.length === 0) {
-                            outputChannel.appendLine('\n⚠️ No git changes found to scan.');
+                            updateWebview(resultsPanel!, 'No git changes found to scan.', []);
                             vscode.window.showInformationMessage('SecureFlow: No git changes found to scan.');
                             return;
                         }
                         
-                        // Report progress
                         progress.report({ increment: 30, message: "Analyzing changes..." });
-                        
-                        // Print file and change information
-                        outputChannel.appendLine(`\n📄 Found ${changes.length} changed chunks in ${new Set(changes.map(c => c.filePath)).size} files\n`);
                         
                         let allIssues: Array<{issue: SecurityIssue, filePath: string, startLine: number}> = [];
                         
                         // Analyze each change
                         for (let i = 0; i < changes.length; i++) {
                             const change = changes[i];
-                            outputChannel.appendLine(`File: ${path.basename(change.filePath)}`);
-                            outputChannel.appendLine(`Lines: ${change.startLine}-${change.startLine + change.lineCount - 1}`);
-                            outputChannel.appendLine(`Changes:\n${change.content}\n`);
-                            
-                            // Analyze the change content with the selected AI Model
-                            // For now, we'll use the synchronous pattern-based analysis
-                            // In a future update, this would use the async AI-powered analysis
                             const issues = await performSecurityAnalysisAsync(change.content, selectedModel, await settingsManager.getApiKey());
                             
-                            // Map issues to include file path and line number
                             const mappedIssues = issues.map((issue: SecurityIssue) => ({
                                 issue,
                                 filePath: change.filePath,
@@ -192,45 +188,19 @@ export function registerSecureFlowReviewCommand(
                             
                             allIssues = [...allIssues, ...mappedIssues];
                             
-                            // Update progress
                             progress.report({ 
                                 increment: 60 / changes.length, 
                                 message: `Analyzed ${i + 1}/${changes.length} chunks...` 
                             });
                         }
                         
-                        // Finalize progress
-                        progress.report({ increment: 10, message: "Finalizing scan..." });
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Update WebView with results
+                        updateWebview(resultsPanel!, `Scan complete! Found ${allIssues.length} issues.`, allIssues);
                         
-                        // Display results
-                        outputChannel.appendLine('\n✅ Security scan complete!\n');
-                        
-                        if (allIssues.length === 0) {
-                            outputChannel.appendLine('🎉 No security issues found in the scanned changes.');
-                            vscode.window.showInformationMessage('SecureFlow: No security issues found in the scanned changes.');
-                        } else {
-                            outputChannel.appendLine(`⚠️ Found ${allIssues.length} potential security issues:\n`);
-                            
-                            allIssues.forEach((item, index) => {
-                                const { issue, filePath, startLine } = item;
-                                outputChannel.appendLine(`Issue #${index + 1}: ${issue.title}`);
-                                outputChannel.appendLine(`File: ${path.basename(filePath)}`);
-                                outputChannel.appendLine(`Location: Line ${startLine}`);
-                                outputChannel.appendLine(`Severity: ${issue.severity}`);
-                                outputChannel.appendLine(`Description: ${issue.description}`);
-                                outputChannel.appendLine(`Recommendation: ${issue.recommendation}\n`);
-                            });
-                            
-                            // Show notification
+                        if (allIssues.length > 0) {
                             vscode.window.showWarningMessage(
-                                `SecureFlow: Found ${allIssues.length} security ${allIssues.length === 1 ? 'issue' : 'issues'} in your code changes.`,
-                                'View Details'
-                            ).then(selection => {
-                                if (selection === 'View Details') {
-                                    outputChannel.show(true);
-                                }
-                            });
+                                `SecureFlow: Found ${allIssues.length} security ${allIssues.length === 1 ? 'issue' : 'issues'} in your code changes.`
+                            );
                         }
                     }
                 );
@@ -241,8 +211,52 @@ export function registerSecureFlowReviewCommand(
         }
     );
     
-    // Add to subscriptions
     context.subscriptions.push(statusBarItem, reviewCommand);
+}
+
+function updateWebview(panel: vscode.WebviewPanel, summary: string, issues: Array<{issue: SecurityIssue, filePath: string, startLine: number}>) {
+    const html = `<!DOCTYPE html>
+    <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .summary { margin-bottom: 20px; font-size: 1.2em; }
+                .issue { 
+                    background: #f3f3f3; 
+                    padding: 15px; 
+                    margin-bottom: 15px; 
+                    border-radius: 5px;
+                    border-left: 4px solid #cc0000;
+                }
+                .issue-title { font-weight: bold; color: #cc0000; }
+                .issue-location { color: #666; margin: 5px 0; }
+                .issue-severity { 
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 3px;
+                    background: #ff9999;
+                    color: white;
+                    font-size: 0.9em;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="summary">${summary}</div>
+            ${issues.map((item, index) => `
+                <div class="issue">
+                    <div class="issue-title">${item.issue.title}</div>
+                    <div class="issue-location">
+                        ${path.basename(item.filePath)} (Line ${item.startLine})
+                    </div>
+                    <div class="issue-severity">${item.issue.severity}</div>
+                    <p>${item.issue.description}</p>
+                    <p><strong>Recommendation:</strong> ${item.issue.recommendation}</p>
+                </div>
+            `).join('')}
+        </body>
+    </html>`;
+
+    panel.webview.html = html;
 }
 
 // Interface for git change information

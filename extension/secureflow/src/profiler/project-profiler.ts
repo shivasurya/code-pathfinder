@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { AIClientFactory } from '../clients';
 import { AIClient } from '../clients/ai-client';
-import { getPromptForAppType } from '../prompts/prompt-loader';
 import { loadPrompt } from '../prompts/prompt-loader';
 import { SettingsManager } from '../settings/settings-manager';
 
@@ -90,8 +89,8 @@ export class ProjectProfiler {
       const selectedModel = this.settingsManager.getSelectedAIModel();
       this.aiClient = AIClientFactory.getClient(selectedModel);
     } else {
-      // Default to OpenAI if settings manager is not provided
-      this.aiClient = AIClientFactory.getClient('openai');
+      // Default to Claude if settings manager is not provided
+      this.aiClient = AIClientFactory.getClient('claude-3-5-sonnet-20241022');
     }
   }
 

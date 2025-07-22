@@ -1,0 +1,217 @@
+body {
+    padding: 12px;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    background-color: var(--vscode-editor-background);
+}
+
+h1 {
+    font-size: 1.1em;
+    margin-bottom: 0.8em;
+    color: var(--vscode-editor-foreground);
+}
+
+.select-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+select {
+    flex: 1;
+    padding: 6px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: codicon;
+    font-size: 16px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.action-btn:hover {
+    opacity: 1;
+    background: var(--vscode-button-hoverBackground);
+}
+
+.delete-btn {
+    color: var(--vscode-errorForeground);
+}
+
+.refresh-btn {
+    color: var(--vscode-button-foreground);
+}
+
+.profile-details {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 4px;
+}
+
+.profile-details h2 {
+    font-size: 1em;
+    margin: 0 0 8px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-details .actions {
+    display: flex;
+    gap: 4px;
+}
+
+.profile-details .detail-row {
+    display: flex;
+    margin-bottom: 2px;
+    padding: 4px 6px;
+    border-radius: 3px;
+}
+
+.profile-details .label {
+    flex: 0 0 90px;
+    color: var(--vscode-foreground);
+    opacity: 0.7;
+    font-size: 0.9em;
+    padding-right: 8px;
+}
+
+.profile-details .value {
+    flex: 1;
+    color: var(--vscode-foreground);
+    font-size: 0.9em;
+    line-height: 1.3;
+}
+
+.profile-details .badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    margin: 0 4px 4px 0;
+}
+
+.empty-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    margin: 16px 0;
+    border: 1px dashed var(--vscode-panel-border);
+    border-radius: 8px;
+    gap: 20px;
+}
+
+.empty-state p {
+    margin: 0 0 8px 0;
+    opacity: 0.8;
+    font-size: 0.9em;
+    line-height: 1.4;
+    max-width: 280px;
+}
+
+.feature-list {
+    margin: 12px auto 16px;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.feature-item {
+    margin: 2px 0;
+    font-size: 0.9em;
+    line-height: 1.3;
+    color: var(--vscode-foreground);
+    opacity: 0.9;
+    padding-left: 14px;
+    position: relative;
+    width: 100%;
+    text-align: left;
+}
+
+.feature-item::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    top: -1px;
+    color: var(--vscode-button-background);
+}
+
+.empty-state-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--vscode-button-background);
+    border-radius: 12px;
+    margin-bottom: 4px;
+}
+
+.empty-state-icon img {
+    width: 32px;
+    height: 32px;
+}
+
+.ai-disclaimer {
+    font-size: 0.8em;
+    opacity: 0.6;
+    border-top: 1px solid var(--vscode-panel-border);
+    padding-top: 12px;
+    margin-top: 4px;
+    max-width: 280px;
+}
+
+.scan-btn {
+    padding: 8px 16px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.scan-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.scan-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
