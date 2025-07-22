@@ -211,6 +211,137 @@ select {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+.profile-card {
+    background: var(--vscode-editor-background);
+    border-radius: 12px;
+    padding: 20px 18px 16px 18px;
+    margin: 0 auto;
+    max-width: 340px;
+    min-width: 220px;
+    border: 1px solid var(--vscode-panel-border);
+    transition: box-shadow 0.2s;
+}
+
+.profile-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    gap: 8px;
+}
+
+.profile-card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.profile-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.profile-action-btn {
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+}
+
+.profile-action-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+    color: var(--vscode-button-foreground);
+}
+
+.profile-trash-icon {
+    display: flex;
+    align-items: center;
+    color: var(--vscode-errorForeground);
+    margin-left: 0;
+}
+
+.profile-action-btn:active .profile-trash-icon {
+    color: var(--vscode-editor-foreground);
+}
+
+.profile-card-naked {
+    background: none;
+    border-radius: 10px;
+    box-shadow: none;
+    padding: 20px 0 10px 0;
+    margin: 0 auto;
+    max-width: 340px;
+    min-width: 220px;
+    border: none;
+}
+
+.profile-card-divider {
+    border-bottom: 1px solid var(--vscode-panel-border);
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.profile-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.profile-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.97em;
+    padding: 2px 0;
+}
+
+.profile-card-label {
+    color: var(--vscode-foreground);
+    opacity: 0.7;
+    min-width: 90px;
+    font-weight: 500;
+}
+
+.profile-card-value {
+    color: var(--vscode-foreground);
+    text-align: right;
+    font-weight: 400;
+    word-break: break-all;
+}
+
+.profile-card-path {
+    font-size: 0.92em;
+    opacity: 0.8;
+}
+
+.profile-badge {
+    display: inline-block;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-size: 0.88em;
+    margin-right: 4px;
+    margin-bottom: 2px;
+    font-weight: 500;
+}
+
+.profile-badge-confidence {
+    background: #2ecc40;
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
