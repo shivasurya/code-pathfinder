@@ -135,6 +135,115 @@
                     </div>
                 </div>
             </div>
+            <div class="profile-tabs-section">
+                <div class="profile-tabs">
+                    <button class="profile-tab active" id="tab-health">Security Health</button>
+                    <button class="profile-tab" id="tab-history">Scan History</button>
+                </div>
+                <div class="profile-tab-content" id="tabContent-health">
+                    <div class="health-summary-v2">
+                        <div class="health-score-v2">
+                            <div class="health-score-circle">
+                                <span class="health-score-value">D</span>
+                                <span class="health-score-label">Fair</span>
+                            </div>
+                        </div>
+                        <div class="health-severity-badges">
+                            <div class="severity-badge critical"><span class="sev-icon">&#9888;</span> Critical</div>
+                            <div class="severity-badge critical-count">1</div>
+                            <div class="severity-badge high"><span class="sev-icon">&#9888;</span> High</div>
+                            <div class="severity-badge high-count">2</div>
+                            <div class="severity-badge medium"><span class="sev-icon">&#9888;</span> Medium</div>
+                            <div class="severity-badge medium-count">4</div>
+                        </div>
+                    </div>
+                    <div class="scan-history-title">Reported Issues</div>
+                    <div class="scan-history-list-v2">
+                        <div class="scan-history-item-v2 critical">
+                            <span class="scan-icon critical">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Critical] Remote Code Execution in /api/upload</div>
+                                <div class="scan-meta">Detected: Today, 5:12 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 high">
+                            <span class="scan-icon high">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[High] SQL Injection in /user/login</div>
+                                <div class="scan-meta">Detected: Today, 4:50 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Insecure Cookie Flag</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] XML External Entity (XXE) Injection</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Server-side Request Forgery (SSRF)</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Server Misconfiguration</div>
+                                <div class="scan-meta">Detected: Yesterday, 8:10 PM</div>
+                            </div>
+                        </div>
+                        <div class="scan-history-item-v2 medium">
+                            <span class="scan-icon medium">&#9888;</span>
+                            <div>
+                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
+                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="profile-tab-content" id="tabContent-history" style="display:none;">
+                    <div class="scan-history-list">
+                        <div class="scan-history-item diff">
+                            <span class="scan-type">Diff Scan</span>
+                            <span class="scan-desc">#1 Code change diff scan</span>
+                            <span class="scan-time">Today, 6:26 PM</span>
+                        </div>
+                        <div class="scan-history-item full">
+                            <span class="scan-type">Full Scan</span>
+                            <span class="scan-desc">#2 Full scan</span>
+                            <span class="scan-time">Yesterday, 3:10 PM</span>
+                        </div>
+                        <div class="scan-history-item diff">
+                            <span class="scan-type">Diff Scan</span>
+                            <span class="scan-desc">#3 Code change diff scan</span>
+                            <span class="scan-time">Jul 20, 10:45 AM</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
         // Attach event listeners to new action buttons
         document.getElementById('deleteProfileCard').onclick = () => {
@@ -154,6 +263,23 @@
                     profileId: selectedId
                 });
             }
+        };
+        // Tab switching logic
+        const tabHealth = document.getElementById('tab-health');
+        const tabHistory = document.getElementById('tab-history');
+        const tabContentHealth = document.getElementById('tabContent-health');
+        const tabContentHistory = document.getElementById('tabContent-history');
+        tabHealth.onclick = () => {
+            tabHealth.classList.add('active');
+            tabHistory.classList.remove('active');
+            tabContentHealth.style.display = '';
+            tabContentHistory.style.display = 'none';
+        };
+        tabHistory.onclick = () => {
+            tabHistory.classList.add('active');
+            tabHealth.classList.remove('active');
+            tabContentHistory.style.display = '';
+            tabContentHealth.style.display = 'none';
         };
     }
 
