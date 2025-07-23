@@ -14,7 +14,7 @@ interface GeminiCompletionResponse {
 
 export class GeminiClient extends HttpClient implements AIClient {
     private static readonly API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    private defaultModel = 'gemini-pro';
+    private defaultModel = 'gemini-2.5-pro';
 
     /**
      * Send a request to the Google Gemini API
@@ -41,8 +41,8 @@ export class GeminiClient extends HttpClient implements AIClient {
                     }
                 ],
                 generationConfig: {
-                    temperature: options.temperature || 0.7,
-                    maxOutputTokens: options.maxTokens || 500,
+                    temperature: options.temperature || 0,
+                    maxOutputTokens: options.maxTokens || 2048,
                 }
             },
             {

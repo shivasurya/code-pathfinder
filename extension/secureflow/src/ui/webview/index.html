@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureFlow AI</title>
+    <link rel="stylesheet" href="{{cssPath}}" />
+</head>
+<body>
+    <h3>SecureFlow Profiles</h3>
+    <div id="mainContent">
+        <div class="select-container" style="display: none;">
+            <select id="profileSelect">
+                <option value="">Select a profile...</option>
+            </select>
+            <button id="scanAll" class="action-btn refresh-btn" title="Scan All Profiles">↻</button>
+        </div>
+        <div id="emptyState" class="empty-state">
+            <div class="empty-state-icon">
+                <img src="{{iconPath}}" alt="SecureFlow" />
+            </div>
+            <div>
+                <h3 style="margin: 0 0 12px 0;">Welcome to SecureFlow AI</h3>
+                <p>Let's analyze your workspace to provide tailored security insights. SecureFlow will:</p>
+                <div class="feature-list">
+                    <div class="feature-item">Review code for security risks</div>
+                    <div class="feature-item">Surface potential vulnerabilities</div>
+                    <div class="feature-item">Assist with threat modeling</div>
+                    <div class="feature-item">Recommend security fixes</div>
+                </div>
+            </div>
+            <button id="scanWorkspace" class="scan-btn">
+                <span style="font-family: codicon;">⚡</span>
+                Secure Your Workspace
+            </button>
+            <div class="ai-disclaimer">
+                SecureFlow is powered by AI. While our analysis strives to be thorough, please review all suggestions carefully before implementation.
+            </div>
+        </div>
+        <div id="profileDetails" class="profile-details" style="display: none;">
+            <h2>
+                Profile Details
+                <div class="actions">
+                    <button id="rescanProfile" class="action-btn refresh-btn" title="Rescan Profile">↻</button>
+                    <button id="deleteProfile" class="action-btn delete-btn" title="Delete Profile">✖</button>
+                </div>
+            </h2>
+            <div id="profileContent"></div>
+        </div>
+    </div>
+    <script src="{{jsPath}}"></script>
+</body>
+</html>

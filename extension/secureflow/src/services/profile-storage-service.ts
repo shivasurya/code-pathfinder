@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { ApplicationProfile } from '../profiler/project-profiler';
+import { ApplicationProfile, ProjectProfiler } from '../profiler/project-profiler';
 import { ProfileStoreData, StoredProfile } from '../models/profile-store';
+import { SettingsManager } from '../settings/settings-manager';
 
 /**
  * Service for managing application profiles storage
@@ -219,5 +220,98 @@ export class ProfileStorageService {
     };
     
     await this.saveData();
+  }
+
+  /**
+   * Scan the current workspace and create/update profiles
+   */
+  public async scanWorkspace(): Promise<void> {
+    // Get the active workspace folders
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      throw new Error('No workspace folders found');
+    }
+
+    // Clear any existing profiles for these workspaces
+    await this.clearWorkspaceProfiles(workspaceFolders.map(f => f.uri.toString()));
+    try {
+      // Create a project profiler instance for this folder
+      // get vscode context for settings
+      const settingsManager = new SettingsManager(this.context);
+      const profiler = new ProjectProfiler(workspaceFolders[0], settingsManager);
+
+      const secretAPIKey = await settingsManager.getApiKey();
+      if (!secretAPIKey) {
+        throw new Error('API Key is required for profiling');
+      }
+      // Profile the workspace
+      const profiles = await profiler.profileWorkspace(secretAPIKey);
+
+      // Store each detected profile
+      for (const profile of profiles) {
+        await this.storeProfile(profile, workspaceFolders[0].uri.toString());
+      }
+    } catch (error) {
+      console.error(`Error scanning workspace folder ${workspaceFolders[0].name}:`, error);
+    }
+  }
+
+  /**
+   * Clear profiles for specified workspace folders
+   */
+  private async clearWorkspaceProfiles(workspaceFolderUris: string[]): Promise<void> {
+    for (const uri of workspaceFolderUris) {
+      const profileIds = this.data.workspaceProfiles[uri] || [];
+      for (const id of profileIds) {
+        delete this.data.profiles[id];
+      }
+      delete this.data.workspaceProfiles[uri];
+    }
+    await this.saveData();
+  }
+
+  /**
+   * Rescan a specific profile
+   */
+  public async rescanProfile(profile: StoredProfile): Promise<StoredProfile | undefined> {
+    try {
+      // Get workspace folder for this profile
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.parse(profile.workspaceFolderUri));
+      if (!workspaceFolder) {
+        throw new Error('Workspace folder not found for profile');
+      }
+
+      const profiler = new ProjectProfiler(workspaceFolder);
+      const updatedProfiles = await profiler.profileWorkspace(profile.path);
+      
+      // Find matching profile from the rescan
+      const updatedProfile = updatedProfiles.find(p => 
+        p.path === profile.path && 
+        p.category === profile.category &&
+        p.name === profile.name
+      );
+
+      if (updatedProfile) {
+        // Store the updated profile
+        return await this.storeProfile(
+          updatedProfile, 
+          profile.workspaceFolderUri,
+          profile.isActive
+        );
+      }
+
+      return undefined;
+    } catch (error) {
+      console.error(`Error rescanning profile ${profile.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Rescan all profiles in all workspaces
+   */
+  public async rescanAllProfiles(): Promise<void> {
+    // Just use scanWorkspace as it handles everything we need
+    await this.scanWorkspace();
   }
 }

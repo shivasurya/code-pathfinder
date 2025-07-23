@@ -1,14 +1,66 @@
 {
   "name": "secureflow",
-  "displayName": "secureflow",
-  "description": "Your AI security co-pilot for smarter, safer code, right in your editor",
+  "displayName": "SecureFlow Code Reviewer",
+  "description": "AI-powered security copilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
   "version": "0.0.1",
+  "publisher": "codepathfinder",
+  "author": {
+    "name": "Shivasurya",
+    "email": "support@codepathfinder.dev"
+  },
+  "license": "AGPL-3.0",
+  "homepage": "https://codepathfinder.dev/secureflow-ai",
+  "bugs": {
+    "url": "https://github.com/shivasurya/code-pathfinder/issues",
+    "email": "support@codepathfinder.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shivasurya/code-pathfinder"
+  },
+  "keywords": [
+    "security",
+    "code-analysis",
+    "ai",
+    "threat-modeling",
+    "vulnerability-detection",
+    "static-analysis",
+    "secure-coding",
+    "devsecops",
+    "code-review",
+    "sast",
+    "security-scanner",
+    "security-automation",
+    "code-security",
+    "security-testing",
+    "vulnerability-scanner",
+    "threat-detection",
+    "security-analysis",
+    "secure-development",
+    "application-security",
+    "cybersecurity",
+    "code-quality",
+    "security-tools",
+    "security-best-practices",
+    "security-review",
+    "continuous-security",
+    "vscode-security",
+    "security-extension",
+    "code-inspection",
+    "security-insights"
+    ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.102.0"
   },
   "categories": [
-    "Other",
-    "Linters"
+    "AI",
+    "Linters",
+    "Machine Learning"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -37,15 +89,24 @@
       "title": "SecureFlow",
       "properties": {
         "secureflow.AIModel": {
-          "type": "string",
-            "default": "openai",
-            "enum": ["openai", "claude", "gemini", "claude-3-5-sonnet-20241022"],
-          "enumDescriptions": [
-            "Use OpenAI models for security analysis",
-            "Use Anthropic Claude models for security analysis",
-            "Use Google Gemini models for security analysis",
-            "Use Anthropic Claude 3.5 Sonnet models for security analysis"
-          ],
+            "type": "string",
+            "default": "claude-3-5-sonnet-20241022",
+            "enum": ["gpt-4o", "gpt-4o-mini", "o1-mini", "o1", "gpt-4.1-2025-04-14", "o3-mini-2025-01-31", "gemini-2.5-pro", "gemini-2.5-flash", "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+            "enumDescriptions": [
+            "OpenAI GPT-4 O",
+            "OpenAI GPT-4 O Mini ",
+            "OpenAI O1 Mini Model",
+            "OpenAI O1 Model",
+            "OpenAI GPT-4.1 (2025 Version)",
+            "OpenAI O3 Mini (2025 Version)",
+            "Google Gemini 2.5 Pro",
+            "Google Gemini 2.5 Flash",
+            "Anthropic Claude 4 Opus (2025 Version)",
+            "Anthropic Claude 4 Sonnet (2025 Version)",
+            "Anthropic Claude 3.7 Sonnet (2025 Version)",
+            "Anthropic Claude 3.5 Sonnet (2024 Version)",
+            "Anthropic Claude 3.5 Haiku (2024 Version)"
+            ],
           "description": "Select the AI Model to use for security analysis"
         },
         "secureflow.APIKey": {
