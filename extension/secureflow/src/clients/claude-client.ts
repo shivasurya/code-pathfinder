@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { AIClient, AIClientOptions, AIResponse, AIResponseChunk } from './ai-client';
 import { HttpClient } from './http-client';
 
@@ -21,7 +22,9 @@ export class ClaudeClient extends HttpClient implements AIClient {
      */
     public async sendRequest(prompt: string, options?: AIClientOptions): Promise<AIResponse> {
         if (!options?.apiKey) {
-            throw new Error('Anthropic Claude API key is required');
+            const errorMsg = 'API key is required for the selected AI provider. Please set it in the extension settings.';
+            vscode.window.showErrorMessage(errorMsg);
+            throw new Error(errorMsg);
         }
 
         const response = await this.post(

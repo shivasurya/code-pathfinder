@@ -20,66 +20,69 @@ export async function getGitChanges(): Promise<GitChangeInfo[]> {
         const repoPath = workspaceFolders[0].uri.fsPath;
         const changes: GitChangeInfo[] = [];
 
-        // Construct the git diff command
-        let command = 'git diff --unified=0';
-
-        // Execute git command
-        const output = await executeCommand(command, repoPath);
-        
-        // Parse the git diff output
-        let currentFile: string | null = null;
-        
-        const lines = output.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+        // Process both staged and unstaged changes
+        const processDiff = async (staged: boolean): Promise<void> => {
+            const command = `git diff ${staged ? '--cached' : ''} --unified=0 --no-color`;
+            const output = await executeCommand(command, repoPath);
             
-            // Check for file header
-            if (line.startsWith('diff --git')) {
-                const match = line.match(/diff --git a\/(.*) b\/(.*)/);
-                if (match && match[2]) {
-                    currentFile = match[2];
-                }
-                continue;
-            }
+            if (!output.trim()) return;
             
-            // Check for hunk header
-            if (line.startsWith('@@') && currentFile) {
-                const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-                if (match) {
-                    const startLine = parseInt(match[3], 10);
-                    const lineCount = match[4] ? parseInt(match[4], 10) : 1;
-                    
-                    // Collect the changed lines content
-                    let content = '';
-                    let j = i + 1;
-                    let collectedLines = 0;
-                    
-                    while (j < lines.length && collectedLines < lineCount) {
-                        const nextLine = lines[j];
-                        if (!nextLine.startsWith('-') && 
-                            !nextLine.startsWith('diff --git') && 
-                            !nextLine.startsWith('@@')) {
-                            // Include the line if it's an addition or context line
-                            if (nextLine.startsWith('+')) {
-                                content += nextLine.substring(1) + '\n';
-                                collectedLines++;
-                            } else {
-                                content += nextLine + '\n';
-                                collectedLines++;
-                            }
-                        }
-                        j++;
+            let currentFile: string | null = null;
+            const lines = output.split('\n');
+            let i = 0;
+            
+            while (i < lines.length) {
+                const line = lines[i];
+                
+                // Check for file header
+                if (line.startsWith('diff --git')) {
+                    const match = line.match(/diff --git a\/(.*?) b\/(.*)/);
+                    if (match && match[2]) {
+                        currentFile = match[2].trim();
                     }
-                    
-                    changes.push({
-                        filePath: path.join(repoPath, currentFile),
-                        startLine,
-                        lineCount,
-                        content: content.trim()
-                    });
+                    i++;
+                    continue;
                 }
+                
+                // Check for hunk header
+                if (line.startsWith('@@') && currentFile) {
+                    const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+                    if (match) {
+                        const startLine = parseInt(match[3], 10);
+                        let addedLines = 0;
+                        let content = '';
+                        
+                        // Process the hunk content
+                        i++; // Move to first line of hunk
+                        while (i < lines.length && !lines[i].startsWith('diff --git') && !lines[i].startsWith('@@')) {
+                            const hunkLine = lines[i];
+                            if (hunkLine.startsWith('+') && !hunkLine.startsWith('+++')) {
+                                content += hunkLine.substring(1) + '\n';
+                                addedLines++;
+                            }
+                            i++;
+                        }
+                        
+                        if (addedLines > 0) {
+                            changes.push({
+                                filePath: path.join(repoPath, currentFile),
+                                startLine,
+                                lineCount: addedLines,
+                                content: content.trim()
+                            });
+                        }
+                        
+                        continue; // Don't increment i again as we already did in the loop
+                    }
+                }
+                
+                i++;
             }
-        }
+        };
+        
+        // Process both staged and unstaged changes
+        await processDiff(true);  // Staged changes
+        await processDiff(false); // Unstaged changes
         
         return changes;
     } catch (error) {
