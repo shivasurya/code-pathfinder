@@ -34,36 +34,12 @@ export class SettingsManager {
     }
     
     /**
-     * Get the API Key for the selected model
+     * Get the API Key from secure storage
+     * @returns The API key if found, otherwise undefined
      */
     public async getApiKey(): Promise<string | undefined> {
-        const key = `secureflow.APIKey`;
-
-        // Try to get the key from secure storage first
-        let apiKey = await this.context.secrets.get(key);
-        
-        // If not found in secure storage, check if it's in settings
-        if (!apiKey) {
-            const config = vscode.workspace.getConfiguration('secureflow');
-            const configKey = config.get<string>('APIKey');
-            
-            // If found in settings, store it securely and clear from settings
-            if (configKey) {
-                await this.context.secrets.store(key, configKey);
-                // Clear the key from settings to keep it secure
-                await config.update('APIKey', '', vscode.ConfigurationTarget.Global);
-                apiKey = configKey;
-            }
-        }
-        
-        return apiKey;
-    }
-    
-    /**
-     * Store API Key securely
-     */
-    public async storeApiKey(apiKey: string): Promise<void> {
-        const key = `secureflow.APIKey`;
-        await this.context.secrets.store(key, apiKey);
+        // just get from workspace settings
+        const config = vscode.workspace.getConfiguration('secureflow');
+        return config.get<string>('APIKey');
     }
 }

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { ProjectProfiler, ApplicationProfile } from './project-profiler';
 import { getPromptPath } from '../prompts';
-import { loadPrompt } from '../prompts/prompt-loader';
 import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 

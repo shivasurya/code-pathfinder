@@ -12,29 +12,70 @@ import { SecureFlowExplorer } from './ui/secureflow-explorer';
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	console.log('SecureFlow extension is now active!');
+	
+	// Show activation message to user for debugging
+	vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
 
 	// Create an output channel for security diagnostics
 	const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
+	outputChannel.appendLine('SecureFlow extension starting...');
 	
-	// Initialize the settings manager
-	const settingsManager = new SettingsManager(context);
-	
-	// Register workspace profiler command
-	const workspaceProfilerCommand = new WorkspaceProfilerCommand(context);
-	const workspaceProfilerDisposable = workspaceProfilerCommand.register();
-	context.subscriptions.push(workspaceProfilerDisposable);
-	
-	// Register analyze selection command
-	const analyzeSelectionCommand = registerAnalyzeSelectionCommand(outputChannel, settingsManager);
-	
-	// Register the git changes review command and status bar button
-	registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
+	try {
+		// Initialize the settings manager
+		const settingsManager = new SettingsManager(context);
+		outputChannel.appendLine('Settings manager initialized');
+		
+		// Register workspace profiler command
+		const workspaceProfilerCommand = new WorkspaceProfilerCommand(context);
+		const workspaceProfilerDisposable = workspaceProfilerCommand.register();
+		context.subscriptions.push(workspaceProfilerDisposable);
+		outputChannel.appendLine('Workspace profiler command registered');
+		
+		// Register analyze selection command
+		const analyzeSelectionCommand = registerAnalyzeSelectionCommand(outputChannel, settingsManager);
+		outputChannel.appendLine('Analyze selection command registered');
+		
+		// Register the git changes review command and status bar button
+		registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
+		outputChannel.appendLine('Git review command registered');
 
-	// Add commands to context subscriptions
-	context.subscriptions.push(analyzeSelectionCommand);
+		// Register set API key command
+		const setApiKeyCommand = vscode.commands.registerCommand('secureflow.setApiKey', async () => {
+			const apiKey = await vscode.window.showInputBox({
+				prompt: 'Enter your AI provider API Key',
+				password: true,
+				ignoreFocusOut: true,
+				validateInput: value => {
+					if (!value) return 'API key cannot be empty';
+					return null;
+				}
+			});
 
-	// Register the SecureFlow Explorer webview
-	SecureFlowExplorer.register(context);
+			if (apiKey) {
+				await context.secrets.store('secureflow.APIKey', apiKey);
+				vscode.window.showInformationMessage('API key saved successfully!');
+			}
+		});
+
+		// Add commands to context subscriptions
+		context.subscriptions.push(
+			analyzeSelectionCommand,
+			setApiKeyCommand
+		);
+
+		// Register the SecureFlow Explorer webview
+		SecureFlowExplorer.register(context);
+		outputChannel.appendLine('SecureFlow Explorer registered');
+		
+		outputChannel.appendLine('SecureFlow extension fully activated!');
+		console.log('SecureFlow extension fully activated!');
+		
+	} catch (error) {
+		const errorMessage = `SecureFlow activation failed: ${error}`;
+		outputChannel.appendLine(errorMessage);
+		console.error(errorMessage);
+		vscode.window.showErrorMessage(errorMessage);
+	}
 }
 
 function registerAnalyzeSelectionCommand(

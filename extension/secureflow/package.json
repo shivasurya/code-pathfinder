@@ -18,6 +18,11 @@
     "type": "git",
     "url": "https://github.com/shivasurya/code-pathfinder"
   },
+  "qna": "marketplace",
+  "pricing": "Free",
+  "sponsor": {
+    "url": "https://github.com/sponsors/shivasurya"
+  },
   "keywords": [
     "security",
     "code-analysis",
@@ -55,15 +60,16 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.102.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
-    "AI",
+    "Other",
     "Linters",
     "Machine Learning"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -72,7 +78,7 @@
         {
           "id": "secureflow-explorer",
           "title": "SecureFlow",
-          "icon": "resources/dark/shield.svg"
+          "icon": "$(shield)"
         }
       ]
     },
@@ -112,7 +118,8 @@
         "secureflow.APIKey": {
           "type": "string",
           "default": "",
-          "description": "API Key for the selected AI Model (stored securely)"
+          "description": "API Key for the selected AI provider",
+          "markdownDescription": "API Key for the selected AI provider. Get your API key from your AI provider's dashboard."
         }
       }
     },

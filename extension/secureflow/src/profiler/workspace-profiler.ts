@@ -92,8 +92,8 @@ export class WorkspaceProfiler {
       const selectedModel = this.settingsManager.getSelectedAIModel();
       this.aiClient = AIClientFactory.getClient(selectedModel);
     } else {
-      // Default to OpenAI if settings manager is not provided
-      this.aiClient = AIClientFactory.getClient('openai');
+      // Default to GPT-4o if settings manager is not provided
+      this.aiClient = AIClientFactory.getClient('gpt-4o');
     }
   }
 
