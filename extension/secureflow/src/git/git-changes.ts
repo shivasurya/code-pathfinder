@@ -187,22 +187,34 @@ export function registerSecureFlowReviewCommand(
                                 return undefined;
                             }
 
-                            // Find profiles whose path is a parent directory of the file path
+                            // Check if file is in a workspace folder
+                            const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+                            if (!workspaceFolder) {
+                                return undefined;
+                            }
+
+                            // Find profiles within the workspace
                             const relevantProfiles = allProfiles.filter(profile => {
-                                const profilePath = path.resolve(profile.path);
-                                const resolvedFilePath = path.resolve(filePath);
-                                return resolvedFilePath.startsWith(profilePath + path.sep) || resolvedFilePath === profilePath;
+                                const profileUri = vscode.Uri.parse(profile.workspaceFolderUri);
+                                const profileWorkspace = vscode.workspace.getWorkspaceFolder(profileUri);
+                                return profileWorkspace && profileWorkspace.uri.fsPath === workspaceFolder.uri.fsPath;
                             });
 
                             if (relevantProfiles.length === 0) {
                                 return undefined;
                             }
 
-                            // Return the profile with the longest matching path (most specific)
-                            return relevantProfiles.reduce((best, current) => {
-                                const bestPathLength = path.resolve(best.path).length;
-                                const currentPathLength = path.resolve(current.path).length;
-                                return currentPathLength > bestPathLength ? current : best;
+                            // Get relative path within workspace
+                            const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+
+                            // Find profile where file path falls under profile path
+                            return relevantProfiles.find(profile => {
+                                const normalizedProfilePath = profile.path === '/' ? '' : profile.path;
+                                const profilePathParts = normalizedProfilePath.split('/').filter(p => p);
+                                const filePathParts = relativePath.split(path.sep).filter(p => p);
+
+                                // Check if file path starts with profile path parts
+                                return profilePathParts.every((part, index) => filePathParts[index] === part);
                             });
                         };
 
