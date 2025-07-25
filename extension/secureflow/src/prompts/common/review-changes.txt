@@ -51,5 +51,30 @@ Review Guidelines:
    - Issues requiring unlikely preconditions
    - Platform/framework limitations
    - Legacy compatibility issues
+   - Frontend Vulnerabilities
+   - Race conditions
+   - Security Best Practices
+   - General Best Practices
+   - Accessibility issues
+   - Performance issues
+   - Code quality issues
+   - Documentation issues
 
 Provide actionable, practical feedback that helps developers understand and fix real security issues while maintaining code quality and performance.
+
+Review the following code for security issues and return a JSON array of issues found.
+Each issue should have the following format strictly:
+{
+    "title": "Issue title",
+    "severity": "Low|Medium|High|Critical",
+    "description": "Detailed description of the issue",
+    "recommendation": "How to fix the issue"
+}
+
+If no issues are found, return an empty array.
+
+Here's the context below for you to review structured as
+
+1. Profile Information of the application if available
+2. Diff of the code changes 
+3. Full code of the file if available for context

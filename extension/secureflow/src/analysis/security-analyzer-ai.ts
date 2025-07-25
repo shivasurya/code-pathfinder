@@ -21,20 +21,6 @@ export async function analyzeSecurityWithAI(
         
         // Construct the prompt for security analysis
         const prompt = `
-            You are a security expert analyzing code for vulnerabilities. 
-            Review the following code for security issues and return a JSON array of issues found.
-            Each issue should have the following format:
-            {
-                "title": "Issue title",
-                "severity": "Low|Medium|High|Critical",
-                "description": "Detailed description of the issue",
-                "recommendation": "How to fix the issue"
-            }
-            
-            If no issues are found, return an empty array.
-            
-            Here's the code to analyze:
-            
             \`\`\`
             ${code}
             \`\`\`
