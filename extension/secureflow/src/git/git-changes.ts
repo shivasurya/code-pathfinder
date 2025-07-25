@@ -4,6 +4,8 @@ import * as path from 'path';
 import { SecurityIssue } from '../models/security-issue';
 import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
 import { SettingsManager } from '../settings/settings-manager';
+import { ProfileStorageService } from '../services/profile-storage-service';
+import { StoredProfile } from '../models/profile-store';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
@@ -120,6 +122,8 @@ export function registerSecureFlowReviewCommand(
     outputChannel: vscode.OutputChannel,
     settingsManager: SettingsManager
 ): void {
+    // Initialize profile storage service
+    const profileService = new ProfileStorageService(context);
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right,
@@ -173,33 +177,137 @@ export function registerSecureFlowReviewCommand(
                             vscode.window.showInformationMessage('SecureFlow: No git changes found to scan.');
                             return;
                         }
-                        
-                        progress.report({ increment: 30, message: "Analyzing changes..." });
-                        
+
+                        // Get all stored profiles
+                        const allProfiles: StoredProfile[] = profileService.getAllProfiles();
+
+                        // Helper function to find the most relevant profile for a file path
+                        const findRelevantProfile = (filePath: string): StoredProfile | undefined => {
+                            if (allProfiles.length === 0) {
+                                return undefined;
+                            }
+
+                            // Find profiles whose path is a parent directory of the file path
+                            const relevantProfiles = allProfiles.filter(profile => {
+                                const profilePath = path.resolve(profile.path);
+                                const resolvedFilePath = path.resolve(filePath);
+                                return resolvedFilePath.startsWith(profilePath + path.sep) || resolvedFilePath === profilePath;
+                            });
+
+                            if (relevantProfiles.length === 0) {
+                                return undefined;
+                            }
+
+                            // Return the profile with the longest matching path (most specific)
+                            return relevantProfiles.reduce((best, current) => {
+                                const bestPathLength = path.resolve(best.path).length;
+                                const currentPathLength = path.resolve(current.path).length;
+                                return currentPathLength > bestPathLength ? current : best;
+                            });
+                        };
+
+                        // Group changes by file
+                        const changesByFile: { [filePath: string]: {diffs: string[], starts: number[]} } = {};
+                        for (const change of changes) {
+                            if (!changesByFile[change.filePath]) {
+                                changesByFile[change.filePath] = { diffs: [], starts: [] };
+                            }
+                            changesByFile[change.filePath].diffs.push(change.content);
+                            changesByFile[change.filePath].starts.push(change.startLine);
+                        }
+
                         let allIssues: Array<{issue: SecurityIssue, filePath: string, startLine: number}> = [];
-                        
-                        // Analyze each change
-                        for (let i = 0; i < changes.length; i++) {
-                            const change = changes[i];
-                            const issues = await performSecurityAnalysisAsync(change.content, selectedModel, await settingsManager.getApiKey());
+                        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+                        let consolidatedReviewContent = '';
+                        const fileMetadata: Array<{filePath: string, startLine: number}> = [];
+
+                        // Collect all profiles used
+                        const usedProfiles = new Set<StoredProfile>();
+
+                        // Build consolidated review content for all files
+                        for (const [filePath, {diffs, starts}] of Object.entries(changesByFile)) {
+                            const profile = findRelevantProfile(filePath);
+                            if (profile) {
+                                usedProfiles.add(profile);
+                            }
+
+                            // Store file metadata for later mapping
+                            fileMetadata.push({ filePath, startLine: starts[0] || 1 });
+
+                            consolidatedReviewContent += `\n=== FILE: ${filePath} ===\n`;
                             
-                            const mappedIssues = issues.map((issue: SecurityIssue) => ({
-                                issue,
-                                filePath: change.filePath,
-                                startLine: change.startLine
-                            }));
+                            if (profile) {
+                                consolidatedReviewContent += `/*\n[SECUREFLOW PROFILE CONTEXT]\nName: ${profile.name}\nCategory: ${profile.category}\nPath: ${profile.path}\nLanguages: ${profile.languages.join(', ')}\nFrameworks: ${profile.frameworks.join(', ')}\nBuild Tools: ${profile.buildTools.join(', ')}\nEvidence: ${profile.evidence.join('; ')}\n*/\n`;
+                            }
                             
-                            allIssues = [...allIssues, ...mappedIssues];
+                            // Attach all diffs for the file
+                            for (const diff of diffs) {
+                                consolidatedReviewContent += `<DIFF>\n${diff}\n</DIFF>\n`;
+                            }
                             
+                            // Attach full file content
+                            let fullFileContent = '';
+                            try {
+                                fullFileContent = (await vscode.workspace.openTextDocument(filePath)).getText();
+                            } catch (e) {
+                                fullFileContent = '// Unable to load full file content';
+                            }
+                            consolidatedReviewContent += `\n/* [FULL FILE CONTENT] */\n${fullFileContent}\n`;
+                            consolidatedReviewContent += `\n=== END FILE: ${filePath} ===\n\n`;
+
                             progress.report({ 
-                                increment: 60 / changes.length, 
-                                message: `Analyzed ${i + 1}/${changes.length} chunks...` 
+                                increment: 30 / Object.keys(changesByFile).length,
+                                message: `Preparing analysis...`
                             });
                         }
+
+                        // Add summary of all profiles at the beginning
+                        let profileSummary = '';
+                        if (usedProfiles.size > 0) {
+                            profileSummary = `/*\n[SECUREFLOW ANALYSIS CONTEXT]\nAnalyzing ${Object.keys(changesByFile).length} files across ${usedProfiles.size} application profile(s):\n`;
+                            usedProfiles.forEach(profile => {
+                                profileSummary += `- ${profile.name} (${profile.category}) at ${profile.path}\n`;
+                            });
+                            profileSummary += `*/\n\n`;
+                        }
+
+                        const finalReviewContent = profileSummary + consolidatedReviewContent;
+                        outputChannel.appendLine(finalReviewContent);
+
+                        progress.report({ 
+                            increment: 30,
+                            message: `Performing security analysis...`
+                        });
+
+                        // Make single API call with all consolidated content
+                        const issues = await performSecurityAnalysisAsync(finalReviewContent, selectedModel, await settingsManager.getApiKey());
                         
+                        // Map issues back to files (best effort - use first file if unable to determine)
+                        const mappedIssues = issues.map((issue: SecurityIssue, index: number) => {
+                            // Try to find the most relevant file based on issue content or use first file as fallback
+                            let relevantFile = fileMetadata[0]; // fallback to first file
+                            
+                            // Simple heuristic: if issue mentions a filename, use that
+                            for (const fileMeta of fileMetadata) {
+                                const fileName = path.basename(fileMeta.filePath);
+                                if (issue.description.includes(fileName) || issue.title.includes(fileName)) {
+                                    relevantFile = fileMeta;
+                                    break;
+                                }
+                            }
+                            
+                            return {
+                                issue,
+                                filePath: relevantFile.filePath,
+                                startLine: relevantFile.startLine
+                            };
+                        });
+                        
+                        allIssues = mappedIssues;
+
                         // Update WebView with results
                         updateWebview(resultsPanel!, `Scan complete! Found ${allIssues.length} issues.`, allIssues);
-                        
+
                         if (allIssues.length > 0) {
                             vscode.window.showWarningMessage(
                                 `SecureFlow: Found ${allIssues.length} security ${allIssues.length === 1 ? 'issue' : 'issues'} in your code changes.`
@@ -213,7 +321,6 @@ export function registerSecureFlowReviewCommand(
             }
         }
     );
-    
     context.subscriptions.push(statusBarItem, reviewCommand);
 }
 
