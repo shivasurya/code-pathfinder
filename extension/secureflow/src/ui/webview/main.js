@@ -4,8 +4,9 @@
     const profileDetails = document.getElementById('profileDetails');
     const profileContent = document.getElementById('profileContent');
 
-    // Request initial profiles
+    // Request initial profiles and scans
     vscode.postMessage({ type: 'getProfiles' });
+    vscode.postMessage({ type: 'getScans' });
 
     // Handle messages from extension
     window.addEventListener('message', event => {
@@ -29,6 +30,9 @@
             case 'updateProfiles':
                 updateProfileList(message.profiles);
                 break;
+            case 'updateScans':
+                updateScanList(message.scans);
+                break;
             case 'profileDetails':
                 displayProfileDetails(message.profile);
                 break;
@@ -47,36 +51,39 @@
     function updateProfileList(profiles) {
         const selectContainer = document.querySelector('.select-container');
         const emptyState = document.getElementById('emptyState');
-        const profileDetails = document.getElementById('profileDetails');
 
-        // Clear existing profile options
-        while (profileSelect.options.length > 1) {
-            profileSelect.remove(1);
-        }
+        // Reset UI state
+        profileDetails.style.display = 'none';
+        profileCardContainer.style.display = 'none';
+        profileSelect.innerHTML = '';
 
         if (!profiles || profiles.length === 0) {
+            // No profiles - show empty state
             selectContainer.style.display = 'none';
             emptyState.style.display = 'flex';
-            showNoProfileDetails();
             return;
         }
 
+        // We have profiles - show select container and hide empty state
         selectContainer.style.display = 'flex';
         emptyState.style.display = 'none';
 
-        // Add new profile options
-        profiles.forEach(profile => {
+        // Add profile options and select first one
+        profiles.forEach((profile, index) => {
             const option = document.createElement('option');
             option.value = profile.id;
             option.textContent = profile.name || 'Unnamed Profile';
             profileSelect.appendChild(option);
-        });
 
-        // Auto-select first profile if available
-        profileSelect.value = profiles[0].id;
-        vscode.postMessage({
-            type: 'profileSelected',
-            profileId: profiles[0].id
+            // Auto-select first profile
+            if (index === 0) {
+                option.selected = true;
+                // Trigger profile selection
+                vscode.postMessage({
+                    type: 'profileSelected',
+                    profileId: profile.id
+                });
+            }
         });
     }
 
@@ -87,6 +94,103 @@
         profileCardContainer.id = 'profileCardContainer';
         profileDetails.parentNode.insertBefore(profileCardContainer, profileDetails.nextSibling);
     }
+
+    // Format timestamp to human readable format
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const isToday = date.toDateString() === now.toDateString();
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        const timeStr = date.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+        });
+
+        if (isToday) {
+            return `Today at ${timeStr}`;
+        } else if (isYesterday) {
+            return `Yesterday at ${timeStr}`;
+        } else {
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'short',
+                month: 'short', 
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+    }
+
+    // Store scans globally so they can be used when profile details are shown
+    let globalScans = [];
+
+    // Update scan list
+    function updateScanList(scans) {
+        globalScans = scans || [];
+        
+        const scanList = document.getElementById('scanList');
+        const noScans = document.getElementById('noScans');
+        
+        // If elements don't exist yet (profile not selected), just store the data
+        if (!scanList || !noScans) {
+            return;
+        }
+        
+        if (!scans || scans.length === 0) {
+            noScans.style.display = 'block';
+            // Clear any existing scan items
+            const existingItems = scanList.querySelectorAll('.scan-item');
+            existingItems.forEach(item => item.remove());
+            return;
+        }
+        
+        noScans.style.display = 'none';
+        
+        // Clear existing scan items
+        const existingItems = scanList.querySelectorAll('.scan-item');
+        existingItems.forEach(item => item.remove());
+        
+        // Show only the 5 most recent scans
+        const recentScans = scans.slice(0, 5);
+        
+        recentScans.forEach(scan => {
+            const scanItem = document.createElement('div');
+            scanItem.className = 'scan-item';
+            
+            const issueCount = scan.issues.length;
+            const issueClass = issueCount > 0 ? 'has-issues' : 'no-issues';
+            const issueText = issueCount > 0 ? `${issueCount} issue${issueCount > 1 ? 's' : ''}` : 'No issues';
+            
+            scanItem.innerHTML = `
+                <div class="scan-info">
+                    <div class="scan-title">Scan #${scan.scanNumber}</div>
+                    <div class="scan-meta">
+                        <span>${formatTimestamp(scan.timestamp)}</span>
+                        <span>${scan.fileCount} files</span>
+                        <span class="scan-issues ${issueClass}">${issueText}</span>
+                    </div>
+                </div>
+                <div class="scan-actions">
+                    <button class="view-scan-btn" onclick="viewScan(${scan.scanNumber})">
+                        <span style="font-family: codicon;">→</span> View
+                    </button>
+                </div>
+            `;
+            
+            scanList.appendChild(scanItem);
+        });
+    }
+
+    // View scan function (global scope)
+    window.viewScan = function(scanNumber) {
+        vscode.postMessage({ type: 'viewScan', scanNumber: scanNumber });
+    };
 
     // Display profile details
     function displayProfileDetails(profile) {
@@ -137,109 +241,16 @@
             </div>
             <div class="profile-tabs-section">
                 <div class="profile-tabs">
-                    <button class="profile-tab active" id="tab-health">Security Health</button>
-                    <button class="profile-tab" id="tab-history">Scan History</button>
+                    <button class="profile-tab active" id="tab-history">Scan History</button>
                 </div>
-                <div class="profile-tab-content" id="tabContent-health">
-                    <div class="health-summary-v2">
-                        <div class="health-score-v2">
-                            <div class="health-score-circle">
-                                <span class="health-score-value">D</span>
-                                <span class="health-score-label">Fair</span>
-                            </div>
-                        </div>
-                        <div class="health-severity-badges">
-                            <div class="severity-badge critical"><span class="sev-icon">&#9888;</span> Critical</div>
-                            <div class="severity-badge critical-count">1</div>
-                            <div class="severity-badge high"><span class="sev-icon">&#9888;</span> High</div>
-                            <div class="severity-badge high-count">2</div>
-                            <div class="severity-badge medium"><span class="sev-icon">&#9888;</span> Medium</div>
-                            <div class="severity-badge medium-count">4</div>
-                        </div>
+                <div class="profile-tab-content active" id="tabContent-history">
+                    <div id="scanList" class="scan-list">
+                        <!-- Scan items will be dynamically added here -->
                     </div>
-                    <div class="scan-history-title">Reported Issues</div>
-                    <div class="scan-history-list-v2">
-                        <div class="scan-history-item-v2 critical">
-                            <span class="scan-icon critical">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Critical] Remote Code Execution in /api/upload</div>
-                                <div class="scan-meta">Detected: Today, 5:12 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 high">
-                            <span class="scan-icon high">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[High] SQL Injection in /user/login</div>
-                                <div class="scan-meta">Detected: Today, 4:50 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Insecure Cookie Flag</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] XML External Entity (XXE) Injection</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Server-side Request Forgery (SSRF)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Server Misconfiguration</div>
-                                <div class="scan-meta">Detected: Yesterday, 8:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
+                    <div id="noScans" class="no-scans" style="display: none;">
+                        <p>No scans yet. Run a scan to see the results here.</p>
                     </div>
                 </div>
-                <div class="profile-tab-content" id="tabContent-history" style="display:none;">
-                    <div class="scan-history-list">
-                        <div class="scan-history-item diff">
-                            <span class="scan-type">Diff Scan</span>
-                            <span class="scan-desc">#1 Code change diff scan</span>
-                            <span class="scan-time">Today, 6:26 PM</span>
-                        </div>
-                        <div class="scan-history-item full">
-                            <span class="scan-type">Full Scan</span>
-                            <span class="scan-desc">#2 Full scan</span>
-                            <span class="scan-time">Yesterday, 3:10 PM</span>
-                        </div>
-                        <div class="scan-history-item diff">
-                            <span class="scan-type">Diff Scan</span>
-                            <span class="scan-desc">#3 Code change diff scan</span>
-                            <span class="scan-time">Jul 20, 10:45 AM</span>
                         </div>
                     </div>
                 </div>
@@ -264,6 +275,9 @@
                 });
             }
         };
+        
+        // Now that the tab structure is created, update the scan list with stored data
+        updateScanList(globalScans);
         // Tab switching logic
         const tabHealth = document.getElementById('tab-health');
         const tabHistory = document.getElementById('tab-history');
@@ -303,10 +317,14 @@
         }
     }
 
-    // When no profile is selected, show the old details container and hide the card
+    // When no profile is selected or no profiles exist, show empty state
     function showNoProfileDetails() {
-        profileDetails.style.display = 'block';
+        profileDetails.style.display = 'none';
         profileCardContainer.style.display = 'none';
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+        }
     }
 
     function getTrashIcon() {

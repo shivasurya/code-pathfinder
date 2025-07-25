@@ -46,9 +46,13 @@ const extensionConfig = {
   },
   // Copy the resources to the output folder
   plugins: [
+    // Clean dist directory before build
+    new (require('clean-webpack-plugin').CleanWebpackPlugin)(),
     new (require('copy-webpack-plugin'))({
       patterns: [
-        { from: 'resources', to: 'resources' }
+        { from: 'resources', to: 'resources' },
+        { from: 'src/ui/webview', to: 'webview' },
+        { from: 'src/prompts', to: 'prompts' }
       ]
     })
   ],

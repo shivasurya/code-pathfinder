@@ -53,14 +53,14 @@
     "security-extension",
     "code-inspection",
     "security-insights"
-    ],
+  ],
   "icon": "resources/icon.png",
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "Other",
@@ -69,7 +69,10 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "*"
+    "onView:secureflow.mainView",
+    "onCommand:secureflow.analyzeWorkspace",
+    "onCommand:secureflow.analyzeSelection",
+    "onCommand:secureflow.reviewChanges"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -95,10 +98,24 @@
       "title": "SecureFlow",
       "properties": {
         "secureflow.AIModel": {
-            "type": "string",
-            "default": "claude-3-5-sonnet-20241022",
-            "enum": ["gpt-4o", "gpt-4o-mini", "o1-mini", "o1", "gpt-4.1-2025-04-14", "o3-mini-2025-01-31", "gemini-2.5-pro", "gemini-2.5-flash", "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
-            "enumDescriptions": [
+          "type": "string",
+          "default": "claude-3-5-sonnet-20241022",
+          "enum": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "o1-mini",
+            "o1",
+            "gpt-4.1-2025-04-14",
+            "o3-mini-2025-01-31",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-20250514",
+            "claude-3-7-sonnet-20250219",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022"
+          ],
+          "enumDescriptions": [
             "OpenAI GPT-4 O",
             "OpenAI GPT-4 O Mini ",
             "OpenAI O1 Mini Model",
@@ -112,7 +129,7 @@
             "Anthropic Claude 3.7 Sonnet (2025 Version)",
             "Anthropic Claude 3.5 Sonnet (2024 Version)",
             "Anthropic Claude 3.5 Haiku (2024 Version)"
-            ],
+          ],
           "description": "Select the AI Model to use for security analysis"
         },
         "secureflow.APIKey": {
@@ -206,11 +223,12 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.102.0",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
+    "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^9.25.1",
     "ts-loader": "^9.5.2",
