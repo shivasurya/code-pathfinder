@@ -6,6 +6,7 @@ import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
 import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
+import { ScanStorageService } from '../services/scan-storage-service';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
@@ -124,6 +125,9 @@ export function registerSecureFlowReviewCommand(
 ): void {
     // Initialize profile storage service
     const profileService = new ProfileStorageService(context);
+    
+    // Initialize scan storage service
+    const scanService = new ScanStorageService(context);
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right,
@@ -317,13 +321,31 @@ export function registerSecureFlowReviewCommand(
                         
                         allIssues = mappedIssues;
 
-                        // Update WebView with results
-                        updateWebview(resultsPanel!, `Scan complete! Found ${allIssues.length} issues.`, allIssues);
+                        // Save the scan result
+                        const scanSummary = `Scan complete! Found ${allIssues.length} issues.`;
+                        const savedScan = await scanService.saveScan(
+                            allIssues,
+                            scanSummary,
+                            finalReviewContent,
+                            Object.keys(changesByFile).length,
+                            selectedModel
+                        );
+
+                        // Update WebView with results including scan number
+                        const webviewSummary = `Scan #${savedScan.scanNumber} complete! Found ${allIssues.length} issues. (${savedScan.timestampFormatted})`;
+                        updateWebview(resultsPanel!, webviewSummary, allIssues);
 
                         if (allIssues.length > 0) {
                             vscode.window.showWarningMessage(
-                                `SecureFlow: Found ${allIssues.length} security ${allIssues.length === 1 ? 'issue' : 'issues'} in your code changes.`
-                            );
+                                `SecureFlow Scan #${savedScan.scanNumber}: Found ${allIssues.length} security issues in your git changes.`,
+                                'View Results'
+                            ).then(selection => {
+                                if (selection === 'View Results' && resultsPanel) {
+                                    resultsPanel.reveal(vscode.ViewColumn.Two);
+                                }
+                            });
+                        } else {
+                            vscode.window.showInformationMessage(`SecureFlow Scan #${savedScan.scanNumber}: No security issues found in your git changes.`);
                         }
                     }
                 );
