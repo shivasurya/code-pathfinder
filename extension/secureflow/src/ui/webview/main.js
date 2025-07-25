@@ -238,97 +238,16 @@
             </div>
             <div class="profile-tabs-section">
                 <div class="profile-tabs">
-                    <button class="profile-tab active" id="tab-health">Security Health</button>
-                    <button class="profile-tab" id="tab-history">Scan History</button>
+                    <button class="profile-tab active" id="tab-history">Scan History</button>
                 </div>
-                <div class="profile-tab-content" id="tabContent-health">
-                    <div class="health-summary-v2">
-                        <div class="health-score-v2">
-                            <div class="health-score-circle">
-                                <span class="health-score-value">D</span>
-                                <span class="health-score-label">Fair</span>
-                            </div>
-                        </div>
-                        <div class="health-severity-badges">
-                            <div class="severity-badge critical"><span class="sev-icon">&#9888;</span> Critical</div>
-                            <div class="severity-badge critical-count">1</div>
-                            <div class="severity-badge high"><span class="sev-icon">&#9888;</span> High</div>
-                            <div class="severity-badge high-count">2</div>
-                            <div class="severity-badge medium"><span class="sev-icon">&#9888;</span> Medium</div>
-                            <div class="severity-badge medium-count">4</div>
-                        </div>
-                    </div>
-                    <div class="scan-history-title">Reported Issues</div>
-                    <div class="scan-history-list-v2">
-                        <div class="scan-history-item-v2 critical">
-                            <span class="scan-icon critical">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Critical] Remote Code Execution in /api/upload</div>
-                                <div class="scan-meta">Detected: Today, 5:12 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 high">
-                            <span class="scan-icon high">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[High] SQL Injection in /user/login</div>
-                                <div class="scan-meta">Detected: Today, 4:50 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Insecure Cookie Flag</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] XML External Entity (XXE) Injection</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Server-side Request Forgery (SSRF)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Server Misconfiguration</div>
-                                <div class="scan-meta">Detected: Yesterday, 8:10 PM</div>
-                            </div>
-                        </div>
-                        <div class="scan-history-item-v2 medium">
-                            <span class="scan-icon medium">&#9888;</span>
-                            <div>
-                                <div class="scan-title">[Medium] Cross-Site Scripting (XSS)</div>
-                                <div class="scan-meta">Detected: Yesterday, 2:10 PM</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="profile-tab-content" id="tabContent-history" style="display:none;">
+                <div class="profile-tab-content active" id="tabContent-history">
                     <div id="scanList" class="scan-list">
-                        <div id="noScans" class="empty-scan-state">
-                            <p>No security scans found. Run a SecureFlow review to see scan history here.</p>
+                        <!-- Scan items will be dynamically added here -->
+                    </div>
+                    <div id="noScans" class="no-scans" style="display: none;">
+                        <p>No scans yet. Run a scan to see the results here.</p>
+                    </div>
+                </div>
                         </div>
                     </div>
                 </div>
