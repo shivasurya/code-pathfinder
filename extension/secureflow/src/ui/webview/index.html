@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureFlow AI</title>
-    <link rel="stylesheet" href="{{cssPath}}" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' ${cspSource}; style-src 'self' 'unsafe-inline' ${cspSource}; script-src 'self' 'unsafe-inline' ${cspSource}; img-src 'self' data: https: ${cspSource};">
+    <link rel="stylesheet" href="${stylesUri}" />
 </head>
 <body>
     <h3>SecureFlow Profiles</h3>
@@ -17,7 +18,7 @@
         </div>
         <div id="emptyState" class="empty-state">
             <div class="empty-state-icon">
-                <img src="{{iconPath}}" alt="SecureFlow" />
+                <img src="${iconUri}" alt="SecureFlow" />
             </div>
             <div>
                 <h3 style="margin: 0 0 12px 0;">Welcome to SecureFlow AI</h3>
@@ -48,6 +49,6 @@
             <div id="profileContent"></div>
         </div>
     </div>
-    <script src="{{jsPath}}"></script>
+    <script src="${scriptUri}"></script>
 </body>
 </html>

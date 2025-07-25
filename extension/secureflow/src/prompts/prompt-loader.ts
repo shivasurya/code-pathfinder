@@ -16,7 +16,7 @@ export async function loadPrompt(promptPath: string): Promise<string> {
       throw new Error('Could not find extension path');
     }
     
-    const fullPath = path.join(extensionPath, 'src', 'prompts', promptPath);
+    const fullPath = path.join(extensionPath, 'dist', 'prompts', promptPath);
     return fs.readFileSync(fullPath, 'utf8');
   } catch (error) {
     console.error(`Error loading prompt: ${error}`);

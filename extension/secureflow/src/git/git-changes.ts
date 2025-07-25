@@ -7,6 +7,7 @@ import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
 import { ScanStorageService } from '../services/scan-storage-service';
+import { loadPrompt } from '../prompts/prompt-loader';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
@@ -234,7 +235,7 @@ export function registerSecureFlowReviewCommand(
 
                         let allIssues: Array<{issue: SecurityIssue, filePath: string, startLine: number}> = [];
                         const workspaceFolders = vscode.workspace.workspaceFolders || [];
-                        let consolidatedReviewContent = '';
+                        let consolidatedReviewContent = await loadPrompt('common/review-changes.txt');
                         const fileMetadata: Array<{filePath: string, startLine: number}> = [];
 
                         // Collect all profiles used

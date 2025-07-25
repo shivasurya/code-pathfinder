@@ -460,22 +460,22 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
         `;
     }
 
-    private _getHtmlContent(webview: vscode.Webview) {
-        // Get file paths for resources
+    private _getHtmlContent(webview: vscode.Webview): string {
+        // Get paths to resource files
+        const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'index.html');
+        const mainScriptPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'main.js'));
+        const stylesPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'styles.css'));
         const iconPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'resources', 'icon.png'));
-        const cssPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'webview', 'styles.css'));
-        const jsPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'webview', 'main.js'));
+
+        // Read and return the HTML content
+        const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
         
-        // Read the HTML template
-        const htmlTemplate = fs.readFileSync(
-            path.join(this._extensionUri.fsPath, 'src', 'ui', 'webview', 'index.html'),
-            'utf8'
-        );
-        
-        // Replace placeholders with actual values
-        return htmlTemplate
-            .replace('{{iconPath}}', iconPath.toString())
-            .replace('{{cssPath}}', cssPath.toString())
-            .replace('{{jsPath}}', jsPath.toString());
+        // Replace placeholders with actual URIs
+        let data = htmlContent
+            .replace(/\$\{scriptUri\}/g, mainScriptPath.toString())
+            .replace(/\$\{stylesUri\}/g, stylesPath.toString())
+            .replace(/\$\{iconUri\}/g, iconPath.toString())
+            .replace(/\$\{cspSource\}/g, webview.cspSource);
+        return data;
     }
 }
