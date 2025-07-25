@@ -462,6 +462,105 @@ select {
     margin: 0 4px 4px 0;
 }
 
+/* Scan History Styles */
+.scan-history-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.scan-history-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.scan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.scan-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    background: var(--vscode-editor-background);
+    transition: background-color 0.2s ease;
+}
+
+.scan-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.scan-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.scan-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    margin: 0 0 2px 0;
+}
+
+.scan-meta {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    display: flex;
+    gap: 8px;
+}
+
+.scan-issues {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.scan-issues.has-issues {
+    background: #ff8800;
+    color: white;
+}
+
+.scan-issues.no-issues {
+    background: #88cc00;
+    color: black;
+}
+
+.scan-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.view-scan-btn {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.view-scan-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.empty-scan-state {
+    text-align: center;
+    padding: 16px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+}
+
 .empty-state {
     display: none;
     flex-direction: column;

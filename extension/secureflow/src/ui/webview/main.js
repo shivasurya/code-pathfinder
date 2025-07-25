@@ -4,8 +4,9 @@
     const profileDetails = document.getElementById('profileDetails');
     const profileContent = document.getElementById('profileContent');
 
-    // Request initial profiles
+    // Request initial profiles and scans
     vscode.postMessage({ type: 'getProfiles' });
+    vscode.postMessage({ type: 'getScans' });
 
     // Handle messages from extension
     window.addEventListener('message', event => {
@@ -28,6 +29,9 @@
                 break;
             case 'updateProfiles':
                 updateProfileList(message.profiles);
+                break;
+            case 'updateScans':
+                updateScanList(message.scans);
                 break;
             case 'profileDetails':
                 displayProfileDetails(message.profile);
@@ -87,6 +91,71 @@
         profileCardContainer.id = 'profileCardContainer';
         profileDetails.parentNode.insertBefore(profileCardContainer, profileDetails.nextSibling);
     }
+
+    // Store scans globally so they can be used when profile details are shown
+    let globalScans = [];
+
+    // Update scan list
+    function updateScanList(scans) {
+        globalScans = scans || [];
+        
+        const scanList = document.getElementById('scanList');
+        const noScans = document.getElementById('noScans');
+        
+        // If elements don't exist yet (profile not selected), just store the data
+        if (!scanList || !noScans) {
+            return;
+        }
+        
+        if (!scans || scans.length === 0) {
+            noScans.style.display = 'block';
+            // Clear any existing scan items
+            const existingItems = scanList.querySelectorAll('.scan-item');
+            existingItems.forEach(item => item.remove());
+            return;
+        }
+        
+        noScans.style.display = 'none';
+        
+        // Clear existing scan items
+        const existingItems = scanList.querySelectorAll('.scan-item');
+        existingItems.forEach(item => item.remove());
+        
+        // Show only the 5 most recent scans
+        const recentScans = scans.slice(0, 5);
+        
+        recentScans.forEach(scan => {
+            const scanItem = document.createElement('div');
+            scanItem.className = 'scan-item';
+            
+            const issueCount = scan.issues.length;
+            const issueClass = issueCount > 0 ? 'has-issues' : 'no-issues';
+            const issueText = issueCount > 0 ? `${issueCount} issue${issueCount > 1 ? 's' : ''}` : 'No issues';
+            
+            scanItem.innerHTML = `
+                <div class="scan-info">
+                    <div class="scan-title">Scan #${scan.scanNumber}</div>
+                    <div class="scan-meta">
+                        <span>${scan.timestampFormatted}</span>
+                        <span>${scan.fileCount} files</span>
+                        <span class="scan-issues ${issueClass}">${issueText}</span>
+                    </div>
+                </div>
+                <div class="scan-actions">
+                    <button class="view-scan-btn" onclick="viewScan(${scan.scanNumber})">
+                        <span style="font-family: codicon;">→</span> View
+                    </button>
+                </div>
+            `;
+            
+            scanList.appendChild(scanItem);
+        });
+    }
+
+    // View scan function (global scope)
+    window.viewScan = function(scanNumber) {
+        vscode.postMessage({ type: 'viewScan', scanNumber: scanNumber });
+    };
 
     // Display profile details
     function displayProfileDetails(profile) {
@@ -225,21 +294,9 @@
                     </div>
                 </div>
                 <div class="profile-tab-content" id="tabContent-history" style="display:none;">
-                    <div class="scan-history-list">
-                        <div class="scan-history-item diff">
-                            <span class="scan-type">Diff Scan</span>
-                            <span class="scan-desc">#1 Code change diff scan</span>
-                            <span class="scan-time">Today, 6:26 PM</span>
-                        </div>
-                        <div class="scan-history-item full">
-                            <span class="scan-type">Full Scan</span>
-                            <span class="scan-desc">#2 Full scan</span>
-                            <span class="scan-time">Yesterday, 3:10 PM</span>
-                        </div>
-                        <div class="scan-history-item diff">
-                            <span class="scan-type">Diff Scan</span>
-                            <span class="scan-desc">#3 Code change diff scan</span>
-                            <span class="scan-time">Jul 20, 10:45 AM</span>
+                    <div id="scanList" class="scan-list">
+                        <div id="noScans" class="empty-scan-state">
+                            <p>No security scans found. Run a SecureFlow review to see scan history here.</p>
                         </div>
                     </div>
                 </div>
@@ -264,6 +321,9 @@
                 });
             }
         };
+        
+        // Now that the tab structure is created, update the scan list with stored data
+        updateScanList(globalScans);
         // Tab switching logic
         const tabHealth = document.getElementById('tab-health');
         const tabHistory = document.getElementById('tab-history');
