@@ -55,7 +55,7 @@
         // Reset UI state
         profileDetails.style.display = 'none';
         profileCardContainer.style.display = 'none';
-        profileSelect.innerHTML = '<option value="">Select a profile...</option>';
+        profileSelect.innerHTML = '';
 
         if (!profiles || profiles.length === 0) {
             // No profiles - show empty state
@@ -68,12 +68,22 @@
         selectContainer.style.display = 'flex';
         emptyState.style.display = 'none';
 
-        // Add profile options
-        profiles.forEach(profile => {
+        // Add profile options and select first one
+        profiles.forEach((profile, index) => {
             const option = document.createElement('option');
             option.value = profile.id;
             option.textContent = profile.name || 'Unnamed Profile';
             profileSelect.appendChild(option);
+
+            // Auto-select first profile
+            if (index === 0) {
+                option.selected = true;
+                // Trigger profile selection
+                vscode.postMessage({
+                    type: 'profileSelected',
+                    profileId: profile.id
+                });
+            }
         });
     }
 
