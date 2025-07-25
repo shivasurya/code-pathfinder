@@ -92,6 +92,38 @@
         profileDetails.parentNode.insertBefore(profileCardContainer, profileDetails.nextSibling);
     }
 
+    // Format timestamp to human readable format
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const isToday = date.toDateString() === now.toDateString();
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        const timeStr = date.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+        });
+
+        if (isToday) {
+            return `Today at ${timeStr}`;
+        } else if (isYesterday) {
+            return `Yesterday at ${timeStr}`;
+        } else {
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'short',
+                month: 'short', 
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+    }
+
     // Store scans globally so they can be used when profile details are shown
     let globalScans = [];
 
@@ -136,7 +168,7 @@
                 <div class="scan-info">
                     <div class="scan-title">Scan #${scan.scanNumber}</div>
                     <div class="scan-meta">
-                        <span>${scan.timestampFormatted}</span>
+                        <span>${formatTimestamp(scan.timestamp)}</span>
                         <span>${scan.fileCount} files</span>
                         <span class="scan-issues ${issueClass}">${issueText}</span>
                     </div>
