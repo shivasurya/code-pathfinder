@@ -51,36 +51,29 @@
     function updateProfileList(profiles) {
         const selectContainer = document.querySelector('.select-container');
         const emptyState = document.getElementById('emptyState');
-        const profileDetails = document.getElementById('profileDetails');
 
-        // Clear existing profile options
-        while (profileSelect.options.length > 1) {
-            profileSelect.remove(1);
-        }
+        // Reset UI state
+        profileDetails.style.display = 'none';
+        profileCardContainer.style.display = 'none';
+        profileSelect.innerHTML = '<option value="">Select a profile...</option>';
 
         if (!profiles || profiles.length === 0) {
+            // No profiles - show empty state
             selectContainer.style.display = 'none';
             emptyState.style.display = 'flex';
-            showNoProfileDetails();
             return;
         }
 
+        // We have profiles - show select container and hide empty state
         selectContainer.style.display = 'flex';
         emptyState.style.display = 'none';
 
-        // Add new profile options
+        // Add profile options
         profiles.forEach(profile => {
             const option = document.createElement('option');
             option.value = profile.id;
             option.textContent = profile.name || 'Unnamed Profile';
             profileSelect.appendChild(option);
-        });
-
-        // Auto-select first profile if available
-        profileSelect.value = profiles[0].id;
-        vscode.postMessage({
-            type: 'profileSelected',
-            profileId: profiles[0].id
         });
     }
 
@@ -314,10 +307,14 @@
         }
     }
 
-    // When no profile is selected, show the old details container and hide the card
+    // When no profile is selected or no profiles exist, show empty state
     function showNoProfileDetails() {
-        profileDetails.style.display = 'block';
+        profileDetails.style.display = 'none';
         profileCardContainer.style.display = 'none';
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+        }
     }
 
     function getTrashIcon() {
