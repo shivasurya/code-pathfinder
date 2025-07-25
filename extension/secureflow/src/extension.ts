@@ -14,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('SecureFlow extension is now active!');
 	
 	// Show activation message to user for debugging
-	vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
+	// vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
 
 	// Create an output channel for security diagnostics
 	const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
@@ -39,28 +39,9 @@ export function activate(context: vscode.ExtensionContext) {
 		registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
 		outputChannel.appendLine('Git review command registered');
 
-		// Register set API key command
-		const setApiKeyCommand = vscode.commands.registerCommand('secureflow.setApiKey', async () => {
-			const apiKey = await vscode.window.showInputBox({
-				prompt: 'Enter your AI provider API Key',
-				password: true,
-				ignoreFocusOut: true,
-				validateInput: value => {
-					if (!value) return 'API key cannot be empty';
-					return null;
-				}
-			});
-
-			if (apiKey) {
-				await context.secrets.store('secureflow.APIKey', apiKey);
-				vscode.window.showInformationMessage('API key saved successfully!');
-			}
-		});
-
 		// Add commands to context subscriptions
 		context.subscriptions.push(
-			analyzeSelectionCommand,
-			setApiKeyCommand
+			analyzeSelectionCommand
 		);
 
 		// Register the SecureFlow Explorer webview

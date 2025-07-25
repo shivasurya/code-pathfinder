@@ -4,7 +4,7 @@
 
 ## Features
  
-- **Quick Security Analysis**: Select any code snippet and press `Cmd+L` (Mac) to analyze it for security vulnerabilities
+- **Quick Security Analysis**: Run security analysis on your code and changes
 - **Real-time Feedback**: Get immediate feedback on potential security issues
 - **Detailed Reports**: View comprehensive reports with severity ratings, descriptions, and recommendations
 - **In-Editor Experience**: All analysis happens right in your VS Code editor with no need to switch contexts
