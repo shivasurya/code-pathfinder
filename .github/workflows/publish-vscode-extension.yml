@@ -11,7 +11,8 @@ jobs:
   publish-extension:
     if: |
       github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'release') &&
+      (contains(github.event.pull_request.labels.*.name, 'release') ||
+       contains(github.event.pull_request.labels.*.name, 'pre-release-publish')) &&
       contains(github.event.pull_request.labels.*.name, 'publish-vscode')
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +33,17 @@ jobs:
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
         working-directory: extension/secureflow
 
+      - name: Check if pre-release
+        id: check_prerelease
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'pre-release-publish') }}" == "true" ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "Pre-release mode enabled"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "Regular release mode"
+          fi
+
       - name: Check for existing version
         id: check_version
         run: |
@@ -47,21 +59,34 @@ jobs:
 
       - name: Package Extension
         if: steps.check_version.outputs.exists == 'false'
-        run: vsce package
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            vsce package --pre-release
+          else
+            vsce package
+          fi
         working-directory: extension/secureflow
 
       - name: Publish to VSCode Marketplace
         if: steps.check_version.outputs.exists == 'false'
-        run: vsce publish
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            vsce publish --pre-release
+          else
+            vsce publish
+          fi
         env:
           VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
         working-directory: extension/secureflow
 
       - name: Publish to Open VSX Registry
         if: steps.check_version.outputs.exists == 'false'
-        run: vsce publish --registry https://open-vsx.org/vscode/gallery
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            npx ovsx publish --pre-release
+          else
+            npx ovsx publish
+          fi
         env:
-          VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+          OVSX_PAT: ${{ secrets.OPENVSCODE_MARKETPLACE_TOKEN }}
         working-directory: extension/secureflow
-
-
