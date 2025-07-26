@@ -3,6 +3,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import { SecurityIssue } from '../models/security-issue';
 import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
+import { AnalyticsService } from '../services/analytics';
 import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
@@ -145,6 +146,12 @@ export function registerSecureFlowReviewCommand(
     const reviewCommand = vscode.commands.registerCommand(
         "secureflow.reviewChanges",
         async (uri?: vscode.Uri) => {
+            // Track command usage
+            const analytics = AnalyticsService.getInstance();
+            analytics.trackEvent('Git Security Review Started', {
+                review_type: 'git_changes'
+            });
+            
             try {
                 // Create or show WebView panel
                 if (!resultsPanel) {

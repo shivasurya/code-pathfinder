@@ -5,6 +5,7 @@ import { StoredProfile } from '../models/profile-store';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { ScanStorageService } from '../services/scan-storage-service';
 import { ScanResult } from '../models/scan-result';
+import { AnalyticsService } from '../services/analytics';
 
 export class SecureFlowExplorer {
     private static instance: SecureFlowExplorer;
@@ -99,13 +100,27 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
+            // Initialize analytics service for all message handlers
+            const analytics = AnalyticsService.getInstance();
+            
             switch (message.type) {
                 case 'scanWorkspace':
+                    // Track UI action
+                    analytics.trackEvent('Workspace Security Scan Started', {
+                        scan_trigger: 'manual_button_click'
+                    });
+                    
                     try {
                         // Start the workspace scan
                         await this._profileService.scanWorkspace();
                         // Load the new profiles
                         await this.loadProfiles();
+                        // Track API success
+                        analytics.trackEvent('Workspace Security Scan Completed', {
+                            scan_result: 'success',
+                            profiles_found: this._profiles.length
+                        });
+                        
                         // Update the UI with success state
                         if (this._view) {
                             this._view.webview.postMessage({
@@ -114,6 +129,11 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                             });
                         }
                     } catch (error) {
+                        // Track API failure
+                        analytics.trackEvent('Workspace Security Scan Failed', {
+                            error_type: 'scan_execution_error'
+                        });
+                        
                         if (this._view) {
                             this._view.webview.postMessage({
                                 type: 'scanComplete',
@@ -124,18 +144,30 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 case 'getProfiles':
+                    analytics.trackEvent('Security Profiles Refreshed', {
+                        refresh_trigger: 'user_request'
+                    });
                     await this.loadProfiles();
                     break;
                 case 'getScans':
+                    analytics.trackEvent('Scan History Viewed', {
+                        view_trigger: 'user_request'
+                    });
                     await this.loadScans();
                     break;
                 case 'viewScan':
+                    analytics.trackEvent('Scan Results Opened', {
+                        scan_number: message.scanNumber
+                    });
                     const scan = this._scans.find(s => s.scanNumber === message.scanNumber);
                     if (scan) {
                         this.openScanResultsWebview(scan);
                     }
                     break;
                 case 'profileSelected':
+                    analytics.trackEvent('Security Profile Selected', {
+                        profile_action: 'view_details'
+                    });
                     const profile = this._profiles.find(p => p.id === message.profileId);
                     if (profile && this._view) {
                         this._view.webview.postMessage({
@@ -156,6 +188,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 case 'confirmDelete':
+                    analytics.trackEvent('Security Profile Delete Requested', {
+                        delete_trigger: 'user_confirmation'
+                    });
+                    
                     const answer = await vscode.window.showWarningMessage(
                         'Are you sure you want to delete this profile?',
                         { modal: true },
@@ -166,6 +202,12 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                         try {
                             await this._profileService.deleteProfile(message.profileId);
                             await this.loadProfiles();
+                            
+                            // Track API success
+                            analytics.trackEvent('Security Profile Deleted Successfully', {
+                                profile_id: message.profileId
+                            });
+                            
                             if (this._view) {
                                 this._view.webview.postMessage({
                                     type: 'deleteSuccess',
@@ -173,6 +215,11 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                                 });
                             }
                         } catch (error) {
+                            // Track API failure
+                            analytics.trackEvent('Security Profile Delete Failed', {
+                                error_type: 'deletion_error'
+                            });
+                            
                             if (this._view) {
                                 this._view.webview.postMessage({
                                     type: 'error',
@@ -183,6 +230,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 case 'rescanProfile':
+                    analytics.trackEvent('Security Profile Rescan Started', {
+                        rescan_trigger: 'manual_request'
+                    });
+                    
                     try {
                         const profile = this._profiles.find(p => p.id === message.profileId);
                         if (profile) {
@@ -190,8 +241,19 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                             // You'll need to implement the actual rescan logic in your service
                             await this._profileService.rescanProfile(profile);
                             await this.loadProfiles();
+                            
+                            // Track API success
+                            analytics.trackEvent('Security Profile Rescan Completed', {
+                                profile_id: message.profileId,
+                                rescan_result: 'success'
+                            });
                         }
                     } catch (error) {
+                        // Track API failure
+                        analytics.trackEvent('Security Profile Rescan Failed', {
+                            error_type: 'rescan_execution_error'
+                        });
+                        
                         if (this._view) {
                             this._view.webview.postMessage({
                                 type: 'error',
