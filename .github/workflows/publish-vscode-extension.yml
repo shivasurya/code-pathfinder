@@ -1,0 +1,87 @@
+name: Publish VSCode Extension
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      - 'extension/**'
+
+jobs:
+  publish-extension:
+    if: |
+      github.event.pull_request.merged == true &&
+      (contains(github.event.pull_request.labels.*.name, 'release') ||
+       contains(github.event.pull_request.labels.*.name, 'pre-release-publish')) &&
+      contains(github.event.pull_request.labels.*.name, 'publish-vscode')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -g @vscode/vsce
+          npm install -g ovsx
+        working-directory: extension/secureflow
+
+      - name: Get current version
+        id: get_version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        working-directory: extension/secureflow
+
+      - name: Check if pre-release
+        id: check_prerelease
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'pre-release-publish') }}" == "true" ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "Pre-release mode enabled"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "Regular release mode"
+          fi
+
+
+
+      - name: Package Extension
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            echo "Packaging as pre-release..."
+            vsce package --pre-release
+          else
+            echo "Packaging as stable release..."
+            vsce package
+          fi
+        working-directory: extension/secureflow
+
+      - name: Publish to VSCode Marketplace
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            echo "Publishing to VSCode Marketplace as pre-release..."
+            vsce publish --pre-release
+          else
+            echo "Publishing to VSCode Marketplace as stable release..."
+            vsce publish
+          fi
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+        working-directory: extension/secureflow
+
+      - name: Publish to Open VSX Registry
+        run: |
+          if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            echo "Publishing to Open VSX as pre-release..."
+            ovsx publish --pre-release
+          else
+            echo "Publishing to Open VSX as stable release..."
+            ovsx publish
+          fi
+        env:
+          OVSX_PAT: ${{ secrets.OPENVSCODE_MARKETPLACE_TOKEN }}
+        working-directory: extension/secureflow
