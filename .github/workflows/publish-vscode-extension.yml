@@ -25,7 +25,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm install -g @vscode/vsce
+          npm install -g ovsx
         working-directory: extension/secureflow
 
       - name: Get current version
@@ -44,48 +47,40 @@ jobs:
             echo "Regular release mode"
           fi
 
-      - name: Check for existing version
-        id: check_version
-        run: |
-          echo "Checking if version ${VERSION} exists in VSCode Marketplace..."
-          curl -s https://marketplace.visualstudio.com/_apis/public/gallery/publishers/codepathfinder/vsextensions/secureflow/${VERSION} > /dev/null
-          if [ $? -eq 0 ]; then
-            echo "Version ${VERSION} already exists in VSCode Marketplace"
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Version ${VERSION} does not exist in VSCode Marketplace"
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
+
 
       - name: Package Extension
-        if: steps.check_version.outputs.exists == 'false'
         run: |
           if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            echo "Packaging as pre-release..."
             vsce package --pre-release
           else
+            echo "Packaging as stable release..."
             vsce package
           fi
         working-directory: extension/secureflow
 
       - name: Publish to VSCode Marketplace
-        if: steps.check_version.outputs.exists == 'false'
         run: |
           if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
+            echo "Publishing to VSCode Marketplace as pre-release..."
             vsce publish --pre-release
           else
+            echo "Publishing to VSCode Marketplace as stable release..."
             vsce publish
           fi
         env:
-          VSCODE_MARKETPLACE_TOKEN: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
         working-directory: extension/secureflow
 
       - name: Publish to Open VSX Registry
-        if: steps.check_version.outputs.exists == 'false'
         run: |
           if [[ "${{ steps.check_prerelease.outputs.is_prerelease }}" == "true" ]]; then
-            npx ovsx publish --pre-release
+            echo "Publishing to Open VSX as pre-release..."
+            ovsx publish --pre-release
           else
-            npx ovsx publish
+            echo "Publishing to Open VSX as stable release..."
+            ovsx publish
           fi
         env:
           OVSX_PAT: ${{ secrets.OPENVSCODE_MARKETPLACE_TOKEN }}
