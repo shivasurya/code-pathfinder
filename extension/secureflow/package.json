@@ -137,6 +137,11 @@
           "default": "",
           "description": "API Key for the selected AI provider",
           "markdownDescription": "API Key for the selected AI provider. Get your API key from your AI provider's dashboard."
+        },
+        "secureflow.analytics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable anonymous analytics to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change."
         }
       }
     },
@@ -219,6 +224,9 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
+  },
+  "dependencies": {
+    "posthog-node": "^4.0.1"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

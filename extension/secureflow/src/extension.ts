@@ -7,11 +7,27 @@ import { registerSecureFlowReviewCommand } from './git/git-changes';
 import { SettingsManager } from './settings/settings-manager';
 import { WorkspaceProfilerCommand } from './profiler/workspace-profiler-command';
 import { SecureFlowExplorer } from './ui/secureflow-explorer';
+import { AnalyticsService } from './services/analytics';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	console.log('SecureFlow extension is now active!');
+	
+	// Initialize analytics if enabled
+	const analytics = AnalyticsService.getInstance();
+	const analyticsEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
+	console.log('📊 Analytics: Settings check - enabled:', analyticsEnabled);
+	
+	if (analyticsEnabled) {
+		await analytics.initialize();
+		analytics.trackEvent('SecureFlow Extension Started', {
+			extension_version: context.extension.packageJSON.version,
+			vscode_version: vscode.version
+		});
+	} else {
+		console.log('📊 Analytics: Disabled in settings, skipping initialization');
+	}
 	
 	// Show activation message to user for debugging
 	// vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
@@ -64,6 +80,11 @@ function registerAnalyzeSelectionCommand(
 	settingsManager: SettingsManager
 ): vscode.Disposable {
 	return vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
+		// Track command usage
+		const analytics = AnalyticsService.getInstance();
+		analytics.trackEvent('Code Analysis Started', {
+			analysis_type: 'selected_text'
+		});
 		// Get the active text editor
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
@@ -157,4 +178,8 @@ function registerAnalyzeSelectionCommand(
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export async function deactivate() {
+	// Properly shutdown analytics
+	const analytics = AnalyticsService.getInstance();
+	await analytics.shutdown();
+}
