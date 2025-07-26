@@ -99,7 +99,6 @@ export class ProjectProfiler {
    */
   public async profileWorkspace(secretApiKey: string,progressCallback?: (message: string) => void): Promise<ApplicationProfile[]> {
     try {
-      console.log(`Using API key: ${secretApiKey}`);
       // First collect the project structure
       progressCallback?.('Collecting project structure...');
       const projectStructure = await this.collectProjectStructure(progressCallback);
