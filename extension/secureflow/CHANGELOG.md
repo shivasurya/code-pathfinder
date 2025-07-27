@@ -1,10 +1,23 @@
 # SecureFlow Changelog
 
-## [0.0.1] - July 2024
+## Version 0.0.3 - July 27, 2025
+
+### 🎯 What's New?
+- **Gemini Client**: SecureFlow now supports Gemini 2.5 Pro and Gemini 2.5 Flash models.
+- **Analytics**: SecureFlow now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
+  - **AI Model** - AI model used for security analysis
+  
+
+## Version 0.0.2 - July 26, 2025
+
+### 🎯 What's New?
+- **Analytics**: SecureFlow now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
+
+## Version 0.0.1 - July 25, 2025
 
 🚀 First Release - Your AI Security Guardian
 
-### 🎯 What's Included
+### 🎯 What's New?
 - **One-Click Security Analysis**: Select your code and press `Cmd+L` to get instant security insights
 - **Git Changes Review**: Automatically scan your code changes for security issues before committing
 - **Workspace Security Profile**: Get a complete security overview of your entire project
