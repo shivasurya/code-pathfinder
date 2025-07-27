@@ -59,6 +59,9 @@ export class AnalyticsService {
         properties['vscode_extension_version'] = vscode.extensions.getExtension('secureflow')?.packageJSON.version;
         properties['vscode_build_version'] = vscode.version;
 
+        // get AI model name from config
+        properties['ai_model'] = vscode.workspace.getConfiguration('secureflow').get('AIModel');
+
         // Send event to PostHog using Node.js client
         if (this.posthog) {
             console.log(`📊 Analytics: Tracking event "${eventName}" with properties:`, properties);
