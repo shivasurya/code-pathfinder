@@ -6,6 +6,7 @@ import { ProfileStorageService } from '../services/profile-storage-service';
 import { ScanStorageService } from '../services/scan-storage-service';
 import { ScanResult } from '../models/scan-result';
 import { AnalyticsService } from '../services/analytics';
+import { SettingsManager } from '../settings/settings-manager';
 
 export class SecureFlowExplorer {
     private static instance: SecureFlowExplorer;
@@ -272,6 +273,55 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                             this._view.webview.postMessage({
                                 type: 'error',
                                 message: 'Failed to rescan profiles'
+                            });
+                        }
+                    }
+                    break;
+                case 'checkOnboardingStatus':
+                    try {
+                        const settingsManager = new SettingsManager(this._context);
+                        const apiKey = await settingsManager.getApiKey();
+                        const model = settingsManager.getSelectedAIModel();
+                        
+                        const isConfigured = !!(apiKey && model);
+                        
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'onboardingStatus',
+                                isConfigured: isConfigured
+                            });
+                        }
+                    } catch (error) {
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'onboardingStatus',
+                                isConfigured: false
+                            });
+                        }
+                    }
+                    break;
+                case 'saveConfig':
+                    analytics.trackEvent('Configuration Saved', {
+                        model: message.model
+                    });
+                    
+                    try {
+                        const config = vscode.workspace.getConfiguration('secureflow');
+                        await config.update('AIModel', message.model, vscode.ConfigurationTarget.Global);
+                        await config.update('APIKey', message.apiKey, vscode.ConfigurationTarget.Global);
+                        
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'configSaved',
+                                success: true
+                            });
+                        }
+                    } catch (error) {
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'configSaved',
+                                success: false,
+                                error: 'Failed to save configuration'
                             });
                         }
                     }
