@@ -185,7 +185,7 @@ export function registerSecureFlowReviewCommand(
                         const changes = await getGitChanges();
                         
                         if (changes.length === 0) {
-                            updateWebview(resultsPanel!, 'No git changes found to scan.', []);
+                            updateWebview(resultsPanel!, 0, new Date(), []);
                             vscode.window.showInformationMessage('SecureFlow: No git changes found to scan.');
                             return;
                         }
@@ -341,7 +341,7 @@ export function registerSecureFlowReviewCommand(
 
                         // Update WebView with results including scan number
                         const webviewSummary = `Scan #${savedScan.scanNumber} complete! Found ${allIssues.length} issues. (${savedScan.timestampFormatted})`;
-                        updateWebview(resultsPanel!, webviewSummary, allIssues);
+                        updateWebview(resultsPanel!, savedScan.scanNumber, new Date(savedScan.timestamp), allIssues);
 
                         if (allIssues.length > 0) {
                             vscode.window.showWarningMessage(
@@ -366,49 +366,180 @@ export function registerSecureFlowReviewCommand(
     context.subscriptions.push(statusBarItem, reviewCommand);
 }
 
-function updateWebview(panel: vscode.WebviewPanel, summary: string, issues: Array<{issue: SecurityIssue, filePath: string, startLine: number}>) {
-    const html = `<!DOCTYPE html>
-    <html>
+import { formatTimestamp } from '../utils/format-timestamp';
+
+function generateGitChangesHtml(scanNumber: number, timestamp: Date, issues: Array<{issue: SecurityIssue, filePath: string, startLine: number}>): string {
+    // Helper to get relative path from workspace root
+    function getRelativePath(filePath: string): string {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const root = workspaceFolders[0].uri.fsPath;
+            return path.relative(root, filePath);
+        }
+        return filePath;
+    }
+
+    const issuesHtml = issues.map((item) => `
+        <div class="issue">
+            <div class="issue-header">
+                <span class="severity severity-${item.issue.severity.toLowerCase()}">${item.issue.severity}</span>
+                <h3 class="issue-title">${item.issue.title}</h3>
+            </div>
+            <div class="issue-meta">
+                <span class="file">${getRelativePath(item.filePath)}:${item.startLine}</span>
+            </div>
+            <p class="description">${item.issue.description}</p>
+            <div class="recommendation">
+                <strong>Recommendation:</strong> ${item.issue.recommendation}
+            </div>
+        </div>
+    `).join('');
+
+    return `<!DOCTYPE html>
+        <html>
         <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Git Changes Security Review</title>
             <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                .summary { margin-bottom: 20px; font-size: 1.2em; }
-                .issue { 
-                    background: #f3f3f3; 
-                    padding: 15px; 
-                    margin-bottom: 15px; 
-                    border-radius: 5px;
-                    border-left: 4px solid #cc0000;
+                body { 
+                    font-family: var(--vscode-font-family); 
+                    padding: 20px; 
+                    color: var(--vscode-foreground);
+                    background: var(--vscode-editor-background);
                 }
-                .issue-title { font-weight: bold; color: #cc0000; }
-                .issue-location { color: #666; margin: 5px 0; }
-                .issue-severity { 
-                    display: inline-block;
-                    padding: 3px 8px;
-                    border-radius: 3px;
-                    background: #ff9999;
-                    color: white;
-                    font-size: 0.9em;
+                .header { 
+                    border-bottom: 1px solid var(--vscode-panel-border); 
+                    padding-bottom: 15px; 
+                    margin-bottom: 20px; 
+                }
+                .scan-info { 
+                    display: flex; 
+                    gap: 20px; 
+                    margin-bottom: 10px; 
+                    flex-wrap: wrap;
+                }
+                .info-item { 
+                    display: flex; 
+                    flex-direction: column; 
+                }
+                .info-label { 
+                    font-size: 12px; 
+                    color: var(--vscode-descriptionForeground); 
+                }
+                .info-value { 
+                    font-weight: bold; 
+                }
+                .issue { 
+                    border: 1px solid var(--vscode-panel-border); 
+                    border-radius: 8px; 
+                    padding: 20px; 
+                    margin-bottom: 20px; 
+                    background: var(--vscode-editor-background);
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                    transition: box-shadow 0.2s ease;
+                }
+                .issue:hover {
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                }
+                .issue-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 12px;
+                }
+                .issue-title { 
+                    margin: 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: var(--vscode-foreground);
+                    line-height: 1.4;
+                }
+                .issue-meta { 
+                    display: flex; 
+                    gap: 16px; 
+                    margin-bottom: 16px; 
+                    font-size: 13px;
+                    align-items: center;
+                }
+                .severity { 
+                    padding: 3px 8px; 
+                    border-radius: 4px; 
+                    font-weight: 600;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .severity-critical { 
+                    background: rgba(220, 38, 38, 0.2); 
+                    color: #fca5a5; 
+                    border: 1px solid rgba(220, 38, 38, 0.3);
+                }
+                .severity-high { 
+                    background: rgba(251, 146, 60, 0.2); 
+                    color: #fdba74; 
+                    border: 1px solid rgba(251, 146, 60, 0.3);
+                }
+                .severity-medium { 
+                    background: rgba(245, 158, 11, 0.2); 
+                    color: #fbbf24; 
+                    border: 1px solid rgba(245, 158, 11, 0.3);
+                }
+                .severity-low { 
+                    background: rgba(34, 197, 94, 0.2); 
+                    color: #86efac; 
+                    border: 1px solid rgba(34, 197, 94, 0.3);
+                }
+                .file { 
+                    font-family: var(--vscode-editor-font-family); 
+                    background: rgba(255, 255, 255, 0.05); 
+                    padding: 4px 8px; 
+                    border-radius: 4px; 
+                    font-size: 12px;
+                    color: var(--vscode-textLink-foreground);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }
+                .description { 
+                    margin: 16px 0; 
+                    line-height: 1.6;
+                    color: var(--vscode-foreground);
+                    font-size: 14px;
+                }
+                .recommendation {
+                    background: rgba(0, 128, 255, 0.04);
+                    border-left: 3px solid #007acc;
+                    padding: 8px 12px;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    color:rgb(244, 250, 253);
                 }
             </style>
         </head>
         <body>
-            <div class="summary">${summary}</div>
-            ${issues.map((item, index) => `
-                <div class="issue">
-                    <div class="issue-title">${item.issue.title}</div>
-                    <div class="issue-location">
-                        ${path.basename(item.filePath)} (Line ${item.startLine})
+            <div class="header">
+                <h2>Git Changes Security Review</h2>
+                <div class="scan-info">
+                    <div class="info-item">
+                        <span class="info-label">Scan #</span>
+                        <span class="info-value">${scanNumber}</span>
                     </div>
-                    <div class="issue-severity">${item.issue.severity}</div>
-                    <p>${item.issue.description}</p>
-                    <p><strong>Recommendation:</strong> ${item.issue.recommendation}</p>
+                    <div class="info-item">
+                        <span class="info-label">Completed</span>
+                        <span class="info-value">${formatTimestamp(timestamp)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Issues Found</span>
+                        <span class="info-value">${issues.length}</span>
+                    </div>
                 </div>
-            `).join('')}
+            </div>
+            ${issuesHtml}
         </body>
-    </html>`;
+        </html>`;
+}
 
-    panel.webview.html = html;
+function updateWebview(panel: vscode.WebviewPanel, scanNumber: number, timestamp: Date, issues: Array<{issue: SecurityIssue, filePath: string, startLine: number}>) {
+    panel.webview.html = generateGitChangesHtml(scanNumber, timestamp, issues);
 }
 
 // Interface for git change information
