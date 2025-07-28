@@ -4,9 +4,17 @@
     const profileDetails = document.getElementById('profileDetails');
     const profileContent = document.getElementById('profileContent');
 
+    // Onboarding state
+    let currentStep = 1;
+    let selectedModel = 'claude-3-5-sonnet-20241022';
+    let apiKey = '';
+
     // Request initial profiles and scans
     vscode.postMessage({ type: 'getProfiles' });
     vscode.postMessage({ type: 'getScans' });
+    
+    // Check if onboarding is needed
+    vscode.postMessage({ type: 'checkOnboardingStatus' });
 
     // Handle messages from extension
     window.addEventListener('message', event => {
@@ -43,6 +51,26 @@
             case 'deleteSuccess':
                 profileDetails.style.display = 'none';
                 profileSelect.value = '';
+                break;
+            case 'onboardingStatus':
+                if (message.isConfigured) {
+                    console.log('Already configured');
+                    // Skip onboarding if already configured
+                    showStep(4);
+                    updateConfigSummary();
+                } else {
+                    // Show step 1 for new users
+                    showStep(1);
+                }
+                break;
+            case 'configSaved':
+                if (message.success) {
+                    // Move to final step after successful config save
+                    showStep(4);
+                    updateConfigSummary();
+                } else {
+                    alert('Failed to save configuration: ' + message.error);
+                }
                 break;
         }
     });
@@ -336,10 +364,12 @@
     document.getElementById('deleteProfile').addEventListener('click', () => {
         const selectedId = profileSelect.value;
         if (selectedId) {
-            vscode.postMessage({
-                type: 'confirmDelete',
-                profileId: selectedId
-            });
+            if (confirm('Are you sure you want to delete this profile? This action cannot be undone.')) {
+                vscode.postMessage({ 
+                    type: 'deleteProfile', 
+                    profileId: selectedId 
+                });
+            }
         }
     });
 
@@ -347,55 +377,214 @@
     document.getElementById('rescanProfile').addEventListener('click', () => {
         const selectedId = profileSelect.value;
         if (selectedId) {
-            vscode.postMessage({
-                type: 'rescanProfile',
-                profileId: selectedId
+            const button = document.getElementById('rescanProfile');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '⏳';
+            
+            vscode.postMessage({ 
+                type: 'rescanProfile', 
+                profileId: selectedId 
             });
+            
+            // Re-enable button after a delay
+            setTimeout(() => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }, 3000);
         }
     });
 
     // Handle scan all button click
     document.getElementById('scanAll').addEventListener('click', () => {
-        vscode.postMessage({ type: 'rescanAll' });
+        const button = document.getElementById('scanAll');
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '⏳';
+        
+        vscode.postMessage({ type: 'scanAllProfiles' });
+        
+        // Re-enable button after a delay
+        setTimeout(() => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }, 3000);
     });
 
     // Handle scan workspace button click
     document.getElementById('scanWorkspace').addEventListener('click', () => {
         const button = document.getElementById('scanWorkspace');
         button.disabled = true;
-        button.innerHTML = '<span style="font-family: codicon; animation: spin 1s linear infinite;">↻</span> Analyzing...';
+        button.innerHTML = '<span style="font-family: codicon;">⏳</span> Scanning...';
         
         vscode.postMessage({ type: 'scanWorkspace' });
-        
-        // Show loading state in empty state
-        const emptyState = document.getElementById('emptyState');
-        const originalContent = emptyState.innerHTML;
-        emptyState.innerHTML = 
-            '<div class="empty-state-icon" style="animation: spin 1s linear infinite;">↻</div>' +
-            '<div>' +
-                '<h3 style="margin: 0 0 8px 0;">Scanning Workspace</h3>' +
-                '<p>Analyzing your project for security patterns...</p>' +
-            '</div>';
-            
-        // Add timeout to restore button state if no response
-        setTimeout(() => {
-            if (button.disabled) {
-                button.disabled = false;
-                button.innerHTML = '<span style="font-family: codicon;">⚡</span> Secure Your Workspace';
-                emptyState.innerHTML = originalContent;
-            }
-        }, 30000); // 30 second timeout
     });
 
-    // Handle profile selection
+    // Onboarding Functions
+    function showStep(step) {
+        // Hide all steps
+        for (let i = 1; i <= 4; i++) {
+            const stepElement = document.getElementById(`onboardingStep${i}`);
+            if (stepElement) {
+                stepElement.style.display = 'none';
+            }
+        }
+        
+        // Show the requested step
+        const targetStep = document.getElementById(`onboardingStep${step}`);
+        if (targetStep) {
+            targetStep.style.display = 'block';
+            currentStep = step;
+            if (step === 4) {
+                updateConfigSummary();
+            }
+        }
+    }
+
+    function updateModelInfo() {
+        const modelInfo = document.getElementById('selectedModelInfo');
+        const modelName = getModelDisplayName(selectedModel);
+        const provider = getModelProvider(selectedModel);
+        
+        modelInfo.innerHTML = `
+            <strong>Selected Model:</strong> ${modelName}<br>
+            <strong>Provider:</strong> ${provider}<br>
+            <small>Make sure you have a valid API key for ${provider}</small>
+        `;
+    }
+
+    function updateConfigSummary() {
+        const configSummary = document.getElementById('configSummary');
+        const modelName = getModelDisplayName(selectedModel);
+        const provider = getModelProvider(selectedModel);
+        
+        configSummary.innerHTML = `
+            <div class="config-item">
+                <span class="config-label">AI Model:</span>
+                <span class="config-value">${modelName}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Provider:</span>
+                <span class="config-value">${provider}</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">API Key:</span>
+                <span class="config-value">••••••••••••${apiKey.slice(-4)}</span>
+            </div>
+        `;
+    }
+
+    function getModelDisplayName(model) {
+        const modelNames = {
+            'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
+            'gpt-4o': 'GPT-4o',
+            'gpt-4o-mini': 'GPT-4o Mini',
+            'o1-mini': 'O1 Mini',
+            'o1': 'O1',
+            'gpt-4.1-2025-04-14': 'GPT-4.1',
+            'o3-mini-2025-01-31': 'O3 Mini',
+            'gemini-2.5-pro': 'Gemini 2.5 Pro',
+            'gemini-2.5-flash': 'Gemini 2.5 Flash',
+            'claude-opus-4-20250514': 'Claude Opus 4',
+            'claude-sonnet-4-20250514': 'Claude Sonnet 4',
+            'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
+            'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku'
+        };
+        return modelNames[model] || model;
+    }
+
+    function getModelProvider(model) {
+        if (model.startsWith('claude')) return 'Anthropic';
+        if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) return 'OpenAI';
+        if (model.startsWith('gemini')) return 'Google';
+        return 'Unknown';
+    }
+
+    // Onboarding Event Listeners
+    document.addEventListener('DOMContentLoaded', () => {
+        // Step 1: Start onboarding
+        const startButton = document.getElementById('startOnboarding');
+        if (startButton) {
+            startButton.addEventListener('click', () => {
+                showStep(2);
+            });
+        }
+
+        // Step 2: Model selection
+        const modelSelect = document.getElementById('modelSelect');
+        if (modelSelect) {
+            modelSelect.addEventListener('change', (e) => {
+                selectedModel = e.target.value;
+            });
+        }
+
+        const backToStep1 = document.getElementById('backToStep1');
+        if (backToStep1) {
+            backToStep1.addEventListener('click', () => {
+                showStep(1);
+            });
+        }
+
+        const continueToStep3 = document.getElementById('continueToStep3');
+        if (continueToStep3) {
+            continueToStep3.addEventListener('click', () => {
+                showStep(3);
+                updateModelInfo();
+            });
+        }
+
+        // Step 3: API Key configuration
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        if (apiKeyInput) {
+            apiKeyInput.addEventListener('input', (e) => {
+                apiKey = e.target.value;
+            });
+        }
+
+        const backToStep2 = document.getElementById('backToStep2');
+        if (backToStep2) {
+            backToStep2.addEventListener('click', () => {
+                showStep(2);
+            });
+        }
+
+        const continueToStep4 = document.getElementById('continueToStep4');
+        if (continueToStep4) {
+            continueToStep4.addEventListener('click', () => {
+                if (!apiKey.trim()) {
+                    alert('Please enter an API key to continue.');
+                    return;
+                }
+                
+                // Save configuration
+                vscode.postMessage({
+                    type: 'saveConfig',
+                    model: selectedModel,
+                    apiKey: apiKey
+                });
+            });
+        }
+
+        // Step 4: Back to API key
+        const backToStep3 = document.getElementById('backToStep3');
+        if (backToStep3) {
+            backToStep3.addEventListener('click', () => {
+                showStep(3);
+                updateModelInfo();
+            });
+        }
+    });
+
+    // Handle profile selection change
     profileSelect.addEventListener('change', () => {
         const selectedId = profileSelect.value;
         if (selectedId) {
-            vscode.postMessage({
-                type: 'profileSelected',
-                profileId: selectedId
-            });
-            // Show loading state
+            const profile = globalProfiles.find(p => p.id === selectedId);
+            if (profile) {
+                displayProfileDetails(profile);
+            }
+            
+            // Show loading state while fetching profile details
             profileCardContainer.innerHTML = '<div>Loading profile details...</div>';
             profileCardContainer.style.display = 'block';
             profileDetails.style.display = 'none';
@@ -403,4 +592,4 @@
             showNoProfileDetails();
         }
     });
-}());
+})();

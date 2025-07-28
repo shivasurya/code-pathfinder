@@ -67,7 +67,7 @@ Each issue should have the following format strictly:
 {
     "title": "Issue title",
     "severity": "Low|Medium|High|Critical",
-    "description": "Detailed description of the issue",
+    "description": "Detailed description of the issue and include file name, path and line number",
     "recommendation": "How to fix the issue"
 }
 

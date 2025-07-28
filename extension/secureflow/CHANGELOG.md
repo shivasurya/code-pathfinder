@@ -1,5 +1,12 @@
 # SecureFlow Changelog
 
+## Version 0.0.4 - July 28, 2025
+
+### 🚀 What's New?
+- Added better onboarding experience
+- Fixed AI Client to support openai models
+
+
 ## Version 0.0.3 - July 27, 2025
 
 ### 🎯 What's New?

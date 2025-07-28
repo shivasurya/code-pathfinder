@@ -20,20 +20,113 @@
             <div class="empty-state-icon">
                 <img src="${iconUri}" alt="SecureFlow" />
             </div>
-            <div>
-                <h3 style="margin: 0 0 12px 0;">Welcome to SecureFlow AI</h3>
-                <p>Let's analyze your workspace to provide tailored security insights. SecureFlow will:</p>
-                <div class="feature-list">
-                    <div class="feature-item">Review code for security risks</div>
-                    <div class="feature-item">Surface potential vulnerabilities</div>
-                    <div class="feature-item">Assist with threat modeling</div>
-                    <div class="feature-item">Recommend security fixes</div>
+            
+            <!-- Step 1: Welcome -->
+            <div id="onboardingStep1" class="onboarding-step">
+                <div>
+                    <h3 style="margin: 0 0 12px 0;">Welcome to SecureFlow AI</h3>
+                    <p>Let's set up SecureFlow to provide tailored security insights. We'll need to configure your AI model and API key first.</p>
+                    <div class="feature-list">
+                        <div class="feature-item">Review code for security risks</div>
+                        <div class="feature-item">Surface potential vulnerabilities</div>
+                        <div class="feature-item">Assist with threat modeling</div>
+                        <div class="feature-item">Recommend security fixes</div>
+                    </div>
+                </div>
+                <button id="startOnboarding" class="scan-btn">
+                    <span style="font-family: codicon;">🚀</span>
+                    Get Started
+                </button>
+            </div>
+            
+            <!-- Step 2: Model Selection -->
+            <div id="onboardingStep2" class="onboarding-step" style="display: none;">
+                <div>
+                    <h3 style="margin: 0 0 12px 0;">Choose Your AI Model</h3>
+                    <p>Select the AI model you'd like to use for security analysis:</p>
+                    <div class="form-group">
+                        <label for="modelSelect">AI Model:</label>
+                        <select id="modelSelect" class="form-select">
+                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Recommended)</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="o1-mini">O1 Mini</option>
+                            <option value="o1">O1</option>
+                            <option value="gpt-4.1-2025-04-14">GPT-4.1</option>
+                            <option value="o3-mini-2025-01-31">O3 Mini</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                            <option value="claude-opus-4-20250514">Claude Opus 4</option>
+                            <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                            <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet</option>
+                            <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="onboarding-buttons">
+                    <button id="backToStep1" class="secondary-btn">
+                        <span style="font-family: codicon;">←</span>
+                        Back
+                    </button>
+                    <button id="continueToStep3" class="scan-btn">
+                        Continue
+                        <span style="font-family: codicon;">→</span>
+                    </button>
                 </div>
             </div>
-            <button id="scanWorkspace" class="scan-btn">
-                <span style="font-family: codicon;">⚡</span>
-                Secure Your Workspace
-            </button>
+            
+            <!-- Step 3: API Key Configuration -->
+            <div id="onboardingStep3" class="onboarding-step" style="display: none;">
+                <div>
+                    <h3 style="margin: 0 0 12px 0;">Configure API Key</h3>
+                    <p>Enter your API key for the selected AI model. This will be stored securely in your user settings.</p>
+                    <div class="form-group">
+                        <label for="apiKeyInput">API Key:</label>
+                        <input type="password" id="apiKeyInput" class="form-input" placeholder="Enter your API key..." />
+                        <div class="input-help">
+                            <span style="font-family: codicon;">🔒</span>
+                            Your API key is stored securely and never shared
+                        </div>
+                    </div>
+                    <div id="selectedModelInfo" class="model-info">
+                        <!-- Model info will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="onboarding-buttons">
+                    <button id="backToStep2" class="secondary-btn">
+                        <span style="font-family: codicon;">←</span>
+                        Back
+                    </button>
+                    <button id="continueToStep4" class="scan-btn">
+                        Continue
+                        <span style="font-family: codicon;">→</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 4: Ready to Analyze -->
+            <div id="onboardingStep4" class="onboarding-step" style="display: none;">
+                <div style="text-align: center;">
+                    <h3 style="margin: 0 0 12px 0;">Ready to Secure Your Workspace!</h3>
+                    <div class="ai-disclaimer">
+                        Great! SecureFlow is now configured and ready to analyze your workspace for security insights.
+                    </div>
+                    <div id="configSummary" class="config-summary">
+                        <!-- Configuration summary will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="onboarding-buttons">
+                    <button id="backToStep3" class="secondary-btn">
+                        <span style="font-family: codicon;">←</span>
+                        Back
+                    </button>
+                    <button id="scanWorkspace" class="scan-btn">
+                        <span style="font-family: codicon;">⚡</span>
+                        Secure Your Workspace
+                    </button>
+                </div>
+            </div>
+            
             <div class="ai-disclaimer">
                 SecureFlow is powered by AI. While our analysis strives to be thorough, please review all suggestions carefully before implementation.
             </div>
