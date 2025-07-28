@@ -734,6 +734,10 @@ select {
     font-weight: 300;
 }
 
+.center-text {
+  text-align: center;
+}
+
 /* --- Onboarding Styles --- */
 .onboarding-step {
     width: 100%;

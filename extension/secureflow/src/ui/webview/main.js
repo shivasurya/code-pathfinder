@@ -54,8 +54,10 @@
                 break;
             case 'onboardingStatus':
                 if (message.isConfigured) {
+                    console.log('Already configured');
                     // Skip onboarding if already configured
                     showStep(4);
+                    updateConfigSummary();
                 } else {
                     // Show step 1 for new users
                     showStep(1);
@@ -433,6 +435,9 @@
         if (targetStep) {
             targetStep.style.display = 'block';
             currentStep = step;
+            if (step === 4) {
+                updateConfigSummary();
+            }
         }
     }
 

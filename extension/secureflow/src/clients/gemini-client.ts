@@ -22,7 +22,7 @@ export class GeminiClient extends HttpClient implements AIClient {
      * @returns The AI response
      */
     public async sendRequest(prompt: string, options?: AIClientOptions): Promise<AIResponse> {
-        console.log("Using API key: ", options?.apiKey);
+        // console.log("Using API key: ", options?.apiKey);
         if (!options?.apiKey) {
             throw new Error('Google Gemini API key is required');
         }
