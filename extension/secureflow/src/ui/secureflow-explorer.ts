@@ -201,12 +201,20 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     );
                     if (answer === 'Delete') {
                         try {
+                            // Delete the profile
                             await this._profileService.deleteProfile(message.profileId);
+                            
+                            // Delete all scan history as requested
+                            await this._scanService.clearAllScans();
+                            
+                            // Reload both profiles and scans to reflect changes
                             await this.loadProfiles();
+                            await this.loadScans();
                             
                             // Track API success
                             analytics.trackEvent('Security Profile Deleted Successfully', {
-                                profile_id: message.profileId
+                                profile_id: message.profileId,
+                                scan_history_cleared: true
                             });
                             
                             if (this._view) {
@@ -224,7 +232,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                             if (this._view) {
                                 this._view.webview.postMessage({
                                     type: 'error',
-                                    message: 'Failed to delete profile'
+                                    message: 'Failed to delete profile and scan history'
                                 });
                             }
                         }
