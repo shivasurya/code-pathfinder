@@ -5,11 +5,11 @@ export class AnalyticsService {
     private static instance: AnalyticsService;
     private posthog: PostHog | null = null;
     private initialized = false;
-    private distinctId: string;
+    private distinctId: string = '';
+    private context: vscode.ExtensionContext | null = null;
 
     private constructor() {
-        // Generate a random anonymous ID for this session
-        this.distinctId = Math.random().toString(36).substring(2, 15);
+        // Distinct ID will be loaded from global state in initialize()
     }
 
     public static getInstance(): AnalyticsService {
@@ -19,11 +19,19 @@ export class AnalyticsService {
         return AnalyticsService.instance;
     }
 
-    public async initialize(): Promise<void> {
+    public async initialize(context?: vscode.ExtensionContext): Promise<void> {
         if (this.initialized) {
             console.log('📊 Analytics: Already initialized, skipping');
             return;
         }
+
+        // Store context for persistent storage
+        if (context) {
+            this.context = context;
+        }
+
+        // Load or generate persistent distinct ID
+        await this.loadOrGenerateDistinctId();
 
         try {
             console.log('📊 Analytics: Initializing PostHog client...');
@@ -45,6 +53,34 @@ export class AnalyticsService {
         }
     }
 
+    private async loadOrGenerateDistinctId(): Promise<void> {
+        const DISTINCT_ID_KEY = 'secureflow.analytics.distinctId';
+        
+        if (this.context) {
+            // Try to load existing distinct ID from global state
+            const existingId = this.context.globalState.get<string>(DISTINCT_ID_KEY);
+            
+            if (existingId) {
+                this.distinctId = existingId;
+                console.log('📊 Analytics: Loaded existing distinct ID from storage');
+            } else {
+                // Generate new distinct ID and store it
+                this.distinctId = this.generateDistinctId();
+                await this.context.globalState.update(DISTINCT_ID_KEY, this.distinctId);
+                console.log('📊 Analytics: Generated and stored new distinct ID');
+            }
+        } else {
+            // Fallback: generate temporary ID if no context available
+            this.distinctId = this.generateDistinctId();
+            console.log('📊 Analytics: Generated temporary distinct ID (no context available)');
+        }
+    }
+
+    private generateDistinctId(): string {
+        // Generate a random anonymous ID
+        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    }
+
     public isEnabled(): boolean {
         return this.initialized && this.posthog !== null;
     }
@@ -64,7 +100,7 @@ export class AnalyticsService {
 
         // Send event to PostHog using Node.js client
         if (this.posthog) {
-            console.log(`📊 Analytics: Tracking event "${eventName}" with properties:`, properties);
+            // console.log(`📊 Analytics: Tracking event "${eventName}" with properties:`, properties);
             
             this.posthog.capture({
                 distinctId: this.distinctId,
@@ -77,17 +113,6 @@ export class AnalyticsService {
         } else {
             console.warn('📊 Analytics: PostHog client not initialized, event not tracked:', eventName);
         }
-    }
-
-
-
-    public identifyUser(userId: string): void {
-        // We don't actually identify users - keep anonymous
-        this.distinctId = userId;
-    }
-
-    public reset(): void {
-        this.distinctId = Math.random().toString(36).substring(2, 15);
     }
 
     public async shutdown(): Promise<void> {

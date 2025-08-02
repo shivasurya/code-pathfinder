@@ -12,15 +12,13 @@ import { AnalyticsService } from './services/analytics';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
-	console.log('SecureFlow extension is now active!');
-	
 	// Initialize analytics if enabled
 	const analytics = AnalyticsService.getInstance();
 	const analyticsEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
-	console.log('📊 Analytics: Settings check - enabled:', analyticsEnabled);
+	// console.log('📊 Analytics: Settings check - enabled:', analyticsEnabled);
 	
 	if (analyticsEnabled) {
-		await analytics.initialize();
+		await analytics.initialize(context);
 		analytics.trackEvent('SecureFlow Extension Started', {
 			extension_version: context.extension.packageJSON.version,
 			vscode_version: vscode.version
@@ -29,8 +27,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		console.log('📊 Analytics: Disabled in settings, skipping initialization');
 	}
 	
+	SecureFlowExplorer.register(context);
+	
 	// Show activation message to user for debugging
-	// vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
+	vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
 
 	// Create an output channel for security diagnostics
 	const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
@@ -59,10 +59,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(
 			analyzeSelectionCommand
 		);
-
-		// Register the SecureFlow Explorer webview
-		SecureFlowExplorer.register(context);
-		outputChannel.appendLine('SecureFlow Explorer registered');
 		
 		outputChannel.appendLine('SecureFlow extension fully activated!');
 		console.log('SecureFlow extension fully activated!');
