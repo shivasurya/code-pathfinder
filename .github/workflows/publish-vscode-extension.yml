@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'extension/secureflow/package-lock.json'
 
       - name: Install dependencies
         run: |

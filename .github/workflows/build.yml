@@ -6,6 +6,10 @@ on:
       - main
       - master
   pull_request:
+    paths:
+      - 'sourcecode-parser/**'
+      - 'playground/**'
+      - 'pathfinder-rules/**'
 
 jobs:
   build:
