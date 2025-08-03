@@ -808,6 +808,11 @@ select {
     margin-top: 24px;
 }
 
+/* Center the Get Started button in step 1 */
+#onboardingStep1 .scan-btn {
+    margin: 24px auto 0 auto;
+}
+
 .secondary-btn {
     background: var(--vscode-button-secondaryBackground);
     color: var(--vscode-button-secondaryForeground);
