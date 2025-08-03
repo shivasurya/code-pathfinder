@@ -1,8 +1,16 @@
 # SecureFlow Changelog
 
+## Version 0.0.5 - August 3, 2025
+
+### Chores
+
+- Addressed some performance hiccups
+- Fixed analytics identifier being generated multiple times
+
 ## Version 0.0.4 - July 28, 2025
 
 ### 🚀 What's New?
+
 - Added better onboarding experience
 - Fixed AI Client to support openai models
 
