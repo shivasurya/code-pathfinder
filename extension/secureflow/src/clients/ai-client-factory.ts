@@ -30,6 +30,7 @@ export class AIClientFactory {
             return new GeminiClient();
 
             // Anthropic models
+            case 'claude-opus-4-1-20250805':
             case 'claude-opus-4-20250514':
             case 'claude-sonnet-4-20250514':
             case 'claude-3-7-sonnet-20250219':
