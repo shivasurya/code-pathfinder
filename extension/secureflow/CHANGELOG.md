@@ -1,5 +1,11 @@
 # SecureFlow Changelog
 
+## Version 0.0.6 - August 10, 2025
+
+### 🚀 What's New?
+
+- Added Anthropic Claude 4.1 Opus Model support
+
 ## Version 0.0.5 - August 3, 2025
 
 ### Chores
