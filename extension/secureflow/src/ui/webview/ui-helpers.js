@@ -74,6 +74,7 @@ export function getModelDisplayName(model) {
         'o3-mini-2025-01-31': 'O3 Mini',
         'gemini-2.5-pro': 'Gemini 2.5 Pro',
         'gemini-2.5-flash': 'Gemini 2.5 Flash',
+        'claude-opus-4-1-20250805': 'Claude Opus 4.1',
         'claude-opus-4-20250514': 'Claude Opus 4',
         'claude-sonnet-4-20250514': 'Claude Sonnet 4',
         'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
