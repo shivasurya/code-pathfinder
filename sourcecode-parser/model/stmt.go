@@ -126,7 +126,7 @@ func (forStmt *ForStmt) GetAnUpdate() *Expr {
 }
 
 func (forStmt *ForStmt) ToString() string {
-	return fmt.Sprintf("for (%s; %s; %s) %s", forStmt.Init.NodeString, forStmt.Condition.NodeString, forStmt.Increment.NodeString, forStmt.Stmt.NodeString)
+	return fmt.Sprintf("for (%s; %s; %s) %s", forStmt.Init.NodeString, forStmt.Condition.NodeString, forStmt.Increment.NodeString, forStmt.NodeString)
 }
 
 type IWhileStmt interface {
@@ -160,11 +160,11 @@ func (whileStmt *WhileStmt) GetStmt() Stmt {
 }
 
 func (whileStmt *WhileStmt) GetPP() string {
-	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.Stmt.NodeString)
+	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.NodeString)
 }
 
 func (whileStmt *WhileStmt) ToString() string {
-	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.Stmt.NodeString)
+	return fmt.Sprintf("while (%s) %s", whileStmt.Condition.NodeString, whileStmt.NodeString)
 }
 
 type ILabeledStmt interface {
