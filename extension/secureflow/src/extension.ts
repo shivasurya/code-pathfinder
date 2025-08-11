@@ -8,29 +8,50 @@ import { SettingsManager } from './settings/settings-manager';
 import { WorkspaceProfilerCommand } from './profiler/workspace-profiler-command';
 import { SecureFlowExplorer } from './ui/secureflow-explorer';
 import { AnalyticsService } from './services/analytics';
+import { SentryService } from './services/sentry-service';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
-	// Initialize analytics if enabled
-	const analytics = AnalyticsService.getInstance();
-	const analyticsEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
-	// console.log('📊 Analytics: Settings check - enabled:', analyticsEnabled);
 	
-	if (analyticsEnabled) {
-		await analytics.initialize(context);
-		analytics.trackEvent('SecureFlow Extension Started', {
-			extension_version: context.extension.packageJSON.version,
-			vscode_version: vscode.version
-		});
-	} else {
-		console.log('📊 Analytics: Disabled in settings, skipping initialization');
+	try {
+		// Initialize Sentry error reporting first
+		const sentry = SentryService.getInstance();
+		await sentry.initialize(context);
+		sentry.addBreadcrumb('Extension activation started', 'lifecycle');
+
+		// Initialize analytics if enabled
+		const analytics = AnalyticsService.getInstance();
+		const analyticsEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
+		// console.log('📊 Analytics: Settings check - enabled:', analyticsEnabled);
+		
+		if (analyticsEnabled) {
+			await analytics.initialize(context);
+			analytics.trackEvent('SecureFlow Extension Started', {
+				extension_version: context.extension.packageJSON.version,
+				vscode_version: vscode.version
+			});
+		} else {
+			console.log('📊 Analytics: Disabled in settings, skipping initialization');
+		}
+
+		// Set up global error handlers
+		sentry.setupGlobalErrorHandlers();
+	} catch (error) {
+		console.error('Failed to initialize SecureFlow services:', error);
+		// Even if Sentry fails, we should still try to capture this error
+		try {
+			const sentry = SentryService.getInstance();
+			sentry.captureException(error as Error, { context: 'extension_activation' });
+		} catch (sentryError) {
+			console.error('Failed to capture initialization error:', sentryError);
+		}
 	}
 	
 	SecureFlowExplorer.register(context);
 	
 	// Show activation message to user for debugging
-	vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
+	// vscode.window.showInformationMessage('SecureFlow extension activated successfully!');
 
 	// Create an output channel for security diagnostics
 	const outputChannel = vscode.window.createOutputChannel('SecureFlow Security Diagnostics');
@@ -67,6 +88,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		const errorMessage = `SecureFlow activation failed: ${error}`;
 		outputChannel.appendLine(errorMessage);
 		console.error(errorMessage);
+		
+		// Capture the error with Sentry
+		try {
+			const sentry = SentryService.getInstance();
+			sentry.captureException(error as Error, { 
+				context: 'extension_main_activation',
+				component: 'command_registration'
+			});
+		} catch (sentryError) {
+			console.error('Failed to capture activation error:', sentryError);
+		}
+		
 		vscode.window.showErrorMessage(errorMessage);
 	}
 }
@@ -75,7 +108,10 @@ function registerAnalyzeSelectionCommand(
 	outputChannel: vscode.OutputChannel, 
 	settingsManager: SettingsManager
 ): vscode.Disposable {
-	return vscode.commands.registerCommand('secureflow.analyzeSelection', async () => {
+	const sentry = SentryService.getInstance();
+	return vscode.commands.registerCommand('secureflow.analyzeSelection', sentry.withErrorHandling(
+		'secureflow.analyzeSelection',
+		async () => {
 		// Track command usage
 		const analytics = AnalyticsService.getInstance();
 		analytics.trackEvent('Code Analysis Started', {
@@ -150,6 +186,19 @@ function registerAnalyzeSelectionCommand(
 				// If there's an error with the API key or AI analysis, fallback to pattern-based
 				console.error('Error with AI analysis:', error);
 				outputChannel.appendLine(`⚠️ Error connecting to ${aiModel}: ${error}. Using pattern-based analysis only.`);
+				
+				// Capture the error with Sentry
+				try {
+					const sentry = SentryService.getInstance();
+					sentry.captureException(error as Error, { 
+						context: 'ai_analysis_error',
+						component: 'analyze_selection_command',
+						ai_model: aiModel,
+						selected_text_length: selectedText.length
+					});
+				} catch (sentryError) {
+					console.error('Failed to capture AI analysis error:', sentryError);
+				}
 			}
 			
 			// Complete the progress
@@ -170,12 +219,35 @@ function registerAnalyzeSelectionCommand(
 				});
 			}
 		});
-	});
+	}));
 }
 
 // This method is called when your extension is deactivated
 export async function deactivate() {
-	// Properly shutdown analytics
-	const analytics = AnalyticsService.getInstance();
-	await analytics.shutdown();
+	try {
+		// Add breadcrumb for deactivation
+		const sentry = SentryService.getInstance();
+		sentry.addBreadcrumb('Extension deactivation started', 'lifecycle');
+		
+		// Properly shutdown analytics
+		const analytics = AnalyticsService.getInstance();
+		await analytics.shutdown();
+		
+		// Flush any pending Sentry events before shutdown
+		await sentry.flush(3000); // Wait up to 3 seconds for events to be sent
+		
+		// Close Sentry client
+		await sentry.close();
+		
+		console.log('SecureFlow extension deactivated successfully');
+	} catch (error) {
+		console.error('Error during extension deactivation:', error);
+		// Try to capture this error, but don't wait for it
+		try {
+			const sentry = SentryService.getInstance();
+			sentry.captureException(error as Error, { context: 'extension_deactivation' });
+		} catch (sentryError) {
+			console.error('Failed to capture deactivation error:', sentryError);
+		}
+	}
 }

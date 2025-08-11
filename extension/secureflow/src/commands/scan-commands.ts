@@ -1,16 +1,18 @@
 import * as vscode from 'vscode';
 import { ScanStorageService } from '../services/scan-storage-service';
+import { SentryService } from '../services/sentry-service';
 
 /**
  * Register scan-related commands
  */
 export function registerScanCommands(context: vscode.ExtensionContext): void {
     const scanService = new ScanStorageService(context);
+    const sentry = SentryService.getInstance();
 
     // Command to retrieve a scan by number
     const retrieveScanCommand = vscode.commands.registerCommand(
         'secureflow.retrieveScan',
-        async () => {
+        sentry.withErrorHandling('secureflow.retrieveScan', async () => {
             const scanNumber = await vscode.window.showInputBox({
                 prompt: 'Enter scan number to retrieve',
                 placeHolder: 'e.g., 1',
@@ -41,13 +43,13 @@ export function registerScanCommands(context: vscode.ExtensionContext): void {
                     vscode.window.showErrorMessage(`Scan #${num} not found.`);
                 }
             }
-        }
+        })
     );
 
     // Command to list all scans
     const listScansCommand = vscode.commands.registerCommand(
         'secureflow.listScans',
-        async () => {
+        sentry.withErrorHandling('secureflow.listScans', async () => {
             const scans = scanService.getAllScans();
             const stats = scanService.getStats();
             
@@ -77,7 +79,7 @@ export function registerScanCommands(context: vscode.ExtensionContext): void {
                     });
                 }, 100);
             }
-        }
+        })
     );
 
     context.subscriptions.push(retrieveScanCommand, listScansCommand);

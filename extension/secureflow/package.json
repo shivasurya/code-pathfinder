@@ -144,6 +144,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable anonymous analytics to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change."
+        },
+        "secureflow.errorReporting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable anonymous error reporting to help improve the product stability. Only error information is collected with no personal data. Restart Editor to apply this change."
         }
       }
     },
@@ -228,6 +233,7 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@sentry/node": "^10.4.0",
     "posthog-node": "^4.0.1"
   },
   "devDependencies": {
