@@ -103,10 +103,10 @@ export class WorkspaceProfiler {
   public async profileWorkspace(): Promise<ProfilerResult> {
     // Start with workspace structure analysis
     const workspaceStructure = await this.getWorkspaceStructure();
-    
+
     // Use AI to profile the workspace based on structure
     const applications = await this.analyzeWorkspaceWithAI(workspaceStructure);
-    
+
     return { applications };
   }
 
@@ -120,12 +120,12 @@ export class WorkspaceProfiler {
       directories: {},
       keyFiles: []
     };
-    
+
     await this.scanDirectory(this.workspaceFolder.uri.fsPath, structure, 0, 3);
-    
+
     return structure;
   }
-  
+
   /**
    * Recursively scan a directory to build structure
    * @param dirPath Directory to scan
@@ -134,40 +134,41 @@ export class WorkspaceProfiler {
    * @param maxDepth Maximum depth to scan
    */
   private async scanDirectory(
-    dirPath: string, 
-    structure: any, 
-    currentDepth: number, 
+    dirPath: string,
+    structure: any,
+    currentDepth: number,
     maxDepth: number
   ): Promise<void> {
     if (currentDepth > maxDepth) {
       return;
     }
-    
+
     try {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const entryPath = path.join(dirPath, entry.name);
-        
+
         // Skip ignored patterns
         if (this.shouldIgnore(entry.name)) {
           continue;
         }
-        
+
         if (entry.isDirectory()) {
           if (currentDepth < maxDepth) {
-            structure.directories[entry.name] = { 
-              directories: {}, 
-              keyFiles: [] 
+            structure.directories[entry.name] = {
+              directories: {},
+              keyFiles: []
             };
             await this.scanDirectory(
-              entryPath, 
-              structure.directories[entry.name], 
-              currentDepth + 1, 
+              entryPath,
+              structure.directories[entry.name],
+              currentDepth + 1,
               maxDepth
             );
           } else {
-            structure.directories[entry.name] = "[Directory contents not scanned]";
+            structure.directories[entry.name] =
+              '[Directory contents not scanned]';
           }
         } else if (entry.isFile()) {
           // Only include high-signal files in the structure
@@ -185,7 +186,7 @@ export class WorkspaceProfiler {
               structure.keyFiles.push({
                 name: entry.name,
                 path: entryPath,
-                content: "[File too large to include]"
+                content: '[File too large to include]'
               });
             }
           }
@@ -195,7 +196,7 @@ export class WorkspaceProfiler {
       console.error(`Error scanning directory ${dirPath}:`, error);
     }
   }
-  
+
   /**
    * Check if a file or directory should be ignored
    */
@@ -203,7 +204,7 @@ export class WorkspaceProfiler {
     for (const pattern of this.ignorePatterns) {
       if (pattern.startsWith('*')) {
         // Handle extension pattern
-        const ext = pattern.substring(1); 
+        const ext = pattern.substring(1);
         if (name.endsWith(ext)) {
           return true;
         }
@@ -213,12 +214,12 @@ export class WorkspaceProfiler {
     }
     return false;
   }
-  
+
   /**
    * Check if a file provides high signal about project type
    */
   private isHighSignalFile(fileName: string): boolean {
-    return this.highSignalFiles.some(pattern => {
+    return this.highSignalFiles.some((pattern) => {
       if (pattern.startsWith('*.')) {
         // Handle extension pattern
         const ext = pattern.substring(1);
@@ -227,11 +228,13 @@ export class WorkspaceProfiler {
       return fileName === pattern;
     });
   }
-  
+
   /**
    * Use AI to analyze the workspace structure and determine application types
    */
-  private async analyzeWorkspaceWithAI(workspaceStructure: any): Promise<ProjectApplication[]> {
+  private async analyzeWorkspaceWithAI(
+    workspaceStructure: any
+  ): Promise<ProjectApplication[]> {
     try {
       // Create a condensed representation of the project for the AI
       const projectData = {
@@ -240,7 +243,10 @@ export class WorkspaceProfiler {
         keyFiles: workspaceStructure.keyFiles.map((file: any) => ({
           name: file.name,
           path: file.path,
-          content: file.content.length > 1000 ? file.content.substring(0, 1000) + "..." : file.content
+          content:
+            file.content.length > 1000
+              ? file.content.substring(0, 1000) + '...'
+              : file.content
         }))
       };
 
@@ -295,10 +301,10 @@ export class WorkspaceProfiler {
         // Call the AI client to analyze the workspace
         const response = await this.aiClient.sendRequest(prompt, {
           temperature: 0.1, // Lower temperature for more deterministic results
-          maxTokens: 2048,  // Ensure enough tokens for the response
+          maxTokens: 2048, // Ensure enough tokens for the response
           apiKey: '' // The API key should be managed by the client
         });
-        
+
         // Parse the JSON response
         try {
           // Extract the JSON part from the response
@@ -307,15 +313,18 @@ export class WorkspaceProfiler {
             console.error('No JSON found in response:', response.content);
             return this.getMockProfiles(); // Fallback to mock profiles
           }
-          
+
           const jsonContent = jsonMatch[0];
           const result = JSON.parse(jsonContent);
-          
+
           if (!result.applications || !Array.isArray(result.applications)) {
-            console.error('Invalid response format, missing applications array:', result);
+            console.error(
+              'Invalid response format, missing applications array:',
+              result
+            );
             return this.getMockProfiles(); // Fallback to mock profiles
           }
-          
+
           return result.applications;
         } catch (parseError) {
           console.error('Error parsing AI response:', parseError);
@@ -331,29 +340,32 @@ export class WorkspaceProfiler {
       return this.getMockProfiles();
     }
   }
-  
+
   /**
    * Get mock application profiles for testing or fallback
    */
   private getMockProfiles(): ProjectApplication[] {
     const mockApplications: ProjectApplication[] = [
       {
-        name: "Sample Express API",
-        path: "/",
-        category: "backend",
-        subcategory: "http",
-        technology: "express",
+        name: 'Sample Express API',
+        path: '/',
+        category: 'backend',
+        subcategory: 'http',
+        technology: 'express',
         confidence: 85,
-        languages: ["javascript", "typescript"],
-        frameworks: ["express"],
-        buildTools: ["webpack"],
-        evidence: ["Found package.json with express dependency", "Server routing patterns detected"]
+        languages: ['javascript', 'typescript'],
+        frameworks: ['express'],
+        buildTools: ['webpack'],
+        evidence: [
+          'Found package.json with express dependency',
+          'Server routing patterns detected'
+        ]
       }
     ];
-    
+
     return mockApplications;
   }
-  
+
   /**
    * Get the appropriate security prompt for an application
    */

@@ -6,90 +6,92 @@ import { SentryService } from '../services/sentry-service';
  * Register scan-related commands
  */
 export function registerScanCommands(context: vscode.ExtensionContext): void {
-    const scanService = new ScanStorageService(context);
-    const sentry = SentryService.getInstance();
+  const scanService = new ScanStorageService(context);
+  const sentry = SentryService.getInstance();
 
-    // Command to retrieve a scan by number
-    const retrieveScanCommand = vscode.commands.registerCommand(
-        'secureflow.retrieveScan',
-        sentry.withErrorHandling('secureflow.retrieveScan', async () => {
-            const scanNumber = await vscode.window.showInputBox({
-                prompt: 'Enter scan number to retrieve',
-                placeHolder: 'e.g., 1',
-                validateInput: (value) => {
-                    const num = parseInt(value);
-                    if (isNaN(num) || num < 1) {
-                        return 'Please enter a valid scan number (1 or greater)';
-                    }
-                    return null;
-                }
-            });
+  // Command to retrieve a scan by number
+  const retrieveScanCommand = vscode.commands.registerCommand(
+    'secureflow.retrieveScan',
+    sentry.withErrorHandling('secureflow.retrieveScan', async () => {
+      const scanNumber = await vscode.window.showInputBox({
+        prompt: 'Enter scan number to retrieve',
+        placeHolder: 'e.g., 1',
+        validateInput: (value) => {
+          const num = parseInt(value);
+          if (isNaN(num) || num < 1) {
+            return 'Please enter a valid scan number (1 or greater)';
+          }
+          return null;
+        }
+      });
 
-            if (scanNumber) {
-                const num = parseInt(scanNumber);
-                const scan = scanService.getScanByNumber(num);
-                
-                if (scan) {
-                    // Create a new webview to display the scan results
-                    const panel = vscode.window.createWebviewPanel(
-                        'secureflowScanResult',
-                        `SecureFlow Scan #${scan.scanNumber}`,
-                        vscode.ViewColumn.One,
-                        { enableScripts: true }
-                    );
+      if (scanNumber) {
+        const num = parseInt(scanNumber);
+        const scan = scanService.getScanByNumber(num);
 
-                    panel.webview.html = generateScanResultHtml(scan);
-                } else {
-                    vscode.window.showErrorMessage(`Scan #${num} not found.`);
-                }
-            }
-        })
-    );
+        if (scan) {
+          // Create a new webview to display the scan results
+          const panel = vscode.window.createWebviewPanel(
+            'secureflowScanResult',
+            `SecureFlow Scan #${scan.scanNumber}`,
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+          );
 
-    // Command to list all scans
-    const listScansCommand = vscode.commands.registerCommand(
-        'secureflow.listScans',
-        sentry.withErrorHandling('secureflow.listScans', async () => {
-            const scans = scanService.getAllScans();
-            const stats = scanService.getStats();
-            
-            if (scans.length === 0) {
-                vscode.window.showInformationMessage('No scans found.');
-                return;
-            }
+          panel.webview.html = generateScanResultHtml(scan);
+        } else {
+          vscode.window.showErrorMessage(`Scan #${num} not found.`);
+        }
+      }
+    })
+  );
 
-            const items = scans.map(scan => ({
-                label: `Scan #${scan.scanNumber}`,
-                description: `${scan.issues.length} issues - ${scan.timestampFormatted}`,
-                detail: `${scan.fileCount} files analyzed with ${scan.model}`,
-                scanNumber: scan.scanNumber
-            }));
+  // Command to list all scans
+  const listScansCommand = vscode.commands.registerCommand(
+    'secureflow.listScans',
+    sentry.withErrorHandling('secureflow.listScans', async () => {
+      const scans = scanService.getAllScans();
+      const stats = scanService.getStats();
 
-            const selected = await vscode.window.showQuickPick(items, {
-                placeHolder: `Select a scan to view (${stats.totalScans} total scans)`
-            });
+      if (scans.length === 0) {
+        vscode.window.showInformationMessage('No scans found.');
+        return;
+      }
 
-            if (selected) {
-                vscode.commands.executeCommand('secureflow.retrieveScan');
-                // Pre-fill the input with the selected scan number
-                setTimeout(() => {
-                    vscode.window.showInputBox({
-                        prompt: 'Enter scan number to retrieve',
-                        value: selected.scanNumber.toString()
-                    });
-                }, 100);
-            }
-        })
-    );
+      const items = scans.map((scan) => ({
+        label: `Scan #${scan.scanNumber}`,
+        description: `${scan.issues.length} issues - ${scan.timestampFormatted}`,
+        detail: `${scan.fileCount} files analyzed with ${scan.model}`,
+        scanNumber: scan.scanNumber
+      }));
 
-    context.subscriptions.push(retrieveScanCommand, listScansCommand);
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `Select a scan to view (${stats.totalScans} total scans)`
+      });
+
+      if (selected) {
+        vscode.commands.executeCommand('secureflow.retrieveScan');
+        // Pre-fill the input with the selected scan number
+        setTimeout(() => {
+          vscode.window.showInputBox({
+            prompt: 'Enter scan number to retrieve',
+            value: selected.scanNumber.toString()
+          });
+        }, 100);
+      }
+    })
+  );
+
+  context.subscriptions.push(retrieveScanCommand, listScansCommand);
 }
 
 /**
  * Generate HTML for displaying scan results
  */
 function generateScanResultHtml(scan: any): string {
-    const issuesHtml = scan.issues.map((item: any) => `
+  const issuesHtml = scan.issues
+    .map(
+      (item: any) => `
         <div class="issue">
             <h3 class="issue-title severity-${item.issue.severity.toLowerCase()}">${item.issue.title}</h3>
             <div class="issue-meta">
@@ -101,9 +103,11 @@ function generateScanResultHtml(scan: any): string {
                 <strong>Recommendation:</strong> ${item.issue.recommendation}
             </div>
         </div>
-    `).join('');
+    `
+    )
+    .join('');
 
-    return `
+  return `
         <!DOCTYPE html>
         <html>
         <head>
@@ -153,10 +157,14 @@ function generateScanResultHtml(scan: any): string {
                 </div>
             </div>
             
-            ${scan.issues.length > 0 ? `
+            ${
+              scan.issues.length > 0
+                ? `
                 <h2>Security Issues</h2>
                 ${issuesHtml}
-            ` : '<p>No security issues found in this scan.</p>'}
+            `
+                : '<p>No security issues found in this scan.</p>'
+            }
         </body>
         </html>
     `;

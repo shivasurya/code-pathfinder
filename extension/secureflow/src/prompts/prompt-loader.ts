@@ -10,12 +10,14 @@ import { getPromptPath, getAppProfilerPrompt } from './index';
  */
 export async function loadPrompt(promptPath: string): Promise<string> {
   try {
-    const extensionPath = vscode.extensions.getExtension('codepathfinder.secureflow')?.extensionPath;
-    
+    const extensionPath = vscode.extensions.getExtension(
+      'codepathfinder.secureflow'
+    )?.extensionPath;
+
     if (!extensionPath) {
       throw new Error('Could not find extension path');
     }
-    
+
     const fullPath = path.join(extensionPath, 'dist', 'prompts', promptPath);
     return fs.readFileSync(fullPath, 'utf8');
   } catch (error) {

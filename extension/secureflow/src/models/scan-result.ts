@@ -8,17 +8,17 @@ export interface ScanResult {
    * Unique scan number (running number starting from 1)
    */
   scanNumber: number;
-  
+
   /**
    * Timestamp when the scan was performed
    */
   timestamp: number;
-  
+
   /**
    * Human-readable timestamp
    */
   timestampFormatted: string;
-  
+
   /**
    * Array of security issues found in the scan
    */
@@ -27,22 +27,22 @@ export interface ScanResult {
     filePath: string;
     startLine: number;
   }>;
-  
+
   /**
    * Summary of the scan
    */
   summary: string;
-  
+
   /**
    * The consolidated review content that was analyzed
    */
   reviewContent: string;
-  
+
   /**
    * Number of files analyzed
    */
   fileCount: number;
-  
+
   /**
    * AI model used for the analysis
    */
@@ -57,12 +57,12 @@ export interface ScanStorageData {
    * Map of scan numbers to scan results
    */
   scans: { [scanNumber: number]: ScanResult };
-  
+
   /**
    * The next scan number to use
    */
   nextScanNumber: number;
-  
+
   /**
    * Version of the storage schema, for future migrations
    */

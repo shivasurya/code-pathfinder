@@ -22,24 +22,31 @@ export class ScanStorageService {
    * Load scan store data from storage
    */
   private loadData(): ScanStorageData {
-    const data = this.context.globalState.get<ScanStorageData>(ScanStorageService.STORE_KEY);
-    return data || {
-      scans: {},
-      nextScanNumber: 1,
-      version: 1
-    };
+    const data = this.context.globalState.get<ScanStorageData>(
+      ScanStorageService.STORE_KEY
+    );
+    return (
+      data || {
+        scans: {},
+        nextScanNumber: 1,
+        version: 1
+      }
+    );
   }
 
   /**
    * Save scan store data to storage
    */
   private async saveData(): Promise<void> {
-    await this.context.globalState.update(ScanStorageService.STORE_KEY, this.data);
+    await this.context.globalState.update(
+      ScanStorageService.STORE_KEY,
+      this.data
+    );
   }
 
   /**
    * Save a new scan result
-   * 
+   *
    * @param issues Array of security issues found
    * @param summary Summary of the scan
    * @param reviewContent The consolidated review content that was analyzed
@@ -48,7 +55,11 @@ export class ScanStorageService {
    * @returns The saved scan result with assigned scan number
    */
   public async saveScan(
-    issues: Array<{issue: SecurityIssue, filePath: string, startLine: number}>,
+    issues: Array<{
+      issue: SecurityIssue;
+      filePath: string;
+      startLine: number;
+    }>,
     summary: string,
     reviewContent: string,
     fileCount: number,
@@ -79,7 +90,7 @@ export class ScanStorageService {
 
   /**
    * Retrieve a scan by its scan number
-   * 
+   *
    * @param scanNumber The scan number to retrieve
    * @returns The scan result or undefined if not found
    */
@@ -89,16 +100,18 @@ export class ScanStorageService {
 
   /**
    * Get all saved scans
-   * 
+   *
    * @returns Array of all scan results, sorted by scan number (newest first)
    */
   public getAllScans(): ScanResult[] {
-    return Object.values(this.data.scans).sort((a, b) => b.scanNumber - a.scanNumber);
+    return Object.values(this.data.scans).sort(
+      (a, b) => b.scanNumber - a.scanNumber
+    );
   }
 
   /**
    * Get the latest scan
-   * 
+   *
    * @returns The most recent scan result or undefined if no scans exist
    */
   public getLatestScan(): ScanResult | undefined {
@@ -108,7 +121,7 @@ export class ScanStorageService {
 
   /**
    * Delete a scan by its scan number
-   * 
+   *
    * @param scanNumber The scan number to delete
    * @returns True if the scan was deleted, false if it didn't exist
    */
@@ -132,7 +145,7 @@ export class ScanStorageService {
 
   /**
    * Get scan statistics
-   * 
+   *
    * @returns Object with scan statistics
    */
   public getStats(): {
@@ -142,7 +155,10 @@ export class ScanStorageService {
     latestScanTimestamp?: string;
   } {
     const scans = Object.values(this.data.scans);
-    const totalIssues = scans.reduce((sum, scan) => sum + scan.issues.length, 0);
+    const totalIssues = scans.reduce(
+      (sum, scan) => sum + scan.issues.length,
+      0
+    );
     const latestScan = this.getLatestScan();
 
     return {

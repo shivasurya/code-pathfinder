@@ -97,11 +97,15 @@ export class ProjectProfiler {
   /**
    * Profile the workspace and detect application types
    */
-  public async profileWorkspace(secretApiKey: string,progressCallback?: (message: string) => void): Promise<ApplicationProfile[]> {
+  public async profileWorkspace(
+    secretApiKey: string,
+    progressCallback?: (message: string) => void
+  ): Promise<ApplicationProfile[]> {
     try {
       // First collect the project structure
       progressCallback?.('Collecting project structure...');
-      const projectStructure = await this.collectProjectStructure(progressCallback);
+      const projectStructure =
+        await this.collectProjectStructure(progressCallback);
 
       // Next, read critical files for deeper analysis
       progressCallback?.('Analyzing key project files...');
@@ -109,7 +113,12 @@ export class ProjectProfiler {
 
       // Use AI to determine the project type
       progressCallback?.('Determining project type...');
-      const applicationProfiles = await this.determineProjectTypes(projectStructure, keyFileContents, secretApiKey, progressCallback);
+      const applicationProfiles = await this.determineProjectTypes(
+        projectStructure,
+        keyFileContents,
+        secretApiKey,
+        progressCallback
+      );
 
       return applicationProfiles;
     } catch (error) {
@@ -121,7 +130,9 @@ export class ProjectProfiler {
   /**
    * Collect the basic project structure (directories and files)
    */
-  private async collectProjectStructure(progressCallback?: (message: string) => void): Promise<any> {
+  private async collectProjectStructure(
+    progressCallback?: (message: string) => void
+  ): Promise<any> {
     const rootPath = this.workspaceFolder.uri.fsPath;
     progressCallback?.(`Scanning project structure at: ${rootPath}`);
     const structure: any = {
@@ -134,7 +145,9 @@ export class ProjectProfiler {
 
     // Return the collected structure
     if (progressCallback) {
-      progressCallback(`Project structure collected with ${structure.directories.length} directories and ${structure.files.length} files.`);
+      progressCallback(
+        `Project structure collected with ${structure.directories.length} directories and ${structure.files.length} files.`
+      );
     }
     return structure;
   }
@@ -142,7 +155,11 @@ export class ProjectProfiler {
   /**
    * Recursively traverse the directory to build the project structure
    */
-  private async traverseDirectory(dirPath: string, structure: any, depth: number): Promise<void> {
+  private async traverseDirectory(
+    dirPath: string,
+    structure: any,
+    depth: number
+  ): Promise<void> {
     if (depth > this.maxTraversalDepth) {
       return;
     }
@@ -152,7 +169,10 @@ export class ProjectProfiler {
 
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
-        const relativePath = path.relative(this.workspaceFolder.uri.fsPath, fullPath);
+        const relativePath = path.relative(
+          this.workspaceFolder.uri.fsPath,
+          fullPath
+        );
 
         // Skip auto-generated files and directories
         if (this.shouldSkip(entry.name, relativePath)) {
@@ -165,7 +185,7 @@ export class ProjectProfiler {
             path: relativePath,
             depth
           });
-          
+
           // Recursively traverse subdirectories
           await this.traverseDirectory(fullPath, structure, depth + 1);
         } else if (entry.isFile()) {
@@ -198,7 +218,7 @@ export class ProjectProfiler {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -207,13 +227,16 @@ export class ProjectProfiler {
    */
   private async readKeyProjectFiles(projectStructure: any): Promise<any[]> {
     const keyFiles: any[] = [];
-    
+
     for (const file of projectStructure.files) {
       if (this.isKeyProjectFile(file.name)) {
         try {
-          const fullPath = path.join(this.workspaceFolder.uri.fsPath, file.path);
+          const fullPath = path.join(
+            this.workspaceFolder.uri.fsPath,
+            file.path
+          );
           const stats = fs.statSync(fullPath);
-          
+
           // Skip files that are too large
           if (stats.size > this.maxFileSize) {
             keyFiles.push({
@@ -223,7 +246,7 @@ export class ProjectProfiler {
             });
             continue;
           }
-          
+
           const content = fs.readFileSync(fullPath, 'utf8');
           keyFiles.push({
             name: file.name,
@@ -235,7 +258,7 @@ export class ProjectProfiler {
         }
       }
     }
-    
+
     return keyFiles;
   }
 
@@ -253,7 +276,7 @@ export class ProjectProfiler {
     projectStructure: any,
     keyFileContents: any[],
     secretApiKey: string,
-    progressCallback?: (message: string) => void,
+    progressCallback?: (message: string) => void
   ): Promise<ApplicationProfile[]> {
     try {
       // Create a condensed representation of the project
@@ -321,10 +344,10 @@ export class ProjectProfiler {
         // Call the AI client to analyze the workspace
         const response = await this.aiClient.sendRequest(prompt, {
           temperature: 0, // Lower temperature for more deterministic results
-          maxTokens: 2048,  // Ensure enough tokens for the response
+          maxTokens: 2048, // Ensure enough tokens for the response
           apiKey: secretApiKey // The API key should be managed by the client
         });
-        
+
         // Parse the JSON response
         try {
           // Extract the JSON part from the response
@@ -333,15 +356,18 @@ export class ProjectProfiler {
             console.error('No JSON found in response:', response.content);
             return []; // Fallback to empty array
           }
-          
+
           const jsonContent = jsonMatch[0];
           const result = JSON.parse(jsonContent);
-          
+
           if (!result.applications || !Array.isArray(result.applications)) {
-            console.error('Invalid response format, missing applications array:', result);
+            console.error(
+              'Invalid response format, missing applications array:',
+              result
+            );
             return []; // Fallback to empty array
           }
-          
+
           return result.applications;
         } catch (parseError) {
           console.error('Error parsing AI response:', parseError);
