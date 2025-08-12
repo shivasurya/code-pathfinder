@@ -46,7 +46,8 @@ Review Guidelines:
    - Severity: Justified severity rating
    - Fix: Concrete, implementation-agnostic solution
 
-5. Exclude from Analysis:
+
+Strictly exclude below category of vulnerabilities from Analysis:
    - Theoretical vulnerabilities without practical impact
    - Issues requiring unlikely preconditions
    - Platform/framework limitations
@@ -59,6 +60,10 @@ Review Guidelines:
    - Performance issues
    - Code quality issues
    - Documentation issues
+   - Any kind of logging containing sensitive information
+   - Using Environment variables for sensitive information
+   - Security Best Practices around encrypting environment variables
+   - Unhandled error messages containing sensitive information   
 
 Provide actionable, practical feedback that helps developers understand and fix real security issues while maintaining code quality and performance.
 

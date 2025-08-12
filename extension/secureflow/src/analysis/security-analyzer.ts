@@ -13,12 +13,16 @@ import { formatTimestamp } from '../utils/format-timestamp';
  * @param code The code to analyze
  * @param aiModel The AI Model to use
  * @param apiKey API key for the AI Model
+ * @param filePath Optional file path for profile context
+ * @param context Optional VS Code extension context for profile service
  * @returns Promise with array of security issues found
  */
 export async function performSecurityAnalysisAsync(
     code: string, 
     aiModel: AIModel, 
-    apiKey?: string
+    apiKey?: string,
+    filePath?: string,
+    context?: vscode.ExtensionContext
 ): Promise<SecurityIssue[]> {
     
     // If no API key is provided, just return the pattern-based results
@@ -29,7 +33,7 @@ export async function performSecurityAnalysisAsync(
     try {
         
         // Run the AI-based analysis
-        const aiIssues = await analyzeSecurityWithAI(code, aiModel, apiKey);
+        const aiIssues = await analyzeSecurityWithAI(code, aiModel, apiKey, filePath, context);
         
         // Merge the results, removing any duplicates
         const allIssues = [];
@@ -61,7 +65,8 @@ function generateSelectionAnalysisHtml(
     timestamp: Date, 
     issues: SecurityIssue[], 
     filePath: string, 
-    startLine: number
+    startLine: number,
+    aiModel: AIModel
 ): string {
     // Helper to get relative path from workspace root
     function getRelativePath(filePath: string): string {
@@ -236,6 +241,10 @@ function generateSelectionAnalysisHtml(
                         <span class="info-label">File</span>
                         <span class="info-value">${getRelativePath(filePath)}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="info-label">AI Model</span>
+                        <span class="info-value">${aiModel}</span>
+                    </div>
                 </div>
             </div>
             ${issues.length > 0 ? issuesHtml : `
@@ -263,20 +272,23 @@ function updateSelectionWebview(
     timestamp: Date, 
     issues: SecurityIssue[], 
     filePath: string, 
-    startLine: number
+    startLine: number,
+    aiModel: AIModel
 ) {
-    panel.webview.html = generateSelectionAnalysisHtml(scanNumber, timestamp, issues, filePath, startLine);
+    panel.webview.html = generateSelectionAnalysisHtml(scanNumber, timestamp, issues, filePath, startLine, aiModel);
 }
 
 /**
  * Registers the analyze selection command for VS Code
  * @param outputChannel The output channel for logging
  * @param settingsManager The settings manager instance
+ * @param context The VS Code extension context for profile services
  * @returns Disposable for the registered command
  */
 export function registerAnalyzeSelectionCommand(
     outputChannel: vscode.OutputChannel,
-    settingsManager: SettingsManager
+    settingsManager: SettingsManager,
+    context: vscode.ExtensionContext
 ): vscode.Disposable {
     let resultsPanel: vscode.WebviewPanel | undefined;
     
@@ -329,6 +341,12 @@ export function registerAnalyzeSelectionCommand(
                 title: "SecureFlow: Analyzing selected code...",
                 cancellable: true
             }, async (progress, token) => {
+                // Get file information first
+                const filePath = editor.document.fileName;
+                const startLine = selection.start.line + 1; // Convert to 1-based line numbers
+                const timestamp = new Date();
+                const scanNumber = Math.floor(Date.now() / 1000); // Simple scan number based on timestamp
+
                 // Get the selected AI Model and API key
                 const aiModel = settingsManager.getSelectedAIModel();
                 let securityIssues: SecurityIssue[] = [];
@@ -336,7 +354,7 @@ export function registerAnalyzeSelectionCommand(
                 try {
                     const apiKey = await settingsManager.getApiKey();
                     if (apiKey) {
-                        securityIssues = await performSecurityAnalysisAsync(selectedText, aiModel, apiKey);
+                        securityIssues = await performSecurityAnalysisAsync(selectedText, aiModel, apiKey, filePath, context);
                     }
                 } catch (error) {
                     console.error('Error with AI analysis:', error);
@@ -353,15 +371,9 @@ export function registerAnalyzeSelectionCommand(
                     }
                 }
 
-                // Get file information
-                const filePath = editor.document.fileName;
-                const startLine = selection.start.line + 1; // Convert to 1-based line numbers
-                const timestamp = new Date();
-                const scanNumber = Math.floor(Date.now() / 1000); // Simple scan number based on timestamp
-
                 // Update WebView with results
                 if (resultsPanel) {
-                    updateSelectionWebview(resultsPanel, scanNumber, timestamp, securityIssues, filePath, startLine);
+                    updateSelectionWebview(resultsPanel, scanNumber, timestamp, securityIssues, filePath, startLine, aiModel);
                     resultsPanel.reveal(vscode.ViewColumn.Two);
                 }
 

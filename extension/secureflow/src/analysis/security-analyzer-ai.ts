@@ -1,32 +1,110 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { SecurityIssue } from '../models/security-issue';
 import { AIClientFactory } from '../clients/ai-client-factory';
 import { AIModel } from '../settings/settings-manager';
+import { ProfileStorageService } from '../services/profile-storage-service';
+import { StoredProfile } from '../models/profile-store';
+import { loadPrompt } from '../prompts/prompt-loader';
+
+/**
+ * Helper function to find the most relevant profile for a file path
+ * @param filePath The file path to find a profile for
+ * @param allProfiles Array of all available profiles
+ * @returns The most relevant profile or undefined
+ */
+function findRelevantProfile(filePath: string, allProfiles: StoredProfile[]): StoredProfile | undefined {
+    if (allProfiles.length === 0) {
+        return undefined;
+    }
+
+    // Check if file is in a workspace folder
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+    if (!workspaceFolder) {
+        return undefined;
+    }
+
+    // Find profiles within the workspace
+    const relevantProfiles = allProfiles.filter(profile => {
+        const profileUri = vscode.Uri.parse(profile.workspaceFolderUri);
+        const profileWorkspace = vscode.workspace.getWorkspaceFolder(profileUri);
+        return profileWorkspace && profileWorkspace.uri.fsPath === workspaceFolder.uri.fsPath;
+    });
+
+    if (relevantProfiles.length === 0) {
+        return undefined;
+    }
+
+    // Get relative path within workspace
+    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+
+    // Find profile where file path falls under profile path
+    return relevantProfiles.find(profile => {
+        const normalizedProfilePath = profile.path === '/' ? '' : profile.path;
+        const profilePathParts = normalizedProfilePath.split('/').filter(p => p);
+        const filePathParts = relativePath.split(path.sep).filter(p => p);
+
+        // Check if file path starts with profile path parts
+        return profilePathParts.every((part, index) => filePathParts[index] === part);
+    });
+}
 
 /**
  * Analyzes code for security issues using AI models
  * @param code The code to analyze
  * @param aiModel The AI model to use
  * @param apiKey The API key for the AI model
+ * @param filePath Optional file path to get relevant profile context
+ * @param context Optional VS Code extension context for profile service
  * @returns Array of security issues found
  */
 export async function analyzeSecurityWithAI(
     code: string, 
     aiModel: AIModel,
-    apiKey: string
+    apiKey: string,
+    filePath?: string,
+    context?: vscode.ExtensionContext
 ): Promise<SecurityIssue[]> {
     try {
         // Get the appropriate AI client
         const aiClient = AIClientFactory.getClient(aiModel);
+
+        // Load the base prompt template
+        let consolidatedReviewContent = await loadPrompt('common/review-changes.txt');
         
-        // Construct the prompt for security analysis
-        const prompt = `
-            \`\`\`
-            ${code}
-            \`\`\`
+        // Get the profile context and add it to the prompt
+        if (filePath && context) {
+            const profileService = new ProfileStorageService(context);
+            const profile = findRelevantProfile(filePath, profileService.getAllProfiles());
             
-            Please provide your response as valid JSON only, with no additional text.
-        `;
+            if (profile) {
+                const profileContext = `/*
+[SECUREFLOW PROFILE CONTEXT]
+Name: ${profile.name}
+Category: ${profile.category}
+Path: ${profile.path}
+Languages: ${profile.languages.join(', ')}
+Frameworks: ${profile.frameworks.join(', ')}
+Build Tools: ${profile.buildTools.join(', ')}
+Evidence: ${profile.evidence.join('; ')}
+*/
+
+`;
+                
+                consolidatedReviewContent += `\n${profileContext}`;
+            }
+        }
+        
+        // Add the selected code as if it's a code change/diff
+        const fileName = filePath ? path.basename(filePath) : 'selected-code';
+        consolidatedReviewContent += `\n=== FILE: ${fileName} ===\n`;
+        consolidatedReviewContent += `<SELECTED_CODE>\n${code}\n</SELECTED_CODE>\n`;
+        consolidatedReviewContent += `\n=== END FILE: ${fileName} ===\n\n`;
+        
+        // Use the consolidated content as the prompt
+        const prompt = consolidatedReviewContent;
+
+        console.log(prompt);
         
         // Send the request to the AI model
         const response = await aiClient.sendRequest(prompt, {
@@ -34,6 +112,8 @@ export async function analyzeSecurityWithAI(
             temperature: 0, // Lower temperature for more consistent results
             maxTokens: 2000  // Allow enough tokens for a detailed analysis
         });
+
+        console.log(response);
         
         // Parse the response as JSON
         try {

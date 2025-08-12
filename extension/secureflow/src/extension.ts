@@ -61,15 +61,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(workspaceProfilerDisposable);
 		
 		// Register analyze selection command
-		const analyzeSelectionCommand = registerAnalyzeSelectionCommand(outputChannel, settingsManager);
+		context.subscriptions.push(registerAnalyzeSelectionCommand(outputChannel, settingsManager, context));
 		
 		// Register the git changes review command and status bar button
 		registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
 
-		// Add commands to context subscriptions
-		context.subscriptions.push(
-			analyzeSelectionCommand
-		);
+
 		
 		console.log('SecureFlow extension fully activated!');
 		
