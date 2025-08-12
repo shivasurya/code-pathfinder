@@ -18,37 +18,41 @@ import { formatTimestamp } from '../utils/format-timestamp';
  * @returns Promise with array of security issues found
  */
 export async function performSecurityAnalysisAsync(
-    code: string, 
-    aiModel: AIModel, 
-    apiKey?: string,
-    filePath?: string,
-    context?: vscode.ExtensionContext
+  code: string,
+  aiModel: AIModel,
+  apiKey?: string,
+  filePath?: string,
+  context?: vscode.ExtensionContext
 ): Promise<SecurityIssue[]> {
-    
-    // If no API key is provided, just return the pattern-based results
-    if (!apiKey) {
-        return [];
+  // If no API key is provided, just return the pattern-based results
+  if (!apiKey) {
+    return [];
+  }
+
+  try {
+    // Run the AI-based analysis
+    const aiIssues = await analyzeSecurityWithAI(
+      code,
+      aiModel,
+      apiKey,
+      filePath,
+      context
+    );
+
+    // Merge the results, removing any duplicates
+    const allIssues = [];
+
+    // Add AI issues that don't overlap with pattern issues
+    for (const aiIssue of aiIssues) {
+      allIssues.push(aiIssue);
     }
-    
-    try {
-        
-        // Run the AI-based analysis
-        const aiIssues = await analyzeSecurityWithAI(code, aiModel, apiKey, filePath, context);
-        
-        // Merge the results, removing any duplicates
-        const allIssues = [];
-        
-        // Add AI issues that don't overlap with pattern issues
-        for (const aiIssue of aiIssues) {
-            allIssues.push(aiIssue);
-        }
-        
-        return allIssues;
-    } catch (error) {
-        console.error('Error in AI-based analysis:', error);
-        // If AI analysis fails, return just the pattern-based results
-        return [];
-    }
+
+    return allIssues;
+  } catch (error) {
+    console.error('Error in AI-based analysis:', error);
+    // If AI analysis fails, return just the pattern-based results
+    return [];
+  }
 }
 
 /**
@@ -61,24 +65,26 @@ export async function performSecurityAnalysisAsync(
  * @returns HTML string for the webview
  */
 function generateSelectionAnalysisHtml(
-    scanNumber: number, 
-    timestamp: Date, 
-    issues: SecurityIssue[], 
-    filePath: string, 
-    startLine: number,
-    aiModel: AIModel
+  scanNumber: number,
+  timestamp: Date,
+  issues: SecurityIssue[],
+  filePath: string,
+  startLine: number,
+  aiModel: AIModel
 ): string {
-    // Helper to get relative path from workspace root
-    function getRelativePath(filePath: string): string {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const root = workspaceFolders[0].uri.fsPath;
-            return path.relative(root, filePath);
-        }
-        return filePath;
+  // Helper to get relative path from workspace root
+  function getRelativePath(filePath: string): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const root = workspaceFolders[0].uri.fsPath;
+      return path.relative(root, filePath);
     }
+    return filePath;
+  }
 
-    const issuesHtml = issues.map((issue) => `
+  const issuesHtml = issues
+    .map(
+      (issue) => `
         <div class="issue">
             <div class="issue-header">
                 <span class="severity severity-${issue.severity.toLowerCase()}">${issue.severity}</span>
@@ -92,9 +98,11 @@ function generateSelectionAnalysisHtml(
                 <strong>Recommendation:</strong> ${issue.recommendation}
             </div>
         </div>
-    `).join('');
+    `
+    )
+    .join('');
 
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
@@ -247,12 +255,16 @@ function generateSelectionAnalysisHtml(
                     </div>
                 </div>
             </div>
-            ${issues.length > 0 ? issuesHtml : `
+            ${
+              issues.length > 0
+                ? issuesHtml
+                : `
                 <div class="no-issues">
                     <h3>✅ No Security Issues Found</h3>
                     <p>The selected code appears to be secure based on our analysis.</p>
                 </div>
-            `}
+            `
+            }
         </body>
         </html>`;
 }
@@ -267,15 +279,22 @@ function generateSelectionAnalysisHtml(
  * @param startLine The starting line
  */
 function updateSelectionWebview(
-    panel: vscode.WebviewPanel, 
-    scanNumber: number, 
-    timestamp: Date, 
-    issues: SecurityIssue[], 
-    filePath: string, 
-    startLine: number,
-    aiModel: AIModel
+  panel: vscode.WebviewPanel,
+  scanNumber: number,
+  timestamp: Date,
+  issues: SecurityIssue[],
+  filePath: string,
+  startLine: number,
+  aiModel: AIModel
 ) {
-    panel.webview.html = generateSelectionAnalysisHtml(scanNumber, timestamp, issues, filePath, startLine, aiModel);
+  panel.webview.html = generateSelectionAnalysisHtml(
+    scanNumber,
+    timestamp,
+    issues,
+    filePath,
+    startLine,
+    aiModel
+  );
 }
 
 /**
@@ -286,117 +305,144 @@ function updateSelectionWebview(
  * @returns Disposable for the registered command
  */
 export function registerAnalyzeSelectionCommand(
-    outputChannel: vscode.OutputChannel,
-    settingsManager: SettingsManager,
-    context: vscode.ExtensionContext
+  outputChannel: vscode.OutputChannel,
+  settingsManager: SettingsManager,
+  context: vscode.ExtensionContext
 ): vscode.Disposable {
-    let resultsPanel: vscode.WebviewPanel | undefined;
-    
-    const sentry = SentryService.getInstance();
-    return vscode.commands.registerCommand('secureflow.analyzeSelection', sentry.withErrorHandling(
-        'secureflow.analyzeSelection',
-        async () => {
-            // Track command usage
-            const analytics = AnalyticsService.getInstance();
-            analytics.trackEvent('Code Analysis Started', {
-                analysis_type: 'selected_text'
-            });
+  let resultsPanel: vscode.WebviewPanel | undefined;
 
-            // Get the active text editor
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                vscode.window.showErrorMessage('No active editor found');
-                return;
+  const sentry = SentryService.getInstance();
+  return vscode.commands.registerCommand(
+    'secureflow.analyzeSelection',
+    sentry.withErrorHandling('secureflow.analyzeSelection', async () => {
+      // Track command usage
+      const analytics = AnalyticsService.getInstance();
+      analytics.trackEvent('Code Analysis Started', {
+        analysis_type: 'selected_text'
+      });
+
+      // Get the active text editor
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showErrorMessage('No active editor found');
+        return;
+      }
+
+      // Get the selected text
+      const selection = editor.selection;
+      const selectedText = editor.document.getText(selection);
+
+      if (!selectedText) {
+        vscode.window.showInformationMessage(
+          'No text selected for security analysis'
+        );
+        return;
+      }
+
+      // Create or show WebView panel
+      if (!resultsPanel) {
+        resultsPanel = vscode.window.createWebviewPanel(
+          'secureflowSelectionResults',
+          'SecureFlow Selection Analysis',
+          vscode.ViewColumn.Two,
+          {
+            enableScripts: true,
+            retainContextWhenHidden: true
+          }
+        );
+
+        resultsPanel.onDidDispose(() => {
+          resultsPanel = undefined;
+        });
+      }
+
+      // Show progress indicator
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'SecureFlow: Analyzing selected code...',
+          cancellable: true
+        },
+        async (progress, token) => {
+          // Get file information first
+          const filePath = editor.document.fileName;
+          const startLine = selection.start.line + 1; // Convert to 1-based line numbers
+          const timestamp = new Date();
+          const scanNumber = Math.floor(Date.now() / 1000); // Simple scan number based on timestamp
+
+          // Get the selected AI Model and API key
+          const aiModel = settingsManager.getSelectedAIModel();
+          let securityIssues: SecurityIssue[] = [];
+
+          try {
+            const apiKey = await settingsManager.getApiKey();
+            if (apiKey) {
+              securityIssues = await performSecurityAnalysisAsync(
+                selectedText,
+                aiModel,
+                apiKey,
+                filePath,
+                context
+              );
             }
-
-            // Get the selected text
-            const selection = editor.selection;
-            const selectedText = editor.document.getText(selection);
-            
-            if (!selectedText) {
-                vscode.window.showInformationMessage('No text selected for security analysis');
-                return;
+          } catch (error) {
+            console.error('Error with AI analysis:', error);
+            try {
+              const sentry = SentryService.getInstance();
+              sentry.captureException(error as Error, {
+                context: 'ai_analysis_error',
+                component: 'analyze_selection_command',
+                ai_model: aiModel,
+                selected_text_length: selectedText.length
+              });
+            } catch (sentryError) {
+              console.error(
+                'Failed to capture AI analysis error:',
+                sentryError
+              );
             }
+          }
 
-            // Create or show WebView panel
-            if (!resultsPanel) {
-                resultsPanel = vscode.window.createWebviewPanel(
-                    'secureflowSelectionResults',
-                    'SecureFlow Selection Analysis',
-                    vscode.ViewColumn.Two,
-                    {
-                        enableScripts: true,
-                        retainContextWhenHidden: true
-                    }
-                );
+          // Update WebView with results
+          if (resultsPanel) {
+            updateSelectionWebview(
+              resultsPanel,
+              scanNumber,
+              timestamp,
+              securityIssues,
+              filePath,
+              startLine,
+              aiModel
+            );
+            resultsPanel.reveal(vscode.ViewColumn.Two);
+          }
 
-                resultsPanel.onDidDispose(() => {
-                    resultsPanel = undefined;
-                });
-            }
-
-            // Show progress indicator
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "SecureFlow: Analyzing selected code...",
-                cancellable: true
-            }, async (progress, token) => {
-                // Get file information first
-                const filePath = editor.document.fileName;
-                const startLine = selection.start.line + 1; // Convert to 1-based line numbers
-                const timestamp = new Date();
-                const scanNumber = Math.floor(Date.now() / 1000); // Simple scan number based on timestamp
-
-                // Get the selected AI Model and API key
-                const aiModel = settingsManager.getSelectedAIModel();
-                let securityIssues: SecurityIssue[] = [];
-                
-                try {
-                    const apiKey = await settingsManager.getApiKey();
-                    if (apiKey) {
-                        securityIssues = await performSecurityAnalysisAsync(selectedText, aiModel, apiKey, filePath, context);
-                    }
-                } catch (error) {
-                    console.error('Error with AI analysis:', error);
-                    try {
-                        const sentry = SentryService.getInstance();
-                        sentry.captureException(error as Error, { 
-                            context: 'ai_analysis_error',
-                            component: 'analyze_selection_command',
-                            ai_model: aiModel,
-                            selected_text_length: selectedText.length
-                        });
-                    } catch (sentryError) {
-                        console.error('Failed to capture AI analysis error:', sentryError);
-                    }
+          // Show appropriate message
+          if (securityIssues.length === 0) {
+            vscode.window
+              .showInformationMessage(
+                `SecureFlow Analysis #${scanNumber}: No security issues found in the selected code.`,
+                'View Results'
+              )
+              .then((selection) => {
+                if (selection === 'View Results' && resultsPanel) {
+                  resultsPanel.reveal(vscode.ViewColumn.Two);
                 }
-
-                // Update WebView with results
-                if (resultsPanel) {
-                    updateSelectionWebview(resultsPanel, scanNumber, timestamp, securityIssues, filePath, startLine, aiModel);
-                    resultsPanel.reveal(vscode.ViewColumn.Two);
+              });
+          } else {
+            vscode.window
+              .showWarningMessage(
+                `SecureFlow Analysis #${scanNumber}: Found ${securityIssues.length} potential security issues.`,
+                'View Results'
+              )
+              .then((selection) => {
+                if (selection === 'View Results' && resultsPanel) {
+                  resultsPanel.reveal(vscode.ViewColumn.Two);
                 }
-
-                // Show appropriate message
-                if (securityIssues.length === 0) {
-                    vscode.window.showInformationMessage(
-                        `SecureFlow Analysis #${scanNumber}: No security issues found in the selected code.`,
-                        'View Results'
-                    ).then(selection => {
-                        if (selection === 'View Results' && resultsPanel) {
-                            resultsPanel.reveal(vscode.ViewColumn.Two);
-                        }
-                    });
-                } else {
-                    vscode.window.showWarningMessage(
-                        `SecureFlow Analysis #${scanNumber}: Found ${securityIssues.length} potential security issues.`,
-                        'View Results'
-                    ).then(selection => {
-                        if (selection === 'View Results' && resultsPanel) {
-                            resultsPanel.reveal(vscode.ViewColumn.Two);
-                        }
-                    });
-                }
-            });
-        }));
+              });
+          }
+        }
+      );
+    })
+  );
 }
