@@ -112,7 +112,6 @@ Evidence: ${profile.evidence.join('; ')}
             maxTokens: 2000  // Allow enough tokens for a detailed analysis
         });
 
-        console.log(response);
         
         // Parse the response as JSON
         try {
