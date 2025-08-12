@@ -104,7 +104,6 @@ Evidence: ${profile.evidence.join('; ')}
         // Use the consolidated content as the prompt
         const prompt = consolidatedReviewContent;
 
-        console.log(prompt);
         
         // Send the request to the AI model
         const response = await aiClient.sendRequest(prompt, {
