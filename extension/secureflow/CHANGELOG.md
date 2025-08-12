@@ -1,5 +1,23 @@
 # SecureFlow Changelog
 
+## Version 0.0.7 - August 11, 2025
+
+### 🚀 What's New?
+
+- **Workspace Profile Integration**: Enhanced security analysis with workspace profile context for more accurate and contextual vulnerability detection
+- **Improved Selection Analysis UI**: Refined webview interface for better code selection analysis experience
+- **Sentry Error Reporting**: Added comprehensive error tracking and reporting system for better debugging and user experience
+
+### 🔧 Improvements
+
+- **Code Formatting**: Applied prettier formatting across the codebase for consistent code style
+- **Debug Log Cleanup**: Removed unnecessary debug logs to improve performance and reduce noise
+- **Security Analyzer Enhancements**: Updated AI-powered security analysis with improved prompts and analysis logic
+
+### 🐛 Bug Fixes
+
+- **UX Issue Notifications**: Addressed annoying UX notification issues that were impacting user experience
+
 ## Version 0.0.6 - August 10, 2025
 
 ### 🚀 What's New?
