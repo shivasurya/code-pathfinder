@@ -63,7 +63,7 @@ Strictly exclude below category of vulnerabilities from Analysis:
    - Any kind of logging containing sensitive information
    - Using Environment variables for sensitive information
    - Security Best Practices around encrypting environment variables
-   - Unhandled error messages containing sensitive information   
+   - Unhandled error messages containing sensitive information
 
 Provide actionable, practical feedback that helps developers understand and fix real security issues while maintaining code quality and performance.
 
