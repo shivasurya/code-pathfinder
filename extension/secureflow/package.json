@@ -173,8 +173,7 @@
     "keybindings": [
       {
         "command": "secureflow.analyzeSelection",
-        "key": "cmd+l",
-        "mac": "cmd+l",
+        "key": "ctrl+l",
         "when": "editorHasSelection"
       }
     ],
@@ -230,7 +229,8 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "format": "prettier --config .prettierrc 'src/**/*.ts' --write"
   },
   "dependencies": {
     "@sentry/node": "^10.4.0",
@@ -247,6 +247,7 @@
     "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^13.0.0",
     "eslint": "^9.25.1",
+    "prettier": "^3.6.2",
     "ts-loader": "^9.5.2",
     "typescript": "^5.8.3",
     "webpack": "^5.99.7",
