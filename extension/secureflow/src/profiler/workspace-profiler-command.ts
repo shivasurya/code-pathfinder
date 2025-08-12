@@ -3,6 +3,7 @@ import { ProjectProfiler, ApplicationProfile } from './project-profiler';
 import { getPromptPath } from '../prompts';
 import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
+import { SentryService } from '../services/sentry-service';
 
 /**
  * Command handler for workspace profiling and analysis
@@ -18,7 +19,10 @@ export class WorkspaceProfilerCommand {
    * Register the workspace profiler command
    */
   public register(): vscode.Disposable {
-    return vscode.commands.registerCommand('secureflow.profileWorkspace', this.executeCommand.bind(this));
+    const sentry = SentryService.getInstance();
+    return vscode.commands.registerCommand('secureflow.profileWorkspace', 
+      sentry.withErrorHandling('secureflow.profileWorkspace', this.executeCommand.bind(this))
+    );
   }
 
   /**

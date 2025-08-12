@@ -115,6 +115,10 @@ export class AnalyticsService {
         }
     }
 
+    public getDistinctId(): string {
+        return this.distinctId;
+    }
+
     public async shutdown(): Promise<void> {
         if (this.posthog) {
             await this.posthog.shutdown();

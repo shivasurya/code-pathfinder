@@ -5,6 +5,7 @@ import { SecurityIssue } from '../models/security-issue';
 import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
 import { AnalyticsService } from '../services/analytics';
 import { SettingsManager } from '../settings/settings-manager';
+import { SentryService } from '../services/sentry-service';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
 import { ScanStorageService } from '../services/scan-storage-service';
@@ -142,10 +143,11 @@ export function registerSecureFlowReviewCommand(
     
     let resultsPanel: vscode.WebviewPanel | undefined;
 
-    // Register command
+    // Register command with Sentry error handling
+    const sentry = SentryService.getInstance();
     const reviewCommand = vscode.commands.registerCommand(
         "secureflow.reviewChanges",
-        async (uri?: vscode.Uri) => {
+        sentry.withErrorHandling("secureflow.reviewChanges", async (uri?: vscode.Uri) => {
             // Track command usage
             const analytics = AnalyticsService.getInstance();
             analytics.trackEvent('Git Security Review Started', {
@@ -360,8 +362,19 @@ export function registerSecureFlowReviewCommand(
             } catch (error) {
                 console.error('Error during security review:', error);
                 vscode.window.showErrorMessage(`SecureFlow: Error during security review: ${error}`);
+                
+                // Capture the error with Sentry (additional error handling within the wrapped function)
+                try {
+                    sentry.captureException(error as Error, {
+                        context: 'git_review_command',
+                        component: 'git_changes',
+                        uri: uri?.toString()
+                    });
+                } catch (sentryError) {
+                    console.error('Failed to capture git review error:', sentryError);
+                }
             }
-        }
+        })
     );
     context.subscriptions.push(statusBarItem, reviewCommand);
 }
