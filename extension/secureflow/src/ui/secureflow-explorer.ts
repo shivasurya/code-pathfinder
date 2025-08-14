@@ -11,6 +11,7 @@ import { SettingsManager } from '../settings/settings-manager';
 export class SecureFlowExplorer {
   private static instance: SecureFlowExplorer;
   private _view?: vscode.WebviewView;
+  private static _provider?: SecureFlowWebViewProvider;
 
   private constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -28,9 +29,16 @@ export class SecureFlowExplorer {
       context.extensionUri,
       context
     );
+    SecureFlowExplorer._provider = provider;
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('secureflow.mainView', provider)
     );
+  }
+
+  public static refreshScanList(): void {
+    if (SecureFlowExplorer._provider) {
+      SecureFlowExplorer._provider.refreshScanList();
+    }
   }
 }
 
@@ -91,6 +99,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+  }
+
+  public async refreshScanList() {
+    await this.loadScans();
   }
 
   public resolveWebviewView(
