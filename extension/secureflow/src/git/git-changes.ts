@@ -10,6 +10,7 @@ import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
 import { ScanStorageService } from '../services/scan-storage-service';
 import { loadPrompt } from '../prompts/prompt-loader';
+import { SecureFlowExplorer } from '../ui/secureflow-explorer';
 
 /**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
@@ -405,6 +406,9 @@ export function registerSecureFlowReviewCommand(
                 new Date(savedScan.timestamp),
                 allIssues
               );
+
+              // Refresh the scan list in the main webview
+              SecureFlowExplorer.refreshScanList();
 
               if (allIssues.length > 0) {
                 vscode.window
