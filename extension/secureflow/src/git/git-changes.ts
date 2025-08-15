@@ -357,7 +357,10 @@ export function registerSecureFlowReviewCommand(
               const issues = await performSecurityAnalysisAsync(
                 finalReviewContent,
                 selectedModel,
-                await settingsManager.getApiKey()
+                await settingsManager.getApiKey(),
+                undefined,
+                context,
+                true
               );
 
               // Map issues back to files (best effort - use first file if unable to determine)

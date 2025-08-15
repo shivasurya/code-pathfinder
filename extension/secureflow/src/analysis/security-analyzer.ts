@@ -22,7 +22,8 @@ export async function performSecurityAnalysisAsync(
   aiModel: AIModel,
   apiKey?: string,
   filePath?: string,
-  context?: vscode.ExtensionContext
+  context?: vscode.ExtensionContext,
+  isGitDiff?: boolean
 ): Promise<SecurityIssue[]> {
   // If no API key is provided, just return the pattern-based results
   if (!apiKey) {
@@ -36,7 +37,8 @@ export async function performSecurityAnalysisAsync(
       aiModel,
       apiKey,
       filePath,
-      context
+      context,
+      isGitDiff
     );
 
     // Merge the results, removing any duplicates
@@ -382,7 +384,8 @@ export function registerAnalyzeSelectionCommand(
                 aiModel,
                 apiKey,
                 filePath,
-                context
+                context,
+                false
               );
             }
           } catch (error) {
