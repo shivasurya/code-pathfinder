@@ -1,5 +1,13 @@
 # SecureFlow Changelog
 
+## Version 0.0.8 - August 14, 2025
+
+### 🐛 Bug Fixes
+
+- **Improved Parsing**: Enhanced parsing logic to handle XML responses more effectively
+- **User Experience**: Update scan results list after each scan to provide immediate feedback
+
+
 ## Version 0.0.7 - August 11, 2025
 
 ### 🚀 What's New?

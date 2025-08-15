@@ -12,3 +12,7 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+
+
+# ignore hidden directories and files 
+.windsurf/**
