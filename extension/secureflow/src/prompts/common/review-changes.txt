@@ -69,14 +69,22 @@ Provide actionable, practical feedback that helps developers understand and fix 
 
 Review the following code for security issues and return a JSON array of issues found.
 Each issue should have the following format strictly:
-{
-    "title": "Issue title",
-    "severity": "Low|Medium|High|Critical",
-    "description": "Detailed description of the issue and include file name, path and line number",
-    "recommendation": "How to fix the issue"
-}
+<issues>
+    <issue>
+        <title>Issue title</title>
+        <severity>Low|Medium|High|Critical</severity>
+        <description>Detailed description of the issue and include file name, path and line number</description>
+        <recommendation>How to fix the issue</recommendation>
+    </issue>
+    <issue>
+        <title>Issue title</title>
+        <severity>Low|Medium|High|Critical</severity>
+        <description>Detailed description of the issue and include file name, path and line number</description>
+        <recommendation>How to fix the issue</recommendation>
+    </issue>
+</issues>
 
-If no issues are found, return an empty array.
+If no issues are found, return an empty <issues></issues>.
 
 Here's the context below for you to review structured as
 
