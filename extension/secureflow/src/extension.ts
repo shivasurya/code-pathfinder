@@ -40,8 +40,7 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }
 
-    // Set up global error handlers
-    sentry.setupGlobalErrorHandlers();
+    // Rely on Sentry's default global handlers; filtering is handled in beforeSend
   } catch (error) {
     console.error('Failed to initialize SecureFlow services:', error);
     // Even if Sentry fails, we should still try to capture this error

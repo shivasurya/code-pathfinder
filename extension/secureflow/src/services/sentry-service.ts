@@ -50,10 +50,18 @@ export class SentryService {
 
         // Configure for shared environment (VS Code)
         beforeSend: (event, hint) => {
+          // Only allow events that originate from our extension
+          if (!this.isAppEvent(event, hint)) {
+            return null;
+          }
+
           // Filter out sensitive information
           const sanitized = this.sanitizeEvent(event);
           return sanitized as Sentry.ErrorEvent;
         },
+
+        // Disable Sentry's automatic global handlers to avoid collecting
+        // unrelated VS Code / other extension errors. We'll manage our own.
 
         // Set user context using analytics ID
         initialScope: {
@@ -244,30 +252,39 @@ export class SentryService {
     // Capture unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
       console.error('Unhandled Promise Rejection:', reason);
-      this.captureException(
-        reason instanceof Error ? reason : new Error(String(reason)),
-        {
+      const err = reason instanceof Error ? reason : new Error(String(reason));
+      if (this.isErrorFromOurCode(err)) {
+        this.captureException(err, {
           context: 'unhandled_promise_rejection',
           promise: promise.toString()
-        }
-      );
+        });
+      }
     });
 
     // Capture uncaught exceptions
     process.on('uncaughtException', (error) => {
       console.error('Uncaught Exception:', error);
-      this.captureException(error, { context: 'uncaught_exception' });
+      if (this.isErrorFromOurCode(error)) {
+        this.captureException(error, { context: 'uncaught_exception' });
+      }
     });
 
     // Capture VS Code extension host errors
     if (typeof process !== 'undefined' && process.on) {
       process.on('warning', (warning) => {
         console.warn('Process Warning:', warning);
-        this.captureMessage(`Process Warning: ${warning.message}`, 'warning', {
-          context: 'process_warning',
-          warning_name: warning.name,
-          warning_stack: warning.stack
-        });
+        // Only send warnings if they originate from our extension code
+        if (this.isStackFromOurExtension(warning.stack)) {
+          this.captureMessage(
+            `Process Warning: ${warning.message}`,
+            'warning',
+            {
+              context: 'process_warning',
+              warning_name: warning.name,
+              warning_stack: warning.stack
+            }
+          );
+        }
       });
     }
   }
@@ -316,5 +333,98 @@ export class SentryService {
       // Fallback to VS Code's anonymized machine ID
       return vscode.env.machineId;
     }
+  }
+
+  /**
+   * Determine if a Sentry event should be considered application-originated.
+   * Prefer explicit tagging from our capture calls; otherwise, inspect stack frames.
+   */
+  private isAppEvent(event: Sentry.Event, hint?: Sentry.EventHint): boolean {
+    // If our code set the component tag, accept.
+    if (event.tags && event.tags['component'] === 'secureflow-extension') {
+      return true;
+    }
+
+    // Inspect exception stack frames to see if any frame is from our extension path
+    const values = event.exception?.values || [];
+    for (const val of values) {
+      const frames = (val.stacktrace && val.stacktrace.frames) || [];
+      for (const frame of frames) {
+        if (frame.filename && this.isFrameFromOurExtension(frame.filename)) {
+          return true;
+        }
+      }
+    }
+
+    // Otherwise, drop the event
+    return false;
+  }
+
+  /**
+   * Checks whether a filename from a stack frame points to our extension code.
+   */
+  private isFrameFromOurExtension(filename: string): boolean {
+    const extPath = this.context?.extension.extensionPath || '';
+    // Normalize
+    const f = filename.toLowerCase();
+    const ext = extPath.toLowerCase();
+
+    // Fast-path: any reference containing 'secureflow' is considered our code
+    // This handles VS Code webview resource URLs like
+    // file+.vscode-resource.../codepathfinder.secureflow-<ver>/dist/webview/main.js
+    if (f.includes('secureflow')) {
+      return true;
+    }
+
+    // Allow if the file is within our extension folder (dist/ or src/)
+    if (ext && f.includes(ext)) {
+      return true;
+    }
+
+    // Heuristic fallbacks useful when source paths are sanitized or minimized
+    // Match common identifiers for this project
+    if (
+      f.includes('/secureflow/') ||
+      f.includes('secureflow/dist/') ||
+      f.includes('secureflow/src/') ||
+      f.includes('code-pathfinder/extension/secureflow') ||
+      f.includes('codepathfinder.secureflow')
+    ) {
+      return true;
+    }
+
+    // Exclude obvious non-app frames
+    if (
+      f.startsWith('node:') ||
+      f.includes('/electron/') ||
+      f.includes('/vscode/')
+    ) {
+      return false;
+    }
+
+    return false;
+  }
+
+  /**
+   * Determines whether an Error's stack originates from our extension code.
+   */
+  private isErrorFromOurCode(error: Error): boolean {
+    return this.isStackFromOurExtension(error.stack);
+  }
+
+  /**
+   * Checks a raw stack string for any frame pointing to our extension.
+   */
+  private isStackFromOurExtension(stack?: string): boolean {
+    if (!stack) {
+      return false;
+    }
+    const lines = stack.split('\n');
+    for (const line of lines) {
+      if (this.isFrameFromOurExtension(line)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
