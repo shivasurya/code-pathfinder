@@ -1,5 +1,12 @@
 # SecureFlow Changelog
 
+## Version 0.0.9 - August 16, 2025
+
+### 🐛 Bug Fixes
+
+- **Issue with Sentry Error Reporting**: Fixed issue with Sentry error reporting
+
+
 ## Version 0.0.8 - August 14, 2025
 
 ### 🐛 Bug Fixes
