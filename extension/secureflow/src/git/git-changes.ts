@@ -32,7 +32,9 @@ export async function getGitChanges(): Promise<GitChangeInfo[]> {
       const command = `git diff ${staged ? '--cached' : ''} --unified=0 --no-color`;
       const output = await executeCommand(command, repoPath);
 
-      if (!output.trim()) return;
+      if (!output.trim()) {
+        return;
+      }
 
       let currentFile: string | null = null;
       const lines = output.split('\n');
@@ -456,6 +458,50 @@ export function registerSecureFlowReviewCommand(
 
 import { formatTimestamp } from '../utils/format-timestamp';
 
+// Basic, safe markdown renderer for our webview needs.
+// Supports fenced code blocks (```lang) and inline code (`code`).
+// Everything is HTML-escaped by default to avoid XSS.
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderMarkdownBasic(md: string): string {
+  if (!md) return '';
+
+  // Normalize line endings
+  let text = md.replace(/\r\n/g, '\n');
+
+  // Escape HTML first
+  text = escapeHtml(text);
+
+  // Fenced code blocks: ```lang\n...\n```
+  // Use a replacer that preserves newlines and optional language
+  const fencedBlockRe = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  text = text.replace(fencedBlockRe, (_m, lang, code) => {
+    const language = lang ? ` language-${lang}` : '';
+    return `<pre class="code-block"><code class="${language}">${code}</code></pre>`;
+  });
+
+  // Inline code: `code` (avoid matching inside already converted blocks)
+  // Since we've already converted fenced blocks, a simple regex works here
+  const inlineCodeRe = /`([^`]+)`/g;
+  text = text.replace(
+    inlineCodeRe,
+    (_m, code) => `<code class="inline-code">${code}</code>`
+  );
+
+  // Basic paragraph/line breaks: convert double newlines to paragraphs, single to <br>
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map((para) => para.replace(/\n/g, '<br/>'));
+  return paragraphs.map((p) => `<p>${p}</p>`).join('');
+}
+
 function generateGitChangesHtml(
   scanNumber: number,
   timestamp: Date,
@@ -482,9 +528,10 @@ function generateGitChangesHtml(
             <div class="issue-meta">
                 <span class="file">${getRelativePath(item.filePath)}:${item.startLine}</span>
             </div>
-            <p class="description">${item.issue.description}</p>
+            <div class="description">${renderMarkdownBasic(item.issue.description)}</div>
             <div class="recommendation">
-                <strong>Recommendation:</strong> ${item.issue.recommendation}
+                <strong>Recommendation:</strong>
+                ${renderMarkdownBasic(item.issue.recommendation)}
             </div>
         </div>
     `
@@ -607,7 +654,27 @@ function generateGitChangesHtml(
                     padding: 8px 12px;
                     border-radius: 4px;
                     font-size: 13px;
-                    color:rgb(244, 250, 253);
+                    color: rgb(244, 250, 253);
+                }
+                /* Code styling */
+                pre.code-block {
+                    background: var(--vscode-editor-background);
+                    border: 1px solid var(--vscode-panel-border);
+                    border-radius: 6px;
+                    padding: 12px;
+                    overflow: auto;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 12px;
+                    line-height: 1.5;
+                    margin: 10px 0;
+                }
+                code.inline-code {
+                    background: rgba(255, 255, 255, 0.06);
+                    border: 1px solid var(--vscode-panel-border);
+                    border-radius: 4px;
+                    padding: 1px 4px;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 12px;
                 }
             </style>
         </head>

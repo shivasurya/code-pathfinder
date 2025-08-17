@@ -156,16 +156,14 @@ export async function analyzeSecurityWithAI(
   isGitDiff?: boolean
 ): Promise<SecurityIssue[]> {
   try {
-    // Get the appropriate AI client
     const aiClient = AIClientFactory.getClient(aiModel);
-    let consolidatedReviewContent = '';
-    if (!isGitDiff) {
-      // Load the base prompt template
-      let consolidatedReviewContent = await loadPrompt(
-        'common/review-changes.txt'
-      );
+    let prompt = '';
 
-      // Get the profile context and add it to the prompt
+    if (isGitDiff) {
+      prompt = code;
+    } else {
+      prompt = await loadPrompt('common/review-changes.txt');
+
       if (filePath && context) {
         const profileService = new ProfileStorageService(context);
         const profile = findRelevantProfile(
@@ -175,46 +173,36 @@ export async function analyzeSecurityWithAI(
 
         if (profile) {
           const profileContext = `/*
-              [SECUREFLOW PROFILE CONTEXT]
-              Name: ${profile.name}
-              Category: ${profile.category}
-              Path: ${profile.path}
-              Languages: ${profile.languages.join(', ')}
-              Frameworks: ${profile.frameworks.join(', ')}
-              Build Tools: ${profile.buildTools.join(', ')}
-              Evidence: ${profile.evidence.join('; ')}
-              */
-            `;
-
-          consolidatedReviewContent += `\n${profileContext}`;
+            [SECUREFLOW PROFILE CONTEXT]
+            Name: ${profile.name}
+            Category: ${profile.category}
+            Path: ${profile.path}
+            Languages: ${profile.languages.join(', ')}
+            Frameworks: ${profile.frameworks.join(', ')}
+            Build Tools: ${profile.buildTools.join(', ')}
+            Evidence: ${profile.evidence.join('; ')}
+            */
+          `;
+          prompt += `\n${profileContext}`;
         }
       }
-      // Add the selected code as if it's a code change/diff
+
       const fileName = filePath ? path.basename(filePath) : 'selected-code';
-      consolidatedReviewContent += `\n=== FILE: ${fileName} ===\n`;
-      consolidatedReviewContent += `<SELECTED_CODE>\n${code}\n</SELECTED_CODE>\n`;
-      consolidatedReviewContent += `\n=== END FILE: ${fileName} ===\n\n`;
+      prompt += `\n=== FILE: ${filePath} ===\n`;
+      prompt += `<SELECTED_CODE>\n${code}\n</SELECTED_CODE>\n`;
+      prompt += `\n=== END FILE: ${fileName} ===\n\n`;
     }
 
-    // Use the consolidated content as the prompt
-    let prompt = '';
-    if (consolidatedReviewContent && consolidatedReviewContent.trim() !== '') {
-      prompt = consolidatedReviewContent;
-    } else {
-      prompt = code;
-    }
+    console.log('Prompt:', prompt);
 
-    // Send the request to the AI model
     const response = await aiClient.sendRequest(prompt, {
       apiKey,
-      temperature: 0, // Lower temperature for more consistent results
-      maxTokens: 2000 // Allow enough tokens for a detailed analysis
+      temperature: 0,
+      maxTokens: 2000
     });
 
-    // Parse the response as XML
     try {
-      const responseText = response.content.trim();
-      return parseXMLResponse(responseText);
+      return parseXMLResponse(response.content.trim());
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
       return [
