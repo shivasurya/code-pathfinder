@@ -188,12 +188,10 @@ export async function analyzeSecurityWithAI(
       }
 
       const fileName = filePath ? path.basename(filePath) : 'selected-code';
-      prompt += `\n=== FILE: ${filePath} ===\n`;
+      prompt += `\n=== FILE: ${fileName} ===\n`;
       prompt += `<SELECTED_CODE>\n${code}\n</SELECTED_CODE>\n`;
       prompt += `\n=== END FILE: ${fileName} ===\n\n`;
     }
-
-    console.log('Prompt:', prompt);
 
     const response = await aiClient.sendRequest(prompt, {
       apiKey,
