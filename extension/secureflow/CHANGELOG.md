@@ -1,5 +1,18 @@
 # SecureFlow Changelog
 
+## Version 0.0.10 - August 17, 2025
+
+### 🚀 What's New?
+
+### 🔧 Improvements
+
+- Use filename (not full path) in security analysis prompt for cleaner, less noisy context
+- Remove debug logging during analysis to reduce noise
+
+### 🐛 Bug Fixes
+
+- Fix markdown rendering in webview output
+
 ## Version 0.0.9 - August 16, 2025
 
 ### 🐛 Bug Fixes
