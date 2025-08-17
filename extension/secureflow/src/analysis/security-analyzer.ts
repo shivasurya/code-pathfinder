@@ -7,6 +7,50 @@ import { AnalyticsService } from '../services/analytics';
 import { SentryService } from '../services/sentry-service';
 import { formatTimestamp } from '../utils/format-timestamp';
 
+// Basic, safe markdown renderer for our webview needs.
+// Supports fenced code blocks (```lang) and inline code (`code`).
+// Everything is HTML-escaped by default to avoid XSS.
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderMarkdownBasic(md: string): string {
+  if (!md) {
+    return '';
+  }
+
+  // Normalize line endings
+  let text = md.replace(/\r\n/g, '\n');
+
+  // Escape HTML first
+  text = escapeHtml(text);
+
+  // Fenced code blocks: ```lang\n...\n```
+  const fencedBlockRe = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  text = text.replace(fencedBlockRe, (_m, lang, code) => {
+    const language = lang ? ` language-${lang}` : '';
+    return `<pre class="code-block"><code class="${language}">${code}</code></pre>`;
+  });
+
+  // Inline code: `code`
+  const inlineCodeRe = /`([^`]+)`/g;
+  text = text.replace(
+    inlineCodeRe,
+    (_m, code) => `<code class="inline-code">${code}</code>`
+  );
+
+  // Paragraph and line breaks
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map((para) => para.replace(/\n/g, '<br/>'));
+  return paragraphs.map((p) => `<p>${p}</p>`).join('');
+}
+
 /**
  * Performs security analysis on the given code snippet asynchronously,
  * utilizing both pattern-based detection and AI-based analysis if an API key is provided
@@ -95,9 +139,10 @@ function generateSelectionAnalysisHtml(
             <div class="issue-meta">
                 <span class="file">${getRelativePath(filePath)}:${startLine}</span>
             </div>
-            <p class="description">${issue.description}</p>
+            <div class="description">${renderMarkdownBasic(issue.description)}</div>
             <div class="recommendation">
-                <strong>Recommendation:</strong> ${issue.recommendation}
+                <strong>Recommendation:</strong>
+                ${renderMarkdownBasic(issue.recommendation)}
             </div>
         </div>
     `
@@ -219,6 +264,26 @@ function generateSelectionAnalysisHtml(
                     border-radius: 0 4px 4px 0;
                     font-size: 14px;
                     line-height: 1.5;
+                }
+                /* Code styling for markdown */
+                pre.code-block {
+                    background: var(--vscode-editor-background);
+                    border: 1px solid var(--vscode-panel-border);
+                    border-radius: 6px;
+                    padding: 12px;
+                    overflow: auto;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 12px;
+                    line-height: 1.5;
+                    margin: 10px 0;
+                }
+                code.inline-code {
+                    background: rgba(255, 255, 255, 0.06);
+                    border: 1px solid var(--vscode-panel-border);
+                    border-radius: 4px;
+                    padding: 1px 4px;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 12px;
                 }
                 .no-issues {
                     text-align: center;
