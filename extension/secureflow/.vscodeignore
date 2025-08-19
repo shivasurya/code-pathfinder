@@ -16,3 +16,4 @@ vsc-extension-quickstart.md
 
 # ignore hidden directories and files 
 .windsurf/**
+packages/secureflow-cli/**
