@@ -1,6 +1,16 @@
 import { PostHog } from 'posthog-node';
 import * as vscode from 'vscode';
 
+/**
+ * TODO(CLI): This service depends on VS Code APIs (vscode.ExtensionContext, workspace configuration)
+ * and should NOT be reused directly by the CLI.
+ *
+ * Plan:
+ * - For the CLI, introduce a lightweight analytics adapter (no-op or console logging),
+ *   keeping this file extension-only.
+ * - Keep the public surface unchanged for the extension. The CLI will not import this module.
+ */
+
 export class AnalyticsService {
   private static instance: AnalyticsService;
   private posthog: PostHog | null = null;

@@ -1,0 +1,18 @@
+{
+  "name": "@codepathfinder/secureflow-cli",
+  "version": "0.0.1",
+  "description": "SecureFlow CLI (early scaffold) — reuse VS Code extension logic via adapters",
+  "license": "MIT",
+  "bin": {
+    "secureflow": "bin/secureflow"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bin/secureflow",
+    "help": "node bin/secureflow --help"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "colorette": "^2.0.20"
+  }
+}

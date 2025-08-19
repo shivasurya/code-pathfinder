@@ -52,6 +52,17 @@ function renderMarkdownBasic(md: string): string {
 }
 
 /**
+ * TODO(VS Code): This function is VS Code UI specific and MUST remain extension-only.
+ * TODO(CLI): Extract a UI-free analysis helper for reuse in CLI.
+ * - performSecurityAnalysisAsync is almost pure except for the optional vscode.ExtensionContext
+ *   parameter and analytics/sentry in callers. For CLI, plan to introduce a wrapper:
+ *   runSecurityAnalysis(code, aiModel, apiKey, filePath, { isGitDiff }): Promise<SecurityIssue[]>
+ * - The following functions are VS Code UI specific and MUST remain extension-only:
+ *   - generateSelectionAnalysisHtml()
+ *   - updateSelectionWebview()
+ *   - registerAnalyzeSelectionCommand()
+ */
+/**
  * Performs security analysis on the given code snippet asynchronously,
  * utilizing both pattern-based detection and AI-based analysis if an API key is provided
  * @param code The code to analyze
@@ -110,6 +121,7 @@ export async function performSecurityAnalysisAsync(
  * @param startLine The starting line of the selection
  * @returns HTML string for the webview
  */
+// EXTENSION-ONLY: Webview HTML renderer
 function generateSelectionAnalysisHtml(
   scanNumber: number,
   timestamp: Date,
@@ -345,6 +357,7 @@ function generateSelectionAnalysisHtml(
  * @param filePath The file path
  * @param startLine The starting line
  */
+// EXTENSION-ONLY: Webview panel updater
 function updateSelectionWebview(
   panel: vscode.WebviewPanel,
   scanNumber: number,
@@ -371,6 +384,7 @@ function updateSelectionWebview(
  * @param context The VS Code extension context for profile services
  * @returns Disposable for the registered command
  */
+// EXTENSION-ONLY: Command registration for VS Code
 export function registerAnalyzeSelectionCommand(
   outputChannel: vscode.OutputChannel,
   settingsManager: SettingsManager,

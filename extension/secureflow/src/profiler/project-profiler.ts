@@ -7,6 +7,15 @@ import { loadPrompt } from '../prompts/prompt-loader';
 import { SettingsManager } from '../settings/settings-manager';
 
 /**
+ * TODO(CLI): This module imports VS Code types and uses vscode.WorkspaceFolder.
+ * Refactor plan to enable CLI reuse:
+ * - Introduce a CLI-friendly constructor overload that accepts `rootPath: string` instead of
+ *   `vscode.WorkspaceFolder`, and avoid direct `vscode` dependency in core logic.
+ * - Keep the current class as EXTENSION adapter: it will pass `workspaceFolder.uri.fsPath`
+ *   into a pure profiler that uses only Node's fs/path and AI client.
+ * - The following remain extension-only: anything reading `vscode.workspace` or using VS Code UI.
+ */
+/**
  * Interface representing a detected application in the workspace
  */
 export interface ApplicationProfile {

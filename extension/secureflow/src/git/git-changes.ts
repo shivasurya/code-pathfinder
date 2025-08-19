@@ -13,6 +13,15 @@ import { loadPrompt } from '../prompts/prompt-loader';
 import { SecureFlowExplorer } from '../ui/secureflow-explorer';
 
 /**
+ * TODO(CLI): This module mixes core git parsing with VS Code UI and services.
+ * Extraction plan:
+ * - Create a pure helper: getGitChangesAtRepo(repoPath: string, opts: { staged?: boolean }): Promise<GitChangeInfo[]>
+ *   that replaces usage of vscode.workspace and works in Node.
+ * - Keep Webview-related functions and command registration as EXTENSION-ONLY.
+ * - CLI will reuse only the pure helper and call performSecurityAnalysisAsync directly.
+ */
+
+/**
  * Gets the git changes (hunks) for a specific file or all files in the workspace
  * @param filePath Optional path to a specific file
  * @returns Array of change information objects
@@ -112,6 +121,7 @@ export async function getGitChanges(): Promise<GitChangeInfo[]> {
  * @param cwd Current working directory
  * @returns Command output as string
  */
+// CLI-READY: pure helper used by both extension and CLI
 async function executeCommand(command: string, cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     cp.exec(command, { cwd }, (error, stdout, stderr) => {
@@ -130,6 +140,7 @@ async function executeCommand(command: string, cwd: string): Promise<string> {
  * @param outputChannel Output channel for displaying results
  * @param settingsManager Settings manager for the extension
  */
+// EXTENSION-ONLY: Command registration + Webview UI
 export function registerSecureFlowReviewCommand(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel,
