@@ -1,53 +1,42 @@
-import * as https from 'https';
-import * as http from 'http';
-import { URL } from 'url';
+const https = require('https');
+const http = require('http');
+const { URL } = require('url');
 
 /**
  * Base HTTP client for making requests to AI APIs
  */
-export class HttpClient {
+class HttpClient {
   /**
    * Make a GET request
-   * @param url The URL to request
-   * @param headers Additional headers to include
-   * @returns The response data
+   * @param {string} url The URL to request
+   * @param {Record<string, string>} headers Additional headers to include
+   * @returns {Promise<any>} The response data
    */
-  protected async get(
-    url: string,
-    headers: Record<string, string> = {}
-  ): Promise<any> {
+  async get(url, headers = {}) {
     return this.request(url, 'GET', headers);
   }
 
   /**
    * Make a POST request
-   * @param url The URL to request
-   * @param body The request body
-   * @param headers Additional headers to include
-   * @returns The response data
+   * @param {string} url The URL to request
+   * @param {any} body The request body
+   * @param {Record<string, string>} headers Additional headers to include
+   * @returns {Promise<any>} The response data
    */
-  protected async post(
-    url: string,
-    body: any,
-    headers: Record<string, string> = {}
-  ): Promise<any> {
+  async post(url, body, headers = {}) {
     return this.request(url, 'POST', headers, body);
   }
 
   /**
    * Make a streaming POST request
-   * @param url The URL to request
-   * @param body The request body
-   * @param onChunk Callback for each chunk of data
-   * @param headers Additional headers to include
+   * @param {string} url The URL to request
+   * @param {any} body The request body
+   * @param {function(any): void} onChunk Callback for each chunk of data
+   * @param {function(): void} onComplete Callback when request completes
+   * @param {Record<string, string>} headers Additional headers to include
+   * @returns {Promise<void>}
    */
-  protected async streamingPost(
-    url: string,
-    body: any,
-    onChunk: (chunk: any) => void,
-    onComplete: () => void,
-    headers: Record<string, string> = {}
-  ): Promise<void> {
+  async streamingPost(url, body, onChunk, onComplete, headers = {}) {
     const parsedUrl = new URL(url);
     const options = {
       hostname: parsedUrl.hostname,
@@ -94,18 +83,13 @@ export class HttpClient {
 
   /**
    * Make a generic HTTP request
-   * @param url The URL to request
-   * @param method The HTTP method
-   * @param headers Additional headers to include
-   * @param body The request body (for POST, PUT, etc.)
-   * @returns The response data
+   * @param {string} url The URL to request
+   * @param {string} method The HTTP method
+   * @param {Record<string, string>} headers Additional headers to include
+   * @param {any} body The request body (for POST, PUT, etc.)
+   * @returns {Promise<any>} The response data
    */
-  private async request(
-    url: string,
-    method: string,
-    headers: Record<string, string> = {},
-    body?: any
-  ): Promise<any> {
+  async request(url, method, headers = {}, body) {
     const parsedUrl = new URL(url);
     const options = {
       hostname: parsedUrl.hostname,
@@ -172,3 +156,7 @@ export class HttpClient {
     });
   }
 }
+
+module.exports = {
+  HttpClient
+};

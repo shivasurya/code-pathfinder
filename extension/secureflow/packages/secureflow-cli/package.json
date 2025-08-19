@@ -6,6 +6,8 @@
   "bin": {
     "secureflow": "bin/secureflow"
   },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "type": "commonjs",
   "scripts": {
     "start": "node bin/secureflow",

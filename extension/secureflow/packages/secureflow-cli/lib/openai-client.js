@@ -1,41 +1,26 @@
-import {
-  AIClient,
-  AIClientOptions,
-  AIResponse,
-  AIResponseChunk
-} from './ai-client';
-import { HttpClient } from './http-client';
+const { AIClient } = require('./ai-client');
+const { HttpClient } = require('./http-client');
 
-interface OpenAICompletionResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
-  model: string;
-}
-
-export class OpenAIClient extends HttpClient implements AIClient {
-  private static readonly API_URL =
-    'https://api.openai.com/v1/chat/completions';
-  private defaultModel = 'gpt-3.5-turbo';
+class OpenAIClient extends HttpClient {
+  constructor() {
+    super();
+    this.API_URL = 'https://api.openai.com/v1/chat/completions';
+    this.defaultModel = 'gpt-3.5-turbo';
+  }
 
   /**
    * Send a request to the OpenAI API
-   * @param prompt The prompt to send
-   * @param options OpenAI-specific options
-   * @returns The AI response
+   * @param {string} prompt The prompt to send
+   * @param {import('./ai-client').AIClientOptions} options OpenAI-specific options
+   * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  public async sendRequest(
-    prompt: string,
-    options?: AIClientOptions
-  ): Promise<AIResponse> {
+  async sendRequest(prompt, options) {
     if (!options?.apiKey) {
       throw new Error('OpenAI API key is required');
     }
 
-    const response = (await this.post(
-      OpenAIClient.API_URL,
+    const response = await this.post(
+      this.API_URL,
       {
         model: options.model || this.defaultModel,
         messages: [{ role: 'user', content: prompt }],
@@ -47,7 +32,7 @@ export class OpenAIClient extends HttpClient implements AIClient {
         Authorization: `Bearer ${options.apiKey}`,
         'Content-Type': 'application/json'
       }
-    )) as OpenAICompletionResponse;
+    );
 
     return {
       content: response.choices[0].message.content,
@@ -58,15 +43,12 @@ export class OpenAIClient extends HttpClient implements AIClient {
 
   /**
    * Send a streaming request to the OpenAI API
-   * @param prompt The prompt to send
-   * @param callback Callback function for each chunk
-   * @param options OpenAI-specific options
+   * @param {string} prompt The prompt to send
+   * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
+   * @param {import('./ai-client').AIClientOptions} options OpenAI-specific options
+   * @returns {Promise<void>}
    */
-  public async sendStreamingRequest(
-    prompt: string,
-    callback: (chunk: AIResponseChunk) => void,
-    options?: AIClientOptions
-  ): Promise<void> {
+  async sendStreamingRequest(prompt, callback, options) {
     if (!options?.apiKey) {
       throw new Error('OpenAI API key is required');
     }
@@ -74,7 +56,7 @@ export class OpenAIClient extends HttpClient implements AIClient {
     let contentSoFar = '';
 
     await this.streamingPost(
-      OpenAIClient.API_URL,
+      this.API_URL,
       {
         model: options.model || this.defaultModel,
         messages: [{ role: 'user', content: prompt }],
@@ -82,7 +64,7 @@ export class OpenAIClient extends HttpClient implements AIClient {
         max_tokens: options.maxTokens || 2000,
         stream: true
       },
-      (chunk: string) => {
+      (chunk) => {
         try {
           // OpenAI sends "data: " prefixed SSE
           const lines = chunk.split('\n').filter((line) => line.trim() !== '');
@@ -124,3 +106,7 @@ export class OpenAIClient extends HttpClient implements AIClient {
     );
   }
 }
+
+module.exports = {
+  OpenAIClient
+};

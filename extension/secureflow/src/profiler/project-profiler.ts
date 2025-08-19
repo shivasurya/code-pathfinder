@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AIClientFactory } from '../clients';
-import { AIClient } from '../clients/ai-client';
+import { AIClientFactory, AIClient } from '@codepathfinder/secureflow-cli';
 import { loadPrompt } from '../prompts/prompt-loader';
 import { SettingsManager } from '../settings/settings-manager';
 

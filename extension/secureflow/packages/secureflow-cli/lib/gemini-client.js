@@ -1,36 +1,19 @@
-import {
-  AIClient,
-  AIClientOptions,
-  AIResponse,
-  AIResponseChunk
-} from './ai-client';
-import { HttpClient } from './http-client';
+const { AIClient } = require('./ai-client');
+const { HttpClient } = require('./http-client');
 
-// interface GeminiCompletionResponse {
-//     candidates: Array<{
-//         content: {
-//             parts: Array<{
-//                 text: string;
-//             }>;
-//         }
-//     }>;
-//     promptFeedback?: any;
-// }
-
-export class GeminiClient extends HttpClient implements AIClient {
-  private defaultModel = 'gemini-2.5-pro';
+class GeminiClient extends HttpClient {
+  constructor() {
+    super();
+    this.defaultModel = 'gemini-2.5-pro';
+  }
 
   /**
    * Send a request to the Google Gemini API
-   * @param prompt The prompt to send
-   * @param options Gemini-specific options
-   * @returns The AI response
+   * @param {string} prompt The prompt to send
+   * @param {import('./ai-client').AIClientOptions} options Gemini-specific options
+   * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  public async sendRequest(
-    prompt: string,
-    options?: AIClientOptions
-  ): Promise<AIResponse> {
-    // console.log("Using API key: ", options?.apiKey);
+  async sendRequest(prompt, options) {
     if (!options?.apiKey) {
       throw new Error('Google Gemini API key is required');
     }
@@ -61,7 +44,7 @@ export class GeminiClient extends HttpClient implements AIClient {
     }
 
     const content = response.candidates[0].content.parts
-      .map((part: any) => part.text)
+      .map((part) => part.text)
       .join('');
 
     return {
@@ -73,26 +56,27 @@ export class GeminiClient extends HttpClient implements AIClient {
 
   /**
    * Send a streaming request to the Google Gemini API
-   * @param prompt The prompt to send
-   * @param callback Callback function for each chunk
-   * @param options Gemini-specific options
+   * @param {string} prompt The prompt to send
+   * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
+   * @param {import('./ai-client').AIClientOptions} options Gemini-specific options
+   * @returns {Promise<void>}
    */
-  public async sendStreamingRequest(
-    prompt: string,
-    callback: (chunk: AIResponseChunk) => void,
-    options?: AIClientOptions
-  ): Promise<void> {
+  async sendStreamingRequest(prompt, callback, options) {
     // throw not implemented error
     throw new Error('sendStreamingRequest not implemented for GeminiClient');
   }
 
   /**
    * Parse multiple JSON objects from a stream chunk
-   * @param chunk Raw stream chunk that may contain multiple JSON objects
-   * @returns Array of parsed JSON objects
+   * @param {string} chunk Raw stream chunk that may contain multiple JSON objects
+   * @returns {any[]} Array of parsed JSON objects
    */
-  private parseStreamChunk(chunk: string): any[] {
+  parseStreamChunk(chunk) {
     // throw not implemented error
     throw new Error('parseStreamChunk not implemented for GeminiClient');
   }
 }
+
+module.exports = {
+  GeminiClient
+};

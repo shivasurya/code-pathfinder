@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SecurityIssue } from '../models/security-issue';
-import { AIClientFactory } from '../clients/ai-client-factory';
+import { AIClientFactory } from '@codepathfinder/secureflow-cli';
 import { AIModel } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
@@ -198,6 +198,8 @@ export async function analyzeSecurityWithAI(
       temperature: 0,
       maxTokens: 2000
     });
+
+    console.log(response);
 
     try {
       return parseXMLResponse(response.content.trim());
