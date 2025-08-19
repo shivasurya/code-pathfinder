@@ -53,7 +53,7 @@ export class AnalyticsService {
           host: 'https://us.i.posthog.com',
           flushAt: 1, // Send events immediately for better debugging
           flushInterval: 0, // Disable automatic flushing,
-          disableGeoip: false,
+          disableGeoip: false
         }
       );
 

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as cp from 'child_process';
 import * as path from 'path';
 import { SecurityIssue } from '../models/security-issue';
 import { performSecurityAnalysisAsync } from '../analysis/security-analyzer';
@@ -11,6 +10,8 @@ import { StoredProfile } from '../models/profile-store';
 import { ScanStorageService } from '../services/scan-storage-service';
 import { loadPrompt } from '../prompts/prompt-loader';
 import { SecureFlowExplorer } from '../ui/secureflow-explorer';
+// Shared, VS Code-agnostic git helpers (CommonJS) from local workspace package
+import * as cliGit from '@codepathfinder/secureflow-cli/lib/git';
 
 /**
  * TODO(CLI): This module mixes core git parsing with VS Code UI and services.
@@ -34,105 +35,18 @@ export async function getGitChanges(): Promise<GitChangeInfo[]> {
     }
 
     const repoPath = workspaceFolders[0].uri.fsPath;
-    const changes: GitChangeInfo[] = [];
-
-    // Process both staged and unstaged changes
-    const processDiff = async (staged: boolean): Promise<void> => {
-      const command = `git diff ${staged ? '--cached' : ''} --unified=0 --no-color`;
-      const output = await executeCommand(command, repoPath);
-
-      if (!output.trim()) {
-        return;
-      }
-
-      let currentFile: string | null = null;
-      const lines = output.split('\n');
-      let i = 0;
-
-      while (i < lines.length) {
-        const line = lines[i];
-
-        // Check for file header
-        if (line.startsWith('diff --git')) {
-          const match = line.match(/diff --git a\/(.*?) b\/(.*)/);
-          if (match && match[2]) {
-            currentFile = match[2].trim();
-          }
-          i++;
-          continue;
-        }
-
-        // Check for hunk header
-        if (line.startsWith('@@') && currentFile) {
-          const match = line.match(
-            /@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
-          );
-          if (match) {
-            const startLine = parseInt(match[3], 10);
-            let addedLines = 0;
-            let content = '';
-
-            // Process the hunk content
-            i++; // Move to first line of hunk
-            while (
-              i < lines.length &&
-              !lines[i].startsWith('diff --git') &&
-              !lines[i].startsWith('@@')
-            ) {
-              const hunkLine = lines[i];
-              if (hunkLine.startsWith('+') && !hunkLine.startsWith('+++')) {
-                content += hunkLine.substring(1) + '\n';
-                addedLines++;
-              }
-              i++;
-            }
-
-            if (addedLines > 0) {
-              changes.push({
-                filePath: path.join(repoPath, currentFile),
-                startLine,
-                lineCount: addedLines,
-                content: content.trim()
-              });
-            }
-
-            continue; // Don't increment i again as we already did in the loop
-          }
-        }
-
-        i++;
-      }
-    };
-
-    // Process both staged and unstaged changes
-    await processDiff(true); // Staged changes
-    await processDiff(false); // Unstaged changes
-
-    return changes;
+    const changes = await cliGit.getGitChangesAtRepo(repoPath, {
+      staged: true,
+      unstaged: true
+    });
+    return changes as GitChangeInfo[];
   } catch (error) {
     console.error('Error getting git changes:', error);
     return [];
   }
 }
 
-/**
- * Executes a shell command and returns the output
- * @param command Command to execute
- * @param cwd Current working directory
- * @returns Command output as string
- */
-// CLI-READY: pure helper used by both extension and CLI
-async function executeCommand(command: string, cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    cp.exec(command, { cwd }, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
-  });
-}
+// Note: command execution and parsing now lives in `packages/secureflow-cli/lib/git`
 
 /**
  * Registers the SecureFlow review command for git changes
@@ -482,7 +396,9 @@ function escapeHtml(input: string): string {
 }
 
 function renderMarkdownBasic(md: string): string {
-  if (!md) return '';
+  if (!md) {
+    return '';
+  }
 
   // Normalize line endings
   let text = md.replace(/\r\n/g, '\n');

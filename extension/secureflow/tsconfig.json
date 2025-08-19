@@ -12,6 +12,8 @@
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		"esModuleInterop": true,
+		"allowJs": false,
+		"types": ["node", "vscode"],
 		/* Additional Checks */
 		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
 		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */

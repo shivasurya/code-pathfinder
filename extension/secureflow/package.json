@@ -234,7 +234,8 @@
   },
   "dependencies": {
     "@sentry/node": "^10.4.0",
-    "posthog-node": "^4.0.1"
+    "posthog-node": "^4.0.1",
+    "@codepathfinder/secureflow-cli": "file:packages/secureflow-cli"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
