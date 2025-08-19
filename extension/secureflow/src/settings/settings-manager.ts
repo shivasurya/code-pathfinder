@@ -1,5 +1,12 @@
 import * as vscode from 'vscode';
 
+/**
+ * TODO(CLI): This settings manager depends on VS Code configuration and secret storage.
+ * - Treat this file as EXTENSION-ONLY.
+ * - The CLI will introduce a separate CLIConfigManager that reads from env/flags/~/.secureflow/config.json.
+ * - Keep API surface unchanged for the extension; do not import this module from the CLI.
+ */
+
 export type AIModel =
   | 'gpt-4o'
   | 'gpt-4o-mini'

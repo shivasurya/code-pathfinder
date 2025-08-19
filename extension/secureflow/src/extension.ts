@@ -13,6 +13,12 @@ import { SecureFlowExplorer } from './ui/secureflow-explorer';
 import { AnalyticsService } from './services/analytics';
 import { SentryService } from './services/sentry-service';
 
+/**
+ * TODO(CLI): This file is EXTENSION-ONLY. It wires up VS Code activation,
+ * command registration, webviews, analytics, and sentry. The CLI will have
+ * its own entry point and must NOT import this module.
+ */
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {

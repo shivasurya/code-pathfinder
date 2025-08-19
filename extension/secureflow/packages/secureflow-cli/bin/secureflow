@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+
+/*
+ * SecureFlow CLI (scaffold)
+ * This is a minimal, non-breaking CLI entry that will evolve to reuse extension logic via adapters.
+ */
+
+const { Command } = require('commander');
+const { yellow, red } = require('colorette');
+const pkg = require('../package.json');
+
+const program = new Command();
+
+program
+  .name('secureflow')
+  .description('SecureFlow CLI — security analysis for codebases (scaffold)')
+  .version(pkg.version);
+
+program
+  .command('scan')
+  .description('Scan code for issues (placeholder)')
+  .option('--file <path>', 'File to scan')
+  .option('--range <start:end>', 'Line range, e.g. 10:50')
+  .option('--format <format>', 'Output format: json|text', 'text')
+  .action((opts) => {
+    console.log(yellow('SecureFlow CLI scaffold'));
+    console.log('This command is a placeholder and will be implemented in upcoming PRs.');
+    if (opts.file) console.log('file:', opts.file);
+    if (opts.range) console.log('range:', opts.range);
+    console.log('format:', opts.format);
+    process.exitCode = 0;
+  });
+
+program
+  .command('profile')
+  .description('Profile project (placeholder)')
+  .action(() => {
+    console.log(yellow('SecureFlow CLI scaffold'));
+    console.log('Project profiling will be implemented in a future PR.');
+    process.exitCode = 0;
+  });
+
+program
+  .command('helpall')
+  .description('Show help for all commands')
+  .action(() => {
+    program.commands.forEach((c) => c.outputHelp());
+  });
+
+program.parseAsync(process.argv).catch((err) => {
+  console.error(red('[secureflow] fatal error'));
+  console.error(err?.stack || err?.message || String(err));
+  process.exit(1);
+});
