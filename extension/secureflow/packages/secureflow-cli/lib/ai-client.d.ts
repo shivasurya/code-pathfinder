@@ -1,6 +1,7 @@
 /**
  * Interface for AI model providers
  */
+
 export interface AIClientOptions {
   apiKey: string;
   model?: string;
@@ -22,7 +23,7 @@ export interface AIResponse {
 /**
  * Interface that all AI model providers must implement
  */
-export interface AIClient {
+export declare class AIClient {
   /**
    * Send a request to the AI model
    * @param prompt The prompt to send to the AI model

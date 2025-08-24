@@ -1,19 +1,18 @@
-import { AIClient } from './ai-client';
-import { ClaudeClient } from './claude-client';
-import { GeminiClient } from './gemini-client';
-import { OpenAIClient } from './openai-client';
-import { AIModel } from '../settings/settings-manager';
+const { AIClient } = require('./ai-client');
+const { ClaudeClient } = require('./claude-client');
+const { GeminiClient } = require('./gemini-client');
+const { OpenAIClient } = require('./openai-client');
 
 /**
  * Factory class for creating AI clients
  */
-export class AIClientFactory {
+class AIClientFactory {
   /**
    * Get the appropriate AI client based on the model
-   * @param model The AI model to use
-   * @returns The AI client for the specified model
+   * @param {import('./types').AIModel} model The AI model to use
+   * @returns {AIClient} The AI client for the specified model
    */
-  public static getClient(model: AIModel): AIClient {
+  static getClient(model) {
     switch (model) {
       // OpenAI models
       case 'gpt-4o':
@@ -43,3 +42,7 @@ export class AIClientFactory {
     }
   }
 }
+
+module.exports = {
+  AIClientFactory
+};

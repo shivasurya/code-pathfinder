@@ -1,43 +1,26 @@
-import * as vscode from 'vscode';
-import {
-  AIClient,
-  AIClientOptions,
-  AIResponse,
-  AIResponseChunk
-} from './ai-client';
-import { HttpClient } from './http-client';
+const { AIClient } = require('./ai-client');
+const { HttpClient } = require('./http-client');
 
-interface ClaudeCompletionResponse {
-  content: Array<{
-    text: string;
-    type: string;
-  }>;
-  model: string;
-}
-
-export class ClaudeClient extends HttpClient implements AIClient {
-  private static readonly API_URL = 'https://api.anthropic.com/v1/messages';
-  private defaultModel = 'claude-3-5-sonnet-20241022';
+class ClaudeClient extends HttpClient {
+  constructor() {
+    super();
+    this.API_URL = 'https://api.anthropic.com/v1/messages';
+    this.defaultModel = 'claude-3-5-sonnet-20241022';
+  }
 
   /**
    * Send a request to the Anthropic Claude API
-   * @param prompt The prompt to send
-   * @param options Claude-specific options
-   * @returns The AI response
+   * @param {string} prompt The prompt to send
+   * @param {import('./ai-client').AIClientOptions} options Claude-specific options
+   * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  public async sendRequest(
-    prompt: string,
-    options?: AIClientOptions
-  ): Promise<AIResponse> {
+  async sendRequest(prompt, options) {
     if (!options?.apiKey) {
-      const errorMsg =
-        'API key is required for the selected AI provider. Please set it in the extension settings.';
-      vscode.window.showErrorMessage(errorMsg);
-      throw new Error(errorMsg);
+      throw new Error('Anthropic Claude API key is required');
     }
 
-    const response = (await this.post(
-      ClaudeClient.API_URL,
+    const response = await this.post(
+      this.API_URL,
       {
         model: options.model || this.defaultModel,
         messages: [{ role: 'user', content: prompt }],
@@ -50,7 +33,7 @@ export class ClaudeClient extends HttpClient implements AIClient {
         'anthropic-version': '2023-06-01', // Use appropriate API version
         'Content-Type': 'application/json'
       }
-    )) as ClaudeCompletionResponse;
+    );
 
     // Extract text content from Claude's response
     const content = response.content
@@ -67,15 +50,12 @@ export class ClaudeClient extends HttpClient implements AIClient {
 
   /**
    * Send a streaming request to the Anthropic Claude API
-   * @param prompt The prompt to send
-   * @param callback Callback function for each chunk
-   * @param options Claude-specific options
+   * @param {string} prompt The prompt to send
+   * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
+   * @param {import('./ai-client').AIClientOptions} options Claude-specific options
+   * @returns {Promise<void>}
    */
-  public async sendStreamingRequest(
-    prompt: string,
-    callback: (chunk: AIResponseChunk) => void,
-    options?: AIClientOptions
-  ): Promise<void> {
+  async sendStreamingRequest(prompt, callback, options) {
     if (!options?.apiKey) {
       throw new Error('Anthropic Claude API key is required');
     }
@@ -83,7 +63,7 @@ export class ClaudeClient extends HttpClient implements AIClient {
     let contentSoFar = '';
 
     await this.streamingPost(
-      ClaudeClient.API_URL,
+      this.API_URL,
       {
         model: options.model || this.defaultModel,
         messages: [{ role: 'user', content: prompt }],
@@ -91,7 +71,7 @@ export class ClaudeClient extends HttpClient implements AIClient {
         max_tokens: options.maxTokens || 500,
         stream: true
       },
-      (chunk: string) => {
+      (chunk) => {
         try {
           // Claude also uses SSE format with data: prefix
           const lines = chunk.split('\n').filter((line) => line.trim() !== '');
@@ -138,3 +118,7 @@ export class ClaudeClient extends HttpClient implements AIClient {
     );
   }
 }
+
+module.exports = {
+  ClaudeClient
+};
