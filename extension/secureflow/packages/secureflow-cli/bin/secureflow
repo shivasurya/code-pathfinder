@@ -9,6 +9,7 @@ const { Command } = require('commander');
 const { yellow, red, cyan } = require('colorette');
 const pkg = require('../package.json');
 const { getMaskedConfig, loadConfig, CONFIG_FILE } = require('../lib/config');
+const { CLIProfileCommand } = require('../profiler');
 
 const program = new Command();
 
@@ -34,11 +35,25 @@ program
 
 program
   .command('profile')
-  .description('Profile project (placeholder)')
-  .action(() => {
-    console.log(yellow('SecureFlow CLI scaffold'));
-    console.log('Project profiling will be implemented in a future PR.');
-    process.exitCode = 0;
+  .description('Profile project to identify application types and technologies')
+  .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
+  .option('--model <model>', 'AI model to use for analysis')
+  .option('--format <format>', 'Output format: text|json', 'text')
+  .option('--output <file>', 'Save results to file')
+  .action(async (projectPath, options) => {
+    try {
+      const profileCommand = new CLIProfileCommand({
+        selectedModel: options.model
+      });
+      await profileCommand.execute(projectPath, options);
+    } catch (error) {
+      console.error(red('❌ Profile command failed:'));
+      console.error(error.message);
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
   });
 
 program
