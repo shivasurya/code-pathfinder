@@ -5,6 +5,11 @@ const { ClaudeClient } = require('./claude-client');
 const { GeminiClient } = require('./gemini-client');
 const { OpenAIClient } = require('./openai-client');
 const { HttpClient } = require('./http-client');
+const { AIModel } = require('./types');
+
+// Export prompts functionality
+const { getPromptPath, getAppProfilerPrompt } = require('./prompts');
+const { loadPrompt, getPromptForAppType, getApplicationProfilerPrompt, getThreatModelingPrompt } = require('./prompts/prompt-loader');
 
 module.exports = {
   AIClient,
@@ -12,5 +17,12 @@ module.exports = {
   ClaudeClient,
   GeminiClient,
   OpenAIClient,
-  HttpClient
+  HttpClient,
+  AIModel,
+  getPromptPath,
+  getAppProfilerPrompt,
+  loadPrompt,
+  getPromptForAppType,
+  getApplicationProfilerPrompt,
+  getThreatModelingPrompt
 };

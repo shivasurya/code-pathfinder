@@ -1,7 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
 import { getPromptPath, getAppProfilerPrompt } from './index';
+
+// Try to import vscode, but handle gracefully if not available (CLI context)
+let vscode: any;
+try {
+  vscode = require('vscode');
+} catch {
+  vscode = null;
+}
 
 /**
  * Load a prompt file from the prompts directory
@@ -10,15 +17,24 @@ import { getPromptPath, getAppProfilerPrompt } from './index';
  */
 export async function loadPrompt(promptPath: string): Promise<string> {
   try {
-    const extensionPath = vscode.extensions.getExtension(
-      'codepathfinder.secureflow'
-    )?.extensionPath;
+    let fullPath: string;
+    
+    if (vscode) {
+      // VS Code extension context
+      const extensionPath = vscode.extensions.getExtension(
+        'codepathfinder.secureflow'
+      )?.extensionPath;
 
-    if (!extensionPath) {
-      throw new Error('Could not find extension path');
+      if (!extensionPath) {
+        throw new Error('Could not find extension path');
+      }
+
+      fullPath = path.join(extensionPath, 'dist', 'prompts', promptPath);
+    } else {
+      // CLI context - prompts are in the same directory as this file
+      fullPath = path.join(__dirname, promptPath);
     }
-
-    const fullPath = path.join(extensionPath, 'dist', 'prompts', promptPath);
+    
     return fs.readFileSync(fullPath, 'utf8');
   } catch (error) {
     console.error(`Error loading prompt: ${error}`);

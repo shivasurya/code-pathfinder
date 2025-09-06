@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ProjectProfiler, ApplicationProfile } from './project-profiler';
-import { getPromptPath } from '../prompts';
+import { getPromptPath } from '@codepathfinder/secureflow-cli';
 import { SettingsManager } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { SentryService } from '../services/sentry-service';

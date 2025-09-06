@@ -5,7 +5,7 @@ import { AIClientFactory } from '@codepathfinder/secureflow-cli';
 import { AIModel } from '../settings/settings-manager';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
-import { loadPrompt } from '../prompts/prompt-loader';
+import { loadPrompt } from '@codepathfinder/secureflow-cli';
 
 /**
  * Parses XML response from AI and extracts security issues

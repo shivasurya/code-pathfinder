@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AIClientFactory, AIClient } from '@codepathfinder/secureflow-cli';
-import { loadPrompt } from '../prompts/prompt-loader';
+import { loadPrompt } from '@codepathfinder/secureflow-cli';
 import { SettingsManager } from '../settings/settings-manager';
 
 /**

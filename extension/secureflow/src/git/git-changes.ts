@@ -8,7 +8,7 @@ import { SentryService } from '../services/sentry-service';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { StoredProfile } from '../models/profile-store';
 import { ScanStorageService } from '../services/scan-storage-service';
-import { loadPrompt } from '../prompts/prompt-loader';
+import { loadPrompt } from '@codepathfinder/secureflow-cli';
 import { SecureFlowExplorer } from '../ui/secureflow-explorer';
 // Shared, VS Code-agnostic git helpers (CommonJS) from local workspace package
 import * as cliGit from '@codepathfinder/secureflow-cli/lib/git';
