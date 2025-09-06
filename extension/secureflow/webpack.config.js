@@ -52,7 +52,7 @@ const extensionConfig = {
       patterns: [
         { from: 'resources', to: 'resources' },
         { from: 'src/ui/webview', to: 'webview' },
-        { from: 'src/prompts', to: 'prompts' }
+        { from: 'packages/secureflow-cli/lib/prompts', to: 'prompts' }
       ]
     })
   ],
