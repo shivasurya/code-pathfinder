@@ -11,6 +11,9 @@ const { AIModel } = require('./types');
 const { getPromptPath, getAppProfilerPrompt } = require('./prompts');
 const { loadPrompt, getPromptForAppType, getApplicationProfilerPrompt, getThreatModelingPrompt } = require('./prompts/prompt-loader');
 
+// Export workspace analyzer functionality
+const { WorkspaceAnalyzer, ApplicationProfile } = require('./workspace-analyzer');
+
 module.exports = {
   AIClient,
   AIClientFactory,
@@ -24,5 +27,7 @@ module.exports = {
   loadPrompt,
   getPromptForAppType,
   getApplicationProfilerPrompt,
-  getThreatModelingPrompt
+  getThreatModelingPrompt,
+  WorkspaceAnalyzer,
+  ApplicationProfile
 };

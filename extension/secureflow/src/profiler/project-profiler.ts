@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AIClientFactory, AIClient } from '@codepathfinder/secureflow-cli';
-import { loadPrompt } from '@codepathfinder/secureflow-cli';
+import {
+  WorkspaceAnalyzer,
+  ApplicationProfile
+} from '@codepathfinder/secureflow-cli';
 import { SettingsManager } from '../settings/settings-manager';
 
 /**
@@ -14,21 +16,8 @@ import { SettingsManager } from '../settings/settings-manager';
  *   into a pure profiler that uses only Node's fs/path and AI client.
  * - The following remain extension-only: anything reading `vscode.workspace` or using VS Code UI.
  */
-/**
- * Interface representing a detected application in the workspace
- */
-export interface ApplicationProfile {
-  name: string;
-  path: string;
-  category: string;
-  subcategory?: string;
-  technology?: string;
-  confidence: number;
-  languages: string[];
-  frameworks: string[];
-  buildTools: string[];
-  evidence: string[];
-}
+// ApplicationProfile is now imported from the CLI library
+export { ApplicationProfile } from '@codepathfinder/secureflow-cli';
 
 /**
  * Helper class for analyzing the current workspace to determine project type
@@ -85,21 +74,18 @@ export class ProjectProfiler {
   // Maximum depth to traverse in directories
   private readonly maxTraversalDepth = 4;
 
-  // AI client for workspace profiling
-  private aiClient: AIClient;
+  // Workspace analyzer for AI-based profiling
+  private workspaceAnalyzer: WorkspaceAnalyzer;
 
   constructor(
     private readonly workspaceFolder: vscode.WorkspaceFolder,
     private readonly settingsManager?: SettingsManager
   ) {
-    // Initialize AI client
-    if (this.settingsManager) {
-      const selectedModel = this.settingsManager.getSelectedAIModel();
-      this.aiClient = AIClientFactory.getClient(selectedModel);
-    } else {
-      // Default to Claude if settings manager is not provided
-      this.aiClient = AIClientFactory.getClient('claude-3-5-sonnet-20241022');
-    }
+    // Initialize workspace analyzer
+    const selectedModel =
+      this.settingsManager?.getSelectedAIModel() ||
+      'claude-3-5-sonnet-20241022';
+    this.workspaceAnalyzer = new WorkspaceAnalyzer({ selectedModel });
   }
 
   /**
@@ -121,12 +107,13 @@ export class ProjectProfiler {
 
       // Use AI to determine the project type
       progressCallback?.('Determining project type...');
-      const applicationProfiles = await this.determineProjectTypes(
-        projectStructure,
-        keyFileContents,
-        secretApiKey,
-        progressCallback
-      );
+      const applicationProfiles =
+        await this.workspaceAnalyzer.determineProjectTypes(
+          projectStructure,
+          keyFileContents,
+          secretApiKey,
+          progressCallback
+        );
 
       return applicationProfiles;
     } catch (error) {
@@ -275,121 +262,6 @@ export class ProjectProfiler {
    */
   private isKeyProjectFile(fileName: string): boolean {
     return this.projectSignalFiles.includes(fileName);
-  }
-
-  /**
-   * Use AI to determine the project types based on structure and key files
-   */
-  private async determineProjectTypes(
-    projectStructure: any,
-    keyFileContents: any[],
-    secretApiKey: string,
-    progressCallback?: (message: string) => void
-  ): Promise<ApplicationProfile[]> {
-    try {
-      // Create a condensed representation of the project
-      const projectData = {
-        structure: {
-          directories: projectStructure.directories.map((dir: any) => ({
-            name: dir.name,
-            path: dir.path,
-            depth: dir.depth
-          })),
-          files: projectStructure.files.map((file: any) => ({
-            name: file.name,
-            path: file.path,
-            extension: file.extension
-          }))
-        },
-        keyFiles: keyFileContents
-      };
-
-      // Load the app profiler prompt
-      let promptTemplate = '';
-      try {
-        promptTemplate = await loadPrompt('common/app-profiler.txt');
-      } catch (error) {
-        console.error('Error loading app profiler prompt:', error);
-        // Fallback to a basic prompt if the file can't be loaded
-        promptTemplate = `You are an expert application profiler. Analyze the following project structure and key file contents to determine the type of application(s).`;
-      }
-
-      // Create a prompt for the AI
-      const prompt = `
-      ${promptTemplate}
-      
-      PROJECT STRUCTURE:
-      ${JSON.stringify(projectData, null, 2)}
-      
-      Based on this information, determine:
-      1. The type of application(s) in this workspace
-      2. If it's a monorepo, identify each distinct application
-      3. The primary programming languages and frameworks used
-      4. For each identified application, provide category, subcategory, and technology
-      
-      Respond in the following JSON format:
-      {
-        "applications": [
-          {
-            "name": "application name",
-            "path": "relative/path/to/app",
-            "category": "category",
-            "subcategory": "subcategory",
-            "technology": "specific technology",
-            "confidence": confidence percentage,
-            "languages": ["language1", "language2"],
-            "frameworks": ["framework1", "framework2"],
-            "buildTools": ["tool1", "tool2"],
-            "evidence": ["reason1", "reason2"]
-          }
-        ]
-      }
-      `;
-
-      progressCallback?.('Sending request to AI service...');
-
-      try {
-        // Call the AI client to analyze the workspace
-        const response = await this.aiClient.sendRequest(prompt, {
-          temperature: 0, // Lower temperature for more deterministic results
-          maxTokens: 2048, // Ensure enough tokens for the response
-          apiKey: secretApiKey // The API key should be managed by the client
-        });
-
-        // Parse the JSON response
-        try {
-          // Extract the JSON part from the response
-          const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) {
-            console.error('No JSON found in response:', response.content);
-            return []; // Fallback to empty array
-          }
-
-          const jsonContent = jsonMatch[0];
-          const result = JSON.parse(jsonContent);
-
-          if (!result.applications || !Array.isArray(result.applications)) {
-            console.error(
-              'Invalid response format, missing applications array:',
-              result
-            );
-            return []; // Fallback to empty array
-          }
-
-          return result.applications;
-        } catch (parseError) {
-          console.error('Error parsing AI response:', parseError);
-          console.error('Response content:', response.content);
-          return []; // Fallback to empty array
-        }
-      } catch (aiError) {
-        console.error('Error calling AI service:', aiError);
-        return []; // Fallback to empty array
-      }
-    } catch (error) {
-      console.error('Error determining project types:', error);
-      throw error;
-    }
   }
 }
 
