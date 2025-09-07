@@ -1,5 +1,6 @@
 const { cyan, yellow, red, green, dim, magenta } = require('colorette');
 const { FileRequestHandler } = require('./file-request-handler');
+const { loadPrompt } = require('../lib/prompts/prompt-loader');
 
 /**
  * AI-powered security analyzer with iterative file request capability
@@ -20,7 +21,7 @@ class AISecurityAnalyzer {
     console.log(magenta('🔍 Starting AI-driven security analysis...'));
     
     let iteration = 0;
-    let currentContext = this._buildInitialContext(profileInfo, projectSummary, reviewPrompt);
+    let currentContext = await this._buildInitialContext(profileInfo, projectSummary, reviewPrompt);
     let allFileContents = [];
     let finalAnalysis = null;
 
@@ -59,7 +60,7 @@ class AISecurityAnalyzer {
         allFileContents.push(...newFileContents);
 
         // Build context for next iteration
-        currentContext = this._buildIterativeContext(
+        currentContext = await this._buildIterativeContext(
           profileInfo,
           projectSummary,
           reviewPrompt,
@@ -94,7 +95,7 @@ class AISecurityAnalyzer {
   /**
    * Build initial context for first AI request
    */
-  _buildInitialContext(profileInfo, projectSummary, reviewPrompt) {
+  async _buildInitialContext(profileInfo, projectSummary, reviewPrompt) {
     let context = reviewPrompt + '\n\n';
 
     // Add profile information
@@ -126,16 +127,17 @@ class AISecurityAnalyzer {
     });
 
     // Add file request instructions
-    context += '\n' + this.fileHandler.getFileRequestInstructions();
+    context += '\n' + await this.fileHandler.getFileRequestInstructions();
 
-    context += `\nA expert senior security engineer goes through all possible source files including UI stuffs. Please analyze this project structure and request files you need to examine for security issues.`;
+    const initialAnalysisPrompt = await loadPrompt('scanner/initial-analysis.txt');
+    context += `\n${initialAnalysisPrompt}`;
     return context;
   }
 
   /**
    * Build context for iterative requests
    */
-  _buildIterativeContext(profileInfo, projectSummary, reviewPrompt, fileContents, fileResults, iteration) {
+  async _buildIterativeContext(profileInfo, projectSummary, reviewPrompt, fileContents, fileResults, iteration) {
     let context = reviewPrompt + '\n\n';
 
     // Add profile information
@@ -168,10 +170,12 @@ class AISecurityAnalyzer {
 
     // Add instructions for next step
     if (iteration < this.maxIterations) {
-      context += '\n' + this.fileHandler.getFileRequestInstructions();
-      context += `\nBased on the files analyzed so far, either:\n1. Request additional files if needed for complete analysis\n2. Provide your final security analysis if you have sufficient information`;
+      context += '\n' + await this.fileHandler.getFileRequestInstructions();
+      const iterativePrompt = await loadPrompt('scanner/iterative-analysis.txt');
+      context += `\n${iterativePrompt}`;
     } else {
-      context += `\nThis is the final iteration. provide your complete security analysis based on all the files examined and following strict security review guidelines.`;
+      const finalIterationPrompt = await loadPrompt('scanner/final-iteration.txt');
+      context += `\n${finalIterationPrompt}`;
     }
 
     return context;
@@ -216,7 +220,8 @@ class AISecurityAnalyzer {
    */
   async _getFinalAnalysis(context) {
     console.log(context);
-    const finalContext = context + '\n\nPlease provide your final security analysis. Do not request any more files.';
+    const finalAnalysisPrompt = await loadPrompt('scanner/final-analysis.txt');
+    const finalContext = context + `\n\n${finalAnalysisPrompt}`;
     return await this._sendToAI(finalContext, 'final');
   }
 

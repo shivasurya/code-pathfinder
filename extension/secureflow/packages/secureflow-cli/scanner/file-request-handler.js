@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
 const { cyan, yellow, red, green, dim } = require('colorette');
+const { loadPrompt } = require('../lib/prompts/prompt-loader');
 
 const readFile = promisify(fs.readFile);
 const stat = promisify(fs.stat);
@@ -201,24 +202,8 @@ class FileRequestHandler {
   /**
    * Generate file request tools description for LLM
    */
-  getFileRequestInstructions() {
-    return `
-You can request as much as files you want for analysis using the following format:
-<file_request path="./relative/path/to/file.js" reason="Brief reason for requesting this file" />
-
-Rules for file requests:
-1. Use relative paths from the project root
-2. Provide a brief reason for each request
-3. Files will be automatically filtered (no hidden files, symlinks, or files outside project scope)
-4. Large files (>1000 lines) will be truncated to first 500 lines
-5. You'll be notified if a file cannot be read
-6. Be skeptical like a senior security engineer and make sure to read all source files
-7. Go through project structure and request files including UI files (sometimes UI files are also important)
-
-Example:
-<file_request path="./src/auth/login.js" reason="Check authentication implementation" />
-<file_request path="./config/database.js" reason="Review database configuration" />
-`;
+  async getFileRequestInstructions() {
+    return await loadPrompt('scanner/file-request-instructions.txt');
   }
 
   /**
