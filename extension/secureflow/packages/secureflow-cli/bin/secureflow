@@ -10,6 +10,7 @@ const { yellow, red, cyan } = require('colorette');
 const pkg = require('../package.json');
 const { getMaskedConfig, loadConfig, CONFIG_FILE } = require('../lib/config');
 const { CLIProfileCommand } = require('../profiler');
+const { CLIFullScanCommand } = require('../scanner');
 
 const program = new Command();
 
@@ -20,17 +21,27 @@ program
 
 program
   .command('scan')
-  .description('Scan code for issues (placeholder)')
-  .option('--file <path>', 'File to scan')
-  .option('--range <start:end>', 'Line range, e.g. 10:50')
-  .option('--format <format>', 'Output format: json|text', 'text')
-  .action((opts) => {
-    console.log(yellow('SecureFlow CLI scaffold'));
-    console.log('This command is a placeholder and will be implemented in upcoming PRs.');
-    if (opts.file) console.log('file:', opts.file);
-    if (opts.range) console.log('range:', opts.range);
-    console.log('format:', opts.format);
-    process.exitCode = 0;
+  .description('Perform full security scan of project using AI analysis')
+  .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
+  .option('--model <model>', 'AI model to use for analysis')
+  .option('--format <format>', 'Output format: text|json', 'text')
+  .option('--output <file>', 'Save results to file')
+  .action(async (projectPath, options) => {
+    try {
+      const scanCommand = new CLIFullScanCommand({
+        selectedModel: options.model,
+        outputFormat: options.format,
+        outputFile: options.output
+      });
+      await scanCommand.execute(projectPath, options);
+    } catch (error) {
+      console.error(red('❌ Full scan failed:'));
+      console.error(error.message);
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
   });
 
 program
