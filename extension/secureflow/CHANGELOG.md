@@ -1,5 +1,30 @@
 # SecureFlow Changelog
 
+## Version 0.0.11 - September 7, 2025
+
+### 🚀 What's New?
+
+- **SecureFlow CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
+- **AI-Powered Security Scanner**: New iterative file analysis system with intelligent file request handling
+- **Full Workspace Scanning**: Comprehensive security scanning with up to 10 iterations for thorough analysis
+- **CLI Project Profiling**: AI-powered workspace analysis and profiling capabilities via command line
+- **Configuration Management**: New CLI config command for managing API keys and settings
+
+### 🔧 Improvements
+
+- **Enhanced Security Guidelines**: Improved file request rules and security review guidelines for more comprehensive analysis
+- **Modular Architecture**: Extracted AI client functionality into separate CLI package for better code organization
+- **Prompt Template System**: Refactored prompt loading with asynchronous template management
+- **Git Integration**: Enhanced git diff parsing logic moved to shared CLI package
+- **Analytics Enhancement**: Enabled GeoIP tracking in PostHog analytics for better insights
+
+### 🛠️ Technical Changes
+
+- Removed deprecated workspace-profiler class and related interfaces
+- Extracted git diff parsing logic into shared CLI package
+- Moved prompts to CLI package with updated import structure
+- Added workspace analyzer for AI-based project profiling
+
 ## Version 0.0.10 - August 17, 2025
 
 ### 🚀 What's New?
