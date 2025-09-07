@@ -212,6 +212,8 @@ Rules for file requests:
 3. Files will be automatically filtered (no hidden files, symlinks, or files outside project scope)
 4. Large files (>1000 lines) will be truncated to first 500 lines
 5. You'll be notified if a file cannot be read
+6. Be skeptical like a senior security engineer and make sure to read all source files
+7. Go through project structure and request files including UI files (sometimes UI files are also important)
 
 Example:
 <file_request path="./src/auth/login.js" reason="Check authentication implementation" />

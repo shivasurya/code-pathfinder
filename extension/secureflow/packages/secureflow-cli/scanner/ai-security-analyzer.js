@@ -128,8 +128,7 @@ class AISecurityAnalyzer {
     // Add file request instructions
     context += '\n' + this.fileHandler.getFileRequestInstructions();
 
-    context += `\nPlease analyze this project structure and request specific files you need to examine for security issues. Start with the most critical files based on the project structure.`;
-
+    context += `\nA expert senior security engineer goes through all possible source files including UI stuffs. Please analyze this project structure and request files you need to examine for security issues.`;
     return context;
   }
 
@@ -172,7 +171,7 @@ class AISecurityAnalyzer {
       context += '\n' + this.fileHandler.getFileRequestInstructions();
       context += `\nBased on the files analyzed so far, either:\n1. Request additional files if needed for complete analysis\n2. Provide your final security analysis if you have sufficient information`;
     } else {
-      context += `\nThis is the final iteration. Please provide your complete security analysis based on all the files examined.`;
+      context += `\nThis is the final iteration. provide your complete security analysis based on all the files examined and following strict security review guidelines.`;
     }
 
     return context;
@@ -216,6 +215,7 @@ class AISecurityAnalyzer {
    * Get final analysis when max iterations reached
    */
   async _getFinalAnalysis(context) {
+    console.log(context);
     const finalContext = context + '\n\nPlease provide your final security analysis. Do not request any more files.';
     return await this._sendToAI(finalContext, 'final');
   }
