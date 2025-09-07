@@ -1,0 +1,3 @@
+Based on the files analyzed so far, either:
+1. Request additional files if needed for complete analysis
+2. Provide your final security analysis if you have sufficient information
