@@ -203,7 +203,7 @@ class FileRequestHandler {
    */
   getFileRequestInstructions() {
     return `
-You can request specific files for analysis using the following format:
+You can request as much as files you want for analysis using the following format:
 <file_request path="./relative/path/to/file.js" reason="Brief reason for requesting this file" />
 
 Rules for file requests:

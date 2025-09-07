@@ -45,6 +45,18 @@ Strict Security Review Guidelines:
    - Impact: Real-world exploitation scenario
    - Severity: Justified severity rating
    - Fix: Concrete, implementation-agnostic solution
+  
+5. Never report security issues without going through all possible files and code paths
+   - It may include UI files
+   - It may include backend files
+   - It may include database files
+   - It may include configuration files
+   - It may include environment files
+   - You may exclude test files
+   - It may include documentation files
+   - You may exclude license files
+   - It may include README files
+   - You may exclude other files
 
 
 Strictly don't report below category of vulnerabilities from Analysis:

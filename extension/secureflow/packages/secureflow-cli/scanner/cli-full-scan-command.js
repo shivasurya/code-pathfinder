@@ -65,7 +65,7 @@ class CLIFullScanCommand {
 
       // Initialize AI security analyzer
       const aiAnalyzer = new AISecurityAnalyzer(aiClient, projectPath, {
-        maxIterations: 3,
+        maxIterations: 10,
         maxFileLines: 1000,
         partialReadLines: 500
       });
