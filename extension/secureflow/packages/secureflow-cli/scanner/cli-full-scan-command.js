@@ -6,6 +6,8 @@ const { AISecurityAnalyzer } = require('./ai-security-analyzer');
 const { loadPrompt } = require('../lib/prompts/prompt-loader');
 const { loadConfig } = require('../lib/config');
 const { AIClientFactory } = require('../lib/ai-client-factory');
+const { TokenTracker } = require('../lib/token-tracker');
+const { TokenDisplay } = require('../lib/token-display');
 
 /**
  * CLI Full Scan Command - performs comprehensive security analysis
@@ -15,6 +17,7 @@ class CLIFullScanCommand {
     this.selectedModel = options.selectedModel;
     this.outputFormat = options.outputFormat || 'text';
     this.outputFile = options.outputFile;
+    this.tokenTracker = null; // Will be initialized when model is known
   }
 
   /**
@@ -60,14 +63,19 @@ class CLIFullScanCommand {
       console.log(cyan('📋 Loading security analysis prompt...'));
       const reviewPrompt = await loadPrompt('common/review-changes.txt');
 
+      // Initialize token tracker
+      const model = this.selectedModel || config.model || 'claude-3-5-sonnet-20241022';
+      this.tokenTracker = new TokenTracker(model);
+
       // Initialize AI client
       const aiClient = this._createAIClient(config);
 
-      // Initialize AI security analyzer
+      // Initialize AI security analyzer with token tracking
       const aiAnalyzer = new AISecurityAnalyzer(aiClient, projectPath, {
         maxIterations: 10,
         maxFileLines: 1000,
-        partialReadLines: 500
+        partialReadLines: 500,
+        tokenTracker: this.tokenTracker
       });
 
       // Perform iterative analysis
@@ -100,6 +108,12 @@ class CLIFullScanCommand {
 
       // Output results
       await this._outputResults(scanResult, analysisResult);
+
+      // Display final token usage summary
+      if (this.tokenTracker) {
+        const summaryData = this.tokenTracker.getFinalSummaryData();
+        TokenDisplay.displayFinalSummary(summaryData);
+      }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       console.log(green(`\n✅ Scan completed in ${duration}s`));
@@ -167,7 +181,8 @@ class CLIFullScanCommand {
             maxTokens: 4000
           });
           
-          return response.content;
+          // Return response object with both content and usage for token tracking
+          return response;
         } catch (error) {
           console.error(red(`❌ AI request failed: ${error.message}`));
           throw error;

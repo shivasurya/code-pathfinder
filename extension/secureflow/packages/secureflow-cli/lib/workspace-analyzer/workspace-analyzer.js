@@ -1,5 +1,7 @@
 const { AIClientFactory } = require('../ai-client-factory');
 const { loadPrompt } = require('../prompts/prompt-loader');
+const { TokenTracker } = require('../token-tracker');
+const { TokenDisplay } = require('../token-display');
 
 /**
  * Interface representing a detected application in the workspace
@@ -27,6 +29,7 @@ class WorkspaceAnalyzer {
   constructor(options = {}) {
     this.selectedModel = options.selectedModel || 'claude-3-5-sonnet-20241022';
     this.aiClient = AIClientFactory.getClient(this.selectedModel);
+    this.tokenTracker = new TokenTracker(this.selectedModel);
   }
 
   /**
@@ -105,6 +108,10 @@ class WorkspaceAnalyzer {
 
       progressCallback?.('Sending request to AI service...');
 
+      // Display session state before the call
+      const preCallData = this.tokenTracker.getPreCallUsageData();
+      TokenDisplay.displayPreCallUsage(preCallData);
+
       try {
         // Call the AI client to analyze the workspace
         const response = await this.aiClient.sendRequest(prompt, {
@@ -112,6 +119,10 @@ class WorkspaceAnalyzer {
           maxTokens: 2048, // Ensure enough tokens for the response
           apiKey: secretApiKey // The API key should be managed by the client
         });
+
+        // Record token usage from API response
+        const usageData = this.tokenTracker.recordUsage(response.usage);
+        TokenDisplay.displayUsageResponse(usageData);
 
         // Parse the JSON response
         try {
@@ -157,6 +168,22 @@ class WorkspaceAnalyzer {
   setModel(modelName) {
     this.selectedModel = modelName;
     this.aiClient = AIClientFactory.getClient(modelName);
+    this.tokenTracker = new TokenTracker(modelName);
+  }
+
+  /**
+   * Get token usage statistics
+   */
+  getTokenUsage() {
+    return this.tokenTracker.getUsageStats();
+  }
+
+  /**
+   * Display final token usage summary
+   */
+  displayTokenSummary() {
+    const summaryData = this.tokenTracker.getFinalSummaryData();
+    TokenDisplay.displayFinalSummary(summaryData);
   }
 }
 

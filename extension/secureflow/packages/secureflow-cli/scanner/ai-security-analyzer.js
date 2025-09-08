@@ -1,6 +1,7 @@
 const { cyan, yellow, red, green, dim, magenta } = require('colorette');
 const { FileRequestHandler } = require('./file-request-handler');
 const { loadPrompt } = require('../lib/prompts/prompt-loader');
+const { TokenDisplay } = require('../lib/token-display');
 
 /**
  * AI-powered security analyzer with iterative file request capability
@@ -12,6 +13,7 @@ class AISecurityAnalyzer {
     this.fileHandler = new FileRequestHandler(projectPath, options);
     this.maxIterations = options.maxIterations || 3;
     this.analysisLog = [];
+    this.tokenTracker = options.tokenTracker || null;
   }
 
   /**
@@ -205,10 +207,26 @@ class AISecurityAnalyzer {
   async _sendToAI(context, iteration) {
     console.log(dim(`📤 Sending context to AI (${context.length} characters)`));
     
+    // Display session state before the call
+    if (this.tokenTracker) {
+      const preCallData = this.tokenTracker.getPreCallUsageData(iteration);
+      TokenDisplay.displayPreCallUsage(preCallData);
+    }
+    
     try {
       const response = await this.aiClient.analyze(context);
-      console.log(dim(`📥 Received AI response (${response.length} characters)`));
-      return response;
+      
+      // Extract content from response object
+      const content = response.content || response;
+      console.log(dim(`📥 Received AI response (${content.length} characters)`));
+      
+      // Record token usage from API response if available
+      if (this.tokenTracker && response.usage) {
+        const usageData = this.tokenTracker.recordUsage(response.usage, iteration);
+        TokenDisplay.displayUsageResponse(usageData);
+      }
+      
+      return content;
     } catch (error) {
       console.error(red(`❌ AI request failed in iteration ${iteration}: ${error.message}`));
       throw error;
