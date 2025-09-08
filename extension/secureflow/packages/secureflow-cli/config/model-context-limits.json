@@ -1,0 +1,124 @@
+{
+    "modelContextLimits": {
+      "openai": {
+        "gpt-4o": {
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "description": "GPT-4o with 128K context window, 16K max output tokens"
+        },
+        "gpt-4o-mini": {
+          "contextWindow": 128000,
+          "maxOutput": 16384,
+          "description": "GPT-4o mini with 128K context window, 16K max output tokens"
+        },
+        "o1-mini": {
+          "contextWindow": 128000,
+          "maxOutput": 65536,
+          "description": "O1-mini reasoning model with 128K context window, 65K max output tokens"
+        },
+        "o1": {
+          "contextWindow": 128000,
+          "maxOutput": 32768,
+          "description": "O1 reasoning model with 128K context window, 32K max output tokens"
+        },
+        "gpt-4.1-2025-04-14": {
+          "contextWindow": 1000000,
+          "maxOutput": 32768,
+          "description": "GPT-4.1 with 1M context window, 32K max output tokens"
+        },
+        "o3-mini-2025-01-31": {
+          "contextWindow": 200000,
+          "maxOutput": 100000,
+          "description": "O3-mini reasoning model with 200K context window, 100K max output tokens"
+        }
+      },
+      "google": {
+        "gemini-2.5-pro": {
+          "contextWindow": 1048576,
+          "maxOutput": 65535,
+          "description": "Gemini 2.5 Pro with 1M+ context window, 65K max output tokens"
+        },
+        "gemini-2.5-flash": {
+          "contextWindow": 1048576,
+          "maxOutput": 65535,
+          "description": "Gemini 2.5 Flash with 1M+ context window, 65K max output tokens"
+        }
+      },
+      "anthropic": {
+        "claude-opus-4-1-20250805": {
+          "contextWindow": 200000,
+          "maxOutput": 32000,
+          "description": "Claude Opus 4.1 with 200K context window, 32K max output tokens"
+        },
+        "claude-opus-4-20250514": {
+          "contextWindow": 200000,
+          "maxOutput": 32000,
+          "description": "Claude Opus 4 with 200K context window, 32K max output tokens"
+        },
+        "claude-sonnet-4-20250514": {
+          "contextWindow": 200000,
+          "maxOutput": 64000,
+          "description": "Claude Sonnet 4 with 200K context window (1M beta available), 64K max output tokens"
+        },
+        "claude-3-7-sonnet-20250219": {
+          "contextWindow": 128000,
+          "maxOutput": 64000,
+          "description": "Claude 3.7 Sonnet with 128K context window, 64K max output tokens"
+        },
+        "claude-3-5-sonnet-20241022": {
+          "contextWindow": 200000,
+          "maxOutput": 8192,
+          "description": "Claude 3.5 Sonnet with 200K context window, 8K max output tokens (deprecated model)"
+        },
+        "claude-3-5-haiku-20241022": {
+          "contextWindow": 200000,
+          "maxOutput": 8192,
+          "description": "Claude 3.5 Haiku with 200K context window, 8K max output tokens"
+        }
+      }
+    },
+    "metadata": {
+      "lastUpdated": "2025-09-07",
+      "source": "Verified against official API documentation and provider websites",
+      "notes": [
+        "Context windows are measured in tokens",
+        "Actual token usage may vary based on content type (text, code, etc.)",
+        "Some models have beta features with larger context windows",
+        "Claude Sonnet 4 supports 1M context window in beta with context-1m-2025-08-07 header",
+        "O1 and O3 models are reasoning models with different token counting behavior",
+        "Claude 3.5 Sonnet (20241022) is deprecated - use Claude 3.7 Sonnet instead",
+        "GPT-4.1 and Gemini models support very large context windows (1M+ tokens)",
+        "All specifications verified as of September 2025",
+        "Claude Opus models have 64K max output, not 32K as previously listed",
+        "O3-mini has significantly higher limits than O1-mini",
+        "Gemini models use 65,535 max output tokens, not 65,536"
+      ],
+      "recommendations": {
+        "largeContext": [
+          "gpt-4.1-2025-04-14",
+          "gemini-2.5-pro",
+          "gemini-2.5-flash"
+        ],
+        "balanced": [
+          "claude-sonnet-4-20250514",
+          "gpt-4o",
+          "claude-3-7-sonnet-20250219"
+        ],
+        "fast": [
+          "gpt-4o-mini",
+          "claude-3-5-haiku-20241022",
+          "gemini-2.5-flash"
+        ],
+        "reasoning": [
+          "o1",
+          "o1-mini",
+          "o3-mini-2025-01-31"
+        ],
+        "highOutput": [
+          "o3-mini-2025-01-31",
+          "claude-opus-4-1-20250805",
+          "claude-sonnet-4-20250514"
+        ]
+      }
+    }
+  }

@@ -265,6 +265,20 @@ class CLIProjectProfiler {
   setModel(modelName) {
     this.workspaceAnalyzer.setModel(modelName);
   }
+
+  /**
+   * Get token usage statistics
+   */
+  getTokenUsage() {
+    return this.workspaceAnalyzer.getTokenUsage();
+  }
+
+  /**
+   * Display final token usage summary
+   */
+  displayTokenSummary() {
+    this.workspaceAnalyzer.displayTokenSummary();
+  }
 }
 
 module.exports = {

@@ -37,7 +37,8 @@ class OpenAIClient extends HttpClient {
     return {
       content: response.choices[0].message.content,
       model: response.model,
-      provider: 'openai'
+      provider: 'openai',
+      usage: response.usage
     };
   }
 

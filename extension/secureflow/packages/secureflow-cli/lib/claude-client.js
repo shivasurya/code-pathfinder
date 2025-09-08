@@ -44,7 +44,8 @@ class ClaudeClient extends HttpClient {
     return {
       content,
       model: response.model,
-      provider: 'claude'
+      provider: 'claude',
+      usage: response.usage
     };
   }
 

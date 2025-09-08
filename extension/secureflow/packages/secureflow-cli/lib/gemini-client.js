@@ -50,7 +50,8 @@ class GeminiClient extends HttpClient {
     return {
       content,
       model: model,
-      provider: 'gemini'
+      provider: 'gemini',
+      usage: response.usageMetadata
     };
   }
 

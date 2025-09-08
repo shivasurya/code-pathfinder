@@ -46,7 +46,7 @@ class CLIProfileCommand {
 
       // Create profiler instance
       const profilerOptions = {
-        selectedModel: this.selectedModel || config.selectedModel || 'claude-3-5-sonnet-20241022'
+        selectedModel: this.selectedModel || config.model || 'claude-3-5-sonnet-20241022'
       };
       const profiler = new CLIProjectProfiler(profilerOptions);
 
@@ -64,6 +64,11 @@ class CLIProfileCommand {
         config.apiKey,
         updateProgress
       );
+
+      // Display token usage summary if available
+      if (profiler.getTokenUsage) {
+        profiler.displayTokenSummary();
+      }
 
       // Handle results
       if (applications.length === 0) {

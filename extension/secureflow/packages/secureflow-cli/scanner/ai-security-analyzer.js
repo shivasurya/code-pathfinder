@@ -12,6 +12,7 @@ class AISecurityAnalyzer {
     this.fileHandler = new FileRequestHandler(projectPath, options);
     this.maxIterations = options.maxIterations || 3;
     this.analysisLog = [];
+    this.tokenTracker = options.tokenTracker || null;
   }
 
   /**
@@ -205,10 +206,24 @@ class AISecurityAnalyzer {
   async _sendToAI(context, iteration) {
     console.log(dim(`📤 Sending context to AI (${context.length} characters)`));
     
+    // Display session state before the call
+    if (this.tokenTracker) {
+      this.tokenTracker.displayPreCallUsage(iteration);
+    }
+    
     try {
       const response = await this.aiClient.analyze(context);
-      console.log(dim(`📥 Received AI response (${response.length} characters)`));
-      return response;
+      
+      // Extract content from response object
+      const content = response.content || response;
+      console.log(dim(`📥 Received AI response (${content.length} characters)`));
+      
+      // Record token usage from API response if available
+      if (this.tokenTracker && response.usage) {
+        this.tokenTracker.recordUsage(response.usage, iteration);
+      }
+      
+      return content;
     } catch (error) {
       console.error(red(`❌ AI request failed in iteration ${iteration}: ${error.message}`));
       throw error;

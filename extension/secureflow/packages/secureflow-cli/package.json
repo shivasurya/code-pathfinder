@@ -14,7 +14,7 @@
     "help": "node bin/secureflow --help"
   },
   "dependencies": {
-    "commander": "^11.1.0",
-    "colorette": "^2.0.20"
+    "colorette": "^2.0.20",
+    "commander": "^11.1.0"
   }
 }
