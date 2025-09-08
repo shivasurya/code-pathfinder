@@ -2,6 +2,9 @@ const path = require('path');
 const fs = require('fs');
 const { CLIProjectProfiler } = require('./cli-project-profiler');
 const { loadConfig } = require('../lib/config');
+const { AIClientFactory } = require('../lib/ai-client-factory');
+const { TokenTracker } = require('../lib/token-tracker');
+const { TokenDisplay } = require('../lib/token-display');
 const { yellow, green, red, cyan, blue } = require('colorette');
 
 /**

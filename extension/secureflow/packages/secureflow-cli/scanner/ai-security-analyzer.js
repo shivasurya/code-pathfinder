@@ -1,6 +1,7 @@
 const { cyan, yellow, red, green, dim, magenta } = require('colorette');
 const { FileRequestHandler } = require('./file-request-handler');
 const { loadPrompt } = require('../lib/prompts/prompt-loader');
+const { TokenDisplay } = require('../lib/token-display');
 
 /**
  * AI-powered security analyzer with iterative file request capability
@@ -208,7 +209,8 @@ class AISecurityAnalyzer {
     
     // Display session state before the call
     if (this.tokenTracker) {
-      this.tokenTracker.displayPreCallUsage(iteration);
+      const preCallData = this.tokenTracker.getPreCallUsageData(iteration);
+      TokenDisplay.displayPreCallUsage(preCallData);
     }
     
     try {
@@ -220,7 +222,8 @@ class AISecurityAnalyzer {
       
       // Record token usage from API response if available
       if (this.tokenTracker && response.usage) {
-        this.tokenTracker.recordUsage(response.usage, iteration);
+        const usageData = this.tokenTracker.recordUsage(response.usage, iteration);
+        TokenDisplay.displayUsageResponse(usageData);
       }
       
       return content;

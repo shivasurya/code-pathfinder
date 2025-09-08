@@ -1,6 +1,7 @@
 const { AIClientFactory } = require('../ai-client-factory');
 const { loadPrompt } = require('../prompts/prompt-loader');
 const { TokenTracker } = require('../token-tracker');
+const { TokenDisplay } = require('../token-display');
 
 /**
  * Interface representing a detected application in the workspace
@@ -108,7 +109,8 @@ class WorkspaceAnalyzer {
       progressCallback?.('Sending request to AI service...');
 
       // Display session state before the call
-      this.tokenTracker.displayPreCallUsage();
+      const preCallData = this.tokenTracker.getPreCallUsageData();
+      TokenDisplay.displayPreCallUsage(preCallData);
 
       try {
         // Call the AI client to analyze the workspace
@@ -119,7 +121,8 @@ class WorkspaceAnalyzer {
         });
 
         // Record token usage from API response
-        this.tokenTracker.recordUsage(response.usage);
+        const usageData = this.tokenTracker.recordUsage(response.usage);
+        TokenDisplay.displayUsageResponse(usageData);
 
         // Parse the JSON response
         try {
@@ -179,7 +182,8 @@ class WorkspaceAnalyzer {
    * Display final token usage summary
    */
   displayTokenSummary() {
-    this.tokenTracker.displayFinalSummary();
+    const summaryData = this.tokenTracker.getFinalSummaryData();
+    TokenDisplay.displayFinalSummary(summaryData);
   }
 }
 

@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { cyan, yellow, red, green, dim, magenta } = require('colorette');
 
 /**
  * Token tracking and management utility
+ * Pure calculation logic without display dependencies - reusable across CLI and VS Code
  * Uses only API response data for accurate token counting across all providers
  */
 class TokenTracker {
@@ -71,46 +71,45 @@ class TokenTracker {
   }
 
   /**
-   * Display current session state before LLM call
+   * Get current session state data for display
    */
-  displayPreCallUsage(iteration = null) {
+  getPreCallUsageData(iteration = null) {
     const availableInput = this.getAvailableInputTokens();
     const availableOutput = this.getAvailableOutputTokens();
     
-    const iterationText = iteration ? ` (Iteration ${iteration})` : '';
-    console.log(cyan(`\n🔢 Token Usage${iterationText} - Session State:`));
-    console.log(dim(`   Model: ${this.modelName} (${this.currentLimits.provider})`));
-    console.log(dim(`   Context Window: ${this.currentLimits.contextWindow.toLocaleString()} tokens`));
-    console.log(dim(`   Max Output: ${this.currentLimits.maxOutput.toLocaleString()} tokens`));
-    
-    console.log(`   📊 Session input so far: ${this.totalInputTokens.toLocaleString()}`);
-    console.log(`   📊 Session output so far: ${this.totalOutputTokens.toLocaleString()}`);
-    if (this.totalReasoningTokens > 0) {
-      console.log(`   🧠 Session reasoning so far: ${this.totalReasoningTokens.toLocaleString()}`);
-    }
-    
-    const inputColor = availableInput > 10000 ? green : (availableInput > 1000 ? yellow : red);
-    const outputColor = availableOutput > 1000 ? green : (availableOutput > 0 ? yellow : red);
-    
-    console.log(`   ⚡ Available context: ${inputColor(availableInput.toLocaleString())} tokens`);
-    console.log(`   ⚡ Available output: ${outputColor(availableOutput.toLocaleString())} tokens`);
-    
-    if (availableInput < 1000) {
-      console.log(red(`   ⚠️  WARNING: Low context tokens remaining`));
-    }
-    
-    if (availableOutput < 1000) {
-      console.log(yellow(`   ⚠️  WARNING: Low output tokens remaining`));
-    }
+    return {
+      iteration,
+      model: {
+        name: this.modelName,
+        provider: this.currentLimits.provider,
+        contextWindow: this.currentLimits.contextWindow,
+        maxOutput: this.currentLimits.maxOutput
+      },
+      session: {
+        inputTokens: this.totalInputTokens,
+        outputTokens: this.totalOutputTokens,
+        reasoningTokens: this.totalReasoningTokens
+      },
+      available: {
+        context: availableInput,
+        output: availableOutput
+      },
+      warnings: {
+        lowContext: availableInput < 1000,
+        lowOutput: availableOutput < 1000
+      }
+    };
   }
 
   /**
-   * Record and display token usage from API response
+   * Record token usage from API response and return structured data
    */
   recordUsage(apiUsage, iteration = null) {
     if (!apiUsage) {
-      console.log(yellow(`   ⚠️  No token usage data available from API response`));
-      return;
+      return {
+        success: false,
+        error: 'No token usage data available from API response'
+      };
     }
 
     // Extract token counts from API response - handle different provider formats
@@ -146,78 +145,88 @@ class TokenTracker {
     this.totalReasoningTokens += reasoningTokens;
     
     // Record usage
-    this.usageHistory.push({
+    const usageRecord = {
       iteration: iteration || this.usageHistory.length + 1,
       inputTokens,
       outputTokens,
       reasoningTokens,
       timestamp: new Date().toISOString()
-    });
+    };
     
-    const iterationText = iteration ? ` (Iteration ${iteration})` : '';
-    console.log(cyan(`\n📊 Token Usage${iterationText} - API Response:`));
+    this.usageHistory.push(usageRecord);
     
-    console.log(green(`   ✅ Actual API usage:`));
-    console.log(`      📤 Input: ${inputTokens.toLocaleString()} tokens`);
-    console.log(`      📥 Output: ${outputTokens.toLocaleString()} tokens`);
-    if (reasoningTokens > 0) {
-      console.log(`      🧠 Reasoning: ${reasoningTokens.toLocaleString()} tokens`);
-    }
-    
-    console.log(`   📈 Session totals:`);
-    console.log(`      📤 Total input: ${this.totalInputTokens.toLocaleString()} tokens`);
-    console.log(`      📥 Total output: ${this.totalOutputTokens.toLocaleString()} tokens`);
-    if (this.totalReasoningTokens > 0) {
-      console.log(`      🧠 Total reasoning: ${this.totalReasoningTokens.toLocaleString()} tokens`);
-    }
-    console.log(`      🎯 Total used: ${(this.totalInputTokens + this.totalOutputTokens).toLocaleString()} tokens`);
-    
+    // Calculate remaining tokens
     const remainingContext = this.currentLimits.contextWindow - this.totalInputTokens - this.totalOutputTokens;
     const remainingOutput = this.currentLimits.maxOutput - this.totalOutputTokens;
     
-    const contextColor = remainingContext > 10000 ? green : (remainingContext > 1000 ? yellow : red);
-    const outputColor = remainingOutput > 1000 ? green : (remainingOutput > 0 ? yellow : red);
+    // Calculate usage percentages
+    const contextUsagePercent = ((this.totalInputTokens + this.totalOutputTokens) / this.currentLimits.contextWindow * 100);
+    const outputUsagePercent = (this.totalOutputTokens / this.currentLimits.maxOutput * 100);
     
-    console.log(`   ⚡ Remaining context: ${contextColor(remainingContext.toLocaleString())} tokens`);
-    console.log(`   ⚡ Remaining output: ${outputColor(remainingOutput.toLocaleString())} tokens`);
-    
-    // Usage percentage
-    const contextUsagePercent = ((this.totalInputTokens + this.totalOutputTokens) / this.currentLimits.contextWindow * 100).toFixed(1);
-    const outputUsagePercent = (this.totalOutputTokens / this.currentLimits.maxOutput * 100).toFixed(1);
-    
-    console.log(dim(`   📊 Context usage: ${contextUsagePercent}%`));
-    console.log(dim(`   📊 Output usage: ${outputUsagePercent}%`));
+    return {
+      success: true,
+      iteration,
+      current: {
+        inputTokens,
+        outputTokens,
+        reasoningTokens
+      },
+      totals: {
+        inputTokens: this.totalInputTokens,
+        outputTokens: this.totalOutputTokens,
+        reasoningTokens: this.totalReasoningTokens,
+        totalUsed: this.totalInputTokens + this.totalOutputTokens
+      },
+      remaining: {
+        context: remainingContext,
+        output: remainingOutput
+      },
+      percentages: {
+        context: contextUsagePercent,
+        output: outputUsagePercent
+      },
+      warnings: {
+        lowContext: remainingContext < 1000,
+        lowOutput: remainingOutput < 1000
+      }
+    };
   }
 
   /**
-   * Display final usage summary
+   * Get final usage summary data for display
    */
-  displayFinalSummary() {
-    console.log(magenta('\n📊 FINAL TOKEN USAGE SUMMARY'));
-    console.log('='.repeat(50));
-    console.log(`Model: ${this.modelName} (${this.currentLimits.provider})`);
-    console.log(`Total iterations: ${this.usageHistory.length}`);
-    console.log(`Total input tokens: ${this.totalInputTokens.toLocaleString()}`);
-    console.log(`Total output tokens: ${this.totalOutputTokens.toLocaleString()}`);
-    if (this.totalReasoningTokens > 0) {
-      console.log(`Total reasoning tokens: ${this.totalReasoningTokens.toLocaleString()}`);
-    }
-    console.log(`Total tokens used: ${(this.totalInputTokens + this.totalOutputTokens).toLocaleString()}`);
+  getFinalSummaryData() {
+    const contextUsagePercent = ((this.totalInputTokens + this.totalOutputTokens) / this.currentLimits.contextWindow * 100);
+    const outputUsagePercent = (this.totalOutputTokens / this.currentLimits.maxOutput * 100);
     
-    const contextUsagePercent = ((this.totalInputTokens + this.totalOutputTokens) / this.currentLimits.contextWindow * 100).toFixed(1);
-    const outputUsagePercent = (this.totalOutputTokens / this.currentLimits.maxOutput * 100).toFixed(1);
-    
-    console.log(`Context window usage: ${contextUsagePercent}% of ${this.currentLimits.contextWindow.toLocaleString()}`);
-    console.log(`Output limit usage: ${outputUsagePercent}% of ${this.currentLimits.maxOutput.toLocaleString()}`);
-    
-    if (this.usageHistory.length > 1) {
-      console.log('\nPer-iteration breakdown:');
-      this.usageHistory.forEach((usage, index) => {
-        const reasoningText = usage.reasoningTokens > 0 ? `, Reasoning: ${usage.reasoningTokens.toLocaleString()}` : '';
-        console.log(`  ${index + 1}. Input: ${usage.inputTokens.toLocaleString()}, Output: ${usage.outputTokens.toLocaleString()}${reasoningText}`);
-      });
-    }
-    console.log('='.repeat(50));
+    return {
+      model: {
+        name: this.modelName,
+        provider: this.currentLimits.provider
+      },
+      summary: {
+        totalIterations: this.usageHistory.length,
+        totalInputTokens: this.totalInputTokens,
+        totalOutputTokens: this.totalOutputTokens,
+        totalReasoningTokens: this.totalReasoningTokens,
+        totalTokensUsed: this.totalInputTokens + this.totalOutputTokens
+      },
+      limits: {
+        contextWindow: this.currentLimits.contextWindow,
+        maxOutput: this.currentLimits.maxOutput
+      },
+      percentages: {
+        contextUsage: contextUsagePercent,
+        outputUsage: outputUsagePercent
+      },
+      breakdown: this.usageHistory.map((usage, index) => ({
+        iteration: index + 1,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        reasoningTokens: usage.reasoningTokens,
+        timestamp: usage.timestamp
+      }))
+    };
   }
 
   /**

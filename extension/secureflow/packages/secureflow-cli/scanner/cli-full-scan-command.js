@@ -7,6 +7,7 @@ const { loadPrompt } = require('../lib/prompts/prompt-loader');
 const { loadConfig } = require('../lib/config');
 const { AIClientFactory } = require('../lib/ai-client-factory');
 const { TokenTracker } = require('../lib/token-tracker');
+const { TokenDisplay } = require('../lib/token-display');
 
 /**
  * CLI Full Scan Command - performs comprehensive security analysis
@@ -110,7 +111,8 @@ class CLIFullScanCommand {
 
       // Display final token usage summary
       if (this.tokenTracker) {
-        this.tokenTracker.displayFinalSummary();
+        const summaryData = this.tokenTracker.getFinalSummaryData();
+        TokenDisplay.displayFinalSummary(summaryData);
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
