@@ -132,6 +132,11 @@ class TokenTracker {
       outputTokens = usage.candidatesTokenCount || 0;
       reasoningTokens = usage.thoughtsTokenCount || 0; // For thinking models
     }
+    // ollama format
+    else if (usage.total_tokens !== undefined) {
+      inputTokens = usage.prompt_tokens || 0;
+      outputTokens = usage.completion_tokens || 0;
+    }
     // Fallback - try both naming conventions
     else {
       inputTokens = usage.input_tokens || usage.promptTokenCount || 0;

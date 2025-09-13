@@ -44,6 +44,13 @@
           "description": "Gemini 2.5 Flash with 1M+ context window, 65K max output tokens"
         }
       },
+      "ollama": {
+        "qwen3:4b": {
+          "contextWindow": 256000,
+          "maxOutput": 32768,
+          "description": "Qwen 3:4B with 256K context window, 32K max output tokens"
+        }
+      },
       "anthropic": {
         "claude-opus-4-1-20250805": {
           "contextWindow": 200000,
