@@ -2,6 +2,7 @@ const { AIClient } = require('./ai-client');
 const { ClaudeClient } = require('./claude-client');
 const { GeminiClient } = require('./gemini-client');
 const { OpenAIClient } = require('./openai-client');
+const { OllamaClient } = require('./ollama-client');
 
 /**
  * Factory class for creating AI clients
@@ -36,6 +37,10 @@ class AIClientFactory {
       case 'claude-3-5-sonnet-20241022':
       case 'claude-3-5-haiku-20241022':
         return new ClaudeClient();
+
+      // Ollama models
+      case 'qwen3:4b':
+        return new OllamaClient();
 
       default:
         throw new Error(`Unsupported AI model: ${model}`);

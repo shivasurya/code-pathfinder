@@ -4,6 +4,7 @@ const { AIClientFactory } = require('./ai-client-factory');
 const { ClaudeClient } = require('./claude-client');
 const { GeminiClient } = require('./gemini-client');
 const { OpenAIClient } = require('./openai-client');
+const { OllamaClient } = require('./ollama-client');
 const { HttpClient } = require('./http-client');
 const { AIModel } = require('./types');
 
@@ -20,6 +21,7 @@ module.exports = {
   ClaudeClient,
   GeminiClient,
   OpenAIClient,
+  OllamaClient,
   HttpClient,
   AIModel,
   getPromptPath,
