@@ -12,16 +12,17 @@ class OllamaClient extends HttpClient {
    * Send a request to the Ollama API
    * @param {string} prompt The prompt to send
    * @param {import('./ai-client').AIClientOptions} options Ollama-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  async sendRequest(prompt, options) {
+  async sendRequest(prompt, options, messages) {
     const model = options?.model || this.defaultModel;
     
     const response = await this.post(
       this.API_URL,
       {
         model: model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages || [{ role: 'user', content: prompt }],
         stream: false,
         options: {
           temperature: options?.temperature || 0,
@@ -32,6 +33,8 @@ class OllamaClient extends HttpClient {
         'Content-Type': 'application/json'
       }
     );
+
+    console.log(response.message.content);
 
     // remove text between <think> and </think> tags
     response.message.content = response.message.content.replace(/<think>.*?<\/think>/gs, '');
@@ -53,9 +56,10 @@ class OllamaClient extends HttpClient {
    * @param {string} prompt The prompt to send
    * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
    * @param {import('./ai-client').AIClientOptions} options Ollama-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<void>}
    */
-  async sendStreamingRequest(prompt, callback, options) {
+  async sendStreamingRequest(prompt, callback, options, messages) {
     const model = options?.model || this.defaultModel;
     let contentSoFar = '';
 
@@ -63,7 +67,7 @@ class OllamaClient extends HttpClient {
       this.API_URL,
       {
         model: model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages || [{ role: 'user', content: prompt }],
         stream: true,
         options: {
           temperature: options?.temperature || 0,

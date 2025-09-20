@@ -12,9 +12,10 @@ class ClaudeClient extends HttpClient {
    * Send a request to the Anthropic Claude API
    * @param {string} prompt The prompt to send
    * @param {import('./ai-client').AIClientOptions} options Claude-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  async sendRequest(prompt, options) {
+  async sendRequest(prompt, options, messages) {
     if (!options?.apiKey) {
       throw new Error('Anthropic Claude API key is required');
     }
@@ -22,10 +23,10 @@ class ClaudeClient extends HttpClient {
     const response = await this.post(
       this.API_URL,
       {
-        model: options.model || this.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
+        model: "claude-3-5-sonnet-20241022",
+        messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
-        max_tokens: options.maxTokens || 500,
+        max_tokens: options.maxTokens || 4000,
         stream: false
       },
       {
@@ -54,9 +55,10 @@ class ClaudeClient extends HttpClient {
    * @param {string} prompt The prompt to send
    * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
    * @param {import('./ai-client').AIClientOptions} options Claude-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<void>}
    */
-  async sendStreamingRequest(prompt, callback, options) {
+  async sendStreamingRequest(prompt, callback, options, messages) {
     if (!options?.apiKey) {
       throw new Error('Anthropic Claude API key is required');
     }
@@ -67,7 +69,7 @@ class ClaudeClient extends HttpClient {
       this.API_URL,
       {
         model: options.model || this.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0.7,
         max_tokens: options.maxTokens || 500,
         stream: true

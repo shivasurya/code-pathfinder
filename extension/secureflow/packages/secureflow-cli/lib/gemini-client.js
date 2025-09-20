@@ -11,9 +11,10 @@ class GeminiClient extends HttpClient {
    * Send a request to the Google Gemini API
    * @param {string} prompt The prompt to send
    * @param {import('./ai-client').AIClientOptions} options Gemini-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  async sendRequest(prompt, options) {
+  async sendRequest(prompt, options, messages) {
     if (!options?.apiKey) {
       throw new Error('Google Gemini API key is required');
     }
@@ -22,15 +23,7 @@ class GeminiClient extends HttpClient {
     const response = await this.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ]
+        contents: this._convertMessagesToContents(messages, prompt)
       },
       {
         'x-goog-api-key': options.apiKey,
@@ -56,13 +49,43 @@ class GeminiClient extends HttpClient {
   }
 
   /**
+   * Convert messages array to Gemini contents format
+   * @param {import('./ai-client').AIMessage[]} [messages] Messages array
+   * @param {string} prompt Fallback prompt if no messages
+   * @returns {any[]} Gemini contents array
+   */
+  _convertMessagesToContents(messages, prompt) {
+    if (!messages) {
+      return [
+        {
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ];
+    }
+
+    return messages.map(message => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [
+        {
+          text: message.content
+        }
+      ]
+    }));
+  }
+
+  /**
    * Send a streaming request to the Google Gemini API
    * @param {string} prompt The prompt to send
    * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
    * @param {import('./ai-client').AIClientOptions} options Gemini-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<void>}
    */
-  async sendStreamingRequest(prompt, callback, options) {
+  async sendStreamingRequest(prompt, callback, options, messages) {
     // throw not implemented error
     throw new Error('sendStreamingRequest not implemented for GeminiClient');
   }

@@ -1,1 +1,4 @@
-This is the final iteration. provide your complete security analysis based on all the files examined and following strict security review guidelines.
+This is the final iteration.
+
+Report your final security analysis based on all the files examined and following strict security review guidelines.
+Gather all the reported issues and provide a final security analysis.

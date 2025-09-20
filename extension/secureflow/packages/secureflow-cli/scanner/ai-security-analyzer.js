@@ -26,13 +26,16 @@ class AISecurityAnalyzer {
     let currentContext = await this._buildInitialContext(profileInfo, projectSummary, reviewPrompt);
     let allFileContents = [];
     let finalAnalysis = null;
+    let messages = [{ role: 'user', content: currentContext }];
 
     while (iteration < this.maxIterations) {
       iteration++;
       console.log(cyan(`\n📋 Analysis iteration ${iteration}/${this.maxIterations}`));
 
       // Send context to AI and get response
-      const aiResponse = await this._sendToAI(currentContext, iteration);
+      const aiResponse = await this._sendToAI(null, iteration, messages);
+
+      messages.push({ role: 'assistant', content: aiResponse });
       
       this.analysisLog.push({
         iteration,
@@ -50,26 +53,25 @@ class AISecurityAnalyzer {
         // Process file requests
         const fileResults = await this.fileHandler.processFileRequests(aiResponse);
         
-        // Add successful file contents to context
+        // Add successful file contents to context, avoiding duplicates
         const newFileContents = fileResults
           .filter(result => result.status === 'success')
           .map(result => ({
             path: result.path,
             content: result.content,
-            reason: result.reason
-          }));
+            reason: allFileContents.some(f => f.path === result.path) ? 'duplicate' : result.reason
+          }))
+          .filter(file => !allFileContents.some(f => f.path === file.path));
 
         allFileContents.push(...newFileContents);
 
         // Build context for next iteration
         currentContext = await this._buildIterativeContext(
-          profileInfo,
-          projectSummary,
-          reviewPrompt,
-          allFileContents,
+          newFileContents,
           fileResults,
           iteration
         );
+        messages.push({ role: 'user', content: currentContext });
 
       } else {
         // No more file requests, this should be the final analysis
@@ -82,7 +84,7 @@ class AISecurityAnalyzer {
     // If we reached max iterations, get final analysis
     if (!finalAnalysis) {
       console.log(yellow('⚠️  Reached maximum iterations, requesting final analysis'));
-      finalAnalysis = await this._getFinalAnalysis(currentContext);
+      finalAnalysis = await this._getFinalAnalysis(currentContext, messages);
     }
 
     return {
@@ -116,7 +118,7 @@ class AISecurityAnalyzer {
     context += `Project Path: ${projectSummary.projectPath}\n`;
     context += `Total Files: ${projectSummary.totalFiles}\n\n`;
 
-    context += `Directory Structure:\n${projectSummary.directoryStructure}\n`;
+    context += `Files in the project:\n${projectSummary.directoryStructure}\n`;
 
     context += `Files by Extension:\n`;
     Object.entries(projectSummary.filesByExtension).forEach(([ext, files]) => {
@@ -131,32 +133,25 @@ class AISecurityAnalyzer {
     // Add file request instructions
     context += '\n' + await this.fileHandler.getFileRequestInstructions();
 
-    const initialAnalysisPrompt = await loadPrompt('scanner/initial-analysis.txt');
-    context += `\n${initialAnalysisPrompt}`;
     return context;
   }
 
   /**
    * Build context for iterative requests
    */
-  async _buildIterativeContext(profileInfo, projectSummary, reviewPrompt, fileContents, fileResults, iteration) {
-    let context = reviewPrompt + '\n\n';
-
-    // Add profile information
-    if (profileInfo) {
-      context += `[SECUREFLOW PROFILE CONTEXT]\n`;
-      context += `Name: ${profileInfo.name}\n`;
-      context += `Category: ${profileInfo.category}\n`;
-      context += `Languages: ${profileInfo.languages.join(', ')}\n`;
-      context += `Frameworks: ${profileInfo.frameworks.join(', ')}\n\n`;
-    }
+  async _buildIterativeContext(fileContents, fileResults, iteration) {
+    let context = "\n";
 
     // Add file contents from previous requests
     context += `[ANALYZED FILES - Iteration ${iteration}]\n`;
     fileContents.forEach(file => {
       context += `\n=== FILE: ${file.path} ===\n`;
       context += `Reason: ${file.reason}\n`;
-      context += `${file.content}\n`;
+      if (file.reason === 'duplicate') {
+        context += `[File was already analyzed in previous conversation]\n`;
+      } else {
+        context += `${file.content}\n`;
+      }
       context += `=== END FILE: ${file.path} ===\n`;
     });
 
@@ -166,20 +161,22 @@ class AISecurityAnalyzer {
       if (result.status === 'success') {
         context += `✅ ${result.path}: Successfully read (${result.lines} lines)\n`;
       } else {
-        context += `❌ ${result.path}: ${result.reason}\n`;
+        context += `❌ This file doesn't exist or is not a source file ${result.path}: ${result.reason}. Don't request it again\n`;
       }
     });
 
     // Add instructions for next step
     if (iteration < this.maxIterations) {
-      context += '\n' + await this.fileHandler.getFileRequestInstructions();
+      // include files in the project list
+      // context += `\nFiles in the project:\n${projectSummary.directoryStructure}\n`;
+      // context += '\n' + await this.fileHandler.getFileRequestInstructions();
       const iterativePrompt = await loadPrompt('scanner/iterative-analysis.txt');
       context += `\n${iterativePrompt}`;
     } else {
       const finalIterationPrompt = await loadPrompt('scanner/final-iteration.txt');
       context += `\n${finalIterationPrompt}`;
     }
-
+    //console.log(context);
     return context;
   }
 
@@ -204,8 +201,8 @@ class AISecurityAnalyzer {
   /**
    * Send context to AI and get response
    */
-  async _sendToAI(context, iteration) {
-    console.log(dim(`📤 Sending context to AI (${context.length} characters)`));
+  async _sendToAI(context, iteration, messages) {
+    //console.log(dim(`📤 Sending context to AI (${context.length} characters)`));
     
     // Display session state before the call
     if (this.tokenTracker) {
@@ -214,7 +211,7 @@ class AISecurityAnalyzer {
     }
     
     try {
-      const response = await this.aiClient.analyze(context);
+      const response = await this.aiClient.analyze(context, messages);
       
       // Extract content from response object
       const content = response.content || response;
@@ -236,11 +233,11 @@ class AISecurityAnalyzer {
   /**
    * Get final analysis when max iterations reached
    */
-  async _getFinalAnalysis(context) {
-    console.log(context);
+  async _getFinalAnalysis(context, messages) {
     const finalAnalysisPrompt = await loadPrompt('scanner/final-analysis.txt');
     const finalContext = context + `\n\n${finalAnalysisPrompt}`;
-    return await this._sendToAI(finalContext, 'final');
+    messages.push({ role: 'user', content: finalContext });
+    return await this._sendToAI(null, 'final', messages);
   }
 
   /**

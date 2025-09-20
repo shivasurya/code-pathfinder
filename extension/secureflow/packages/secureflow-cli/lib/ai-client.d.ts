@@ -28,19 +28,22 @@ export declare class AIClient {
    * Send a request to the AI model
    * @param prompt The prompt to send to the AI model
    * @param options Options for the request
+   * @param messages Messages for the request
    * @returns The AI model response
    */
-  sendRequest(prompt: string, options?: AIClientOptions): Promise<AIResponse>;
+  sendRequest(prompt?: string, options?: AIClientOptions, messages?: any): Promise<AIResponse>;
 
   /**
    * Send a streaming request to the AI model
    * @param prompt The prompt to send to the AI model
    * @param callback Callback function for each chunk of the response
    * @param options Options for the request
+   * @param messages Messages for the request
    */
   sendStreamingRequest(
-    prompt: string,
+    prompt?: string,
     callback: (chunk: AIResponseChunk) => void,
-    options?: AIClientOptions
+    options?: AIClientOptions,
+    messages?: any
   ): Promise<void>;
 }

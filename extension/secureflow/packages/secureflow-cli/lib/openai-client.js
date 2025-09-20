@@ -12,9 +12,10 @@ class OpenAIClient extends HttpClient {
    * Send a request to the OpenAI API
    * @param {string} prompt The prompt to send
    * @param {import('./ai-client').AIClientOptions} options OpenAI-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<import('./ai-client').AIResponse>} The AI response
    */
-  async sendRequest(prompt, options) {
+  async sendRequest(prompt, options, messages) {
     if (!options?.apiKey) {
       throw new Error('OpenAI API key is required');
     }
@@ -23,7 +24,7 @@ class OpenAIClient extends HttpClient {
       this.API_URL,
       {
         model: options.model || this.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
         max_tokens: options.maxTokens || 2000,
         stream: false
@@ -47,9 +48,10 @@ class OpenAIClient extends HttpClient {
    * @param {string} prompt The prompt to send
    * @param {function(import('./ai-client').AIResponseChunk): void} callback Callback function for each chunk
    * @param {import('./ai-client').AIClientOptions} options OpenAI-specific options
+   * @param {import('./ai-client').AIMessage[]} [messages] Optional messages array for conversation context
    * @returns {Promise<void>}
    */
-  async sendStreamingRequest(prompt, callback, options) {
+  async sendStreamingRequest(prompt, callback, options, messages) {
     if (!options?.apiKey) {
       throw new Error('OpenAI API key is required');
     }
@@ -60,7 +62,7 @@ class OpenAIClient extends HttpClient {
       this.API_URL,
       {
         model: options.model || this.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
+        messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
         max_tokens: options.maxTokens || 2000,
         stream: true

@@ -61,7 +61,7 @@ class CLIFullScanCommand {
 
       // Load security review prompt
       console.log(cyan('📋 Loading security analysis prompt...'));
-      const reviewPrompt = await loadPrompt('common/review-changes.txt');
+      const reviewPrompt = await loadPrompt('common/security-review-cli.txt');
 
       // Initialize token tracker
       const model = this.selectedModel || config.model || 'claude-3-5-sonnet-20241022';
@@ -170,16 +170,16 @@ class CLIFullScanCommand {
     
     // Create wrapper that matches our expected interface
     return {
-      analyze: async (context) => {
+      analyze: async (context, messages) => {
         console.log(dim('🤖 AI analyzing context...'));
         
         try {
           const response = await aiClient.sendRequest(context, {
             apiKey: config.apiKey,
             model: model,
-            temperature: 0.1,
+            temperature: 0,
             maxTokens: 4000
-          });
+          }, messages);
           
           // Return response object with both content and usage for token tracking
           return response;
