@@ -255,17 +255,25 @@ class ProjectAnalyzer {
 
   /**
    * Format directory structure for LLM consumption
+   * Formats paths without project root directory prefix
+   * Example:
+   * LICENSE Lines: 22
+   * README.md Lines: 95
+   * cmd/todoist/main.go Lines: 30
    */
-  _formatStructureForLLM(structure, indent = '') {
-    let result = `${indent}${structure.name}/\n`;
+  _formatStructureForLLM(structure, parentPath = '') {
+    let result = '';
+    
+    if (structure.type === 'file') {
+      const filePath = parentPath ? `${parentPath}/${structure.name}` : structure.name;
+      return `${filePath} Lines: ${structure.lineCount}\n`;
+    }
     
     if (structure.children) {
+      const currentPath = structure.name === path.basename(this.projectPath) ? '' : 
+        parentPath ? `${parentPath}/${structure.name}` : structure.name;
       structure.children.forEach(child => {
-        if (child.type === 'directory') {
-          result += this._formatStructureForLLM(child, indent + '  ');
-        } else {
-          result += `${indent}  ${child.name} (${child.lineCount} lines)\n`;
-        }
+        result += this._formatStructureForLLM(child, currentPath);
       });
     }
     

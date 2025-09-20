@@ -60,6 +60,9 @@ function inferProvider(env, fileCfg) {
   if (/gemini/i.test(fileCfg?.model || '')) {
     return 'google';
   }
+  if (/qwen/i.test(fileCfg?.model || '')) {
+    return 'ollama';
+  }
   return 'anthropic';
 }
 

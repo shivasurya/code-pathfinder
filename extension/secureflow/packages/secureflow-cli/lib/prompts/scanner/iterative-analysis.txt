@@ -1,3 +1,6 @@
-Based on the files analyzed so far, either:
-1. Request additional files if needed for complete analysis
+Remember to be skeptical like a senior security engineer and make sure to read all source files. If the file 
+doesnt exist, strictly dont request it again and wait for the next iteration to request it.
+
+Based on the files analyzed so far, strictly follow either and don't ask any other questions:
+1. Request additional files if needed for complete analysis in format specified in the file request tag
 2. Provide your final security analysis if you have sufficient information
