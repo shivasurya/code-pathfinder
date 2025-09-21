@@ -24,13 +24,20 @@ program
   .description('Perform full security scan of project using AI analysis')
   .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
   .option('--model <model>', 'AI model to use for analysis')
-  .option('--format <format>', 'Output format: text|json', 'text')
+  .option('--format <format>', 'Output format: text|json|defectdojo', 'text')
   .option('--output <file>', 'Save results to file')
+  .option('--defectdojo', 'Export results in DefectDojo import format (same as --format defectdojo)')
   .action(async (projectPath, options) => {
     try {
+      // Handle --defectdojo flag
+      let outputFormat = options.format;
+      if (options.defectdojo) {
+        outputFormat = 'defectdojo';
+      }
+      
       const scanCommand = new CLIFullScanCommand({
         selectedModel: options.model,
-        outputFormat: options.format,
+        outputFormat: outputFormat,
         outputFile: options.output
       });
       await scanCommand.execute(projectPath, options);
