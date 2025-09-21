@@ -8,6 +8,7 @@ const { loadConfig } = require('../lib/config');
 const { AIClientFactory } = require('../lib/ai-client-factory');
 const { TokenTracker } = require('../lib/token-tracker');
 const { TokenDisplay } = require('../lib/token-display');
+const { DefectDojoFormatter } = require('../lib/formatters/defectdojo-formatter');
 
 /**
  * CLI Full Scan Command - performs comprehensive security analysis
@@ -224,6 +225,31 @@ class CLIFullScanCommand {
       } else {
         console.log('\n' + output);
       }
+    } else if (this.outputFormat === 'defectdojo') {
+      // DefectDojo format output
+      const defectDojoFindings = DefectDojoFormatter.formatFindings(scanResult);
+      
+      // Validate the findings format
+      const validation = DefectDojoFormatter.validateFindings(defectDojoFindings);
+      if (!validation.valid) {
+        console.error(red('❌ DefectDojo format validation failed:'));
+        validation.errors.forEach(error => console.error(red(`   ${error}`)));
+        throw new Error('DefectDojo format validation failed');
+      }
+      
+      const output = JSON.stringify(defectDojoFindings, null, 2);
+      
+      if (this.outputFile) {
+        fs.writeFileSync(this.outputFile, output);
+        console.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
+        console.log(dim(`   Format: DefectDojo Generic Findings Import`));
+        console.log(dim(`   Findings: ${defectDojoFindings.findings.length}`));
+      } else {
+        console.log('\n' + output);
+      }
+      
+      // Also show a summary in text format for user convenience
+      this._outputDefectDojoSummary(scanResult, defectDojoFindings);
     } else {
       // Text format output
       this._outputTextResults(scanResult, analysisResult);
@@ -309,6 +335,60 @@ class CLIFullScanCommand {
   }
 
   /**
+   * Output DefectDojo summary for user convenience
+   */
+  _outputDefectDojoSummary(scanResult, defectDojoFindings) {
+    console.log('\n' + '='.repeat(60));
+    console.log(magenta('🛡️  DEFECTDOJO EXPORT SUMMARY'));
+    console.log('='.repeat(60));
+    
+    console.log(`📅 Timestamp: ${scanResult.timestamp}`);
+    console.log(`📁 Project: ${scanResult.projectPath}`);
+    console.log(`🤖 Model: ${scanResult.model}`);
+    console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
+    
+    console.log('\n📈 DEFECTDOJO FINDINGS:');
+    console.log(`   Critical: ${defectDojoFindings.findings.filter(f => f.severity === 'Critical').length}`);
+    console.log(`   High:     ${defectDojoFindings.findings.filter(f => f.severity === 'High').length}`);
+    console.log(`   Medium:   ${defectDojoFindings.findings.filter(f => f.severity === 'Medium').length}`);
+    console.log(`   Low:      ${defectDojoFindings.findings.filter(f => f.severity === 'Low').length}`);
+    console.log(`   Info:     ${defectDojoFindings.findings.filter(f => f.severity === 'Info').length}`);
+    console.log(`   Total:    ${defectDojoFindings.findings.length}`);
+
+    if (defectDojoFindings.findings.length > 0) {
+      console.log('\n🔍 SAMPLE FINDINGS:');
+      console.log('-'.repeat(60));
+      
+      // Show first 3 findings as examples
+      defectDojoFindings.findings.slice(0, 3).forEach((finding, index) => {
+        const severityColor = this._getSeverityColor(finding.severity);
+        console.log(`\n${index + 1}. ${finding.title}`);
+        console.log(`   Severity: ${severityColor(finding.severity)}`);
+        console.log(`   ID: ${finding.unique_id_from_tool}`);
+        if (finding.file_path) {
+          console.log(`   File: ${finding.file_path}${finding.line ? `:${finding.line}` : ''}`);
+        }
+        if (finding.tags && finding.tags.length > 0) {
+          console.log(`   Tags: ${finding.tags.join(', ')}`);
+        }
+      });
+      
+      if (defectDojoFindings.findings.length > 3) {
+        console.log(`\n   ... and ${defectDojoFindings.findings.length - 3} more findings`);
+      }
+    }
+
+    console.log('\n📋 IMPORT INSTRUCTIONS:');
+    console.log('   1. Log into your DefectDojo instance');
+    console.log('   2. Navigate to your product/engagement');
+    console.log('   3. Click "Import Scan Results"');
+    console.log('   4. Select "Generic Findings Import" as scan type');
+    console.log('   5. Upload the generated JSON file');
+    
+    console.log('\n' + '='.repeat(60));
+  }
+
+  /**
    * Get color function for severity level
    */
   _getSeverityColor(severity) {
@@ -317,6 +397,7 @@ class CLIFullScanCommand {
       case 'high': return red;
       case 'medium': return yellow;
       case 'low': return green;
+      case 'info': return dim;
       default: return dim;
     }
   }
