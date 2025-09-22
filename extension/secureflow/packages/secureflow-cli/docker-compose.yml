@@ -1,0 +1,39 @@
+services:
+  secureflow-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: secureflow-plugin-analyzer
+    volumes:
+      # Mount the targets.txt file (read-only)
+      - ./targets.txt:/app/tools/targets.txt:ro
+      # Mount results directory for output (read-write)
+      - ./results:/app/tools/results:rw
+      # Mount settings directory for API key configuration
+      - secureflow-settings:/home/secureflow/.secureflow
+    environment:
+      - MAX_PLUGINS=50
+      - NODE_ENV=production
+    # Keep container running for interactive use
+    stdin_open: true
+    tty: true
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits for safety
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Restart policy
+    restart: unless-stopped
+    # Network mode
+    network_mode: bridge
+
+volumes:
+  secureflow-settings:
+    driver: local
