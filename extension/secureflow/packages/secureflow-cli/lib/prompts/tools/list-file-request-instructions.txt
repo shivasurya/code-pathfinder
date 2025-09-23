@@ -1,0 +1,15 @@
+Tool: list files in directory
+Description: This method helps to list files in a directory
+Format:
+<list_file_request path="./relative/path/to/directory" reason="short reason for requesting this directory" />
+
+Rules for file requests:
+1. Use relative paths from the project root
+2. Provide a short reason for each request
+3. Files outside project scope will be ignored
+4. Request only directory listed in 'Files in the project' section
+5. Limit to 5 directories per request
+6. Do not request same directory multiple times
+7. Skip directories that were not found previously
+8. Skip non-source directories
+9. Follow project structure strictly

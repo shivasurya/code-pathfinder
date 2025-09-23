@@ -132,6 +132,8 @@ class AISecurityAnalyzer {
 
     // Add file request instructions
     context += '\n' + await this.fileHandler.getFileRequestInstructions();
+    context += '\n' + await this.fileHandler.getListFileRequestInstructions();
+    context += '\n' + await this.fileHandler.getWordpressFileRequestInstructions();
 
     return context;
   }

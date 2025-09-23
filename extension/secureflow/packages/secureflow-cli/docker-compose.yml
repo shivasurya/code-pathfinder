@@ -6,9 +6,9 @@ services:
     container_name: secureflow-plugin-analyzer
     volumes:
       # Mount the targets.txt file (read-only)
-      - ./targets.txt:/app/tools/targets.txt:ro
+      - ./tools/mgmt/targets.txt:/app/tools/mgmt/targets.txt:ro
       # Mount results directory for output (read-write)
-      - ./results:/app/tools/results:rw
+      - ./results:/app/tools/mgmt/results:rw`
       # Mount settings directory for API key configuration
       - secureflow-settings:/home/secureflow/.secureflow
     environment:
