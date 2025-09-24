@@ -9,6 +9,7 @@ const { AIClientFactory } = require('../lib/ai-client-factory');
 const { TokenTracker } = require('../lib/token-tracker');
 const { TokenDisplay } = require('../lib/token-display');
 const { DefectDojoFormatter } = require('../lib/formatters/defectdojo-formatter');
+const { DefectDojoClient } = require('../lib/defectdojo-client');
 
 /**
  * CLI Full Scan Command - performs comprehensive security analysis
@@ -18,6 +19,7 @@ class CLIFullScanCommand {
     this.selectedModel = options.selectedModel;
     this.outputFormat = options.outputFormat || 'text';
     this.outputFile = options.outputFile;
+    this.defectDojoOptions = options.defectDojoOptions || {};
     this.tokenTracker = null; // Will be initialized when model is known
   }
 
@@ -239,6 +241,7 @@ class CLIFullScanCommand {
       
       const output = JSON.stringify(defectDojoFindings, null, 2);
       
+      // Save to file if specified
       if (this.outputFile) {
         fs.writeFileSync(this.outputFile, output);
         console.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
@@ -247,6 +250,9 @@ class CLIFullScanCommand {
       } else {
         console.log('\n' + output);
       }
+      
+      // Submit to DefectDojo API if configured
+      await this._submitToDefectDojo(defectDojoFindings, scanResult);
       
       // Also show a summary in text format for user convenience
       this._outputDefectDojoSummary(scanResult, defectDojoFindings);
@@ -384,6 +390,90 @@ class CLIFullScanCommand {
     console.log('   3. Click "Import Scan Results"');
     console.log('   4. Select "Generic Findings Import" as scan type');
     console.log('   5. Upload the generated JSON file');
+    
+    console.log('\n' + '='.repeat(60));
+  }
+
+  /**
+   * Submit findings to DefectDojo API if configured
+   */
+  async _submitToDefectDojo(defectDojoFindings, scanResult) {
+    // Check if DefectDojo API options are provided (engagement ID is optional)
+    if (!this.defectDojoOptions.url || !this.defectDojoOptions.token || 
+        !this.defectDojoOptions.productId) {
+      console.log(dim('ℹ️  DefectDojo API not configured - skipping automatic submission'));
+      console.log(dim('    Required: --defectdojo-url, --defectdojo-token, --defectdojo-product-id'));
+      return;
+    }
+
+    try {
+      console.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
+      
+      // Create DefectDojo client
+      const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
+      
+      // Validate configuration first
+      console.log(dim('   Validating DefectDojo configuration...'));
+      const validation = await defectDojoClient.validateConfiguration();
+      if (!validation.valid) {
+        console.error(red('❌ DefectDojo configuration validation failed:'));
+        validation.errors.forEach(error => console.error(red(`   ${error}`)));
+        return;
+      }
+      
+      console.log(green('   ✅ Configuration validated'));
+      
+      // Notify if engagement was created
+      if (validation.engagementCreated) {
+        console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
+      }
+      
+      // Submit findings
+      console.log(dim('   Creating test and importing findings...'));
+      const result = await defectDojoClient.submitFindings(defectDojoFindings);
+      
+      if (result.success) {
+        console.log(green('✅ Successfully submitted findings to DefectDojo'));
+        console.log(dim(`   Test ID: ${result.testId}`));
+        console.log(dim(`   Test URL: ${result.testUrl}`));
+        console.log(dim(`   Findings imported: ${result.findingsImported}`));
+        
+        // Update the summary to include DefectDojo submission info
+        this._displayDefectDojoSubmissionSummary(result, scanResult);
+      } else {
+        console.error(red('❌ Failed to submit findings to DefectDojo'));
+      }
+      
+    } catch (error) {
+      console.error(red('❌ DefectDojo submission failed:'));
+      console.error(red(`   ${error.message}`));
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+    }
+  }
+
+  /**
+   * Display DefectDojo submission summary
+   */
+  _displayDefectDojoSubmissionSummary(result, scanResult) {
+    console.log('\n' + '='.repeat(60));
+    console.log(magenta('🔗 DEFECTDOJO SUBMISSION SUMMARY'));
+    console.log('='.repeat(60));
+    
+    console.log(`📅 Submitted: ${new Date().toISOString()}`);
+    console.log(`🔗 DefectDojo URL: ${this.defectDojoOptions.url}`);
+    console.log(`📊 Product ID: ${this.defectDojoOptions.productId}`);
+    console.log(`🎯 Engagement ID: ${this.defectDojoOptions.engagementId}`);
+    console.log(`🧪 Test ID: ${result.testId}`);
+    console.log(`📄 Test URL: ${result.testUrl}`);
+    console.log(`🔍 Findings Imported: ${result.findingsImported}`);
+    
+    console.log('\n📋 NEXT STEPS:');
+    console.log('   1. Visit the test URL above to view findings in DefectDojo');
+    console.log('   2. Review and triage the imported findings');
+    console.log('   3. Assign findings to team members for remediation');
+    console.log('   4. Track remediation progress in DefectDojo');
     
     console.log('\n' + '='.repeat(60));
   }

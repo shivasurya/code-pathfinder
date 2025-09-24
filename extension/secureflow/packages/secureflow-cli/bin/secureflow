@@ -27,6 +27,11 @@ program
   .option('--format <format>', 'Output format: text|json|defectdojo', 'text')
   .option('--output <file>', 'Save results to file')
   .option('--defectdojo', 'Export results in DefectDojo import format (same as --format defectdojo)')
+  .option('--defectdojo-url <url>', 'DefectDojo instance URL (e.g., https://defectdojo.example.com)')
+  .option('--defectdojo-token <token>', 'DefectDojo API token for authentication')
+  .option('--defectdojo-product-id <id>', 'DefectDojo product ID to submit findings to')
+  .option('--defectdojo-engagement-id <id>', 'DefectDojo engagement ID (optional - will create if not provided)')
+  .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "SecureFlow Scan")')
   .action(async (projectPath, options) => {
     try {
       // Handle --defectdojo flag
@@ -38,7 +43,14 @@ program
       const scanCommand = new CLIFullScanCommand({
         selectedModel: options.model,
         outputFormat: outputFormat,
-        outputFile: options.output
+        outputFile: options.output,
+        defectDojoOptions: {
+          url: options.defectdojoUrl,
+          token: options.defectdojoToken,
+          productId: options.defectdojoProductId,
+          engagementId: options.defectdojoEngagementId,
+          testTitle: options.defectdojoTestTitle || 'SecureFlow Scan'
+        }
       });
       await scanCommand.execute(projectPath, options);
     } catch (error) {
