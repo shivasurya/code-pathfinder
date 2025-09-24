@@ -13,8 +13,8 @@ const stat = promisify(fs.stat);
 class FileRequestHandler {
   constructor(projectPath, options = {}) {
     this.projectPath = path.resolve(projectPath);
-    this.maxFileLines = options.maxFileLines || 1000;
-    this.partialReadLines = options.partialReadLines || 500;
+    this.maxFileLines = 5000;
+    this.partialReadLines = 5000;
     this.requestLog = [];
   }
 
@@ -203,7 +203,21 @@ class FileRequestHandler {
    * Generate file request tools description for LLM
    */
   async getFileRequestInstructions() {
-    return await loadPrompt('scanner/file-request-instructions.txt');
+    return await loadPrompt('tools/file-request-instructions.txt');
+  }
+
+  /**
+   * Get List file request instructions
+   */
+  async getListFileRequestInstructions() {
+    return await loadPrompt('tools/list-file-request-instructions.txt');
+  }
+
+  /**
+   * Get Wordpress specific file request instructions
+   */
+  async getWordpressFileRequestInstructions() {
+    return await loadPrompt('technologies/wordpress-plugins/wordpress.txt');
   }
 
   /**

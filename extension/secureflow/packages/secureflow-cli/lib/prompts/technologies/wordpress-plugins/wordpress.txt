@@ -1,0 +1,9 @@
+Here are few tips on review code for Wordpress plugins for security vulnerabilities
+
+1. We care about vulnerabilities that are related to access resources, modify resources, delete resources from unauthenticated user.
+2. Ignore CSRF or Session nonce related vulnerabilities.
+3. Ignore any stored XSS vulnerabilities caused by authenticated user including subscribers and authors.
+4. Carefully verify if the plugin is using any unauthenticated API's to access resources, modify resources, delete resources.
+5. Verify all the calls within the method like security engineer like dataflow analysis before reporting any vulnerabilities.
+6. Always assume that administrator, editor, author or subscriber is not malicious and can't perform any action to trigger the vulnerability.
+7. Don't assume any default values that developer or any user who configures the plugin in insecure way.

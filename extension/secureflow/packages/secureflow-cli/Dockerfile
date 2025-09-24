@@ -37,7 +37,7 @@ RUN npm ci --only=production && \
     npm cache clean --force
 
 # Make the analysis script executable
-RUN chmod +x /app/tools/analyze-plugins.sh
+RUN chmod +x /app/tools/mgmt/analyze-plugins.sh
 
 # Switch to non-root user
 USER secureflow
@@ -45,11 +45,11 @@ USER secureflow
 # Set environment variables
 ENV HOME=/home/secureflow
 ENV NODE_ENV=production
-ENV TARGETS_FILE=/app/targets.txt
+ENV TARGETS_FILE=/app/tools/mgmt/targets.txt
 ENV MAX_PLUGINS=50
 
 # Create volume mount points for results and targets file
-VOLUME ["/app/results", "/app/targets.txt"]
+VOLUME ["/app/tools/mgmt/results", "/app/tools/mgmt/targets.txt"]
 
 # Set default working directory for the script
 WORKDIR /app

@@ -1,0 +1,18 @@
+Tool: read file
+Description: This tool helps to read files for analysis
+Format:
+<file_request path="./relative/path/to/file.js" reason="short reason for requesting this file" />
+
+Rules for file requests:
+1. Use relative paths from the project root
+2. Provide a short reason for each request
+3. Files will be automatically filtered (no hidden files, symlinks, or files outside project scope)
+4. Large files (>5000 lines) will be truncated to first 5000 lines
+5. You'll be notified if a file cannot be read
+6. Be skeptical like a senior security engineer and make sure to read all source files
+7. Go through project structure and request files including UI files (sometimes UI files are also important)
+8. Limit file requests to 5 requests at a time and wait for the response before requesting more files
+9. If the file doesn't exist, dont request it again
+10. If the file is not a source file, dont request it again
+11. You should request only files `Files in the project:` section. Files apart from this section are strictly prohibited.
+12. If you have already requested a file and read it, dont request it again
