@@ -49,10 +49,10 @@ class CLIFullScanCommand {
       console.log(dim(`   Extensions: ${Object.keys(projectSummary.filesByExtension).join(', ')}`));
       console.log(dim(`   Important files: ${projectSummary.importantFiles.length}`));
       
-      // Display directory tree
-      console.log(cyan('\n📂 Project Structure:'));
-      const directoryStructure = await projectAnalyzer.getDirectoryStructure();
-      console.log(projectAnalyzer.formatDirectoryTreeForCLI(directoryStructure));
+      // // Display directory tree
+      // console.log(cyan('\n📂 Project Structure:'));
+      // const directoryStructure = await projectAnalyzer.getDirectoryStructure();
+      // console.log(projectAnalyzer.formatDirectoryTreeForCLI(directoryStructure));
 
       // Load profile information if available
       const profileInfo = await this._loadProfileInfo(projectPath);
@@ -61,9 +61,7 @@ class CLIFullScanCommand {
       } else {
         console.log(yellow('⚠️  No profile found, proceeding without context'));
       }
-
-      // Load security review prompt
-      console.log(cyan('📋 Loading security analysis prompt...'));
+      
       const reviewPrompt = await loadPrompt('common/security-review-cli.txt');
 
       // Initialize token tracker
@@ -75,14 +73,12 @@ class CLIFullScanCommand {
 
       // Initialize AI security analyzer with token tracking
       const aiAnalyzer = new AISecurityAnalyzer(aiClient, projectPath, {
-        maxIterations: 10,
-        maxFileLines: 1000,
+        maxIterations: 20,
+        maxFileLines: 5000,
         partialReadLines: 500,
         tokenTracker: this.tokenTracker
       });
 
-      // Perform iterative analysis
-      console.log(magenta('🤖 Starting AI-powered security analysis...'));
       const analysisResult = await aiAnalyzer.analyzeProject(
         profileInfo,
         projectSummary,
@@ -245,8 +241,6 @@ class CLIFullScanCommand {
       if (this.outputFile) {
         fs.writeFileSync(this.outputFile, output);
         console.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
-        console.log(dim(`   Format: DefectDojo Generic Findings Import`));
-        console.log(dim(`   Findings: ${defectDojoFindings.findings.length}`));
       } else {
         console.log('\n' + output);
       }
@@ -343,30 +337,25 @@ class CLIFullScanCommand {
   /**
    * Output DefectDojo summary for user convenience
    */
-  _outputDefectDojoSummary(scanResult, defectDojoFindings) {
-    console.log('\n' + '='.repeat(60));
-    console.log(magenta('🛡️  DEFECTDOJO EXPORT SUMMARY'));
-    console.log('='.repeat(60));
-    
-    console.log(`📅 Timestamp: ${scanResult.timestamp}`);
-    console.log(`📁 Project: ${scanResult.projectPath}`);
+  _outputDefectDojoSummary(scanResult, defectDojoFindings) {    
     console.log(`🤖 Model: ${scanResult.model}`);
     console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
     
-    console.log('\n📈 DEFECTDOJO FINDINGS:');
-    console.log(`   Critical: ${defectDojoFindings.findings.filter(f => f.severity === 'Critical').length}`);
-    console.log(`   High:     ${defectDojoFindings.findings.filter(f => f.severity === 'High').length}`);
-    console.log(`   Medium:   ${defectDojoFindings.findings.filter(f => f.severity === 'Medium').length}`);
-    console.log(`   Low:      ${defectDojoFindings.findings.filter(f => f.severity === 'Low').length}`);
-    console.log(`   Info:     ${defectDojoFindings.findings.filter(f => f.severity === 'Info').length}`);
-    console.log(`   Total:    ${defectDojoFindings.findings.length}`);
+    const summaryCounts = {
+      critical: defectDojoFindings.findings.filter(f => f.severity === 'critical').length,
+      high: defectDojoFindings.findings.filter(f => f.severity === 'high').length,
+      medium: defectDojoFindings.findings.filter(f => f.severity === 'medium').length,
+      low: defectDojoFindings.findings.filter(f => f.severity === 'low').length,
+      info: defectDojoFindings.findings.filter(f => f.severity === 'info').length
+    };
+
+    console.log(
+      `\n${magenta(`CR:${summaryCounts.critical}`)} ${cyan(`HI:${summaryCounts.high}`)} ${yellow(`ME:${summaryCounts.medium}`)} ${green(`LO:${summaryCounts.low}`)} ${dim(`IN:${summaryCounts.info}`)}`
+    );
 
     if (defectDojoFindings.findings.length > 0) {
-      console.log('\n🔍 SAMPLE FINDINGS:');
-      console.log('-'.repeat(60));
-      
       // Show first 3 findings as examples
-      defectDojoFindings.findings.slice(0, 3).forEach((finding, index) => {
+      defectDojoFindings.findings.forEach((finding, index) => {
         const severityColor = this._getSeverityColor(finding.severity);
         console.log(`\n${index + 1}. ${finding.title}`);
         console.log(`   Severity: ${severityColor(finding.severity)}`);
@@ -378,20 +367,7 @@ class CLIFullScanCommand {
           console.log(`   Tags: ${finding.tags.join(', ')}`);
         }
       });
-      
-      if (defectDojoFindings.findings.length > 3) {
-        console.log(`\n   ... and ${defectDojoFindings.findings.length - 3} more findings`);
-      }
     }
-
-    console.log('\n📋 IMPORT INSTRUCTIONS:');
-    console.log('   1. Log into your DefectDojo instance');
-    console.log('   2. Navigate to your product/engagement');
-    console.log('   3. Click "Import Scan Results"');
-    console.log('   4. Select "Generic Findings Import" as scan type');
-    console.log('   5. Upload the generated JSON file');
-    
-    console.log('\n' + '='.repeat(60));
   }
 
   /**
