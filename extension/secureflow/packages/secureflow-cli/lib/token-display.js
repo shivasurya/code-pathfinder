@@ -114,33 +114,54 @@ class TokenDisplay {
   }
 
   /**
-   * Display final usage summary
+   * Display final usage summary (compact single line)
    */
   static displayFinalSummary(summaryData) {
+    // Validate input
+    if (!summaryData) {
+      console.log(yellow('⚠️  Invalid summary data for token display'));
+      return;
+    }
+
     const { model, summary, limits, percentages, breakdown } = summaryData;
     
-    console.log(magenta('\n📊 FINAL TOKEN USAGE SUMMARY'));
-    console.log('='.repeat(50));
-    console.log(`Model: ${model.name} (${model.provider})`);
-    console.log(`Total iterations: ${summary.totalIterations}`);
-    console.log(`Total input tokens: ${summary.totalInputTokens.toLocaleString()}`);
-    console.log(`Total output tokens: ${summary.totalOutputTokens.toLocaleString()}`);
-    if (summary.totalReasoningTokens > 0) {
-      console.log(`Total reasoning tokens: ${summary.totalReasoningTokens.toLocaleString()}`);
-    }
-    console.log(`Total tokens used: ${summary.totalTokensUsed.toLocaleString()}`);
+    // Validate nested objects with defaults
+    const safeModel = model || {};
+    const safeSummary = summary || {};
+    const safePercentages = percentages || {};
     
-    console.log(`Context window usage: ${percentages.contextUsage.toFixed(1)}% of ${limits.contextWindow.toLocaleString()}`);
-    console.log(`Output limit usage: ${percentages.outputUsage.toFixed(1)}% of ${limits.maxOutput.toLocaleString()}`);
+    // Format numbers compactly
+    const totalInput = this.formatNumber(safeSummary.totalInputTokens || 0);
+    const totalOutput = this.formatNumber(safeSummary.totalOutputTokens || 0);
+    const totalUsed = this.formatNumber(safeSummary.totalTokensUsed || 0);
+    const contextUsage = (safePercentages.contextUsage || 0).toFixed(1);
+    const outputUsage = (safePercentages.outputUsage || 0).toFixed(1);
     
-    if (breakdown.length > 1) {
+    // Reasoning tokens (if present)
+    const reasoningText = (safeSummary.totalReasoningTokens || 0) > 0 
+      ? ` R:${this.formatNumber(safeSummary.totalReasoningTokens)}` : '';
+    
+    console.log();
+    console.log(
+      magenta(`📊 ${safeModel.name || 'Unknown'}`) + ' | ' +
+      cyan(`${safeSummary.totalIterations || 0} iterations`) + ' | ' +
+      green(`I:${totalInput} O:${totalOutput}${reasoningText}`) + ' | ' +
+      yellow(`Total:${totalUsed}`) + ' | ' +
+      red(`${contextUsage}% ${outputUsage}%`)
+    );
+    console.log();
+
+    // TODO: Per-iteration breakdown for cost analysis
+    // Commented out for now to keep output compact
+    /*
+    if (breakdown && breakdown.length > 1) {
       console.log('\nPer-iteration breakdown:');
       breakdown.forEach((usage) => {
-        const reasoningText = usage.reasoningTokens > 0 ? `, Reasoning: ${usage.reasoningTokens.toLocaleString()}` : '';
-        console.log(`  ${usage.iteration}. Input: ${usage.inputTokens.toLocaleString()}, Output: ${usage.outputTokens.toLocaleString()}${reasoningText}`);
+        const reasoningText = usage.reasoningTokens > 0 ? `, Reasoning: ${this.formatNumber(usage.reasoningTokens)}` : '';
+        console.log(`  ${usage.iteration}. Input: ${this.formatNumber(usage.inputTokens)}, Output: ${this.formatNumber(usage.outputTokens)}${reasoningText}`);
       });
     }
-    console.log('='.repeat(50));
+    */
   }
 
   /**
