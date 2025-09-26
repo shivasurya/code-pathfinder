@@ -7,40 +7,69 @@ const { cyan, yellow, red, green, dim, magenta } = require('colorette');
  */
 class TokenDisplay {
   /**
-   * Display current session state before LLM call
+   * Format numbers in k/M format for compact display
    */
-  static displayPreCallUsage(usageData) {
-    const { iteration, model, session, available, warnings } = usageData;
-    
-    const iterationText = iteration ? ` (Iteration ${iteration})` : '';
-    console.log(cyan(`\n🔢 Token Usage${iterationText} - Session State:`));
-    console.log(dim(`   Model: ${model.name} (${model.provider})`));
-    console.log(dim(`   Context Window: ${model.contextWindow.toLocaleString()} tokens`));
-    console.log(dim(`   Max Output: ${model.maxOutput.toLocaleString()} tokens`));
-    
-    console.log(`   📊 Session input so far: ${session.inputTokens.toLocaleString()}`);
-    console.log(`   📊 Session output so far: ${session.outputTokens.toLocaleString()}`);
-    if (session.reasoningTokens > 0) {
-      console.log(`   🧠 Session reasoning so far: ${session.reasoningTokens.toLocaleString()}`);
-    }
-    
-    const inputColor = available.context > 10000 ? green : (available.context > 1000 ? yellow : red);
-    const outputColor = available.output > 1000 ? green : (available.output > 0 ? yellow : red);
-    
-    console.log(`   ⚡ Available context: ${inputColor(available.context.toLocaleString())} tokens`);
-    console.log(`   ⚡ Available output: ${outputColor(available.output.toLocaleString())} tokens`);
-    
-    if (warnings.lowContext) {
-      console.log(red(`   ⚠️  WARNING: Low context tokens remaining`));
-    }
-    
-    if (warnings.lowOutput) {
-      console.log(yellow(`   ⚠️  WARNING: Low output tokens remaining`));
+  static formatNumber(num) {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'k';
+    } else {
+      return num.toString();
     }
   }
-
   /**
-   * Display token usage from API response
+   * Display current session state before LLM call (compact single line)
+   */
+  static displayPreCallUsage(usageData) {
+    // Validate input
+    if (!usageData) {
+      console.log(yellow('⚠️  Invalid usage data for token display'));
+      return;
+    }
+
+    const { iteration, model, session, available, warnings } = usageData;
+    
+    // Validate nested objects with defaults
+    const safeModel = model || {};
+    const safeSession = session || {};
+    const safeAvailable = available || {};
+    const safeWarnings = warnings || {};
+    
+    // Calculate usage percentage
+    const contextWindow = safeModel.contextWindow || 0;
+    const totalUsed = (safeSession.inputTokens || 0) + (safeSession.outputTokens || 0);
+    const usagePercentage = contextWindow > 0 ? ((totalUsed / contextWindow) * 100).toFixed(1) : '0.0';
+    
+    // Build compact display
+    const iterationText = iteration ? ` (${iteration})` : '';
+    const modelName = safeModel.name || 'Unknown';
+    const inputTokens = this.formatNumber(safeSession.inputTokens || 0);
+    const outputTokens = this.formatNumber(safeSession.outputTokens || 0);
+    const availableContext = this.formatNumber(safeAvailable.context || 0);
+    const availableOutput = this.formatNumber(safeAvailable.output || 0);
+    
+    // Color coding for available tokens
+    const contextColor = (safeAvailable.context || 0) > 10000 ? green : ((safeAvailable.context || 0) > 1000 ? yellow : red);
+    const outputColor = (safeAvailable.output || 0) > 1000 ? green : ((safeAvailable.output || 0) > 0 ? yellow : red);
+    
+    // Warning indicators
+    const warningText = (safeWarnings.lowContext || safeWarnings.lowOutput) ? red(' ⚠️') : '';
+    
+    // add new line before display
+    console.log();
+    console.log(
+      cyan(`${modelName}`) + ' | ' +
+      magenta(`I:${inputTokens}`) + ' ' + cyan(`O:${outputTokens}`) + ' | ' +
+      contextColor(`C:${availableContext}`) + ' ' +
+      outputColor(`O:${availableOutput}`) + ' | ' +
+      green(`${usagePercentage}%`) +
+      warningText
+    );
+    console.log();
+  }
+  /**
+   * Display token usage from API response (compact single line)
    */
   static displayUsageResponse(usageData) {
     if (!usageData.success) {
@@ -50,32 +79,38 @@ class TokenDisplay {
 
     const { iteration, current, totals, remaining, percentages, warnings } = usageData;
     
-    const iterationText = iteration ? ` (Iteration ${iteration})` : '';
-    console.log(cyan(`\n📊 Token Usage${iterationText} - API Response:`));
+    // Validate nested objects with defaults
+    const safeCurrent = current || {};
+    const safeTotals = totals || {};
+    const safeRemaining = remaining || {};
+    const safePercentages = percentages || {};
     
-    console.log(green(`   ✅ Actual API usage:`));
-    console.log(`      📤 Input: ${current.inputTokens.toLocaleString()} tokens`);
-    console.log(`      📥 Output: ${current.outputTokens.toLocaleString()} tokens`);
-    if (current.reasoningTokens > 0) {
-      console.log(`      🧠 Reasoning: ${current.reasoningTokens.toLocaleString()} tokens`);
-    }
+    // Build compact display values
+    const iterationText = iteration ? ` (${iteration})` : '';
+    const currentInput = this.formatNumber(safeCurrent.inputTokens || 0);
+    const currentOutput = this.formatNumber(safeCurrent.outputTokens || 0);
+    const totalInput = this.formatNumber(safeTotals.inputTokens || 0);
+    const totalOutput = this.formatNumber(safeTotals.outputTokens || 0);
+    const remainingContext = this.formatNumber(safeRemaining.context || 0);
+    const remainingOutput = this.formatNumber(safeRemaining.output || 0);
+    const contextPercentage = (safePercentages.context || 0).toFixed(1);
     
-    console.log(`   📈 Session totals:`);
-    console.log(`      📤 Total input: ${totals.inputTokens.toLocaleString()} tokens`);
-    console.log(`      📥 Total output: ${totals.outputTokens.toLocaleString()} tokens`);
-    if (totals.reasoningTokens > 0) {
-      console.log(`      🧠 Total reasoning: ${totals.reasoningTokens.toLocaleString()} tokens`);
-    }
-    console.log(`      🎯 Total used: ${totals.totalUsed.toLocaleString()} tokens`);
+    // Color coding for remaining tokens
+    const contextColor = (safeRemaining.context || 0) > 10000 ? green : ((safeRemaining.context || 0) > 1000 ? yellow : red);
+    const outputColor = (safeRemaining.output || 0) > 1000 ? green : ((safeRemaining.output || 0) > 0 ? yellow : red);
     
-    const contextColor = remaining.context > 10000 ? green : (remaining.context > 1000 ? yellow : red);
-    const outputColor = remaining.output > 1000 ? green : (remaining.output > 0 ? yellow : red);
+    // Reasoning tokens (if present)
+    const reasoningText = (safeCurrent.reasoningTokens || 0) > 0 ? ` R:${this.formatNumber(safeCurrent.reasoningTokens)}` : '';
     
-    console.log(`   ⚡ Remaining context: ${contextColor(remaining.context.toLocaleString())} tokens`);
-    console.log(`   ⚡ Remaining output: ${outputColor(remaining.output.toLocaleString())} tokens`);
-    
-    console.log(dim(`   📊 Context usage: ${percentages.context.toFixed(1)}%`));
-    console.log(dim(`   📊 Output usage: ${percentages.output.toFixed(1)}%`));
+    console.log();
+    console.log(
+      green(`I:${currentInput} O:${currentOutput}${reasoningText}`) + ' | ' +
+      cyan(`Total I:${totalInput} O:${totalOutput}`) + ' | ' +
+      contextColor(`C:${remainingContext}`) + ' ' +
+      outputColor(`O:${remainingOutput}`) + ' | ' +
+      magenta(`${contextPercentage}%`)
+    );
+    console.log();
   }
 
   /**
