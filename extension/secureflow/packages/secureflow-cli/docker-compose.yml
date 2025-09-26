@@ -8,7 +8,7 @@ services:
       # Mount the targets.txt file (read-only)
       - ./tools/mgmt/targets.txt:/app/tools/mgmt/targets.txt:ro
       # Mount results directory for output (read-write)
-      - ./results:/app/tools/mgmt/results:rw`
+      - ./results:/app/tools/mgmt/results:rw
       # Mount settings directory for API key configuration
       - secureflow-settings:/home/secureflow/.secureflow
     environment:
@@ -17,6 +17,8 @@ services:
     # Keep container running for interactive use
     stdin_open: true
     tty: true
+    # Use host network to access localhost services directly
+    network_mode: host
     # Security settings
     security_opt:
       - no-new-privileges:true
@@ -31,8 +33,6 @@ services:
           cpus: '0.5'
     # Restart policy
     restart: unless-stopped
-    # Network mode
-    network_mode: bridge
 
 volumes:
   secureflow-settings:

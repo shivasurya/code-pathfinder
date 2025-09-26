@@ -2,6 +2,3 @@ dist/
 build/
 node_modules/
 *.vsix
-**/results/**
-**/wordpress/**
-**/mgmt/**
