@@ -217,7 +217,6 @@ class AISecurityAnalyzer {
       
       // Extract content from response object
       const content = response.content || response;
-      console.log(dim(`📥 Received AI response (${content.length} characters)`));
       
       // Record token usage from API response if available
       if (this.tokenTracker && response.usage) {

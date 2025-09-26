@@ -414,8 +414,6 @@ class CLIFullScanCommand {
         console.log(dim(`   Test URL: ${result.testUrl}`));
         console.log(dim(`   Findings imported: ${result.findingsImported}`));
         
-        // Update the summary to include DefectDojo submission info
-        this._displayDefectDojoSubmissionSummary(result, scanResult);
       } else {
         console.error(red('❌ Failed to submit findings to DefectDojo'));
       }
@@ -427,31 +425,6 @@ class CLIFullScanCommand {
         console.error(error.stack);
       }
     }
-  }
-
-  /**
-   * Display DefectDojo submission summary
-   */
-  _displayDefectDojoSubmissionSummary(result, scanResult) {
-    console.log('\n' + '='.repeat(60));
-    console.log(magenta('🔗 DEFECTDOJO SUBMISSION SUMMARY'));
-    console.log('='.repeat(60));
-    
-    console.log(`📅 Submitted: ${new Date().toISOString()}`);
-    console.log(`🔗 DefectDojo URL: ${this.defectDojoOptions.url}`);
-    console.log(`📊 Product ID: ${this.defectDojoOptions.productId}`);
-    console.log(`🎯 Engagement ID: ${this.defectDojoOptions.engagementId}`);
-    console.log(`🧪 Test ID: ${result.testId}`);
-    console.log(`📄 Test URL: ${result.testUrl}`);
-    console.log(`🔍 Findings Imported: ${result.findingsImported}`);
-    
-    console.log('\n📋 NEXT STEPS:');
-    console.log('   1. Visit the test URL above to view findings in DefectDojo');
-    console.log('   2. Review and triage the imported findings');
-    console.log('   3. Assign findings to team members for remediation');
-    console.log('   4. Track remediation progress in DefectDojo');
-    
-    console.log('\n' + '='.repeat(60));
   }
 
   /**
