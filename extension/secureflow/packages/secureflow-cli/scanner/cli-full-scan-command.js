@@ -339,7 +339,6 @@ class CLIFullScanCommand {
    * Output DefectDojo summary for user convenience
    */
   _outputDefectDojoSummary(scanResult, defectDojoFindings) {    
-    console.log(`🤖 Model: ${scanResult.model}`);
     console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
     
     const summaryCounts = {

@@ -1,6 +1,9 @@
 Remember to be skeptical like a senior security engineer and make sure to read all source files. If the file 
-doesnt exist, strictly dont request it again and wait for the next iteration to request it.
+doesnt exist, strictly dont request it again and wait for the next iteration to request it. Be sure to list 
+all files under project directory without missing any path, because it helps to reduce blind spots in analysis.
 
 Based on the files analyzed so far, strictly follow either and don't ask any other questions:
 1. Request additional files if needed for complete analysis in format specified in the file request tag
-2. Provide your final security analysis if you have sufficient information
+2. Request additional list of files if needed for complete analysis in format specified in the list file request tag
+3. Provide your final security analysis if you have sufficient information
+4. If you haven't requested for list of files so far, please provide rational reason for not requesting it.

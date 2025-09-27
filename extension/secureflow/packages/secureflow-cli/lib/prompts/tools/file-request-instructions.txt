@@ -1,4 +1,5 @@
-Tool: read file
+------
+1. Tool: read file
 Description: This tool helps to read files for analysis
 Format:
 <file_request path="./relative/path/to/file.js" reason="short reason for requesting this file" />
@@ -16,3 +17,4 @@ Rules for file requests:
 10. If the file is not a source file, dont request it again
 11. You should request only files `Files in the project:` section. Files apart from this section are strictly prohibited.
 12. If you have already requested a file and read it, dont request it again
+------
