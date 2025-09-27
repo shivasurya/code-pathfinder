@@ -48,8 +48,6 @@ class AISecurityAnalyzer {
       const fileRequests = this._extractFileRequests(aiResponse);
       
       if (fileRequests.length > 0) {
-        console.log(yellow(`🤖 LLM requesting ${fileRequests.length} files for analysis`));
-        
         // Process file requests
         const fileResults = await this.fileHandler.processFileRequests(aiResponse);
         

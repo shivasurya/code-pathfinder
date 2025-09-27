@@ -186,7 +186,7 @@ class CLIFullScanCommand {
           // Return response object with both content and usage for token tracking
           return response;
         }, {
-          successMessage: green('✅ Security analysis completed'),
+          successMessage: "",
           errorMessage: red('❌ Security analysis failed')
         });
       }
@@ -351,7 +351,7 @@ class CLIFullScanCommand {
     };
 
     console.log(
-      `\n${magenta(`CR:${summaryCounts.critical}`)} ${cyan(`HI:${summaryCounts.high}`)} ${yellow(`ME:${summaryCounts.medium}`)} ${green(`LO:${summaryCounts.low}`)} ${dim(`IN:${summaryCounts.info}`)}`
+      `\n${magenta(`Critical:${summaryCounts.critical}`)} ${cyan(`High:${summaryCounts.high}`)} ${yellow(`Medium:${summaryCounts.medium}`)} ${green(`Low:${summaryCounts.low}`)} ${dim(`Info:${summaryCounts.info}`)}`
     );
 
     if (defectDojoFindings.findings.length > 0) {
@@ -382,39 +382,29 @@ class CLIFullScanCommand {
       console.log(dim('    Required: --defectdojo-url, --defectdojo-token, --defectdojo-product-id'));
       return;
     }
-
     try {
-      console.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
+      // console.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
       
       // Create DefectDojo client and validate configuration
-      const result = await withLoader('🔍 Validating DefectDojo configuration...', async () => {
-        const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
-        const validation = await defectDojoClient.validateConfiguration();
-        
-        if (!validation.valid) {
-          throw new Error(`Configuration validation failed: ${validation.errors.join(', ')}`);
-        }
-        
-        // Notify if engagement was created
-        if (validation.engagementCreated) {
-          console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
-        }
-        
-        // Submit findings
-        return await defectDojoClient.submitFindings(defectDojoFindings);
-      }, {
-        successMessage: green('✅ DefectDojo configuration validated'),
-        errorMessage: red('❌ DefectDojo validation failed')
-      });
+      const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
+      const validation = await defectDojoClient.validateConfiguration();
       
+      if (!validation.valid) {
+        throw new Error(`Configuration validation failed: ${validation.errors.join(', ')}`);
+      }
+      
+      // Notify if engagement was created
+      // if (validation.engagementCreated) {
+      //   console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
+      // }
+      
+      // Submit findings
+      const result = await defectDojoClient.submitFindings(defectDojoFindings);
       if (result.success) {
-        console.log(green('✅ Successfully submitted findings to DefectDojo'));
-        console.log(dim(`   Test ID: ${result.testId}`));
-        console.log(dim(`   Test URL: ${result.testUrl}`));
-        console.log(dim(`   Findings imported: ${result.findingsImported}`));
-        
+        console.log(green('✅ Findings submitted to DefectDojo'));
       } else {
-        console.error(red('❌ Failed to submit findings to DefectDojo'));
+        console.error(red('❌ DefectDojo submission failed'));
+        console.error(red(`   ${result.errorMessage}`));
       }
       
     } catch (error) {
