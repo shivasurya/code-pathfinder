@@ -343,11 +343,11 @@ class CLIFullScanCommand {
     console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
     
     const summaryCounts = {
-      critical: defectDojoFindings.findings.filter(f => f.severity === 'critical').length,
-      high: defectDojoFindings.findings.filter(f => f.severity === 'high').length,
-      medium: defectDojoFindings.findings.filter(f => f.severity === 'medium').length,
-      low: defectDojoFindings.findings.filter(f => f.severity === 'low').length,
-      info: defectDojoFindings.findings.filter(f => f.severity === 'info').length
+      critical: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'critical').length,
+      high: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'high').length,
+      medium: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'medium').length,
+      low: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'low').length,
+      info: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'info').length
     };
 
     console.log(
