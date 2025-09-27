@@ -26,7 +26,8 @@ class FileRequestHandler {
     const results = [];
 
     for (const request of requests) {
-      console.log(cyan(`🤖 LLM requesting file: ${request.path}`));
+      console.log(cyan(`Read(${request.path})`));
+      console.log(dim(`  └ • Read ${path.basename(request.path)} (${request.reason})`));
       
       const result = await this._handleFileRequest(request);
       results.push(result);
@@ -118,8 +119,8 @@ class FileRequestHandler {
       // Read file content with size limits
       const content = await this._readFileWithLimits(fullPath);
       
-      console.log(green(`✅ File read: ${requestedPath} (${content.split('\n').length} lines)`));
-      console.log(dim(`   Reason: ${reason}`));
+      // console.log(green(`✅ File read: ${requestedPath} (${content.split('\n').length} lines)`));
+      // console.log(dim(`   Reason: ${reason}`));
 
       return {
         status: 'success',
