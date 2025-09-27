@@ -62,8 +62,8 @@ class AnimatedLoader {
     this.text = text;
     this.options = {
       spinnerFrames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-      sweepSpeed: 80, // milliseconds between sweep updates (faster)
-      spinnerSpeed: 50, // milliseconds between spinner frames (faster)
+      sweepSpeed: 60, // milliseconds between sweep updates (even faster)
+      spinnerSpeed: 30, // milliseconds between spinner frames (much faster)
       primaryColor: yellow, // Use orange/yellow as primary color
       dimColor: dim,
       ...options
@@ -84,17 +84,26 @@ class AnimatedLoader {
     const coloredChars = chars.map((char, index) => {
       // Calculate distance from sweep position
       const distance = Math.abs(index - position);
-      const maxDistance = 2; // How far the color effect extends
+      const maxDistance = 5; // Expanded color effect range
       
       if (distance === 0) {
         // Brightest color at sweep position
         return this.options.primaryColor(char);
       } else if (distance === 1) {
-        // Medium brightness - slightly dimmed primary color
+        // Very bright - full primary color
         return this.options.primaryColor(char);
       } else if (distance === 2) {
+        // Bright - full primary color
+        return this.options.primaryColor(char);
+      } else if (distance === 3) {
+        // Medium brightness - slightly dimmed primary color
+        return this.options.dimColor(this.options.primaryColor(char));
+      } else if (distance === 4) {
         // More dimmed
         return this.options.dimColor(this.options.primaryColor(char));
+      } else if (distance === 5) {
+        // Very dimmed
+        return this.options.dimColor(this.options.dimColor(char));
       } else {
         // Default dim color
         return this.options.dimColor(char);
