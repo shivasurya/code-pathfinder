@@ -48,6 +48,35 @@ class FileRequestHandler {
   }
 
   /**
+   * Process LLM list file requests from structured response
+   */
+  async processListFileRequests(llmResponse) {
+    const requests = this._parseListFileRequests(llmResponse);
+    const results = [];
+
+    for (const request of requests) {
+      console.log(cyan(`ListFiles(${request.path})`));
+      console.log(dim(`  └ • List directory ${path.basename(request.path)} (${request.reason})`));
+      
+      const result = await this._handleListFileRequest(request);
+      results.push(result);
+      
+      // Log the request
+      this.requestLog.push({
+        timestamp: new Date().toISOString(),
+        request,
+        result: {
+          status: result.status,
+          reason: result.reason,
+          filesListed: result.files ? result.files.length : 0
+        }
+      });
+    }
+
+    return results;
+  }
+
+  /**
    * Parse file requests from LLM response
    * Expected format: <file_request path="./src/app.js" reason="Check authentication logic" />
    */
@@ -57,6 +86,25 @@ class FileRequestHandler {
     
     let match;
     while ((match = fileRequestRegex.exec(response)) !== null) {
+      requests.push({
+        path: match[1],
+        reason: match[2] || 'No reason provided'
+      });
+    }
+
+    return requests;
+  }
+
+  /**
+   * Parse list file requests from LLM response
+   * Expected format: <list_file_request path="./src" reason="Check directory structure" />
+   */
+  _parseListFileRequests(response) {
+    const requests = [];
+    const listFileRequestRegex = /<list_file_request\s+path="([^"]+)"(?:\s+reason="([^"]*)")?\s*\/>/g;
+    
+    let match;
+    while ((match = listFileRequestRegex.exec(response)) !== null) {
       requests.push({
         path: match[1],
         reason: match[2] || 'No reason provided'
@@ -138,6 +186,127 @@ class FileRequestHandler {
         reason: error.message,
         path: requestedPath
       };
+    }
+  }
+
+  /**
+   * Handle individual list file request with filtering and validation
+   */
+  async _handleListFileRequest(request) {
+    const { path: requestedPath, reason } = request;
+    
+    try {
+      // Resolve and validate path
+      const fullPath = this._resolvePath(requestedPath);
+      
+      // Check if directory is within project scope
+      if (!this._isWithinProjectScope(fullPath)) {
+        console.log(red(`❌ Directory outside project scope: ${requestedPath}`));
+        return {
+          status: 'rejected',
+          reason: 'Directory is outside project directory scope',
+          path: requestedPath
+        };
+      }
+
+      // Check if it's a hidden directory
+      if (this._isHiddenFile(fullPath)) {
+        console.log(yellow(`⚠️  Hidden directory ignored: ${requestedPath}`));
+        return {
+          status: 'rejected',
+          reason: 'Hidden directories are ignored',
+          path: requestedPath
+        };
+      }
+
+      // Check if directory exists
+      if (!fs.existsSync(fullPath)) {
+        console.log(red(`❌ Directory not found: ${requestedPath}`));
+        return {
+          status: 'rejected',
+          reason: 'Directory does not exist',
+          path: requestedPath
+        };
+      }
+
+      // Check if it's actually a directory
+      const stats = await stat(fullPath);
+      if (!stats.isDirectory()) {
+        console.log(red(`❌ Path is not a directory: ${requestedPath}`));
+        return {
+          status: 'rejected',
+          reason: 'Path is not a directory',
+          path: requestedPath
+        };
+      }
+
+      // List directory contents
+      const files = await this._listDirectoryContents(fullPath);
+      
+      return {
+        status: 'success',
+        path: requestedPath,
+        fullPath,
+        files,
+        reason,
+        fileCount: files.length
+      };
+
+    } catch (error) {
+      console.log(red(`❌ Error listing directory ${requestedPath}: ${error.message}`));
+      return {
+        status: 'error',
+        reason: error.message,
+        path: requestedPath
+      };
+    }
+  }
+
+  /**
+   * List directory contents with filtering
+   */
+  async _listDirectoryContents(dirPath) {
+    const { readdir } = require('fs').promises;
+    
+    try {
+      const items = await readdir(dirPath, { withFileTypes: true });
+      const files = [];
+      
+      for (const item of items) {
+        // Skip hidden files and directories
+        if (item.name.startsWith('.') && item.name !== '.env' && item.name !== '.gitignore') {
+          continue;
+        }
+        
+        const itemPath = path.join(dirPath, item.name);
+        const relativePath = path.relative(this.projectPath, itemPath);
+        
+        if (item.isDirectory()) {
+          files.push({
+            name: item.name,
+            type: 'directory',
+            relativePath: relativePath
+          });
+        } else if (item.isFile()) {
+          files.push({
+            name: item.name,
+            type: 'file',
+            relativePath: relativePath
+          });
+        }
+      }
+      
+      // Sort by type (directories first) then by name
+      files.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      
+      return files;
+    } catch (error) {
+      throw new Error(`Failed to read directory: ${error.message}`);
     }
   }
 

@@ -25,6 +25,7 @@ class AISecurityAnalyzer {
     let iteration = 0;
     let currentContext = await this._buildInitialContext(profileInfo, projectSummary, reviewPrompt);
     let allFileContents = [];
+    let fileRequestsHistory = [];
     let finalAnalysis = null;
     let messages = [{ role: 'user', content: currentContext }];
 
@@ -34,7 +35,6 @@ class AISecurityAnalyzer {
 
       // Send context to AI and get response
       const aiResponse = await this._sendToAI(null, iteration, messages);
-
       messages.push({ role: 'assistant', content: aiResponse });
       
       this.analysisLog.push({
@@ -46,10 +46,25 @@ class AISecurityAnalyzer {
 
       // Check if AI wants to request files
       const fileRequests = this._extractFileRequests(aiResponse);
+      const newFileRequests = fileRequests.filter(request => !fileRequestsHistory.some(f => f.path === request.path));
+      fileRequestsHistory.push(...newFileRequests);
+
+      // Check if AI wants to list files
+      const listFileRequests = this._extractListFileRequests(aiResponse);
       
-      if (fileRequests.length > 0) {
-        // Process file requests
-        const fileResults = await this.fileHandler.processFileRequests(aiResponse);
+      if (fileRequests.length > 0 || listFileRequests.length > 0) {
+        let fileResults = [];
+        let listResults = [];
+        
+        // Process file requests first
+        if (fileRequests.length > 0) {
+          fileResults = await this.fileHandler.processFileRequests(aiResponse);
+        }
+        
+        // Process list file requests separately
+        if (listFileRequests.length > 0) {
+          listResults = await this.fileHandler.processListFileRequests(aiResponse);
+        }
         
         // Add successful file contents to context, avoiding duplicates
         const newFileContents = fileResults
@@ -63,17 +78,19 @@ class AISecurityAnalyzer {
 
         allFileContents.push(...newFileContents);
 
-        // Build context for next iteration
+        // Build context for next iteration with both file contents and directory listings
         currentContext = await this._buildIterativeContext(
           newFileContents,
           fileResults,
-          iteration
+          listResults,
+          iteration,
+          fileRequestsHistory,
+          projectSummary
         );
         messages.push({ role: 'user', content: currentContext });
 
       } else {
-        // No more file requests, this should be the final analysis
-        console.log(green('✅ AI completed analysis without additional file requests'));
+        // No more file or list requests, this should be the final analysis
         finalAnalysis = aiResponse;
         break;
       }
@@ -116,7 +133,7 @@ class AISecurityAnalyzer {
     context += `Project Path: ${projectSummary.projectPath}\n`;
     context += `Total Files: ${projectSummary.totalFiles}\n\n`;
 
-    context += `Files in the project:\n${projectSummary.directoryStructure}\n`;
+    // context += `Files in the project:\n${projectSummary.directoryStructure}\n`;
 
     context += `Files by Extension:\n`;
     Object.entries(projectSummary.filesByExtension).forEach(([ext, files]) => {
@@ -139,31 +156,74 @@ class AISecurityAnalyzer {
   /**
    * Build context for iterative requests
    */
-  async _buildIterativeContext(fileContents, fileResults, iteration) {
+  async _buildIterativeContext(fileContents, fileResults, listResults, iteration, fileRequestsHistory, projectSummary) {
     let context = "\n";
 
     // Add file contents from previous requests
-    context += `[ANALYZED FILES - Iteration ${iteration}]\n`;
-    fileContents.forEach(file => {
-      context += `\n=== FILE: ${file.path} ===\n`;
-      context += `Reason: ${file.reason}\n`;
-      if (file.reason === 'duplicate') {
-        context += `[File was already analyzed in previous conversation]\n`;
-      } else {
-        context += `${file.content}\n`;
-      }
-      context += `=== END FILE: ${file.path} ===\n`;
-    });
+    if (fileContents.length > 0) {
+      context += `[ANALYZED FILES - Iteration ${iteration}]\n`;
+      fileContents.forEach(file => {
+        context += `\n=== FILE: ${file.path} ===\n`;
+        context += `Reason: ${file.reason}\n`;
+        if (file.reason === 'duplicate') {
+          context += `[File was already analyzed in previous conversation]\n`;
+        } else {
+          context += `${file.content}\n`;
+        }
+        context += `=== END FILE: ${file.path} ===\n`;
+      });
+    }
+
+    // Add directory listings from previous requests
+    if (listResults && listResults.length > 0) {
+      context += `\n[DIRECTORY LISTINGS - Iteration ${iteration}]\n`;
+      listResults.forEach(result => {
+        if (result.status === 'success') {
+          context += `\n=== DIRECTORY: ${result.path} ===\n`;
+          context += `Reason: ${result.reason}\n`;
+          context += `Files and directories found (${result.fileCount} items):\n`;
+          result.files.forEach(file => {
+            const icon = file.type === 'directory' ? '📁' : '📄';
+            context += `${icon} ${file.name} (${file.type})\n`;
+          });
+          context += `=== END DIRECTORY: ${result.path} ===\n`;
+        } else {
+          context += `❌ Directory listing failed for ${result.path}: ${result.reason}\n`;
+        }
+      });
+    }
 
     // Add file request results summary
-    context += `\n[FILE REQUEST RESULTS]\n`;
-    fileResults.forEach(result => {
-      if (result.status === 'success') {
-        context += `✅ ${result.path}: Successfully read (${result.lines} lines)\n`;
-      } else {
-        context += `❌ This file doesn't exist or is not a source file ${result.path}: ${result.reason}. Don't request it again\n`;
-      }
-    });
+    if (fileResults.length > 0) {
+      context += `\n[FILE REQUEST RESULTS]\n`;
+      fileResults.forEach(result => {
+        if (result.status === 'success') {
+          context += `✅ ${result.path}: Successfully read (${result.lines} lines)\n`;
+        } else {
+          context += `❌ This file doesn't exist or is not a source file ${result.path}: ${result.reason}. Don't request it again\n`;
+        }
+      });
+    }
+
+    // Add list request results summary
+    if (listResults && listResults.length > 0) {
+      context += `\n[DIRECTORY LISTING RESULTS]\n`;
+      listResults.forEach(result => {
+        if (result.status === 'success') {
+          context += `✅ ${result.path}: Successfully listed (${result.fileCount} items)\n`;
+        } else {
+          context += `❌ Directory listing failed for ${result.path}: ${result.reason}. Don't request it again\n`;
+        }
+      });
+    }
+
+    // Add file request history
+    if (fileRequestsHistory.length > 0) {
+      context += `\n[FILE REQUEST HISTORY]\n`;
+      context += `So far, you have requested ${fileRequestsHistory.length} files\n`;
+      context += `Project has ${projectSummary.totalFiles} files\n`;
+      context += `\n`;
+    }
 
     // Add instructions for next step
     if (iteration < this.maxIterations) {
@@ -199,16 +259,34 @@ class AISecurityAnalyzer {
   }
 
   /**
+   * Extract list file requests from AI response
+   */
+  _extractListFileRequests(response) {
+    const listFileRequestRegex = /<list_file_request\s+path="([^"]+)"(?:\s+reason="([^"]*)")?\s*\/>/g;
+    const requests = [];
+    
+    let match;
+    while ((match = listFileRequestRegex.exec(response)) !== null) {
+      requests.push({
+        path: match[1],
+        reason: match[2] || 'No reason provided'
+      });
+    }
+
+    return requests;
+  }
+
+  /**
    * Send context to AI and get response
    */
   async _sendToAI(context, iteration, messages) {
     //console.log(dim(`📤 Sending context to AI (${context.length} characters)`));
     
     // Display session state before the call
-    if (this.tokenTracker) {
-      const preCallData = this.tokenTracker.getPreCallUsageData(iteration);
-      TokenDisplay.displayPreCallUsage(preCallData);
-    }
+    // if (this.tokenTracker) {
+    //   const preCallData = this.tokenTracker.getPreCallUsageData(iteration);
+    //   TokenDisplay.displayPreCallUsage(preCallData);
+    // }
     
     try {
       const response = await this.aiClient.analyze(context, messages);
