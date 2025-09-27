@@ -8,6 +8,7 @@ const { loadConfig } = require('../lib/config');
 const { AIClientFactory } = require('../lib/ai-client-factory');
 const { TokenTracker } = require('../lib/token-tracker');
 const { TokenDisplay } = require('../lib/token-display');
+const { withLoader, withSecurityLoader, createLoader } = require('../lib/animated-loader');
 const { DefectDojoFormatter } = require('../lib/formatters/defectdojo-formatter');
 const { DefectDojoClient } = require('../lib/defectdojo-client');
 
@@ -41,9 +42,13 @@ class CLIFullScanCommand {
       }
 
       // Initialize project analyzer
-      console.log(cyan('📁 Analyzing project structure...'));
-      const projectAnalyzer = new ProjectAnalyzer(projectPath);
-      const projectSummary = await projectAnalyzer.getProjectSummary();
+      const projectSummary = await withLoader('📁 Analyzing project structure...', async () => {
+        const projectAnalyzer = new ProjectAnalyzer(projectPath);
+        return await projectAnalyzer.getProjectSummary();
+      }, {
+        successMessage: green('✅ Project structure analyzed'),
+        errorMessage: red('❌ Project analysis failed')
+      });
       
       console.log(green(`✅ Found ${projectSummary.totalFiles} files in project`));
       console.log(dim(`   Extensions: ${Object.keys(projectSummary.filesByExtension).join(', ')}`));
@@ -170,9 +175,7 @@ class CLIFullScanCommand {
     // Create wrapper that matches our expected interface
     return {
       analyze: async (context, messages) => {
-        console.log(dim('🤖 AI analyzing context...'));
-        
-        try {
+        return await withSecurityLoader(async () => {
           const response = await aiClient.sendRequest(context, {
             apiKey: config.apiKey,
             model: model,
@@ -182,10 +185,10 @@ class CLIFullScanCommand {
           
           // Return response object with both content and usage for token tracking
           return response;
-        } catch (error) {
-          console.error(red(`❌ AI request failed: ${error.message}`));
-          throw error;
-        }
+        }, {
+          successMessage: green('✅ Security analysis completed'),
+          errorMessage: red('❌ Security analysis failed')
+        });
       }
     };
   }
@@ -241,8 +244,6 @@ class CLIFullScanCommand {
       if (this.outputFile) {
         fs.writeFileSync(this.outputFile, output);
         console.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
-      } else {
-        console.log('\n' + output);
       }
       
       // Submit to DefectDojo API if configured
@@ -385,28 +386,26 @@ class CLIFullScanCommand {
     try {
       console.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
       
-      // Create DefectDojo client
-      const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
-      
-      // Validate configuration first
-      console.log(dim('   Validating DefectDojo configuration...'));
-      const validation = await defectDojoClient.validateConfiguration();
-      if (!validation.valid) {
-        console.error(red('❌ DefectDojo configuration validation failed:'));
-        validation.errors.forEach(error => console.error(red(`   ${error}`)));
-        return;
-      }
-      
-      console.log(green('   ✅ Configuration validated'));
-      
-      // Notify if engagement was created
-      if (validation.engagementCreated) {
-        console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
-      }
-      
-      // Submit findings
-      console.log(dim('   Creating test and importing findings...'));
-      const result = await defectDojoClient.submitFindings(defectDojoFindings);
+      // Create DefectDojo client and validate configuration
+      const result = await withLoader('🔍 Validating DefectDojo configuration...', async () => {
+        const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
+        const validation = await defectDojoClient.validateConfiguration();
+        
+        if (!validation.valid) {
+          throw new Error(`Configuration validation failed: ${validation.errors.join(', ')}`);
+        }
+        
+        // Notify if engagement was created
+        if (validation.engagementCreated) {
+          console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
+        }
+        
+        // Submit findings
+        return await defectDojoClient.submitFindings(defectDojoFindings);
+      }, {
+        successMessage: green('✅ DefectDojo configuration validated'),
+        errorMessage: red('❌ DefectDojo validation failed')
+      });
       
       if (result.success) {
         console.log(green('✅ Successfully submitted findings to DefectDojo'));
