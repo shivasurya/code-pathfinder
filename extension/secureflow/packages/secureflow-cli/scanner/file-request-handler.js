@@ -241,15 +241,19 @@ class FileRequestHandler {
       }
 
       // List directory contents
-      const files = await this._listDirectoryContents(fullPath);
+      const contents = await this._listDirectoryContents(fullPath);
       
       return {
         status: 'success',
         path: requestedPath,
         fullPath,
-        files,
+        files: contents.files,
+        directories: contents.directories,
+        all: contents.all,
         reason,
-        fileCount: files.length
+        fileCount: contents.files.length,
+        directoryCount: contents.directories.length,
+        totalCount: contents.all.length
       };
 
     } catch (error) {
@@ -263,48 +267,63 @@ class FileRequestHandler {
   }
 
   /**
-   * List directory contents with filtering
+   * List directory contents with filtering, including both files and directories with full paths
    */
   async _listDirectoryContents(dirPath) {
     const { readdir } = require('fs').promises;
     
     try {
       const items = await readdir(dirPath, { withFileTypes: true });
-      const files = [];
+      const result = {
+        files: [],
+        directories: [],
+        all: []
+      };
       
       for (const item of items) {
-        // Skip hidden files and directories
-        if (item.name.startsWith('.') && item.name !== '.env' && item.name !== '.gitignore') {
+        // Skip hidden files and directories (except important config files)
+        if (item.name.startsWith('.') && 
+            item.name !== '.env' && 
+            item.name !== '.gitignore' && 
+            item.name !== '.config' &&
+            item.name !== '.npmrc' &&
+            item.name !== '.dockerignore') {
           continue;
         }
         
         const itemPath = path.join(dirPath, item.name);
         const relativePath = path.relative(this.projectPath, itemPath);
+        const fullPath = path.resolve(itemPath);
+        
+        const itemInfo = {
+          name: item.name,
+          type: item.isDirectory() ? 'directory' : 'file',
+          relativePath: relativePath.startsWith('.') ? relativePath : `./${relativePath}`,
+          fullPath: fullPath
+        };
         
         if (item.isDirectory()) {
-          files.push({
-            name: item.name,
-            type: 'directory',
-            relativePath: relativePath
-          });
+          result.directories.push(itemInfo);
         } else if (item.isFile()) {
-          files.push({
-            name: item.name,
-            type: 'file',
-            relativePath: relativePath
-          });
+          result.files.push(itemInfo);
         }
+        
+        result.all.push(itemInfo);
       }
       
       // Sort by type (directories first) then by name
-      files.sort((a, b) => {
+      const sortFn = (a, b) => {
         if (a.type !== b.type) {
           return a.type === 'directory' ? -1 : 1;
         }
         return a.name.localeCompare(b.name);
-      });
+      };
       
-      return files;
+      result.files.sort(sortFn);
+      result.directories.sort(sortFn);
+      result.all.sort(sortFn);
+      
+      return result;
     } catch (error) {
       throw new Error(`Failed to read directory: ${error.message}`);
     }

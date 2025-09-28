@@ -1,17 +1,30 @@
 ------
-2. Tool: list files in directory (equivalent to 'ls' command)
-Description: This method helps to list files in a directory
-Format:
-<list_file_request path="./relative/path/to/directory" reason="short reason for requesting this directory" />
+2. Tool: Directory Listing (List Files and Subdirectories)
+Description: Explore directory contents to discover files and subdirectories for security analysis
+Purpose: Use this tool to navigate the project structure and identify files that need security review
 
-Rules for file requests:
-1. Use relative paths from the project root
-2. Provide a short reason for each request
-3. Files outside project scope will be ignored
-4. Request only directory listed in 'Files in the project' section
-5. Limit to 5 directories per request
-6. Do not request same directory multiple times
-7. Skip directories that were not found previously
-8. Skip non-source directories
-9. Follow project structure strictly
+Format:
+<list_file_request path="./relative/path/to/directory" reason="brief explanation of why you need to explore this directory" />
+
+When to use this tool:
+- Start security analysis by exploring the project root directory first
+- Navigate into subdirectories to understand the project structure
+- Discover configuration files, source code files, and security-relevant directories
+- Find entry points, authentication modules, database connections, and API endpoints
+- Explore directories mentioned in build files or configuration
+
+Best practices:
+1. Always start with the root directory (path="./") to get an overview
+2. Use relative paths from the project root (e.g., "./src", "./config", "./api")
+3. Explore directories systematically - start broad, then go deeper
+4. Focus on security-relevant directories like src/, config/, auth/, api/, admin/
+5. Limit to 3-5 directory requests per iteration to avoid overwhelming context
+6. Don't request the same directory multiple times
+7. Skip hidden directories (starting with .) unless they contain configuration files
+8. Prioritize directories that likely contain business logic and security controls
+
+Example usage sequence:
+1. <list_file_request path="./" reason="Get project overview and identify main directories" />
+2. <list_file_request path="./src" reason="Explore source code structure" />
+3. <list_file_request path="./config" reason="Check configuration files for security settings" />
 ----

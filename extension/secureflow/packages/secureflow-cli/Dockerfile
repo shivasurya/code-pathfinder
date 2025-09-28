@@ -48,9 +48,6 @@ ENV NODE_ENV=production
 ENV TARGETS_FILE=/app/tools/mgmt/targets.txt
 ENV MAX_PLUGINS=50
 
-# Create volume mount points for results and targets file
-VOLUME ["/app/tools/mgmt/results", "/app/tools/mgmt/targets.txt"]
-
 # Set default working directory for the script
 WORKDIR /app
 

@@ -4,13 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: secureflow-plugin-analyzer
-    volumes:
-      # Mount the targets.txt file (read-only)
-      - ./tools/mgmt/targets.txt:/app/tools/mgmt/targets.txt:ro
-      # Mount results directory for output (read-write)
-      - ./results:/app/tools/mgmt/results:rw
-      # Mount settings directory for API key configuration
-      - secureflow-settings:/home/secureflow/.secureflow
     environment:
       - MAX_PLUGINS=50
       - NODE_ENV=production
