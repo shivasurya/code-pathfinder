@@ -181,11 +181,24 @@ class AISecurityAnalyzer {
         if (result.status === 'success') {
           context += `\n=== DIRECTORY: ${result.path} ===\n`;
           context += `Reason: ${result.reason}\n`;
-          context += `Files and directories found (${result.fileCount} items):\n`;
-          result.files.forEach(file => {
-            const icon = file.type === 'directory' ? '📁' : '📄';
-            context += `${icon} ${file.name} (${file.type})\n`;
-          });
+          context += `Total items: ${result.totalCount} (${result.directoryCount} directories, ${result.fileCount} files)\n`;
+          
+          // List directories first
+          if (result.directories && result.directories.length > 0) {
+            context += `\nDirectories:\n`;
+            result.directories.forEach(dir => {
+              context += `📁 ${dir.name} (path: ${dir.relativePath})\n`;
+            });
+          }
+          
+          // Then list files
+          if (result.files && result.files.length > 0) {
+            context += `\nFiles:\n`;
+            result.files.forEach(file => {
+              context += `📄 ${file.name} (path: ${file.relativePath})\n`;
+            });
+          }
+          
           context += `=== END DIRECTORY: ${result.path} ===\n`;
         } else {
           context += `❌ Directory listing failed for ${result.path}: ${result.reason}\n`;
@@ -210,7 +223,7 @@ class AISecurityAnalyzer {
       context += `\n[DIRECTORY LISTING RESULTS]\n`;
       listResults.forEach(result => {
         if (result.status === 'success') {
-          context += `✅ ${result.path}: Successfully listed (${result.fileCount} items)\n`;
+          context += `✅ ${result.path}: Successfully listed (${result.totalCount} total items: ${result.directoryCount} directories, ${result.fileCount} files)\n`;
         } else {
           context += `❌ Directory listing failed for ${result.path}: ${result.reason}. Don't request it again\n`;
         }
