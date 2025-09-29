@@ -20,7 +20,7 @@ class AISecurityAnalyzer {
    * Perform iterative security analysis with file requests
    */
   async analyzeProject(profileInfo, projectSummary, reviewPrompt) {
-    console.log(magenta('🔍 Starting AI-driven security analysis...'));
+  // console.log(magenta('🔍 Starting AI-driven security analysis...'));
     
     let iteration = 0;
     let currentContext = await this._buildInitialContext(profileInfo, projectSummary, reviewPrompt);
@@ -31,7 +31,6 @@ class AISecurityAnalyzer {
 
     while (iteration < this.maxIterations) {
       iteration++;
-      console.log(cyan(`\n📋 Analysis iteration ${iteration}/${this.maxIterations}`));
 
       // Send context to AI and get response
       const aiResponse = await this._sendToAI(null, iteration, messages);

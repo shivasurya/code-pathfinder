@@ -104,11 +104,11 @@ class TokenDisplay {
     
     console.log();
     console.log(
-      green(`I:${currentInput} O:${currentOutput}${reasoningText}`) + ' | ' +
-      cyan(`Total I:${totalInput} O:${totalOutput}`) + ' | ' +
-      contextColor(`C:${remainingContext}`) + ' ' +
-      outputColor(`O:${remainingOutput}`) + ' | ' +
-      magenta(`${contextPercentage}%`)
+      green(`Input :${currentInput} Output :${currentOutput} ${reasoningText}`) + ' | ' +
+      cyan(`Total Input :${totalInput} Output :${totalOutput}`) + ' | ' +
+      contextColor(`Context :${remainingContext}`) + ' ' +
+      outputColor(`Output :${remainingOutput}`) + ' | ' +
+      magenta(`Context Usage :${contextPercentage}%`)
     );
     console.log();
   }
