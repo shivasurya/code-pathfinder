@@ -137,10 +137,16 @@ class TokenTracker {
       inputTokens = usage.prompt_tokens || 0;
       outputTokens = usage.completion_tokens || 0;
     }
+    // xAI Grok format (OpenAI-compatible but may have specific fields)
+    else if (usage.prompt_tokens !== undefined && usage.completion_tokens !== undefined) {
+      inputTokens = usage.prompt_tokens || 0;
+      outputTokens = usage.completion_tokens || 0;
+      reasoningTokens = usage.reasoning_tokens || 0; // Grok reasoning tokens
+    }
     // Fallback - try both naming conventions
     else {
-      inputTokens = usage.input_tokens || usage.promptTokenCount || 0;
-      outputTokens = usage.output_tokens || usage.candidatesTokenCount || 0;
+      inputTokens = usage.input_tokens || usage.promptTokenCount || usage.prompt_tokens || 0;
+      outputTokens = usage.output_tokens || usage.candidatesTokenCount || usage.completion_tokens || 0;
       reasoningTokens = usage.reasoning_tokens || usage.thoughtsTokenCount || 0;
     }
     
