@@ -16,7 +16,7 @@ const program = new Command();
 
 program
   .name('secureflow')
-  .description('SecureFlow CLI — security analysis for codebases (scaffold)')
+  .description('AI-powered security analysis CLI tool with intelligent file discovery')
   .version(pkg.version);
 
 program
