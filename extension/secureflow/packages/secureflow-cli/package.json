@@ -1,8 +1,8 @@
 {
   "name": "@codepathfinder/secureflow-cli",
   "version": "0.0.1",
-  "description": "SecureFlow CLI (early scaffold) — reuse VS Code extension logic via adapters",
-  "license": "MIT",
+  "description": "AI-powered security analysis CLI tool with intelligent file discovery and comprehensive vulnerability scanning",
+  "license": "AGPL-3.0",
   "bin": {
     "secureflow": "bin/secureflow"
   },
@@ -16,5 +16,38 @@
   "dependencies": {
     "colorette": "^2.0.20",
     "commander": "^11.1.0"
-  }
+  },
+  "keywords": [
+    "security",
+    "vulnerability",
+    "analysis",
+    "ai",
+    "cli",
+    "code-review",
+    "static-analysis",
+    "defectdojo",
+    "llm-analysis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shivasurya/code-pathfinder.git",
+    "directory": "extension/secureflow/packages/secureflow-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/shivasurya/code-pathfinder/issues"
+  },
+  "homepage": "https://github.com/shivasurya/code-pathfinder#readme",
+  "author": "Shivasurya",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "config/",
+    "profiler/",
+    "scanner/",
+    "README.md",
+    "LICENSE"
+  ]
 }
