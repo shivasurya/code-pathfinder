@@ -7,3 +7,4 @@ Here are few tips on review code for Wordpress plugins for security vulnerabilit
 5. Verify all the calls within the method like security engineer like dataflow analysis before reporting any vulnerabilities.
 6. Always assume that administrator, editor, author or subscriber is not malicious and can't perform any action to trigger the vulnerability.
 7. Don't assume any default values that developer or any user who configures the plugin in insecure way.
+8. Ignore any vulnerabilities that are related to SSL bypass or any other vulnerabilities that are related to SSL.
