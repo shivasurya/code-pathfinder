@@ -262,6 +262,8 @@ async function withLoader(text, asyncFn, options = {}) {
  * Convenience function for security analysis with random meme text
  */
 async function withSecurityLoader(asyncFn, options = {}) {
+  // Add a newline before starting the loader for better spacing
+  console.log('');
   const randomMeme = getRandomSecurityMeme();
   return await withLoader(randomMeme, asyncFn, options);
 }

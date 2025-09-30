@@ -165,7 +165,28 @@ download_plugin() {
         log "Downloaded $slug successfully"
         
         # Extract with size limits (prevent zip bombs)
-        if unzip -q -j -o "$zip_file" -d "$plugin_dir" 2>/dev/null; then
+        if unzip -q -o "$zip_file" -d "/tmp/extract_$$" 2>/dev/null; then
+            # Handle WordPress plugin directory structure
+            # Plugins are typically packaged as plugin-name/plugin-name/* 
+            local extracted_dir="/tmp/extract_$$"
+            local plugin_content_dir
+            
+            # Find the actual plugin directory (should be the only directory in extracted_dir)
+            plugin_content_dir=$(find "$extracted_dir" -mindepth 1 -maxdepth 1 -type d | head -1)
+            
+            if [[ -n "$plugin_content_dir" && -d "$plugin_content_dir" ]]; then
+                # Move the plugin content to our target directory
+                mv "$plugin_content_dir"/* "$plugin_dir"/ 2>/dev/null || true
+                # Handle hidden files if any
+                mv "$plugin_content_dir"/.[^.]* "$plugin_dir"/ 2>/dev/null || true
+                # Clean up temporary extraction directory
+                rm -rf "$extracted_dir"
+            else
+                # Fallback: move everything from extraction directory
+                mv "$extracted_dir"/* "$plugin_dir"/ 2>/dev/null || true
+                mv "$extracted_dir"/.[^.]* "$plugin_dir"/ 2>/dev/null || true
+                rm -rf "$extracted_dir"
+            fi
             # Check extracted size (limit to 100MB)
             local size=$(du -sm "$plugin_dir" | cut -f1)
             if [[ $size -gt 100 ]]; then
@@ -183,7 +204,7 @@ download_plugin() {
             return 0
         else
             error "Failed to extract $slug"
-            rm -rf "$plugin_dir" "$zip_file"
+            rm -rf "/tmp/extract_$$" "$zip_file"
             return 1
         fi
     else
