@@ -99,7 +99,7 @@
       "properties": {
         "secureflow.AIModel": {
           "type": "string",
-          "default": "claude-3-5-sonnet-20241022",
+          "default": "claude-sonnet-4-5-20250929",
           "enum": [
             "gpt-4o",
             "gpt-4o-mini",
@@ -111,6 +111,7 @@
             "gemini-2.5-flash",
             "claude-opus-4-1-20250805",
             "claude-opus-4-20250514",
+            "claude-sonnet-4-5-20250929",
             "claude-sonnet-4-20250514",
             "claude-3-7-sonnet-20250219",
             "claude-3-5-sonnet-20241022",
@@ -127,9 +128,10 @@
             "Google Gemini 2.5 Flash",
             "Anthropic Claude 4.1 Opus (2025 Version)",
             "Anthropic Claude 4 Opus (2025 Version)",
+            "Anthropic Claude 4.5 Sonnet (2025 Version) - RECOMMENDED",
             "Anthropic Claude 4 Sonnet (2025 Version)",
             "Anthropic Claude 3.7 Sonnet (2025 Version)",
-            "Anthropic Claude 3.5 Sonnet (2024 Version)",
+            "Anthropic Claude 3.5 Sonnet (2024 Version) - DEPRECATED, use 4.5 instead",
             "Anthropic Claude 3.5 Haiku (2024 Version)"
           ],
           "description": "Select the AI Model to use for security analysis"

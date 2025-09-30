@@ -40,7 +40,7 @@ secureflow config --show
 ```
 
 **Supported Models:**
-- **Claude**: `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`
+- **Claude**: `claude-sonnet-4-5-20250929` (recommended), `claude-3-5-haiku-20241022`, ~~`claude-3-5-sonnet-20241022`~~ (deprecated - use 4.5 instead)
 - **OpenAI GPT**: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`
 - **Google Gemini**: `gemini-1.5-pro`, `gemini-1.5-flash`, `gemini-1.0-pro`
 - **Anthropic**: `claude-instant-1.2`
@@ -53,7 +53,7 @@ secureflow config --show
 secureflow scan
 
 # Scan specific project with Claude
-secureflow scan ./my-project --model claude-3-5-sonnet-20241022
+secureflow scan ./my-project --model claude-sonnet-4-5-20250929
 
 # Get project profile first
 secureflow profile ./my-project

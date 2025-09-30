@@ -38,7 +38,7 @@ function loadConfig() {
   const env = process.env;
 
   const cfg = {
-    model: env.SECUREFLOW_MODEL || fileCfg.model || 'claude-3-5-sonnet-20241022',
+    model: env.SECUREFLOW_MODEL || fileCfg.model || 'claude-sonnet-4-5-20250929',
     apiKey:
       env.SECUREFLOW_API_KEY || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || fileCfg.apiKey || '',
     provider: env.SECUREFLOW_PROVIDER || fileCfg.provider || inferProvider(env, fileCfg),

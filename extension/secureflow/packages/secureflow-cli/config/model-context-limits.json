@@ -62,6 +62,11 @@
           "maxOutput": 32000,
           "description": "Claude Opus 4 with 200K context window, 32K max output tokens"
         },
+        "claude-sonnet-4-5-20250929": {
+          "contextWindow": 200000,
+          "maxOutput": 64000,
+          "description": "Claude Sonnet 4.5 with 200K context window (1M beta available), 64K max output tokens"
+        },
         "claude-sonnet-4-20250514": {
           "contextWindow": 200000,
           "maxOutput": 64000,
@@ -75,7 +80,7 @@
         "claude-3-5-sonnet-20241022": {
           "contextWindow": 200000,
           "maxOutput": 8192,
-          "description": "Claude 3.5 Sonnet with 200K context window, 8K max output tokens (deprecated model)"
+          "description": "Claude 3.5 Sonnet with 200K context window, 8K max output tokens (DEPRECATED - use Claude 4.5 instead)"
         },
         "claude-3-5-haiku-20241022": {
           "contextWindow": 200000,
@@ -100,7 +105,7 @@
         "Some models have beta features with larger context windows",
         "Claude Sonnet 4 supports 1M context window in beta with context-1m-2025-08-07 header",
         "O1 and O3 models are reasoning models with different token counting behavior",
-        "Claude 3.5 Sonnet (20241022) is deprecated - use Claude 3.7 Sonnet instead",
+        "Claude 3.5 Sonnet (20241022) is deprecated - use Claude 4.5 Sonnet instead",
         "GPT-4.1 and Gemini models support very large context windows (1M+ tokens)",
         "All specifications verified as of September 2025",
         "Claude Opus models have 64K max output, not 32K as previously listed",
@@ -117,6 +122,7 @@
           "gemini-2.5-flash"
         ],
         "balanced": [
+          "claude-sonnet-4-5-20250929",
           "claude-sonnet-4-20250514",
           "gpt-4o",
           "claude-3-7-sonnet-20250219"
@@ -135,6 +141,7 @@
         "highOutput": [
           "o3-mini-2025-01-31",
           "claude-opus-4-1-20250805",
+          "claude-sonnet-4-5-20250929",
           "claude-sonnet-4-20250514"
         ]
       }
