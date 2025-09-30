@@ -11,7 +11,6 @@ SecureFlow CLI is a powerful command-line tool that performs comprehensive secur
 - 🎯 **Comprehensive Scanning** - Full project security analysis with context-aware insights
 - 📊 **Multiple Output Formats** - Text, JSON, and DefectDojo integration
 - 🏗️ **Project Profiling** - Technology stack detection and application type identification
-- 🔒 **Security-First** - Built-in protections against directory traversal and hidden file exposure
 - 🎨 **Beautiful TUI** - Claude-style terminal interface with colored output and progress indicators
 
 ## 🚀 Quick Start
