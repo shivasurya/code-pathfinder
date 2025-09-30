@@ -115,7 +115,8 @@
             "claude-sonnet-4-20250514",
             "claude-3-7-sonnet-20250219",
             "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022"
+            "claude-3-5-haiku-20241022",
+            "grok-4-fast-reasoning"
           ],
           "enumDescriptions": [
             "OpenAI GPT-4 O",
@@ -132,7 +133,8 @@
             "Anthropic Claude 4 Sonnet (2025 Version)",
             "Anthropic Claude 3.7 Sonnet (2025 Version)",
             "Anthropic Claude 3.5 Sonnet (2024 Version) - DEPRECATED, use 4.5 instead",
-            "Anthropic Claude 3.5 Haiku (2024 Version)"
+            "Anthropic Claude 3.5 Haiku (2024 Version)",
+            "xAI Grok 4 Fast Reasoning (2025 Version)"
           ],
           "description": "Select the AI Model to use for security analysis"
         },

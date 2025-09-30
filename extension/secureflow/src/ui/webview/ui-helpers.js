@@ -79,7 +79,8 @@ export function getModelDisplayName(model) {
         'claude-opus-4-20250514': 'Claude Opus 4',
         'claude-sonnet-4-20250514': 'Claude Sonnet 4',
         'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
-        'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku'
+        'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku',
+        'grok-4-fast-reasoning': 'Grok 4 Fast Reasoning'
     };
     return modelNames[model] || model;
 }
@@ -89,5 +90,6 @@ export function getModelProvider(model) {
     if (model.startsWith('claude')) return 'Anthropic';
     if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) return 'OpenAI';
     if (model.startsWith('gemini')) return 'Google';
+    if (model.startsWith('grok')) return 'xAI';
     return 'Unknown';
 }
