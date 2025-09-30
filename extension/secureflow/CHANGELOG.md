@@ -1,5 +1,17 @@
 # SecureFlow Changelog
 
+## Version 0.0.12 - September 30, 2025
+
+### 🚀 What's New?
+
+- **Secureflow CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
+- **Grok AI Model Support**: Added Grok 4 Fast Reasoning AI model support for enhanced security analysis
+- **Say bye to claude-sonnet-3-5 model**: Removed deprecated claude-sonnet-3-5 model
+
+### 🔧 Improvements
+
+- **Enhanced Security Guidelines**: Improved file request rules and security review guidelines for more comprehensive analysis
+
 ## Version 0.0.11 - September 7, 2025
 
 ### 🚀 What's New?
