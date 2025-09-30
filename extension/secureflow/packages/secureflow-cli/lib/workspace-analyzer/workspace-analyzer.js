@@ -27,7 +27,7 @@ class ApplicationProfile {
  */
 class WorkspaceAnalyzer {
   constructor(options = {}) {
-    this.selectedModel = options.selectedModel || 'claude-3-5-sonnet-20241022';
+    this.selectedModel = options.selectedModel || 'claude-sonnet-4-5-20250929';
     this.aiClient = AIClientFactory.getClient(this.selectedModel);
     this.tokenTracker = new TokenTracker(this.selectedModel);
   }

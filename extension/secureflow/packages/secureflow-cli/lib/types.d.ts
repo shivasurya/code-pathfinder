@@ -13,6 +13,7 @@ export type AIModel =
   | 'gemini-2.5-flash'
   | 'claude-opus-4-1-20250805'
   | 'claude-opus-4-20250514'
+  | 'claude-sonnet-4-5-20250929'
   | 'claude-sonnet-4-20250514'
   | 'claude-3-7-sonnet-20250219'
   | 'claude-3-5-sonnet-20241022'

@@ -65,7 +65,8 @@ export function getTrashIcon() {
 // Get display name for AI models
 export function getModelDisplayName(model) {
     const modelNames = {
-        'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
+        'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
+        'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet (⚠️ DEPRECATED - Use 4.5 instead)',
         'gpt-4o': 'GPT-4o',
         'gpt-4o-mini': 'GPT-4o Mini',
         'o1-mini': 'O1 Mini',

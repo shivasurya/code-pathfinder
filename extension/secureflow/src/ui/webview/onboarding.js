@@ -7,7 +7,7 @@ import { getModelDisplayName, getModelProvider } from './ui-helpers.js';
 
 // Onboarding state
 let currentStep = 1;
-let selectedModel = 'claude-3-5-sonnet-20241022';
+let selectedModel = 'claude-sonnet-4-5-20250929';
 let apiKey = '';
 
 // Show specific onboarding step

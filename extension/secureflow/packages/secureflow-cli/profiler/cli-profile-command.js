@@ -49,7 +49,7 @@ class CLIProfileCommand {
 
       // Create profiler instance
       const profilerOptions = {
-        selectedModel: this.selectedModel || config.model || 'claude-3-5-sonnet-20241022'
+        selectedModel: this.selectedModel || config.model || 'claude-sonnet-4-5-20250929'
       };
       const profiler = new CLIProjectProfiler(profilerOptions);
 

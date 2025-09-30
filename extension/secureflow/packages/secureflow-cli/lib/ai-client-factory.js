@@ -33,9 +33,10 @@ class AIClientFactory {
       // Anthropic models
       case 'claude-opus-4-1-20250805':
       case 'claude-opus-4-20250514':
+      case 'claude-sonnet-4-5-20250929':
       case 'claude-sonnet-4-20250514':
       case 'claude-3-7-sonnet-20250219':
-      case 'claude-3-5-sonnet-20241022':
+      case 'claude-3-5-sonnet-20241022': // deprecated - use claude-sonnet-4-5-20250929 instead
       case 'claude-3-5-haiku-20241022':
         return new ClaudeClient();
 

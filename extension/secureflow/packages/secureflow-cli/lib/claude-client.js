@@ -5,7 +5,7 @@ class ClaudeClient extends HttpClient {
   constructor() {
     super();
     this.API_URL = 'https://api.anthropic.com/v1/messages';
-    this.defaultModel = 'claude-3-5-sonnet-20241022';
+    this.defaultModel = 'claude-sonnet-4-5-20250929';
   }
 
   /**
@@ -20,10 +20,15 @@ class ClaudeClient extends HttpClient {
       throw new Error('Anthropic Claude API key is required');
     }
 
+    // Show deprecation warning for claude-3-5-sonnet-20241022
+    if (options.model === 'claude-3-5-sonnet-20241022') {
+      console.warn('⚠️  WARNING: claude-3-5-sonnet-20241022 is deprecated. Please upgrade to claude-sonnet-4-5-20250929 for better performance and latest features.');
+    }
+
     const response = await this.post(
       this.API_URL,
       {
-        model: "claude-3-5-sonnet-20241022",
+        model: options.model || "claude-sonnet-4-5-20250929",
         messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
         max_tokens: options.maxTokens || 4000,
