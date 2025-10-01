@@ -1,0 +1,346 @@
+---
+title: SecureFlow AI - Your AI Security Copilot
+description: AI-powered security analysis for smarter, safer code. Catch vulnerabilities early in your SDLC with 13+ AI models including Claude, GPT, Gemini, and Grok.
+template: splash
+hero:
+  tagline: "Your AI Security Copilot for Smarter, Safer Code"
+  actions:
+    - text: Install CLI
+      link: "https://www.npmjs.com/package/@codepathfinder/secureflow-cli"
+      icon: right-arrow
+      variant: primary
+      target: _blank
+    - text: VS Code Extension
+      link: "https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+      icon: external
+    - text: Open VSX
+      link: "https://open-vsx.org/extension/codepathfinder/secureflow"
+      icon: external
+    - text: View on GitHub
+      link: https://github.com/shivasurya/code-pathfinder/tree/main/extension/secureflow
+      icon: github
+---
+
+import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
+
+<div class="secureflow-hero">
+  <div class="gradient-bg"></div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="badge-text">🛡️ AI-Powered Security Analysis</span>
+    </div>
+    <h1 class="hero-title">
+      Catch Security Vulnerabilities 
+    </h1>
+    <p class="hero-subtitle">
+      SecureFlow AI integrates seamlessly into your development workflow, providing real-time security analysis 
+      with advanced AI models. Perfect for developers using Windsurf, Claude Code, Cursor, Cline, or any AI-powered IDE.
+    </p>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-number">13+</div>
+        <div class="stat-label">AI Models</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">600+</div>
+        <div class="stat-label">Repos Scanned</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">&lt;2 Min</div>
+        <div class="stat-label">Avg Scan Time</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="features-showcase">
+  <div class="container">
+    <h2 class="section-title">
+      <span class="gradient-text">Powerful Features</span> for Modern Development
+    </h2>
+    <p class="section-subtitle">
+      Built for developers who use AI tools and want to catch security issues early in the SDLC
+    </p>
+    
+    <CardGrid stagger>
+      <Card title="🤖 13+ AI Models" icon="rocket">
+        Support for Claude 4.5 Sonnet, GPT-4o, Gemini 2.5 Pro, Grok 4 Fast Reasoning, and more. 
+        Choose the best model for your security analysis needs.
+      </Card>
+      
+      <Card title="🔍 Intelligent File Discovery" icon="magnifier">
+        Smart project analysis with iterative file request system. AI makes targeted requests 
+        to understand your codebase structure and identify security hotspots.
+      </Card>
+      
+      <Card title="🎯 Comprehensive Scanning" icon="approve-check">
+        Full project security analysis with context-aware insights. Detects OWASP Top 10 
+        vulnerabilities, injection flaws, authentication issues, and more.
+      </Card>
+      
+      <Card title="📊 Multiple Output Formats" icon="document">
+        Export results in text, JSON, or DefectDojo format. Perfect for CI/CD integration 
+        and security team workflows.
+      </Card>
+      
+      <Card title="🏗️ Project Profiling" icon="puzzle">
+        Technology stack detection and application type identification. Understands your 
+        project structure for better analysis.
+      </Card>
+      
+      <Card title="🎨 Beautiful Interface" icon="star">
+        Claude-style terminal interface with colored output, progress indicators, 
+        and intuitive VS Code integration.
+      </Card>
+    </CardGrid>
+  </div>
+</div>
+
+<div class="ai-models-section">
+  <div class="container">
+    <h2 class="section-title">
+      Choose Your <span class="gradient-text">AI Model</span>
+    </h2>
+    <p class="section-subtitle">
+      SecureFlow AI supports the latest and most powerful AI models for security analysis
+    </p>
+    
+    <div class="models-grid">
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-logo">🧠</div>
+          <div class="model-info">
+            <h3>Anthropic Claude</h3>
+          </div>
+        </div>
+        <ul class="model-list">
+          <li>Claude 4.5 Sonnet (Latest)</li>
+          <li>Claude 3.7 Sonnet</li>
+          <li>Claude 3.5 haiku</li>
+        </ul>
+      </div>
+      
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-logo">⚡</div>
+          <div class="model-info">
+            <h3>OpenAI</h3>
+          </div>
+        </div>
+        <ul class="model-list">
+          <li>GPT-4o</li>
+          <li>GPT-4o Mini</li>
+          <li>o1 & o1-mini</li>
+          <li>o3-mini (Latest)</li>
+        </ul>
+      </div>
+      
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-logo">🔮</div>
+          <div class="model-info">
+            <h3>Google Gemini</h3>
+          </div>
+        </div>
+        <ul class="model-list">
+          <li>Gemini 2.5 Pro</li>
+          <li>Gemini 2.5 Flash</li>
+        </ul>
+      </div>
+      
+      <div class="model-card">
+        <div class="model-header">
+          <div class="model-logo">🚀</div>
+          <div class="model-info">
+            <h3>xAI Grok</h3>
+          </div>
+        </div>
+        <ul class="model-list">
+          <li>Grok 4 Fast Reasoning</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="workflow-section">
+  <div class="container">
+    <h2 class="section-title">
+      Perfect for <span class="gradient-text">AI-Powered</span> Development
+    </h2>
+    <p class="section-subtitle">
+      Designed for developers using modern AI coding tools
+    </p>
+    
+    <div class="workflow-grid">
+      <div class="workflow-card">
+        <div class="workflow-icon">🌊</div>
+        <h3>Windsurf IDE</h3>
+        <p>Seamless integration with Windsurf's AI-powered development environment</p>
+      </div>
+      
+      <div class="workflow-card">
+        <div class="workflow-icon">🤖</div>
+        <h3>Claude Code</h3>
+        <p>Perfect companion for Claude-powered coding sessions and code reviews</p>
+      </div>
+      
+      <div class="workflow-card">
+        <div class="workflow-icon">📝</div>
+        <h3>Cursor IDE</h3>
+        <p>Enhance your Cursor workflow with automated security analysis</p>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+<div class="security-benefits-section">
+  <div class="container">
+    <h2 class="section-title">
+      Why <span class="gradient-text">Security First</span> Development Matters
+    </h2>
+    <p class="section-subtitle">
+      Catch vulnerabilities before they become expensive security incidents
+    </p>
+    
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon">⚡</div>
+        <h3>Faster Development</h3>
+        <p>Automated security analysis means no waiting for security team reviews. Ship features faster while maintaining security standards.</p>
+        <div class="benefit-stat">50% faster security reviews</div>
+      </div>
+      
+      <div class="benefit-card">
+        <div class="benefit-icon">🛡️</div>
+        <h3>Code Quality</h3>
+        <p>Improve overall code quality while catching security issues. Learn secure coding patterns and best practices as you develop.</p>
+        <div class="benefit-stat">Better code standards</div>
+      </div>
+      
+      <div class="benefit-card">
+        <div class="benefit-icon">📈</div>
+        <h3>Developer Productivity</h3>
+        <p>Learn security best practices as you code. SecureFlow AI educates your team while protecting your applications.</p>
+        <div class="benefit-stat">3x security knowledge growth</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="comparison-section">
+  <div class="container">
+    <h2 class="section-title">
+      Why Choose <span class="gradient-text">SecureFlow AI</span>
+    </h2>
+    <p class="section-subtitle">
+      See how we compare to traditional security scanning tools
+    </p>
+    
+    <div class="comparison-table">
+      <div class="comparison-header">
+        <div class="feature-col">Feature</div>
+        <div class="secureflow-col">SecureFlow AI</div>
+        <div class="traditional-col">Traditional SAST</div>
+        <div class="manual-col">Manual Reviews</div>
+      </div>
+      
+      <div class="comparison-row">
+        <div class="feature-col">AI-Powered Analysis</div>
+        <div class="secureflow-col">✅ 13+ AI Models</div>
+        <div class="traditional-col">❌ Rule-based only</div>
+        <div class="manual-col">❌ Human-dependent</div>
+      </div>
+      
+      <div class="comparison-row">
+        <div class="feature-col">IDE Integration</div>
+        <div class="secureflow-col">✅ Native VS Code</div>
+        <div class="traditional-col">⚠️ Limited support</div>
+        <div class="manual-col">❌ No integration</div>
+      </div>
+      
+      <div class="comparison-row">
+        <div class="feature-col">Context Awareness</div>
+        <div class="secureflow-col">✅ Full codebase understanding</div>
+        <div class="traditional-col">❌ Single file analysis</div>
+        <div class="manual-col">✅ Human context</div>
+      </div>
+      
+      <div class="comparison-row">
+        <div class="feature-col">False Positive Rate</div>
+        <div class="secureflow-col">✅ &lt;5% (AI-filtered)</div>
+        <div class="traditional-col">❌ 30-50% typical</div>
+        <div class="manual-col">✅ Low (time-intensive)</div>
+      </div>
+      
+      <div class="comparison-row">
+        <div class="feature-col">Setup Time</div>
+        <div class="secureflow-col">✅ 2 minutes</div>
+        <div class="traditional-col">❌ Days/weeks</div>
+        <div class="manual-col">❌ Ongoing training</div>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+<div class="demo-section" id="demo">
+  <div class="container">
+    <h2 class="section-title">
+      See SecureFlow AI in <span class="gradient-text">Action</span>
+    </h2>
+    
+    <div class="demo-grid">
+      <div class="demo-card">
+        <h3>🔍 Quick Security Scan</h3>
+        <div class="demo-steps">
+          <div class="demo-step">
+            <strong>1. Scan your project with AI</strong>
+            <code>secureflow scan ./my-app</code>
+          </div>
+          <div class="demo-step">
+            <strong>2. Use specific AI model</strong>
+            <code>secureflow scan --model grok-4-fast-reasoning</code>
+          </div>
+          <div class="demo-step">
+            <strong>3. Export results</strong>
+            <code>secureflow scan --defectdojo --output findings.json</code>
+          </div>
+        </div>
+      </div>
+      
+      <div class="demo-card">
+        <h3>📊 Rich Output Formats</h3>
+        <div class="output-preview">
+          <div class="severity-item critical">🔴 Critical: SQL Injection vulnerability</div>
+          <div class="severity-item high">🟠 High: Hardcoded API key detected</div>
+          <div class="severity-item medium">🟡 Medium: Weak password validation</div>
+          <div class="severity-item low">🔵 Low: Missing security headers</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="integration-section">
+  <div class="container">
+    <h2 class="section-title">
+      Powerful <span class="gradient-text">Integrations</span>
+    </h2>
+    
+    <CardGrid>
+      <Card title="🔗 DefectDojo Integration" icon="seti:config">
+        Direct integration with DefectDojo security platforms. Automatic engagement creation, 
+        severity mapping, and CWE/CVE detection.
+      </Card>
+      
+      <Card title="🚀 CI/CD Ready" icon="seti:pipeline">
+        JSON output format perfect for CI/CD integration. Works with GitHub Actions, 
+        GitLab CI, Jenkins, and more.
+      </Card>
+    </CardGrid>
+  </div>
+</div>
