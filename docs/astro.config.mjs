@@ -21,6 +21,9 @@ export default defineConfig({
         label: 'Overview',
         slug: 'overview'
       }, {
+        label: 'SecureFlow AI',
+        slug: 'secureflow-ai'
+      }, {
         label: 'CLI Quickstart',
         slug: 'quickstart'
       }, {
@@ -44,7 +47,7 @@ export default defineConfig({
       label: 'Changelog',
       slug: 'changelog'
     },],
-    customCss: ["./src/styles/font.css", "./src/styles/layout.css"],
+    customCss: ["./src/styles/font.css", "./src/styles/layout.css", "./src/styles/secureflow-ai.css"],
     components: {
       Footer: './src/components/Footer.astro',
       Header: './src/components/Header.astro',
