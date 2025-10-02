@@ -1,0 +1,51 @@
+---
+title: "Introducing SecureFlow CLI to Hunt Vulnerabilities"
+description: "AI-powered security scanning tool using agentic loops to hunt vulnerabilities - discovered 300+ issues in WordPress plugins with 12+ AI model support and DefectDojo integration."
+template: splash
+author: "@sshivasurya"
+pubDate: "2025-10-01"
+tags: ["SAST", "Security", "SecureFlow", "CLI"]
+---
+
+import CombinedLayout from '../../../layouts/CombinedLayout.astro';
+import { Card } from '@astrojs/starlight/components';
+
+<CombinedLayout frontmatter={frontmatter}>
+
+    ![Uptown Waterloo](/assets/rooftop.jpg)
+    *Uptown Waterloo view from rooftop - where I used to sit and design, code, and iterate*
+
+    On Monday, September 29th, I demonstrated [SecureFlow CLI](https://github.com/shivasurya/code-pathfinder/tree/main/cli/secureflow) at [DevHouse Waterloo](https://lu.ma/waterlooevents?e=calev-BSBI0xt9FVzzcjK) at Builder's Club in Waterloo. The demo was well-received, and I received many questions about the technology stack and design decisions. If you're in the Kitchener-Waterloo area, I recommend checking out [DevHouse Waterloo](https://lu.ma/waterlooevents).
+    
+    I've been using the paid version of Windsurf since 2024 and appreciate how it uses LLMs to drive tooling for desired outcomes by leveraging available tools. I've applied the same approach to security scanning instead of software development. Fortunately, Ara Khan from Cline (an open-source AI agent for software development, and a former colleague) [tweeted](https://x.com/arafatkatze/status/1970171291295506491) about Cline's simplest agentic algorithm, which caught my attention.
+    
+    Following this approach, I implemented a similar agentic loop for scanning code vulnerabilities using:
+
+    - File listing in the workspace
+    - Application code profiling
+    - File reading in the workspace
+    - Technology and framework context selection for customization 
+    
+    The results were promising. I focused on the WordPress plugin ecosystem because plugins have source code available as ZIP files and are often overlooked for secure code scanning, despite having active installations ranging from 10,000 to 100,000 users. My scanning yielded approximately 45 Critical, 125 High, 110 Medium, and 8 Low severity vulnerabilities. Around 20% of the vulnerabilities can be classified as acceptable risk—often lacking code reachability or requiring administrators to configure systems insecurely, with many having conditional requirements.
+    
+    I've observed that large language models excel at finding privilege escalation vulnerabilities. For example, they can identify cases where Subscriber or Editor level access in WordPress can execute administrator-level actions and take over WordPress sites, as well as unauthenticated privilege escalations, Stored XSS, and Remote Code Execution vulnerabilities with conditional requirements.
+    
+    Using the Grok 4 Fast reasoning model, which is cost-effective and has generous rate limits, I processed up to 30 million tokens (cumulative across individual automated sessions) over three days for less than $4. While I acknowledge the subsidized cost, the model doesn't match Claude 3.5 or 4.5 Sonnet's performance in vulnerability hunting. I plan to keep the agents running in the background within rate limits while optimizing token usage, hoping to eventually identify pre-authentication classic RCE vulnerabilities without conditional requirements.
+
+    Token usage optimization involves selecting the right files to read while ignoring vendor directories, test directories, and generated files. It also requires customizing prompts to ignore irrelevant files that don't contribute to vulnerability detection, and building efficient tools to generate code graphs (reachability graphs) to confirm vulnerabilities. I believe LLMs should perform well when analyzing AST call graphs, based on insights from the CodeBERT Graph research paper.
+
+    The CLI is available on [npm](https://www.npmjs.com/package/@codepathfinder/secureflow-cli) and [GitHub](https://github.com/shivasurya/code-pathfinder/tree/main/extension/secureflow/packages/secureflow-cli).
+    
+    Key features include:
+    - Works like Cursor/Windsurf loops, using tools to read and navigate the codebase
+    - [Open source](https://github.com/shivasurya/code-pathfinder/tree/main/extension/secureflow) codebase
+    - BYOK (Bring Your Own Key) support for AI models including Gemini, Claude, OpenAI, and xAI Grok
+    - Privacy-focused: no private code or data is sent to any server except the AI model provider
+    - Integrates with DefectDojo (I'm working to improve this integration—I was in a hurry when I saw the burst of vulnerabilities that needed review)
+    - Supports 12+ AI models (OpenAI, Claude, xAI Grok, Gemini, and Ollama)
+    
+    The tool is still in development and has some rough edges. If you try it out and encounter any issues, please open an issue on [GitHub](https://github.com/shivasurya/code-pathfinder/issues). Your feedback helps improve SecureFlow. 
+    
+    I have to acknowledge that SecureFlow is essentially a while loop that attempts to use tools like a security engineer to gather context and spot vulnerabilities—it doesn't have any competitive moat. But it's incredibly fun to build, iterate, and hunt vulnerabilities. It feels like living in the future: I set the agent running, leave the room, and come back the next day to see the findings. When I discover something critical, I get genuinely excited and rush to share it—my partner, who's an engineer herself, is consistently amazed by what SecureFlow uncovers. Building comprehensive context around vulnerability classes that can sit and observe in the IDE, identify issues, and provide exploitation paths with minimal intervention from a security engineer is, in my opinion, the future of security agents and SAST scanning.
+</CombinedLayout>
+
