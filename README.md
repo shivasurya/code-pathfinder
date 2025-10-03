@@ -11,7 +11,6 @@ Code Pathfinder, the open-source alternative to GitHub CodeQL. Built for advance
 [![AGPL-3.0 License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
 [![Discord](https://img.shields.io/discord/1259511338183557120?logo=discord&label=discord&utm_source=github)](https://discord.gg/xmPdJC6WPX)
 [![codecov](https://codecov.io/gh/shivasurya/code-pathfinder/graph/badge.svg?token=VYQLI49TF4)](https://codecov.io/gh/shivasurya/code-pathfinder)
-![Code-Pathfinder Playground](https://badgen.net/static/Online%20Playground/live/cyan?icon=terminal)
 </div>
 
 ## :tv: Demo
