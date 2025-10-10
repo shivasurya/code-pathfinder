@@ -88,7 +88,7 @@ Read the [official documentation](https://codepathfinder.dev/), or run `pathfind
 
 ## Features
 
-- [x] Basic queries (Similar to CodeQL)
+- [x] Graph-based structural queries
 - [x] Source Sink Analysis
 - [ ] Data Flow Analysis with Control Flow Graph
 

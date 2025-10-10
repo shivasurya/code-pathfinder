@@ -1,9 +1,9 @@
 ---
 title: Code PathFinder
-description: Opensource CodeQL alternative for finding vulnerabilities in code.
+description: Open-source AI-powered security analysis combining LLM-assisted reviews with structural queries.
 template: splash
 hero:
-  tagline: "Opensource CodeQL alternative for finding vulnerabilities in your code."
+  tagline: "AI-powered code security for modern teams."
   actions:
     - text: Install Now
       link: /quickstart
@@ -22,11 +22,24 @@ hero:
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 import PostHogLayout from '../../layouts/PostHogLayout.astro';
+import { getCollection } from 'astro:content';
+import '../../styles/motion-gradient.css';
+import '../../styles/blog-cards.css';
+import '../../styles/feature-cards.css';
+
+export const allPosts = await getCollection('docs', ({ id }) => {
+  if (id.startsWith('blog/index.mdx')) return false;
+  return id.startsWith('blog/');
+});
+
+export const latestPosts = [...allPosts]
+  .sort((a, b) => new Date(b.data.pubDate || '1970-01-01') - new Date(a.data.pubDate || '1970-01-01'))
+  .slice(0, 6);
 
 <PostHogLayout>
 </PostHogLayout>
 
-
+<div class="motion-gradient"></div>
 
 <div style="display: flex; justify-content: center;">
 ```bash
@@ -56,79 +69,71 @@ public static void main(String[] args) {
   <svg width="4rem" height="4rem" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path fill="goldenrod" d="M17,4v9.74l-4,3.28-6.2-2.26V17L3.29,12.41l10.23.8V4.44Zm-3.41.49L7.85,1V3.29L2.58,4.84,1,6.87v4.61l2.26,1V6.57Z"/>
   </svg>
-<Icon name="seti:npm" color="goldenrod" size="4rem" />
+  <Icon name="seti:npm" color="goldenrod" size="4rem" />
 </div>
+
+<br />
+
 <br />
 <div style="text-align: center;">
-## Supported Features
+## Why Code Pathfinder
 </div>
-<br />
-<CardGrid stagger>
-	<Card title="Craft Queries" icon="pencil">
-		Strengthen your code’s integrity with robust security checks and insights.
-	</Card>
-	<Card title="Structural Search" icon="seti:code-search">
-		Search and identify specific patterns in source code seamlessly.
-	</Card>
-	<Card title="Call Graph Analysis" icon="seti:pipeline">
-		Visualize and analyze method calls and data flow for better understanding.
-	</Card>
-	<Card title="Source-Sink Analysis" icon="seti:plan">
-		Detect and prevent vulnerabilities by tracing sensitive data paths.
-	</Card>
-</CardGrid>
 
+<div class="feat-grid">
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="rocket" size="1.15rem" color="currentColor" />
+      <h4>LLM Security Reviews</h4>
+    </div>
+    <p>Use leading models (Claude, GPT, Gemini, Grok) to catch risky patterns with context—beyond regex and grep.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="github" size="1.15rem" color="currentColor" />
+      <h4>Editor, PRs and Pipelines</h4>
+    </div>
+    <p>See findings in your editor, pull requests and CI pipelines with a single configuration and consistent results.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="seti:pipeline" size="1.15rem" color="currentColor" />
+      <h4>Code Graph Analysis</h4>
+    </div>
+    <p>Structural search, call graphs and source‑to‑sink tracing for precise, explainable detections.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="seti:plan" size="1.15rem" color="currentColor" />
+      <h4>Reports and Integrations</h4>
+    </div>
+    <p>Export SARIF and DefectDojo with severity mapping and metadata for smooth triage and tracking.</p>
+  </div>
+</div>
+
+<br/>
+<br/>
 <br/>
 <div style="text-align: center;">
 ## Latest Blog Posts
 
 </div>
 
-<br/>
-<CardGrid>
-       <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); background-color: #e0e0e0;">
-         <img src="/assets/dev-house-waterloo.jpg" alt="SecureFlow Extension" style="width: 100%; height: 200px; object-fit: cover;" />
-         <div style="padding: 16px;">
-           <h4 style="color: #333;">Introducing SecureFlow Extension</h4>
-           <br />
-           <a href="/blog/introducing-secureflow-extension-to-vibe-code-securely" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">
-           <span style="font-size: 1.2em;">Read →</span>
-           </a>
-         </div>
-       </div>
-
-       <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); background-color: #e0e0e0;">
-         <img src="/assets/cpf-illustration.jpg" alt="CodeQL Alternative" style="width: 100%; height: 200px; object-fit: cover;" />
-         <div style="padding: 16px;">
-           <h4 style="color: #333;">CodeQL Opensource Alternative</h4>
-           <br />
-           <a href="/blog/codeql-oss-alternative" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">
-           <span style="font-size: 1.2em;">Read →</span>
-           </a>
-         </div>
-       </div>
-
-       <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); background-color: #e0e0e0;">
-         <img src="/assets/webview.webp" alt="WebView Misconfigurations" style="width: 100%; height: 200px; object-fit: cover;" />
-         <div style="padding: 16px;">
-           <h4 style="color: #333;">Detecting WebView Misconfigurations</h4>
-           <br />
-           <a href="/blog/finding-webview-misconfigurations-android" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">
-           <span style="font-size: 1.2em;">Read →</span>
-           </a>
-         </div>
-       </div>
-
-       <div style="border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); background-color: #e0e0e0;">
-         <img src="/assets/cpf-illustration.jpg" alt="SAST False Positives" style="width: 100%; height: 200px; object-fit: cover;" />
-         <div style="padding: 16px;">
-           <h4 style="color: #333;">Reducing SAST False Positives</h4>
-           <br />
-           <a href="/blog/silence-the-noise-a-practical-guide-to-systematically-reducing-sast-false-positives" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">
-           <span style="font-size: 1.2em;">Read →</span>
-           </a>
-         </div>
-       </div>
-</CardGrid>
-
-
+<div class="blog-grid">
+  {latestPosts.map((post) => (
+    <div class="blog-card">
+      <a class="blog-card-link" href={`/${post.slug}`}>
+        <h4>{post.data.title}</h4>
+        {post.data.description && (<p>{post.data.description}</p>)}
+        <div class="blog-meta">
+          {post.data.pubDate && (
+            <span class="date">{new Date(post.data.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+          )}
+          <span>•</span>
+          <span class="author">{post.data.author || 'Code Pathfinder Team'}</span>
+          <span style="margin-left:auto"></span>
+          <span>Read →</span>
+        </div>
+      </a>
+    </div>
+  ))}
+</div>

@@ -10,8 +10,7 @@ export default defineConfig({
     title: 'Code PathFinder',
     favicon: 'favicon.ico',
     social: {
-      github: 'https://github.com/shivasurya/code-pathfinder',
-      discord: 'https://discord.gg/xmPdJC6WPX'
+      github: 'https://github.com/shivasurya/code-pathfinder'
     },
     sidebar: [{
       label: 'Getting Started',
@@ -47,10 +46,14 @@ export default defineConfig({
       label: 'Changelog',
       slug: 'changelog'
     },],
-    customCss: ["./src/styles/font.css", "./src/styles/layout.css", "./src/styles/secureflow-ai.css"],
+    customCss: [
+      "./src/styles/font.css",
+      "./src/styles/layout.css",
+      "./src/styles/secureflow-ai.css",
+      "./src/styles/theme-overrides.css"
+    ],
     components: {
       Footer: './src/components/Footer.astro',
       Header: './src/components/Header.astro',
     },
   }), sitemap()]
-});

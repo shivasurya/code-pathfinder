@@ -1,0 +1,72 @@
+/* Site-wide theme overrides: background + primary button accent */
+
+:root {
+  /* Legacy violet kept for reference but not used */
+  --cpf-accent: #8b5cf6;
+  --cpf-accent-high: #a78bfa;
+  --cpf-accent-low: 139 92 246;
+}
+
+/* Light mode: pure white background, black content surfaces */
+:root[data-theme='light'] {
+  --sl-color-bg: #ffffff;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-offset: #f7f7f7;
+  --sl-color-bg-inline-code: #f4f4f6;
+  --sl-color-hairline: #eaeaea;
+  /* Motion gradient base */
+  --cpf-bg: #ffffff;
+
+  /* Accent coloring */
+  --sl-color-accent: #000000;            /* pure black */
+  --sl-color-accent-high: #111111;
+  --sl-color-accent-low: rgba(0, 0, 0, 0.10);
+  --sl-color-text-accent: #000000;
+}
+
+/* Dark mode: pitch black */
+:root[data-theme='dark'] {
+  --sl-color-bg: #000000;
+  --sl-color-bg-nav: #050505;
+  --sl-color-bg-offset: #0a0a0a;
+  --sl-color-bg-inline-code: #0f0f10;
+  --sl-color-hairline: #151515;
+  /* Motion gradient base */
+  --cpf-bg: #000000;
+
+  /* Accent coloring */
+  --sl-color-accent: #ffffff;            /* pure white */
+  --sl-color-accent-high: #e5e5e5;
+  --sl-color-accent-low: rgba(255, 255, 255, 0.16);
+  --sl-color-text-accent: #ffffff;
+}
+
+/* Primary button overrides (site-wide) */
+/* Dark mode: white button with black text */
+:root[data-theme='dark'] .button.primary,
+:root[data-theme='dark'] a.button.primary,
+:root[data-theme='dark'] .sl-button.primary,
+:root[data-theme='dark'] a[role='button'].primary {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+/* Light mode: pitch black button with white text */
+:root[data-theme='light'] .button.primary,
+:root[data-theme='light'] a.button.primary,
+:root[data-theme='light'] .sl-button.primary,
+:root[data-theme='light'] a[role='button'].primary {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+/* (removed empty ruleset to satisfy linter) */
+
+/* Hover treatment for both themes */
+.button.primary:hover,
+a.button.primary:hover,
+.sl-button.primary:hover {
+  filter: brightness(1.05);
+}
