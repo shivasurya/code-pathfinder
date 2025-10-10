@@ -56,4 +56,5 @@ export default defineConfig({
       Footer: './src/components/Footer.astro',
       Header: './src/components/Header.astro',
     },
-  }), sitemap()]
+  }), sitemap()],
+});
