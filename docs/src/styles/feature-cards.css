@@ -1,0 +1,69 @@
+/* Feature cards for landing page (2x2 grid, non-clickable) */
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .feat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.feat-card {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 10px;
+  background: var(--sl-color-bg);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  box-sizing: border-box;
+  min-height: 180px;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+/* Light mode: set base text color to black so children (icons, h4) inherit correctly */
+html[data-theme='light'] .feat-card,
+:root[data-theme='light'] .feat-card { color: #000; }
+html[data-theme='dark'] .feat-card,
+:root[data-theme='dark'] .feat-card { color: #fff !important; }
+
+.feat-grid > .feat-card:first-child { margin-top: 12px; }
+
+.feat-card:hover { border-color: var(--sl-color-accent); box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+
+.feat-head { display: flex; align-items: center; gap: .6rem; min-height: 1.6rem; }
+/* Inherit title color so icons match theme mode */
+.feat-head { color: var(--sl-color-white); }
+html[data-theme='light'] .feat-head,
+:root[data-theme='light'] .feat-head { color: var(--sl-color-black); }
+.feat-head, .feat-card h4, .feat-icon { color: inherit !important; }
+
+.feat-icon {
+  color: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.feat-card h4 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
+  color: inherit; /* inherit from container for theme-accurate color */
+  display: inline-flex;
+  align-items: center;
+}
+html[data-theme='light'] .feat-card h4,
+:root[data-theme='light'] .feat-card h4 { color: inherit; }
+
+.feat-card p {
+  margin: .6rem 0 0;
+  color: var(--sl-color-gray-2);
+  line-height: 1.45;
+}

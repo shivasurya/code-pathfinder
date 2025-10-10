@@ -2,7 +2,7 @@
 title: Code PathFinder Blog
 template: splash
 hero:
-  tagline: "Opensource alternative to CodeQL"
+  tagline: "Insights and updates from the Code Pathfinder team"
   actions:
     - text: Install Now
       link: /quickstart
@@ -11,9 +11,6 @@ hero:
     - text: Documentation
       link: /overview
       icon: open-book
-    - text: Tech Blog
-      link: /blog
-      icon: pen
     - text: Get Source
       link: https://github.com/shivasurya/code-pathfinder
       icon: github
@@ -21,6 +18,7 @@ hero:
 
 import PostHogLayout from '../../../layouts/PostHogLayout.astro';
 import { getCollection } from 'astro:content';
+import '../../../styles/blog-cards.css';
 
 export const allPosts = await getCollection('docs', ({ id, data }) => {
   // filter out index.mdx from the list of posts
@@ -37,39 +35,22 @@ export const blogEntries = [...allPosts].sort((a, b) => {
 });
 
 <PostHogLayout />
-<div style="margin: 3rem auto; padding: 0 1.5rem; max-width: 800px;">
-  
-  <div style="display: grid; gap: 2rem;">
-    {blogEntries.map((post) => (
-      <div style="border-radius: 8px; border: 1px solid #e2e8f0; padding: 1.5rem; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
-        <h2 style="margin-top: 0; margin-bottom: 0.75rem;">
-          <a href={`/${post.slug}`} style="text-decoration: none; color: #4c6ef5; font-size: 1.5rem;">
-            {post.data.title}
-          </a>
-        </h2>
-        <p style="font-size: 1.1rem; margin-bottom: 1rem;">
-          {post.data.description}
-        </p>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
-          <div style="display: flex; align-items: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; margin-right: 0.75rem;">
-              <img src={`https://www.gravatar.com/avatar/93047f1d8e343ca3af1451616829ceb1?s=150`} alt={frontmatter.author} style="width: 100%; height: 100%; object-fit: cover;" />
-            </div>
-            <span style="color: #718096;"><a href="https://x.com/sshivasurya">{post.data.author || "@sshivasurya"}</a></span>
-          </div>
-          
+<div class="blog-grid" style="margin-top: 1.5rem;">
+  {blogEntries.map((post) => (
+    <div class="blog-card">
+      <a class="blog-card-link" href={`/${post.slug}`}>
+        <h4>{post.data.title}</h4>
+        {post.data.description && (<p>{post.data.description}</p>)}
+        <div class="blog-meta">
           {post.data.pubDate && (
-            <div style="color: #718096; font-style: italic;">
-              {new Date(post.data.pubDate).toLocaleDateString('en-US', {
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric'
-              })}
-            </div>
+            <span class="date">{new Date(post.data.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           )}
+          <span>•</span>
+          <span class="author">{post.data.author || 'Code Pathfinder Team'}</span>
+          <span style="margin-left:auto"></span>
+          <span>Read →</span>
         </div>
-      </div>
-    ))}
-  </div>
+      </a>
+    </div>
+  ))}
 </div>

@@ -1,0 +1,79 @@
+/* Animated moving gradient background (scoped)
+   Usage: Place <div class="motion-gradient"></div> near top of page markup.
+   Lightweight, CSS-only. Safe defaults and accessibility-aware.
+*/
+
+:root {
+  --cpf-bg: #0b0f14;                 /* base background */
+  --cpf-glow-a: rgba(0, 136, 255, .55);
+  --cpf-glow-b: rgba(0, 220, 180, .45);
+  --cpf-glow-c: rgba(0, 90, 200, .40);
+  --cpf-vmax: 60vmax;                /* blob size scales with viewport */
+  --cpf-blur: 70px;                  /* softness of glow */
+}
+
+.motion-gradient {
+  position: relative;
+}
+
+/* Two drifting radial blobs behind all page content */
+.motion-gradient::before,
+.motion-gradient::after {
+  content: "";
+  position: fixed;                   /* cover viewport */
+  inset: 0;
+  z-index: -1;                       /* sit below content */
+  pointer-events: none;
+  background-repeat: no-repeat;
+  filter: blur(var(--cpf-blur));
+  transform: translateZ(0);          /* promote to its own layer */
+}
+
+/* Primary glow */
+.motion-gradient::before {
+  background-image:
+    radial-gradient(var(--cpf-vmax) var(--cpf-vmax) at 35% 45%, var(--cpf-glow-a), transparent 60%),
+    radial-gradient(calc(var(--cpf-vmax) * .85) calc(var(--cpf-vmax) * .85) at 70% 60%, var(--cpf-glow-b), transparent 65%);
+  animation: cpf-drift-a 26s ease-in-out infinite alternate,
+             cpf-hue 40s linear infinite;
+}
+
+/* Secondary glow */
+.motion-gradient::after {
+  background-image:
+    radial-gradient(calc(var(--cpf-vmax) * .9) calc(var(--cpf-vmax) * .9) at 60% 40%, var(--cpf-glow-c), transparent 65%);
+  mix-blend-mode: screen;
+  opacity: .6;
+  animation: cpf-drift-b 32s ease-in-out infinite alternate,
+             cpf-hue 56s linear infinite;
+  animation-delay: 0s, -10s;
+}
+
+@keyframes cpf-drift-a {
+  0% { background-position: 0 0; }
+  50% { background-position: 2% -2%; }
+  100% { background-position: -2% 2%; }
+}
+
+@keyframes cpf-drift-b {
+  0% { background-position: 0 0; }
+  50% { background-position: -3% 2%; }
+  100% { background-position: 3% -2%; }
+}
+
+/* Smooth color cycling via hue rotation (includes blur to preserve softness) */
+@keyframes cpf-hue {
+  0% { filter: blur(var(--cpf-blur)) hue-rotate(0deg); }
+  50% { filter: blur(var(--cpf-blur)) hue-rotate(180deg); }
+  100% { filter: blur(var(--cpf-blur)) hue-rotate(360deg); }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .motion-gradient::before, .motion-gradient::after {
+    animation: none;
+    filter: blur(var(--cpf-blur));
+  }
+}
+
+/* No content z-index overrides necessary; layers sit below via z-index: -1 */
