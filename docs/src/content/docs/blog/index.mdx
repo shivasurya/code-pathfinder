@@ -8,12 +8,12 @@ hero:
       link: /quickstart
       icon: right-arrow
       variant: primary
-    - text: Documentation
-      link: /overview
+    - text: SecureFlow AI
+      link: /secureflow-ai
+      icon: rocket
+    - text: Browse Rules
+      link: /atlas
       icon: open-book
-    - text: Get Source
-      link: https://github.com/shivasurya/code-pathfinder
-      icon: github
 ---
 
 import PostHogLayout from '../../../layouts/PostHogLayout.astro';
@@ -35,6 +35,20 @@ export const blogEntries = [...allPosts].sort((a, b) => {
 });
 
 <PostHogLayout />
+<div aria-hidden="true"
+  style="
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    filter: blur(70px);
+    background-image:
+      radial-gradient(60vmax 60vmax at 35% 45%, rgba(0,136,255,0.55), transparent 60%),
+      radial-gradient(calc(60vmax * .85) calc(60vmax * .85) at 70% 60%, rgba(0,220,180,0.45), transparent 65%),
+      radial-gradient(calc(60vmax * .9) calc(60vmax * .9) at 60% 40%, rgba(0,90,200,0.40), transparent 65%);
+  "
+></div>
 <div class="blog-grid" style="margin-top: 1.5rem;">
   {blogEntries.map((post) => (
     <div class="blog-card">
@@ -54,3 +68,53 @@ export const blogEntries = [...allPosts].sort((a, b) => {
     </div>
   ))}
 </div>
+
+<br />
+
+<section
+  style="
+    position: relative;
+    margin: 64px 0 24px 0;
+    padding: 64px 16px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(1200px 400px at 50% -10%, rgba(32,178,170,0.20), rgba(0,0,0,0));
+    text-align: center;
+  "
+>
+  <h2 style="margin: 0 0 12px 0; font-size: 1.9rem; font-weight: 700;">
+    Try SecureFlow in your editor
+  </h2>
+  <p style="margin: 0 0 28px 0; opacity: 0.9;">
+    Install the SecureFlow extension for VS Code or Open VSX and start analyzing your code in seconds.
+  </p>
+  <div style="display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+    <a
+      href="https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        display:inline-flex; align-items:center; justify-content:center;
+        padding: 10px 16px; border-radius: 10px; font-weight: 600;
+        background: var(--sl-color-accent); color: var(--sl-color-bg);
+        text-decoration:none; min-width: 220px;
+      "
+    >
+      Visual Studio Code
+    </a>
+    <a
+      href="https://open-vsx.org/extension/codepathfinder/secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        display:inline-flex; align-items:center; justify-content:center;
+        padding: 10px 16px; border-radius: 10px; font-weight: 600;
+        background: transparent; color: var(--sl-color-accent);
+        border: 1px solid var(--sl-color-accent);
+        text-decoration:none; min-width: 220px;
+      "
+    >
+      Open VSX
+    </a>
+  </div>
+</section>
