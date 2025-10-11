@@ -61,15 +61,15 @@ public static void main(String[] args) {
 ## Supported Platforms
 </div>
 
-<div style="display: flex; justify-content: space-around; align-items: center; margin: 40px 0;">
-  <Icon name="seti:docker" color="goldenrod" size="4rem" />
-  <Icon name="seti:github" color="goldenrod" size="3rem" />
-  <Icon name="bitbucket" color="goldenrod" size="3rem" />
-  <Icon name="gitlab" color="goldenrod" size="3rem" />
+<div class="platform-icons" style="display: flex; justify-content: space-around; align-items: center; margin: 40px 0;">
+  <Icon name="seti:docker" color="currentColor" size="4rem" />
+  <Icon name="seti:github" color="currentColor" size="3rem" />
+  <Icon name="bitbucket" color="currentColor" size="3rem" />
+  <Icon name="gitlab" color="currentColor" size="3rem" />
   <svg width="4rem" height="4rem" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path fill="goldenrod" d="M17,4v9.74l-4,3.28-6.2-2.26V17L3.29,12.41l10.23.8V4.44Zm-3.41.49L7.85,1V3.29L2.58,4.84,1,6.87v4.61l2.26,1V6.57Z"/>
+    <path fill="currentColor" d="M17,4v9.74l-4,3.28-6.2-2.26V17L3.29,12.41l10.23.8V4.44Zm-3.41.49L7.85,1V3.29L2.58,4.84,1,6.87v4.61l2.26,1V6.57Z"/>
   </svg>
-  <Icon name="seti:npm" color="goldenrod" size="4rem" />
+  <Icon name="seti:npm" color="currentColor" size="4rem" />
 </div>
 
 <br />
@@ -137,3 +137,53 @@ public static void main(String[] args) {
     </div>
   ))}
 </div>
+
+<br />
+
+<section
+  style="
+    position: relative;
+    margin: 64px 0 24px 0;
+    padding: 64px 16px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(1200px 400px at 50% -10%, rgba(32,178,170,0.20), rgba(0,0,0,0));
+    text-align: center;
+  "
+>
+  <h2 style="margin: 0 0 12px 0; font-size: 1.9rem; font-weight: 700;">
+    Try SecureFlow in your editor
+  </h2>
+  <p style="margin: 0 0 28px 0; opacity: 0.9;">
+    Install the SecureFlow extension for VS Code or Open VSX and start analyzing your code in seconds.
+  </p>
+  <div style="display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+    <a
+      href="https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        display:inline-flex; align-items:center; justify-content:center;
+        padding: 10px 16px; border-radius: 10px; font-weight: 600;
+        background: var(--sl-color-accent); color: var(--sl-color-bg);
+        text-decoration:none; min-width: 220px;
+      "
+    >
+      Visual Studio Code
+    </a>
+    <a
+      href="https://open-vsx.org/extension/codepathfinder/secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        display:inline-flex; align-items:center; justify-content:center;
+        padding: 10px 16px; border-radius: 10px; font-weight: 600;
+        background: transparent; color: var(--sl-color-accent);
+        border: 1px solid var(--sl-color-accent);
+        text-decoration:none; min-width: 220px;
+      "
+    >
+      Open VSX
+    </a>
+  </div>
+</section>
