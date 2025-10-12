@@ -1,165 +1,658 @@
 ---
-title: SecureFlow AI - Your AI Security Copilot
+title: SecureFlow AI - AI-Powered Security Analysis
 description: AI-powered security analysis for smarter, safer code. Catch vulnerabilities early in your SDLC with 13+ AI models including Claude, GPT, Gemini, and Grok.
 template: splash
 hero:
-  tagline: "Your AI Security Copilot for Smarter, Safer Code"
+  tagline: "AI-Powered Security Analysis for Modern Development Teams"
   actions:
-    - text: Install CLI
-      link: "https://www.npmjs.com/package/@codepathfinder/secureflow-cli"
-      icon: right-arrow
+    - text: Install VS Code Extension
+      link: "https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+      icon: rocket
       variant: primary
       target: _blank
-    - text: VS Code Extension
-      link: "https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
-      icon: external
     - text: Open VSX
       link: "https://open-vsx.org/extension/codepathfinder/secureflow"
       icon: external
+      target: _blank
+    - text: Install CLI
+      link: "https://www.npmjs.com/package/@codepathfinder/secureflow-cli"
+      icon: right-arrow
+      target: _blank
     - text: View on GitHub
       link: https://github.com/shivasurya/code-pathfinder/tree/main/extension/secureflow
       icon: github
+      target: _blank
 ---
 
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
+import PostHogLayout from '../../layouts/PostHogLayout.astro';
+import '../../styles/motion-gradient.css';
+import '../../styles/feature-cards.css';
 
-<div class="secureflow-hero">
-  <div class="gradient-bg"></div>
-  <div class="hero-content">
-    <div class="hero-badge">
-      <span class="badge-text">🛡️ AI-Powered Security Analysis</span>
+<PostHogLayout>
+</PostHogLayout>
+
+<div class="motion-gradient"></div>
+
+<section
+  style="
+    max-width: 1000px;
+    margin: 64px auto;
+    padding: 48px 48px 100px 48px;
+    background: #fff;
+    border-radius: 16px;
+    border: 2px solid #e0e0e0;
+    position: relative;
+    overflow: hidden;
+  "
+>
+  {/* Ground line - Chrome style */}
+  <div style="position: absolute; bottom: 80px; left: 0; right: 0; height: 2px; background: #535353;"></div>
+  
+  {/* Chrome T-Rex - using actual image, jumps when obstacles approach */}
+  <div class="chrome-dino" style="position: absolute; bottom: 80px; left: 80px; z-index: 2;">
+    <div style="text-align: center;">
+      <div style="margin-bottom: 4px; font-size: 0.65rem; font-weight: 700; color: #535353; font-family: monospace;">SAST</div>
+      <img src="/assets/Dead_Chrome_T-Rex.webp.png" alt="T-Rex" style="width: 50px; height: auto; display: block; image-rendering: pixelated; animation: dino-jump-timed 4s ease-in-out infinite;"/>
     </div>
-    <h1 class="hero-title">
-      Catch Security Vulnerabilities 
+  </div>
+  
+  {/* Proactive Mode: Dinosaur shoots fireballs at vulnerabilities */}
+  <div id="dino-fireball" style="position: absolute; bottom: 90px; left: 130px; display: none; z-index: 3;">
+    <img src="/assets/fireball-min.jpg" alt="Attack" style="width: 45px; height: auto; display: block; image-rendering: pixelated; animation: dino-shoot 1.5s linear infinite;"/>
+  </div>
+  
+  {/* Cactus obstacles - randomized sizes and vulnerabilities */}
+  <div style="position: absolute; bottom: 80px; right: -100px; animation: obstacle-move 4s linear infinite;">
+    <div style="text-align: center;">
+      <div style="margin-bottom: 4px; font-size: 0.6rem; font-weight: 600; color: #535353; font-family: monospace;">CSRF</div>
+      <img src="/assets/3_Cactus_Chrome_Dino.webp.png" alt="Cactus" style="width: 25px; height: auto; display: block; image-rendering: pixelated;"/>
+    </div>
+  </div>
+  
+  <div style="position: absolute; bottom: 80px; right: -100px; animation: obstacle-move 4s linear infinite 1.3s;">
+    <div style="text-align: center;">
+      <div style="margin-bottom: 4px; font-size: 0.6rem; font-weight: 600; color: #535353; font-family: monospace;">XSS</div>
+      <img src="/assets/3_Cactus_Chrome_Dino.webp.png" alt="Cactus" style="width: 45px; height: auto; display: block; image-rendering: pixelated;"/>
+    </div>
+  </div>
+  
+  <div style="position: absolute; bottom: 80px; right: -100px; animation: obstacle-move 4s linear infinite 2.6s;">
+    <div style="text-align: center;">
+      <div style="margin-bottom: 4px; font-size: 0.6rem; font-weight: 600; color: #535353; font-family: monospace;">SQL Inject</div>
+      <img src="/assets/3_Cactus_Chrome_Dino.webp.png" alt="Cactus" style="width: 32px; height: auto; display: block; image-rendering: pixelated;"/>
+    </div>
+  </div>
+  
+  {/* Dimming overlay */}
+  <div id="game-dim" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: none; z-index: 100;"></div>
+  
+  {/* Falling LLM fireballs - multiple fireballs */}
+  <div id="fireball-game" style="position: absolute; top: 20px; right: 400px; animation: fireball-fall-single 10s ease-in forwards;">
+    <div style="text-align: center;">
+      <img src="/assets/fireball-min.jpg" alt="LLM Fireball" style="width: 50px; height: auto; display: block; image-rendering: pixelated;"/>
+      <div style="font-size: 0.6rem; font-weight: 700; color: #ff6b35; font-family: monospace; margin-top: 4px;">AI</div>
+    </div>
+  </div>
+  
+  <div style="position: absolute; top: 20px; right: 200px; animation: fireball-fall-single 10s ease-in forwards 1s;">
+    <div style="text-align: center;">
+      <img src="/assets/fireball-min.jpg" alt="LLM Fireball" style="width: 45px; height: auto; display: block; image-rendering: pixelated;"/>
+      <div style="font-size: 0.6rem; font-weight: 700; color: #ff6b35; font-family: monospace; margin-top: 4px;">LLM</div>
+    </div>
+  </div>
+  
+  <div style="position: absolute; top: 20px; right: 600px; animation: fireball-fall-single 10s ease-in forwards 1.5s;">
+    <div style="text-align: center;">
+      <img src="/assets/fireball-min.jpg" alt="LLM Fireball" style="width: 40px; height: auto; display: block; image-rendering: pixelated;"/>
+      <div style="font-size: 0.6rem; font-weight: 700; color: #ff6b35; font-family: monospace; margin-top: 4px;">GPT</div>
+    </div>
+  </div>
+  
+  {/* Game Over message */}
+  <div id="game-over" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; z-index: 200;">
+    <div style="text-align: center; background: rgba(0,0,0,0.95); padding: 32px 56px; border-radius: 12px; border: 3px solid #ff6b35; box-shadow: 0 0 30px rgba(255,107,53,0.5);">
+      <div style="font-size: 2.5rem; font-weight: 800; color: #ff6b35; font-family: monospace; margin-bottom: 8px;">GAME OVER</div>
+      <div style="font-size: 1rem; color: #fff; font-family: monospace;">AI-Powered Security Arrives</div>
+    </div>
+  </div>
+  
+  <div style="position: relative; z-index: 0; margin-top: 20px;">
+    <div style="text-align: center; margin-bottom: 140px;">
+      <h2 style="margin: 0 0 16px 0; font-size: 2rem; font-weight: 700; color: #535353;">
+        The Security Evolution: From Reactive to Proactive
+      </h2>
+      
+      {/* Era Toggle Buttons - positioned below headline */}
+      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; align-items: center;">
+        <button id="btn-pre-llm" onclick="switchEra('pre')" style="padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; background: #535353; color: #fff; border: 2px solid #535353; cursor: pointer; height: 44px; display: flex; align-items: center; justify-content: center; margin-top: 15px;">
+          Reactive Mode
+        </button>
+        <button id="btn-post-llm" onclick="switchEra('post')" style="padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; background: transparent; color: #535353; border: 2px solid #535353; cursor: pointer; height: 44px; display: flex; align-items: center; justify-content: center;">
+          Proactive Mode
+        </button>
+      </div>
+      
+      <p style="margin: 0; font-size: 1.15rem; line-height: 1.7; color: #424242; max-width: 700px; margin-left: auto; margin-right: auto;">
+        Traditional SAST jumps over vulnerabilities one at a time with <strong>80% false positives</strong>. Meanwhile, AI-powered analysis <strong>understands your codebase</strong>, detects real vulnerabilities, catches edge cases, eliminates false positives, and <strong>helps you ship secure code</strong> in minutes.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+{`
+  @keyframes dino-jump-timed {
+    0% { transform: translateY(0); }
+    8% { transform: translateY(-65px); }
+    16% { transform: translateY(0); }
+    32.5% { transform: translateY(-65px); }
+    40.5% { transform: translateY(0); }
+    65% { transform: translateY(-65px); }
+    73% { transform: translateY(0); }
+    100% { transform: translateY(0); }
+  }
+  
+  @keyframes obstacle-move {
+    0% { right: -100px; }
+    100% { right: 110%; }
+  }
+  
+  @keyframes fireball-fall-single {
+    0% { 
+      transform: translate(0, 0) rotate(0deg);
+      opacity: 1;
+    }
+    85% { 
+      transform: translate(-320px, 340px) rotate(-30deg);
+      opacity: 1;
+    }
+    100% { 
+      transform: translate(-320px, 340px) rotate(-30deg);
+      opacity: 0;
+    }
+  }
+  
+  @keyframes dino-shoot {
+    0% { 
+      transform: translateX(0) rotate(-10deg);
+      opacity: 1;
+    }
+    100% { 
+      transform: translateX(600px) rotate(-10deg);
+      opacity: 0.3;
+    }
+  }
+  
+  @keyframes cactus-disappear {
+    0% { 
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% { 
+      opacity: 0.5;
+      transform: scale(0.8);
+    }
+    100% { 
+      opacity: 0;
+      transform: scale(0);
+    }
+  }
+  
+  /* Icon theme switching */
+  @media (prefers-color-scheme: light) {
+    .icon-dark-mode {
+      display: none !important;
+    }
+    .icon-light-mode {
+      display: block !important;
+    }
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .icon-light-mode {
+      display: none !important;
+    }
+    .icon-dark-mode {
+      display: block !important;
+    }
+  }
+`}
+</style>
+
+<script>
+{`
+  if (typeof window !== 'undefined') {
+    // Global mode state
+    window.currentEra = 'pre';
+    
+    // Switch between Reactive and Proactive modes
+    window.switchEra = function(era) {
+      window.currentEra = era;
+      
+      const btnPre = document.getElementById('btn-pre-llm');
+      const btnPost = document.getElementById('btn-post-llm');
+      const dinoFireball = document.getElementById('dino-fireball');
+      const fallingFireball = document.getElementById('fireball-game');
+      
+      if (era === 'pre') {
+        // Reactive Mode: Traditional SAST jumping over threats
+        btnPre.style.background = '#535353';
+        btnPre.style.color = '#fff';
+        btnPost.style.background = 'transparent';
+        btnPost.style.color = '#535353';
+        
+        // Change T-Rex label to SAST
+        const dinoLabel = document.querySelector('.chrome-dino div[style*="margin-bottom"]');
+        if (dinoLabel) dinoLabel.textContent = 'SAST';
+        
+        // Hide dinosaur shooting fireball
+        if (dinoFireball) dinoFireball.style.display = 'none';
+        
+        // Show falling fireball (game over)
+        if (fallingFireball) fallingFireball.style.display = 'block';
+        
+      } else {
+        // Proactive Mode: AI-powered targeting and elimination
+        btnPost.style.background = '#535353';
+        btnPost.style.color = '#fff';
+        btnPre.style.background = 'transparent';
+        btnPre.style.color = '#535353';
+        
+        // Change T-Rex label to SecureFlow
+        const dinoLabel = document.querySelector('.chrome-dino div[style*="margin-bottom"]');
+        if (dinoLabel) dinoLabel.textContent = 'SecureFlow';
+        
+        // Show dinosaur shooting fireball
+        if (dinoFireball) dinoFireball.style.display = 'block';
+        
+        // Hide falling fireball
+        if (fallingFireball) fallingFireball.style.display = 'none';
+        
+        // Hide game over if showing
+        const gameOver = document.getElementById('game-over');
+        const gameDim = document.getElementById('game-dim');
+        if (gameOver) gameOver.style.display = 'none';
+        if (gameDim) gameDim.style.display = 'none';
+        
+        // Resume game if paused
+        resumeGame();
+        
+        // Start making cacti disappear when hit
+        startPostLLMMode();
+      }
+    };
+    
+    function startPostLLMMode() {
+      // Make entire cactus container (including label) disappear when dinosaur shoots
+      setTimeout(() => {
+        const allDivs = document.querySelectorAll('div[style*="animation"]');
+        allDivs.forEach(div => {
+          const style = div.getAttribute('style');
+          if (style && style.includes('obstacle-move')) {
+            // Find the inner container with both label and image
+            const innerContainer = div.querySelector('div[style*="text-align: center"]');
+            if (innerContainer) {
+              innerContainer.style.animation = 'cactus-disappear 0.5s ease-out forwards';
+              setTimeout(() => {
+                innerContainer.style.animation = '';
+                innerContainer.style.opacity = '1';
+                innerContainer.style.transform = 'scale(1)';
+              }, 2000);
+            }
+          }
+        });
+        
+        // Repeat for continuous effect
+        if (window.currentEra === 'post') {
+          setTimeout(startPostLLMMode, 2000);
+        }
+      }, 500);
+    }
+    
+    function pauseGame() {
+      // Pause T-Rex animation
+      const dino = document.querySelector('.chrome-dino img');
+      if (dino) {
+        dino.style.animationPlayState = 'paused';
+      }
+      
+      // Pause all cactus animations - find all animated divs
+      const allDivs = document.querySelectorAll('div[style*="animation"]');
+      allDivs.forEach(div => {
+        const style = div.getAttribute('style');
+        if (style && style.includes('obstacle-move')) {
+          div.style.animationPlayState = 'paused';
+        }
+      });
+    }
+    
+    function resumeGame() {
+      // Resume T-Rex animation
+      const dino = document.querySelector('.chrome-dino img');
+      if (dino) {
+        dino.style.animationPlayState = 'running';
+      }
+      
+      // Resume all cactus animations
+      const allDivs = document.querySelectorAll('div[style*="animation"]');
+      allDivs.forEach(div => {
+        const style = div.getAttribute('style');
+        if (style && style.includes('obstacle-move')) {
+          div.style.animationPlayState = 'running';
+        }
+      });
+    }
+    
+    function restartGame() {
+      const fireball = document.getElementById('fireball-game');
+      const gameOver = document.getElementById('game-over');
+      const gameDim = document.getElementById('game-dim');
+      
+      if (fireball && gameOver && gameDim) {
+        // Hide game over message and dimming
+        gameOver.style.display = 'none';
+        gameDim.style.display = 'none';
+        
+        // Resume game animations
+        resumeGame();
+        
+        // Reset fireball
+        fireball.style.animation = 'none';
+        fireball.style.opacity = '1';
+        
+        // Trigger reflow to restart animation
+        void fireball.offsetWidth;
+        
+        // Restart animation
+        fireball.style.animation = 'fireball-fall-single 10s ease-in forwards';
+        
+        // Schedule next game over (only in Reactive mode)
+        setTimeout(() => {
+          if (window.currentEra === 'pre') {
+            // Pause game
+            pauseGame();
+            
+            // Show game over
+            gameDim.style.display = 'block';
+            gameOver.style.display = 'block';
+            
+            setTimeout(restartGame, 2000);
+          } else {
+            // Proactive mode: no game over, continuous elimination
+            setTimeout(restartGame, 0);
+          }
+        }, 10000);
+      }
+    }
+    
+    // Start the game cycle
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const gameOver = document.getElementById('game-over');
+        const gameDim = document.getElementById('game-dim');
+        if (gameOver && gameDim) {
+          // Only show game over in Reactive mode
+          if (window.currentEra === 'pre') {
+            // Pause game
+            pauseGame();
+            
+            // Show game over
+            gameDim.style.display = 'block';
+            gameOver.style.display = 'block';
+            
+            setTimeout(restartGame, 2000);
+          }
+        }
+      }, 10000);
+    });
+  }
+`}
+</script>
+
+<section
+  style="
+    position: relative;
+    margin: 48px 0 64px 0;
+    padding: 48px 24px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(1200px 400px at 50% -10%, rgba(32,178,170,0.20), rgba(0,0,0,0));
+    text-align: center;
+  "
+>
+  <h2 style="margin: 0 0 12px 0; font-size: 1.9rem; font-weight: 700;">
+    Get Started in 60 Seconds
+  </h2>
+  <p style="margin: 0 0 32px 0; opacity: 0.9; font-size: 1.1rem;">
+    Choose your preferred installation method
+  </p>
+  
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto 32px auto;">
+    <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: left; display: flex; flex-direction: column; min-height: 220px; margin-top: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+        <Icon name="seti:vscode" size="1.2rem" />
+        VS Code Extension
+      </h3>
+      <p style="margin: 0 0 auto 0; opacity: 0.8; font-size: 0.95rem; padding-bottom: 20px;">
+        Native integration with real-time feedback in your editor
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <a
+          href="https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+            background: var(--sl-color-accent); color: var(--sl-color-bg);
+            text-decoration: none;
+          "
+        >
+          Install on VS Code
+        </a>
+        <a
+          href="https://open-vsx.org/extension/codepathfinder/secureflow"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+            background: transparent; color: var(--sl-color-accent);
+            border: 1px solid var(--sl-color-accent);
+            text-decoration: none;
+          "
+        >
+          Open VSX
+        </a>
+      </div>
+    </div>
+    
+    <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: left; display: flex; flex-direction: column; min-height: 220px; margin-top: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+        <Icon name="seti:shell" size="1.2rem" />
+        CLI Tool
+      </h3>
+      <p style="margin: 0 0 auto 0; opacity: 0.8; font-size: 0.95rem; padding-bottom: 20px;">
+        Run security scans from terminal or CI/CD pipelines
+      </p>
+      <div style="margin-bottom: 8px;">
+        <div style="position: relative; background: rgba(0,0,0,0.4); padding: 12px 48px 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+          <code style="font-family: monospace; font-size: 0.9rem; color: rgba(255,255,255,0.95); background: none;">npm i -g @codepathfinder/secureflow-cli</code>
+          <button
+            class="copy-npm-btn"
+            data-copy-text="npm i -g @codepathfinder/secureflow-cli"
+            style="
+              position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+              background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+              padding: 4px 8px; border-radius: 4px; cursor: pointer;
+              font-size: 1rem; transition: all 0.2s;
+            "
+          >
+            📋
+          </button>
+        </div>
+      </div>
+      <a
+        href="https://www.npmjs.com/package/@codepathfinder/secureflow-cli"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="
+          display: inline-flex; align-items: center; gap: 4px;
+          color: var(--sl-color-accent); text-decoration: none; font-size: 0.9rem;
+        "
+      >
+        View on npm →
+      </a>
+    </div>
+  </div>
+  
+  <div style="display: inline-block; padding: 12px 20px; background: rgba(255,193,7,0.15); border-radius: 8px; border: 1px solid rgba(255,193,7,0.3); margin-top: 20px;">
+    <span style="font-size: 0.95rem;">⚡ Both options include support for Claude 4.5, GPT-4o, Gemini 2.5 Pro, Grok 4, and more!</span>
+  </div>
+</section>
+
+<section
+  style="
+    position: relative;
+    margin: -40px 0 64px 0;
+    padding: 48px 24px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(1200px 400px at 50% -10%, rgba(138,43,226,0.25), rgba(0,0,0,0));
+    text-align: center;
+    border: 1px solid rgba(138,43,226,0.2);
+  "
+>
+  <div style="max-width: 900px; margin: 0 auto;">
+    <div style="display: inline-block; padding: 6px 16px; border-radius: 20px; background: rgba(138,43,226,0.15); margin-bottom: 20px; border: 1px solid rgba(138,43,226,0.3);">
+      <span style="font-size: 0.9rem; font-weight: 600;">🛡️ Trusted by 600+ Repositories</span>
+    </div>
+    
+    <h1 style="margin: 0 0 16px 0; font-size: 2.5rem; font-weight: 800; line-height: 1.2;">
+      Catch Vulnerabilities Before<br/>They Reach <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Production</span>
     </h1>
-    <p class="hero-subtitle">
-      SecureFlow AI integrates seamlessly into your development workflow, providing real-time security analysis 
-      with advanced AI models. Perfect for developers using Windsurf, Claude Code, Cursor, Cline, or any AI-powered IDE.
+    
+    <p style="margin: 0 0 32px 0; font-size: 1.25rem; opacity: 0.9; max-width: 700px; margin-left: auto; margin-right: auto; line-height: 1.6;">
+      AI-powered security analysis right in your editor. Choose from 13+ advanced models including Claude 4.5, GPT-4o, Gemini 2.5 Pro, and Grok 4. Get instant insights as you code—no waiting for security team reviews.
     </p>
-    <div class="hero-stats">
-      <div class="stat">
-        <div class="stat-number">13+</div>
-        <div class="stat-label">AI Models</div>
+    
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; max-width: 600px; margin: 40px auto 0 auto; align-items: end;">
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: 800; color: #667eea; margin-bottom: 8px; padding-top: 10px;">13+</div>
+        <div style="opacity: 0.8; font-size: 0.95rem;">AI Models</div>
       </div>
-      <div class="stat">
-        <div class="stat-number">600+</div>
-        <div class="stat-label">Repos Scanned</div>
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: 800; color: #764ba2; margin-bottom: 8px;">600+</div>
+        <div style="opacity: 0.8; font-size: 0.95rem;">Repos Scanned</div>
       </div>
-      <div class="stat">
-        <div class="stat-number">&lt;2 Min</div>
-        <div class="stat-label">Avg Scan Time</div>
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: 800; color: #667eea; margin-bottom: 8px;">&lt;2min</div>
+        <div style="opacity: 0.8; font-size: 0.95rem;">Setup Time</div>
       </div>
     </div>
   </div>
+</section>
+
+<br />
+<div style="text-align: center; margin-top: 40px;">
+## Why SecureFlow AI
 </div>
 
-
-<div class="features-showcase">
-  <div class="container">
-    <h2 class="section-title">
-      <span class="gradient-text">Powerful Features</span> for Modern Development
-    </h2>
-    <p class="section-subtitle">
-      Built for developers who use AI tools and want to catch security issues early in the SDLC
-    </p>
-    
-    <CardGrid stagger>
-      <Card title="🤖 13+ AI Models" icon="rocket">
-        Support for Claude 4.5 Sonnet, GPT-4o, Gemini 2.5 Pro, Grok 4 Fast Reasoning, and more. 
-        Choose the best model for your security analysis needs.
-      </Card>
-      
-      <Card title="🔍 Intelligent File Discovery" icon="magnifier">
-        Smart project analysis with iterative file request system. AI makes targeted requests 
-        to understand your codebase structure and identify security hotspots.
-      </Card>
-      
-      <Card title="🎯 Comprehensive Scanning" icon="approve-check">
-        Full project security analysis with context-aware insights. Detects OWASP Top 10 
-        vulnerabilities, injection flaws, authentication issues, and more.
-      </Card>
-      
-      <Card title="📊 Multiple Output Formats" icon="document">
-        Export results in text, JSON, or DefectDojo format. Perfect for CI/CD integration 
-        and security team workflows.
-      </Card>
-      
-      <Card title="🏗️ Project Profiling" icon="puzzle">
-        Technology stack detection and application type identification. Understands your 
-        project structure for better analysis.
-      </Card>
-      
-      <Card title="🎨 Beautiful Interface" icon="star">
-        Claude-style terminal interface with colored output, progress indicators, 
-        and intuitive VS Code integration.
-      </Card>
-    </CardGrid>
+<div class="feat-grid" style="align-items: stretch;">
+  <div class="feat-card" style="margin-top: 15px;">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="rocket" size="1.15rem" color="currentColor" />
+      <h4>13+ AI Models</h4>
+    </div>
+    <p>Support for Claude 4.5 Sonnet, GPT-4o, Gemini 2.5 Pro, Grok 4 Fast Reasoning, and more. Choose the best model for your security analysis needs.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="magnifier" size="1.15rem" color="currentColor" />
+      <h4>Intelligent File Discovery</h4>
+    </div>
+    <p>Smart project analysis with iterative file request system. AI makes targeted requests to understand your codebase structure and identify security hotspots.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="approve-check" size="1.15rem" color="currentColor" />
+      <h4>Comprehensive Scanning</h4>
+    </div>
+    <p>Full project security analysis with context-aware insights. Detects OWASP Top 10 vulnerabilities, injection flaws, authentication issues, and more.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="document" size="1.15rem" color="currentColor" />
+      <h4>Multiple Output Formats</h4>
+    </div>
+    <p>Export results in text, JSON, or DefectDojo format. Perfect for CI/CD integration and security team workflows.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="puzzle" size="1.15rem" color="currentColor" />
+      <h4>Project Profiling</h4>
+    </div>
+    <p>Technology stack detection and application type identification. Understands your project structure for better analysis.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="star" size="1.15rem" color="currentColor" />
+      <h4>Beautiful Interface</h4>
+    </div>
+    <p>Claude-style terminal interface with colored output, progress indicators, and intuitive VS Code integration.</p>
   </div>
 </div>
 
-<div class="ai-models-section">
-  <div class="container">
-    <h2 class="section-title">
-      Choose Your <span class="gradient-text">AI Model</span>
-    </h2>
-    <p class="section-subtitle">
-      SecureFlow AI supports the latest and most powerful AI models for security analysis
-    </p>
-    
-    <div class="models-grid">
-      <div class="model-card">
-        <div class="model-header">
-          <div class="model-logo">🧠</div>
-          <div class="model-info">
-            <h3>Anthropic Claude</h3>
-          </div>
-        </div>
-        <ul class="model-list">
-          <li>Claude 4.5 Sonnet (Latest)</li>
-          <li>Claude 3.7 Sonnet</li>
-          <li>Claude 3.5 haiku</li>
-        </ul>
-      </div>
-      
-      <div class="model-card">
-        <div class="model-header">
-          <div class="model-logo">⚡</div>
-          <div class="model-info">
-            <h3>OpenAI</h3>
-          </div>
-        </div>
-        <ul class="model-list">
-          <li>GPT-4o</li>
-          <li>GPT-4o Mini</li>
-          <li>o1 & o1-mini</li>
-          <li>o3-mini (Latest)</li>
-        </ul>
-      </div>
-      
-      <div class="model-card">
-        <div class="model-header">
-          <div class="model-logo">🔮</div>
-          <div class="model-info">
-            <h3>Google Gemini</h3>
-          </div>
-        </div>
-        <ul class="model-list">
-          <li>Gemini 2.5 Pro</li>
-          <li>Gemini 2.5 Flash</li>
-        </ul>
-      </div>
-      
-      <div class="model-card">
-        <div class="model-header">
-          <div class="model-logo">🚀</div>
-          <div class="model-info">
-            <h3>xAI Grok</h3>
-          </div>
-        </div>
-        <ul class="model-list">
-          <li>Grok 4 Fast Reasoning</li>
-        </ul>
-      </div>
+<br/>
+<br/>
+
+<br/>
+<div style="text-align: center; margin-bottom: 48px;">
+  <h2 style="margin: 0 0 12px 0; font-size: 2rem; font-weight: 700;">
+    Choose Your AI Model
+  </h2>
+  <p style="margin: 0; opacity: 0.8; font-size: 1.1rem;">
+    Support for the latest and most powerful AI models
+  </p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; max-width: 1000px; ">
+  <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;margin-top:15px">
+    <div style="font-size: 2.5rem; margin-bottom: 12px;">🧠</div>
+    <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 600;">Anthropic Claude</h3>
+    <div style="font-size: 0.9rem; opacity: 0.8; line-height: 1.8;">
+      <div>Claude 4.5 Sonnet</div>
+      <div>Claude 3.7 Sonnet</div>
+      <div>Claude 3.5 Haiku</div>
+    </div>
+  </div>
+  
+  <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+    <div style="font-size: 2.5rem; margin-bottom: 12px;">⚡</div>
+    <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 600;">OpenAI</h3>
+    <div style="font-size: 0.9rem; opacity: 0.8; line-height: 1.8;">
+      <div>GPT-4o</div>
+      <div>GPT-4o Mini</div>
+      <div>o1 & o1-mini</div>
+      <div>o3-mini</div>
+    </div>
+  </div>
+  
+  <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+    <div style="font-size: 2.5rem; margin-bottom: 12px;">🔮</div>
+    <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 600;">Google Gemini</h3>
+    <div style="font-size: 0.9rem; opacity: 0.8; line-height: 1.8;">
+      <div>Gemini 2.5 Pro</div>
+      <div>Gemini 2.5 Flash</div>
+    </div>
+  </div>
+  
+  <div style="background: rgba(255,255,255,0.05); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center;">
+    <div style="font-size: 2.5rem; margin-bottom: 12px;">🚀</div>
+    <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 600;">xAI Grok</h3>
+    <div style="font-size: 0.9rem; opacity: 0.8; line-height: 1.8;">
+      <div>Grok 4 Fast Reasoning</div>
     </div>
   </div>
 </div>
@@ -167,27 +660,35 @@ import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 <div class="workflow-section">
   <div class="container">
     <h2 class="section-title">
-      Perfect for <span class="gradient-text">AI-Powered</span> Development
+      Perfect for AI-Powered Development
     </h2>
     <p class="section-subtitle">
       Designed for developers using modern AI coding tools
     </p>
     
     <div class="workflow-grid">
-      <div class="workflow-card">
-        <div class="workflow-icon">🌊</div>
+      <div class="workflow-card" style="margin-top:15px">
+        <div class="workflow-icon" style="display: flex; justify-content: center; align-items: center;">
+          <img src="/assets/windsurf.svg" alt="Windsurf" class="icon-dark-mode" style="width: 48px; height: 48px; display: block;" />
+          <img src="/assets/windsurf-light-mode.svg" alt="Windsurf" class="icon-light-mode" style="width: 48px; height: 48px; display: none;" />
+        </div>
         <h3>Windsurf IDE</h3>
         <p>Seamless integration with Windsurf's AI-powered development environment</p>
       </div>
       
       <div class="workflow-card">
-        <div class="workflow-icon">🤖</div>
+        <div class="workflow-icon" style="display: flex; justify-content: center; align-items: center;">
+          <img src="/assets/claude-color.svg" alt="Claude" style="width: 48px; height: 48px;" />
+        </div>
         <h3>Claude Code</h3>
         <p>Perfect companion for Claude-powered coding sessions and code reviews</p>
       </div>
       
       <div class="workflow-card">
-        <div class="workflow-icon">📝</div>
+        <div class="workflow-icon" style="display: flex; justify-content: center; align-items: center;">
+          <img src="/assets/cursor.svg" alt="Cursor" class="icon-light-mode" style="width: 48px; height: 48px; display: none;" />
+          <img src="/assets/cursor-dark-mode.svg" alt="Cursor" class="icon-dark-mode" style="width: 48px; height: 48px; display: block;" />
+        </div>
         <h3>Cursor IDE</h3>
         <p>Enhance your Cursor workflow with automated security analysis</p>
       </div>
@@ -199,14 +700,14 @@ import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 <div class="security-benefits-section">
   <div class="container">
     <h2 class="section-title">
-      Why <span class="gradient-text">Security First</span> Development Matters
+      Why Security First Development Matters
     </h2>
     <p class="section-subtitle">
       Catch vulnerabilities before they become expensive security incidents
     </p>
     
     <div class="benefits-grid">
-      <div class="benefit-card">
+      <div class="benefit-card" style="margin-top:15px">
         <div class="benefit-icon">⚡</div>
         <h3>Faster Development</h3>
         <p>Automated security analysis means no waiting for security team reviews. Ship features faster while maintaining security standards.</p>
@@ -231,116 +732,157 @@ import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 </div>
 
 
-<div class="comparison-section">
-  <div class="container">
-    <h2 class="section-title">
-      Why Choose <span class="gradient-text">SecureFlow AI</span>
-    </h2>
-    <p class="section-subtitle">
-      See how we compare to traditional security scanning tools
-    </p>
-    
-    <div class="comparison-table">
-      <div class="comparison-header">
-        <div class="feature-col">Feature</div>
-        <div class="secureflow-col">SecureFlow AI</div>
-        <div class="traditional-col">Traditional SAST</div>
-        <div class="manual-col">Manual Reviews</div>
-      </div>
-      
-      <div class="comparison-row">
-        <div class="feature-col">AI-Powered Analysis</div>
-        <div class="secureflow-col">✅ 13+ AI Models</div>
-        <div class="traditional-col">❌ Rule-based only</div>
-        <div class="manual-col">❌ Human-dependent</div>
-      </div>
-      
-      <div class="comparison-row">
-        <div class="feature-col">IDE Integration</div>
-        <div class="secureflow-col">✅ Native VS Code</div>
-        <div class="traditional-col">⚠️ Limited support</div>
-        <div class="manual-col">❌ No integration</div>
-      </div>
-      
-      <div class="comparison-row">
-        <div class="feature-col">Context Awareness</div>
-        <div class="secureflow-col">✅ Full codebase understanding</div>
-        <div class="traditional-col">❌ Single file analysis</div>
-        <div class="manual-col">✅ Human context</div>
-      </div>
-      
-      <div class="comparison-row">
-        <div class="feature-col">False Positive Rate</div>
-        <div class="secureflow-col">✅ &lt;5% (AI-filtered)</div>
-        <div class="traditional-col">❌ 30-50% typical</div>
-        <div class="manual-col">✅ Low (time-intensive)</div>
-      </div>
-      
-      <div class="comparison-row">
-        <div class="feature-col">Setup Time</div>
-        <div class="secureflow-col">✅ 2 minutes</div>
-        <div class="traditional-col">❌ Days/weeks</div>
-        <div class="manual-col">❌ Ongoing training</div>
-      </div>
-      
+
+<div style="text-align: center;">
+## Powerful Integrations
+</div>
+
+<div class="feat-grid">
+  <div class="feat-card" style="margin-top:15px">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="seti:config" size="1.15rem" color="currentColor" />
+      <h4>DefectDojo Integration</h4>
     </div>
+    <p>Direct integration with DefectDojo security platforms. Automatic engagement creation, severity mapping, and CWE/CVE detection.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="seti:pipeline" size="1.15rem" color="currentColor" />
+      <h4>CI/CD Ready</h4>
+    </div>
+    <p>JSON output format perfect for CI/CD integration. Works with GitHub Actions, GitLab CI, Jenkins, and more.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="seti:github" size="1.15rem" color="currentColor" />
+      <h4>Real-time Editor Feedback</h4>
+    </div>
+    <p>Get instant security insights as you code. Review git changes and profile workspaces directly from VS Code.</p>
+  </div>
+  <div class="feat-card">
+    <div class="feat-head">
+      <Icon class="feat-icon" name="open-book" size="1.15rem" color="currentColor" />
+      <h4>Comprehensive Reports</h4>
+    </div>
+    <p>Detailed security findings with severity ratings, descriptions, remediation steps, and actionable recommendations.</p>
   </div>
 </div>
 
-<div class="demo-section" id="demo">
-  <div class="container">
-    <h2 class="section-title">
-      See SecureFlow AI in <span class="gradient-text">Action</span>
-    </h2>
+<br />
+
+<section
+  style="
+    position: relative;
+    margin: 64px auto 24px auto;
+    padding: 64px 32px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(1200px 400px at 50% -10%, rgba(32,178,170,0.20), rgba(0,0,0,0));
+    text-align: center;
+    max-width: 1000px;
+  "
+>
+  <h2 style="margin: 0 0 16px 0; font-size: 2rem; font-weight: 700;">
+    Ready to Ship Secure Code Faster?
+  </h2>
+  <p style="margin: 0 0 40px 0; opacity: 0.9; font-size: 1.1rem; max-width: 600px; margin-left: auto; margin-right: auto; margin-bottom: 40px;">
+    Join 600+ repositories using SecureFlow AI. Start analyzing your code in under 2 minutes.
+  </p>
+  
+  <div style="display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap;">
+    <a
+      href="https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        padding: 12px 32px;
+        border-radius: 8px;
+        background: var(--sl-color-accent);
+        color: var(--sl-color-bg);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: opacity 0.2s;
+      "
+      onmouseover="this.style.opacity='0.9'"
+      onmouseout="this.style.opacity='1'"
+    >
+      VS Code Extension
+    </a>
     
-    <div class="demo-grid">
-      <div class="demo-card">
-        <h3>🔍 Quick Security Scan</h3>
-        <div class="demo-steps">
-          <div class="demo-step">
-            <strong>1. Scan your project with AI</strong>
-            <code>secureflow scan ./my-app</code>
-          </div>
-          <div class="demo-step">
-            <strong>2. Use specific AI model</strong>
-            <code>secureflow scan --model grok-4-fast-reasoning</code>
-          </div>
-          <div class="demo-step">
-            <strong>3. Export results</strong>
-            <code>secureflow scan --defectdojo --output findings.json</code>
-          </div>
-        </div>
-      </div>
-      
-      <div class="demo-card">
-        <h3>📊 Rich Output Formats</h3>
-        <div class="output-preview">
-          <div class="severity-item critical">🔴 Critical: SQL Injection vulnerability</div>
-          <div class="severity-item high">🟠 High: Hardcoded API key detected</div>
-          <div class="severity-item medium">🟡 Medium: Weak password validation</div>
-          <div class="severity-item low">🔵 Low: Missing security headers</div>
-        </div>
-      </div>
+    <a
+      href="https://open-vsx.org/extension/codepathfinder/secureflow"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="
+        padding: 12px 32px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.05);
+        color: var(--sl-color-white);
+        border: 2px solid var(--sl-color-accent);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: opacity 0.2s;
+      "
+      onmouseover="this.style.opacity='0.9'"
+      onmouseout="this.style.opacity='1'"
+    >
+      Open VSX
+    </a>
+  </div>
+  
+  <div style="margin-top: 40px; padding: 24px; background: rgba(0,0,0,0.2); border-radius: 12px; max-width: 600px; margin-left: auto; margin-right: auto; margin-top: 40px;">
+    <div style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Or install the CLI</div>
+    <div style="position: relative; background: rgba(0,0,0,0.3); padding: 14px 50px 14px 16px; border-radius: 8px; font-family: monospace; font-size: 1rem; color: var(--sl-color-white); display: flex; align-items: center;">
+      <span>npm i -g @codepathfinder/secureflow-cli</span>
+      <button
+        class="copy-npm-btn"
+        data-copy-text="npm i -g @codepathfinder/secureflow-cli"
+        style="
+          position: absolute; right: 12px;
+          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+          padding: 8px 12px; border-radius: 4px; cursor: pointer;
+          font-size: 0.9rem; transition: all 0.2s;
+          display: flex; align-items: center; justify-content: center;
+          height: 32px; width: 32px;
+        "
+      >
+        📋
+      </button>
     </div>
   </div>
-</div>
+</section>
 
-<div class="integration-section">
-  <div class="container">
-    <h2 class="section-title">
-      Powerful <span class="gradient-text">Integrations</span>
-    </h2>
-    
-    <CardGrid>
-      <Card title="🔗 DefectDojo Integration" icon="seti:config">
-        Direct integration with DefectDojo security platforms. Automatic engagement creation, 
-        severity mapping, and CWE/CVE detection.
-      </Card>
-      
-      <Card title="🚀 CI/CD Ready" icon="seti:pipeline">
-        JSON output format perfect for CI/CD integration. Works with GitHub Actions, 
-        GitLab CI, Jenkins, and more.
-      </Card>
-    </CardGrid>
-  </div>
-</div>
+<script>
+{`
+  // Handle copy button functionality
+  if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+      const copyButtons = document.querySelectorAll('.copy-npm-btn');
+      copyButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+          const textToCopy = button.getAttribute('data-copy-text');
+          try {
+            await navigator.clipboard.writeText(textToCopy);
+            button.textContent = '✓';
+            setTimeout(() => {
+              button.textContent = '📋';
+            }, 2000);
+          } catch (err) {
+            console.error('Failed to copy:', err);
+          }
+        });
+        
+        // Hover effects
+        button.addEventListener('mouseenter', () => {
+          button.style.background = 'rgba(255,255,255,0.2)';
+        });
+        button.addEventListener('mouseleave', () => {
+          button.style.background = 'rgba(255,255,255,0.1)';
+        });
+      });
+    });
+  }
+`}
+</script>
