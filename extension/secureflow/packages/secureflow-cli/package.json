@@ -1,6 +1,6 @@
 {
   "name": "@codepathfinder/secureflow-cli",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "AI-powered security analysis CLI tool with intelligent file discovery and comprehensive vulnerability scanning",
   "license": "AGPL-3.0",
   "bin": {
@@ -36,7 +36,7 @@
   "bugs": {
     "url": "https://github.com/shivasurya/code-pathfinder/issues"
   },
-  "homepage": "https://github.com/shivasurya/code-pathfinder#readme",
+  "homepage": "https://codepathfinder.dev/secureflow-ai",
   "author": "Shivasurya",
   "engines": {
     "node": ">=16.0.0"
