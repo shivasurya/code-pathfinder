@@ -1,5 +1,11 @@
 # SecureFlow Changelog
 
+## Version 0.0.14 - October 12, 2025
+
+### 🚀 What's New?
+
+- **Updates to AI Model Support**: Added support for GPT-5 model family and updated model context limits with latest specs
+
 ## Version 0.0.12 - September 30, 2025
 
 ### 🚀 What's New?
