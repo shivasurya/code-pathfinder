@@ -1,149 +1,234 @@
 {
-    "modelContextLimits": {
-      "openai": {
-        "gpt-4o": {
-          "contextWindow": 128000,
-          "maxOutput": 16384,
-          "description": "GPT-4o with 128K context window, 16K max output tokens"
-        },
-        "gpt-4o-mini": {
-          "contextWindow": 128000,
-          "maxOutput": 16384,
-          "description": "GPT-4o mini with 128K context window, 16K max output tokens"
-        },
-        "o1-mini": {
-          "contextWindow": 128000,
-          "maxOutput": 65536,
-          "description": "O1-mini reasoning model with 128K context window, 65K max output tokens"
-        },
-        "o1": {
-          "contextWindow": 128000,
-          "maxOutput": 32768,
-          "description": "O1 reasoning model with 128K context window, 32K max output tokens"
-        },
-        "gpt-4.1-2025-04-14": {
-          "contextWindow": 1000000,
-          "maxOutput": 32768,
-          "description": "GPT-4.1 with 1M context window, 32K max output tokens"
-        },
-        "o3-mini-2025-01-31": {
-          "contextWindow": 200000,
-          "maxOutput": 100000,
-          "description": "O3-mini reasoning model with 200K context window, 100K max output tokens"
-        }
+  "modelContextLimits": {
+    "openai": {
+      "gpt-5-pro": {
+        "contextWindow": 400000,
+        "maxOutput": 128000,
+        "description": "Extended reasoning using scaled parallel computing for the most complex tasks",
+        "status": "available"
       },
-      "google": {
-        "gemini-2.5-pro": {
-          "contextWindow": 1048576,
-          "maxOutput": 65535,
-          "description": "Gemini 2.5 Pro with 1M+ context window, 65K max output tokens"
-        },
-        "gemini-2.5-flash": {
-          "contextWindow": 1048576,
-          "maxOutput": 65535,
-          "description": "Gemini 2.5 Flash with 1M+ context window, 65K max output tokens"
-        }
+      "gpt-5": {
+        "contextWindow": 400000,
+        "maxOutput": 128000,
+        "description": "Most advanced model for coding and agentic tasks",
+        "status": "available"
       },
-      "ollama": {
-        "qwen3:4b": {
-          "contextWindow": 256000,
-          "maxOutput": 32768,
-          "description": "Qwen 3:4B with 256K context window, 32K max output tokens"
-        }
+      "gpt-5-mini": {
+        "contextWindow": 200000,
+        "maxOutput": 64000,
+        "description": "Faster, cost-efficient version of GPT-5",
+        "status": "available"
       },
-      "anthropic": {
-        "claude-opus-4-1-20250805": {
-          "contextWindow": 200000,
-          "maxOutput": 32000,
-          "description": "Claude Opus 4.1 with 200K context window, 32K max output tokens"
-        },
-        "claude-opus-4-20250514": {
-          "contextWindow": 200000,
-          "maxOutput": 32000,
-          "description": "Claude Opus 4 with 200K context window, 32K max output tokens"
-        },
-        "claude-sonnet-4-5-20250929": {
-          "contextWindow": 200000,
-          "maxOutput": 64000,
-          "description": "Claude Sonnet 4.5 with 200K context window (1M beta available), 64K max output tokens"
-        },
-        "claude-sonnet-4-20250514": {
-          "contextWindow": 200000,
-          "maxOutput": 64000,
-          "description": "Claude Sonnet 4 with 200K context window (1M beta available), 64K max output tokens"
-        },
-        "claude-3-7-sonnet-20250219": {
-          "contextWindow": 128000,
-          "maxOutput": 64000,
-          "description": "Claude 3.7 Sonnet with 128K context window, 64K max output tokens"
-        },
-        "claude-3-5-sonnet-20241022": {
-          "contextWindow": 200000,
-          "maxOutput": 8192,
-          "description": "Claude 3.5 Sonnet with 200K context window, 8K max output tokens (DEPRECATED - use Claude 4.5 instead)"
-        },
-        "claude-3-5-haiku-20241022": {
-          "contextWindow": 200000,
-          "maxOutput": 8192,
-          "description": "Claude 3.5 Haiku with 200K context window, 8K max output tokens"
-        }
+      "gpt-5-nano": {
+        "contextWindow": 128000,
+        "maxOutput": 32000,
+        "description": "Fastest, most cost-efficient version of GPT-5",
+        "status": "available"
       },
-      "xai": {
-        "grok-4-fast-reasoning": {
-          "contextWindow": 2000000,
-          "maxOutput": 65536,
-          "description": "Grok-4 fast reasoning model with 2M context window, 65K max output tokens"
-        }
+      "o3": {
+        "contextWindow": 200000,
+        "maxOutput": 32768,
+        "description": "Most powerful reasoning model (succeeded by GPT-5)",
+        "status": "available"
+      },
+      "o3-pro": {
+        "contextWindow": 200000,
+        "maxOutput": 32768,
+        "description": "O3 with extended thinking for complex problems",
+        "status": "available"
+      },
+      "o3-mini": {
+        "contextWindow": 200000,
+        "maxOutput": 100000,
+        "description": "Cost-efficient reasoning model",
+        "status": "available"
+      },
+      "o4-mini": {
+        "contextWindow": 200000,
+        "maxOutput": 65536,
+        "description": "Fast, cost-efficient reasoning model",
+        "status": "available"
+      },
+      "gpt-4.1": {
+        "contextWindow": 1000000,
+        "maxOutput": 32768,
+        "description": "Smartest non-reasoning model, 1M context window",
+        "status": "available"
+      },
+      "gpt-4.1-mini": {
+        "contextWindow": 128000,
+        "maxOutput": 16384,
+        "description": "Fast, capable, efficient small model replacing GPT-4o mini",
+        "status": "available"
+      },
+      "gpt-4o": {
+        "contextWindow": 128000,
+        "maxOutput": 16384,
+        "description": "Fast, intelligent, flexible GPT model",
+        "status": "available"
+      },
+      "gpt-4o-mini": {
+        "contextWindow": 128000,
+        "maxOutput": 16384,
+        "description": "Fast, affordable small model (replaced by GPT-4.1 mini)",
+        "status": "available"
+      },
+      "o1": {
+        "contextWindow": 200000,
+        "maxOutput": 32768,
+        "description": "Previous full o-series reasoning model",
+        "status": "available"
+      },
+      "o1-mini": {
+        "contextWindow": 128000,
+        "maxOutput": 65536,
+        "description": "Small reasoning model alternative to o1",
+        "status": "deprecated",
+        "shutdownDate": "October 27, 2025"
+      },
+      "gpt-4.5-preview": {
+        "contextWindow": 200000,
+        "maxOutput": 32768,
+        "description": "Research preview (DEPRECATED - replaced by GPT-4.1)",
+        "status": "deprecated",
+        "shutdownDate": "July 14, 2025"
+      },
+      "o1-preview": {
+        "contextWindow": 128000,
+        "maxOutput": 32768,
+        "description": "Preview of first o-series model (DEPRECATED - replaced by o3)",
+        "status": "deprecated",
+        "shutdownDate": "July 28, 2025"
       }
     },
-    "metadata": {
-      "lastUpdated": "2025-09-28",
-      "source": "Verified against official API documentation and provider websites",
-      "notes": [
-        "Context windows are measured in tokens",
-        "Actual token usage may vary based on content type (text, code, etc.)",
-        "Some models have beta features with larger context windows",
-        "Claude Sonnet 4 supports 1M context window in beta with context-1m-2025-08-07 header",
-        "O1 and O3 models are reasoning models with different token counting behavior",
-        "Claude 3.5 Sonnet (20241022) is deprecated - use Claude 4.5 Sonnet instead",
-        "GPT-4.1 and Gemini models support very large context windows (1M+ tokens)",
-        "All specifications verified as of September 2025",
-        "Claude Opus models have 64K max output, not 32K as previously listed",
-        "O3-mini has significantly higher limits than O1-mini",
-        "Gemini models use 65,535 max output tokens, not 65,536",
-        "Grok-4-fast-reasoning has 2M context window with 4M tokens/minute rate limit (verified from xAI docs)",
-        "Grok max output tokens estimated at 65K (not specified in official docs)"
-      ],
-      "recommendations": {
-        "largeContext": [
-          "grok-4-fast-reasoning",
-          "gpt-4.1-2025-04-14",
-          "gemini-2.5-pro",
-          "gemini-2.5-flash"
-        ],
-        "balanced": [
-          "claude-sonnet-4-5-20250929",
-          "claude-sonnet-4-20250514",
-          "gpt-4o",
-          "claude-3-7-sonnet-20250219"
-        ],
-        "fast": [
-          "gpt-4o-mini",
-          "claude-3-5-haiku-20241022",
-          "gemini-2.5-flash"
-        ],
-        "reasoning": [
-          "o1",
-          "o1-mini",
-          "o3-mini-2025-01-31",
-          "grok-4-fast-reasoning"
-        ],
-        "highOutput": [
-          "o3-mini-2025-01-31",
-          "claude-opus-4-1-20250805",
-          "claude-sonnet-4-5-20250929",
-          "claude-sonnet-4-20250514"
-        ]
+    "google": {
+      "gemini-2.5-pro": {
+        "contextWindow": 1048576,
+        "maxOutput": 65536,
+        "description": "State-of-the-art thinking model for complex reasoning",
+        "status": "available"
+      },
+      "gemini-2.5-flash": {
+        "contextWindow": 1048576,
+        "maxOutput": 65536,
+        "description": "Best price-performance with thinking capabilities",
+        "status": "available"
+      }
+    },
+    "anthropic": {
+      "claude-sonnet-4-5-20250929": {
+        "contextWindow": 200000,
+        "contextWindowBeta": 1000000,
+        "maxOutput": 64000,
+        "description": "Best model for complex agents and coding (1M beta available)",
+        "status": "available"
+      },
+      "claude-opus-4-1-20250805": {
+        "contextWindow": 200000,
+        "maxOutput": 64000,
+        "description": "Exceptional model for specialized complex tasks",
+        "status": "available"
+      },
+      "claude-opus-4-20250514": {
+        "contextWindow": 200000,
+        "contextWindowBeta": 1000000,
+        "maxOutput": 64000,
+        "description": "Previous flagship model (1M beta available)",
+        "status": "available"
+      },
+      "claude-sonnet-4-20250514": {
+        "contextWindow": 200000,
+        "contextWindowBeta": 1000000,
+        "maxOutput": 64000,
+        "description": "High-performance model (1M beta available)",
+        "status": "available"
+      },
+      "claude-3-7-sonnet-20250219": {
+        "contextWindow": 200000,
+        "maxOutput": 128000,
+        "description": "High-performance with toggleable extended thinking (128K output)",
+        "status": "available"
+      },
+      "claude-3-5-haiku-20241022": {
+        "contextWindow": 200000,
+        "maxOutput": 8192,
+        "description": "Fastest model with blazing speeds",
+        "status": "available"
+      },
+      "claude-3-5-sonnet-20241022": {
+        "contextWindow": 200000,
+        "maxOutput": 8192,
+        "description": "DEPRECATED - Use Claude Sonnet 4.5 instead",
+        "status": "deprecated"
+      }
+    },
+    "ollama": {
+      "qwen3:4b": {
+        "contextWindow": 256000,
+        "maxOutput": 32768,
+        "description": "Qwen 3:4B local model with large context window",
+        "status": "available"
       }
     }
+  },
+  "metadata": {
+    "lastUpdated": "October 13, 2025",
+    "source": "Official API documentation from OpenAI, Google, and Anthropic",
+    "notes": [
+      "Context windows measured in tokens",
+      "OpenAI o1-mini shutting down October 27, 2025 (replaced by o4-mini)",
+      "OpenAI gpt-4.5-preview shut down July 14, 2025 (replaced by gpt-4.1)",
+      "OpenAI o1-preview shut down July 28, 2025 (replaced by o3)",
+      "Claude Sonnet 4.5 and Claude Sonnet 4 support 1M context with beta header",
+      "Claude 3.7 Sonnet supports 128K max output tokens (vs 64K for Claude 4 models)",
+      "Gemini 2.5 models use 65,536 max output tokens (not 65,535)",
+      "GPT-5 family are the latest frontier models from OpenAI",
+      "Assistants API will be deprecated August 26, 2026",
+      "Claude 3.5 Sonnet (20241022) is deprecated - use Claude Sonnet 4.5",
+      "All specifications verified as of October 2025",
+      "Knowledge cutoffs vary by model - check official docs for details"
+    ],
+    "recommendations": {
+      "largeContext": [
+        "gpt-4.1 (1M tokens)",
+        "gemini-2.5-pro (1M+ tokens)",
+        "gemini-2.5-flash (1M+ tokens)",
+        "claude-sonnet-4-5 (1M beta)",
+        "gpt-5 (400K tokens)"
+      ],
+      "balanced": [
+        "gpt-5",
+        "claude-sonnet-4-5",
+        "gemini-2.5-flash",
+        "gpt-4o",
+        "claude-opus-4-1"
+      ],
+      "fast": [
+        "gpt-5-nano",
+        "gpt-4.1-mini",
+        "claude-3-5-haiku",
+        "gemini-2.5-flash-lite"
+      ],
+      "reasoning": [
+        "gpt-5 (with thinking)",
+        "o3",
+        "o3-pro",
+        "o4-mini",
+        "gemini-2.5-pro (with thinking)"
+      ],
+      "highOutput": [
+        "gpt-5 (128K output)",
+        "o3-mini (100K output)",
+        "claude-3-7-sonnet (128K output)",
+        "o4-mini (65.5K output)",
+        "gemini-2.5-flash (65.5K output)"
+      ],
+      "coding": [
+        "gpt-5",
+        "claude-sonnet-4-5",
+        "o3",
+        "gpt-4.1"
+      ]
+    }
   }
+}
