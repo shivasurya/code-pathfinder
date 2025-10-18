@@ -3,11 +3,11 @@ import { AnalyticsService as SharedAnalyticsService } from '../../packages/secur
 
 /**
  * VS Code Analytics Service
- * 
+ *
  * This is a thin wrapper around the shared CLI analytics service.
  * It maintains the same public API as before to avoid breaking existing code,
  * but delegates to the shared analytics service from the CLI package.
- * 
+ *
  * The shared service is initialized with VS Code-specific context and metadata.
  */
 
@@ -34,7 +34,9 @@ export class AnalyticsService {
     }
 
     // Check user preference from VS Code settings
-    this.userEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
+    this.userEnabled = vscode.workspace
+      .getConfiguration('secureflow')
+      .get('analytics.enabled', true);
 
     // Only initialize if user has analytics enabled
     if (!this.userEnabled) {
@@ -43,7 +45,8 @@ export class AnalyticsService {
     }
 
     const metadata = {
-      vscode_extension_version: vscode.extensions.getExtension('secureflow')?.packageJSON.version,
+      vscode_extension_version:
+        vscode.extensions.getExtension('secureflow')?.packageJSON.version,
       vscode_build_version: vscode.version
     };
 
@@ -73,7 +76,8 @@ export class AnalyticsService {
 
     const vsCodeProperties = {
       ...properties,
-      vscode_extension_version: vscode.extensions.getExtension('secureflow')?.packageJSON.version,
+      vscode_extension_version:
+        vscode.extensions.getExtension('secureflow')?.packageJSON.version,
       vscode_build_version: vscode.version,
       ai_model: vscode.workspace.getConfiguration('secureflow').get('AIModel')
     };
