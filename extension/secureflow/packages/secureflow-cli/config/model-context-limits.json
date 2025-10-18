@@ -149,10 +149,16 @@
         "description": "High-performance with toggleable extended thinking (128K output)",
         "status": "available"
       },
+      "claude-haiku-4-5": {
+        "contextWindow": 200000,
+        "maxOutput": 64000,
+        "description": "Fastest model with near-frontier intelligence",
+        "status": "available"
+      },
       "claude-3-5-haiku-20241022": {
         "contextWindow": 200000,
         "maxOutput": 8192,
-        "description": "Fastest model with blazing speeds",
+        "description": "Fastest model with blazing speeds (Older version)",
         "status": "available"
       },
       "claude-3-5-sonnet-20241022": {

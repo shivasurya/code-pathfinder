@@ -85,6 +85,7 @@ export function getModelDisplayName(model) {
         'claude-opus-4-20250514': 'Claude Opus 4',
         'claude-sonnet-4-20250514': 'Claude Sonnet 4',
         'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
+        'claude-haiku-4-5': 'Claude 4.5 Haiku',
         'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku',
         'grok-4-fast-reasoning': 'Grok 4 Fast Reasoning'
     };

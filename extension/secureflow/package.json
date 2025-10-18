@@ -121,6 +121,7 @@
             "claude-opus-4-20250514",
             "claude-sonnet-4-20250514",
             "claude-3-7-sonnet-20250219",
+            "claude-haiku-4-5",
             "claude-3-5-haiku-20241022",
             "grok-4-fast-reasoning"
           ],
@@ -145,7 +146,8 @@
             "Anthropic Claude 4 Opus (2025) - Previous flagship model",
             "Anthropic Claude 4 Sonnet (2025) - High-performance model",
             "Anthropic Claude 3.7 Sonnet (2025) - With toggleable extended thinking",
-            "Anthropic Claude 3.5 Haiku (2024) - Fastest model",
+            "Anthropic Claude 4.5 Haiku (2025) - Fastest model with near-frontier intelligence",
+            "Anthropic Claude 3.5 Haiku (2024) - Fastest model (Older version)",
             "xAI Grok 4 Fast Reasoning (2025) - Fast reasoning with 2M context"
           ],
           "description": "Select the AI Model to use for security analysis"

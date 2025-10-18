@@ -28,6 +28,7 @@ export type AIModel =
   | 'claude-opus-4-20250514'
   | 'claude-sonnet-4-20250514'
   | 'claude-3-7-sonnet-20250219'
+  | 'claude-haiku-4-5'
   | 'claude-3-5-haiku-20241022'
   | 'grok-4-fast-reasoning';
 

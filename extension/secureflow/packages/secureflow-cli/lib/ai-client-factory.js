@@ -43,6 +43,7 @@ class AIClientFactory {
       case 'claude-opus-4-20250514':
       case 'claude-sonnet-4-20250514':
       case 'claude-3-7-sonnet-20250219':
+      case 'claude-haiku-4-5':
       case 'claude-3-5-haiku-20241022':
         return new ClaudeClient();
 
