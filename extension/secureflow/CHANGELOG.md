@@ -1,5 +1,11 @@
 # SecureFlow Changelog
 
+## Version 0.0.15 - October 17, 2025
+
+### 🚀 What's New?
+
+- **Claude Haiku 4.5 Support**: Added support for Claude Haiku 4.5 model for enhanced security analysis
+
 ## Version 0.0.14 - October 12, 2025
 
 ### 🚀 What's New?
