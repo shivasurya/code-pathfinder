@@ -15,6 +15,9 @@ const { loadPrompt, getPromptForAppType, getApplicationProfilerPrompt, getThreat
 // Export workspace analyzer functionality
 const { WorkspaceAnalyzer, ApplicationProfile } = require('./workspace-analyzer');
 
+// Export analytics service
+const { AnalyticsService, StorageAdapter, FileStorageAdapter, VSCodeStorageAdapter } = require('./services/analytics');
+
 module.exports = {
   AIClient,
   AIClientFactory,
@@ -31,5 +34,9 @@ module.exports = {
   getApplicationProfilerPrompt,
   getThreatModelingPrompt,
   WorkspaceAnalyzer,
-  ApplicationProfile
+  ApplicationProfile,
+  AnalyticsService,
+  StorageAdapter,
+  FileStorageAdapter,
+  VSCodeStorageAdapter
 };
