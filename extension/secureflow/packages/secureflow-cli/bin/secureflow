@@ -8,7 +8,7 @@
 const { Command } = require('commander');
 const { yellow, red, cyan } = require('colorette');
 const pkg = require('../package.json');
-const { getMaskedConfig, loadConfig, CONFIG_FILE } = require('../lib/config');
+const { getMaskedConfig, loadConfig, setAnalyticsEnabled, CONFIG_FILE } = require('../lib/config');
 const { CLIProfileCommand } = require('../profiler');
 const { CLIFullScanCommand } = require('../scanner');
 const { AnalyticsService } = require('../lib/services/analytics');
@@ -18,13 +18,19 @@ const analytics = AnalyticsService.getInstance();
 
 // Main async function to ensure proper initialization order
 async function main() {
-  // Initialize analytics FIRST and wait for it (silently)
-  try {
-    await analytics.initializeForCLI({
-      cli_version: pkg.version
-    });
-  } catch (err) {
-    // Silently fail - analytics should not disrupt CLI
+  const config = loadConfig();
+  
+  // Initialize analytics FIRST if enabled by user (default: true)
+  const analyticsEnabled = config.analytics?.enabled !== false;
+  
+  if (analyticsEnabled) {
+    try {
+      await analytics.initializeForCLI({
+        cli_version: pkg.version
+      });
+    } catch (err) {
+      // Silently fail - analytics should not disrupt CLI
+    }
   }
 
   // NOW set up the program after analytics is ready
@@ -33,7 +39,17 @@ async function main() {
   program
     .name('secureflow')
     .description('AI-powered security analysis CLI tool with intelligent file discovery')
-    .version(pkg.version);
+    .version(pkg.version)
+    .option('--disable-analytics', 'Disable analytics for this session')
+    .option('--enable-analytics', 'Enable analytics for this session');
+
+  // Handle analytics flags
+  program.hook('preAction', (thisCommand, actionCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.disableAnalytics) {
+      analytics.initialized = false; // Disable for this session
+    }
+  });
 
   program
     .command('scan')
@@ -133,6 +149,42 @@ async function main() {
     console.log(JSON.stringify(cfg, null, 2));
     process.exitCode = 0;
   });
+
+  program
+    .command('analytics <action>')
+    .description('Manage analytics preferences (enable|disable|status)')
+    .action((action) => {
+      const cfg = loadConfig();
+      const currentStatus = cfg.analytics?.enabled !== false ? 'enabled' : 'disabled';
+      
+      if (action === 'status') {
+        console.log(cyan('Analytics Status:'), currentStatus);
+        console.log('\nAnalytics help improve SecureFlow by collecting anonymous usage metrics.');
+        console.log('No personal information, code, or file paths are collected.');
+        console.log('\nCommands:');
+        console.log('  secureflow analytics enable   - Enable analytics permanently');
+        console.log('  secureflow analytics disable  - Disable analytics permanently');
+        console.log('  secureflow analytics status   - Show current status');
+      } else if (action === 'enable') {
+        if (setAnalyticsEnabled(true)) {
+          console.log(cyan('✓ Analytics enabled'));
+          console.log('Thank you for helping improve SecureFlow!');
+        } else {
+          console.error(red('✗ Failed to update analytics preference'));
+        }
+      } else if (action === 'disable') {
+        if (setAnalyticsEnabled(false)) {
+          console.log(cyan('✓ Analytics disabled'));
+          console.log('Analytics have been turned off.');
+        } else {
+          console.error(red('✗ Failed to update analytics preference'));
+        }
+      } else {
+        console.error(red(`Unknown action: ${action}`));
+        console.log('Valid actions: enable, disable, status');
+        process.exitCode = 1;
+      }
+    });
 
   program
     .command('helpall')

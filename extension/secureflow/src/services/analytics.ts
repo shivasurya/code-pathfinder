@@ -15,6 +15,7 @@ export class AnalyticsService {
   private static instance: AnalyticsService;
   private sharedService: SharedAnalyticsService;
   private initialized = false;
+  private userEnabled = true; // Application-layer control
 
   private constructor() {
     this.sharedService = SharedAnalyticsService.getInstance();
@@ -32,6 +33,15 @@ export class AnalyticsService {
       return;
     }
 
+    // Check user preference from VS Code settings
+    this.userEnabled = vscode.workspace.getConfiguration('secureflow').get('analytics.enabled', true);
+
+    // Only initialize if user has analytics enabled
+    if (!this.userEnabled) {
+      this.initialized = true; // Mark as initialized but don't init PostHog
+      return;
+    }
+
     const metadata = {
       vscode_extension_version: vscode.extensions.getExtension('secureflow')?.packageJSON.version,
       vscode_build_version: vscode.version
@@ -45,6 +55,10 @@ export class AnalyticsService {
   }
 
   public isEnabled(): boolean {
+    // Check application-layer control first
+    if (!this.userEnabled) {
+      return false;
+    }
     return this.sharedService.isEnabled();
   }
 
@@ -52,7 +66,8 @@ export class AnalyticsService {
     eventName: string,
     properties: Record<string, any> = {}
   ): Promise<void> {
-    if (!this.isEnabled()) {
+    // Respect user preference at application layer
+    if (!this.userEnabled || !this.isEnabled()) {
       return;
     }
 
