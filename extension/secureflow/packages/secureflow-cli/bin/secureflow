@@ -66,9 +66,14 @@ async function main() {
     .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "SecureFlow Scan")')
     .action(async (projectPath, options) => {
     try {
-      // Track scan command usage
+      // Load config to get actual model being used
+      const config = loadConfig();
+      const actualModel = options.model || config.model;
+      
+      // Track scan command usage with actual model
       await analytics.trackEvent('CLI Command: Scan', {
-        ai_model: options.model || 'default',
+        ai_model: actualModel,
+        ai_provider: config.provider,
         output_format: options.format || 'text',
         has_defectdojo: !!options.defectdojo
       });
@@ -111,9 +116,14 @@ async function main() {
     .option('--output <file>', 'Save results to file')
     .action(async (projectPath, options) => {
     try {
-      // Track profile command usage
+      // Load config to get actual model being used
+      const config = loadConfig();
+      const actualModel = options.model || config.model;
+      
+      // Track profile command usage with actual model
       await analytics.trackEvent('CLI Command: Profile', {
-        ai_model: options.model || 'default',
+        ai_model: actualModel,
+        ai_provider: config.provider,
         output_format: options.format || 'text'
       });
 
@@ -198,8 +208,8 @@ async function main() {
   // Parse CLI arguments
   await program.parseAsync(process.argv);
   
-  // Shutdown analytics after command completes
-  await analytics.shutdown();
+  // Quick shutdown for fast exit (fire and forget)
+  analytics.shutdown(true).catch(() => {});
 }
 
 // Run the main function

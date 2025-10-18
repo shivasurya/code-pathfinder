@@ -17,7 +17,7 @@ const os = require('os');
 const POSTHOG_API_KEY = 'phc_iOS0SOw2gDax8kq44Z9FBEVAs8m6QG7yANvBF8ItV6g';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 const DISTINCT_ID_KEY = 'secureflow.analytics.distinctId';
-const SHUTDOWN_TIMEOUT_MS = 2000;
+const SHUTDOWN_TIMEOUT_MS = 500; // Reduced from 2000ms to 500ms
 
 /**
  * Storage adapter interface for distinct ID persistence
@@ -248,7 +248,8 @@ class AnalyticsService {
         event: eventName,
         properties: eventProperties
       });
-      await this.posthog.flush();
+      // Fire and forget - don't wait for flush to complete
+      this.posthog.flush().catch(() => {});
     } catch (error) {
       // Silently fail - analytics should not disrupt application
     }
@@ -270,13 +271,23 @@ class AnalyticsService {
 
   /**
    * Shutdown analytics service
+   * @param {boolean} quick - If true, don't wait for flush (faster exit)
    */
-  async shutdown() {
+  async shutdown(quick = false) {
     if (!this.posthog) {
       return;
     }
 
     try {
+      if (quick) {
+        // For quick commands, just shutdown without waiting
+        this.posthog.shutdown().catch(() => {}); // Fire and forget
+        this.posthog = null;
+        this.initialized = false;
+        return;
+      }
+
+      // Normal shutdown with reduced timeout
       const shutdownPromise = this.posthog.shutdown();
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Shutdown timeout')), SHUTDOWN_TIMEOUT_MS)

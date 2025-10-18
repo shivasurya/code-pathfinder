@@ -66,6 +66,7 @@ export declare class AnalyticsService {
 
   /**
    * Shutdown analytics service
+   * @param quick - If true, don't wait for flush (faster exit)
    */
-  shutdown(): Promise<void>;
+  shutdown(quick?: boolean): Promise<void>;
 }
