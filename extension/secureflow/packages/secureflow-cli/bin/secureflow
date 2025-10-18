@@ -8,32 +8,76 @@
 const { Command } = require('commander');
 const { yellow, red, cyan } = require('colorette');
 const pkg = require('../package.json');
-const { getMaskedConfig, loadConfig, CONFIG_FILE } = require('../lib/config');
+const { getMaskedConfig, loadConfig, setAnalyticsEnabled, CONFIG_FILE } = require('../lib/config');
 const { CLIProfileCommand } = require('../profiler');
 const { CLIFullScanCommand } = require('../scanner');
+const { AnalyticsService } = require('../lib/services/analytics');
 
-const program = new Command();
+// Initialize analytics for CLI
+const analytics = AnalyticsService.getInstance();
 
-program
-  .name('secureflow')
-  .description('AI-powered security analysis CLI tool with intelligent file discovery')
-  .version(pkg.version);
-
-program
-  .command('scan')
-  .description('Perform full security scan of project using AI analysis')
-  .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
-  .option('--model <model>', 'AI model to use for analysis')
-  .option('--format <format>', 'Output format: text|json|defectdojo', 'text')
-  .option('--output <file>', 'Save results to file')
-  .option('--defectdojo', 'Export results in DefectDojo import format (same as --format defectdojo)')
-  .option('--defectdojo-url <url>', 'DefectDojo instance URL (e.g., https://defectdojo.example.com)')
-  .option('--defectdojo-token <token>', 'DefectDojo API token for authentication')
-  .option('--defectdojo-product-id <id>', 'DefectDojo product ID to submit findings to')
-  .option('--defectdojo-engagement-id <id>', 'DefectDojo engagement ID (optional - will create if not provided)')
-  .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "SecureFlow Scan")')
-  .action(async (projectPath, options) => {
+// Main async function to ensure proper initialization order
+async function main() {
+  const config = loadConfig();
+  
+  // Initialize analytics FIRST if enabled by user (default: true)
+  const analyticsEnabled = config.analytics?.enabled !== false;
+  
+  if (analyticsEnabled) {
     try {
+      await analytics.initializeForCLI({
+        cli_version: pkg.version
+      });
+    } catch (err) {
+      // Silently fail - analytics should not disrupt CLI
+    }
+  }
+
+  // NOW set up the program after analytics is ready
+  const program = new Command();
+
+  program
+    .name('secureflow')
+    .description('AI-powered security analysis CLI tool with intelligent file discovery')
+    .version(pkg.version)
+    .option('--disable-analytics', 'Disable analytics for this session')
+    .option('--enable-analytics', 'Enable analytics for this session');
+
+  // Handle analytics flags
+  program.hook('preAction', (thisCommand, actionCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.disableAnalytics) {
+      analytics.initialized = false; // Disable for this session
+    }
+  });
+
+  program
+    .command('scan')
+    .description('Perform full security scan of project using AI analysis')
+    .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
+    .option('--model <model>', 'AI model to use for analysis')
+    .option('--format <format>', 'Output format: text|json|defectdojo', 'text')
+    .option('--output <file>', 'Save results to file')
+    .option('--defectdojo', 'Export results in DefectDojo import format (same as --format defectdojo)')
+    .option('--defectdojo-url <url>', 'DefectDojo instance URL (e.g., https://defectdojo.example.com)')
+    .option('--defectdojo-token <token>', 'DefectDojo API token for authentication')
+    .option('--defectdojo-product-id <id>', 'DefectDojo product ID to submit findings to')
+    .option('--defectdojo-engagement-id <id>', 'DefectDojo engagement ID (optional - will create if not provided)')
+    .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "SecureFlow Scan")')
+    .action(async (projectPath, options) => {
+    try {
+      // Load config to get actual model being used
+      const config = loadConfig();
+      const actualModel = options.model || config.model;
+      
+      // Track scan command usage with actual model
+      await analytics.trackEvent('CLI Command: Scan', {
+        ai_model: actualModel,
+        ai_provider: config.provider,
+        output_format: options.format || 'text',
+        has_defectdojo: !!options.defectdojo
+      });
+
       // Handle --defectdojo flag
       let outputFormat = options.format;
       if (options.defectdojo) {
@@ -63,15 +107,26 @@ program
     }
   });
 
-program
-  .command('profile')
-  .description('Profile project to identify application types and technologies')
-  .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
-  .option('--model <model>', 'AI model to use for analysis')
-  .option('--format <format>', 'Output format: text|json', 'text')
-  .option('--output <file>', 'Save results to file')
-  .action(async (projectPath, options) => {
+  program
+    .command('profile')
+    .description('Profile project to identify application types and technologies')
+    .argument('[path]', 'Path to project directory (defaults to current directory)', '.')
+    .option('--model <model>', 'AI model to use for analysis')
+    .option('--format <format>', 'Output format: text|json', 'text')
+    .option('--output <file>', 'Save results to file')
+    .action(async (projectPath, options) => {
     try {
+      // Load config to get actual model being used
+      const config = loadConfig();
+      const actualModel = options.model || config.model;
+      
+      // Track profile command usage with actual model
+      await analytics.trackEvent('CLI Command: Profile', {
+        ai_model: actualModel,
+        ai_provider: config.provider,
+        output_format: options.format || 'text'
+      });
+
       const profileCommand = new CLIProfileCommand({
         selectedModel: options.model
       });
@@ -86,12 +141,12 @@ program
     }
   });
 
-program
-  .command('config')
-  .description('Show CLI configuration (masked by default)')
-  .option('--show', 'Show configuration summary', false)
-  .option('--raw', 'Do not mask secrets (use with caution)', false)
-  .action((opts) => {
+  program
+    .command('config')
+    .description('Show CLI configuration (masked by default)')
+    .option('--show', 'Show configuration summary', false)
+    .option('--raw', 'Do not mask secrets (use with caution)', false)
+    .action((opts) => {
     if (!opts.show) {
       console.log('Use --show to display the configuration.');
       console.log(`Config file path: ${CONFIG_FILE}`);
@@ -105,14 +160,60 @@ program
     process.exitCode = 0;
   });
 
-program
-  .command('helpall')
-  .description('Show help for all commands')
-  .action(() => {
-    program.commands.forEach((c) => c.outputHelp());
-  });
+  program
+    .command('analytics <action>')
+    .description('Manage analytics preferences (enable|disable|status)')
+    .action((action) => {
+      const cfg = loadConfig();
+      const currentStatus = cfg.analytics?.enabled !== false ? 'enabled' : 'disabled';
+      
+      if (action === 'status') {
+        console.log(cyan('Analytics Status:'), currentStatus);
+        console.log('\nAnalytics help improve SecureFlow by collecting anonymous usage metrics.');
+        console.log('No personal information, code, or file paths are collected.');
+        console.log('\nCommands:');
+        console.log('  secureflow analytics enable   - Enable analytics permanently');
+        console.log('  secureflow analytics disable  - Disable analytics permanently');
+        console.log('  secureflow analytics status   - Show current status');
+      } else if (action === 'enable') {
+        if (setAnalyticsEnabled(true)) {
+          console.log(cyan('✓ Analytics enabled'));
+          console.log('Thank you for helping improve SecureFlow!');
+        } else {
+          console.error(red('✗ Failed to update analytics preference'));
+        }
+      } else if (action === 'disable') {
+        if (setAnalyticsEnabled(false)) {
+          console.log(cyan('✓ Analytics disabled'));
+          console.log('Analytics have been turned off.');
+        } else {
+          console.error(red('✗ Failed to update analytics preference'));
+        }
+      } else {
+        console.error(red(`Unknown action: ${action}`));
+        console.log('Valid actions: enable, disable, status');
+        process.exitCode = 1;
+      }
+    });
 
-program.parseAsync(process.argv).catch((err) => {
+  program
+    .command('helpall')
+    .description('Show help for all commands')
+    .action(async () => {
+      // Track help command usage
+      await analytics.trackEvent('CLI Command: Help', {});
+      program.commands.forEach((c) => c.outputHelp());
+    });
+
+  // Parse CLI arguments
+  await program.parseAsync(process.argv);
+  
+  // Quick shutdown for fast exit (fire and forget)
+  analytics.shutdown(true).catch(() => {});
+}
+
+// Run the main function
+main().catch((err) => {
   console.error(red('[secureflow] fatal error'));
   console.error(err?.stack || err?.message || String(err));
   process.exit(1);

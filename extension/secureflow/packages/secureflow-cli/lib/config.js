@@ -43,7 +43,7 @@ function loadConfig() {
       env.SECUREFLOW_API_KEY || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || fileCfg.apiKey || '',
     provider: env.SECUREFLOW_PROVIDER || fileCfg.provider || inferProvider(env, fileCfg),
     analytics: {
-      enabled: getBool(env.SECUREFLOW_ANALYTICS_ENABLED, fileCfg?.analytics?.enabled, false)
+      enabled: getBool(env.SECUREFLOW_ANALYTICS_ENABLED, fileCfg?.analytics?.enabled, true) // Default: enabled
     }
   };
 
@@ -84,9 +84,31 @@ function getMaskedConfig() {
   };
 }
 
+function setAnalyticsEnabled(enabled) {
+  try {
+    // Ensure directory exists
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    }
+
+    // Read existing config
+    const existing = readJsonSafe(CONFIG_FILE);
+    
+    // Update analytics setting
+    existing.analytics = { ...existing.analytics, enabled };
+    
+    // Write back to file
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(existing, null, 2));
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 module.exports = {
   loadConfig,
   getMaskedConfig,
+  setAnalyticsEnabled,
   CONFIG_DIR,
   CONFIG_FILE
 };

@@ -13,3 +13,6 @@ export { getPromptPath, getAppProfilerPrompt } from './prompts';
 export { loadPrompt, getPromptForAppType, getApplicationProfilerPrompt, getThreatModelingPrompt } from './prompts/prompt-loader';
 
 export { WorkspaceAnalyzer, ApplicationProfile, WorkspaceAnalyzerOptions } from './workspace-analyzer';
+
+// Export analytics service
+export { AnalyticsService, StorageAdapter, FileStorageAdapter, VSCodeStorageAdapter } from './services/analytics';
