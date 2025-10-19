@@ -60,7 +60,7 @@ jobs:
           fi
 
       - name: Build and push to GitHub Container Registry
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         env:
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         with:
@@ -76,7 +76,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/code-pathfinder:${{ steps.vars.outputs.tag2 }}
 
       - name: Build and push to Docker Hub
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         env:
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         with:
