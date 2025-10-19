@@ -61,5 +61,5 @@ func TestExecute(t *testing.T) {
 	}
 }
 
-// Mock for os.Exit
+// Mock for os.Exit.
 var osExit = os.Exit

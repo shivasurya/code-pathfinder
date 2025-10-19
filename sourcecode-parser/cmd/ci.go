@@ -23,7 +23,7 @@ type Rule struct {
 	Severity     string `json:"severity"`
 	Passed       bool   `json:"passed" default:"true"`
 	Query        string `json:"query"`
-	RuleProvider string `json:"rule_provider"`
+	RuleProvider string `json:"ruleProvider"`
 }
 
 var ciCmd = &cobra.Command{
