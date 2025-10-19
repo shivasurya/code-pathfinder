@@ -241,10 +241,8 @@ func TestLog(t *testing.T) {
 						t.Errorf("Log() output does not contain expected argument: %v", arg)
 					}
 				}
-			} else {
-				if logOutput != "" {
-					t.Errorf("Log() produced output when verbose logging was disabled")
-				}
+			} else if logOutput != "" {
+				t.Errorf("Log() produced output when verbose logging was disabled")
 			}
 		})
 	}
