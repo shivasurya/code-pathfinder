@@ -7,6 +7,7 @@ import { ScanStorageService } from '../services/scan-storage-service';
 import { ScanResult } from '../models/scan-result';
 import { AnalyticsService } from '../services/analytics';
 import { SettingsManager } from '../settings/settings-manager';
+import { ModelConfig } from '../generated/model-config';
 
 export class SecureFlowExplorer {
   private static instance: SecureFlowExplorer;
@@ -640,12 +641,35 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     // Read and return the HTML content
     const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
+    // Prepare model configuration for injection
+    const modelConfigData = {
+      models: ModelConfig.getAllActive(),
+      providers: {
+        openai: ModelConfig.getProviderInfo('openai'),
+        anthropic: ModelConfig.getProviderInfo('anthropic'),
+        google: ModelConfig.getProviderInfo('google'),
+        xai: ModelConfig.getProviderInfo('xai'),
+        ollama: ModelConfig.getProviderInfo('ollama')
+      }
+    };
+
+    // Create inline script to inject model config before main script loads
+    const modelConfigScript = `
+      <script>
+        window.modelConfig = ${JSON.stringify(modelConfigData)};
+      </script>
+    `;
+
     // Replace placeholders with actual URIs
     let data = htmlContent
       .replace(/\$\{scriptUri\}/g, mainScriptPath.toString())
       .replace(/\$\{stylesUri\}/g, stylesPath.toString())
       .replace(/\$\{iconUri\}/g, iconPath.toString())
       .replace(/\$\{cspSource\}/g, webview.cspSource);
+    
+    // Inject model config script before the main script tag
+    data = data.replace('</head>', `${modelConfigScript}</head>`);
+    
     return data;
   }
 }
