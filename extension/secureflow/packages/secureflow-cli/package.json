@@ -11,7 +11,10 @@
   "type": "commonjs",
   "scripts": {
     "start": "node bin/secureflow",
-    "help": "node bin/secureflow --help"
+    "help": "node bin/secureflow --help",
+    "generate:models": "node scripts/generate-model-config.js",
+    "prepack": "npm run generate:models",
+    "prepublishOnly": "npm run generate:models"
   },
   "dependencies": {
     "colorette": "^2.0.20",
@@ -48,6 +51,7 @@
     "config/",
     "profiler/",
     "scanner/",
+    "scripts/",
     "README.md",
     "LICENSE"
   ]

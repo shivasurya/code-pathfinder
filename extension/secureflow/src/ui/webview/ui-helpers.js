@@ -62,41 +62,43 @@ export function getTrashIcon() {
     return `<svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.5 8.5V14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12.5 8.5V14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="4.5" y="5.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M2.5 5.5H17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8.5 2.5H11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 }
 
+/**
+ * NOTE: Model configuration is auto-generated from config/models.json
+ * This file now dynamically loads model data instead of hardcoding it
+ */
+
+// Import the model config - this will be available after webpack bundles
+// For now, we'll use a dynamic approach that works in the webview context
+let modelConfigCache = null;
+
+/**
+ * Load model configuration from the extension
+ * In the webview context, we can access this via the vscode API
+ */
+function loadModelConfig() {
+    // This will be populated by the extension when it loads the webview
+    // For now, return a fallback that will be replaced by proper loading
+    if (typeof window !== 'undefined' && window.modelConfig) {
+        return window.modelConfig;
+    }
+    
+    // Fallback - will be replaced when webview loads
+    return { models: [], providers: {} };
+}
+
 // Get display name for AI models
 export function getModelDisplayName(model) {
-    const modelNames = {
-        'gpt-5-pro': 'GPT-5 Pro',
-        'gpt-5': 'GPT-5',
-        'gpt-5-mini': 'GPT-5 Mini',
-        'gpt-5-nano': 'GPT-5 Nano',
-        'o3': 'O3',
-        'o3-pro': 'O3 Pro',
-        'o3-mini': 'O3 Mini',
-        'o4-mini': 'O4 Mini',
-        'gpt-4.1': 'GPT-4.1',
-        'gpt-4.1-mini': 'GPT-4.1 Mini',
-        'gpt-4o': 'GPT-4o',
-        'gpt-4o-mini': 'GPT-4o Mini',
-        'o1': 'O1',
-        'gemini-2.5-pro': 'Gemini 2.5 Pro',
-        'gemini-2.5-flash': 'Gemini 2.5 Flash',
-        'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
-        'claude-opus-4-1-20250805': 'Claude Opus 4.1',
-        'claude-opus-4-20250514': 'Claude Opus 4',
-        'claude-sonnet-4-20250514': 'Claude Sonnet 4',
-        'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
-        'claude-haiku-4-5': 'Claude 4.5 Haiku',
-        'claude-3-5-haiku-20241022': 'Claude 3.5 Haiku',
-        'grok-4-fast-reasoning': 'Grok 4 Fast Reasoning'
-    };
-    return modelNames[model] || model;
+    const config = loadModelConfig();
+    const modelData = config.models?.find(m => m.id === model);
+    return modelData?.displayName || model;
 }
 
 // Get provider name for AI models
 export function getModelProvider(model) {
-    if (model.startsWith('claude')) return 'Anthropic';
-    if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) return 'OpenAI';
-    if (model.startsWith('gemini')) return 'Google';
-    if (model.startsWith('grok')) return 'xAI';
+    const config = loadModelConfig();
+    const modelData = config.models?.find(m => m.id === model);
+    if (modelData && config.providers) {
+        return config.providers[modelData.provider]?.name || 'Unknown';
+    }
     return 'Unknown';
 }

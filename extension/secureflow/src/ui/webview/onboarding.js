@@ -10,6 +10,45 @@ let currentStep = 1;
 let selectedModel = 'claude-sonnet-4-5-20250929';
 let apiKey = '';
 
+/**
+ * Populate model select dropdown from window.modelConfig
+ */
+function populateModelDropdown() {
+    const modelSelect = document.getElementById('modelSelect');
+    if (!modelSelect || !window.modelConfig) {
+        return;
+    }
+
+    // Clear existing options
+    modelSelect.innerHTML = '';
+
+    // Get models sorted by order
+    const models = window.modelConfig.models || [];
+    
+    // Find recommended model
+    const recommended = models.find(m => m.recommended);
+    
+    // Add options
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.displayName;
+        if (model.recommended) {
+            option.textContent += ' (Recommended)';
+        }
+        modelSelect.appendChild(option);
+    });
+
+    // Set default to recommended or first model
+    if (recommended) {
+        modelSelect.value = recommended.id;
+        selectedModel = recommended.id;
+    } else if (models.length > 0) {
+        modelSelect.value = models[0].id;
+        selectedModel = models[0].id;
+    }
+}
+
 // Show specific onboarding step
 export function showStep(step) {
     // Hide all steps
@@ -92,6 +131,9 @@ export function handleConfigSaved(message) {
 
 // Initialize onboarding event listeners
 export function initializeOnboardingEventListeners(vscode) {
+    // Populate model dropdown from injected config
+    populateModelDropdown();
+
     // Step 1: Start onboarding
     const startButton = document.getElementById('startOnboarding');
     if (startButton) {
