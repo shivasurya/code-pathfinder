@@ -11,9 +11,11 @@ import (
 	"time"
 
 	javalang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/java"
+	pythonlang "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/python"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	"github.com/smacker/go-tree-sitter/java"
+	"github.com/smacker/go-tree-sitter/python"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	//nolint:all
@@ -41,6 +43,7 @@ type Node struct {
 	hasAccess            bool
 	File                 string
 	isJavaSourceFile     bool
+	isPythonSourceFile   bool
 	ThrowsExceptions     []string
 	Annotation           []string
 	JavaDoc              *model.Javadoc
@@ -113,6 +116,10 @@ func isJavaSourceFile(filename string) bool {
 	return filepath.Ext(filename) == ".java"
 }
 
+func isPythonSourceFile(filename string) bool {
+	return filepath.Ext(filename) == ".py"
+}
+
 //nolint:all
 func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	if node == nil {
@@ -183,7 +190,307 @@ func parseJavadocTags(commentContent string) *model.Javadoc {
 
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
+	isPythonSourceFile := isPythonSourceFile(file)
 	switch node.Type() {
+	// Python-specific node types
+	case "function_definition":
+		if !isPythonSourceFile {
+			break
+		}
+		// Extract function name and parameters
+		functionName := ""
+		parameters := []string{}
+		
+		nameNode := node.ChildByFieldName("name")
+		if nameNode != nil {
+			functionName = nameNode.Content(sourceCode)
+		}
+		
+		parametersNode := node.ChildByFieldName("parameters")
+		if parametersNode != nil {
+			for i := 0; i < int(parametersNode.NamedChildCount()); i++ {
+				param := parametersNode.NamedChild(i)
+				if param.Type() == "identifier" || param.Type() == "typed_parameter" || param.Type() == "default_parameter" {
+					parameters = append(parameters, param.Content(sourceCode))
+				}
+			}
+		}
+		
+		methodID := GenerateMethodID(functionName, parameters, file)
+		functionNode := &Node{
+			ID:                   methodID,
+			Type:                 "function_definition",
+			Name:                 functionName,
+			CodeSnippet:          node.Content(sourceCode),
+			LineNumber:           node.StartPoint().Row + 1,
+			MethodArgumentsValue: parameters,
+			File:                 file,
+			isPythonSourceFile:   isPythonSourceFile,
+		}
+		graph.AddNode(functionNode)
+		currentContext = functionNode
+		
+	case "class_definition":
+		if !isPythonSourceFile {
+			break
+		}
+		// Extract class name and bases
+		className := ""
+		superClasses := []string{}
+		
+		nameNode := node.ChildByFieldName("name")
+		if nameNode != nil {
+			className = nameNode.Content(sourceCode)
+		}
+		
+		superclassNode := node.ChildByFieldName("superclasses")
+		if superclassNode != nil {
+			for i := 0; i < int(superclassNode.NamedChildCount()); i++ {
+				superClass := superclassNode.NamedChild(i)
+				if superClass.Type() == "identifier" || superClass.Type() == "attribute" {
+					superClasses = append(superClasses, superClass.Content(sourceCode))
+				}
+			}
+		}
+		
+		classNode := &Node{
+			ID:                 GenerateMethodID(className, []string{}, file),
+			Type:               "class_definition",
+			Name:               className,
+			CodeSnippet:        node.Content(sourceCode),
+			LineNumber:         node.StartPoint().Row + 1,
+			Interface:          superClasses,
+			File:               file,
+			isPythonSourceFile: isPythonSourceFile,
+		}
+		graph.AddNode(classNode)
+		
+	case "call":
+		if !isPythonSourceFile {
+			break
+		}
+		// Python function calls
+		callName := ""
+		arguments := []string{}
+		
+		functionNode := node.ChildByFieldName("function")
+		if functionNode != nil {
+			callName = functionNode.Content(sourceCode)
+		}
+		
+		argumentsNode := node.ChildByFieldName("arguments")
+		if argumentsNode != nil {
+			for i := 0; i < int(argumentsNode.NamedChildCount()); i++ {
+				arg := argumentsNode.NamedChild(i)
+				arguments = append(arguments, arg.Content(sourceCode))
+			}
+		}
+		
+		callID := GenerateMethodID(callName, arguments, file)
+		callNode := &Node{
+			ID:                   callID,
+			Type:                 "call",
+			Name:                 callName,
+			IsExternal:           true,
+			CodeSnippet:          node.Content(sourceCode),
+			LineNumber:           node.StartPoint().Row + 1,
+			MethodArgumentsValue: arguments,
+			File:                 file,
+			isPythonSourceFile:   isPythonSourceFile,
+		}
+		graph.AddNode(callNode)
+		if currentContext != nil {
+			graph.AddEdge(currentContext, callNode)
+		}
+		
+	case "return_statement":
+		if isPythonSourceFile {
+			returnNode := pythonlang.ParseReturnStatement(node, sourceCode)
+			uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			returnStmtNode := &Node{
+				ID:                 GenerateSha256(uniqueReturnID),
+				Type:               "ReturnStmt",
+				LineNumber:         node.StartPoint().Row + 1,
+				Name:               "ReturnStmt",
+				IsExternal:         true,
+				CodeSnippet:        node.Content(sourceCode),
+				File:               file,
+				isPythonSourceFile: isPythonSourceFile,
+				ReturnStmt:         returnNode,
+			}
+			graph.AddNode(returnStmtNode)
+		} else if isJavaSourceFile {
+			returnNode := javalang.ParseReturnStatement(node, sourceCode)
+			uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			returnStmtNode := &Node{
+				ID:               GenerateSha256(uniqueReturnID),
+				Type:             "ReturnStmt",
+				LineNumber:       node.StartPoint().Row + 1,
+				Name:             "ReturnStmt",
+				IsExternal:       true,
+				CodeSnippet:      node.Content(sourceCode),
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				ReturnStmt:       returnNode,
+			}
+			graph.AddNode(returnStmtNode)
+		}
+		
+	case "break_statement":
+		if isPythonSourceFile {
+			breakNode := pythonlang.ParseBreakStatement(node, sourceCode)
+			uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			breakStmtNode := &Node{
+				ID:                 GenerateSha256(uniquebreakstmtID),
+				Type:               "BreakStmt",
+				LineNumber:         node.StartPoint().Row + 1,
+				Name:               "BreakStmt",
+				IsExternal:         true,
+				CodeSnippet:        node.Content(sourceCode),
+				File:               file,
+				isPythonSourceFile: isPythonSourceFile,
+				BreakStmt:          breakNode,
+			}
+			graph.AddNode(breakStmtNode)
+		} else if isJavaSourceFile {
+			breakNode := javalang.ParseBreakStatement(node, sourceCode)
+			uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			breakStmtNode := &Node{
+				ID:               GenerateSha256(uniquebreakstmtID),
+				Type:             "BreakStmt",
+				LineNumber:       node.StartPoint().Row + 1,
+				Name:             "BreakStmt",
+				IsExternal:       true,
+				CodeSnippet:      node.Content(sourceCode),
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				BreakStmt:        breakNode,
+			}
+			graph.AddNode(breakStmtNode)
+		}
+		
+	case "continue_statement":
+		if isPythonSourceFile {
+			continueNode := pythonlang.ParseContinueStatement(node, sourceCode)
+			uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			continueStmtNode := &Node{
+				ID:                 GenerateSha256(uniquecontinueID),
+				Type:               "ContinueStmt",
+				LineNumber:         node.StartPoint().Row + 1,
+				Name:               "ContinueStmt",
+				IsExternal:         true,
+				CodeSnippet:        node.Content(sourceCode),
+				File:               file,
+				isPythonSourceFile: isPythonSourceFile,
+				ContinueStmt:       continueNode,
+			}
+			graph.AddNode(continueStmtNode)
+		} else if isJavaSourceFile {
+			continueNode := javalang.ParseContinueStatement(node, sourceCode)
+			uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			continueStmtNode := &Node{
+				ID:               GenerateSha256(uniquecontinueID),
+				Type:             "ContinueStmt",
+				LineNumber:       node.StartPoint().Row + 1,
+				Name:             "ContinueStmt",
+				IsExternal:       true,
+				CodeSnippet:      node.Content(sourceCode),
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				ContinueStmt:     continueNode,
+			}
+			graph.AddNode(continueStmtNode)
+		}
+		
+	case "assert_statement":
+		if isPythonSourceFile {
+			assertNode := pythonlang.ParseAssertStatement(node, sourceCode)
+			uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			assertStmtNode := &Node{
+				ID:                 GenerateSha256(uniqueAssertID),
+				Type:               "AssertStmt",
+				LineNumber:         node.StartPoint().Row + 1,
+				Name:               "AssertStmt",
+				IsExternal:         true,
+				CodeSnippet:        node.Content(sourceCode),
+				File:               file,
+				isPythonSourceFile: isPythonSourceFile,
+				AssertStmt:         assertNode,
+			}
+			graph.AddNode(assertStmtNode)
+		} else if isJavaSourceFile {
+			assertNode := javalang.ParseAssertStatement(node, sourceCode)
+			uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
+			assertStmtNode := &Node{
+				ID:               GenerateSha256(uniqueAssertID),
+				Type:             "AssertStmt",
+				LineNumber:       node.StartPoint().Row + 1,
+				Name:             "AssertStmt",
+				IsExternal:       true,
+				CodeSnippet:      node.Content(sourceCode),
+				File:             file,
+				isJavaSourceFile: isJavaSourceFile,
+				AssertStmt:       assertNode,
+			}
+			graph.AddNode(assertStmtNode)
+		}
+		
+	case "expression_statement":
+		if isPythonSourceFile {
+			// Handle yield expressions in Python
+			for i := 0; i < int(node.ChildCount()); i++ {
+				child := node.Child(i)
+				if child.Type() == "yield" {
+					yieldNode := pythonlang.ParseYieldStatement(child, sourceCode)
+					uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", child.StartPoint().Row+1, child.StartPoint().Column+1, file)
+					yieldStmtNode := &Node{
+						ID:                 GenerateSha256(uniqueyieldID),
+						Type:               "YieldStmt",
+						LineNumber:         child.StartPoint().Row + 1,
+						Name:               "YieldStmt",
+						IsExternal:         true,
+						CodeSnippet:        child.Content(sourceCode),
+						File:               file,
+						isPythonSourceFile: isPythonSourceFile,
+						YieldStmt:          yieldNode,
+					}
+					graph.AddNode(yieldStmtNode)
+					break
+				}
+			}
+		}
+		
+	case "assignment":
+		if isPythonSourceFile {
+			// Python variable assignments
+			variableName := ""
+			variableValue := ""
+			
+			leftNode := node.ChildByFieldName("left")
+			if leftNode != nil {
+				variableName = leftNode.Content(sourceCode)
+			}
+			
+			rightNode := node.ChildByFieldName("right")
+			if rightNode != nil {
+				variableValue = rightNode.Content(sourceCode)
+			}
+			
+			variableNode := &Node{
+				ID:                 GenerateMethodID(variableName, []string{}, file),
+				Type:               "variable_assignment",
+				Name:               variableName,
+				CodeSnippet:        node.Content(sourceCode),
+				LineNumber:         node.StartPoint().Row + 1,
+				VariableValue:      variableValue,
+				Scope:              "local",
+				File:               file,
+				isPythonSourceFile: isPythonSourceFile,
+			}
+			graph.AddNode(variableNode)
+		}
+		
+	// Java-specific node types continue below
 	case "block":
 		blockNode := javalang.ParseBlockStatement(node, sourceCode)
 		uniqueBlockID := fmt.Sprintf("block_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -199,36 +506,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			BlockStmt:        blockNode,
 		}
 		graph.AddNode(blockStmtNode)
-	case "return_statement":
-		returnNode := javalang.ParseReturnStatement(node, sourceCode)
-		uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		returnStmtNode := &Node{
-			ID:               GenerateSha256(uniqueReturnID),
-			Type:             "ReturnStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "ReturnStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			ReturnStmt:       returnNode,
-		}
-		graph.AddNode(returnStmtNode)
-	case "assert_statement":
-		assertNode := javalang.ParseAssertStatement(node, sourceCode)
-		uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		assertStmtNode := &Node{
-			ID:               GenerateSha256(uniqueAssertID),
-			Type:             "AssertStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "AssertStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			AssertStmt:       assertNode,
-		}
-		graph.AddNode(assertStmtNode)
+	// Java return, assert handled in combined case above
 	case "yield_statement":
 		yieldNode := javalang.ParseYieldStatement(node, sourceCode)
 		uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
@@ -244,36 +522,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			YieldStmt:        yieldNode,
 		}
 		graph.AddNode(yieldStmtNode)
-	case "break_statement":
-		breakNode := javalang.ParseBreakStatement(node, sourceCode)
-		uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		breakStmtNode := &Node{
-			ID:               GenerateSha256(uniquebreakstmtID),
-			Type:             "BreakStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "BreakStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			BreakStmt:        breakNode,
-		}
-		graph.AddNode(breakStmtNode)
-	case "continue_statement":
-		continueNode := javalang.ParseContinueStatement(node, sourceCode)
-		uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
-		continueStmtNode := &Node{
-			ID:               GenerateSha256(uniquecontinueID),
-			Type:             "ContinueStmt",
-			LineNumber:       node.StartPoint().Row + 1,
-			Name:             "ContinueStmt",
-			IsExternal:       true,
-			CodeSnippet:      node.Content(sourceCode),
-			File:             file,
-			isJavaSourceFile: isJavaSourceFile,
-			ContinueStmt:     continueNode,
-		}
-		graph.AddNode(continueStmtNode)
+	// Java break, continue handled in combined case above
 	case "if_statement":
 		ifNode := model.IfStmt{}
 		// get the condition of the if statement
@@ -1062,8 +1311,9 @@ func getFiles(directory string) ([]string, error) {
 			return err
 		}
 		if !info.IsDir() {
-			// append only java files
-			if filepath.Ext(path) == ".java" {
+			// append only java and python files
+			ext := filepath.Ext(path)
+			if ext == ".java" || ext == ".py" {
 				files = append(files, path)
 			}
 		}
@@ -1106,11 +1356,20 @@ func Initialize(directory string) *CodeGraph {
 		parser := sitter.NewParser()
 		defer parser.Close()
 
-		// Set the language (Java in this case)
-		parser.SetLanguage(java.GetLanguage())
-
 		for file := range fileChan {
 			fileName := filepath.Base(file)
+			fileExt := filepath.Ext(file)
+			
+			// Set the language based on file extension
+			if fileExt == ".java" {
+				parser.SetLanguage(java.GetLanguage())
+			} else if fileExt == ".py" {
+				parser.SetLanguage(python.GetLanguage())
+			} else {
+				Log("Unsupported file type:", file)
+				continue
+			}
+			
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
 			sourceCode, err := readFile(file)
 			if err != nil {
