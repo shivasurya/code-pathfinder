@@ -925,3 +925,99 @@ func TestExtractMethodName(t *testing.T) {
 		})
 	}
 }
+
+// Python-specific tests
+
+func TestIsPythonSourceFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		want     bool
+	}{
+		{"Valid Python file", "example.py", true},
+		{"Python file with path", "/path/to/script.py", true},
+		{"Python file with Windows path", "C:\\path\\to\\script.py", true},
+		{"File with multiple dots", "my.test.script.py", true},
+		{"Hidden Python file", ".hidden.py", true},
+		{"Non-Python file", "example.txt", false},
+		{"Java file", "Example.java", false},
+		{"No extension", "pythonfile", false},
+		{"Empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPythonSourceFile(tt.filename); got != tt.want {
+				t.Errorf("isPythonSourceFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetFilesMixedLanguages(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_mixed")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	testFiles := []struct {
+		name       string
+		content    string
+		shouldFind bool
+	}{
+		{"file1.py", "print('Hello')", true},
+		{"file2.txt", "Text content", false},
+		{"file3.py", "def func(): pass", true},
+		{"subdir/file4.py", "class Test: pass", true},
+		{"file5", "No extension file", false},
+		{"test.java", "public class Test {}", true},
+	}
+
+	for _, tf := range testFiles {
+		path := filepath.Join(tempDir, tf.name)
+		err := os.MkdirAll(filepath.Dir(path), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+		err = os.WriteFile(path, []byte(tf.content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	// Run getFiles
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	// Check that both .py and .java files are found
+	expectedFiles := 4 // 3 Python + 1 Java
+	if len(files) != expectedFiles {
+		t.Errorf("Expected %d files, but got %d", expectedFiles, len(files))
+	}
+
+	// Verify file extensions
+	pythonCount := 0
+	javaCount := 0
+	for _, file := range files {
+		ext := filepath.Ext(file)
+		switch ext {
+		case ".py":
+			pythonCount++
+		case ".java":
+			javaCount++
+		default:
+			t.Errorf("Unexpected file extension: %s", ext)
+		}
+	}
+
+	if pythonCount != 3 {
+		t.Errorf("Expected 3 Python files, got %d", pythonCount)
+	}
+	if javaCount != 1 {
+		t.Errorf("Expected 1 Java file, got %d", javaCount)
+	}
+}
