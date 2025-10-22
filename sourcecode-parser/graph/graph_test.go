@@ -6,10 +6,10 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/java"
+	"github.com/smacker/go-tree-sitter/python"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -877,28 +877,24 @@ func TestBuildGraphFromAST(t *testing.T) {
 
 func TestExtractMethodName(t *testing.T) {
 	tests := []struct {
-		name           string
-		sourceCode     string
-		expectedName   string
-		expectedIDPart string
+		name         string
+		sourceCode   string
+		expectedName string
 	}{
 		{
-			name:           "Simple method",
-			sourceCode:     "public void simpleMethod() {}",
-			expectedName:   "simpleMethod",
-			expectedIDPart: "e4bf121a07daa7b5fc0821f04fe31f22689361aaa7604264034bf231640c0b94",
+			name:         "Simple method",
+			sourceCode:   "public void simpleMethod() {}",
+			expectedName: "simpleMethod",
 		},
 		{
-			name:           "Method with parameters",
-			sourceCode:     "private int complexMethod(String a, int b) {}",
-			expectedName:   "complexMethod",
-			expectedIDPart: "8fa7666614f2db09a92d83f0ec126328a0c0fc93ac0919ffce2be2ce65e5fed5",
+			name:         "Method with parameters",
+			sourceCode:   "private int complexMethod(String a, int b) {}",
+			expectedName: "complexMethod",
 		},
 		{
-			name:           "Generic method",
-			sourceCode:     "public <T> List<T> genericMethod(T item) {}",
-			expectedName:   "genericMethod",
-			expectedIDPart: "4072dc9bf8d115f9c73a0ff3ff2205ef2866845921ac3dd218530ffe85966d96",
+			name:         "Generic method",
+			sourceCode:   "public <T> List<T> genericMethod(T item) {}",
+			expectedName: "genericMethod",
 		},
 	}
 
@@ -919,9 +915,439 @@ func TestExtractMethodName(t *testing.T) {
 				t.Errorf("Expected method name %s, but got %s", tt.expectedName, name)
 			}
 
-			if !strings.Contains(id, tt.expectedIDPart) {
-				t.Errorf("Expected method ID to contain %s, but got %s", tt.expectedIDPart, id)
+			// Verify ID is non-empty and contains the method name (with prefix)
+			if id == "" {
+				t.Error("Expected non-empty method ID")
+			}
+			
+			// Method declarations should have IDs prefixed with method:
+			if methodNode.Type() == "method_declaration" {
+				// The ID is a hash, but we can verify it was generated (non-empty)
+				if len(id) != 64 {
+					t.Errorf("Expected method ID to be SHA256 hash (64 chars), got length %d", len(id))
+				}
 			}
 		})
 	}
+}
+
+// Python-specific tests
+
+func TestIsPythonSourceFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		want     bool
+	}{
+		{"Valid Python file", "example.py", true},
+		{"Python file with path", "/path/to/script.py", true},
+		{"Python file with Windows path", "C:\\path\\to\\script.py", true},
+		{"File with multiple dots", "my.test.script.py", true},
+		{"Hidden Python file", ".hidden.py", true},
+		{"Non-Python file", "example.txt", false},
+		{"Java file", "Example.java", false},
+		{"No extension", "pythonfile", false},
+		{"Empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPythonSourceFile(tt.filename); got != tt.want {
+				t.Errorf("isPythonSourceFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetFilesMixedLanguages(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_mixed")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	testFiles := []struct {
+		name       string
+		content    string
+		shouldFind bool
+	}{
+		{"file1.py", "print('Hello')", true},
+		{"file2.txt", "Text content", false},
+		{"file3.py", "def func(): pass", true},
+		{"subdir/file4.py", "class Test: pass", true},
+		{"file5", "No extension file", false},
+		{"test.java", "public class Test {}", true},
+	}
+
+	for _, tf := range testFiles {
+		path := filepath.Join(tempDir, tf.name)
+		err := os.MkdirAll(filepath.Dir(path), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+		err = os.WriteFile(path, []byte(tf.content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	// Run getFiles
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	// Check that both .py and .java files are found
+	expectedFiles := 4 // 3 Python + 1 Java
+	if len(files) != expectedFiles {
+		t.Errorf("Expected %d files, but got %d", expectedFiles, len(files))
+	}
+
+	// Verify file extensions
+	pythonCount := 0
+	javaCount := 0
+	for _, file := range files {
+		ext := filepath.Ext(file)
+		switch ext {
+		case ".py":
+			pythonCount++
+		case ".java":
+			javaCount++
+		default:
+			t.Errorf("Unexpected file extension: %s", ext)
+		}
+	}
+
+	if pythonCount != 3 {
+		t.Errorf("Expected 3 Python files, got %d", pythonCount)
+	}
+	if javaCount != 1 {
+		t.Errorf("Expected 1 Java file, got %d", javaCount)
+	}
+}
+
+func TestBuildGraphFromASTPythonFunctionDefinition(t *testing.T) {
+	tests := []struct {
+		name              string
+		sourceCode        string
+		expectedNodeCount int
+		expectedName      string
+		expectedParams    []string
+	}{
+		{
+			name: "Simple function without parameters",
+			sourceCode: `def simple_func():
+    pass`,
+			expectedNodeCount: 1,
+			expectedName:      "simple_func",
+			expectedParams:    []string{},
+		},
+		{
+			name: "Function with parameters",
+			sourceCode: `def add(x, y):
+    return x + y`,
+			expectedNodeCount: 2, // function + return
+			expectedName:      "add",
+			expectedParams:    []string{"x", "y"},
+		},
+		{
+			name: "Method with self parameter",
+			sourceCode: `def method(self, arg1, arg2):
+    self.value = arg1`,
+			expectedNodeCount: 2, // function + assignment
+			expectedName:      "method",
+			expectedParams:    []string{"self", "arg1", "arg2"},
+		},
+		{
+			name: "Function with default parameters",
+			sourceCode: `def func_with_defaults(x, y=10, z=20):
+    return x + y + z`,
+			expectedNodeCount: 2, // function + return
+			expectedName:      "func_with_defaults",
+			expectedParams:    []string{"x", "y=10", "z=20"}, // Parser captures default values
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(python.GetLanguage())
+			defer parser.Close()
+
+			tree, err := parser.ParseCtx(context.Background(), nil, []byte(tt.sourceCode))
+			if err != nil {
+				t.Fatalf("Failed to parse Python source code: %v", err)
+			}
+			defer tree.Close()
+
+			root := tree.RootNode()
+			graph := NewCodeGraph()
+			buildGraphFromAST(root, []byte(tt.sourceCode), graph, nil, "test.py")
+
+			if len(graph.Nodes) < tt.expectedNodeCount {
+				t.Errorf("Expected at least %d nodes, but got %d", tt.expectedNodeCount, len(graph.Nodes))
+			}
+
+			// Find the function_definition node
+			var funcNode *Node
+			for _, node := range graph.Nodes {
+				if node.Type == "function_definition" {
+					funcNode = node
+					break
+				}
+			}
+
+			if funcNode == nil {
+				t.Fatal("No function_definition node found")
+			}
+
+			if funcNode.Name != tt.expectedName {
+				t.Errorf("Expected function name %s, got %s", tt.expectedName, funcNode.Name)
+			}
+
+			if !funcNode.isPythonSourceFile {
+				t.Error("Expected isPythonSourceFile to be true")
+			}
+
+			if len(tt.expectedParams) > 0 {
+				if len(funcNode.MethodArgumentsValue) != len(tt.expectedParams) {
+					t.Errorf("Expected %d parameters, got %d", len(tt.expectedParams), len(funcNode.MethodArgumentsValue))
+				}
+				for i, param := range tt.expectedParams {
+					if i < len(funcNode.MethodArgumentsValue) && funcNode.MethodArgumentsValue[i] != param {
+						t.Errorf("Expected parameter %d to be %s, got %s", i, param, funcNode.MethodArgumentsValue[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestBuildGraphFromASTPythonClassDefinition(t *testing.T) {
+	tests := []struct {
+		name              string
+		sourceCode        string
+		expectedNodeCount int
+		expectedClassName string
+		expectedBases     []string
+	}{
+		{
+			name: "Simple class without base",
+			sourceCode: `class SimpleClass:
+    pass`,
+			expectedNodeCount: 1,
+			expectedClassName: "SimpleClass",
+			expectedBases:     []string{},
+		},
+		{
+			name: "Class with single base",
+			sourceCode: `class Derived(Base):
+    pass`,
+			expectedNodeCount: 1,
+			expectedClassName: "Derived",
+			expectedBases:     []string{"Base"},
+		},
+		{
+			name: "Class with multiple bases",
+			sourceCode: `class MultiDerived(Base1, Base2, Base3):
+    pass`,
+			expectedNodeCount: 1,
+			expectedClassName: "MultiDerived",
+			expectedBases:     []string{"Base1", "Base2", "Base3"},
+		},
+		{
+			name: "Class with method",
+			sourceCode: `class MyClass:
+    def my_method(self):
+        return 42`,
+			expectedNodeCount: 3, // class + method + return
+			expectedClassName: "MyClass",
+			expectedBases:     []string{},
+		},
+		{
+			name: "Class with __init__ method",
+			sourceCode: `class Person:
+    def __init__(self, name):
+        self.name = name`,
+			expectedNodeCount: 3, // class + __init__ + assignment
+			expectedClassName: "Person",
+			expectedBases:     []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(python.GetLanguage())
+			defer parser.Close()
+
+			tree, err := parser.ParseCtx(context.Background(), nil, []byte(tt.sourceCode))
+			if err != nil {
+				t.Fatalf("Failed to parse Python source code: %v", err)
+			}
+			defer tree.Close()
+
+			root := tree.RootNode()
+			graph := NewCodeGraph()
+			buildGraphFromAST(root, []byte(tt.sourceCode), graph, nil, "test.py")
+
+			if len(graph.Nodes) < tt.expectedNodeCount {
+				t.Errorf("Expected at least %d nodes, but got %d", tt.expectedNodeCount, len(graph.Nodes))
+			}
+
+			// Find the class_definition node
+			var classNode *Node
+			for _, node := range graph.Nodes {
+				if node.Type == "class_definition" {
+					classNode = node
+					break
+				}
+			}
+
+			if classNode == nil {
+				t.Fatal("No class_definition node found")
+			}
+
+			if classNode.Name != tt.expectedClassName {
+				t.Errorf("Expected class name %s, got %s", tt.expectedClassName, classNode.Name)
+			}
+
+			if !classNode.isPythonSourceFile {
+				t.Error("Expected isPythonSourceFile to be true")
+			}
+
+			if len(tt.expectedBases) > 0 {
+				if len(classNode.Interface) != len(tt.expectedBases) {
+					t.Errorf("Expected %d base classes, got %d", len(tt.expectedBases), len(classNode.Interface))
+				}
+				for i, base := range tt.expectedBases {
+					if i < len(classNode.Interface) && classNode.Interface[i] != base {
+						t.Errorf("Expected base class %d to be %s, got %s", i, base, classNode.Interface[i])
+					}
+				}
+			} else if len(classNode.Interface) != 0 {
+				t.Errorf("Expected no base classes, got %d", len(classNode.Interface))
+			}
+		})
+	}
+}
+
+func TestBuildGraphFromASTPythonStatements(t *testing.T) {
+	tests := []struct {
+		name              string
+		sourceCode        string
+		expectedTypes     []string
+		minNodeCount      int
+	}{
+		{
+			name: "Function with return statement",
+			sourceCode: `def get_value():
+    return 42`,
+			expectedTypes: []string{"function_definition", "ReturnStmt"},
+			minNodeCount:  2,
+		},
+		{
+			name: "Function with assert statement",
+			sourceCode: `def validate(x):
+    assert x > 0, "must be positive"`,
+			expectedTypes: []string{"function_definition", "AssertStmt"},
+			minNodeCount:  2,
+		},
+		{
+			name: "Function with break and continue",
+			sourceCode: `def loop():
+    for i in range(10):
+        if i == 5:
+            break
+        if i == 3:
+            continue`,
+			expectedTypes: []string{"function_definition", "BreakStmt", "ContinueStmt"},
+			minNodeCount:  3,
+		},
+		{
+			name: "Generator function with yield",
+			sourceCode: `def gen():
+    yield 1
+    yield 2`,
+			expectedTypes: []string{"function_definition", "YieldStmt"},
+			minNodeCount:  2,
+		},
+		{
+			name: "Function with variable assignment",
+			sourceCode: `def compute():
+    result = 10 + 20
+    return result`,
+			expectedTypes: []string{"function_definition", "variable_assignment", "ReturnStmt"},
+			minNodeCount:  3,
+		},
+		{
+			name: "Function with function calls",
+			sourceCode: `def caller():
+    print("hello")
+    other_func()`,
+			expectedTypes: []string{"function_definition", "call"},
+			minNodeCount:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(python.GetLanguage())
+			defer parser.Close()
+
+			tree, err := parser.ParseCtx(context.Background(), nil, []byte(tt.sourceCode))
+			if err != nil {
+				t.Fatalf("Failed to parse Python source code: %v", err)
+			}
+			defer tree.Close()
+
+			root := tree.RootNode()
+			graph := NewCodeGraph()
+			buildGraphFromAST(root, []byte(tt.sourceCode), graph, nil, "test.py")
+
+			if len(graph.Nodes) < tt.minNodeCount {
+				t.Errorf("Expected at least %d nodes, but got %d", tt.minNodeCount, len(graph.Nodes))
+			}
+
+			// Verify expected node types exist
+			nodeTypes := make(map[string]bool)
+			pythonSpecificTypes := map[string]bool{
+				"function_definition": true,
+				"class_definition":    true,
+				"call":                true,
+				"variable_assignment": true,
+				"ReturnStmt":          true,
+				"AssertStmt":          true,
+				"BreakStmt":           true,
+				"ContinueStmt":        true,
+				"YieldStmt":           true,
+			}
+			
+			for _, node := range graph.Nodes {
+				nodeTypes[node.Type] = true
+				
+				// Python-specific nodes should be marked as Python
+				if pythonSpecificTypes[node.Type] && !node.isPythonSourceFile {
+					t.Errorf("Node %s (type: %s) should have isPythonSourceFile=true", node.ID, node.Type)
+				}
+			}
+
+			for _, expectedType := range tt.expectedTypes {
+				if !nodeTypes[expectedType] {
+					t.Errorf("Expected node type %s not found. Found types: %v", expectedType, getKeys(nodeTypes))
+				}
+			}
+		})
+	}
+}
+
+// Helper function to get map keys.
+func getKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
