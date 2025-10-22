@@ -238,7 +238,7 @@ func parseJavaClassDeclaration(node *sitter.Node, sourceCode []byte, graph *Code
 	}
 
 	classNode := &Node{
-		ID:               GenerateMethodID(className, []string{}, file),
+		ID:               GenerateMethodID("class:"+className, []string{}, file),
 		Type:             "class_declaration",
 		Name:             className,
 		CodeSnippet:      node.Content(sourceCode),

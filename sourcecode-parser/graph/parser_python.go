@@ -28,7 +28,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		}
 	}
 
-	methodID := GenerateMethodID(functionName, parameters, file)
+	methodID := GenerateMethodID("function:"+functionName, parameters, file)
 	functionNode := &Node{
 		ID:                   methodID,
 		Type:                 "function_definition",
@@ -65,7 +65,7 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 	}
 
 	classNode := &Node{
-		ID:                 GenerateMethodID(className, []string{}, file),
+		ID:                 GenerateMethodID("class:"+className, []string{}, file),
 		Type:               "class_definition",
 		Name:               className,
 		CodeSnippet:        node.Content(sourceCode),

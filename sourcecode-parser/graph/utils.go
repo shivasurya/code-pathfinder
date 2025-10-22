@@ -231,7 +231,14 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	columnNumber := int(node.StartPoint().Column) + 1
 	// convert to string and merge
 	content += " " + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber)
-	methodID = GenerateMethodID(methodName, parameters, filepath+"/"+content)
+	
+	// Prefix method declarations to avoid ID collisions with invocations
+	prefix := ""
+	if node.Type() == "method_declaration" {
+		prefix = "method:"
+	}
+	
+	methodID = GenerateMethodID(prefix+methodName, parameters, filepath+"/"+content)
 	return methodName, methodID
 }
 
