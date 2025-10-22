@@ -52,11 +52,12 @@ func TestParseReturnStatement(t *testing.T) {
 				t.Fatal("ParseReturnStatement returned nil")
 			}
 
-			if tt.expected == "" && result.Result != nil {
+			switch {
+			case tt.expected == "" && result.Result != nil:
 				t.Errorf("Expected nil result, got %v", result.Result)
-			} else if tt.expected != "" && result.Result == nil {
+			case tt.expected != "" && result.Result == nil:
 				t.Errorf("Expected result %s, got nil", tt.expected)
-			} else if tt.expected != "" && result.Result != nil && result.Result.NodeString != tt.expected {
+			case tt.expected != "" && result.Result != nil && result.Result.NodeString != tt.expected:
 				t.Errorf("Expected result %s, got %s", tt.expected, result.Result.NodeString)
 			}
 		})

@@ -1361,11 +1361,12 @@ func Initialize(directory string) *CodeGraph {
 			fileExt := filepath.Ext(file)
 			
 			// Set the language based on file extension
-			if fileExt == ".java" {
+			switch fileExt {
+			case ".java":
 				parser.SetLanguage(java.GetLanguage())
-			} else if fileExt == ".py" {
+			case ".py":
 				parser.SetLanguage(python.GetLanguage())
-			} else {
+			default:
 				Log("Unsupported file type:", file)
 				continue
 			}
