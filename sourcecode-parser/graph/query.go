@@ -213,12 +213,12 @@ func evaluateExpression(node []*Node, expression string, query parser.Query) (in
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
-		fmt.Println("Error compiling expression: ", err)
+		Log("Error compiling expression: ", err)
 		return "", err
 	}
 	output, err := expr.Run(program, env)
 	if err != nil {
-		fmt.Println("Error evaluating expression: ", err)
+		Log("Error evaluating expression: ", err)
 		return "", err
 	}
 	return output, nil
@@ -317,6 +317,8 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 	methodInvocation := "method_invocation"
 	variableDeclaration := "variable_declaration"
 	binaryExpression := "binary_expression"
+	functionDefinition := "function_definition"
+	classDefinition := "class_definition"
 	addExpression := "add_expression"
 	subExpression := "sub_expression"
 	mulExpression := "mul_expression"
@@ -358,6 +360,10 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			variableDeclaration = entity.Alias
 		case "binary_expression":
 			binaryExpression = entity.Alias
+		case "function_definition":
+			functionDefinition = entity.Alias
+		case "class_definition":
+			classDefinition = entity.Alias
 		case "add_expression":
 			addExpression = entity.Alias
 		case "sub_expression":
@@ -582,6 +588,16 @@ func generateProxyEnv(node *Node, query parser.Query) map[string]interface{} {
 			"toString":     proxyenv.ToString,
 			"getBlockStmt": proxyenv.GetBlockStmt,
 		},
+		functionDefinition: map[string]interface{}{
+			"getName":         proxyenv.GetName,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"toString":        proxyenv.ToString,
+		},
+		classDefinition: map[string]interface{}{
+			"getName":      proxyenv.GetName,
+			"getInterface": proxyenv.GetInterfaces,
+			"toString":     proxyenv.ToString,
+		},
 	}
 	return env
 }
@@ -624,12 +640,12 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
-		fmt.Println("Error compiling expression: ", err)
+		Log("Error compiling expression: ", err)
 		return false
 	}
 	output, err := expr.Run(program, env)
 	if err != nil {
-		fmt.Println("Error evaluating expression: ", err)
+		Log("Error evaluating expression: ", err)
 		return false
 	}
 	if output.(bool) { //nolint:all
