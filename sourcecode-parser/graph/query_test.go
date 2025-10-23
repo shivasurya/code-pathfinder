@@ -249,3 +249,329 @@ func TestCartesianProductPerformance(t *testing.T) {
 	assert.Equal(t, 9765625, len(result))
 	assert.Less(t, duration, 10*time.Second)
 }
+
+// TestPythonClassDefinitionSupport tests that Python class_definition entities are properly supported.
+func TestPythonClassDefinitionSupport(t *testing.T) {
+	graph := NewCodeGraph()
+	node := &Node{
+		ID:                 "python_class_1",
+		Type:               "class_definition",
+		Name:               "Calculator",
+		Interface:          []string{"object"},
+		isPythonSourceFile: true,
+	}
+	graph.AddNode(node)
+
+	tests := []struct {
+		name     string
+		query    parser.Query
+		expected int
+	}{
+		{
+			name: "Query Python class by name",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+				Expression: "c.getName() == \"Calculator\"",
+				Condition: []string{
+					"c.getName()==\"Calculator\"",
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "Query all Python classes",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+				Expression: "",
+				Condition:  []string{},
+			},
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resultSet, output := QueryEntities(graph, tt.query)
+			assert.Equal(t, tt.expected, len(resultSet))
+			assert.NotNil(t, output)
+		})
+	}
+}
+
+// TestPythonFunctionDefinitionSupport tests that Python function_definition entities are properly supported.
+func TestPythonFunctionDefinitionSupport(t *testing.T) {
+	graph := NewCodeGraph()
+	node := &Node{
+		ID:                   "python_func_1",
+		Type:                 "function_definition",
+		Name:                 "process_data",
+		MethodArgumentsValue: []string{"data", "options"},
+		isPythonSourceFile:   true,
+	}
+	graph.AddNode(node)
+
+	tests := []struct {
+		name     string
+		query    parser.Query
+		expected int
+	}{
+		{
+			name: "Query Python function by name",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+				Expression: "f.getName() == \"process_data\"",
+				Condition: []string{
+					"f.getName()==\"process_data\"",
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "Query all Python functions",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+				Expression: "",
+				Condition:  []string{},
+			},
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resultSet, output := QueryEntities(graph, tt.query)
+			assert.Equal(t, tt.expected, len(resultSet))
+			assert.NotNil(t, output)
+		})
+	}
+}
+
+// TestGenerateProxyEnvForPythonClass tests that proxy environment is correctly generated for Python classes.
+func TestGenerateProxyEnvForPythonClass(t *testing.T) {
+	node := &Node{
+		Type:               "class_definition",
+		Name:               "TestClass",
+		Interface:          []string{"BaseClass", "Mixin"},
+		isPythonSourceFile: true,
+	}
+
+	query := parser.Query{
+		SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+	}
+
+	env := generateProxyEnv(node, query)
+	assert.NotNil(t, env)
+	assert.Contains(t, env, "c")
+	classEnv := env["c"].(map[string]interface{})
+
+	// Verify all expected methods are present
+	assert.NotNil(t, classEnv["getName"])
+	assert.NotNil(t, classEnv["getInterface"])
+	assert.NotNil(t, classEnv["toString"])
+
+	// Test getName
+	name := classEnv["getName"].(func() string)()
+	assert.Equal(t, "TestClass", name)
+
+	// Test getInterface
+	interfaces := classEnv["getInterface"].(func() []string)()
+	assert.Equal(t, []string{"BaseClass", "Mixin"}, interfaces)
+
+	// Test toString
+	toString := classEnv["toString"].(func() string)()
+	assert.Contains(t, toString, "TestClass")
+	assert.Contains(t, toString, "class_definition")
+}
+
+// TestGenerateProxyEnvForPythonFunction tests that proxy environment is correctly generated for Python functions.
+func TestGenerateProxyEnvForPythonFunction(t *testing.T) {
+	node := &Node{
+		Type:                 "function_definition",
+		Name:                 "calculate",
+		MethodArgumentsValue: []string{"x", "y", "z"},
+		isPythonSourceFile:   true,
+	}
+
+	query := parser.Query{
+		SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+	}
+
+	env := generateProxyEnv(node, query)
+	assert.NotNil(t, env)
+	assert.Contains(t, env, "f")
+	funcEnv := env["f"].(map[string]interface{})
+
+	// Verify all expected methods are present
+	assert.NotNil(t, funcEnv["getName"])
+	assert.NotNil(t, funcEnv["getArgumentName"])
+	assert.NotNil(t, funcEnv["toString"])
+
+	// Test getName
+	name := funcEnv["getName"].(func() string)()
+	assert.Equal(t, "calculate", name)
+
+	// Test getArgumentName
+	argNames := funcEnv["getArgumentName"].(func() []string)()
+	assert.Equal(t, []string{"x", "y", "z"}, argNames)
+
+	// Test toString
+	toString := funcEnv["toString"].(func() string)()
+	assert.Contains(t, toString, "calculate")
+	assert.Contains(t, toString, "function_definition")
+}
+
+// TestFilterPythonEntities tests filtering of Python entities.
+func TestFilterPythonEntities(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     *Node
+		query    parser.Query
+		expected bool
+	}{
+		{
+			name: "Filter Python class by name",
+			node: &Node{
+				Type:               "class_definition",
+				Name:               "Calculator",
+				isPythonSourceFile: true,
+			},
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+				Expression: "c.getName() == \"Calculator\"",
+			},
+			expected: true,
+		},
+		{
+			name: "Filter Python function by name",
+			node: &Node{
+				Type:               "function_definition",
+				Name:               "process_data",
+				isPythonSourceFile: true,
+			},
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+				Expression: "f.getName() == \"process_data\"",
+			},
+			expected: true,
+		},
+		{
+			name: "Filter Python class with false condition",
+			node: &Node{
+				Type:               "class_definition",
+				Name:               "TestClass",
+				isPythonSourceFile: true,
+			},
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+				Expression: "c.getName() == \"DifferentClass\"",
+			},
+			expected: false,
+		},
+		{
+			name: "Filter Python function by arguments",
+			node: &Node{
+				Type:                 "function_definition",
+				Name:                 "add",
+				MethodArgumentsValue: []string{"x", "y"},
+				isPythonSourceFile:   true,
+			},
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+				Expression: "len(f.getArgumentName()) == 2",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FilterEntities([]*Node{tt.node}, tt.query)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestMixedJavaAndPythonEntities tests querying both Java and Python entities.
+func TestMixedJavaAndPythonEntities(t *testing.T) {
+	graph := NewCodeGraph()
+
+	// Add Java class
+	javaClass := &Node{
+		ID:                 "java_class_1",
+		Type:               "class_declaration",
+		Name:               "JavaClass",
+		Modifier:           "public",
+		isJavaSourceFile:   true,
+	}
+	graph.AddNode(javaClass)
+
+	// Add Python class
+	pythonClass := &Node{
+		ID:                 "python_class_1",
+		Type:               "class_definition",
+		Name:               "PythonClass",
+		isPythonSourceFile: true,
+	}
+	graph.AddNode(pythonClass)
+
+	// Add Java method
+	javaMethod := &Node{
+		ID:                 "java_method_1",
+		Type:               "method_declaration",
+		Name:               "javaMethod",
+		Modifier:           "public",
+		isJavaSourceFile:   true,
+	}
+	graph.AddNode(javaMethod)
+
+	// Add Python function
+	pythonFunc := &Node{
+		ID:                 "python_func_1",
+		Type:               "function_definition",
+		Name:               "python_function",
+		isPythonSourceFile: true,
+	}
+	graph.AddNode(pythonFunc)
+
+	tests := []struct {
+		name     string
+		query    parser.Query
+		expected int
+	}{
+		{
+			name: "Query only Java classes",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_declaration", Alias: "c"}},
+			},
+			expected: 1,
+		},
+		{
+			name: "Query only Python classes",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "class_definition", Alias: "c"}},
+			},
+			expected: 1,
+		},
+		{
+			name: "Query only Java methods",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "method_declaration", Alias: "m"}},
+			},
+			expected: 1,
+		},
+		{
+			name: "Query only Python functions",
+			query: parser.Query{
+				SelectList: []parser.SelectList{{Entity: "function_definition", Alias: "f"}},
+			},
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resultSet, _ := QueryEntities(graph, tt.query)
+			assert.Equal(t, tt.expected, len(resultSet))
+		})
+	}
+}
