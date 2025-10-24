@@ -1,0 +1,25 @@
+# Ignore all benchmark output files
+*.csv
+*.png
+*.log
+
+# Ignore specific benchmark runs
+benchmark.*
+*_benchmark.*
+*_memory.*
+class_*
+function_*
+test_*
+
+# Allow example files if we add them later
+!example_output.png
+!example_data.csv
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS specific
+.DS_Store
+Thumbs.db
