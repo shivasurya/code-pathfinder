@@ -139,7 +139,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 				result := make(map[string]interface{})
 				result["file"] = entityObject.File
 				result["line"] = entityObject.LineNumber
-				result["code"] = entityObject.CodeSnippet
+				result["code"] = entityObject.GetCodeSnippet()
 
 				results["result_set"] = append(results["result_set"].([]map[string]interface{}), result) //nolint:all
 			}
@@ -167,7 +167,7 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 			header += output + "\n"
 			result += header
 			result += "\n"
-			codeSnippetArray := strings.Split(entityObject.CodeSnippet, "\n")
+			codeSnippetArray := strings.Split(entityObject.GetCodeSnippet(), "\n")
 			for i := 0; i < len(codeSnippetArray); i++ {
 				lineNumber := color.New(color.FgCyan).SprintfFunc()("%4d", int(entityObject.LineNumber)+i)
 				result += fmt.Sprintf("%s%s %s %s\n", strings.Repeat("\t", 2), lineNumber, verticalLine, yellowCode(codeSnippetArray[i]))

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/expr-lang/expr"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics"
@@ -159,6 +160,238 @@ func (env *Env) GetBlockStmt() *model.BlockStmt {
 	return env.Node.BlockStmt
 }
 
+// Pool for small environment maps to reduce allocations.
+var envMapPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[string]interface{}, 10)
+	},
+}
+
+// getEnvMapFromPool gets a map from the pool and clears it.
+func getEnvMapFromPool() map[string]interface{} {
+	m := envMapPool.Get().(map[string]interface{})
+	// Clear the map
+	for k := range m {
+		delete(m, k)
+	}
+	return m
+}
+
+// returnEnvMapToPool returns a map to the pool.
+func returnEnvMapToPool(m map[string]interface{}) {
+	if m != nil && len(m) < 100 { // Only pool reasonably-sized maps
+		envMapPool.Put(m)
+	}
+}
+
+// buildEntityEnv creates the environment map for a specific entity type only.
+// This avoids creating all 28 entity type maps when only 1 is needed.
+func buildEntityEnv(proxyenv *Env, entityType string, _ string) map[string]interface{} {
+	switch entityType {
+	case "method_declaration":
+		return map[string]interface{}{
+			"getVisibility":   proxyenv.GetVisibility,
+			"getAnnotation":   proxyenv.GetAnnotations,
+			"getReturnType":   proxyenv.GetReturnType,
+			"getName":         proxyenv.GetName,
+			"getArgumentType": proxyenv.GetArgumentTypes,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"getThrowsType":   proxyenv.GetThrowsTypes,
+			"getDoc":          proxyenv.GetDoc,
+			"toString":        proxyenv.ToString,
+		}
+	case "class_declaration":
+		return map[string]interface{}{
+			"getSuperClass": proxyenv.GetSuperClass,
+			"getName":       proxyenv.GetName,
+			"getAnnotation": proxyenv.GetAnnotations,
+			"getVisibility": proxyenv.GetVisibility,
+			"getInterface":  proxyenv.GetInterfaces,
+			"getDoc":        proxyenv.GetDoc,
+			"toString":      proxyenv.ToString,
+		}
+	case "method_invocation":
+		return map[string]interface{}{
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"getName":         proxyenv.GetName,
+			"getDoc":          proxyenv.GetDoc,
+			"toString":        proxyenv.ToString,
+		}
+	case "variable_declaration":
+		return map[string]interface{}{
+			"getName":             proxyenv.GetName,
+			"getVisibility":       proxyenv.GetVisibility,
+			"getVariableValue":    proxyenv.GetVariableValue,
+			"getVariableDataType": proxyenv.GetVariableDataType,
+			"getScope":            proxyenv.GetScope,
+			"getDoc":              proxyenv.GetDoc,
+			"toString":            proxyenv.ToString,
+		}
+	case "binary_expression":
+		return map[string]interface{}{
+			"getLeftOperand":  proxyenv.GetLeftOperand,
+			"getRightOperand": proxyenv.GetRightOperand,
+			"toString":        proxyenv.ToString,
+		}
+	case "function_definition":
+		return map[string]interface{}{
+			"getName":         proxyenv.GetName,
+			"getArgumentName": proxyenv.GetArgumentNames,
+			"toString":        proxyenv.ToString,
+		}
+	case "class_definition":
+		return map[string]interface{}{
+			"getName":      proxyenv.GetName,
+			"getInterface": proxyenv.GetInterfaces,
+			"toString":     proxyenv.ToString,
+		}
+	case "add_expression", "sub_expression", "mul_expression", "div_expression":
+		op := "+"
+		switch entityType {
+		case "sub_expression":
+			op = "-"
+		case "mul_expression":
+			op = "*"
+		case "div_expression":
+			op = "/"
+		}
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   op,
+			"toString":      proxyenv.ToString,
+		}
+	case "comparison_expression", "equal_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "==",
+			"toString":      proxyenv.ToString,
+		}
+	case "not_equal_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "!=",
+			"toString":      proxyenv.ToString,
+		}
+	case "remainder_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "%",
+			"toString":      proxyenv.ToString,
+		}
+	case "right_shift_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   ">>",
+			"toString":      proxyenv.ToString,
+		}
+	case "left_shift_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "<<",
+			"toString":      proxyenv.ToString,
+		}
+	case "and_bitwise_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "&",
+			"toString":      proxyenv.ToString,
+		}
+	case "and_logical_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "&&",
+			"toString":      proxyenv.ToString,
+		}
+	case "or_logical_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "||",
+			"toString":      proxyenv.ToString,
+		}
+	case "or_bitwise_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "|",
+			"toString":      proxyenv.ToString,
+		}
+	case "unsigned_right_shift_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   ">>>",
+			"toString":      proxyenv.ToString,
+		}
+	case "xor_bitwise_expression":
+		return map[string]interface{}{
+			"getBinaryExpr": proxyenv.GetBinaryExpr,
+			"getOperator":   "^",
+			"toString":      proxyenv.ToString,
+		}
+	case "ClassInstanceExpr":
+		return map[string]interface{}{
+			"getName":              proxyenv.GetName,
+			"getDoc":               proxyenv.GetDoc,
+			"toString":             proxyenv.ToString,
+			"getClassInstanceExpr": proxyenv.GetClassInstanceExpr,
+		}
+	case "IfStmt":
+		return map[string]interface{}{
+			"getIfStmt": proxyenv.GetIfStmt,
+			"toString":  proxyenv.ToString,
+		}
+	case "WhileStmt":
+		return map[string]interface{}{
+			"getWhileStmt": proxyenv.GetWhileStmt,
+			"toString":     proxyenv.ToString,
+		}
+	case "DoStmt":
+		return map[string]interface{}{
+			"getDoStmt": proxyenv.GetDoStmt,
+			"toString":  proxyenv.ToString,
+		}
+	case "ForStmt":
+		return map[string]interface{}{
+			"getForStmt": proxyenv.GetForStmt,
+			"toString":   proxyenv.ToString,
+		}
+	case "BreakStmt":
+		return map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getBreakStmt": proxyenv.GetBreakStmt,
+		}
+	case "ContinueStmt":
+		return map[string]interface{}{
+			"toString":        proxyenv.ToString,
+			"getContinueStmt": proxyenv.GetContinueStmt,
+		}
+	case "YieldStmt":
+		return map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getYieldStmt": proxyenv.GetYieldStmt,
+		}
+	case "AssertStmt":
+		return map[string]interface{}{
+			"toString":      proxyenv.ToString,
+			"getAssertStmt": proxyenv.GetAssertStmt,
+		}
+	case "ReturnStmt":
+		return map[string]interface{}{
+			"toString":      proxyenv.ToString,
+			"getReturnStmt": proxyenv.GetReturnStmt,
+		}
+	case "BlockStmt":
+		return map[string]interface{}{
+			"toString":     proxyenv.ToString,
+			"getBlockStmt": proxyenv.GetBlockStmt,
+		}
+	default:
+		// Fallback for unknown types
+		return map[string]interface{}{
+			"getName":  proxyenv.GetName,
+			"toString": proxyenv.ToString,
+		}
+	}
+}
+
 func QueryEntities(graph *CodeGraph, query parser.Query) (nodes [][]*Node, output [][]interface{}) {
 	result := make([][]*Node, 0)
 
@@ -210,6 +443,7 @@ func generateOutput(nodeSet [][]*Node, query parser.Query) [][]interface{} {
 
 func evaluateExpression(node []*Node, expression string, query parser.Query) (interface{}, error) {
 	env := generateProxyEnvForSet(node, query)
+	defer returnEnvMapToPool(env) // Return to pool when done
 
 	program, err := expr.Compile(expression, expr.Env(env))
 	if err != nil {
@@ -635,6 +869,7 @@ func FilterEntities(node []*Node, query parser.Query) bool {
 	}
 
 	env := generateProxyEnvForSet(node, query)
+	defer returnEnvMapToPool(env) // Return to pool when done
 
 	expression = ReplacePredicateVariables(query)
 
@@ -660,7 +895,7 @@ type classInstance struct {
 }
 
 func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]interface{} {
-	env := make(map[string]interface{})
+	env := getEnvMapFromPool()
 
 	for i, entity := range query.SelectList {
 		// Check if entity is a class type
@@ -668,9 +903,10 @@ func generateProxyEnvForSet(nodeSet []*Node, query parser.Query) map[string]inte
 		if classDecl != nil {
 			env[entity.Alias] = createClassInstance(classDecl)
 		} else {
-			// Handle existing node types
-			proxyEnv := generateProxyEnv(nodeSet[i], query)
-			env[entity.Alias] = proxyEnv[entity.Alias]
+			// OPTIMIZED: Only build the specific entity type map needed
+			// instead of creating all 28 entity type maps
+			proxyEnvWrapper := &Env{Node: nodeSet[i]}
+			env[entity.Alias] = buildEntityEnv(proxyEnvWrapper, entity.Entity, entity.Alias)
 		}
 	}
 	return env
