@@ -72,16 +72,16 @@ task bumpVersion {
 
 task prepareRelease(dependsOn: bumpVersion) {
     doLast {
-        exec {
+        project.exec {
             commandLine 'git', 'checkout', '-b', "bump/v${versionFile.text.trim()}"
         }
-        exec {
+        project.exec {
             commandLine 'git', 'add', 'VERSION'
         }
-        exec {
+        project.exec {
             commandLine 'git', 'commit', '-m', "Bump version to ${versionFile.text.trim()}"
         }
-        exec {
+        project.exec {
             commandLine 'git', 'push', 'origin', "bump/v${versionFile.text.trim()}"
         }
         println "New version finalized: ${versionFile.text.trim()}"
@@ -90,7 +90,7 @@ task prepareRelease(dependsOn: bumpVersion) {
 
 task tagExists {
     doLast {
-        def result = exec {
+        def result = project.exec {
             commandLine 'git', 'rev-parse', "v${versionFile.text.trim()}"
             ignoreExitValue true
         }
@@ -105,10 +105,10 @@ task tagExists {
 
 task createTag(dependsOn: tagExists) {
     doLast {
-        exec {
+        project.exec {
             commandLine 'git', 'tag', "v${versionFile.text.trim()}"
         }
-        exec {
+        project.exec {
             commandLine 'git', 'push', 'origin', "v${versionFile.text.trim()}"
         }
         println "New version tag published: v${versionFile.text.trim()}"
