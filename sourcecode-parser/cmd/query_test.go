@@ -45,7 +45,7 @@ func TestExecuteCLIQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := executeCLIQuery(tt.project, tt.query, tt.output, tt.stdin)
+			result, err := executeCLIQuery(tt.project, tt.query, tt.output, tt.stdin, 0, 0)
 
 			if tt.expectedError != "" {
 				assert.Error(t, err)
@@ -100,7 +100,7 @@ func TestProcessQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := processQuery(tt.input, codeGraph, tt.output)
+			result, err := processQuery(tt.input, codeGraph, tt.output, 0, 0)
 
 			if tt.expectedError != "" {
 				assert.Error(t, err)
@@ -230,10 +230,239 @@ func TestQueryCmdStdinInput(t *testing.T) {
 		w.Close()
 	}()
 
-	result, err := executeCLIQuery("../../test-src/android", "", "", true)
+	result, err := executeCLIQuery("../../test-src/android", "", "", true, 0, 0)
 	fmt.Println(result)
 	assert.NoError(t, err)
 	assert.Equal(t, "Okay, Bye!", result)
 
 	_, _ = io.Copy(io.Discard, r)
+}
+
+func TestPaginationFlags(t *testing.T) {
+	cmd := &cobra.Command{Use: "pathfinder"}
+	cmd.AddCommand(queryCmd)
+
+	tests := []struct {
+		name     string
+		flag     string
+		expected string
+	}{
+		{"page flag", "page", "0"},
+		{"size flag", "size", "0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := queryCmd.Flag(tt.flag)
+			assert.NotNil(t, flag)
+			assert.Equal(t, tt.expected, flag.Value.String())
+		})
+	}
+}
+
+func TestPaginationSorting(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add nodes in non-sorted order to verify sorting works
+	codeGraph.AddNode(&graph.Node{
+		ID:          "3",
+		Type:        "method_declaration",
+		Name:        "methodC",
+		File:        "b.java",
+		LineNumber:  10,
+		CodeSnippet: "public void methodC() {}",
+	})
+	codeGraph.AddNode(&graph.Node{
+		ID:          "1",
+		Type:        "method_declaration",
+		Name:        "methodA",
+		File:        "a.java",
+		LineNumber:  5,
+		CodeSnippet: "public void methodA() {}",
+	})
+	codeGraph.AddNode(&graph.Node{
+		ID:          "2",
+		Type:        "method_declaration",
+		Name:        "methodB",
+		File:        "a.java",
+		LineNumber:  15,
+		CodeSnippet: "public void methodB() {}",
+	})
+
+	// Query without pagination should return all results sorted
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 0, 0)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 3, len(resultSet))
+
+	// Verify results are sorted by File, then LineNumber
+	first := resultSet[0].(map[string]interface{})
+	assert.Equal(t, "a.java", first["file"])
+	assert.Equal(t, float64(5), first["line"])
+
+	second := resultSet[1].(map[string]interface{})
+	assert.Equal(t, "a.java", second["file"])
+	assert.Equal(t, float64(15), second["line"])
+
+	third := resultSet[2].(map[string]interface{})
+	assert.Equal(t, "b.java", third["file"])
+	assert.Equal(t, float64(10), third["line"])
+}
+
+func TestPaginationPage1(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add 5 nodes
+	for i := 1; i <= 5; i++ {
+		codeGraph.AddNode(&graph.Node{
+			ID:          fmt.Sprintf("%d", i),
+			Type:        "method_declaration",
+			Name:        fmt.Sprintf("method%d", i),
+			File:        "test.java",
+			LineNumber:  uint32(i * 10),
+			CodeSnippet: fmt.Sprintf("public void method%d() {}", i),
+		})
+	}
+
+	// Request page 1 with size 2
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 1, 2)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 2, len(resultSet), "Page 1 with size 2 should return 2 results")
+
+	// Verify first page contains first 2 results
+	first := resultSet[0].(map[string]interface{})
+	assert.Equal(t, float64(10), first["line"])
+
+	second := resultSet[1].(map[string]interface{})
+	assert.Equal(t, float64(20), second["line"])
+}
+
+func TestPaginationPage2(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add 5 nodes
+	for i := 1; i <= 5; i++ {
+		codeGraph.AddNode(&graph.Node{
+			ID:          fmt.Sprintf("%d", i),
+			Type:        "method_declaration",
+			Name:        fmt.Sprintf("method%d", i),
+			File:        "test.java",
+			LineNumber:  uint32(i * 10),
+			CodeSnippet: fmt.Sprintf("public void method%d() {}", i),
+		})
+	}
+
+	// Request page 2 with size 2
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 2, 2)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 2, len(resultSet), "Page 2 with size 2 should return 2 results")
+
+	// Verify second page contains next 2 results
+	first := resultSet[0].(map[string]interface{})
+	assert.Equal(t, float64(30), first["line"])
+
+	second := resultSet[1].(map[string]interface{})
+	assert.Equal(t, float64(40), second["line"])
+}
+
+func TestPaginationOutOfRange(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add only 3 nodes
+	for i := 1; i <= 3; i++ {
+		codeGraph.AddNode(&graph.Node{
+			ID:          fmt.Sprintf("%d", i),
+			Type:        "method_declaration",
+			Name:        fmt.Sprintf("method%d", i),
+			File:        "test.java",
+			LineNumber:  uint32(i * 10),
+			CodeSnippet: fmt.Sprintf("public void method%d() {}", i),
+		})
+	}
+
+	// Request page 5 with size 2 (out of range)
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 5, 2)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 0, len(resultSet), "Out of range page should return empty result set")
+}
+
+func TestPaginationPartialLastPage(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add 5 nodes
+	for i := 1; i <= 5; i++ {
+		codeGraph.AddNode(&graph.Node{
+			ID:          fmt.Sprintf("%d", i),
+			Type:        "method_declaration",
+			Name:        fmt.Sprintf("method%d", i),
+			File:        "test.java",
+			LineNumber:  uint32(i * 10),
+			CodeSnippet: fmt.Sprintf("public void method%d() {}", i),
+		})
+	}
+
+	// Request page 3 with size 2 (should return only 1 result)
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 3, 2)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 1, len(resultSet), "Last page with partial results should return remaining items")
+
+	// Verify it's the last result
+	first := resultSet[0].(map[string]interface{})
+	assert.Equal(t, float64(50), first["line"])
+}
+
+func TestPaginationDisabled(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	// Add 3 nodes
+	for i := 1; i <= 3; i++ {
+		codeGraph.AddNode(&graph.Node{
+			ID:          fmt.Sprintf("%d", i),
+			Type:        "method_declaration",
+			Name:        fmt.Sprintf("method%d", i),
+			File:        "test.java",
+			LineNumber:  uint32(i * 10),
+			CodeSnippet: fmt.Sprintf("public void method%d() {}", i),
+		})
+	}
+
+	// Request with page=0 and size=0 (pagination disabled)
+	result, err := processQuery("FROM method_declaration AS md SELECT md.getName()", codeGraph, "json", 0, 0)
+	assert.NoError(t, err)
+
+	var resultJSON map[string]interface{}
+	err = json.Unmarshal([]byte(result), &resultJSON)
+	assert.NoError(t, err)
+
+	resultSet := resultJSON["result_set"].([]interface{})
+	assert.Equal(t, 3, len(resultSet), "Pagination disabled should return all results")
 }

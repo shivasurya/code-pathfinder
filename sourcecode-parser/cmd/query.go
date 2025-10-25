@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -25,6 +26,8 @@ var queryCmd = &cobra.Command{
 		output := cmd.Flag("output").Value.String()
 		outputFile := cmd.Flag("output-file").Value.String()
 		stdin, _ := cmd.Flags().GetBool("stdin") //nolint:all
+		page, _ := cmd.Flags().GetInt("page")
+		size, _ := cmd.Flags().GetInt("size")
 
 		if queryFile != "" {
 			extractedQuery, err := ExtractQueryFromFile(queryFile)
@@ -35,7 +38,7 @@ var queryCmd = &cobra.Command{
 			queryInput = extractedQuery
 		}
 
-		result, err := executeCLIQuery(projectInput, queryInput, output, stdin)
+		result, err := executeCLIQuery(projectInput, queryInput, output, stdin, page, size)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -69,6 +72,9 @@ func init() {
 	queryCmd.Flags().StringP("query", "q", "", "Query to execute")
 	queryCmd.Flags().Bool("stdin", false, "Read query from stdin")
 	queryCmd.Flags().String("query-file", "", "File containing query to execute")
+	// Pagination flags – optional. Page is 1‑based; size 0 disables pagination.
+	queryCmd.Flags().Int("page", 0, "Page number (1‑based, 0 for no pagination)")
+	queryCmd.Flags().Int("size", 0, "Page size (number of results per page, 0 for all)")
 }
 
 func initializeProject(project string) *graph.CodeGraph {
@@ -79,7 +85,7 @@ func initializeProject(project string) *graph.CodeGraph {
 	return codeGraph
 }
 
-func executeCLIQuery(project, query, output string, stdin bool) (string, error) {
+func executeCLIQuery(project, query, output string, stdin bool, page, size int) (string, error) {
 	codeGraph := initializeProject(project)
 
 	if stdin {
@@ -97,7 +103,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 			if strings.HasPrefix(input, ":quit") {
 				return "Okay, Bye!", nil
 			}
-			result, err := processQuery(input, codeGraph, output)
+		result, err := processQuery(input, codeGraph, output, page, size)
 			if err != nil {
 				analytics.ReportEvent(analytics.ErrorProcessingQuery)
 				err := fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -108,7 +114,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 		}
 	} else {
 		// read from command line
-		result, err := processQuery(query, codeGraph, output)
+		result, err := processQuery(query, codeGraph, output, page, size)
 		if err != nil {
 			analytics.ReportEvent(analytics.ErrorProcessingQuery)
 			return "", fmt.Errorf("PathFinder Query syntax error: %w", err)
@@ -117,7 +123,7 @@ func executeCLIQuery(project, query, output string, stdin bool) (string, error) 
 	}
 }
 
-func processQuery(input string, codeGraph *graph.CodeGraph, output string) (string, error) {
+func processQuery(input string, codeGraph *graph.CodeGraph, output string, page, size int) (string, error) {
 	fmt.Println("Executing query: " + input)
 	parsedQuery, err := parser.ParseQuery(input)
 	if err != nil {
@@ -128,6 +134,68 @@ func processQuery(input string, codeGraph *graph.CodeGraph, output string) (stri
 		parsedQuery.Expression = strings.SplitN(parts[1], "SELECT", 2)[0]
 	}
 	entities, formattedOutput := graph.QueryEntities(codeGraph, parsedQuery)
+
+	// Sort results deterministically for consistent pagination.
+	// Sorting by: File (primary), LineNumber (secondary), ID (tertiary).
+	// Need to keep entities and formattedOutput in sync during sort.
+	type resultPair struct {
+		entity []*graph.Node
+		output []interface{}
+	}
+
+	// Combine entities and formattedOutput into pairs
+	pairs := make([]resultPair, len(entities))
+	for i := range entities {
+		pairs[i] = resultPair{
+			entity: entities[i],
+			output: formattedOutput[i],
+		}
+	}
+
+	// Sort the pairs
+	sort.SliceStable(pairs, func(i, j int) bool {
+		// Get first node from each result set for comparison
+		if len(pairs[i].entity) == 0 || len(pairs[j].entity) == 0 {
+			return len(pairs[i].entity) > 0
+		}
+		nodeI := pairs[i].entity[0]
+		nodeJ := pairs[j].entity[0]
+
+		// Compare by File first
+		if nodeI.File != nodeJ.File {
+			return nodeI.File < nodeJ.File
+		}
+		// Then by LineNumber
+		if nodeI.LineNumber != nodeJ.LineNumber {
+			return nodeI.LineNumber < nodeJ.LineNumber
+		}
+		// Finally by ID for tie-breaking
+		return nodeI.ID < nodeJ.ID
+	})
+
+	// Split pairs back into entities and formattedOutput
+	for i := range pairs {
+		entities[i] = pairs[i].entity
+		formattedOutput[i] = pairs[i].output
+	}
+
+	// Apply pagination if requested (page is 1‑based). If size == 0, return all.
+	if size > 0 && page > 0 {
+		total := len(entities)
+		start := (page - 1) * size
+		if start >= total {
+			// Empty result set for out‑of‑range page
+			entities = [][]*graph.Node{}
+			formattedOutput = [][]interface{}{}
+		} else {
+			end := start + size
+			if end > total {
+				end = total
+			}
+			entities = entities[start:end]
+			formattedOutput = formattedOutput[start:end]
+		}
+	}
 	if output == "json" || output == "sarif" {
 		analytics.ReportEvent(analytics.QueryCommandJSON)
 		// convert struct to query_results

@@ -65,7 +65,7 @@ var ciCmd = &cobra.Command{
 		for _, rule := range ruleset {
 			queryInput := ParseQuery(rule)
 			rulesetResult := make(map[string]interface{})
-			result, err := processQuery(queryInput.Query, codeGraph, output)
+			result, err := processQuery(queryInput.Query, codeGraph, output, 0, 0)
 
 			if output == "json" || output == "sarif" {
 				var resultObject map[string]interface{}
