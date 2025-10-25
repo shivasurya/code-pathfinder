@@ -33,7 +33,7 @@ var scanCmd = &cobra.Command{
 				fmt.Println("Error extracting query from file:", err)
 				return
 			}
-			result, err := executeCLIQuery(project, extractedQuery, "json", false)
+			result, err := executeCLIQuery(project, extractedQuery, "json", false, 0, 0)
 			if err != nil {
 				fmt.Println(err)
 			}
