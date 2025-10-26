@@ -1,0 +1,2 @@
+# Configuration settings
+DEBUG = True

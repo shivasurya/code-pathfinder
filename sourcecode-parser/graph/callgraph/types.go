@@ -142,6 +142,12 @@ type ModuleRegistry struct {
 	// Value: "/absolute/path/to/myapp/utils/helpers.py"
 	Modules map[string]string
 
+	// Maps absolute file path to fully qualified module path (reverse of Modules)
+	// Key: "/absolute/path/to/myapp/utils/helpers.py"
+	// Value: "myapp.utils.helpers"
+	// Used for resolving relative imports
+	FileToModule map[string]string
+
 	// Maps short module names to all matching file paths (handles ambiguity)
 	// Key: "helpers"
 	// Value: ["/path/to/myapp/utils/helpers.py", "/path/to/lib/helpers.py"]
@@ -157,6 +163,7 @@ type ModuleRegistry struct {
 func NewModuleRegistry() *ModuleRegistry {
 	return &ModuleRegistry{
 		Modules:         make(map[string]string),
+		FileToModule:    make(map[string]string),
 		ShortNames:      make(map[string][]string),
 		ResolvedImports: make(map[string]string),
 	}
@@ -170,6 +177,7 @@ func NewModuleRegistry() *ModuleRegistry {
 //   - filePath: absolute file path (e.g., "/project/myapp/utils/helpers.py")
 func (mr *ModuleRegistry) AddModule(modulePath, filePath string) {
 	mr.Modules[modulePath] = filePath
+	mr.FileToModule[filePath] = modulePath
 
 	// Extract short name (last component)
 	// "myapp.utils.helpers" → "helpers"
