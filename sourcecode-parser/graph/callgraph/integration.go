@@ -61,15 +61,37 @@ func AnalyzePatterns(callGraph *CallGraph, patternRegistry *PatternRegistry) []P
 	var matches []PatternMatch
 
 	for _, pattern := range patternRegistry.Patterns {
-		if patternRegistry.MatchPattern(pattern, callGraph) {
-			matches = append(matches, PatternMatch{
-				PatternID:   pattern.ID,
-				PatternName: pattern.Name,
-				Description: pattern.Description,
-				Severity:    pattern.Severity,
-				CWE:         pattern.CWE,
-				OWASP:       pattern.OWASP,
-			})
+		details := patternRegistry.MatchPattern(pattern, callGraph)
+		if details != nil && details.Matched {
+			match := PatternMatch{
+				PatternID:    pattern.ID,
+				PatternName:  pattern.Name,
+				Description:  pattern.Description,
+				Severity:     pattern.Severity,
+				CWE:          pattern.CWE,
+				OWASP:        pattern.OWASP,
+				SourceFQN:    details.SourceFQN,
+				SourceCall:   details.SourceCall,
+				SinkFQN:      details.SinkFQN,
+				SinkCall:     details.SinkCall,
+				DataFlowPath: details.DataFlowPath,
+			}
+
+			// Lookup source function details from call graph
+			if sourceNode, ok := callGraph.Functions[details.SourceFQN]; ok {
+				match.SourceFile = sourceNode.File
+				match.SourceLine = sourceNode.LineNumber
+				match.SourceCode = sourceNode.GetCodeSnippet()
+			}
+
+			// Lookup sink function details from call graph
+			if sinkNode, ok := callGraph.Functions[details.SinkFQN]; ok {
+				match.SinkFile = sinkNode.File
+				match.SinkLine = sinkNode.LineNumber
+				match.SinkCode = sinkNode.GetCodeSnippet()
+			}
+
+			matches = append(matches, match)
 		}
 	}
 
@@ -84,4 +106,19 @@ type PatternMatch struct {
 	Severity    Severity // Risk level
 	CWE         string   // CWE identifier
 	OWASP       string   // OWASP category
+
+	// Vulnerability location details
+	SourceFQN      string // Fully qualified name of the source function
+	SourceCall     string // The actual dangerous call (e.g., "input", "request.GET")
+	SourceFile     string // File path where source is located
+	SourceLine     uint32 // Line number of source function
+	SourceCode     string // Code snippet of source function
+
+	SinkFQN        string // Fully qualified name of the sink function
+	SinkCall       string // The actual dangerous call (e.g., "eval", "exec")
+	SinkFile       string // File path where sink is located
+	SinkLine       uint32 // Line number of sink function
+	SinkCode       string // Code snippet of sink function
+
+	DataFlowPath   []string // Complete path from source to sink (FQNs)
 }

@@ -232,9 +232,38 @@ func findContainingFunction(location Location, functions []*graph.Node, modulePa
 //
 //   target="obj.method", imports={}
 //     → "obj.method", false  (needs type inference)
+// Python built-in functions that should not be resolved as module functions
+var pythonBuiltins = map[string]bool{
+	"eval":       true,
+	"exec":       true,
+	"input":      true,
+	"raw_input":  true,
+	"compile":    true,
+	"__import__": true,
+}
+
 func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string) (string, bool) {
+	// Handle self.method() calls - resolve to current module
+	if strings.HasPrefix(target, "self.") {
+		methodName := strings.TrimPrefix(target, "self.")
+		// Resolve to module.method
+		moduleFQN := currentModule + "." + methodName
+		// Validate exists
+		if validateFQN(moduleFQN, registry) {
+			return moduleFQN, true
+		}
+		// Return unresolved but with module prefix
+		return moduleFQN, false
+	}
+
 	// Handle simple names (no dots)
 	if !strings.Contains(target, ".") {
+		// Check if it's a Python built-in
+		if pythonBuiltins[target] {
+			// Return as builtins.function for pattern matching
+			return "builtins." + target, true
+		}
+
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
 			// Found in imports - return the FQN
