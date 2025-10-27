@@ -89,9 +89,9 @@ func TestMatchesFunctionName(t *testing.T) {
 	}{
 		{"Exact match", "eval", "eval", true},
 		{"Suffix match", "myapp.utils.eval", "eval", true},
-		{"Contains match", "myapp.request.GET", "request.GET", true},
+		{"Prefix match", "request.GET.get", "request.GET", true},
 		{"No match", "myapp.safe_function", "eval", false},
-		{"Partial no match", "evaluation", "eval", true}, // Contains matches
+		{"Partial no match", "evaluation", "eval", false}, // Should NOT match - avoids false positives
 	}
 
 	for _, tt := range tests {
