@@ -4,9 +4,96 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
+
+// ImportMapCache provides thread-safe caching of ImportMap instances.
+// This avoids re-parsing imports from the same file multiple times.
+//
+// The cache uses a read-write mutex to allow concurrent reads while
+// ensuring safe writes. This is critical for performance since:
+//  - Import extraction involves tree-sitter parsing (expensive)
+//  - Many files may import the same modules
+//  - Build call graph processes files sequentially (for now)
+//
+// Example usage:
+//
+//	cache := NewImportMapCache()
+//	importMap := cache.GetOrExtract(filePath, sourceCode, registry)
+type ImportMapCache struct {
+	cache map[string]*ImportMap // Maps file path to ImportMap
+	mu    sync.RWMutex          // Protects cache map
+}
+
+// NewImportMapCache creates a new empty import map cache.
+func NewImportMapCache() *ImportMapCache {
+	return &ImportMapCache{
+		cache: make(map[string]*ImportMap),
+	}
+}
+
+// Get retrieves an ImportMap from the cache if it exists.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//
+// Returns:
+//   - ImportMap and true if found in cache, nil and false otherwise
+func (c *ImportMapCache) Get(filePath string) (*ImportMap, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	importMap, ok := c.cache[filePath]
+	return importMap, ok
+}
+
+// Put stores an ImportMap in the cache.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//   - importMap: the extracted ImportMap to cache
+func (c *ImportMapCache) Put(filePath string, importMap *ImportMap) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.cache[filePath] = importMap
+}
+
+// GetOrExtract retrieves an ImportMap from cache or extracts it if not cached.
+// This is the main entry point for using the cache.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//   - sourceCode: file contents (only used if extraction needed)
+//   - registry: module registry for resolving imports
+//
+// Returns:
+//   - ImportMap from cache or newly extracted
+//   - error if extraction fails (cache misses only)
+//
+// Thread-safety:
+//   - Multiple goroutines can safely call GetOrExtract concurrently
+//   - First caller for a file will extract and cache
+//   - Subsequent callers will get cached result
+func (c *ImportMapCache) GetOrExtract(filePath string, sourceCode []byte, registry *ModuleRegistry) (*ImportMap, error) {
+	// Try to get from cache (fast path with read lock)
+	if importMap, ok := c.Get(filePath); ok {
+		return importMap, nil
+	}
+
+	// Cache miss - extract imports (expensive operation)
+	importMap, err := ExtractImports(filePath, sourceCode, registry)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache for future use
+	c.Put(filePath, importMap)
+
+	return importMap, nil
+}
 
 // BuildCallGraph constructs the complete call graph for a Python project.
 // This is Pass 3 of the 3-pass algorithm:
@@ -47,6 +134,10 @@ import (
 func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projectRoot string) (*CallGraph, error) {
 	callGraph := NewCallGraph()
 
+	// Initialize import map cache for performance
+	// This avoids re-parsing imports from the same file multiple times
+	importCache := NewImportMapCache()
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
@@ -65,8 +156,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			continue
 		}
 
-		// Extract imports to build ImportMap for this file
-		importMap, err := ExtractImports(filePath, sourceCode, registry)
+		// Extract imports using cache (avoids re-parsing if already cached)
+		importMap, err := importCache.GetOrExtract(filePath, sourceCode, registry)
 		if err != nil {
 			// Skip files with import errors
 			continue
