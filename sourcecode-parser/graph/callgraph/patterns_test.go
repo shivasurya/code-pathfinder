@@ -117,7 +117,8 @@ func TestPatternRegistry_MatchDangerousFunction(t *testing.T) {
 	})
 
 	matched := registry.MatchPattern(pattern, callGraph)
-	assert.True(t, matched)
+	assert.NotNil(t, matched)
+	assert.True(t, matched.Matched)
 }
 
 func TestPatternRegistry_MatchDangerousFunction_NoMatch(t *testing.T) {
@@ -135,7 +136,12 @@ func TestPatternRegistry_MatchDangerousFunction_NoMatch(t *testing.T) {
 	})
 
 	matched := registry.MatchPattern(pattern, callGraph)
-	assert.False(t, matched)
+	if matched == nil || !matched.Matched {
+		// Pattern didn't match (expected)
+		assert.True(t, true)
+	} else {
+		assert.Fail(t, "Expected no match but found one")
+	}
 }
 
 func TestPatternRegistry_MatchSourceSink(t *testing.T) {
@@ -165,7 +171,8 @@ func TestPatternRegistry_MatchSourceSink(t *testing.T) {
 	callGraph.AddEdge("myapp.process", "myapp.execute_code")
 
 	matched := registry.MatchPattern(pattern, callGraph)
-	assert.True(t, matched)
+	assert.NotNil(t, matched)
+	assert.True(t, matched.Matched)
 }
 
 func TestPatternRegistry_MatchMissingSanitizer_WithSanitizer(t *testing.T) {
@@ -200,7 +207,12 @@ func TestPatternRegistry_MatchMissingSanitizer_WithSanitizer(t *testing.T) {
 	callGraph.AddEdge("myapp.sanitize_input", "myapp.execute_code")
 
 	matched := registry.MatchPattern(pattern, callGraph)
-	assert.False(t, matched) // Should not match because sanitizer is present
+	if matched == nil || !matched.Matched {
+		// Pattern didn't match (expected)
+		assert.True(t, true)
+	} else {
+		assert.Fail(t, "Expected no match but found one")
+	} // Should not match because sanitizer is present
 }
 
 func TestPatternRegistry_MatchMissingSanitizer_WithoutSanitizer(t *testing.T) {
@@ -229,7 +241,8 @@ func TestPatternRegistry_MatchMissingSanitizer_WithoutSanitizer(t *testing.T) {
 	callGraph.AddEdge("myapp.get_input", "myapp.execute_code")
 
 	matched := registry.MatchPattern(pattern, callGraph)
-	assert.True(t, matched) // Should match because sanitizer is missing
+	assert.NotNil(t, matched)
+	assert.True(t, matched.Matched) // Should match because sanitizer is missing
 }
 
 func TestPatternRegistry_HasPath(t *testing.T) {

@@ -232,7 +232,8 @@ func findContainingFunction(location Location, functions []*graph.Node, modulePa
 //
 //   target="obj.method", imports={}
 //     → "obj.method", false  (needs type inference)
-// Python built-in functions that should not be resolved as module functions
+
+// Python built-in functions that should not be resolved as module functions.
 var pythonBuiltins = map[string]bool{
 	"eval":       true,
 	"exec":       true,
