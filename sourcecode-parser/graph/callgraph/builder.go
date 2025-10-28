@@ -189,6 +189,11 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			callSite.TargetFQN = targetFQN
 			callSite.Resolved = resolved
 
+			// If resolution failed, categorize the failure reason
+			if !resolved {
+				callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+			}
+
 			// Add call site to graph (dereference pointer)
 			callGraph.AddCallSite(callerFQN, *callSite)
 
@@ -332,6 +337,90 @@ var pythonBuiltins = map[string]bool{
 	"raw_input":  true,
 	"compile":    true,
 	"__import__": true,
+}
+
+// categorizeResolutionFailure determines why a call target failed to resolve.
+// This enables diagnostic reporting to understand resolution gaps.
+//
+// Categories:
+//   - "external_framework" - Known external frameworks (Django, REST, pytest, stdlib)
+//   - "orm_pattern" - Django ORM patterns (Model.objects.*, queryset.*)
+//   - "attribute_chain" - Method calls on objects/return values
+//   - "variable_method" - Method calls that appear to be on variables
+//   - "super_call" - Calls via super() mechanism
+//   - "not_in_imports" - Simple name not found in imports
+//   - "unknown" - Other unresolved patterns
+//
+// Parameters:
+//   - target: original call target string (e.g., "models.ForeignKey")
+//   - targetFQN: resolved fully qualified name (e.g., "django.db.models.ForeignKey")
+//
+// Returns:
+//   - category string describing the failure reason
+func categorizeResolutionFailure(target, targetFQN string) string {
+	// Check for external frameworks (common patterns)
+	if strings.HasPrefix(targetFQN, "django.") ||
+		strings.HasPrefix(targetFQN, "rest_framework.") ||
+		strings.HasPrefix(targetFQN, "pytest.") ||
+		strings.HasPrefix(targetFQN, "unittest.") ||
+		strings.HasPrefix(targetFQN, "json.") ||
+		strings.HasPrefix(targetFQN, "logging.") ||
+		strings.HasPrefix(targetFQN, "os.") ||
+		strings.HasPrefix(targetFQN, "sys.") ||
+		strings.HasPrefix(targetFQN, "re.") ||
+		strings.HasPrefix(targetFQN, "pathlib.") ||
+		strings.HasPrefix(targetFQN, "collections.") ||
+		strings.HasPrefix(targetFQN, "datetime.") {
+		return "external_framework"
+	}
+
+	// Check for Django ORM patterns
+	if strings.Contains(target, ".objects.") ||
+		strings.HasSuffix(target, ".objects") ||
+		(strings.Contains(target, ".") && (strings.HasSuffix(target, ".filter") ||
+			strings.HasSuffix(target, ".get") ||
+			strings.HasSuffix(target, ".create") ||
+			strings.HasSuffix(target, ".update") ||
+			strings.HasSuffix(target, ".delete") ||
+			strings.HasSuffix(target, ".all") ||
+			strings.HasSuffix(target, ".first") ||
+			strings.HasSuffix(target, ".last") ||
+			strings.HasSuffix(target, ".count") ||
+			strings.HasSuffix(target, ".exists"))) {
+		return "orm_pattern"
+	}
+
+	// Check for super() calls
+	if strings.HasPrefix(target, "super(") || strings.HasPrefix(target, "super.") {
+		return "super_call"
+	}
+
+	// Check for attribute chains (has dots, looks like obj.method())
+	// Heuristic: lowercase first component likely means variable/object
+	if strings.Contains(target, ".") {
+		firstComponent := target[:strings.Index(target, ".")]
+		// If starts with lowercase and not a known module pattern, likely attribute chain
+		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
+			// Could be variable method or attribute chain
+			// Check common variable-like patterns
+			if firstComponent == "self" || firstComponent == "cls" ||
+				firstComponent == "request" || firstComponent == "response" ||
+				firstComponent == "queryset" || firstComponent == "user" ||
+				firstComponent == "obj" || firstComponent == "value" ||
+				firstComponent == "data" || firstComponent == "result" {
+				return "variable_method"
+			}
+			return "attribute_chain"
+		}
+	}
+
+	// Simple name (no dots) - not in imports
+	if !strings.Contains(target, ".") {
+		return "not_in_imports"
+	}
+
+	// Everything else
+	return "unknown"
 }
 
 func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string) (string, bool) {

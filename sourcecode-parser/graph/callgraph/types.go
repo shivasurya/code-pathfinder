@@ -16,12 +16,22 @@ type Location struct {
 // It captures both the syntactic information (where the call is) and
 // semantic information (what is being called and with what arguments).
 type CallSite struct {
-	Target    string     // The name of the function being called (e.g., "eval", "utils.sanitize")
-	Location  Location   // Where this call occurs in the source code
-	Arguments []Argument // Arguments passed to the call
-	Resolved  bool       // Whether we successfully resolved this call to a definition
-	TargetFQN string     // Fully qualified name after resolution (e.g., "myapp.utils.sanitize")
+	Target        string     // The name of the function being called (e.g., "eval", "utils.sanitize")
+	Location      Location   // Where this call occurs in the source code
+	Arguments     []Argument // Arguments passed to the call
+	Resolved      bool       // Whether we successfully resolved this call to a definition
+	TargetFQN     string     // Fully qualified name after resolution (e.g., "myapp.utils.sanitize")
+	FailureReason string     // Why resolution failed (empty if Resolved=true)
 }
+
+// Resolution failure reason categories for diagnostics:
+// - "external_framework" - Call to Django, REST framework, pytest, stdlib, etc.
+// - "orm_pattern" - Django ORM patterns like Model.objects.filter()
+// - "attribute_chain" - Method calls on return values like response.json()
+// - "variable_method" - Method calls on variables like value.split()
+// - "super_call" - Calls via super() to parent class methods
+// - "not_in_imports" - Simple function call not found in imports
+// - "unknown" - Unresolved for other reasons
 
 // Argument represents a single argument passed to a function call.
 // Tracks both the value/expression and metadata about the argument.
