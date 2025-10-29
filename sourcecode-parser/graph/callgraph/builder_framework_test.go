@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestFrameworkResolution validates that known frameworks are resolved correctly
+// TestFrameworkResolution validates that known frameworks are resolved correctly.
 func TestFrameworkResolution(t *testing.T) {
 	// Create temporary test directory
 	tmpDir := t.TempDir()
@@ -89,7 +89,7 @@ def test_stdlib():
 	assert.Equal(t, "logging.getLogger", targetFQN)
 }
 
-// TestNonFrameworkResolution ensures non-framework calls still work correctly
+// TestNonFrameworkResolution ensures non-framework calls still work correctly.
 func TestNonFrameworkResolution(t *testing.T) {
 	// Create temporary test directory
 	tmpDir := t.TempDir()
@@ -145,7 +145,7 @@ def process():
 	assert.Contains(t, targetFQN, "utils.validate")
 }
 
-// TestFrameworkVsLocalPrecedence ensures local definitions take precedence over frameworks
+// TestFrameworkVsLocalPrecedence ensures local definitions take precedence over frameworks.
 func TestFrameworkVsLocalPrecedence(t *testing.T) {
 	// Create temporary test directory
 	tmpDir := t.TempDir()
@@ -198,7 +198,7 @@ def process():
 	assert.True(t, localExists, "Should resolve to local json module in registry")
 }
 
-// TestMixedFrameworkAndLocalCalls validates correct resolution in mixed scenarios
+// TestMixedFrameworkAndLocalCalls validates correct resolution in mixed scenarios.
 func TestMixedFrameworkAndLocalCalls(t *testing.T) {
 	// Create temporary test directory
 	tmpDir := t.TempDir()

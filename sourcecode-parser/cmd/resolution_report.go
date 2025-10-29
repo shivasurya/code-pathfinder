@@ -141,7 +141,7 @@ func printFailureBreakdown(stats *resolutionStatistics) {
 		category string
 		count    int
 	}
-	var categories []categoryCount
+	categories := make([]categoryCount, 0, len(stats.FailuresByReason))
 	for cat, count := range stats.FailuresByReason {
 		categories = append(categories, categoryCount{cat, count})
 	}
@@ -191,7 +191,7 @@ func printTopUnresolvedPatterns(stats *resolutionStatistics, topN int) {
 		pattern string
 		count   int
 	}
-	var patterns []patternCount
+	patterns := make([]patternCount, 0, len(stats.PatternCounts))
 	for pattern, count := range stats.PatternCounts {
 		patterns = append(patterns, patternCount{pattern, count})
 	}

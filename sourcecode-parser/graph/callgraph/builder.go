@@ -397,8 +397,8 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 
 	// Check for attribute chains (has dots, looks like obj.method())
 	// Heuristic: lowercase first component likely means variable/object
-	if strings.Contains(target, ".") {
-		firstComponent := target[:strings.Index(target, ".")]
+	if dotIndex := strings.Index(target, "."); dotIndex != -1 {
+		firstComponent := target[:dotIndex]
 		// If starts with lowercase and not a known module pattern, likely attribute chain
 		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
 			// Could be variable method or attribute chain
