@@ -4,9 +4,96 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
+
+// ImportMapCache provides thread-safe caching of ImportMap instances.
+// This avoids re-parsing imports from the same file multiple times.
+//
+// The cache uses a read-write mutex to allow concurrent reads while
+// ensuring safe writes. This is critical for performance since:
+//  - Import extraction involves tree-sitter parsing (expensive)
+//  - Many files may import the same modules
+//  - Build call graph processes files sequentially (for now)
+//
+// Example usage:
+//
+//	cache := NewImportMapCache()
+//	importMap := cache.GetOrExtract(filePath, sourceCode, registry)
+type ImportMapCache struct {
+	cache map[string]*ImportMap // Maps file path to ImportMap
+	mu    sync.RWMutex          // Protects cache map
+}
+
+// NewImportMapCache creates a new empty import map cache.
+func NewImportMapCache() *ImportMapCache {
+	return &ImportMapCache{
+		cache: make(map[string]*ImportMap),
+	}
+}
+
+// Get retrieves an ImportMap from the cache if it exists.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//
+// Returns:
+//   - ImportMap and true if found in cache, nil and false otherwise
+func (c *ImportMapCache) Get(filePath string) (*ImportMap, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	importMap, ok := c.cache[filePath]
+	return importMap, ok
+}
+
+// Put stores an ImportMap in the cache.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//   - importMap: the extracted ImportMap to cache
+func (c *ImportMapCache) Put(filePath string, importMap *ImportMap) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.cache[filePath] = importMap
+}
+
+// GetOrExtract retrieves an ImportMap from cache or extracts it if not cached.
+// This is the main entry point for using the cache.
+//
+// Parameters:
+//   - filePath: absolute path to the Python file
+//   - sourceCode: file contents (only used if extraction needed)
+//   - registry: module registry for resolving imports
+//
+// Returns:
+//   - ImportMap from cache or newly extracted
+//   - error if extraction fails (cache misses only)
+//
+// Thread-safety:
+//   - Multiple goroutines can safely call GetOrExtract concurrently
+//   - First caller for a file will extract and cache
+//   - Subsequent callers will get cached result
+func (c *ImportMapCache) GetOrExtract(filePath string, sourceCode []byte, registry *ModuleRegistry) (*ImportMap, error) {
+	// Try to get from cache (fast path with read lock)
+	if importMap, ok := c.Get(filePath); ok {
+		return importMap, nil
+	}
+
+	// Cache miss - extract imports (expensive operation)
+	importMap, err := ExtractImports(filePath, sourceCode, registry)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache for future use
+	c.Put(filePath, importMap)
+
+	return importMap, nil
+}
 
 // BuildCallGraph constructs the complete call graph for a Python project.
 // This is Pass 3 of the 3-pass algorithm:
@@ -47,6 +134,10 @@ import (
 func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projectRoot string) (*CallGraph, error) {
 	callGraph := NewCallGraph()
 
+	// Initialize import map cache for performance
+	// This avoids re-parsing imports from the same file multiple times
+	importCache := NewImportMapCache()
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
@@ -65,8 +156,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			continue
 		}
 
-		// Extract imports to build ImportMap for this file
-		importMap, err := ExtractImports(filePath, sourceCode, registry)
+		// Extract imports using cache (avoids re-parsing if already cached)
+		importMap, err := importCache.GetOrExtract(filePath, sourceCode, registry)
 		if err != nil {
 			// Skip files with import errors
 			continue
@@ -97,6 +188,11 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
 			callSite.Resolved = resolved
+
+			// If resolution failed, categorize the failure reason
+			if !resolved {
+				callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+			}
 
 			// Add call site to graph (dereference pointer)
 			callGraph.AddCallSite(callerFQN, *callSite)
@@ -232,12 +328,130 @@ func findContainingFunction(location Location, functions []*graph.Node, modulePa
 //
 //   target="obj.method", imports={}
 //     → "obj.method", false  (needs type inference)
+
+// Python built-in functions that should not be resolved as module functions.
+var pythonBuiltins = map[string]bool{
+	"eval":       true,
+	"exec":       true,
+	"input":      true,
+	"raw_input":  true,
+	"compile":    true,
+	"__import__": true,
+}
+
+// categorizeResolutionFailure determines why a call target failed to resolve.
+// This enables diagnostic reporting to understand resolution gaps.
+//
+// Categories:
+//   - "external_framework" - Known external frameworks (Django, REST, pytest, stdlib)
+//   - "orm_pattern" - Django ORM patterns (Model.objects.*, queryset.*)
+//   - "attribute_chain" - Method calls on objects/return values
+//   - "variable_method" - Method calls that appear to be on variables
+//   - "super_call" - Calls via super() mechanism
+//   - "not_in_imports" - Simple name not found in imports
+//   - "unknown" - Other unresolved patterns
+//
+// Parameters:
+//   - target: original call target string (e.g., "models.ForeignKey")
+//   - targetFQN: resolved fully qualified name (e.g., "django.db.models.ForeignKey")
+//
+// Returns:
+//   - category string describing the failure reason
+func categorizeResolutionFailure(target, targetFQN string) string {
+	// Check for external frameworks (common patterns)
+	if strings.HasPrefix(targetFQN, "django.") ||
+		strings.HasPrefix(targetFQN, "rest_framework.") ||
+		strings.HasPrefix(targetFQN, "pytest.") ||
+		strings.HasPrefix(targetFQN, "unittest.") ||
+		strings.HasPrefix(targetFQN, "json.") ||
+		strings.HasPrefix(targetFQN, "logging.") ||
+		strings.HasPrefix(targetFQN, "os.") ||
+		strings.HasPrefix(targetFQN, "sys.") ||
+		strings.HasPrefix(targetFQN, "re.") ||
+		strings.HasPrefix(targetFQN, "pathlib.") ||
+		strings.HasPrefix(targetFQN, "collections.") ||
+		strings.HasPrefix(targetFQN, "datetime.") {
+		return "external_framework"
+	}
+
+	// Check for Django ORM patterns
+	if strings.Contains(target, ".objects.") ||
+		strings.HasSuffix(target, ".objects") ||
+		(strings.Contains(target, ".") && (strings.HasSuffix(target, ".filter") ||
+			strings.HasSuffix(target, ".get") ||
+			strings.HasSuffix(target, ".create") ||
+			strings.HasSuffix(target, ".update") ||
+			strings.HasSuffix(target, ".delete") ||
+			strings.HasSuffix(target, ".all") ||
+			strings.HasSuffix(target, ".first") ||
+			strings.HasSuffix(target, ".last") ||
+			strings.HasSuffix(target, ".count") ||
+			strings.HasSuffix(target, ".exists"))) {
+		return "orm_pattern"
+	}
+
+	// Check for super() calls
+	if strings.HasPrefix(target, "super(") || strings.HasPrefix(target, "super.") {
+		return "super_call"
+	}
+
+	// Check for attribute chains (has dots, looks like obj.method())
+	// Heuristic: lowercase first component likely means variable/object
+	if dotIndex := strings.Index(target, "."); dotIndex != -1 {
+		firstComponent := target[:dotIndex]
+		// If starts with lowercase and not a known module pattern, likely attribute chain
+		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
+			// Could be variable method or attribute chain
+			// Check common variable-like patterns
+			if firstComponent == "self" || firstComponent == "cls" ||
+				firstComponent == "request" || firstComponent == "response" ||
+				firstComponent == "queryset" || firstComponent == "user" ||
+				firstComponent == "obj" || firstComponent == "value" ||
+				firstComponent == "data" || firstComponent == "result" {
+				return "variable_method"
+			}
+			return "attribute_chain"
+		}
+	}
+
+	// Simple name (no dots) - not in imports
+	if !strings.Contains(target, ".") {
+		return "not_in_imports"
+	}
+
+	// Everything else
+	return "unknown"
+}
+
 func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string) (string, bool) {
+	// Handle self.method() calls - resolve to current module
+	if strings.HasPrefix(target, "self.") {
+		methodName := strings.TrimPrefix(target, "self.")
+		// Resolve to module.method
+		moduleFQN := currentModule + "." + methodName
+		// Validate exists
+		if validateFQN(moduleFQN, registry) {
+			return moduleFQN, true
+		}
+		// Return unresolved but with module prefix
+		return moduleFQN, false
+	}
+
 	// Handle simple names (no dots)
 	if !strings.Contains(target, ".") {
+		// Check if it's a Python built-in
+		if pythonBuiltins[target] {
+			// Return as builtins.function for pattern matching
+			return "builtins." + target, true
+		}
+
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
 			// Found in imports - return the FQN
+			// Check if it's a known framework
+			if isKnown, _ := IsKnownFramework(fqn); isKnown {
+				return fqn, true
+			}
 			// Validate if it exists in registry
 			resolved := validateFQN(fqn, registry)
 			return fqn, resolved
@@ -261,6 +475,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
+		// Check if it's a known framework
+		if isKnown, _ := IsKnownFramework(fullFQN); isKnown {
+			return fullFQN, true
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true
 		}

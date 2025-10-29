@@ -54,8 +54,8 @@ type Pattern struct {
 
 // PatternRegistry manages security patterns.
 type PatternRegistry struct {
-	Patterns       map[string]*Pattern            // Pattern ID -> Pattern
-	PatternsByType map[PatternType][]*Pattern     // Type -> Patterns
+	Patterns       map[string]*Pattern        // Pattern ID -> Pattern
+	PatternsByType map[PatternType][]*Pattern // Type -> Patterns
 }
 
 // NewPatternRegistry creates a new pattern registry.
@@ -93,7 +93,7 @@ func (pr *PatternRegistry) LoadDefaultPatterns() {
 		Description: "Detects code injection when user input flows to eval() without sanitization",
 		Type:        PatternTypeMissingSanitizer,
 		Severity:    SeverityCritical,
-		Sources:     []string{"request.GET", "request.POST", "input", "raw_input"},
+		Sources:     []string{"request.GET", "request.POST", "input", "raw_input", "request.query_params.get"},
 		Sinks:       []string{"eval", "exec"},
 		Sanitizers:  []string{"sanitize", "escape", "validate"},
 		CWE:         "CWE-94",
@@ -102,7 +102,8 @@ func (pr *PatternRegistry) LoadDefaultPatterns() {
 }
 
 // MatchPattern checks if a call graph matches a pattern.
-func (pr *PatternRegistry) MatchPattern(pattern *Pattern, callGraph *CallGraph) bool {
+// Returns detailed match information if a vulnerability is found.
+func (pr *PatternRegistry) MatchPattern(pattern *Pattern, callGraph *CallGraph) *PatternMatchDetails {
 	switch pattern.Type {
 	case PatternTypeDangerousFunction:
 		return pr.matchDangerousFunction(pattern, callGraph)
@@ -111,81 +112,125 @@ func (pr *PatternRegistry) MatchPattern(pattern *Pattern, callGraph *CallGraph) 
 	case PatternTypeMissingSanitizer:
 		return pr.matchMissingSanitizer(pattern, callGraph)
 	default:
-		return false
+		return nil
 	}
 }
 
+// PatternMatchDetails contains detailed information about a pattern match.
+type PatternMatchDetails struct {
+	Matched      bool
+	SourceFQN    string   // Fully qualified name of function containing the source call
+	SourceCall   string   // The actual dangerous call (e.g., "input", "request.GET")
+	SinkFQN      string   // Fully qualified name of function containing the sink call
+	SinkCall     string   // The actual dangerous call (e.g., "eval", "exec")
+	DataFlowPath []string // Complete path from source to sink
+}
+
 // matchDangerousFunction checks if any dangerous function is called.
-func (pr *PatternRegistry) matchDangerousFunction(pattern *Pattern, callGraph *CallGraph) bool {
-	for _, callSites := range callGraph.CallSites {
+func (pr *PatternRegistry) matchDangerousFunction(pattern *Pattern, callGraph *CallGraph) *PatternMatchDetails {
+	for caller, callSites := range callGraph.CallSites {
 		for _, callSite := range callSites {
 			for _, dangerousFunc := range pattern.DangerousFunctions {
 				if matchesFunctionName(callSite.TargetFQN, dangerousFunc) ||
 					matchesFunctionName(callSite.Target, dangerousFunc) {
-					return true
+					return &PatternMatchDetails{
+						Matched:      true,
+						SourceFQN:    caller,
+						SinkFQN:      callSite.TargetFQN,
+						DataFlowPath: []string{caller, callSite.TargetFQN},
+					}
 				}
 			}
 		}
 	}
-	return false
+	return &PatternMatchDetails{Matched: false}
 }
 
 // matchSourceSink checks if there's a path from source to sink.
-func (pr *PatternRegistry) matchSourceSink(pattern *Pattern, callGraph *CallGraph) bool {
+func (pr *PatternRegistry) matchSourceSink(pattern *Pattern, callGraph *CallGraph) *PatternMatchDetails {
 	sourceCalls := pr.findCallsByFunctions(pattern.Sources, callGraph)
 	if len(sourceCalls) == 0 {
-		return false
+		return &PatternMatchDetails{Matched: false}
 	}
 
 	sinkCalls := pr.findCallsByFunctions(pattern.Sinks, callGraph)
 	if len(sinkCalls) == 0 {
-		return false
+		return &PatternMatchDetails{Matched: false}
 	}
 
 	for _, source := range sourceCalls {
 		for _, sink := range sinkCalls {
-			if pr.hasPath(source.caller, sink.caller, callGraph) {
-				return true
+			path := pr.findPath(source.caller, sink.caller, callGraph)
+			if len(path) > 0 {
+				return &PatternMatchDetails{
+					Matched:      true,
+					SourceFQN:    source.caller,
+					SinkFQN:      sink.caller,
+					DataFlowPath: path,
+				}
 			}
 		}
 	}
 
-	return false
+	return &PatternMatchDetails{Matched: false}
 }
 
 // matchMissingSanitizer checks if there's a path from source to sink without sanitization.
-func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *CallGraph) bool {
+func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *CallGraph) *PatternMatchDetails {
 	sourceCalls := pr.findCallsByFunctions(pattern.Sources, callGraph)
 	if len(sourceCalls) == 0 {
-		return false
+		return &PatternMatchDetails{Matched: false}
 	}
 
 	sinkCalls := pr.findCallsByFunctions(pattern.Sinks, callGraph)
 	if len(sinkCalls) == 0 {
-		return false
+		return &PatternMatchDetails{Matched: false}
 	}
 
 	sanitizerCalls := pr.findCallsByFunctions(pattern.Sanitizers, callGraph)
 
+	// Sort for deterministic results
+	sortCallInfo(sourceCalls)
+	sortCallInfo(sinkCalls)
+
 	for _, source := range sourceCalls {
 		for _, sink := range sinkCalls {
-			if pr.hasPath(source.caller, sink.caller, callGraph) {
+			// Skip false positives where source and sink are in the same function
+			if source.caller == sink.caller {
+				continue
+			}
+
+			path := pr.findPath(source.caller, sink.caller, callGraph)
+			if len(path) > 1 { // Require at least 2 functions in path
+				// Check if any sanitizer is on the path
 				hasSanitizer := false
 				for _, sanitizer := range sanitizerCalls {
-					if pr.hasPath(source.caller, sanitizer.caller, callGraph) &&
-						pr.hasPath(sanitizer.caller, sink.caller, callGraph) {
-						hasSanitizer = true
+					// Check if sanitizer is in the path
+					for _, pathFunc := range path {
+						if pathFunc == sanitizer.caller {
+							hasSanitizer = true
+							break
+						}
+					}
+					if hasSanitizer {
 						break
 					}
 				}
 				if !hasSanitizer {
-					return true
+					return &PatternMatchDetails{
+						Matched:      true,
+						SourceFQN:    source.caller,
+						SourceCall:   source.target,
+						SinkFQN:      sink.caller,
+						SinkCall:     sink.target,
+						DataFlowPath: path,
+					}
 				}
 			}
 		}
 	}
 
-	return false
+	return &PatternMatchDetails{Matched: false}
 }
 
 // callInfo stores information about a function call location.
@@ -242,19 +287,94 @@ func (pr *PatternRegistry) dfsPath(current, target string, callGraph *CallGraph,
 	return false
 }
 
+// findPath finds the complete path from source to sink in the call graph.
+// Returns the path as a slice of function FQNs, or empty slice if no path exists.
+func (pr *PatternRegistry) findPath(from, to string, callGraph *CallGraph) []string {
+	if from == to {
+		return []string{from}
+	}
+
+	visited := make(map[string]bool)
+	path := make([]string, 0)
+
+	if pr.dfsPathWithTrace(from, to, callGraph, visited, &path) {
+		return path
+	}
+
+	return []string{}
+}
+
+// dfsPathWithTrace performs depth-first search and captures the path.
+func (pr *PatternRegistry) dfsPathWithTrace(current, target string, callGraph *CallGraph, visited map[string]bool, path *[]string) bool {
+	*path = append(*path, current)
+
+	if current == target {
+		return true
+	}
+
+	if visited[current] {
+		*path = (*path)[:len(*path)-1] // backtrack
+		return false
+	}
+
+	visited[current] = true
+
+	callees := callGraph.GetCallees(current)
+	for _, callee := range callees {
+		if pr.dfsPathWithTrace(callee, target, callGraph, visited, path) {
+			return true
+		}
+	}
+
+	// Backtrack if no path found
+	*path = (*path)[:len(*path)-1]
+	return false
+}
+
+// sortCallInfo sorts callInfo slices by caller FQN for deterministic results.
+func sortCallInfo(calls []callInfo) {
+	// Simple bubble sort - good enough for small slices
+	for i := 0; i < len(calls); i++ {
+		for j := i + 1; j < len(calls); j++ {
+			if calls[i].caller > calls[j].caller {
+				calls[i], calls[j] = calls[j], calls[i]
+			}
+		}
+	}
+}
+
 // matchesFunctionName checks if a function name matches a pattern.
-// Supports exact matches and suffix matches.
+// Supports exact matches, suffix matches, and prefix matches.
+// Examples:
+//   - "builtins.eval" matches pattern "eval" (suffix match)
+//   - "request.GET.get" matches pattern "request.GET" (prefix match for sources)
+//   - "vulnerable_app.eval" matches pattern "eval" (last component match)
 func matchesFunctionName(fqn, pattern string) bool {
+	// Exact match: "eval" == "eval"
 	if fqn == pattern {
 		return true
 	}
 
+	// Suffix match: "builtins.eval" ends with ".eval"
 	if strings.HasSuffix(fqn, "."+pattern) {
 		return true
 	}
 
-	if strings.Contains(fqn, pattern) {
+	// Prefix match: "request.GET.get" starts with "request.GET."
+	// This handles attribute access chains for sources
+	if strings.HasPrefix(fqn, pattern+".") {
 		return true
+	}
+
+	// Extract last component after last dot and compare
+	// This handles cases like "vulnerable_app.eval" → "eval"
+	// but avoids matching "executor" against "exec"
+	lastDot := strings.LastIndex(fqn, ".")
+	if lastDot >= 0 && lastDot < len(fqn)-1 {
+		lastComponent := fqn[lastDot+1:]
+		if lastComponent == pattern {
+			return true
+		}
 	}
 
 	return false
