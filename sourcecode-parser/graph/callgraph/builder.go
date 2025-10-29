@@ -183,7 +183,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 
 			// Resolve the call target to a fully qualified name
-			targetFQN, resolved := resolveCallTarget(callSite.Target, importMap, registry, modulePath)
+			targetFQN, resolved := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph)
 
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
@@ -423,7 +423,7 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 	return "unknown"
 }
 
-func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string) (string, bool) {
+func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")
@@ -479,6 +479,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		if isKnown, _ := IsKnownFramework(fullFQN); isKnown {
 			return fullFQN, true
 		}
+		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
+		if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+			return ormFQN, true
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true
 		}
@@ -490,6 +494,12 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	fullFQN := currentModule + "." + target
 	if validateFQN(fullFQN, registry) {
 		return fullFQN, true
+	}
+
+	// Before giving up, check if it's an ORM pattern (Django, SQLAlchemy, etc.)
+	// ORM methods are dynamically generated at runtime and won't be in source
+	if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+		return ormFQN, true
 	}
 
 	// Can't resolve - return as-is
