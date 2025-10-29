@@ -397,8 +397,8 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 
 	// Check for attribute chains (has dots, looks like obj.method())
 	// Heuristic: lowercase first component likely means variable/object
-	if strings.Contains(target, ".") {
-		firstComponent := target[:strings.Index(target, ".")]
+	if dotIndex := strings.Index(target, "."); dotIndex != -1 {
+		firstComponent := target[:dotIndex]
 		// If starts with lowercase and not a known module pattern, likely attribute chain
 		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
 			// Could be variable method or attribute chain
@@ -448,6 +448,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
 			// Found in imports - return the FQN
+			// Check if it's a known framework
+			if isKnown, _ := IsKnownFramework(fqn); isKnown {
+				return fqn, true
+			}
 			// Validate if it exists in registry
 			resolved := validateFQN(fqn, registry)
 			return fqn, resolved
@@ -471,6 +475,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
+		// Check if it's a known framework
+		if isKnown, _ := IsKnownFramework(fullFQN); isKnown {
+			return fullFQN, true
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true
 		}
