@@ -339,18 +339,19 @@ func BenchmarkResolveCallTarget(b *testing.B) {
 	importMap.AddImport("helper", "myapp.helpers")
 
 	currentModule := "myapp.main"
+	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		// Test simple attribute access (most common case)
-		_, _ = resolveCallTarget("utils.process_data", importMap, registry, currentModule)
+		_, _ = resolveCallTarget("utils.process_data", importMap, registry, currentModule, codeGraph)
 
 		// Test aliased import
-		_, _ = resolveCallTarget("helper.format", importMap, registry, currentModule)
+		_, _ = resolveCallTarget("helper.format", importMap, registry, currentModule, codeGraph)
 
 		// Test fully qualified name
-		_, _ = resolveCallTarget("myapp.utils.validate", importMap, registry, currentModule)
+		_, _ = resolveCallTarget("myapp.utils.validate", importMap, registry, currentModule, codeGraph)
 	}
 }

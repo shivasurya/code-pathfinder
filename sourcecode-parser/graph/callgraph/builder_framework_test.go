@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,28 +64,31 @@ def test_stdlib():
 	modulePath, ok := registry.FileToModule[testFile]
 	assert.True(t, ok)
 
+	// Create empty code graph for tests
+	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
 	// Test Django models resolution
-	targetFQN, resolved := resolveCallTarget("models.User", importMap, registry, modulePath)
+	targetFQN, resolved := resolveCallTarget("models.User", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "Django models.User should be resolved")
 	assert.Equal(t, "django.db.models.User", targetFQN)
 
 	// Test REST framework resolution
-	targetFQN, resolved = resolveCallTarget("serializers.ModelSerializer", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("serializers.ModelSerializer", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "REST framework serializers should be resolved")
 	assert.Equal(t, "rest_framework.serializers.ModelSerializer", targetFQN)
 
 	// Test pytest resolution
-	targetFQN, resolved = resolveCallTarget("pytest.fixture", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("pytest.fixture", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "pytest.fixture should be resolved")
 	assert.Equal(t, "pytest.fixture", targetFQN)
 
 	// Test json (stdlib) resolution
-	targetFQN, resolved = resolveCallTarget("json.loads", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("json.loads", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "json.loads should be resolved")
 	assert.Equal(t, "json.loads", targetFQN)
 
 	// Test logging (stdlib) resolution
-	targetFQN, resolved = resolveCallTarget("logging.getLogger", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("logging.getLogger", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "logging.getLogger should be resolved")
 	assert.Equal(t, "logging.getLogger", targetFQN)
 }
@@ -135,12 +139,15 @@ def process():
 	modulePath, ok := registry.FileToModule[testFile]
 	assert.True(t, ok)
 
+	// Create empty code graph for tests
+	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
 	// Test local function resolution (should resolve to local module)
-	targetFQN, resolved := resolveCallTarget("sanitize", importMap, registry, modulePath)
+	targetFQN, resolved := resolveCallTarget("sanitize", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "Local function sanitize should be resolved")
 	assert.Contains(t, targetFQN, "utils.sanitize")
 
-	targetFQN, resolved = resolveCallTarget("validate", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("validate", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "Local function validate should be resolved")
 	assert.Contains(t, targetFQN, "utils.validate")
 }
@@ -186,8 +193,11 @@ def process():
 	modulePath, ok := registry.FileToModule[testFile]
 	assert.True(t, ok)
 
+	// Create empty code graph for tests
+	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
 	// Test that local json takes precedence over stdlib
-	targetFQN, resolved := resolveCallTarget("loads", importMap, registry, modulePath)
+	targetFQN, resolved := resolveCallTarget("loads", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "Local json.loads should be resolved")
 	// When there's a local module that shadows stdlib, it resolves to local
 	// The FQN will be json.loads but from the local module, not stdlib
@@ -243,13 +253,16 @@ def process():
 	modulePath, ok := registry.FileToModule[testFile]
 	assert.True(t, ok)
 
+	// Create empty code graph for tests
+	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
 	// Test local function resolution
-	targetFQN, resolved := resolveCallTarget("helper", importMap, registry, modulePath)
+	targetFQN, resolved := resolveCallTarget("helper", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "Local helper should be resolved")
 	assert.Contains(t, targetFQN, "utils.helper")
 
 	// Test framework resolution
-	targetFQN, resolved = resolveCallTarget("json.loads", importMap, registry, modulePath)
+	targetFQN, resolved = resolveCallTarget("json.loads", importMap, registry, modulePath, codeGraph)
 	assert.True(t, resolved, "json.loads should be resolved as framework")
 	assert.Equal(t, "json.loads", targetFQN)
 }
