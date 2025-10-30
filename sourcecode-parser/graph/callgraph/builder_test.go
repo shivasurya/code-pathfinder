@@ -23,7 +23,7 @@ func TestResolveCallTarget_SimpleImportedFunction(t *testing.T) {
 	importMap.AddImport("sanitize", "myapp.utils.sanitize")
 
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
-	fqn, resolved := resolveCallTarget("sanitize", importMap, registry, "myapp.views", codeGraph)
+	fqn, resolved := resolveCallTarget("sanitize", importMap, registry, "myapp.views", codeGraph, nil, "")
 
 	assert.True(t, resolved)
 	assert.Equal(t, "myapp.utils.sanitize", fqn)
@@ -42,7 +42,7 @@ func TestResolveCallTarget_QualifiedImport(t *testing.T) {
 	importMap.AddImport("utils", "myapp.utils")
 
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
-	fqn, resolved := resolveCallTarget("utils.sanitize", importMap, registry, "myapp.views", codeGraph)
+	fqn, resolved := resolveCallTarget("utils.sanitize", importMap, registry, "myapp.views", codeGraph, nil, "")
 
 	assert.True(t, resolved)
 	assert.Equal(t, "myapp.utils.sanitize", fqn)
@@ -58,7 +58,7 @@ func TestResolveCallTarget_SameModuleFunction(t *testing.T) {
 	importMap := NewImportMap("/project/myapp/views.py")
 
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
-	fqn, resolved := resolveCallTarget("helper", importMap, registry, "myapp.views", codeGraph)
+	fqn, resolved := resolveCallTarget("helper", importMap, registry, "myapp.views", codeGraph, nil, "")
 
 	assert.True(t, resolved)
 	assert.Equal(t, "myapp.views.helper", fqn)
@@ -74,7 +74,7 @@ func TestResolveCallTarget_UnresolvedMethodCall(t *testing.T) {
 	importMap := NewImportMap("/project/myapp/views.py")
 
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
-	fqn, resolved := resolveCallTarget("obj.method", importMap, registry, "myapp.views", codeGraph)
+	fqn, resolved := resolveCallTarget("obj.method", importMap, registry, "myapp.views", codeGraph, nil, "")
 
 	assert.False(t, resolved)
 	assert.Equal(t, "obj.method", fqn)
@@ -90,7 +90,7 @@ func TestResolveCallTarget_NonExistentFunction(t *testing.T) {
 	importMap.AddImport("missing", "nonexistent.module.function")
 
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
-	fqn, resolved := resolveCallTarget("missing", importMap, registry, "myapp.views", codeGraph)
+	fqn, resolved := resolveCallTarget("missing", importMap, registry, "myapp.views", codeGraph, nil, "")
 
 	assert.False(t, resolved)
 	assert.Equal(t, "nonexistent.module.function", fqn)

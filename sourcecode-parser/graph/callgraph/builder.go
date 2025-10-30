@@ -138,6 +138,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// This avoids re-parsing imports from the same file multiple times
 	importCache := NewImportMapCache()
 
+	// Initialize type inference engine
+	typeEngine := NewTypeInferenceEngine(registry)
+	typeEngine.Builtins = NewBuiltinRegistry()
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
@@ -163,6 +167,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			continue
 		}
 
+		// Extract variable assignments for type inference
+		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+
 		// Extract all call sites from this file
 		callSites, err := ExtractCallSites(filePath, sourceCode, importMap)
 		if err != nil {
@@ -183,7 +190,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 
 			// Resolve the call target to a fully qualified name
-			targetFQN, resolved := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph)
+			targetFQN, resolved := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN)
 
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
@@ -423,7 +430,152 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 	return "unknown"
 }
 
-func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
+func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string) (string, bool) {
+	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
+	if typeEngine == nil || callerFQN == "" {
+		return resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
+	}
+	// Handle self.method() calls - resolve to current module
+	if strings.HasPrefix(target, "self.") {
+		methodName := strings.TrimPrefix(target, "self.")
+		// Resolve to module.method
+		moduleFQN := currentModule + "." + methodName
+		// Validate exists
+		if validateFQN(moduleFQN, registry) {
+			return moduleFQN, true
+		}
+		// Return unresolved but with module prefix
+		return moduleFQN, false
+	}
+
+	// Handle simple names (no dots)
+	if !strings.Contains(target, ".") {
+		// Check if it's a Python built-in
+		if pythonBuiltins[target] {
+			// Return as builtins.function for pattern matching
+			return "builtins." + target, true
+		}
+
+		// Try to resolve through imports
+		if fqn, ok := importMap.Resolve(target); ok {
+			// Found in imports - return the FQN
+			// Check if it's a known framework
+			if isKnown, _ := IsKnownFramework(fqn); isKnown {
+				return fqn, true
+			}
+			// Validate if it exists in registry
+			resolved := validateFQN(fqn, registry)
+			return fqn, resolved
+		}
+
+		// Not in imports - might be in same module
+		sameLevelFQN := currentModule + "." + target
+		if validateFQN(sameLevelFQN, registry) {
+			return sameLevelFQN, true
+		}
+
+		// Can't resolve - return as-is
+		return target, false
+	}
+
+	// Handle qualified names (with dots)
+	parts := strings.SplitN(target, ".", 2)
+	base := parts[0]
+	rest := parts[1]
+
+	// Try type inference for variable.method() calls
+	if typeEngine != nil && callerFQN != "" {
+		scope := typeEngine.GetScope(callerFQN)
+		if scope != nil {
+			// Check if base is a known variable
+			if binding, exists := scope.Variables[base]; exists && binding.Type != nil {
+				varTypeFQN := binding.Type.TypeFQN
+				// Check if it's a builtin type
+				if typeEngine.Builtins != nil {
+					method := typeEngine.Builtins.GetMethod(varTypeFQN, rest)
+					if method != nil {
+						// Resolved to builtin method
+						return varTypeFQN + "." + rest, true
+					}
+				}
+				// Try to resolve as user-defined type method
+				fullFQN := varTypeFQN + "." + rest
+				if validateFQN(fullFQN, registry) {
+					return fullFQN, true
+				}
+			}
+		}
+	}
+
+	// Try to resolve base through imports
+	if baseFQN, ok := importMap.Resolve(base); ok {
+		fullFQN := baseFQN + "." + rest
+		// Check if it's a known framework
+		if isKnown, _ := IsKnownFramework(fullFQN); isKnown {
+			return fullFQN, true
+		}
+		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
+		if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+			return ormFQN, true
+		}
+		if validateFQN(fullFQN, registry) {
+			return fullFQN, true
+		}
+		return fullFQN, false
+	}
+
+	// Base not in imports - might be module-level access
+	// Try current module
+	fullFQN := currentModule + "." + target
+	if validateFQN(fullFQN, registry) {
+		return fullFQN, true
+	}
+
+	// Before giving up, check if it's an ORM pattern (Django, SQLAlchemy, etc.)
+	// ORM methods are dynamically generated at runtime and won't be in source
+	if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+		return ormFQN, true
+	}
+
+	// Can't resolve - return as-is
+	return target, false
+}
+
+// validateFQN checks if a fully qualified name exists in the registry.
+// Handles both module names and function names within modules.
+//
+// Examples:
+//   "myapp.utils" - checks if module exists
+//   "myapp.utils.sanitize" - checks if module "myapp.utils" exists
+//
+// Parameters:
+//   - fqn: fully qualified name to validate
+//   - registry: module registry
+//
+// Returns:
+//   - true if FQN is valid (module or function in existing module)
+func validateFQN(fqn string, registry *ModuleRegistry) bool {
+	// Check if it's a module
+	if _, ok := registry.Modules[fqn]; ok {
+		return true
+	}
+
+	// Check if parent module exists (for functions)
+	// "myapp.utils.sanitize" → check if "myapp.utils" exists
+	lastDot := strings.LastIndex(fqn, ".")
+	if lastDot > 0 {
+		parentModule := fqn[:lastDot]
+		if _, ok := registry.Modules[parentModule]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolveCallTargetLegacy is the old resolution logic without type inference.
+// Used for backward compatibility with existing tests.
+func resolveCallTargetLegacy(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")
@@ -504,38 +656,6 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 
 	// Can't resolve - return as-is
 	return target, false
-}
-
-// validateFQN checks if a fully qualified name exists in the registry.
-// Handles both module names and function names within modules.
-//
-// Examples:
-//   "myapp.utils" - checks if module exists
-//   "myapp.utils.sanitize" - checks if module "myapp.utils" exists
-//
-// Parameters:
-//   - fqn: fully qualified name to validate
-//   - registry: module registry
-//
-// Returns:
-//   - true if FQN is valid (module or function in existing module)
-func validateFQN(fqn string, registry *ModuleRegistry) bool {
-	// Check if it's a module
-	if _, ok := registry.Modules[fqn]; ok {
-		return true
-	}
-
-	// Check if parent module exists (for functions)
-	// "myapp.utils.sanitize" → check if "myapp.utils" exists
-	lastDot := strings.LastIndex(fqn, ".")
-	if lastDot > 0 {
-		parentModule := fqn[:lastDot]
-		if _, ok := registry.Modules[parentModule]; ok {
-			return true
-		}
-	}
-
-	return false
 }
 
 // readFileBytes reads a file and returns its contents as a byte slice.
