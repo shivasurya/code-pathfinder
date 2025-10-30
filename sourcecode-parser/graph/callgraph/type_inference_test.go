@@ -237,7 +237,7 @@ func TestTypeInferenceEngine_Creation(t *testing.T) {
 	assert.NotNil(t, engine.ReturnTypes)
 	assert.Equal(t, 0, len(engine.Scopes))
 	assert.Equal(t, 0, len(engine.ReturnTypes))
-	// Builtins will be tested in Task 2
+	assert.Nil(t, engine.Builtins) // Not initialized by default
 	assert.Equal(t, registry, engine.Registry)
 }
 
@@ -401,4 +401,33 @@ func TestTypeInferenceEngine_ReturnTypeTracking(t *testing.T) {
 
 	// Non-existent function returns nil
 	assert.Nil(t, engine.ReturnTypes["nonexistent.function"])
+}
+
+// TestTypeInferenceEngine_WithBuiltinRegistry tests using the builtin registry.
+func TestTypeInferenceEngine_WithBuiltinRegistry(t *testing.T) {
+	registry := NewModuleRegistry()
+	engine := NewTypeInferenceEngine(registry)
+
+	// Initially nil
+	assert.Nil(t, engine.Builtins)
+
+	// Set builtin registry
+	engine.Builtins = NewBuiltinRegistry()
+	assert.NotNil(t, engine.Builtins)
+
+	// Verify we can access builtin types
+	strType := engine.Builtins.GetType("builtins.str")
+	assert.NotNil(t, strType)
+	assert.Equal(t, "builtins.str", strType.FQN)
+
+	// Verify we can get builtin methods
+	upperMethod := engine.Builtins.GetMethod("builtins.str", "upper")
+	assert.NotNil(t, upperMethod)
+	assert.Equal(t, "builtins.str", upperMethod.ReturnType.TypeFQN)
+
+	// Verify literal type inference
+	typeInfo := engine.Builtins.InferLiteralType(`"hello"`)
+	assert.NotNil(t, typeInfo)
+	assert.Equal(t, "builtins.str", typeInfo.TypeFQN)
+	assert.Equal(t, float32(1.0), typeInfo.Confidence)
 }

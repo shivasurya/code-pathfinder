@@ -30,7 +30,7 @@ type FunctionScope struct {
 type TypeInferenceEngine struct {
 	Scopes      map[string]*FunctionScope // Function FQN -> scope
 	ReturnTypes map[string]*TypeInfo      // Function FQN -> return type
-	// Builtins    *BuiltinRegistry          // Builtin types registry (will be added in Task 2)
+	Builtins    *BuiltinRegistry          // Builtin types registry
 	Registry    *ModuleRegistry           // Module registry reference
 }
 
