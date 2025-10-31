@@ -146,7 +146,32 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
 
-	// Process each Python file in the project
+	// Phase 2 Task 9: Extract return types from all functions (first pass)
+	allReturnStatements := make([]*ReturnStatement, 0)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract return types
+		returns, err := ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
+		if err != nil {
+			continue
+		}
+
+		allReturnStatements = append(allReturnStatements, returns...)
+	}
+
+	// Merge return types and add to engine
+	mergedReturns := MergeReturnTypes(allReturnStatements)
+	typeEngine.AddReturnTypesToEngine(mergedReturns)
+
+	// Process each Python file in the project (second pass for variable assignments and calls)
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
@@ -210,6 +235,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 		}
 	}
+
+	// Phase 2 Task 8: Resolve call: placeholders with return types
+	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
 	return callGraph, nil
 }
@@ -483,25 +511,49 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	base := parts[0]
 	rest := parts[1]
 
-	// Try type inference for variable.method() calls
+	// Phase 2 Task 9: Try type inference for variable.method() calls
 	if typeEngine != nil && callerFQN != "" {
+		// Try function scope first
 		scope := typeEngine.GetScope(callerFQN)
+		if scope == nil {
+			// Fallback to module scope for module-level variables
+			scope = typeEngine.GetScope(currentModule)
+		}
+
 		if scope != nil {
 			// Check if base is a known variable
 			if binding, exists := scope.Variables[base]; exists && binding.Type != nil {
-				varTypeFQN := binding.Type.TypeFQN
-				// Check if it's a builtin type
-				if typeEngine.Builtins != nil {
-					method := typeEngine.Builtins.GetMethod(varTypeFQN, rest)
-					if method != nil {
-						// Resolved to builtin method
-						return varTypeFQN + "." + rest, true
+				typeFQN := binding.Type.TypeFQN
+
+				// Skip placeholders (call:, var:) - not yet resolved
+				if strings.HasPrefix(typeFQN, "call:") || strings.HasPrefix(typeFQN, "var:") {
+					// Continue to legacy resolution
+				} else {
+					// Check if it's a builtin type
+					if typeEngine.Builtins != nil && strings.HasPrefix(typeFQN, "builtins.") {
+						method := typeEngine.Builtins.GetMethod(typeFQN, rest)
+						if method != nil {
+							// Resolved to builtin method
+							return typeFQN + "." + rest, true
+						}
 					}
-				}
-				// Try to resolve as user-defined type method
-				fullFQN := varTypeFQN + "." + rest
-				if validateFQN(fullFQN, registry) {
-					return fullFQN, true
+
+					// Check if it's a project type (user-defined class/method)
+					methodFQN := typeFQN + "." + rest
+
+					// Validate method exists in code graph
+					if codeGraph != nil {
+						if node, ok := codeGraph.Nodes[methodFQN]; ok {
+							if node.Type == "method_declaration" || node.Type == "function_definition" {
+								return methodFQN, true
+							}
+						}
+					}
+
+					// Heuristic: If type has good confidence (>= 0.7), assume method exists
+					if binding.Type.Confidence >= 0.7 {
+						return methodFQN, true
+					}
 				}
 			}
 		}
