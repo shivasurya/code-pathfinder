@@ -62,6 +62,7 @@ func ExtractVariableAssignments(
 		modulePath,
 		"",
 		typeEngine,
+		registry,
 		builtinRegistry,
 	)
 
@@ -85,6 +86,7 @@ func traverseForAssignments(
 	modulePath string,
 	currentFunction string,
 	typeEngine *TypeInferenceEngine,
+	registry *ModuleRegistry,
 	builtinRegistry *BuiltinRegistry,
 ) {
 	if node == nil {
@@ -118,8 +120,10 @@ func traverseForAssignments(
 			node,
 			sourceCode,
 			filePath,
+			modulePath,
 			currentFunction,
 			typeEngine,
+			registry,
 			builtinRegistry,
 		)
 	}
@@ -134,6 +138,7 @@ func traverseForAssignments(
 			modulePath,
 			currentFunction,
 			typeEngine,
+			registry,
 			builtinRegistry,
 		)
 	}
@@ -150,15 +155,18 @@ func traverseForAssignments(
 //   - node: assignment AST node
 //   - sourceCode: source code bytes
 //   - filePath: file path for location
-//   - currentFunction: current function FQN
+//   - modulePath: module FQN
+//   - currentFunction: current function FQN (empty if module-level)
 //   - typeEngine: type inference engine
 //   - builtinRegistry: builtin types registry
 func processAssignment(
 	node *sitter.Node,
 	sourceCode []byte,
 	filePath string,
+	modulePath string,
 	currentFunction string,
 	typeEngine *TypeInferenceEngine,
+	registry *ModuleRegistry,
 	builtinRegistry *BuiltinRegistry,
 ) {
 	// Assignment node structure:
@@ -197,7 +205,7 @@ func processAssignment(
 	}
 
 	// Infer type from right side
-	typeInfo := inferTypeFromExpression(rightNode, sourceCode, builtinRegistry)
+	typeInfo := inferTypeFromExpression(rightNode, sourceCode, filePath, modulePath, registry, builtinRegistry)
 	if typeInfo == nil {
 		return
 	}
@@ -221,17 +229,16 @@ func processAssignment(
 		}
 	}
 
-	// Add to function scope or create module-level scope
-	functionFQN := currentFunction
-	if functionFQN == "" {
-		// Module-level variable - use a special scope
-		// For simplicity, we'll skip module-level for now
-		return
+	// Add to function scope or module-level scope
+	scopeFQN := currentFunction
+	if scopeFQN == "" {
+		// Module-level variable - use module path as scope name
+		scopeFQN = modulePath
 	}
 
-	scope := typeEngine.GetScope(functionFQN)
+	scope := typeEngine.GetScope(scopeFQN)
 	if scope == nil {
-		scope = NewFunctionScope(functionFQN)
+		scope = NewFunctionScope(scopeFQN)
 		typeEngine.AddScope(scope)
 	}
 
@@ -242,11 +249,14 @@ func processAssignment(
 //
 // Currently handles:
 //   - Literals (strings, numbers, lists, dicts, etc.)
-//   - Future: function calls, method calls (Task 2 Phase 1)
+//   - Function calls (creates placeholders or resolves class instantiations)
 //
 // Parameters:
 //   - node: expression AST node
 //   - sourceCode: source code bytes
+//   - filePath: file path for context
+//   - modulePath: module FQN
+//   - registry: module registry for class resolution
 //   - builtinRegistry: builtin types registry
 //
 // Returns:
@@ -254,6 +264,9 @@ func processAssignment(
 func inferTypeFromExpression(
 	node *sitter.Node,
 	sourceCode []byte,
+	filePath string,
+	modulePath string,
+	registry *ModuleRegistry,
 	builtinRegistry *BuiltinRegistry,
 ) *TypeInfo {
 	if node == nil {
@@ -261,6 +274,33 @@ func inferTypeFromExpression(
 	}
 
 	nodeType := node.Type()
+
+	// Handle function calls - try class instantiation first, then create placeholder
+	if nodeType == "call" {
+		// First, try to resolve as class instantiation (e.g., User(), HttpResponse())
+		// This handles PascalCase patterns immediately without creating placeholders
+		importMap := NewImportMap(filePath)
+		classType := ResolveClassInstantiation(node, sourceCode, modulePath, importMap, registry)
+		if classType != nil {
+			return classType
+		}
+
+		// Not a class instantiation - create placeholder for function call
+		// This will be resolved later by UpdateVariableBindingsWithFunctionReturns()
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child.Type() == "identifier" || child.Type() == "attribute" {
+				calleeName := extractCalleeName(child, sourceCode)
+				if calleeName != "" {
+					return &TypeInfo{
+						TypeFQN:    "call:" + calleeName,
+						Confidence: 0.5, // Medium confidence - will be refined later
+						Source:     "function_call_placeholder",
+					}
+				}
+			}
+		}
+	}
 
 	// Handle literals
 	switch nodeType {

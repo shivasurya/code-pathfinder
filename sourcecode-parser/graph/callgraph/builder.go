@@ -146,7 +146,51 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
 
-	// Process each Python file in the project
+	// Phase 2 Task 9: Extract return types from all functions (first pass)
+	allReturnStatements := make([]*ReturnStatement, 0)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract return types
+		returns, err := ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
+		if err != nil {
+			continue
+		}
+
+		allReturnStatements = append(allReturnStatements, returns...)
+	}
+
+	// Merge return types and add to engine
+	mergedReturns := MergeReturnTypes(allReturnStatements)
+	typeEngine.AddReturnTypesToEngine(mergedReturns)
+
+	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
+	for _, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract variable assignments for type inference
+		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	}
+
+	// Phase 2 Task 8: Resolve call: placeholders with return types
+	// This MUST happen before we start resolving call sites!
+	typeEngine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Process each Python file in the project (third pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
@@ -166,9 +210,6 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			// Skip files with import errors
 			continue
 		}
-
-		// Extract variable assignments for type inference
-		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
 
 		// Extract all call sites from this file
 		callSites, err := ExtractCallSites(filePath, sourceCode, importMap)
@@ -190,11 +231,19 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 
 			// Resolve the call target to a fully qualified name
-			targetFQN, resolved := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN)
+			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph)
 
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
 			callSite.Resolved = resolved
+
+			// Phase 2 Task 10: Populate type inference metadata
+			if typeInfo != nil {
+				callSite.ResolvedViaTypeInference = true
+				callSite.InferredType = typeInfo.TypeFQN
+				callSite.TypeConfidence = typeInfo.Confidence
+				callSite.TypeSource = typeInfo.Source
+			}
 
 			// If resolution failed, categorize the failure reason
 			if !resolved {
@@ -277,6 +326,12 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 // Returns:
 //   - Fully qualified name of the containing function, or empty if not found
 func findContainingFunction(location Location, functions []*graph.Node, modulePath string) string {
+	// In Python, module-level code has no indentation (column == 1)
+	// If the call site is at column 1, it's module-level, not inside any function
+	if location.Column == 1 {
+		return ""
+	}
+
 	var bestMatch *graph.Node
 	var bestLine uint32
 
@@ -430,10 +485,11 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 	return "unknown"
 }
 
-func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string) (string, bool) {
+func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string, callGraph *CallGraph) (string, bool, *TypeInfo) {
 	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
 	if typeEngine == nil || callerFQN == "" {
-		return resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
+		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
+		return fqn, resolved, nil
 	}
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
@@ -442,10 +498,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		moduleFQN := currentModule + "." + methodName
 		// Validate exists
 		if validateFQN(moduleFQN, registry) {
-			return moduleFQN, true
+			return moduleFQN, true, nil
 		}
 		// Return unresolved but with module prefix
-		return moduleFQN, false
+		return moduleFQN, false, nil
 	}
 
 	// Handle simple names (no dots)
@@ -453,7 +509,7 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		// Check if it's a Python built-in
 		if pythonBuiltins[target] {
 			// Return as builtins.function for pattern matching
-			return "builtins." + target, true
+			return "builtins." + target, true, nil
 		}
 
 		// Try to resolve through imports
@@ -461,21 +517,21 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 			// Found in imports - return the FQN
 			// Check if it's a known framework
 			if isKnown, _ := IsKnownFramework(fqn); isKnown {
-				return fqn, true
+				return fqn, true, nil
 			}
 			// Validate if it exists in registry
 			resolved := validateFQN(fqn, registry)
-			return fqn, resolved
+			return fqn, resolved, nil
 		}
 
 		// Not in imports - might be in same module
 		sameLevelFQN := currentModule + "." + target
 		if validateFQN(sameLevelFQN, registry) {
-			return sameLevelFQN, true
+			return sameLevelFQN, true, nil
 		}
 
 		// Can't resolve - return as-is
-		return target, false
+		return target, false, nil
 	}
 
 	// Handle qualified names (with dots)
@@ -483,25 +539,87 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	base := parts[0]
 	rest := parts[1]
 
-	// Try type inference for variable.method() calls
+	// Phase 2 Task 9: Try type inference for variable.method() calls
 	if typeEngine != nil && callerFQN != "" {
-		scope := typeEngine.GetScope(callerFQN)
-		if scope != nil {
-			// Check if base is a known variable
-			if binding, exists := scope.Variables[base]; exists && binding.Type != nil {
-				varTypeFQN := binding.Type.TypeFQN
-				// Check if it's a builtin type
-				if typeEngine.Builtins != nil {
-					method := typeEngine.Builtins.GetMethod(varTypeFQN, rest)
-					if method != nil {
-						// Resolved to builtin method
-						return varTypeFQN + "." + rest, true
-					}
+		// Try function scope first, then fall back to module scope
+		var binding *VariableBinding
+
+		// Check function scope first
+		functionScope := typeEngine.GetScope(callerFQN)
+		if functionScope != nil {
+			if b, exists := functionScope.Variables[base]; exists {
+				binding = b
+			}
+		}
+
+		// If not found in function scope, try module scope
+		if binding == nil {
+			moduleScope := typeEngine.GetScope(currentModule)
+			if moduleScope != nil {
+				if b, exists := moduleScope.Variables[base]; exists {
+					binding = b
 				}
-				// Try to resolve as user-defined type method
-				fullFQN := varTypeFQN + "." + rest
-				if validateFQN(fullFQN, registry) {
-					return fullFQN, true
+			}
+		}
+
+		if binding != nil {
+			// Check if variable has type information
+			if binding.Type != nil {
+				typeFQN := binding.Type.TypeFQN
+
+				// Skip placeholders (call:, var:) - not yet resolved
+				if strings.HasPrefix(typeFQN, "call:") || strings.HasPrefix(typeFQN, "var:") {
+					// Continue to legacy resolution
+				} else {
+					// Check if it's a builtin type
+					if typeEngine.Builtins != nil && strings.HasPrefix(typeFQN, "builtins.") {
+						method := typeEngine.Builtins.GetMethod(typeFQN, rest)
+						if method != nil {
+							// Resolved to builtin method - return with type info
+							return typeFQN + "." + rest, true, binding.Type
+						}
+					}
+
+					// Check if it's a project type (user-defined class/method)
+					methodFQN := typeFQN + "." + rest
+
+					// Validate method exists in code graph
+					if codeGraph != nil {
+						if node, ok := codeGraph.Nodes[methodFQN]; ok {
+							if node.Type == "method_declaration" || node.Type == "function_definition" {
+								// Resolved via code graph validation - return with type info
+								return methodFQN, true, binding.Type
+							}
+						}
+
+						// Python class methods are stored at module level (e.g., test.save, not test.User.save)
+						// Try stripping the class name and looking for module.method
+						lastDot := strings.LastIndex(typeFQN, ".")
+						if lastDot >= 0 {
+							modulePart := typeFQN[:lastDot]
+							className := typeFQN[lastDot+1:]
+
+							// Check if it looks like a Python class (PascalCase)
+							if len(className) > 0 && className[0] >= 'A' && className[0] <= 'Z' {
+								pythonMethodFQN := modulePart + "." + rest
+								if callGraph != nil {
+									if node, ok := callGraph.Functions[pythonMethodFQN]; ok {
+										if node.Type == "method_declaration" || node.Type == "function_definition" {
+											// Resolved via Python module-level method lookup
+											return pythonMethodFQN, true, binding.Type
+										}
+									}
+								}
+							}
+						}
+					}
+
+					// Heuristic: If type has good confidence (>= 0.7), assume method exists
+					if binding.Type.Confidence >= 0.7 {
+						// Resolved via confidence heuristic - return with type info
+						return methodFQN, true, binding.Type
+					}
+
 				}
 			}
 		}
@@ -512,33 +630,33 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		fullFQN := baseFQN + "." + rest
 		// Check if it's a known framework
 		if isKnown, _ := IsKnownFramework(fullFQN); isKnown {
-			return fullFQN, true
+			return fullFQN, true, nil
 		}
 		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
 		if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
-			return ormFQN, true
+			return ormFQN, true, nil
 		}
 		if validateFQN(fullFQN, registry) {
-			return fullFQN, true
+			return fullFQN, true, nil
 		}
-		return fullFQN, false
+		return fullFQN, false, nil
 	}
 
 	// Base not in imports - might be module-level access
 	// Try current module
 	fullFQN := currentModule + "." + target
 	if validateFQN(fullFQN, registry) {
-		return fullFQN, true
+		return fullFQN, true, nil
 	}
 
 	// Before giving up, check if it's an ORM pattern (Django, SQLAlchemy, etc.)
 	// ORM methods are dynamically generated at runtime and won't be in source
 	if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
-		return ormFQN, true
+		return ormFQN, true, nil
 	}
 
 	// Can't resolve - return as-is
-	return target, false
+	return target, false, nil
 }
 
 // validateFQN checks if a fully qualified name exists in the registry.
