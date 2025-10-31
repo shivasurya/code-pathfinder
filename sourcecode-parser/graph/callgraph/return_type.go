@@ -2,6 +2,7 @@ package callgraph
 
 import (
 	"context"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
@@ -104,7 +105,7 @@ func traverseForReturns(
 func inferReturnType(
 	node *sitter.Node,
 	sourceCode []byte,
-	_ string, // modulePath - reserved for future use
+	modulePath string,
 	builtinRegistry *BuiltinRegistry,
 ) *TypeInfo {
 	if node == nil {
@@ -178,6 +179,12 @@ func inferReturnType(
 		}
 
 	case "call":
+		// Try class instantiation first (Task 7)
+		classType := ResolveClassInstantiation(node, sourceCode, modulePath, nil, nil)
+		if classType != nil {
+			return classType
+		}
+
 		// Return type from function call - will be enhanced in later tasks
 		// The first child is usually the function being called
 		var functionNode *sitter.Node
@@ -252,6 +259,129 @@ func (te *TypeInferenceEngine) AddReturnTypesToEngine(returnTypes map[string]*Ty
 	for funcFQN, typeInfo := range returnTypes {
 		te.ReturnTypes[funcFQN] = typeInfo
 	}
+}
+
+// isPascalCase checks if a string is in PascalCase (likely a class name).
+func isPascalCase(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	// First character must be uppercase letter
+	if s[0] < 'A' || s[0] > 'Z' {
+		return false
+	}
+
+	// Single character uppercase is considered PascalCase (e.g., "U")
+	if len(s) == 1 {
+		return true
+	}
+
+	// Must not be all caps (constants are UPPER_SNAKE_CASE)
+	allCaps := true
+	for _, ch := range s {
+		if ch >= 'a' && ch <= 'z' {
+			allCaps = false
+			break
+		}
+	}
+
+	return !allCaps
+}
+
+// ResolveClassInstantiation attempts to resolve class instantiation patterns.
+func ResolveClassInstantiation(
+	callNode *sitter.Node,
+	sourceCode []byte,
+	modulePath string,
+	importMap *ImportMap,
+	registry *ModuleRegistry,
+) *TypeInfo {
+	if callNode == nil || callNode.Type() != "call" {
+		return nil
+	}
+
+	// Get the function node (what's being called)
+	var functionNode *sitter.Node
+	for i := 0; i < int(callNode.ChildCount()); i++ {
+		child := callNode.Child(i)
+		if child.Type() != "argument_list" && child.Type() != "(" && child.Type() != ")" {
+			functionNode = child
+			break
+		}
+	}
+
+	if functionNode == nil {
+		return nil
+	}
+
+	funcName := functionNode.Content(sourceCode)
+
+	// Check for attribute access (e.g., models.User())
+	if strings.Contains(funcName, ".") {
+		parts := strings.Split(funcName, ".")
+		className := parts[len(parts)-1]
+
+		// Last part should be PascalCase
+		if !isPascalCase(className) {
+			return nil
+		}
+
+		// Try to resolve through imports
+		if importMap != nil {
+			basePart := strings.Join(parts[:len(parts)-1], ".")
+			resolvedModule, ok := importMap.Resolve(basePart)
+			if ok && resolvedModule != "" {
+				return &TypeInfo{
+					TypeFQN:    resolvedModule + "." + className,
+					Confidence: 0.9,
+					Source:     "class_instantiation_import",
+				}
+			}
+		}
+
+		// Heuristic: assume it's a class in same module or submodule
+		return &TypeInfo{
+			TypeFQN:    modulePath + "." + funcName,
+			Confidence: 0.7,
+			Source:     "class_instantiation_heuristic",
+		}
+	}
+
+	// Simple name (e.g., User())
+	if isPascalCase(funcName) {
+		// Check imports first
+		if importMap != nil {
+			resolvedFQN, ok := importMap.Resolve(funcName)
+			if ok && resolvedFQN != "" {
+				return &TypeInfo{
+					TypeFQN:    resolvedFQN,
+					Confidence: 0.95,
+					Source:     "class_instantiation_import",
+				}
+			}
+		}
+
+		// Check if class exists in module registry
+		classFQN := modulePath + "." + funcName
+		if registry != nil {
+			// Simplified check - in real implementation, would verify class exists
+			// For now, use heuristic
+			return &TypeInfo{
+				TypeFQN:    classFQN,
+				Confidence: 0.8,
+				Source:     "class_instantiation_local",
+			}
+		}
+
+		return &TypeInfo{
+			TypeFQN:    classFQN,
+			Confidence: 0.6,
+			Source:     "class_instantiation_guess",
+		}
+	}
+
+	return nil
 }
 
 // extractFunctionNameFromNode extracts the function name from a function_definition node.

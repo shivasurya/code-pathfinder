@@ -121,8 +121,9 @@ def get_value():
 		types[ret.FunctionFQN] = ret.ReturnType
 	}
 
-	// User() should be captured as call:User (will be resolved in Task 7)
-	assert.Equal(t, "call:User", types["test.create_user"].TypeFQN)
+	// User() is now detected as class instantiation (Task 7)
+	assert.Equal(t, "test.User", types["test.create_user"].TypeFQN)
+	assert.Greater(t, types["test.create_user"].Confidence, float32(0.5))
 	assert.Less(t, types["test.create_user"].Confidence, float32(1.0))
 
 	// str() is a builtin constructor
