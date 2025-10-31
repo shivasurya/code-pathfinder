@@ -491,6 +491,26 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
 		return fqn, resolved, nil
 	}
+
+	// Phase 3 Task 11: Check for method chaining BEFORE other resolution
+	// Chains have pattern "()." indicating call followed by attribute access
+	if strings.Contains(target, ").") {
+		chainFQN, chainResolved, chainType := ResolveChainedCall(
+			target,
+			typeEngine,
+			typeEngine.Builtins,
+			registry,
+			codeGraph,
+			callerFQN,
+			currentModule,
+			callGraph,
+		)
+		if chainResolved {
+			return chainFQN, true, chainType
+		}
+		// Chain parsing attempted but failed - fall through to regular resolution
+	}
+
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")
