@@ -346,12 +346,12 @@ func BenchmarkResolveCallTarget(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Test simple attribute access (most common case)
-		_, _, _ = resolveCallTarget("utils.process_data", importMap, registry, currentModule, codeGraph, nil, "")
+		_, _, _ = resolveCallTarget("utils.process_data", importMap, registry, currentModule, codeGraph, nil, "", nil)
 
 		// Test aliased import
-		_, _, _ = resolveCallTarget("helper.format", importMap, registry, currentModule, codeGraph, nil, "")
+		_, _, _ = resolveCallTarget("helper.format", importMap, registry, currentModule, codeGraph, nil, "", nil)
 
 		// Test fully qualified name
-		_, _, _ = resolveCallTarget("myapp.utils.validate", importMap, registry, currentModule, codeGraph, nil, "")
+		_, _, _ = resolveCallTarget("myapp.utils.validate", importMap, registry, currentModule, codeGraph, nil, "", nil)
 	}
 }

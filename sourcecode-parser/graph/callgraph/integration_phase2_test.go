@@ -189,6 +189,7 @@ func TestIntegration_Phase2_ConfidenceFiltering(t *testing.T) {
 		&graph.CodeGraph{Nodes: make(map[string]*graph.Node)},
 		engine,
 		"test.main",
+		nil,
 	)
 
 	// Should not resolve with low confidence
@@ -226,6 +227,7 @@ func TestIntegration_Phase2_HighConfidenceResolution(t *testing.T) {
 		&graph.CodeGraph{Nodes: make(map[string]*graph.Node)},
 		engine,
 		"test.main",
+		nil,
 	)
 
 	// Should resolve with high confidence heuristic
@@ -263,6 +265,7 @@ func TestIntegration_Phase2_PlaceholderSkipping(t *testing.T) {
 		&graph.CodeGraph{Nodes: make(map[string]*graph.Node)},
 		engine,
 		"test.main",
+		nil,
 	)
 
 	// Should not resolve with placeholder
