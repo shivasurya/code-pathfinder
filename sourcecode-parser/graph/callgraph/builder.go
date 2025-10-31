@@ -171,7 +171,26 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	mergedReturns := MergeReturnTypes(allReturnStatements)
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
 
-	// Process each Python file in the project (second pass for variable assignments and calls)
+	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
+	for _, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract variable assignments for type inference
+		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	}
+
+	// Phase 2 Task 8: Resolve call: placeholders with return types
+	// This MUST happen before we start resolving call sites!
+	typeEngine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Process each Python file in the project (third pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
@@ -191,9 +210,6 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			// Skip files with import errors
 			continue
 		}
-
-		// Extract variable assignments for type inference
-		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
 
 		// Extract all call sites from this file
 		callSites, err := ExtractCallSites(filePath, sourceCode, importMap)
@@ -215,7 +231,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 
 			// Resolve the call target to a fully qualified name
-			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN)
+			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph)
 
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
@@ -243,9 +259,6 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 		}
 	}
-
-	// Phase 2 Task 8: Resolve call: placeholders with return types
-	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
 	return callGraph, nil
 }
@@ -313,6 +326,12 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 // Returns:
 //   - Fully qualified name of the containing function, or empty if not found
 func findContainingFunction(location Location, functions []*graph.Node, modulePath string) string {
+	// In Python, module-level code has no indentation (column == 1)
+	// If the call site is at column 1, it's module-level, not inside any function
+	if location.Column == 1 {
+		return ""
+	}
+
 	var bestMatch *graph.Node
 	var bestLine uint32
 
@@ -466,7 +485,7 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 	return "unknown"
 }
 
-func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string) (string, bool, *TypeInfo) {
+func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string, callGraph *CallGraph) (string, bool, *TypeInfo) {
 	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
 	if typeEngine == nil || callerFQN == "" {
 		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
@@ -522,16 +541,30 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 
 	// Phase 2 Task 9: Try type inference for variable.method() calls
 	if typeEngine != nil && callerFQN != "" {
-		// Try function scope first
-		scope := typeEngine.GetScope(callerFQN)
-		if scope == nil {
-			// Fallback to module scope for module-level variables
-			scope = typeEngine.GetScope(currentModule)
+		// Try function scope first, then fall back to module scope
+		var binding *VariableBinding
+
+		// Check function scope first
+		functionScope := typeEngine.GetScope(callerFQN)
+		if functionScope != nil {
+			if b, exists := functionScope.Variables[base]; exists {
+				binding = b
+			}
 		}
 
-		if scope != nil {
-			// Check if base is a known variable
-			if binding, exists := scope.Variables[base]; exists && binding.Type != nil {
+		// If not found in function scope, try module scope
+		if binding == nil {
+			moduleScope := typeEngine.GetScope(currentModule)
+			if moduleScope != nil {
+				if b, exists := moduleScope.Variables[base]; exists {
+					binding = b
+				}
+			}
+		}
+
+		if binding != nil {
+			// Check if variable has type information
+			if binding.Type != nil {
 				typeFQN := binding.Type.TypeFQN
 
 				// Skip placeholders (call:, var:) - not yet resolved
@@ -558,6 +591,27 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 								return methodFQN, true, binding.Type
 							}
 						}
+
+						// Python class methods are stored at module level (e.g., test.save, not test.User.save)
+						// Try stripping the class name and looking for module.method
+						lastDot := strings.LastIndex(typeFQN, ".")
+						if lastDot >= 0 {
+							modulePart := typeFQN[:lastDot]
+							className := typeFQN[lastDot+1:]
+
+							// Check if it looks like a Python class (PascalCase)
+							if len(className) > 0 && className[0] >= 'A' && className[0] <= 'Z' {
+								pythonMethodFQN := modulePart + "." + rest
+								if callGraph != nil {
+									if node, ok := callGraph.Functions[pythonMethodFQN]; ok {
+										if node.Type == "method_declaration" || node.Type == "function_definition" {
+											// Resolved via Python module-level method lookup
+											return pythonMethodFQN, true, binding.Type
+										}
+									}
+								}
+							}
+						}
 					}
 
 					// Heuristic: If type has good confidence (>= 0.7), assume method exists
@@ -565,6 +619,7 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 						// Resolved via confidence heuristic - return with type info
 						return methodFQN, true, binding.Type
 					}
+
 				}
 			}
 		}

@@ -129,15 +129,25 @@ func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 				// Extract function name from "call:funcName"
 				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
 
-				// Try to resolve as FQN
-				lastDotIndex := strings.LastIndex(scope.FunctionFQN, ".")
+				// Build FQN for the function call
 				var funcFQN string
-				if lastDotIndex >= 0 {
-					funcFQN = scope.FunctionFQN[:lastDotIndex+1] + funcName
+
+				// Check if funcName already contains dots (e.g., "logging.getLogger", "MySerializer")
+				if strings.Contains(funcName, ".") {
+					// Already qualified (e.g., imported module.function)
+					// Try as-is first
+					funcFQN = funcName
 				} else {
-					// Module-level scope
-					modulePath := scope.FunctionFQN
-					funcFQN = modulePath + "." + funcName
+					// Simple name - need to qualify with current scope
+					lastDotIndex := strings.LastIndex(scope.FunctionFQN, ".")
+					if lastDotIndex >= 0 {
+						// Function scope: strip function name, add called function
+						funcFQN = scope.FunctionFQN[:lastDotIndex+1] + funcName
+					} else {
+						// Module-level scope
+						modulePath := scope.FunctionFQN
+						funcFQN = modulePath + "." + funcName
+					}
 				}
 
 				// Resolve type
