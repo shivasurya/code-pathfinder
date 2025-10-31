@@ -1,5 +1,7 @@
 package callgraph
 
+import "strings"
+
 // TypeInfo represents inferred type information for a variable or expression.
 // It tracks the fully qualified type name, confidence level, and how the type was inferred.
 type TypeInfo struct {
@@ -82,5 +84,69 @@ func NewFunctionScope(functionFQN string) *FunctionScope {
 	return &FunctionScope{
 		FunctionFQN: functionFQN,
 		Variables:   make(map[string]*VariableBinding),
+	}
+}
+
+// ResolveVariableType resolves the type of a variable assignment from a function call.
+// It looks up the return type of the called function and propagates it with confidence decay.
+//
+// Parameters:
+//   - assignedFrom: Function FQN that was called
+//   - confidence: Base confidence from assignment
+//
+// Returns:
+//   - TypeInfo with propagated type, or nil if function has no return type
+func (te *TypeInferenceEngine) ResolveVariableType(
+	assignedFrom string,
+	confidence float32,
+) *TypeInfo {
+	// Look up return type of the function
+	returnType, ok := te.ReturnTypes[assignedFrom]
+	if !ok {
+		return nil
+	}
+
+	// Reduce confidence slightly for propagation
+	propagatedConfidence := returnType.Confidence * confidence * 0.95
+
+	return &TypeInfo{
+		TypeFQN:    returnType.TypeFQN,
+		Confidence: propagatedConfidence,
+		Source:     "function_call_propagation",
+	}
+}
+
+// UpdateVariableBindingsWithFunctionReturns resolves "call:funcName" placeholders.
+// It iterates through all scopes and replaces placeholder types with actual return types.
+//
+// This enables inter-procedural type propagation:
+//   user = create_user()  # Initially typed as "call:create_user"
+//   # After update, typed as "test.User" based on create_user's return type
+func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
+	for _, scope := range te.Scopes {
+		for varName, binding := range scope.Variables {
+			if binding.Type != nil && strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+				// Extract function name from "call:funcName"
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+
+				// Try to resolve as FQN
+				lastDotIndex := strings.LastIndex(scope.FunctionFQN, ".")
+				var funcFQN string
+				if lastDotIndex >= 0 {
+					funcFQN = scope.FunctionFQN[:lastDotIndex+1] + funcName
+				} else {
+					// Module-level scope
+					modulePath := scope.FunctionFQN
+					funcFQN = modulePath + "." + funcName
+				}
+
+				// Resolve type
+				resolvedType := te.ResolveVariableType(funcFQN, binding.Type.Confidence)
+				if resolvedType != nil {
+					scope.Variables[varName].Type = resolvedType
+					scope.Variables[varName].AssignedFrom = funcFQN
+				}
+			}
+		}
 	}
 }
