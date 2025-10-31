@@ -1,7 +1,6 @@
 package callgraph
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
