@@ -1,10 +1,33 @@
 package callgraph
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
+
+// FailureStats tracks why attribute chain resolution fails
+type FailureStats struct {
+	TotalAttempts          int
+	NotSelfPrefix          int
+	DeepChains             int // 3+ levels
+	ClassNotFound          int
+	AttributeNotFound      int
+	MethodNotInBuiltins    int
+	CustomClassUnsupported int
+
+	// Pattern samples for analysis
+	DeepChainSamples       []string
+	AttributeNotFoundSamples []string
+	CustomClassSamples     []string
+}
+
+var attributeFailureStats = &FailureStats{
+	DeepChainSamples:       make([]string, 0, 20),
+	AttributeNotFoundSamples: make([]string, 0, 20),
+	CustomClassSamples:     make([]string, 0, 20),
+}
 
 // ResolveSelfAttributeCall resolves self.attribute.method() patterns
 // This is the core of Phase 3 Task 12 - using extracted attributes to resolve calls.
@@ -43,8 +66,11 @@ func ResolveSelfAttributeCall(
 	builtins *BuiltinRegistry,
 	callGraph *CallGraph,
 ) (string, bool, *TypeInfo) {
+	attributeFailureStats.TotalAttempts++
+
 	// Check if this is a self.attr.method pattern
 	if !strings.HasPrefix(target, "self.") {
+		attributeFailureStats.NotSelfPrefix++
 		return "", false, nil
 	}
 
@@ -63,6 +89,10 @@ func ResolveSelfAttributeCall(
 	// For now, handle simple case: self.attr.method (2 levels)
 	// TODO: Handle deep chains like self.obj.attr.method
 	if len(parts) > 3 {
+		attributeFailureStats.DeepChains++
+		if len(attributeFailureStats.DeepChainSamples) < 20 {
+			attributeFailureStats.DeepChainSamples = append(attributeFailureStats.DeepChainSamples, target)
+		}
 		return "", false, nil
 	}
 
@@ -72,12 +102,19 @@ func ResolveSelfAttributeCall(
 	// Step 1: Find the containing class by checking which classes have this method
 	classFQN := findClassContainingMethod(callerFQN, typeEngine.Attributes)
 	if classFQN == "" {
+		attributeFailureStats.ClassNotFound++
 		return "", false, nil
 	}
 
 	// Step 2: Lookup attribute in AttributeRegistry
 	attr := typeEngine.Attributes.GetAttribute(classFQN, attrName)
 	if attr == nil {
+		attributeFailureStats.AttributeNotFound++
+		if len(attributeFailureStats.AttributeNotFoundSamples) < 20 {
+			attributeFailureStats.AttributeNotFoundSamples = append(
+				attributeFailureStats.AttributeNotFoundSamples,
+				fmt.Sprintf("%s (in class %s)", target, classFQN))
+		}
 		return "", false, nil
 	}
 
@@ -98,12 +135,82 @@ func ResolveSelfAttributeCall(
 			}
 		}
 
+		attributeFailureStats.MethodNotInBuiltins++
 		return "", false, nil
 	}
 
 	// TODO: Handle custom class types (class:User → myapp.User)
 	// This requires resolving placeholders and class method lookup
+	attributeFailureStats.CustomClassUnsupported++
+	if len(attributeFailureStats.CustomClassSamples) < 20 {
+		attributeFailureStats.CustomClassSamples = append(
+			attributeFailureStats.CustomClassSamples,
+			fmt.Sprintf("%s (type: %s)", target, attributeTypeFQN))
+	}
 	return "", false, nil
+}
+
+// PrintAttributeFailureStats prints detailed statistics about attribute chain failures
+func PrintAttributeFailureStats() {
+	if attributeFailureStats.TotalAttempts == 0 {
+		return
+	}
+
+	fmt.Printf("\n[ATTR_FAILURE_ANALYSIS] Self-Attribute Resolution Attempts\n")
+	fmt.Printf("========================================================\n")
+	fmt.Printf("Total attempts:              %d\n", attributeFailureStats.TotalAttempts)
+	fmt.Printf("\nFailure Breakdown:\n")
+	fmt.Printf("  Not self prefix:           %d (%.1f%%)\n",
+		attributeFailureStats.NotSelfPrefix,
+		float64(attributeFailureStats.NotSelfPrefix)*100/float64(attributeFailureStats.TotalAttempts))
+	fmt.Printf("  Deep chains (3+ levels):   %d (%.1f%%)\n",
+		attributeFailureStats.DeepChains,
+		float64(attributeFailureStats.DeepChains)*100/float64(attributeFailureStats.TotalAttempts))
+	fmt.Printf("  Class not found:           %d (%.1f%%)\n",
+		attributeFailureStats.ClassNotFound,
+		float64(attributeFailureStats.ClassNotFound)*100/float64(attributeFailureStats.TotalAttempts))
+	fmt.Printf("  Attribute not found:       %d (%.1f%%)\n",
+		attributeFailureStats.AttributeNotFound,
+		float64(attributeFailureStats.AttributeNotFound)*100/float64(attributeFailureStats.TotalAttempts))
+	fmt.Printf("  Method not in builtins:    %d (%.1f%%)\n",
+		attributeFailureStats.MethodNotInBuiltins,
+		float64(attributeFailureStats.MethodNotInBuiltins)*100/float64(attributeFailureStats.TotalAttempts))
+	fmt.Printf("  Custom class unsupported:  %d (%.1f%%)\n",
+		attributeFailureStats.CustomClassUnsupported,
+		float64(attributeFailureStats.CustomClassUnsupported)*100/float64(attributeFailureStats.TotalAttempts))
+
+	// Print sample patterns
+	if len(attributeFailureStats.DeepChainSamples) > 0 {
+		fmt.Printf("\nDeep chain samples (first 10):\n")
+		for i, sample := range attributeFailureStats.DeepChainSamples {
+			if i >= 10 {
+				break
+			}
+			fmt.Printf("  - %s\n", sample)
+		}
+	}
+
+	if len(attributeFailureStats.AttributeNotFoundSamples) > 0 {
+		fmt.Printf("\nAttribute not found samples (first 10):\n")
+		for i, sample := range attributeFailureStats.AttributeNotFoundSamples {
+			if i >= 10 {
+				break
+			}
+			fmt.Printf("  - %s\n", sample)
+		}
+	}
+
+	if len(attributeFailureStats.CustomClassSamples) > 0 {
+		fmt.Printf("\nCustom class samples (first 10):\n")
+		for i, sample := range attributeFailureStats.CustomClassSamples {
+			if i >= 10 {
+				break
+			}
+			fmt.Printf("  - %s\n", sample)
+		}
+	}
+
+	fmt.Printf("========================================================\n\n")
 }
 
 // findClassContainingMethod finds which class contains a given method

@@ -281,6 +281,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		}
 	}
 
+	// Phase 3 Task 12: Print attribute failure analysis
+	PrintAttributeFailureStats()
+
 	return callGraph, nil
 }
 
