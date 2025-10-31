@@ -209,20 +209,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		_ = ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
 	}
 
-	// Debug: Print extracted class attributes
-	if typeEngine.Attributes.Size() > 0 {
-		fmt.Printf("[ATTR_EXTRACT] Extracted %d classes with attributes\n", typeEngine.Attributes.Size())
-		for _, classFQN := range typeEngine.Attributes.GetAllClasses() {
-			classAttrs := typeEngine.Attributes.GetClassAttributes(classFQN)
-			if classAttrs != nil && len(classAttrs.Attributes) > 0 {
-				fmt.Printf("[ATTR_EXTRACT] Class: %s (%d attributes)\n", classFQN, len(classAttrs.Attributes))
-				for attrName, attr := range classAttrs.Attributes {
-					fmt.Printf("[ATTR_EXTRACT]   - %s: %s (confidence: %.2f, source: %s)\n",
-						attrName, attr.Type.TypeFQN, attr.Confidence, attr.Type.Source)
-				}
-			}
-		}
-	}
+	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
+	ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
 	// Process each Python file in the project (fourth pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
@@ -543,6 +531,22 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 			return chainFQN, true, chainType
 		}
 		// Chain parsing attempted but failed - fall through to regular resolution
+	}
+
+	// Phase 3 Task 12: Check for self.attribute.method() patterns BEFORE self.method()
+	// Pattern: self.attr.method (2+ dots starting with self.)
+	if strings.HasPrefix(target, "self.") && strings.Count(target, ".") >= 2 {
+		attrFQN, attrResolved, attrType := ResolveSelfAttributeCall(
+			target,
+			callerFQN,
+			typeEngine,
+			typeEngine.Builtins,
+			callGraph,
+		)
+		if attrResolved {
+			return attrFQN, true, attrType
+		}
+		// Attribute resolution attempted but failed - fall through
 	}
 
 	// Handle self.method() calls - resolve to current module
