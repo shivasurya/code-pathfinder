@@ -243,7 +243,9 @@ def untyped_var(param):
 }
 
 // TestTypeInference_NestedScopes tests type inference in nested functions.
-// TODO: Enable after code graph supports nested function definitions
+// TODO: Enable after code graph supports nested function definitions.
+//
+//nolint:unused,thelper
 func _TestTypeInference_NestedScopes(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.py")

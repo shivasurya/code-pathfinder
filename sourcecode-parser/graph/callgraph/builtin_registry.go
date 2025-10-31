@@ -213,14 +213,15 @@ func isNumericLiteral(s string) bool {
 			}
 		}
 
-		if ch >= '0' && ch <= '9' {
+		switch {
+		case ch >= '0' && ch <= '9':
 			hasDigit = true
-		} else if ch == '.' {
+		case ch == '.':
 			if hasDot || hasE {
 				return false
 			}
 			hasDot = true
-		} else if ch == 'e' || ch == 'E' {
+		case ch == 'e' || ch == 'E':
 			if hasE || !hasDigit {
 				return false
 			}
@@ -229,13 +230,11 @@ func isNumericLiteral(s string) bool {
 			if i+1 < len(s) && (s[i+1] == '+' || s[i+1] == '-') {
 				skipNext = true
 			}
-		} else if ch == '_' {
+		case ch == '_':
 			// Python allows underscores in numeric literals (e.g., 1_000_000)
 			continue
-		} else if ch == '+' || ch == '-' {
-			// Only allowed after 'e' or 'E', which is handled by skipNext
-			return false
-		} else {
+		default:
+			// +/- only allowed after 'e' or 'E', which is handled by skipNext
 			return false
 		}
 	}
