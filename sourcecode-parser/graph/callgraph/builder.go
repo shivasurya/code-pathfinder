@@ -142,6 +142,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	typeEngine := NewTypeInferenceEngine(registry)
 	typeEngine.Builtins = NewBuiltinRegistry()
 
+	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
+	typeEngine.Attributes = NewAttributeRegistry()
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
