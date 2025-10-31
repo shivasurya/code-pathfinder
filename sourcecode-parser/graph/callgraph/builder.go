@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,7 +194,37 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
-	// Process each Python file in the project (third pass for call site resolution)
+	// Phase 3 Task 12: Extract class attributes (third pass)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract class attributes for self.attr tracking
+		_ = ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
+	}
+
+	// Debug: Print extracted class attributes
+	if typeEngine.Attributes.Size() > 0 {
+		fmt.Printf("[ATTR_EXTRACT] Extracted %d classes with attributes\n", typeEngine.Attributes.Size())
+		for _, classFQN := range typeEngine.Attributes.GetAllClasses() {
+			classAttrs := typeEngine.Attributes.GetClassAttributes(classFQN)
+			if classAttrs != nil && len(classAttrs.Attributes) > 0 {
+				fmt.Printf("[ATTR_EXTRACT] Class: %s (%d attributes)\n", classFQN, len(classAttrs.Attributes))
+				for attrName, attr := range classAttrs.Attributes {
+					fmt.Printf("[ATTR_EXTRACT]   - %s: %s (confidence: %.2f, source: %s)\n",
+						attrName, attr.Type.TypeFQN, attr.Confidence, attr.Type.Source)
+				}
+			}
+		}
+	}
+
+	// Process each Python file in the project (fourth pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
