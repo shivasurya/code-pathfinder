@@ -181,7 +181,7 @@ func TestIntegration_Phase2_ConfidenceFiltering(t *testing.T) {
 	engine.AddScope(scope)
 
 	importMap := NewImportMap("test.py")
-	fqn, resolved := resolveCallTarget(
+	fqn, resolved, _ := resolveCallTarget(
 		"obj.method",
 		importMap,
 		registry,
@@ -218,7 +218,7 @@ func TestIntegration_Phase2_HighConfidenceResolution(t *testing.T) {
 	engine.AddScope(scope)
 
 	importMap := NewImportMap("test.py")
-	fqn, resolved := resolveCallTarget(
+	fqn, resolved, _ := resolveCallTarget(
 		"user.save",
 		importMap,
 		registry,
@@ -255,7 +255,7 @@ func TestIntegration_Phase2_PlaceholderSkipping(t *testing.T) {
 	engine.AddScope(scope)
 
 	importMap := NewImportMap("test.py")
-	fqn, resolved := resolveCallTarget(
+	fqn, resolved, _ := resolveCallTarget(
 		"obj.method",
 		importMap,
 		registry,

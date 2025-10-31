@@ -47,6 +47,12 @@ improvements to the resolution logic.`,
 		printOverallStatistics(stats)
 		fmt.Println()
 
+		// Phase 2: Print type inference statistics
+		if stats.TypeInferenceResolved > 0 {
+			printTypeInferenceStatistics(stats)
+			fmt.Println()
+		}
+
 		// Print failure breakdown
 		printFailureBreakdown(stats)
 		fmt.Println()
@@ -68,15 +74,26 @@ type resolutionStatistics struct {
 	PatternCounts    map[string]int                // Target pattern -> count
 	FrameworkCounts  map[string]int                // Framework prefix -> count (for external_framework category)
 	UnresolvedByFQN  map[string]callgraph.CallSite // For detailed inspection
+
+	// Phase 2: Type inference statistics
+	TypeInferenceResolved  int            // Calls resolved via type inference
+	ResolvedByTraditional  int            // Calls resolved via traditional methods
+	TypesBySource          map[string]int // TypeInfo.Source -> count
+	BuiltinTypeResolved    int            // Resolved to builtin types
+	ClassTypeResolved      int            // Resolved to project classes
+	ConfidenceSum          float64        // Sum of confidence scores for averaging
+	ConfidenceDistribution map[string]int // Confidence ranges -> count
 }
 
 // aggregateResolutionStatistics analyzes the call graph and collects statistics.
 func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistics {
 	stats := &resolutionStatistics{
-		FailuresByReason: make(map[string]int),
-		PatternCounts:    make(map[string]int),
-		FrameworkCounts:  make(map[string]int),
-		UnresolvedByFQN:  make(map[string]callgraph.CallSite),
+		FailuresByReason:       make(map[string]int),
+		PatternCounts:          make(map[string]int),
+		FrameworkCounts:        make(map[string]int),
+		UnresolvedByFQN:        make(map[string]callgraph.CallSite),
+		TypesBySource:          make(map[string]int),
+		ConfidenceDistribution: make(map[string]int),
 	}
 
 	// Iterate through all call sites
@@ -86,6 +103,39 @@ func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistic
 
 			if site.Resolved {
 				stats.ResolvedCalls++
+
+				// Phase 2: Track type inference resolutions
+				if site.ResolvedViaTypeInference {
+					stats.TypeInferenceResolved++
+					stats.ConfidenceSum += float64(site.TypeConfidence)
+
+					// Track by source
+					if site.TypeSource != "" {
+						stats.TypesBySource[site.TypeSource]++
+					}
+
+					// Track builtin vs class
+					if containsString(site.InferredType, "builtins.") {
+						stats.BuiltinTypeResolved++
+					} else {
+						stats.ClassTypeResolved++
+					}
+
+					// Track confidence distribution
+					conf := site.TypeConfidence
+					switch {
+					case conf >= 0.9:
+						stats.ConfidenceDistribution["0.9-1.0 (high)"]++
+					case conf >= 0.7:
+						stats.ConfidenceDistribution["0.7-0.9 (medium-high)"]++
+					case conf >= 0.5:
+						stats.ConfidenceDistribution["0.5-0.7 (medium)"]++
+					default:
+						stats.ConfidenceDistribution["0.0-0.5 (low)"]++
+					}
+				} else {
+					stats.ResolvedByTraditional++
+				}
 			} else {
 				stats.UnresolvedCalls++
 
@@ -120,6 +170,16 @@ func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistic
 	return stats
 }
 
+// containsString checks if a string contains a substring.
+func containsString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 // printOverallStatistics prints the overall resolution statistics.
 func printOverallStatistics(stats *resolutionStatistics) {
 	fmt.Println("Overall Statistics:")
@@ -130,6 +190,76 @@ func printOverallStatistics(stats *resolutionStatistics) {
 	fmt.Printf("  Unresolved:        %d (%.1f%%)\n",
 		stats.UnresolvedCalls,
 		percentage(stats.UnresolvedCalls, stats.TotalCalls))
+}
+
+// printTypeInferenceStatistics prints Phase 2 type inference statistics.
+func printTypeInferenceStatistics(stats *resolutionStatistics) {
+	fmt.Println("Type Inference Statistics:")
+	fmt.Printf("  Resolved via type inference:  %d (%.1f%% of resolved)\n",
+		stats.TypeInferenceResolved,
+		percentage(stats.TypeInferenceResolved, stats.ResolvedCalls))
+	fmt.Printf("  Resolved via traditional:     %d (%.1f%% of resolved)\n",
+		stats.ResolvedByTraditional,
+		percentage(stats.ResolvedByTraditional, stats.ResolvedCalls))
+	fmt.Println()
+
+	// Type breakdown
+	fmt.Printf("  Type breakdown:\n")
+	fmt.Printf("    Builtin types:  %d (%.1f%%)\n",
+		stats.BuiltinTypeResolved,
+		percentage(stats.BuiltinTypeResolved, stats.TypeInferenceResolved))
+	fmt.Printf("    Class types:    %d (%.1f%%)\n",
+		stats.ClassTypeResolved,
+		percentage(stats.ClassTypeResolved, stats.TypeInferenceResolved))
+	fmt.Println()
+
+	// Average confidence
+	avgConfidence := 0.0
+	if stats.TypeInferenceResolved > 0 {
+		avgConfidence = stats.ConfidenceSum / float64(stats.TypeInferenceResolved)
+	}
+	fmt.Printf("  Average confidence: %.2f\n", avgConfidence)
+	fmt.Println()
+
+	// Confidence distribution
+	if len(stats.ConfidenceDistribution) > 0 {
+		fmt.Printf("  Confidence distribution:\n")
+		// Sort by key for consistent output
+		keys := []string{"0.9-1.0 (high)", "0.7-0.9 (medium-high)", "0.5-0.7 (medium)", "0.0-0.5 (low)"}
+		for _, key := range keys {
+			if count, ok := stats.ConfidenceDistribution[key]; ok {
+				fmt.Printf("    %-20s %d (%.1f%%)\n",
+					key+":",
+					count,
+					percentage(count, stats.TypeInferenceResolved))
+			}
+		}
+		fmt.Println()
+	}
+
+	// By inference source
+	if len(stats.TypesBySource) > 0 {
+		fmt.Printf("  By inference source:\n")
+		// Sort sources by count (descending)
+		type sourceCount struct {
+			source string
+			count  int
+		}
+		sources := make([]sourceCount, 0, len(stats.TypesBySource))
+		for source, count := range stats.TypesBySource {
+			sources = append(sources, sourceCount{source, count})
+		}
+		sort.Slice(sources, func(i, j int) bool {
+			return sources[i].count > sources[j].count
+		})
+
+		for _, sc := range sources {
+			fmt.Printf("    %-30s %d (%.1f%%)\n",
+				sc.source+":",
+				sc.count,
+				percentage(sc.count, stats.TypeInferenceResolved))
+		}
+	}
 }
 
 // printFailureBreakdown prints the breakdown of failures by category.

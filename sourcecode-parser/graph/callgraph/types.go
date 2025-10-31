@@ -22,6 +22,12 @@ type CallSite struct {
 	Resolved      bool       // Whether we successfully resolved this call to a definition
 	TargetFQN     string     // Fully qualified name after resolution (e.g., "myapp.utils.sanitize")
 	FailureReason string     // Why resolution failed (empty if Resolved=true)
+
+	// Phase 2: Type inference metadata
+	ResolvedViaTypeInference bool    // Was this resolved using type inference?
+	InferredType             string  // The inferred type FQN (e.g., "builtins.str", "test.User")
+	TypeConfidence           float32 // Confidence score of the type inference (0.0-1.0)
+	TypeSource               string  // How type was inferred (e.g., "literal", "return_type", "class_instantiation")
 }
 
 // Resolution failure reason categories for diagnostics:
