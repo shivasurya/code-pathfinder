@@ -216,7 +216,7 @@ func TestThreadSafety(t *testing.T) {
 	done := make(chan bool, 10)
 
 	for i := 0; i < 10; i++ {
-		go func(id int) {
+		go func(_ int) {
 			attr := &ClassAttribute{
 				Name: "attr",
 				Type: &TypeInfo{

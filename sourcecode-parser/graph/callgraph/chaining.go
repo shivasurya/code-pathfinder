@@ -270,7 +270,7 @@ func resolveFirstChainStep(
 	typeEngine *TypeInferenceEngine,
 	callerFQN string,
 	currentModule string,
-	registry *ModuleRegistry,
+	_ *ModuleRegistry,
 	callGraph *CallGraph,
 ) (*TypeInfo, string, bool) {
 	if step.IsCall {
@@ -347,7 +347,7 @@ func resolveChainMethod(
 	currentType *TypeInfo,
 	builtins *BuiltinRegistry,
 	typeEngine *TypeInferenceEngine,
-	registry *ModuleRegistry,
+	_ *ModuleRegistry,
 	callGraph *CallGraph,
 ) (*TypeInfo, string, bool) {
 	if currentType == nil {

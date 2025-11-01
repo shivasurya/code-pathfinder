@@ -101,7 +101,7 @@ func ExtractClassAttributes(
 }
 
 // findClassNodes finds all class_definition nodes in the AST.
-func findClassNodes(node *sitter.Node, sourceCode []byte) []*sitter.Node {
+func findClassNodes(node *sitter.Node, _ []byte) []*sitter.Node {
 	classes := make([]*sitter.Node, 0)
 
 	var traverse func(*sitter.Node)
@@ -143,7 +143,7 @@ func extractClassName(classNode *sitter.Node, sourceCode []byte) string {
 }
 
 // findMethodNodes finds all function_definition nodes within a class.
-func findMethodNodes(classNode *sitter.Node, sourceCode []byte) []*sitter.Node {
+func findMethodNodes(classNode *sitter.Node, _ []byte) []*sitter.Node {
 	methods := make([]*sitter.Node, 0)
 
 	// Find the block node
@@ -193,7 +193,7 @@ func extractMethodName(methodNode *sitter.Node, sourceCode []byte) string {
 func extractAttributeAssignments(
 	classNode *sitter.Node,
 	sourceCode []byte,
-	classFQN string,
+	_ string,
 	filePath string,
 	typeEngine *TypeInferenceEngine,
 ) map[string]*ClassAttribute {
@@ -342,7 +342,7 @@ func inferAttributeType(
 }
 
 // Strategy 1: Infer type from literal values.
-func inferFromLiteral(node *sitter.Node, sourceCode []byte) *TypeInfo {
+func inferFromLiteral(node *sitter.Node, _ []byte) *TypeInfo {
 	nodeType := node.Type()
 
 	switch nodeType {
@@ -406,7 +406,7 @@ func inferFromLiteral(node *sitter.Node, sourceCode []byte) *TypeInfo {
 }
 
 // Strategy 2: Infer type from class instantiation.
-func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
+func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, _ *TypeInferenceEngine) *TypeInfo {
 	if node.Type() != "call" {
 		return nil
 	}
@@ -435,7 +435,7 @@ func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngin
 }
 
 // Strategy 3: Infer type from function call returns.
-func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
+func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, _ *TypeInferenceEngine) *TypeInfo {
 	if node.Type() != "call" {
 		return nil
 	}
@@ -470,7 +470,7 @@ func inferFromConstructorParam(
 	assignment AttributeAssignment,
 	methodNode *sitter.Node,
 	sourceCode []byte,
-	typeEngine *TypeInferenceEngine,
+	_ *TypeInferenceEngine,
 ) *TypeInfo {
 	// Check if we're in __init__
 	methodName := extractMethodName(methodNode, sourceCode)
@@ -524,7 +524,7 @@ func inferFromConstructorParam(
 }
 
 // Strategy 5: Infer type from attribute copy (self.obj = other.attr).
-func inferFromAttributeCopy(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
+func inferFromAttributeCopy(node *sitter.Node, _ []byte, _ *TypeInferenceEngine) *TypeInfo {
 	// Check if right side is attribute access
 	if node.Type() != "attribute" {
 		return nil
