@@ -30,11 +30,12 @@ type FunctionScope struct {
 // TypeInferenceEngine manages type inference across the codebase.
 // It maintains function scopes, return types, and references to other registries.
 type TypeInferenceEngine struct {
-	Scopes      map[string]*FunctionScope // Function FQN -> scope
-	ReturnTypes map[string]*TypeInfo      // Function FQN -> return type
-	Builtins    *BuiltinRegistry          // Builtin types registry
-	Registry    *ModuleRegistry           // Module registry reference
-	Attributes  *AttributeRegistry        // Class attributes registry (Phase 3 Task 12)
+	Scopes         map[string]*FunctionScope // Function FQN -> scope
+	ReturnTypes    map[string]*TypeInfo      // Function FQN -> return type
+	Builtins       *BuiltinRegistry          // Builtin types registry
+	Registry       *ModuleRegistry           // Module registry reference
+	Attributes     *AttributeRegistry        // Class attributes registry (Phase 3 Task 12)
+	StdlibRegistry *StdlibRegistry           // Python stdlib registry (PR #2)
 }
 
 // NewTypeInferenceEngine creates a new type inference engine.
