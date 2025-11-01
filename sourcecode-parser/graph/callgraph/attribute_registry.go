@@ -6,7 +6,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
 
-// ClassAttribute represents a single attribute of a class
+// ClassAttribute represents a single attribute of a class.
 type ClassAttribute struct {
 	Name       string    // Attribute name (e.g., "value", "user")
 	Type       *TypeInfo // Inferred type of the attribute
@@ -15,7 +15,7 @@ type ClassAttribute struct {
 	Confidence float64 // Confidence in type inference (0.0-1.0)
 }
 
-// ClassAttributes holds all attributes for a single class
+// ClassAttributes holds all attributes for a single class.
 type ClassAttributes struct {
 	ClassFQN   string                        // Fully qualified class name (e.g., "myapp.models.User")
 	Attributes map[string]*ClassAttribute    // Map from attribute name to attribute info
@@ -24,13 +24,13 @@ type ClassAttributes struct {
 }
 
 // AttributeRegistry is the global registry of class attributes
-// It provides thread-safe access to class attribute information
+// It provides thread-safe access to class attribute information.
 type AttributeRegistry struct {
 	Classes map[string]*ClassAttributes // Map from class FQN to class attributes
 	mu      sync.RWMutex                // Protects concurrent access
 }
 
-// NewAttributeRegistry creates a new empty AttributeRegistry
+// NewAttributeRegistry creates a new empty AttributeRegistry.
 func NewAttributeRegistry() *AttributeRegistry {
 	return &AttributeRegistry{
 		Classes: make(map[string]*ClassAttributes),
@@ -38,7 +38,7 @@ func NewAttributeRegistry() *AttributeRegistry {
 }
 
 // GetClassAttributes retrieves attributes for a given class FQN
-// Returns nil if class is not in registry
+// Returns nil if class is not in registry.
 func (ar *AttributeRegistry) GetClassAttributes(classFQN string) *ClassAttributes {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()
@@ -46,7 +46,7 @@ func (ar *AttributeRegistry) GetClassAttributes(classFQN string) *ClassAttribute
 }
 
 // GetAttribute retrieves a specific attribute from a class
-// Returns nil if class or attribute is not found
+// Returns nil if class or attribute is not found.
 func (ar *AttributeRegistry) GetAttribute(classFQN, attrName string) *ClassAttribute {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()
@@ -60,7 +60,7 @@ func (ar *AttributeRegistry) GetAttribute(classFQN, attrName string) *ClassAttri
 }
 
 // AddClassAttributes adds or updates attributes for a class
-// Thread-safe for concurrent modifications
+// Thread-safe for concurrent modifications.
 func (ar *AttributeRegistry) AddClassAttributes(classAttrs *ClassAttributes) {
 	ar.mu.Lock()
 	defer ar.mu.Unlock()
@@ -68,7 +68,7 @@ func (ar *AttributeRegistry) AddClassAttributes(classAttrs *ClassAttributes) {
 }
 
 // AddAttribute adds a single attribute to a class
-// Creates the ClassAttributes entry if it doesn't exist
+// Creates the ClassAttributes entry if it doesn't exist.
 func (ar *AttributeRegistry) AddAttribute(classFQN string, attr *ClassAttribute) {
 	ar.mu.Lock()
 	defer ar.mu.Unlock()
@@ -86,7 +86,7 @@ func (ar *AttributeRegistry) AddAttribute(classFQN string, attr *ClassAttribute)
 	classAttrs.Attributes[attr.Name] = attr
 }
 
-// HasClass checks if a class is registered
+// HasClass checks if a class is registered.
 func (ar *AttributeRegistry) HasClass(classFQN string) bool {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()
@@ -94,7 +94,7 @@ func (ar *AttributeRegistry) HasClass(classFQN string) bool {
 	return exists
 }
 
-// GetAllClasses returns a list of all registered class FQNs
+// GetAllClasses returns a list of all registered class FQNs.
 func (ar *AttributeRegistry) GetAllClasses() []string {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()
@@ -106,7 +106,7 @@ func (ar *AttributeRegistry) GetAllClasses() []string {
 	return classes
 }
 
-// Size returns the number of registered classes
+// Size returns the number of registered classes.
 func (ar *AttributeRegistry) Size() int {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()

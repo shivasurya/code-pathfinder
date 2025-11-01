@@ -100,7 +100,7 @@ func ExtractClassAttributes(
 	return nil
 }
 
-// findClassNodes finds all class_definition nodes in the AST
+// findClassNodes finds all class_definition nodes in the AST.
 func findClassNodes(node *sitter.Node, sourceCode []byte) []*sitter.Node {
 	classes := make([]*sitter.Node, 0)
 
@@ -122,7 +122,7 @@ func findClassNodes(node *sitter.Node, sourceCode []byte) []*sitter.Node {
 	return classes
 }
 
-// extractClassName extracts the class name from a class_definition node
+// extractClassName extracts the class name from a class_definition node.
 func extractClassName(classNode *sitter.Node, sourceCode []byte) string {
 	// class_definition has structure:
 	//   class <identifier> [(bases)] : <block>
@@ -142,7 +142,7 @@ func extractClassName(classNode *sitter.Node, sourceCode []byte) string {
 	return ""
 }
 
-// findMethodNodes finds all function_definition nodes within a class
+// findMethodNodes finds all function_definition nodes within a class.
 func findMethodNodes(classNode *sitter.Node, sourceCode []byte) []*sitter.Node {
 	methods := make([]*sitter.Node, 0)
 
@@ -171,7 +171,7 @@ func findMethodNodes(classNode *sitter.Node, sourceCode []byte) []*sitter.Node {
 	return methods
 }
 
-// extractMethodName extracts the method name from a function_definition node
+// extractMethodName extracts the method name from a function_definition node.
 func extractMethodName(methodNode *sitter.Node, sourceCode []byte) string {
 	for i := 0; i < int(methodNode.ChildCount()); i++ {
 		child := methodNode.Child(i)
@@ -226,8 +226,8 @@ func extractAttributeAssignments(
 					AssignedIn: methodName,
 					Location: &graph.SourceLocation{
 						File:      filePath,
-						StartByte: uint32(assignment.Node.StartByte()),
-						EndByte:   uint32(assignment.Node.EndByte()),
+						StartByte: assignment.Node.StartByte(),
+						EndByte:   assignment.Node.EndByte(),
 					},
 					Confidence: float64(typeInfo.Confidence),
 				}
@@ -244,14 +244,14 @@ func extractAttributeAssignments(
 	return attributes
 }
 
-// AttributeAssignment represents a self.attr = value assignment
+// AttributeAssignment represents a self.attr = value assignment.
 type AttributeAssignment struct {
 	AttributeName string       // Name of the attribute (e.g., "value", "user")
 	RightSide     *sitter.Node // AST node of the right-hand side expression
 	Node          *sitter.Node // Full assignment node
 }
 
-// findSelfAttributeAssignments finds all self.attr = value patterns in a method
+// findSelfAttributeAssignments finds all self.attr = value patterns in a method.
 func findSelfAttributeAssignments(methodNode *sitter.Node, sourceCode []byte) []AttributeAssignment {
 	assignments := make([]AttributeAssignment, 0)
 
@@ -300,7 +300,7 @@ func findSelfAttributeAssignments(methodNode *sitter.Node, sourceCode []byte) []
 	return assignments
 }
 
-// inferAttributeType infers the type of an attribute using 6 strategies
+// inferAttributeType infers the type of an attribute using 6 strategies.
 func inferAttributeType(
 	assignment AttributeAssignment,
 	sourceCode []byte,
@@ -341,7 +341,7 @@ func inferAttributeType(
 	return nil
 }
 
-// Strategy 1: Infer type from literal values
+// Strategy 1: Infer type from literal values.
 func inferFromLiteral(node *sitter.Node, sourceCode []byte) *TypeInfo {
 	nodeType := node.Type()
 
@@ -405,7 +405,7 @@ func inferFromLiteral(node *sitter.Node, sourceCode []byte) *TypeInfo {
 	return nil
 }
 
-// Strategy 2: Infer type from class instantiation
+// Strategy 2: Infer type from class instantiation.
 func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
 	if node.Type() != "call" {
 		return nil
@@ -434,7 +434,7 @@ func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngin
 	return nil
 }
 
-// Strategy 3: Infer type from function call returns
+// Strategy 3: Infer type from function call returns.
 func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
 	if node.Type() != "call" {
 		return nil
@@ -465,7 +465,7 @@ func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, typeEngine *Typ
 	return nil
 }
 
-// Strategy 4: Infer type from constructor parameters
+// Strategy 4: Infer type from constructor parameters.
 func inferFromConstructorParam(
 	assignment AttributeAssignment,
 	methodNode *sitter.Node,
@@ -523,7 +523,7 @@ func inferFromConstructorParam(
 	return nil
 }
 
-// Strategy 5: Infer type from attribute copy (self.obj = other.attr)
+// Strategy 5: Infer type from attribute copy (self.obj = other.attr).
 func inferFromAttributeCopy(node *sitter.Node, sourceCode []byte, typeEngine *TypeInferenceEngine) *TypeInfo {
 	// Check if right side is attribute access
 	if node.Type() != "attribute" {

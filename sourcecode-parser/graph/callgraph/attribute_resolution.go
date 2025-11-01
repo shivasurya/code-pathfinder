@@ -7,7 +7,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
 
-// FailureStats tracks why attribute chain resolution fails
+// FailureStats tracks why attribute chain resolution fails.
 type FailureStats struct {
 	TotalAttempts          int
 	NotSelfPrefix          int
@@ -150,7 +150,7 @@ func ResolveSelfAttributeCall(
 	return "", false, nil
 }
 
-// PrintAttributeFailureStats prints detailed statistics about attribute chain failures
+// PrintAttributeFailureStats prints detailed statistics about attribute chain failures.
 func PrintAttributeFailureStats() {
 	if attributeFailureStats.TotalAttempts == 0 {
 		return
@@ -289,7 +289,8 @@ func ResolveAttributePlaceholders(
 			originalType := attr.Type.TypeFQN
 
 			// Resolve placeholder types
-			if strings.HasPrefix(originalType, "class:") {
+			switch {
+			case strings.HasPrefix(originalType, "class:"):
 				// class:User → try to resolve to full FQN
 				className := strings.TrimPrefix(originalType, "class:")
 				resolvedFQN := resolveClassName(className, classFQN, moduleRegistry, codeGraph)
@@ -297,7 +298,7 @@ func ResolveAttributePlaceholders(
 					attr.Type.TypeFQN = resolvedFQN
 					attr.Type.Confidence = 0.9 // High confidence for resolved classes
 				}
-			} else if strings.HasPrefix(originalType, "call:") {
+			case strings.HasPrefix(originalType, "call:"):
 				// call:func → lookup return type
 				funcName := strings.TrimPrefix(originalType, "call:")
 				// Try to find function in same module
@@ -309,7 +310,7 @@ func ResolveAttributePlaceholders(
 					attr.Type.Confidence = returnType.Confidence * 0.8 // Decay confidence
 					attr.Type.Source = "function_call_attribute"
 				}
-			} else if strings.HasPrefix(originalType, "param:") {
+			case strings.HasPrefix(originalType, "param:"):
 				// param:User → resolve type annotation
 				typeName := strings.TrimPrefix(originalType, "param:")
 				resolvedFQN := resolveClassName(typeName, classFQN, moduleRegistry, codeGraph)
@@ -326,7 +327,7 @@ func ResolveAttributePlaceholders(
 }
 
 // resolveClassName resolves a class name to its fully qualified name
-// Uses module registry and code graph to find the class definition
+// Uses module registry and code graph to find the class definition.
 func resolveClassName(
 	className string,
 	contextClassFQN string,
@@ -355,7 +356,7 @@ func resolveClassName(
 	return ""
 }
 
-// classExists checks if a class exists in the code graph
+// classExists checks if a class exists in the code graph.
 func classExists(classFQN string, codeGraph *graph.CodeGraph) bool {
 	// Look for class_declaration nodes with matching name
 	for _, node := range codeGraph.Nodes {
