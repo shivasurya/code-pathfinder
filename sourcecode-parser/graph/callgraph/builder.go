@@ -142,6 +142,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	typeEngine := NewTypeInferenceEngine(registry)
 	typeEngine.Builtins = NewBuiltinRegistry()
 
+	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
+	typeEngine.Attributes = NewAttributeRegistry()
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
@@ -190,7 +193,25 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
-	// Process each Python file in the project (third pass for call site resolution)
+	// Phase 3 Task 12: Extract class attributes (third pass)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := readFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract class attributes for self.attr tracking
+		_ = ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
+	}
+
+	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
+	ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
+
+	// Process each Python file in the project (fourth pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
@@ -259,6 +280,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 			}
 		}
 	}
+
+	// Phase 3 Task 12: Print attribute failure analysis
+	PrintAttributeFailureStats()
 
 	return callGraph, nil
 }
@@ -491,6 +515,42 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
 		return fqn, resolved, nil
 	}
+
+	// Phase 3 Task 11: Check for method chaining BEFORE other resolution
+	// Chains have pattern "()." indicating call followed by attribute access
+	if strings.Contains(target, ").") {
+		chainFQN, chainResolved, chainType := ResolveChainedCall(
+			target,
+			typeEngine,
+			typeEngine.Builtins,
+			registry,
+			codeGraph,
+			callerFQN,
+			currentModule,
+			callGraph,
+		)
+		if chainResolved {
+			return chainFQN, true, chainType
+		}
+		// Chain parsing attempted but failed - fall through to regular resolution
+	}
+
+	// Phase 3 Task 12: Check for self.attribute.method() patterns BEFORE self.method()
+	// Pattern: self.attr.method (2+ dots starting with self.)
+	if strings.HasPrefix(target, "self.") && strings.Count(target, ".") >= 2 {
+		attrFQN, attrResolved, attrType := ResolveSelfAttributeCall(
+			target,
+			callerFQN,
+			typeEngine,
+			typeEngine.Builtins,
+			callGraph,
+		)
+		if attrResolved {
+			return attrFQN, true, attrType
+		}
+		// Attribute resolution attempted but failed - fall through
+	}
+
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")

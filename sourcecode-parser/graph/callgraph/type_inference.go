@@ -34,6 +34,7 @@ type TypeInferenceEngine struct {
 	ReturnTypes map[string]*TypeInfo      // Function FQN -> return type
 	Builtins    *BuiltinRegistry          // Builtin types registry
 	Registry    *ModuleRegistry           // Module registry reference
+	Attributes  *AttributeRegistry        // Class attributes registry (Phase 3 Task 12)
 }
 
 // NewTypeInferenceEngine creates a new type inference engine.
