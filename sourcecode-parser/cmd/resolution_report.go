@@ -131,11 +131,12 @@ func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistic
 					}
 
 					// Determine resolution source
-					if site.TypeSource == "annotation" || site.TypeSource == "stdlib_annotation" {
+					switch {
+					case site.TypeSource == "annotation" || site.TypeSource == "stdlib_annotation":
 						stats.StdlibViaAnnotation++
-					} else if site.ResolvedViaTypeInference {
+					case site.ResolvedViaTypeInference:
 						stats.StdlibViaInference++
-					} else if site.TypeSource == "builtin" || site.TypeSource == "stdlib_builtin" {
+					case site.TypeSource == "builtin" || site.TypeSource == "stdlib_builtin":
 						stats.StdlibViaBuiltin++
 					}
 
@@ -411,7 +412,7 @@ func isStdlibResolution(fqn string) bool {
 }
 
 // extractModuleName extracts the top-level module name from a FQN.
-// Example: "os.path.join" -> "os"
+// Example: "os.path.join" -> "os".
 func extractModuleName(fqn string) string {
 	for i := 0; i < len(fqn); i++ {
 		if fqn[i] == '.' {
