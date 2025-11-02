@@ -146,17 +146,34 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
 	typeEngine.Attributes = NewAttributeRegistry()
 
-	// PR #2: Load stdlib registry from local directory
-	stdlibLoader := &StdlibRegistryLoader{
-		RegistryPath: "registries/python3.14/stdlib/v1",
-	}
-	stdlibRegistry, err := stdlibLoader.LoadRegistry()
+	// PR #3: Detect Python version and load stdlib registry from remote CDN
+	pythonVersion := detectPythonVersion(projectRoot)
+	log.Printf("Detected Python version: %s", pythonVersion)
+
+	// Create remote registry loader
+	remoteLoader := NewStdlibRegistryRemote(
+		"https://codepathfinder.dev/assets/registries",
+		pythonVersion,
+	)
+
+	// Load manifest from CDN
+	err := remoteLoader.LoadManifest()
 	if err != nil {
-		log.Printf("Warning: Failed to load stdlib registry: %v", err)
+		log.Printf("Warning: Failed to load stdlib registry from CDN: %v", err)
 		// Continue without stdlib resolution - not a fatal error
 	} else {
+		// Create adapter to satisfy existing StdlibRegistry interface
+		stdlibRegistry := &StdlibRegistry{
+			Modules:  make(map[string]*StdlibModule),
+			Manifest: remoteLoader.Manifest,
+		}
+
+		// The remote loader will lazy-load modules as needed
+		// We store a reference to it for on-demand loading
 		typeEngine.StdlibRegistry = stdlibRegistry
-		log.Printf("Loaded stdlib registry: %d modules", stdlibRegistry.ModuleCount())
+		typeEngine.StdlibRemote = remoteLoader
+
+		log.Printf("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
 	}
 
 	// First, index all function definitions from the code graph
@@ -710,9 +727,9 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true, nil
 		}
-		// PR #2: Check stdlib registry before user project registry
-		if typeEngine != nil && typeEngine.StdlibRegistry != nil {
-			if validateStdlibFQN(fullFQN, typeEngine.StdlibRegistry) {
+		// PR #3: Check stdlib registry before user project registry
+		if typeEngine != nil && typeEngine.StdlibRemote != nil {
+			if validateStdlibFQN(fullFQN, typeEngine.StdlibRemote) {
 				return fullFQN, true, nil
 			}
 		}
@@ -735,10 +752,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		return ormFQN, true, nil
 	}
 
-	// PR #2: Last resort - check if target is a stdlib call (e.g., os.path.join)
+	// PR #3: Last resort - check if target is a stdlib call (e.g., os.path.join)
 	// This handles cases where stdlib modules are imported directly (import os.path)
-	if typeEngine != nil && typeEngine.StdlibRegistry != nil {
-		if validateStdlibFQN(target, typeEngine.StdlibRegistry) {
+	if typeEngine != nil && typeEngine.StdlibRemote != nil {
+		if validateStdlibFQN(target, typeEngine.StdlibRemote) {
 			return target, true, nil
 		}
 	}
@@ -758,6 +775,7 @@ var stdlibModuleAliases = map[string]string{
 // validateStdlibFQN checks if a fully qualified name is a stdlib function.
 // Supports module.function, module.submodule.function, and module.Class patterns.
 // Handles platform-specific module aliases (e.g., os.path -> posixpath).
+// Uses lazy loading via remote registry to download modules on-demand.
 //
 // Examples:
 //   "os.getcwd" - returns true if os.getcwd exists in stdlib
@@ -766,12 +784,12 @@ var stdlibModuleAliases = map[string]string{
 //
 // Parameters:
 //   - fqn: fully qualified name to check
-//   - stdlibRegistry: stdlib registry
+//   - remoteLoader: remote stdlib registry loader
 //
 // Returns:
 //   - true if FQN is a stdlib function or class
-func validateStdlibFQN(fqn string, stdlibRegistry *StdlibRegistry) bool {
-	if stdlibRegistry == nil {
+func validateStdlibFQN(fqn string, remoteLoader *StdlibRegistryRemote) bool {
+	if remoteLoader == nil {
 		return false
 	}
 
@@ -797,7 +815,12 @@ func validateStdlibFQN(fqn string, stdlibRegistry *StdlibRegistry) bool {
 			moduleName = canonicalName
 		}
 
-		module := stdlibRegistry.GetModule(moduleName)
+		// Lazy load module from remote registry
+		module, err := remoteLoader.GetModule(moduleName)
+		if err != nil {
+			log.Printf("Warning: Failed to load stdlib module %s: %v", moduleName, err)
+			continue
+		}
 		if module == nil {
 			continue
 		}
