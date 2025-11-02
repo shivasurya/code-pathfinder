@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,6 +145,19 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 
 	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
 	typeEngine.Attributes = NewAttributeRegistry()
+
+	// PR #2: Load stdlib registry from local directory
+	stdlibLoader := &StdlibRegistryLoader{
+		RegistryPath: "registries/python3.14/stdlib/v1",
+	}
+	stdlibRegistry, err := stdlibLoader.LoadRegistry()
+	if err != nil {
+		log.Printf("Warning: Failed to load stdlib registry: %v", err)
+		// Continue without stdlib resolution - not a fatal error
+	} else {
+		typeEngine.StdlibRegistry = stdlibRegistry
+		log.Printf("Loaded stdlib registry: %d modules", stdlibRegistry.ModuleCount())
+	}
 
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
@@ -696,6 +710,12 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		if ormFQN, resolved := ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true, nil
 		}
+		// PR #2: Check stdlib registry before user project registry
+		if typeEngine != nil && typeEngine.StdlibRegistry != nil {
+			if validateStdlibFQN(fullFQN, typeEngine.StdlibRegistry) {
+				return fullFQN, true, nil
+			}
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true, nil
 		}
@@ -717,6 +737,85 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 
 	// Can't resolve - return as-is
 	return target, false, nil
+}
+
+// stdlibModuleAliases maps platform-specific module aliases to their canonical names.
+// For example, os.path is posixpath on Unix/Linux/Mac and ntpath on Windows.
+var stdlibModuleAliases = map[string]string{
+	"os.path": "posixpath", // On POSIX systems (Unix, Linux, macOS)
+	// Note: On Windows, os.path would be ntpath, but we default to POSIX
+	// since most development happens on Unix-like systems
+}
+
+// validateStdlibFQN checks if a fully qualified name is a stdlib function.
+// Supports module.function, module.submodule.function, and module.Class patterns.
+// Handles platform-specific module aliases (e.g., os.path -> posixpath).
+//
+// Examples:
+//   "os.getcwd" - returns true if os.getcwd exists in stdlib
+//   "os.path.join" - returns true if posixpath.join exists in stdlib (alias resolution)
+//   "json.dumps" - returns true if json.dumps exists in stdlib
+//
+// Parameters:
+//   - fqn: fully qualified name to check
+//   - stdlibRegistry: stdlib registry
+//
+// Returns:
+//   - true if FQN is a stdlib function or class
+func validateStdlibFQN(fqn string, stdlibRegistry *StdlibRegistry) bool {
+	if stdlibRegistry == nil {
+		return false
+	}
+
+	// Split FQN into parts: os.path.join -> ["os", "path", "join"]
+	parts := strings.Split(fqn, ".")
+	if len(parts) < 2 {
+		return false
+	}
+
+	// Try different module combinations
+	// For "os.path.join", try:
+	//   1. module="os.path", function="join" (with alias resolution)
+	//   2. module="os", function="path.join"
+	//   3. module="os", function="path" (submodule)
+
+	// Try longest match first (os.path)
+	for i := len(parts) - 1; i >= 1; i-- {
+		moduleName := strings.Join(parts[:i], ".")
+		functionName := parts[i]
+
+		// Check if this module is an alias (e.g., os.path -> posixpath)
+		if canonicalName, isAlias := stdlibModuleAliases[moduleName]; isAlias {
+			moduleName = canonicalName
+		}
+
+		module := stdlibRegistry.GetModule(moduleName)
+		if module == nil {
+			continue
+		}
+
+		// Check if it's a function
+		if _, ok := module.Functions[functionName]; ok {
+			return true
+		}
+
+		// Check if it's a class
+		if _, ok := module.Classes[functionName]; ok {
+			return true
+		}
+
+		// Check if it's a constant
+		if _, ok := module.Constants[functionName]; ok {
+			return true
+		}
+
+		// Check if it's an attribute
+		if _, ok := module.Attributes[functionName]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 // validateFQN checks if a fully qualified name exists in the registry.
