@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -53,7 +54,12 @@ func (r *StdlibRegistryRemote) LoadManifest() error {
 
 	log.Printf("Downloading manifest from: %s", manifestURL)
 
-	resp, err := r.HTTPClient.Get(manifestURL)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, manifestURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create manifest request: %w", err)
+	}
+
+	resp, err := r.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download manifest: %w", err)
 	}
@@ -111,7 +117,7 @@ func (r *StdlibRegistryRemote) GetModule(moduleName string) (*StdlibModule, erro
 	}
 
 	if moduleEntry == nil {
-		return nil, nil // Module not found in manifest
+		return nil, nil //nolint:nilnil // nil module is valid when not found
 	}
 
 	// Download module (write lock)
@@ -129,7 +135,12 @@ func (r *StdlibRegistryRemote) GetModule(moduleName string) (*StdlibModule, erro
 
 	log.Printf("Downloading module: %s from %s", moduleName, moduleURL)
 
-	resp, err := r.HTTPClient.Get(moduleURL)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, moduleURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create module request: %w", err)
+	}
+
+	resp, err := r.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download module %s: %w", moduleName, err)
 	}

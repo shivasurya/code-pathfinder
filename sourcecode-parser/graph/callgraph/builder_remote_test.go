@@ -33,13 +33,14 @@ func TestBuildCallGraph_RemoteStdlibLoading(t *testing.T) {
 
 	// Create mock CDN server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+		switch r.URL.Path {
+		case "/python3.14/stdlib/v1/manifest.json":
 			manifestJSON, _ := json.Marshal(manifest)
 			w.Write(manifestJSON)
-		} else if r.URL.Path == "/python3.14/stdlib/v1/os.json" {
+		case "/python3.14/stdlib/v1/os.json":
 			moduleJSON, _ := json.Marshal(module)
 			w.Write(moduleJSON)
-		} else {
+		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
@@ -128,10 +129,11 @@ func TestValidateStdlibFQN_WithRemoteLoader(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+		switch r.URL.Path {
+		case "/python3.14/stdlib/v1/manifest.json":
 			manifestJSON, _ := json.Marshal(manifest)
 			w.Write(manifestJSON)
-		} else if r.URL.Path == "/python3.14/stdlib/v1/os.json" {
+		case "/python3.14/stdlib/v1/os.json":
 			w.Write(moduleJSON)
 		}
 	}))
@@ -180,10 +182,11 @@ func TestValidateStdlibFQN_ModuleAlias(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+		switch r.URL.Path {
+		case "/python3.14/stdlib/v1/manifest.json":
 			manifestJSON, _ := json.Marshal(manifest)
 			w.Write(manifestJSON)
-		} else if r.URL.Path == "/python3.14/stdlib/v1/posixpath.json" {
+		case "/python3.14/stdlib/v1/posixpath.json":
 			w.Write(moduleJSON)
 		}
 	}))
@@ -279,10 +282,11 @@ func TestRemoteLoader_CachingInBuildCallGraph(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+		switch r.URL.Path {
+		case "/python3.14/stdlib/v1/manifest.json":
 			manifestJSON, _ := json.Marshal(manifest)
 			w.Write(manifestJSON)
-		} else if r.URL.Path == "/python3.14/stdlib/v1/os.json" {
+		case "/python3.14/stdlib/v1/os.json":
 			downloadCount++
 			w.Write(moduleJSON)
 		}
