@@ -53,6 +53,12 @@ improvements to the resolution logic.`,
 			fmt.Println()
 		}
 
+		// Print stdlib registry statistics
+		if stats.StdlibResolved > 0 {
+			printStdlibStatistics(stats)
+			fmt.Println()
+		}
+
 		// Print failure breakdown
 		printFailureBreakdown(stats)
 		fmt.Println()
@@ -83,6 +89,14 @@ type resolutionStatistics struct {
 	ClassTypeResolved      int            // Resolved to project classes
 	ConfidenceSum          float64        // Sum of confidence scores for averaging
 	ConfidenceDistribution map[string]int // Confidence ranges -> count
+
+	// Stdlib registry statistics
+	StdlibResolved      int            // Calls resolved to stdlib
+	StdlibByModule      map[string]int // Module name -> count (e.g., "os" -> 45)
+	StdlibByType        map[string]int // Type -> count (function, class, constant, attribute)
+	StdlibViaAnnotation int            // Resolved via type annotations
+	StdlibViaInference  int            // Resolved via type inference
+	StdlibViaBuiltin    int            // Resolved via builtin registry
 }
 
 // aggregateResolutionStatistics analyzes the call graph and collects statistics.
@@ -94,6 +108,8 @@ func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistic
 		UnresolvedByFQN:        make(map[string]callgraph.CallSite),
 		TypesBySource:          make(map[string]int),
 		ConfidenceDistribution: make(map[string]int),
+		StdlibByModule:         make(map[string]int),
+		StdlibByType:           make(map[string]int),
 	}
 
 	// Iterate through all call sites
@@ -103,6 +119,30 @@ func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistic
 
 			if site.Resolved {
 				stats.ResolvedCalls++
+
+				// Track stdlib resolutions
+				if isStdlibResolution(site.TargetFQN) {
+					stats.StdlibResolved++
+
+					// Extract module name (first component before dot)
+					moduleName := extractModuleName(site.TargetFQN)
+					if moduleName != "" {
+						stats.StdlibByModule[moduleName]++
+					}
+
+					// Determine resolution source
+					if site.TypeSource == "annotation" || site.TypeSource == "stdlib_annotation" {
+						stats.StdlibViaAnnotation++
+					} else if site.ResolvedViaTypeInference {
+						stats.StdlibViaInference++
+					} else if site.TypeSource == "builtin" || site.TypeSource == "stdlib_builtin" {
+						stats.StdlibViaBuiltin++
+					}
+
+					// Track type (function, class, etc.)
+					resType := determineStdlibType(site.TargetFQN)
+					stats.StdlibByType[resType]++
+				}
 
 				// Phase 2: Track type inference resolutions
 				if site.ResolvedViaTypeInference {
@@ -344,6 +384,172 @@ func percentage(part, total int) float64 {
 		return 0.0
 	}
 	return float64(part) * 100.0 / float64(total)
+}
+
+// isStdlibResolution checks if a FQN resolves to Python stdlib.
+func isStdlibResolution(fqn string) bool {
+	// List of common stdlib modules
+	stdlibModules := []string{
+		"os.", "sys.", "pathlib.", "re.", "json.", "time.", "datetime.",
+		"collections.", "itertools.", "functools.", "math.", "random.",
+		"subprocess.", "threading.", "multiprocessing.", "asyncio.",
+		"logging.", "argparse.", "unittest.", "sqlite3.", "csv.",
+		"xml.", "html.", "urllib.", "http.", "email.", "socket.",
+		"io.", "tempfile.", "shutil.", "glob.", "pickle.", "base64.",
+		"hashlib.", "hmac.", "secrets.", "struct.", "codecs.", "typing.",
+		"abc.", "contextlib.", "warnings.", "traceback.", "inspect.",
+		"ast.", "dis.", "zipfile.", "tarfile.", "gzip.", "bz2.",
+	}
+
+	for _, mod := range stdlibModules {
+		if len(fqn) >= len(mod) && fqn[:len(mod)] == mod {
+			return true
+		}
+	}
+
+	return false
+}
+
+// extractModuleName extracts the top-level module name from a FQN.
+// Example: "os.path.join" -> "os"
+func extractModuleName(fqn string) string {
+	for i := 0; i < len(fqn); i++ {
+		if fqn[i] == '.' {
+			return fqn[:i]
+		}
+	}
+	return fqn
+}
+
+// determineStdlibType determines if the target is a function, class, method, etc.
+func determineStdlibType(fqn string) string {
+	// Split FQN by dots
+	parts := make([]string, 0)
+	start := 0
+	for i := 0; i < len(fqn); i++ {
+		if fqn[i] == '.' {
+			parts = append(parts, fqn[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(fqn) {
+		parts = append(parts, fqn[start:])
+	}
+
+	if len(parts) == 0 {
+		return "unknown"
+	}
+
+	// Last component
+	lastPart := parts[len(parts)-1]
+
+	// Class names typically start with uppercase
+	if len(lastPart) > 0 && lastPart[0] >= 'A' && lastPart[0] <= 'Z' {
+		return "class"
+	}
+
+	// If there are multiple parts and second-to-last is uppercase, likely a method
+	if len(parts) >= 2 {
+		secondLast := parts[len(parts)-2]
+		if len(secondLast) > 0 && secondLast[0] >= 'A' && secondLast[0] <= 'Z' {
+			return "method"
+		}
+	}
+
+	// Constants are all uppercase
+	isConstant := true
+	for i := 0; i < len(lastPart); i++ {
+		if lastPart[i] >= 'a' && lastPart[i] <= 'z' {
+			isConstant = false
+			break
+		}
+	}
+	if isConstant && len(lastPart) > 1 {
+		return "constant"
+	}
+
+	// Default to function
+	return "function"
+}
+
+// printStdlibStatistics prints Python stdlib registry statistics.
+func printStdlibStatistics(stats *resolutionStatistics) {
+	fmt.Println("Stdlib Registry Statistics:")
+	fmt.Printf("  Total stdlib resolutions:  %d (%.1f%% of resolved)\n",
+		stats.StdlibResolved,
+		percentage(stats.StdlibResolved, stats.ResolvedCalls))
+	fmt.Println()
+
+	// Resolution source breakdown
+	if stats.StdlibViaAnnotation > 0 || stats.StdlibViaInference > 0 || stats.StdlibViaBuiltin > 0 {
+		fmt.Printf("  Resolution source:\n")
+		if stats.StdlibViaAnnotation > 0 {
+			fmt.Printf("    Type annotations:  %d (%.1f%%)\n",
+				stats.StdlibViaAnnotation,
+				percentage(stats.StdlibViaAnnotation, stats.StdlibResolved))
+		}
+		if stats.StdlibViaInference > 0 {
+			fmt.Printf("    Type inference:    %d (%.1f%%)\n",
+				stats.StdlibViaInference,
+				percentage(stats.StdlibViaInference, stats.StdlibResolved))
+		}
+		if stats.StdlibViaBuiltin > 0 {
+			fmt.Printf("    Builtin registry:  %d (%.1f%%)\n",
+				stats.StdlibViaBuiltin,
+				percentage(stats.StdlibViaBuiltin, stats.StdlibResolved))
+		}
+		fmt.Println()
+	}
+
+	// By type (function, class, etc.)
+	if len(stats.StdlibByType) > 0 {
+		fmt.Printf("  By type:\n")
+		// Sort by count
+		type typeCount struct {
+			typeName string
+			count    int
+		}
+		types := make([]typeCount, 0, len(stats.StdlibByType))
+		for t, count := range stats.StdlibByType {
+			types = append(types, typeCount{t, count})
+		}
+		sort.Slice(types, func(i, j int) bool {
+			return types[i].count > types[j].count
+		})
+
+		for _, tc := range types {
+			fmt.Printf("    %-15s %d (%.1f%%)\n",
+				tc.typeName+":",
+				tc.count,
+				percentage(tc.count, stats.StdlibResolved))
+		}
+		fmt.Println()
+	}
+
+	// Top modules
+	if len(stats.StdlibByModule) > 0 {
+		fmt.Printf("  Top 10 modules:\n")
+		// Sort by count
+		type moduleCount struct {
+			module string
+			count  int
+		}
+		modules := make([]moduleCount, 0, len(stats.StdlibByModule))
+		for mod, count := range stats.StdlibByModule {
+			modules = append(modules, moduleCount{mod, count})
+		}
+		sort.Slice(modules, func(i, j int) bool {
+			return modules[i].count > modules[j].count
+		})
+
+		// Print top 10
+		for i, mc := range modules {
+			if i >= 10 {
+				break
+			}
+			fmt.Printf("    %2d. %-15s %d calls\n", i+1, mc.module, mc.count)
+		}
+	}
 }
 
 func init() {
