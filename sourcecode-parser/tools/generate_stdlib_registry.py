@@ -472,7 +472,18 @@ def main():
 
     print(f"{'='*60}\n")
 
-    return 0 if not failed else 1
+    # Platform-specific modules that are expected to fail on Linux/macOS
+    WINDOWS_ONLY_MODULES = {'msvcrt', 'nt', 'winreg', 'winsound', '_winapi'}
+    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES
+
+    # Check if any non-platform-specific modules failed
+    unexpected_failures = [m for m in failed if m not in PLATFORM_SPECIFIC_MODULES]
+
+    if unexpected_failures:
+        print(f"ERROR: Unexpected module failures: {', '.join(unexpected_failures)}")
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
