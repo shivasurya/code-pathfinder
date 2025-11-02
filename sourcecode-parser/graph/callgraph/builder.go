@@ -735,6 +735,14 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		return ormFQN, true, nil
 	}
 
+	// PR #2: Last resort - check if target is a stdlib call (e.g., os.path.join)
+	// This handles cases where stdlib modules are imported directly (import os.path)
+	if typeEngine != nil && typeEngine.StdlibRegistry != nil {
+		if validateStdlibFQN(target, typeEngine.StdlibRegistry) {
+			return target, true, nil
+		}
+	}
+
 	// Can't resolve - return as-is
 	return target, false, nil
 }
