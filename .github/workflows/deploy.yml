@@ -19,6 +19,19 @@ jobs:
     steps:
       - name: Checkout your repository using git
         uses: actions/checkout@v4
+
+      # Generate stdlib registry for Python 3.14
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Generate stdlib registry for Python 3.14
+        run: |
+          cd sourcecode-parser/tools
+          python generate_stdlib_registry.py --all \
+            --output-dir ../../docs/public/assets/registries/python3.14/stdlib/v1/
+
       - name: Create .env file
         env:
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
