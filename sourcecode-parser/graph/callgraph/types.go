@@ -75,6 +75,11 @@ type CallGraph struct {
 	// Map from fully qualified name to the actual function node in the graph
 	// This allows quick lookup of function metadata (line number, file, etc.)
 	Functions map[string]*graph.Node
+
+	// Taint summaries for each function (intra-procedural analysis results)
+	// Key: function FQN
+	// Value: TaintSummary with taint flow information
+	Summaries map[string]*TaintSummary
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.
@@ -85,6 +90,7 @@ func NewCallGraph() *CallGraph {
 		ReverseEdges: make(map[string][]string),
 		CallSites:    make(map[string][]CallSite),
 		Functions:    make(map[string]*graph.Node),
+		Summaries:    make(map[string]*TaintSummary),
 	}
 }
 
