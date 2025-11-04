@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"log"
 	"strings"
 )
 
@@ -118,12 +119,13 @@ func (pr *PatternRegistry) MatchPattern(pattern *Pattern, callGraph *CallGraph) 
 
 // PatternMatchDetails contains detailed information about a pattern match.
 type PatternMatchDetails struct {
-	Matched      bool
-	SourceFQN    string   // Fully qualified name of function containing the source call
-	SourceCall   string   // The actual dangerous call (e.g., "input", "request.GET")
-	SinkFQN      string   // Fully qualified name of function containing the sink call
-	SinkCall     string   // The actual dangerous call (e.g., "eval", "exec")
-	DataFlowPath []string // Complete path from source to sink
+	Matched           bool
+	IsIntraProcedural bool     // true if source and sink are in the same function
+	SourceFQN         string   // Fully qualified name of function containing the source call
+	SourceCall        string   // The actual dangerous call (e.g., "input", "request.GET")
+	SinkFQN           string   // Fully qualified name of function containing the sink call
+	SinkCall          string   // The actual dangerous call (e.g., "eval", "exec")
+	DataFlowPath      []string // Complete path from source to sink
 }
 
 // matchDangerousFunction checks if any dangerous function is called.
@@ -195,9 +197,13 @@ func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *Ca
 
 	for _, source := range sourceCalls {
 		for _, sink := range sinkCalls {
-			// Skip false positives where source and sink are in the same function
+			// Check intra-procedural taint flow using summaries
 			if source.caller == sink.caller {
-				continue
+				intraMatch := pr.checkIntraProceduralTaint(source, sink, callGraph)
+				if intraMatch != nil {
+					return intraMatch // Vulnerability found!
+				}
+				continue // No taint flow, skip
 			}
 
 			path := pr.findPath(source.caller, sink.caller, callGraph)
@@ -218,12 +224,13 @@ func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *Ca
 				}
 				if !hasSanitizer {
 					return &PatternMatchDetails{
-						Matched:      true,
-						SourceFQN:    source.caller,
-						SourceCall:   source.target,
-						SinkFQN:      sink.caller,
-						SinkCall:     sink.target,
-						DataFlowPath: path,
+						Matched:           true,
+						IsIntraProcedural: false, // Explicit flag for inter-procedural
+						SourceFQN:         source.caller,
+						SourceCall:        source.target,
+						SinkFQN:           sink.caller,
+						SinkCall:          sink.target,
+						DataFlowPath:      path,
 					}
 				}
 			}
@@ -378,4 +385,46 @@ func matchesFunctionName(fqn, pattern string) bool {
 	}
 
 	return false
+}
+
+// checkIntraProceduralTaint checks if source and sink in same function have taint flow.
+// Uses taint summaries generated during call graph building to verify vulnerability.
+// Returns non-nil PatternMatchDetails if vulnerable, nil otherwise.
+func (pr *PatternRegistry) checkIntraProceduralTaint(
+	source callInfo,
+	sink callInfo,
+	callGraph *CallGraph,
+) *PatternMatchDetails {
+	functionFQN := source.caller // Same as sink.caller by precondition
+
+	// Get taint summary for this function
+	summary := callGraph.Summaries[functionFQN]
+	if summary == nil {
+		// No summary available - graceful degradation
+		// This can happen if:
+		// - Function failed to parse (syntax error)
+		// - Function has no statements (empty body)
+		// - File was skipped in Pass 5
+		return nil
+	}
+
+	// Check if function has detections (actual taint flow from source to sink)
+	if !summary.HasDetections() {
+		return nil
+	}
+
+	// ✅ Vulnerability confirmed!
+	log.Printf("Intra-procedural vulnerability detected in %s: %d detection(s)",
+		functionFQN, summary.GetDetectionCount())
+
+	// Build match details
+	return &PatternMatchDetails{
+		Matched:           true,
+		IsIntraProcedural: true,
+		SourceFQN:         functionFQN,
+		SourceCall:        source.target,
+		SinkFQN:           functionFQN,
+		SinkCall:          sink.target,
+		DataFlowPath:      []string{functionFQN}, // Single function in path
+	}
 }

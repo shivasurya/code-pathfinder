@@ -3,6 +3,7 @@ package callgraph
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -311,4 +312,179 @@ func TestPatternTypeConstants(t *testing.T) {
 	assert.Equal(t, PatternType("source-sink"), PatternTypeSourceSink)
 	assert.Equal(t, PatternType("missing-sanitizer"), PatternTypeMissingSanitizer)
 	assert.Equal(t, PatternType("dangerous-function"), PatternTypeDangerousFunction)
+}
+
+// ========== INTRA-PROCEDURAL TAINT DETECTION TESTS (PR #6) ==========
+
+func TestMatchMissingSanitizer_IntraProceduralSimple(t *testing.T) {
+	// Test basic intra-procedural vulnerability detection
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.vulnerable": {
+				ID:   "test.vulnerable",
+				Name: "vulnerable",
+			},
+		},
+		CallSites: map[string][]CallSite{
+			"test.vulnerable": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries: map[string]*TaintSummary{
+			"test.vulnerable": {
+				FunctionFQN: "test.vulnerable",
+				TaintedVars: map[string][]*TaintInfo{
+					"x": {{SourceLine: 1, SourceVar: "x", Confidence: 1.0}},
+				},
+				Detections: []*TaintInfo{
+					{SourceLine: 1, SourceVar: "x", SinkLine: 2, SinkCall: "eval", Confidence: 1.0},
+				},
+			},
+		},
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		ID:         "CODE-INJECTION-001",
+		Sources:    []string{"request.GET"},
+		Sinks:      []string{"eval"},
+		Sanitizers: []string{},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Assertions
+	assert.NotNil(t, match)
+	assert.True(t, match.Matched)
+	assert.True(t, match.IsIntraProcedural)
+	assert.Equal(t, "test.vulnerable", match.SourceFQN)
+	assert.Equal(t, "test.vulnerable", match.SinkFQN)
+	assert.Equal(t, []string{"test.vulnerable"}, match.DataFlowPath)
+	assert.Contains(t, match.SourceCall, "request.GET")
+	assert.Contains(t, match.SinkCall, "eval")
+}
+
+func TestMatchMissingSanitizer_IntraProceduralNoSummary(t *testing.T) {
+	// Test graceful handling when summary is missing
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.unknown": {ID: "test.unknown", Name: "unknown"},
+		},
+		CallSites: map[string][]CallSite{
+			"test.unknown": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries:    map[string]*TaintSummary{}, // No summary for test.unknown
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		Sources: []string{"request.GET"},
+		Sinks:   []string{"eval"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should skip intra-procedural check gracefully
+	assert.False(t, match.Matched)
+}
+
+func TestMatchMissingSanitizer_IntraProceduralNoDetections(t *testing.T) {
+	// Test when summary exists but has no detections (no taint flow)
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.safe": {ID: "test.safe", Name: "safe"},
+		},
+		CallSites: map[string][]CallSite{
+			"test.safe": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries: map[string]*TaintSummary{
+			"test.safe": {
+				FunctionFQN: "test.safe",
+				TaintedVars: make(map[string][]*TaintInfo),
+				Detections:  []*TaintInfo{}, // No detections!
+			},
+		},
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		Sources: []string{"request.GET"},
+		Sinks:   []string{"eval"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should not match (no taint flow)
+	assert.False(t, match.Matched)
+}
+
+func TestMatchMissingSanitizer_InterProceduralUnchanged(t *testing.T) {
+	// Test that inter-procedural detection still works
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.source_func": {ID: "test.source_func", Name: "source_func"},
+			"test.sink_func":   {ID: "test.sink_func", Name: "sink_func"},
+		},
+		CallSites: map[string][]CallSite{
+			"test.source_func": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+			},
+			"test.sink_func": {
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Edges: map[string][]string{
+			"test.source_func": {"test.sink_func"},
+		},
+		ReverseEdges: map[string][]string{
+			"test.sink_func": {"test.source_func"},
+		},
+		Summaries: map[string]*TaintSummary{
+			"test.source_func": {FunctionFQN: "test.source_func"},
+			"test.sink_func":   {FunctionFQN: "test.sink_func"},
+		},
+	}
+
+	pattern := &Pattern{
+		Sources: []string{"request.GET"},
+		Sinks:   []string{"eval"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should detect inter-procedural
+	assert.True(t, match.Matched)
+	assert.False(t, match.IsIntraProcedural) // Inter-procedural
+	assert.Equal(t, "test.source_func", match.SourceFQN)
+	assert.Equal(t, "test.sink_func", match.SinkFQN)
+	assert.True(t, len(match.DataFlowPath) > 1)
+}
+
+func TestPatternMatchDetails_BackwardCompatibility(t *testing.T) {
+	// Test that old code works with new schema
+	match := &PatternMatchDetails{
+		Matched:      true,
+		SourceFQN:    "test.source",
+		SinkFQN:      "test.sink",
+		DataFlowPath: []string{"test.source", "test.sink"},
+		// IsIntraProcedural not set - should default to false
+	}
+
+	// Should work correctly
+	assert.True(t, match.Matched)
+	assert.False(t, match.IsIntraProcedural) // Default value
 }
