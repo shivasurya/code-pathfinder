@@ -167,13 +167,19 @@ func (chain *DefUseChain) AddUse(varName string, stmt *Statement) {
 // GetDefs returns all statements that define a given variable.
 // Returns empty slice if variable is never defined.
 func (chain *DefUseChain) GetDefs(varName string) []*Statement {
-	return chain.Defs[varName]
+	if defs, ok := chain.Defs[varName]; ok {
+		return defs
+	}
+	return []*Statement{}
 }
 
 // GetUses returns all statements that use a given variable.
 // Returns empty slice if variable is never used.
 func (chain *DefUseChain) GetUses(varName string) []*Statement {
-	return chain.Uses[varName]
+	if uses, ok := chain.Uses[varName]; ok {
+		return uses
+	}
+	return []*Statement{}
 }
 
 // IsDefined returns true if the variable has at least one definition.
@@ -204,4 +210,125 @@ func (chain *DefUseChain) AllVariables() []string {
 	}
 
 	return result
+}
+
+// BuildDefUseChains constructs a def-use chain from a list of statements.
+// This is a single-pass algorithm that builds an inverted index.
+//
+// Algorithm:
+//  1. Initialize empty Defs and Uses maps
+//  2. For each statement:
+//     - If stmt.Def is not empty: add stmt to Defs[stmt.Def]
+//     - For each variable in stmt.Uses: add stmt to Uses[variable]
+//  3. Return DefUseChain
+//
+// Time complexity: O(n × m)
+//
+//	where n = number of statements
+//	      m = average number of uses per statement
+//	Typical: 50 statements × 3 variables = 150 operations (~1 microsecond)
+//
+// Space complexity: O(v × k)
+//
+//	where v = number of unique variables
+//	      k = average number of defs + uses per variable
+//	Typical: 20 variables × 5 references = 100 pointers = 800 bytes
+//
+// Example:
+//
+//	statements := []*Statement{
+//	    {LineNumber: 1, Def: "x", Uses: []string{}},
+//	    {LineNumber: 2, Def: "y", Uses: []string{"x"}},
+//	    {LineNumber: 3, Def: "", Uses: []string{"y"}},
+//	}
+//
+//	chain := BuildDefUseChains(statements)
+//
+//	// Query: where is x defined?
+//	xDefs := chain.Defs["x"]  // [stmt1]
+//
+//	// Query: where is x used?
+//	xUses := chain.Uses["x"]  // [stmt2]
+func BuildDefUseChains(statements []*Statement) *DefUseChain {
+	chain := NewDefUseChain()
+
+	// Single pass: build inverted index
+	for _, stmt := range statements {
+		// Track definition (single variable per statement)
+		if stmt.Def != "" {
+			chain.AddDef(stmt.Def, stmt)
+		}
+
+		// Track all uses in this statement
+		for _, varName := range stmt.Uses {
+			chain.AddUse(varName, stmt)
+		}
+	}
+
+	return chain
+}
+
+// DefUseStats contains statistics about the def-use chain (for debugging/diagnostics).
+type DefUseStats struct {
+	NumVariables       int // Total unique variables
+	NumDefs            int // Total definition sites
+	NumUses            int // Total use sites
+	MaxDefsPerVariable int // Most definitions for a single variable
+	MaxUsesPerVariable int // Most uses for a single variable
+	UndefinedVariables int // Variables used but never defined (parameters)
+	DeadVariables      int // Variables defined but never used
+}
+
+// ComputeStats computes statistics about this def-use chain.
+// Useful for performance analysis and debugging.
+//
+// Example:
+//
+//	stats := chain.ComputeStats()
+//	fmt.Printf("Function has %d variables, %d defs, %d uses\n",
+//	           stats.NumVariables, stats.NumDefs, stats.NumUses)
+func (chain *DefUseChain) ComputeStats() DefUseStats {
+	stats := DefUseStats{}
+
+	// Count unique variables
+	varSet := make(map[string]bool)
+	for varName := range chain.Defs {
+		varSet[varName] = true
+	}
+	for varName := range chain.Uses {
+		varSet[varName] = true
+	}
+	stats.NumVariables = len(varSet)
+
+	// Count total defs and max defs per variable
+	for _, defs := range chain.Defs {
+		stats.NumDefs += len(defs)
+		if len(defs) > stats.MaxDefsPerVariable {
+			stats.MaxDefsPerVariable = len(defs)
+		}
+	}
+
+	// Count total uses and max uses per variable
+	for _, uses := range chain.Uses {
+		stats.NumUses += len(uses)
+		if len(uses) > stats.MaxUsesPerVariable {
+			stats.MaxUsesPerVariable = len(uses)
+		}
+	}
+
+	// Count undefined variables (used but not defined)
+	for varName := range chain.Uses {
+		if len(chain.Defs[varName]) == 0 {
+			stats.UndefinedVariables++
+		}
+	}
+
+	// Count dead variables (defined but not used)
+	for varName := range chain.Defs {
+		if len(chain.Uses[varName]) == 0 {
+			stats.DeadVariables++
+		}
+	}
+
+	return stats
 }

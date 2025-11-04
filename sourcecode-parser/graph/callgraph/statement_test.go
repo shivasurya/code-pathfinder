@@ -408,9 +408,10 @@ func TestDefUseChainGetDefs(t *testing.T) {
 	assert.Equal(t, stmt1, defs[0])
 	assert.Equal(t, stmt2, defs[1])
 
-	// Test non-existent variable
+	// Test non-existent variable (should return empty slice, not nil)
 	nonExistent := chain.GetDefs("nonexistent")
-	assert.Nil(t, nonExistent)
+	assert.NotNil(t, nonExistent)
+	assert.Equal(t, 0, len(nonExistent))
 }
 
 func TestDefUseChainGetUses(t *testing.T) {
@@ -426,9 +427,10 @@ func TestDefUseChainGetUses(t *testing.T) {
 	assert.Equal(t, stmt1, uses[0])
 	assert.Equal(t, stmt2, uses[1])
 
-	// Test non-existent variable
+	// Test non-existent variable (should return empty slice, not nil)
 	nonExistent := chain.GetUses("nonexistent")
-	assert.Nil(t, nonExistent)
+	assert.NotNil(t, nonExistent)
+	assert.Equal(t, 0, len(nonExistent))
 }
 
 func TestDefUseChainIsDefined(t *testing.T) {
