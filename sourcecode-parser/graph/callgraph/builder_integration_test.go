@@ -193,3 +193,121 @@ def broken(
 		generateTaintSummaries(callGraph, codeGraph, registry)
 	})
 }
+
+func TestGenerateTaintSummaries_StatementExtractionError(t *testing.T) {
+	// Create a temporary test file with code that parses but has extraction issues
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def valid_function():
+    pass
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode := &graph.Node{
+		ID:         "test.valid_function",
+		Type:       "function_definition",
+		Name:       "valid_function",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
+	callGraph := NewCallGraph()
+	callGraph.Functions["test.valid_function"] = funcNode
+
+	codeGraph := &graph.CodeGraph{
+		Nodes: map[string]*graph.Node{
+			funcNode.ID: funcNode,
+		},
+		Edges: make([]*graph.Edge, 0),
+	}
+
+	registry := &ModuleRegistry{
+		Modules:      make(map[string]string),
+		FileToModule: make(map[string]string),
+	}
+
+	// Should handle extraction gracefully
+	generateTaintSummaries(callGraph, codeGraph, registry)
+
+	// Should have created a summary for the valid function
+	assert.GreaterOrEqual(t, len(callGraph.Summaries), 1)
+}
+
+func TestGenerateTaintSummaries_MultipleFunctions(t *testing.T) {
+	// Create a temporary test file with multiple functions
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def func1():
+    x = 1
+    return x
+
+def func2():
+    y = 2
+    return y
+
+def func3():
+    z = 3
+    return z
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode1 := &graph.Node{
+		ID:         "test.func1",
+		Type:       "function_definition",
+		Name:       "func1",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
+	funcNode2 := &graph.Node{
+		ID:         "test.func2",
+		Type:       "function_definition",
+		Name:       "func2",
+		File:       testFile,
+		LineNumber: 6,
+	}
+
+	funcNode3 := &graph.Node{
+		ID:         "test.func3",
+		Type:       "function_definition",
+		Name:       "func3",
+		File:       testFile,
+		LineNumber: 10,
+	}
+
+	callGraph := NewCallGraph()
+	callGraph.Functions["test.func1"] = funcNode1
+	callGraph.Functions["test.func2"] = funcNode2
+	callGraph.Functions["test.func3"] = funcNode3
+
+	codeGraph := &graph.CodeGraph{
+		Nodes: map[string]*graph.Node{
+			funcNode1.ID: funcNode1,
+			funcNode2.ID: funcNode2,
+			funcNode3.ID: funcNode3,
+		},
+		Edges: make([]*graph.Edge, 0),
+	}
+
+	registry := &ModuleRegistry{
+		Modules:      make(map[string]string),
+		FileToModule: make(map[string]string),
+	}
+
+	// Generate summaries for all functions
+	generateTaintSummaries(callGraph, codeGraph, registry)
+
+	// Should have created summaries for all three functions
+	assert.Equal(t, 3, len(callGraph.Summaries))
+	assert.NotNil(t, callGraph.Summaries["test.func1"])
+	assert.NotNil(t, callGraph.Summaries["test.func2"])
+	assert.NotNil(t, callGraph.Summaries["test.func3"])
+}
