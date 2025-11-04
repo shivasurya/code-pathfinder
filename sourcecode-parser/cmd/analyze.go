@@ -33,21 +33,6 @@ var analyzeCmd = &cobra.Command{
 		fmt.Printf("Call graph built successfully: %d functions indexed\n", len(cg.Functions))
 		fmt.Printf("Module registry: %d modules\n", len(registry.Modules))
 
-		// Debug: Print call graph details (commented out for production)
-		// fmt.Printf("\nDEBUG: Call graph statistics:\n")
-		// fmt.Printf("  Functions indexed: %d\n", len(cg.Functions))
-		// for fqn := range cg.Functions {
-		// 	fmt.Printf("    - %s\n", fqn)
-		// }
-		// fmt.Printf("  Call sites: %d callers\n", len(cg.CallSites))
-		// for caller, sites := range cg.CallSites {
-		// 	fmt.Printf("    %s makes %d calls:\n", caller, len(sites))
-		// 	for _, site := range sites {
-		// 		fmt.Printf("      - Target: %s, TargetFQN: %s, Resolved: %v\n", site.Target, site.TargetFQN, site.Resolved)
-		// 	}
-		// }
-		// fmt.Println()
-
 		// Run security analysis
 		matches := callgraph.AnalyzePatterns(cg, patternRegistry)
 

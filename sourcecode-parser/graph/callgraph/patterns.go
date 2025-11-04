@@ -197,9 +197,9 @@ func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *Ca
 
 	for _, source := range sourceCalls {
 		for _, sink := range sinkCalls {
-			// Check intra-procedural taint flow using summaries
+			// Check intra-procedural taint flow using on-demand taint analysis
 			if source.caller == sink.caller {
-				intraMatch := pr.checkIntraProceduralTaint(source, sink, callGraph)
+				intraMatch := pr.checkIntraProceduralTaint(source, sink, callGraph, pattern)
 				if intraMatch != nil {
 					return intraMatch // Vulnerability found!
 				}
@@ -357,28 +357,34 @@ func sortCallInfo(calls []callInfo) {
 //   - "request.GET.get" matches pattern "request.GET" (prefix match for sources)
 //   - "vulnerable_app.eval" matches pattern "eval" (last component match)
 func matchesFunctionName(fqn, pattern string) bool {
+	// Strip everything after ( from fqn if present (e.g., "input(...)" -> "input")
+	cleanFqn := fqn
+	if idx := strings.Index(fqn, "("); idx >= 0 {
+		cleanFqn = fqn[:idx]
+	}
+
 	// Exact match: "eval" == "eval"
-	if fqn == pattern {
+	if cleanFqn == pattern {
 		return true
 	}
 
 	// Suffix match: "builtins.eval" ends with ".eval"
-	if strings.HasSuffix(fqn, "."+pattern) {
+	if strings.HasSuffix(cleanFqn, "."+pattern) {
 		return true
 	}
 
 	// Prefix match: "request.GET.get" starts with "request.GET."
 	// This handles attribute access chains for sources
-	if strings.HasPrefix(fqn, pattern+".") {
+	if strings.HasPrefix(cleanFqn, pattern+".") {
 		return true
 	}
 
 	// Extract last component after last dot and compare
 	// This handles cases like "vulnerable_app.eval" → "eval"
 	// but avoids matching "executor" against "exec"
-	lastDot := strings.LastIndex(fqn, ".")
-	if lastDot >= 0 && lastDot < len(fqn)-1 {
-		lastComponent := fqn[lastDot+1:]
+	lastDot := strings.LastIndex(cleanFqn, ".")
+	if lastDot >= 0 && lastDot < len(cleanFqn)-1 {
+		lastComponent := cleanFqn[lastDot+1:]
 		if lastComponent == pattern {
 			return true
 		}
@@ -388,32 +394,71 @@ func matchesFunctionName(fqn, pattern string) bool {
 }
 
 // checkIntraProceduralTaint checks if source and sink in same function have taint flow.
-// Uses taint summaries generated during call graph building to verify vulnerability.
+// Uses on-demand taint analysis with pattern-specific sources/sinks to verify actual data flow.
 // Returns non-nil PatternMatchDetails if vulnerable, nil otherwise.
 func (pr *PatternRegistry) checkIntraProceduralTaint(
 	source callInfo,
 	sink callInfo,
 	callGraph *CallGraph,
+	pattern *Pattern,
 ) *PatternMatchDetails {
 	functionFQN := source.caller // Same as sink.caller by precondition
 
-	// Get taint summary for this function
-	summary := callGraph.Summaries[functionFQN]
-	if summary == nil {
-		// No summary available - graceful degradation
-		// This can happen if:
-		// - Function failed to parse (syntax error)
-		// - Function has no statements (empty body)
-		// - File was skipped in Pass 5
+	// Get the function node
+	funcNode, ok := callGraph.Functions[functionFQN]
+	if !ok {
+		log.Printf("Function %s not found in call graph", functionFQN)
 		return nil
 	}
 
-	// Check if function has detections (actual taint flow from source to sink)
+	// Read the source file
+	sourceCode, err := readFileBytes(funcNode.File)
+	if err != nil {
+		log.Printf("Failed to read file %s: %v", funcNode.File, err)
+		return nil
+	}
+
+	// Parse the file to get AST
+	tree, err := ParsePythonFile(sourceCode)
+	if err != nil {
+		log.Printf("Failed to parse file %s: %v", funcNode.File, err)
+		return nil
+	}
+	defer tree.Close()
+
+	// Find the function node at the line number
+	functionNode := findFunctionAtLine(tree.RootNode(), funcNode.LineNumber)
+	if functionNode == nil {
+		log.Printf("Could not find function at line %d in %s", funcNode.LineNumber, funcNode.File)
+		return nil
+	}
+
+	// Extract statements from the function
+	statements, err := ExtractStatements(funcNode.File, sourceCode, functionNode)
+	if err != nil {
+		log.Printf("Failed to extract statements from %s: %v", functionFQN, err)
+		return nil
+	}
+
+	// Build def-use chains
+	defUseChain := BuildDefUseChains(statements)
+
+	// Run taint analysis with pattern-specific sources/sinks
+	summary := AnalyzeIntraProceduralTaint(
+		functionFQN,
+		statements,
+		defUseChain,
+		pattern.Sources,    // Use pattern's sources
+		pattern.Sinks,      // Use pattern's sinks
+		pattern.Sanitizers, // Use pattern's sanitizers
+	)
+
+	// Check if taint analysis found vulnerabilities
 	if !summary.HasDetections() {
-		return nil
+		return nil // No taint flow detected
 	}
 
-	// ✅ Vulnerability confirmed!
+	// ✅ Vulnerability confirmed via taint analysis!
 	log.Printf("Intra-procedural vulnerability detected in %s: %d detection(s)",
 		functionFQN, summary.GetDetectionCount())
 

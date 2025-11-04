@@ -1,6 +1,8 @@
 package callgraph
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
@@ -317,38 +319,44 @@ func TestPatternTypeConstants(t *testing.T) {
 // ========== INTRA-PROCEDURAL TAINT DETECTION TESTS (PR #6) ==========
 
 func TestMatchMissingSanitizer_IntraProceduralSimple(t *testing.T) {
-	// Test basic intra-procedural vulnerability detection
+	// Test basic intra-procedural vulnerability detection using real file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def vulnerable():
+    x = input()
+    eval(x)
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode := &graph.Node{
+		ID:         "test.vulnerable",
+		Name:       "vulnerable",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
 	callGraph := &CallGraph{
 		Functions: map[string]*graph.Node{
-			"test.vulnerable": {
-				ID:   "test.vulnerable",
-				Name: "vulnerable",
-			},
+			"test.vulnerable": funcNode,
 		},
 		CallSites: map[string][]CallSite{
 			"test.vulnerable": {
-				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+				{Target: "input", TargetFQN: "builtins.input"},
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries: map[string]*TaintSummary{
-			"test.vulnerable": {
-				FunctionFQN: "test.vulnerable",
-				TaintedVars: map[string][]*TaintInfo{
-					"x": {{SourceLine: 1, SourceVar: "x", Confidence: 1.0}},
-				},
-				Detections: []*TaintInfo{
-					{SourceLine: 1, SourceVar: "x", SinkLine: 2, SinkCall: "eval", Confidence: 1.0},
-				},
-			},
-		},
+		Summaries:    make(map[string]*TaintSummary),
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
 
 	pattern := &Pattern{
 		ID:         "CODE-INJECTION-001",
-		Sources:    []string{"request.GET"},
+		Sources:    []string{"input"},
 		Sinks:      []string{"eval"},
 		Sanitizers: []string{},
 	}
@@ -363,15 +371,20 @@ func TestMatchMissingSanitizer_IntraProceduralSimple(t *testing.T) {
 	assert.Equal(t, "test.vulnerable", match.SourceFQN)
 	assert.Equal(t, "test.vulnerable", match.SinkFQN)
 	assert.Equal(t, []string{"test.vulnerable"}, match.DataFlowPath)
-	assert.Contains(t, match.SourceCall, "request.GET")
+	assert.Contains(t, match.SourceCall, "input")
 	assert.Contains(t, match.SinkCall, "eval")
 }
 
-func TestMatchMissingSanitizer_IntraProceduralNoSummary(t *testing.T) {
-	// Test graceful handling when summary is missing
+func TestMatchMissingSanitizer_IntraProceduralNoFile(t *testing.T) {
+	// Test graceful handling when file cannot be read
 	callGraph := &CallGraph{
 		Functions: map[string]*graph.Node{
-			"test.unknown": {ID: "test.unknown", Name: "unknown"},
+			"test.unknown": {
+				ID:         "test.unknown",
+				Name:       "unknown",
+				File:       "/nonexistent/file.py",
+				LineNumber: 1,
+			},
 		},
 		CallSites: map[string][]CallSite{
 			"test.unknown": {
@@ -379,7 +392,7 @@ func TestMatchMissingSanitizer_IntraProceduralNoSummary(t *testing.T) {
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries:    map[string]*TaintSummary{}, // No summary for test.unknown
+		Summaries:    map[string]*TaintSummary{},
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
@@ -392,42 +405,58 @@ func TestMatchMissingSanitizer_IntraProceduralNoSummary(t *testing.T) {
 	registry := NewPatternRegistry()
 	match := registry.matchMissingSanitizer(pattern, callGraph)
 
-	// Should skip intra-procedural check gracefully
+	// Should not match if file cannot be read (graceful degradation)
 	assert.False(t, match.Matched)
 }
 
-func TestMatchMissingSanitizer_IntraProceduralNoDetections(t *testing.T) {
-	// Test when summary exists but has no detections (no taint flow)
+func TestMatchMissingSanitizer_IntraProceduralWithSanitizer(t *testing.T) {
+	// Test that sanitizers are respected (no false positive)
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def safe_function():
+    user_input = input()
+    sanitized = sanitize(user_input)
+    eval(sanitized)
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode := &graph.Node{
+		ID:         "test.safe_function",
+		Name:       "safe_function",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
 	callGraph := &CallGraph{
 		Functions: map[string]*graph.Node{
-			"test.safe": {ID: "test.safe", Name: "safe"},
+			"test.safe_function": funcNode,
 		},
 		CallSites: map[string][]CallSite{
-			"test.safe": {
-				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+			"test.safe_function": {
+				{Target: "input", TargetFQN: "builtins.input"},
+				{Target: "sanitize", TargetFQN: "test.sanitize"},
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries: map[string]*TaintSummary{
-			"test.safe": {
-				FunctionFQN: "test.safe",
-				TaintedVars: make(map[string][]*TaintInfo),
-				Detections:  []*TaintInfo{}, // No detections!
-			},
-		},
+		Summaries:    make(map[string]*TaintSummary),
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
 
 	pattern := &Pattern{
-		Sources: []string{"request.GET"},
-		Sinks:   []string{"eval"},
+		Sources:    []string{"input"},
+		Sinks:      []string{"eval"},
+		Sanitizers: []string{"sanitize"},
 	}
 
 	registry := NewPatternRegistry()
 	match := registry.matchMissingSanitizer(pattern, callGraph)
 
-	// Should not match (no taint flow)
+	// Should not match because sanitizer breaks taint flow
 	assert.False(t, match.Matched)
 }
 
