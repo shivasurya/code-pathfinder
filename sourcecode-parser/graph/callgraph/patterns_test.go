@@ -1,8 +1,11 @@
 package callgraph
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -311,4 +314,206 @@ func TestPatternTypeConstants(t *testing.T) {
 	assert.Equal(t, PatternType("source-sink"), PatternTypeSourceSink)
 	assert.Equal(t, PatternType("missing-sanitizer"), PatternTypeMissingSanitizer)
 	assert.Equal(t, PatternType("dangerous-function"), PatternTypeDangerousFunction)
+}
+
+// ========== INTRA-PROCEDURAL TAINT DETECTION TESTS (PR #6) ==========
+
+func TestMatchMissingSanitizer_IntraProceduralSimple(t *testing.T) {
+	// Test basic intra-procedural vulnerability detection using real file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def vulnerable():
+    x = input()
+    eval(x)
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode := &graph.Node{
+		ID:         "test.vulnerable",
+		Name:       "vulnerable",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.vulnerable": funcNode,
+		},
+		CallSites: map[string][]CallSite{
+			"test.vulnerable": {
+				{Target: "input", TargetFQN: "builtins.input"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries:    make(map[string]*TaintSummary),
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		ID:         "CODE-INJECTION-001",
+		Sources:    []string{"input"},
+		Sinks:      []string{"eval"},
+		Sanitizers: []string{},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Assertions
+	assert.NotNil(t, match)
+	assert.True(t, match.Matched)
+	assert.True(t, match.IsIntraProcedural)
+	assert.Equal(t, "test.vulnerable", match.SourceFQN)
+	assert.Equal(t, "test.vulnerable", match.SinkFQN)
+	assert.Equal(t, []string{"test.vulnerable"}, match.DataFlowPath)
+	assert.Contains(t, match.SourceCall, "input")
+	assert.Contains(t, match.SinkCall, "eval")
+}
+
+func TestMatchMissingSanitizer_IntraProceduralNoFile(t *testing.T) {
+	// Test graceful handling when file cannot be read
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.unknown": {
+				ID:         "test.unknown",
+				Name:       "unknown",
+				File:       "/nonexistent/file.py",
+				LineNumber: 1,
+			},
+		},
+		CallSites: map[string][]CallSite{
+			"test.unknown": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries:    map[string]*TaintSummary{},
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		Sources: []string{"request.GET"},
+		Sinks:   []string{"eval"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should not match if file cannot be read (graceful degradation)
+	assert.False(t, match.Matched)
+}
+
+func TestMatchMissingSanitizer_IntraProceduralWithSanitizer(t *testing.T) {
+	// Test that sanitizers are respected (no false positive)
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.py")
+
+	sourceCode := `
+def safe_function():
+    user_input = input()
+    sanitized = sanitize(user_input)
+    eval(sanitized)
+`
+
+	err := os.WriteFile(testFile, []byte(sourceCode), 0644)
+	assert.NoError(t, err)
+
+	funcNode := &graph.Node{
+		ID:         "test.safe_function",
+		Name:       "safe_function",
+		File:       testFile,
+		LineNumber: 2,
+	}
+
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.safe_function": funcNode,
+		},
+		CallSites: map[string][]CallSite{
+			"test.safe_function": {
+				{Target: "input", TargetFQN: "builtins.input"},
+				{Target: "sanitize", TargetFQN: "test.sanitize"},
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Summaries:    make(map[string]*TaintSummary),
+		Edges:        make(map[string][]string),
+		ReverseEdges: make(map[string][]string),
+	}
+
+	pattern := &Pattern{
+		Sources:    []string{"input"},
+		Sinks:      []string{"eval"},
+		Sanitizers: []string{"sanitize"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should not match because sanitizer breaks taint flow
+	assert.False(t, match.Matched)
+}
+
+func TestMatchMissingSanitizer_InterProceduralUnchanged(t *testing.T) {
+	// Test that inter-procedural detection still works
+	callGraph := &CallGraph{
+		Functions: map[string]*graph.Node{
+			"test.source_func": {ID: "test.source_func", Name: "source_func"},
+			"test.sink_func":   {ID: "test.sink_func", Name: "sink_func"},
+		},
+		CallSites: map[string][]CallSite{
+			"test.source_func": {
+				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
+			},
+			"test.sink_func": {
+				{Target: "eval", TargetFQN: "builtins.eval"},
+			},
+		},
+		Edges: map[string][]string{
+			"test.source_func": {"test.sink_func"},
+		},
+		ReverseEdges: map[string][]string{
+			"test.sink_func": {"test.source_func"},
+		},
+		Summaries: map[string]*TaintSummary{
+			"test.source_func": {FunctionFQN: "test.source_func"},
+			"test.sink_func":   {FunctionFQN: "test.sink_func"},
+		},
+	}
+
+	pattern := &Pattern{
+		Sources: []string{"request.GET"},
+		Sinks:   []string{"eval"},
+	}
+
+	registry := NewPatternRegistry()
+	match := registry.matchMissingSanitizer(pattern, callGraph)
+
+	// Should detect inter-procedural
+	assert.True(t, match.Matched)
+	assert.False(t, match.IsIntraProcedural) // Inter-procedural
+	assert.Equal(t, "test.source_func", match.SourceFQN)
+	assert.Equal(t, "test.sink_func", match.SinkFQN)
+	assert.True(t, len(match.DataFlowPath) > 1)
+}
+
+func TestPatternMatchDetails_BackwardCompatibility(t *testing.T) {
+	// Test that old code works with new schema
+	match := &PatternMatchDetails{
+		Matched:      true,
+		SourceFQN:    "test.source",
+		SinkFQN:      "test.sink",
+		DataFlowPath: []string{"test.source", "test.sink"},
+		// IsIntraProcedural not set - should default to false
+	}
+
+	// Should work correctly
+	assert.True(t, match.Matched)
+	assert.False(t, match.IsIntraProcedural) // Default value
 }
