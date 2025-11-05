@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 )
 
@@ -81,11 +79,6 @@ func (c *LLMClient) AnalyzeFunction(fn *FunctionMetadata) (*LLMAnalysisResult, e
 			}
 			return nil, fmt.Errorf("failed to parse LLM response: %w\nResponse preview: %s", err, preview)
 		}
-	}
-
-	// Debug: Save raw response for debugging
-	if strings.Contains(fn.FQN, "check_type_tag") || strings.Contains(fn.FQN, "parse_version") {
-		os.WriteFile("/tmp/llm_response_debug.json", []byte(responseText), 0644)
 	}
 
 	// Add metadata
