@@ -157,33 +157,80 @@ func CompareNormalizedFlows(
 }
 
 // categorizeFailureFromLLM extracts failure category from LLM analysis.
+// Categories are ordered by specificity (most specific first).
 func categorizeFailureFromLLM(llmResult *LLMAnalysisResult) string {
 	// Look for keywords in test case reasoning
 	for _, testCase := range llmResult.DataflowTestCases {
 		reasoning := strings.ToLower(testCase.Reasoning)
 
-		if strings.Contains(reasoning, "if ") || strings.Contains(reasoning, "branch") ||
-			strings.Contains(reasoning, "conditional") {
-			return "control_flow_branch"
-		}
-
-		if strings.Contains(reasoning, "field") || strings.Contains(reasoning, "attribute") ||
-			strings.Contains(reasoning, "self.") {
-			return "field_sensitivity"
-		}
-
+		// Check sanitizers first (high priority issue)
 		if strings.Contains(reasoning, "sanitiz") || strings.Contains(reasoning, "escape") ||
-			strings.Contains(reasoning, "quote") {
+			strings.Contains(reasoning, "quote") || strings.Contains(reasoning, "clean") ||
+			strings.Contains(reasoning, "filter") || strings.Contains(reasoning, "validate") {
 			return "sanitizer_missed"
 		}
 
+		// Control flow branches (high priority - common limitation)
+		if strings.Contains(reasoning, "if ") || strings.Contains(reasoning, "branch") ||
+			strings.Contains(reasoning, "conditional") || strings.Contains(reasoning, "else") ||
+			strings.Contains(reasoning, "inside") {
+			return "control_flow_branch"
+		}
+
+		// Field sensitivity (object attribute tracking)
+		if (strings.Contains(reasoning, "field") || strings.Contains(reasoning, "attribute") ||
+			strings.Contains(reasoning, "self.") || strings.Contains(reasoning, "obj.")) &&
+			!strings.Contains(reasoning, "dict") {
+			return "field_sensitivity"
+		}
+
+		// Container operations (list/dict/set)
 		if strings.Contains(reasoning, "list") || strings.Contains(reasoning, "dict") ||
-			strings.Contains(reasoning, "append") {
+			strings.Contains(reasoning, "append") || strings.Contains(reasoning, "array") ||
+			strings.Contains(reasoning, "container") || strings.Contains(reasoning, "[") {
 			return "container_operation"
 		}
 
-		if strings.Contains(reasoning, "f-string") || strings.Contains(reasoning, "format") {
+		// String formatting operations
+		if strings.Contains(reasoning, "f-string") || strings.Contains(reasoning, "format") ||
+			strings.Contains(reasoning, "concatenat") || strings.Contains(reasoning, "join") ||
+			strings.Contains(reasoning, "%s") || strings.Contains(reasoning, ".format(") {
 			return "string_formatting"
+		}
+
+		// Method call propagation
+		if strings.Contains(reasoning, "method") || strings.Contains(reasoning, ".upper()") ||
+			strings.Contains(reasoning, ".lower()") || strings.Contains(reasoning, ".strip()") ||
+			strings.Contains(reasoning, "string method") {
+			return "method_call_propagation"
+		}
+
+		// Assignment chain tracking
+		if strings.Contains(reasoning, "assignment") && (strings.Contains(reasoning, "chain") ||
+			strings.Contains(reasoning, "through") || strings.Contains(reasoning, "via")) {
+			return "assignment_chain"
+		}
+
+		// Return flow tracking
+		if strings.Contains(reasoning, "return") && strings.Contains(reasoning, "flow") {
+			return "return_flow"
+		}
+
+		// Function parameter flow
+		if strings.Contains(reasoning, "parameter") && strings.Contains(reasoning, "flow") {
+			return "parameter_flow"
+		}
+
+		// Complex expressions (method chains, nested calls)
+		if strings.Contains(reasoning, "complex") || strings.Contains(reasoning, "nested") ||
+			strings.Contains(reasoning, "chain") || strings.Contains(reasoning, "multiple") {
+			return "complex_expression"
+		}
+
+		// Inter-procedural (out of scope for intra-procedural analysis)
+		if strings.Contains(reasoning, "function call") || strings.Contains(reasoning, "called function") ||
+			strings.Contains(reasoning, "inter-procedural") || strings.Contains(reasoning, "cross-function") {
+			return "context_required"
 		}
 	}
 
