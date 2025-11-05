@@ -143,6 +143,13 @@ type DataflowTestCase struct {
 
 	// Reasoning for this test case
 	Reasoning string `json:"reasoning"`
+
+	// Failure category (if tool might miss this)
+	// Categories: control_flow_branch, field_sensitivity, sanitizer_missed,
+	//            container_operation, string_formatting, method_call_propagation,
+	//            assignment_chain, return_flow, parameter_flow, complex_expression,
+	//            context_required, none
+	FailureCategory string `json:"failure_category,omitempty"`
 }
 
 // TestCaseSource describes the source in a test case.

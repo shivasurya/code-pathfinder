@@ -157,9 +157,16 @@ func CompareNormalizedFlows(
 }
 
 // categorizeFailureFromLLM extracts failure category from LLM analysis.
-// Categories are ordered by specificity (most specific first).
+// First tries to use LLM-provided category, falls back to keyword matching.
 func categorizeFailureFromLLM(llmResult *LLMAnalysisResult) string {
-	// Look for keywords in test case reasoning
+	// Strategy 1: Use LLM-provided category (most reliable)
+	for _, testCase := range llmResult.DataflowTestCases {
+		if testCase.FailureCategory != "" && testCase.FailureCategory != "none" {
+			return testCase.FailureCategory
+		}
+	}
+
+	// Strategy 2: Fallback to keyword matching (for older LLM responses)
 	for _, testCase := range llmResult.DataflowTestCases {
 		reasoning := strings.ToLower(testCase.Reasoning)
 

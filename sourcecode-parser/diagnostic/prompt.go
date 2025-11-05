@@ -104,7 +104,8 @@ func BuildAnalysisPrompt(sourceCode string) string {
       "expected_detection": true,
       "vulnerability_type": "COMMAND_INJECTION",
       "confidence": 0.95,
-      "reasoning": "Direct flow from user input to OS command without sanitization"
+      "reasoning": "Direct flow from user input to OS command without sanitization",
+      "failure_category": "none"
     }
   ],
 
@@ -143,27 +144,48 @@ func BuildAnalysisPrompt(sourceCode string) string {
 4. **TRACK SIMPLE DATAFLOWS**: Focus on variable assignments, not complex analysis
 5. **CONFIDENCE SCORES**: Rate how confident you are (0.0-1.0)
 6. **EXPLAIN REASONING**: Describe the assignment chain (e.g., "a→b→c→return")
+7. **FAILURE CATEGORY**: For each test case, specify why a static analysis tool might miss this flow:
+   - "none" - Simple flow, tool should detect easily
+   - "control_flow_branch" - Flow through if/else/while branches
+   - "field_sensitivity" - Flow through object fields (self.x, obj.attr)
+   - "sanitizer_missed" - Has sanitizer that tool might not recognize
+   - "container_operation" - Flow through list/dict/array operations
+   - "string_formatting" - Flow through f-strings, .format(), concatenation
+   - "method_call_propagation" - Flow through method calls like .upper(), .strip()
+   - "assignment_chain" - Long chain of assignments (a=b; c=a; d=c)
+   - "return_flow" - Flow from variable to return statement
+   - "parameter_flow" - Flow from function parameter to usage
+   - "complex_expression" - Nested calls, multiple operations
+   - "context_required" - Requires analyzing called functions (out of scope)
 
-**EXAMPLE DATAFLOW PATTERNS**:
+**EXAMPLE DATAFLOW PATTERNS WITH CATEGORIES**:
 
-Simple assignments:
+Simple assignments (failure_category: "none"):
 - param → local_var → return
 - x = param; y = x; return y
 - result = function(param); return result
 
-Through operations:
-- x = param + "suffix"; return x
-- y = param.upper(); return y
-- z = f"{param}"; return z
+Assignment chains (failure_category: "assignment_chain"):
+- x = param; y = x; z = y; w = z; return w
 
-Through containers:
+Through method calls (failure_category: "method_call_propagation"):
+- x = param.upper(); return x
+- y = param.strip().lower(); return y
+
+Through string operations (failure_category: "string_formatting"):
+- x = param + "suffix"; return x
+- z = f"{param}"; return z
+- w = "%s" % param; return w
+
+Through containers (failure_category: "container_operation"):
 - list = [param]; x = list[0]; return x
 - dict = {"key": param}; y = dict["key"]; return y
 
-Through branches:
+Through branches (failure_category: "control_flow_branch"):
 - if condition: x = param; return x
+- if True: y = param; else: y = ""; return y
 
-No flow (independent):
+No flow (failure_category: "none"):
 - x = param; y = "constant"; return y  (y NOT tainted by param)
 
 **FOCUS**: Validate intra-procedural dataflow tracking:
