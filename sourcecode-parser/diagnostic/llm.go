@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -68,7 +70,22 @@ func (c *LLMClient) AnalyzeFunction(fn *FunctionMetadata) (*LLMAnalysisResult, e
 	var result LLMAnalysisResult
 	err = json.Unmarshal([]byte(responseText), &result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse LLM response: %w\nResponse: %s", err, responseText)
+		// Try to extract JSON from markdown code blocks if present
+		responseText = extractJSONFromMarkdown(responseText)
+		err = json.Unmarshal([]byte(responseText), &result)
+		if err != nil {
+			// Log first 500 chars for debugging
+			preview := responseText
+			if len(preview) > 500 {
+				preview = preview[:500]
+			}
+			return nil, fmt.Errorf("failed to parse LLM response: %w\nResponse preview: %s", err, preview)
+		}
+	}
+
+	// Debug: Save raw response for debugging
+	if strings.Contains(fn.FQN, "check_type_tag") || strings.Contains(fn.FQN, "parse_version") {
+		os.WriteFile("/tmp/llm_response_debug.json", []byte(responseText), 0644)
 	}
 
 	// Add metadata
@@ -216,4 +233,46 @@ func (c *LLMClient) AnalyzeBatch(functions []*FunctionMetadata, concurrency int)
 	}
 
 	return results, errors
+}
+
+// extractJSONFromMarkdown extracts JSON from markdown code blocks.
+func extractJSONFromMarkdown(text string) string {
+	// Try to find JSON between ```json and ```
+	start := -1
+	end := -1
+
+	// Look for ```json
+	jsonMarker := "```json"
+	idx := len(jsonMarker)
+	if len(text) > idx && text[:idx] == jsonMarker {
+		start = idx
+	}
+
+	// Look for closing ```
+	if start != -1 {
+		closingMarker := "```"
+		closeIdx := len(text) - len(closingMarker)
+		if closeIdx > start && text[closeIdx:] == closingMarker {
+			end = closeIdx
+		}
+	}
+
+	if start != -1 && end != -1 {
+		return text[start:end]
+	}
+
+	// Try plain ``` markers
+	markers := []int{}
+	for i := 0; i < len(text)-2; i++ {
+		if text[i:i+3] == "```" {
+			markers = append(markers, i)
+		}
+	}
+
+	if len(markers) >= 2 {
+		// Return content between first and last markers
+		return text[markers[0]+3 : markers[len(markers)-1]]
+	}
+
+	return text
 }

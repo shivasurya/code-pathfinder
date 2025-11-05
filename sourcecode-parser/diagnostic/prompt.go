@@ -7,29 +7,38 @@ import (
 // BuildAnalysisPrompt constructs the prompt for LLM pattern discovery and test generation.
 // Based on diagnostic-tech-proposal.md Section 3.3 (LLM Prompt Design).
 func BuildAnalysisPrompt(sourceCode string) string {
-	return fmt.Sprintf(`You are a dataflow analysis expert. Analyze this Python function to discover all dataflow patterns and generate test cases.
+	return fmt.Sprintf(`You are an intra-procedural dataflow analysis expert. Your goal is to validate if a static analysis tool correctly tracks data flow within THIS SINGLE FUNCTION ONLY.
 
 **FUNCTION TO ANALYZE**:
 `+"```python\n%s\n```"+`
 
-**YOUR TASK**:
+**YOUR TASK**: Test if the tool can track how data flows between variables in this function.
 
-1. **DISCOVER PATTERNS** - Identify all dataflow patterns in THIS function:
-   - **Sources**: Any operation that introduces new data (user input, file reads, network, env vars, function params, etc.)
-   - **Sinks**: Any operation that consumes data (output, storage, exec, system calls, returns, etc.)
-   - **Sanitizers**: Any operation that transforms/validates data (escape, quote, validate, cast, etc.)
-   - **Propagators**: Operations that pass data along (assignments, calls, returns)
+1. **DISCOVER DATA SOURCES** - Where does data originate in this function:
+   - Function parameters (any param used in the function body)
+   - Local variable assignments (x = "value")
+   - Function calls that return data (result = some_function())
+   - Literals/constants that get assigned to variables
+   - Dictionary/list access (val = dict['key'])
 
-2. **TRACE DATAFLOWS** - For each discovered source:
-   - Track where the data flows (which variables, which lines)
-   - Identify if it reaches any sinks
-   - Note if any sanitizers are applied
-   - Track through: assignments, calls, returns, branches, containers, attributes
+2. **DISCOVER DATA SINKS** - Where does data get consumed/used:
+   - Return statements (return x)
+   - Function calls that use data (print(x), logger.info(x))
+   - Assignments to data structures (dict[key] = x, list.append(x))
+   - Operations that use variables (y = x + 1)
 
-3. **GENERATE TEST CASES** - Create test cases our tool should pass:
-   - Expected flows (source → sink paths)
-   - Expected sanitizer detection
-   - Expected variable tracking
+3. **TRACE INTRA-PROCEDURAL FLOWS** - For EACH source variable:
+   - Track ALL assignments: if 'a = source', then 'b = a' means b is tainted from source
+   - Track through operations: if 'b = a + "suffix"', b is still tainted from a
+   - Track through containers: if 'list = [a]', then 'b = list[0]' means b is tainted
+   - Track through branches: if inside 'if True: b = a', then b is tainted
+   - Track through method calls: if 'b = a.upper()', b is still tainted from a
+   - ONLY track within this function (do NOT analyze called functions)
+
+4. **GENERATE TEST CASES** - Create test cases for flows YOU FOUND:
+   - Only include flows where source → sink connection exists within this function
+   - Set expected_detection=true if there IS a flow path
+   - Set expected_detection=false if source and sink are INDEPENDENT variables
 
 **OUTPUT FORMAT** (JSON):
 `+"```json"+`
@@ -128,35 +137,42 @@ func BuildAnalysisPrompt(sourceCode string) string {
 
 **IMPORTANT GUIDELINES**:
 
-1. **NO PREDEFINED PATTERNS**: Discover patterns from the code itself, don't assume
-2. **BE SPECIFIC**: Include exact line numbers, variable names, code snippets
-3. **TRACK EVERYTHING**: Even non-security dataflows (var assignments, returns, etc.)
-4. **SANITIZER EFFECTIVENESS**: Note what each sanitizer actually blocks
-5. **GENERATE TESTS**: Each test case should be independently verifiable
-6. **CONFIDENCE SCORES**: Rate how confident you are (0.0-1.0)
-7. **EXPLAIN REASONING**: Why you think a flow exists or doesn't exist
+1. **RESPOND WITH PURE JSON ONLY**: No markdown, no code blocks, no explanations - just the raw JSON object
+2. **INTRA-PROCEDURAL ONLY**: Only analyze flows within this function, ignore inter-procedural flows
+3. **BE SPECIFIC**: Include exact line numbers, variable names from the function
+4. **TRACK SIMPLE DATAFLOWS**: Focus on variable assignments, not complex analysis
+5. **CONFIDENCE SCORES**: Rate how confident you are (0.0-1.0)
+6. **EXPLAIN REASONING**: Describe the assignment chain (e.g., "a→b→c→return")
 
-**EXAMPLE PATTERNS TO DISCOVER**:
+**EXAMPLE DATAFLOW PATTERNS**:
 
-Security:
-- request.GET/POST/COOKIES → eval/exec/os.system
-- input() → open()
-- socket.recv() → subprocess.call()
+Simple assignments:
+- param → local_var → return
+- x = param; y = x; return y
+- result = function(param); return result
 
-Generic Dataflow:
-- function_param → return value
-- config['key'] → database.save()
-- user.name → logger.info()
-- x = calculate() → result = process(x)
+Through operations:
+- x = param + "suffix"; return x
+- y = param.upper(); return y
+- z = f"{param}"; return z
 
-**FOCUS**: Validate dataflow tracking algorithm:
-- ✅ Track variables through assignments
-- ✅ Detect def-use chains correctly
-- ✅ Identify taint propagation paths
-- ✅ Recognize sanitizers
-- ✅ Handle control flow (if/else)
-- ✅ Track container operations
-- ✅ Track attribute access
+Through containers:
+- list = [param]; x = list[0]; return x
+- dict = {"key": param}; y = dict["key"]; return y
+
+Through branches:
+- if condition: x = param; return x
+
+No flow (independent):
+- x = param; y = "constant"; return y  (y NOT tainted by param)
+
+**FOCUS**: Validate intra-procedural dataflow tracking:
+- ✅ Direct assignments (a = b)
+- ✅ Assignment chains (a = b; c = a)
+- ✅ Operations preserving taint (x = a + "text")
+- ✅ Container flows (list[0] = a; b = list[0])
+- ✅ Control flow branches
+- ✅ Independent variables (no flow)
 
 Output ONLY the JSON, no additional text.`, sourceCode)
 }

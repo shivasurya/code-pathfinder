@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/diagnostic"
@@ -65,24 +66,23 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 		llmClient := diagnostic.NewLLMClient(llmURL, modelName)
 		llmResults, llmErrors := llmClient.AnalyzeBatch(functions, concurrency)
 		fmt.Printf("✓ Analyzed %d functions (%d errors)\n", len(llmResults), len(llmErrors))
+
+		// Print first few errors if verbose
+		if verboseFlag && len(llmErrors) > 0 {
+			fmt.Println("\nLLM Analysis Errors:")
+			count := 0
+			for fqn, err := range llmErrors {
+				if count >= 3 {
+					break
+				}
+				fmt.Printf("  - %s: %v\n", fqn, err)
+				count++
+			}
+		}
 		fmt.Println()
 
 		// Step 3: Tool Analysis + Comparison
 		fmt.Println("Step 3/4: Running tool analysis and comparison...")
-		sources := []string{
-			"request.GET", "request.POST", "request.FILES",
-			"input(", "sys.argv",
-		}
-		sinks := []string{
-			".execute(", "cursor.execute",
-			"os.system(", "subprocess",
-			"eval(", "exec(",
-			"open(",
-		}
-		sanitizers := []string{
-			"escape", "sanitize", "clean",
-			"validate", "filter",
-		}
 
 		comparisons := []*diagnostic.DualLevelComparison{}
 		functionsMap := make(map[string]*diagnostic.FunctionMetadata)
@@ -95,9 +95,75 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 				continue // Skip functions with LLM errors
 			}
 
+			// Extract unique source/sink/sanitizer patterns from LLM-discovered patterns
+			sourcePatterns := make(map[string]bool)
+			sinkPatterns := make(map[string]bool)
+			sanitizerPatterns := make(map[string]bool)
+
+			for _, src := range llmResult.DiscoveredPatterns.Sources {
+				sourcePatterns[src.Pattern] = true
+			}
+			for _, snk := range llmResult.DiscoveredPatterns.Sinks {
+				sinkPatterns[snk.Pattern] = true
+			}
+			for _, san := range llmResult.DiscoveredPatterns.Sanitizers {
+				sanitizerPatterns[san.Pattern] = true
+			}
+
+			// Convert to slices and clean patterns
+			// Strip () from patterns since tool matching doesn't expect them
+			sources := []string{}
+			for pattern := range sourcePatterns {
+				cleanPattern := strings.TrimSuffix(pattern, "()")
+				sources = append(sources, cleanPattern)
+			}
+			sinks := []string{}
+			for pattern := range sinkPatterns {
+				cleanPattern := strings.TrimSuffix(pattern, "()")
+				sinks = append(sinks, cleanPattern)
+			}
+			sanitizers := []string{}
+			for pattern := range sanitizerPatterns {
+				cleanPattern := strings.TrimSuffix(pattern, "()")
+				sanitizers = append(sanitizers, cleanPattern)
+			}
+
+			if verboseFlag {
+				fmt.Printf("  %s: LLM found %d sources, %d sinks, %d sanitizers\n",
+					fn.FQN, len(sources), len(sinks), len(sanitizers))
+				if len(sources) > 0 {
+					fmt.Printf("    Sources: %v\n", sources)
+				}
+				if len(sinks) > 0 {
+					fmt.Printf("    Sinks: %v\n", sinks)
+				}
+			}
+
+			// If no patterns discovered, use empty lists (tool will find nothing, matching LLM)
+			if len(sources) == 0 && len(sinks) == 0 {
+				// No patterns = no flows expected
+				toolResult := &diagnostic.FunctionTaintResult{
+					FunctionFQN:  fn.FQN,
+					HasTaintFlow: false,
+					TaintFlows:   []diagnostic.ToolTaintFlow{},
+				}
+				comparison := diagnostic.CompareFunctionResults(fn, toolResult, llmResult)
+				comparisons = append(comparisons, comparison)
+				continue
+			}
+
+			// Run tool with LLM-discovered patterns
 			toolResult, err := diagnostic.AnalyzeSingleFunction(fn, sources, sinks, sanitizers)
 			if err != nil {
-				continue // Skip functions with tool errors
+				if verboseFlag {
+					fmt.Printf("  Tool error for %s: %v\n", fn.FQN, err)
+				}
+				continue
+			}
+
+			if verboseFlag && toolResult != nil {
+				fmt.Printf("    Tool found %d flows (HasTaintFlow=%v)\n",
+					len(toolResult.TaintFlows), toolResult.HasTaintFlow)
 			}
 
 			comparison := diagnostic.CompareFunctionResults(fn, toolResult, llmResult)
@@ -143,7 +209,7 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 func init() {
 	rootCmd.AddCommand(diagnoseCmd)
 	diagnoseCmd.Flags().StringP("project", "p", "", "Project directory to analyze (required)")
-	diagnoseCmd.Flags().String("llm-url", "http://localhost:11434/api/generate", "LLM endpoint URL")
+	diagnoseCmd.Flags().String("llm-url", "http://localhost:11434", "LLM endpoint base URL")
 	diagnoseCmd.Flags().String("model", "qwen2.5-coder:3b", "LLM model name")
 	diagnoseCmd.Flags().StringP("output", "o", "./diagnostic_output", "Output directory for reports")
 	diagnoseCmd.Flags().IntP("max-functions", "m", 50, "Maximum functions to analyze")

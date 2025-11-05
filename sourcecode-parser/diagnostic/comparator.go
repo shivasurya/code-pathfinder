@@ -66,15 +66,18 @@ func CompareFunctionResults(
 	toolResult *FunctionTaintResult,
 	llmResult *LLMAnalysisResult,
 ) *DualLevelComparison {
+	// Determine if LLM detected any dataflow (not just dangerous flows)
+	llmHasFlow := llmResult.AnalysisMetadata.TotalFlows > 0
+
 	comparison := &DualLevelComparison{
 		FunctionFQN:      fn.FQN,
 		BinaryToolResult: toolResult.HasTaintFlow,
-		BinaryLLMResult:  llmResult.AnalysisMetadata.DangerousFlows > 0,
-		BinaryAgreement:  toolResult.HasTaintFlow == (llmResult.AnalysisMetadata.DangerousFlows > 0),
+		BinaryLLMResult:  llmHasFlow,
+		BinaryAgreement:  toolResult.HasTaintFlow == llmHasFlow,
 	}
 
 	// Level 2: Detailed comparison (only if both found flows)
-	if toolResult.HasTaintFlow && llmResult.AnalysisMetadata.DangerousFlows > 0 {
+	if toolResult.HasTaintFlow && llmHasFlow {
 		toolNorm := NormalizeToolResult(toolResult)
 		llmNorm := NormalizeLLMResult(llmResult)
 
