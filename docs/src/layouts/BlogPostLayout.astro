@@ -1,34 +1,37 @@
 ---
-// BlogPostLayout.astro - A reusable template for blog posts
+// BlogPostLayout.astro - A reusable template for blog posts with modern typography
 // Usage: Just import this layout in your MDX file and wrap your content with it
 
 const { frontmatter, hideTitle = false } = Astro.props;
 const isSplashTemplate = frontmatter.template === 'splash';
 import { Icon } from '@astrojs/starlight/components';
+import '../styles/blog-post.css';
 ---
 
-<div style="max-width: 850px; margin: 0 auto; padding: 2rem 1.5rem;">
+<div class="blog-post-wrapper">
   <!-- Hero section with title and metadata -->
-  <div style="margin-bottom: 3rem; position: relative;">
-    <div style="border-left: 5px solid #4c6ef5; padding-left: 1.5rem;">
+  <div class="blog-post-hero">
+    <div class="blog-post-hero-border">
       {!isSplashTemplate && (
-        <h1 style="font-size: 2.5rem; line-height: 1.2; margin-bottom: 1rem; color: #2a2f45;">{frontmatter.title}</h1>
+        <h1 class="blog-post-title">{frontmatter.title}</h1>
       )}
-      <p style="font-size: 1.25rem; font-weight: 400; margin-bottom: 1.5rem;">{frontmatter.description}</p>
-      
-      <div style="display: flex; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 1rem;">
+      <p class="blog-post-description">{frontmatter.description}</p>
+
+      <div class="blog-post-meta">
         {frontmatter.author && (
           <div style="display: flex; align-items: center;">
-            <div style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin-right: 0.75rem;">
-              <img src={`https://www.gravatar.com/avatar/93047f1d8e343ca3af1451616829ceb1?s=150`} alt={frontmatter.author} style="width: 100%; height: 100%; object-fit: cover;" />
+            <div class="blog-post-avatar">
+              <img src={`https://www.gravatar.com/avatar/93047f1d8e343ca3af1451616829ceb1?s=150`} alt={frontmatter.author} />
             </div>
-            <div>
-              <div style="font-weight: 500;"><a href="https://x.com/sshivasurya">{frontmatter.author}</a></div>
+            <div class="blog-post-author-info">
+              <div class="blog-post-author-name">
+                <a href="https://x.com/sshivasurya">{frontmatter.author}</a>
+              </div>
               {frontmatter.pubDate && (
-                <div style="color: #718096; font-size: 0.9rem;">
+                <div class="blog-post-date">
                   {new Date(frontmatter.pubDate).toLocaleDateString('en-US', {
-                    year: 'numeric', 
-                    month: 'long', 
+                    year: 'numeric',
+                    month: 'long',
                     day: 'numeric'
                   })}
                 </div>
@@ -36,11 +39,11 @@ import { Icon } from '@astrojs/starlight/components';
             </div>
           </div>
         )}
-        
+
         {frontmatter.tags && (
-          <div style="margin-left: auto; background-color: #EDF2F7; color: #4a5568; padding: 0.5rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: 500;">
-            {Array.isArray(frontmatter.tags) 
-              ? frontmatter.tags.join(' • ') 
+          <div class="blog-post-tags">
+            {Array.isArray(frontmatter.tags)
+              ? frontmatter.tags.join(' • ')
               : frontmatter.tags}
           </div>
         )}
@@ -48,42 +51,67 @@ import { Icon } from '@astrojs/starlight/components';
     </div>
   </div>
 
-  <div style="display: flex; justify-content: left; gap: 0.5rem; flex-wrap: wrap;">
-        <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(frontmatter.title)}&url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`} target="_blank" rel="noopener noreferrer" style="background-color: #1DA1F2; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-          <Icon name="twitter" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`} target="_blank" rel="noopener noreferrer" style="background-color: #0077B5; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-          <Icon name="linkedin" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://www.reddit.com/submit?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&title=${encodeURIComponent(frontmatter.title)}`} target="_blank" rel="noopener noreferrer" style="background-color: #FF4500; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-            <Icon name="reddit" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://news.ycombinator.com/submitlink?u=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&t=${encodeURIComponent(frontmatter.title)}`} target="_blank" rel="noopener noreferrer" style="background-color: #FF6600; color: white; padding: 0.5rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-            <span style="font-size: 1rem;">HN</span>
-        </a>
-    </div>
+  <!-- Share buttons at top -->
+  <div class="blog-post-share">
+    <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(frontmatter.title)}&url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`}
+       target="_blank"
+       rel="noopener noreferrer"
+       class="blog-post-share-btn twitter">
+      <Icon name="twitter" />
+    </a>
+    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`}
+       target="_blank"
+       rel="noopener noreferrer"
+       class="blog-post-share-btn linkedin">
+      <Icon name="linkedin" />
+    </a>
+    <a href={`https://www.reddit.com/submit?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&title=${encodeURIComponent(frontmatter.title)}`}
+       target="_blank"
+       rel="noopener noreferrer"
+       class="blog-post-share-btn reddit">
+      <Icon name="reddit" />
+    </a>
+    <a href={`https://news.ycombinator.com/submitlink?u=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&t=${encodeURIComponent(frontmatter.title)}`}
+       target="_blank"
+       rel="noopener noreferrer"
+       class="blog-post-share-btn hackernews">
+      <span>HN</span>
+    </a>
+  </div>
 
   <!-- Article content with improved typography -->
-  <div style="font-size: 1.1rem; line-height: 1.8;">
+  <article class="blog-post-content">
     <slot />
-    
-    <!-- Share buttons -->
-    <div style="margin-top: 3rem; text-align: center;">
-      <h3 style="font-size: 1.25rem; margin-bottom: 1rem;">Share this post</h3>
-      <div style="display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
-        <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(frontmatter.title)}&url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`} target="_blank" rel="noopener noreferrer" style="background-color: #1DA1F2; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-          <Icon name="twitter" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`} target="_blank" rel="noopener noreferrer" style="background-color: #0077B5; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-          <Icon name="linkedin" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://www.reddit.com/submit?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&title=${encodeURIComponent(frontmatter.title)}`} target="_blank" rel="noopener noreferrer" style="background-color: #FF4500; color: white; padding: 1rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-            <Icon name="reddit" style="margin-right: 0.5rem;" />
-        </a>
-        <a href={`https://news.ycombinator.com/submitlink?u=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&t=${encodeURIComponent(frontmatter.title)}`} target="_blank" rel="noopener noreferrer" style="background-color: #FF6600; color: white; padding: 0.5rem 1rem; border-radius: 0.25rem; text-decoration: none;">
-            <span style="font-size: 1rem;">HN</span>
-        </a>
-    </div>
+  </article>
+
+  <!-- Share buttons at bottom -->
+  <div class="blog-post-share-bottom">
+    <h3>Share this post</h3>
+    <div class="blog-post-share">
+      <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(frontmatter.title)}&url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`}
+         target="_blank"
+         rel="noopener noreferrer"
+         class="blog-post-share-btn twitter">
+        <Icon name="twitter" />
+      </a>
+      <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}`}
+         target="_blank"
+         rel="noopener noreferrer"
+         class="blog-post-share-btn linkedin">
+        <Icon name="linkedin" />
+      </a>
+      <a href={`https://www.reddit.com/submit?url=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&title=${encodeURIComponent(frontmatter.title)}`}
+         target="_blank"
+         rel="noopener noreferrer"
+         class="blog-post-share-btn reddit">
+        <Icon name="reddit" />
+      </a>
+      <a href={`https://news.ycombinator.com/submitlink?u=${encodeURIComponent('https://codepathfinder.dev/' + Astro.url.pathname)}&t=${encodeURIComponent(frontmatter.title)}`}
+         target="_blank"
+         rel="noopener noreferrer"
+         class="blog-post-share-btn hackernews">
+        <span>HN</span>
+      </a>
     </div>
   </div>
 </div>
