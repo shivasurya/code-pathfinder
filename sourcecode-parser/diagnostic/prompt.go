@@ -175,7 +175,7 @@ Through method calls (failure_category: "method_call_propagation"):
 Through string operations (failure_category: "string_formatting"):
 - x = param + "suffix"; return x
 - z = f"{param}"; return z
-- w = "%s" % param; return w
+- w = "%%s" %% param; return w
 
 Through containers (failure_category: "container_operation"):
 - list = [param]; x = list[0]; return x

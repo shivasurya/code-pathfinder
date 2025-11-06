@@ -23,6 +23,8 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 		projectInput := cmd.Flag("project").Value.String()
 		llmURL := cmd.Flag("llm-url").Value.String()
 		modelName := cmd.Flag("model").Value.String()
+		provider := cmd.Flag("provider").Value.String()
+		apiKey := cmd.Flag("api-key").Value.String()
 		outputDir := cmd.Flag("output").Value.String()
 		maxFunctions, _ := cmd.Flags().GetInt("max-functions")
 		concurrency, _ := cmd.Flags().GetInt("concurrency")
@@ -34,6 +36,18 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 
 		startTime := time.Now()
 
+		// Create LLM client based on provider
+		var llmClient *diagnostic.LLMClient
+		if provider == "openai" {
+			if apiKey == "" {
+				fmt.Println("Error: --api-key is required for OpenAI-compatible providers")
+				return
+			}
+			llmClient = diagnostic.NewOpenAIClient(llmURL, modelName, apiKey)
+		} else {
+			llmClient = diagnostic.NewLLMClient(llmURL, modelName)
+		}
+
 		// Step 1: Extract functions
 		fmt.Println("===============================================================================")
 		fmt.Println("                    DIAGNOSTIC VALIDATION STARTING")
@@ -42,11 +56,13 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 		fmt.Printf("Project:        %s\n", projectInput)
 		fmt.Printf("LLM Endpoint:   %s\n", llmURL)
 		fmt.Printf("Model:          %s\n", modelName)
+		fmt.Printf("Provider:       %s\n", provider)
 		fmt.Printf("Max Functions:  %d\n", maxFunctions)
 		fmt.Printf("Concurrency:    %d\n", concurrency)
 		fmt.Println()
 
 		fmt.Println("Step 1/4: Extracting functions from codebase...")
+
 		functions, err := diagnostic.ExtractAllFunctions(projectInput)
 		if err != nil {
 			fmt.Printf("Error extracting functions: %v\n", err)
@@ -63,21 +79,23 @@ and generates diagnostic reports with precision, recall, and failure analysis.`,
 
 		// Step 2: LLM Analysis
 		fmt.Println("Step 2/4: Running LLM analysis (this may take a while)...")
-		llmClient := diagnostic.NewLLMClient(llmURL, modelName)
 		llmResults, llmErrors := llmClient.AnalyzeBatch(functions, concurrency)
 		fmt.Printf("✓ Analyzed %d functions (%d errors)\n", len(llmResults), len(llmErrors))
 
-		// Print first few errors if verbose
-		if verboseFlag && len(llmErrors) > 0 {
-			fmt.Println("\nLLM Analysis Errors:")
+		// Print errors (always show if there are any)
+		if len(llmErrors) > 0 {
+			fmt.Println("\n⚠️  LLM Analysis Errors:")
 			count := 0
 			for fqn, err := range llmErrors {
-				if count >= 3 {
+				if count >= 5 {
+					fmt.Printf("  ... and %d more errors\n", len(llmErrors)-5)
 					break
 				}
-				fmt.Printf("  - %s: %v\n", fqn, err)
+				fmt.Printf("  ❌ %s:\n", fqn)
+				fmt.Printf("     %v\n", err)
 				count++
 			}
+			fmt.Printf("\n💡 Tip: Failed responses saved to %s/llm_errors.txt\n", outputDir)
 		}
 		fmt.Println()
 
@@ -211,6 +229,8 @@ func init() {
 	diagnoseCmd.Flags().StringP("project", "p", "", "Project directory to analyze (required)")
 	diagnoseCmd.Flags().String("llm-url", "http://localhost:11434", "LLM endpoint base URL")
 	diagnoseCmd.Flags().String("model", "qwen2.5-coder:3b", "LLM model name")
+	diagnoseCmd.Flags().String("provider", "ollama", "LLM provider: ollama, openai (for xAI Grok, vLLM, etc.)")
+	diagnoseCmd.Flags().String("api-key", "", "API key for OpenAI-compatible providers (e.g., xAI Grok)")
 	diagnoseCmd.Flags().StringP("output", "o", "./diagnostic_output", "Output directory for reports")
 	diagnoseCmd.Flags().IntP("max-functions", "m", 50, "Maximum functions to analyze")
 	diagnoseCmd.Flags().IntP("concurrency", "c", 3, "LLM request concurrency")

@@ -15,16 +15,16 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 	// Verify prompt contains key elements
 	assert.Contains(t, prompt, "dataflow analysis expert")
 	assert.Contains(t, prompt, sourceCode)
-	assert.Contains(t, prompt, "DISCOVER PATTERNS")
-	assert.Contains(t, prompt, "TRACE DATAFLOWS")
+	assert.Contains(t, prompt, "DISCOVER DATA SOURCES")
+	assert.Contains(t, prompt, "TRACE INTRA-PROCEDURAL FLOWS")
 	assert.Contains(t, prompt, "GENERATE TEST CASES")
 	assert.Contains(t, prompt, "discovered_patterns")
 	assert.Contains(t, prompt, "dataflow_test_cases")
 	assert.Contains(t, prompt, "JSON")
-	assert.Contains(t, prompt, "Sources")
-	assert.Contains(t, prompt, "Sinks")
-	assert.Contains(t, prompt, "Sanitizers")
-	assert.Contains(t, prompt, "Propagators")
+	assert.Contains(t, prompt, "sources")
+	assert.Contains(t, prompt, "sinks")
+	assert.Contains(t, prompt, "sanitizers")
+	assert.Contains(t, prompt, "propagators")
 }
 
 // TestBuildAnalysisPrompt_ContainsExamples tests that prompt includes examples.
@@ -37,17 +37,17 @@ func TestBuildAnalysisPrompt_ContainsExamples(t *testing.T) {
 	assert.Contains(t, prompt, "COMMAND_INJECTION")
 
 	// Check for generic dataflow examples
-	assert.Contains(t, prompt, "function_param")
-	assert.Contains(t, prompt, "return value")
+	assert.Contains(t, prompt, "param")
+	assert.Contains(t, prompt, "return")
 }
 
 // TestBuildAnalysisPrompt_ContainsGuidelines tests that prompt includes important guidelines.
 func TestBuildAnalysisPrompt_ContainsGuidelines(t *testing.T) {
 	prompt := BuildAnalysisPrompt("def dummy(): pass")
 
-	assert.Contains(t, prompt, "NO PREDEFINED PATTERNS")
+	assert.Contains(t, prompt, "INTRA-PROCEDURAL ONLY")
 	assert.Contains(t, prompt, "BE SPECIFIC")
-	assert.Contains(t, prompt, "TRACK EVERYTHING")
+	assert.Contains(t, prompt, "TRACK SIMPLE DATAFLOWS")
 	assert.Contains(t, prompt, "CONFIDENCE SCORES")
 	assert.Contains(t, prompt, "Output ONLY the JSON")
 }
@@ -76,7 +76,7 @@ func TestBuildAnalysisPrompt_EmptySourceCode(t *testing.T) {
 	prompt := BuildAnalysisPrompt("")
 
 	// Should still generate valid prompt structure
-	assert.Contains(t, prompt, "DISCOVER PATTERNS")
+	assert.Contains(t, prompt, "DISCOVER DATA SOURCES")
 	assert.Contains(t, prompt, "GENERATE TEST CASES")
 	assert.NotEmpty(t, prompt)
 }

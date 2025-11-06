@@ -10,15 +10,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNewLLMClient tests client creation.
+// TestNewLLMClient tests Ollama client creation.
 func TestNewLLMClient(t *testing.T) {
 	client := NewLLMClient("http://localhost:11434", "qwen3-coder:32b")
 
 	assert.NotNil(t, client)
+	assert.Equal(t, ProviderOllama, client.Provider)
 	assert.Equal(t, "http://localhost:11434", client.BaseURL)
 	assert.Equal(t, "qwen3-coder:32b", client.Model)
 	assert.Equal(t, 0.0, client.Temperature)
 	assert.Equal(t, 2000, client.MaxTokens)
+	assert.Equal(t, "", client.APIKey)
+	assert.NotNil(t, client.HTTPClient)
+}
+
+// TestNewOpenAIClient tests OpenAI-compatible client creation.
+func TestNewOpenAIClient(t *testing.T) {
+	client := NewOpenAIClient("https://api.x.ai/v1", "grok-beta", "test-api-key")
+
+	assert.NotNil(t, client)
+	assert.Equal(t, ProviderOpenAI, client.Provider)
+	assert.Equal(t, "https://api.x.ai/v1", client.BaseURL)
+	assert.Equal(t, "grok-beta", client.Model)
+	assert.Equal(t, "test-api-key", client.APIKey)
+	assert.Equal(t, 0.0, client.Temperature)
+	assert.Equal(t, 4000, client.MaxTokens)
 	assert.NotNil(t, client.HTTPClient)
 }
 
@@ -389,4 +405,147 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestAnalyzeFunction_OpenAI tests successful OpenAI API analysis.
+func TestAnalyzeFunction_OpenAI(t *testing.T) {
+	mockResponse := LLMAnalysisResult{
+		DiscoveredPatterns: DiscoveredPatterns{
+			Sources: []PatternLocation{
+				{Pattern: "input", Lines: []int{1}, Variables: []string{"x"}},
+			},
+		},
+		AnalysisMetadata: AnalysisMetadata{
+			Confidence: 0.9,
+		},
+	}
+
+	// Create mock OpenAI server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify OpenAI request format
+		var reqBody map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&reqBody)
+
+		assert.Equal(t, "grok-test", reqBody["model"])
+		assert.NotNil(t, reqBody["messages"])
+		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+
+		// Return OpenAI format response
+		responseBytes, _ := json.Marshal(mockResponse)
+		openaiResp := map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]string{
+						"content": string(responseBytes),
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(openaiResp)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient(server.URL, "grok-test", "test-key")
+
+	fn := &FunctionMetadata{
+		FQN:        "test.func",
+		SourceCode: "def func(): pass",
+	}
+
+	result, err := client.AnalyzeFunction(fn)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, len(result.DiscoveredPatterns.Sources))
+}
+
+// TestAnalyzeFunction_OpenAI_HTTPError tests OpenAI API error handling.
+func TestAnalyzeFunction_OpenAI_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error": "Invalid API key"}`))
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient(server.URL, "grok-test", "bad-key")
+
+	fn := &FunctionMetadata{
+		FQN:        "test.func",
+		SourceCode: "def func(): pass",
+	}
+
+	result, err := client.AnalyzeFunction(fn)
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "status 401")
+}
+
+// TestAnalyzeFunction_OpenAI_NoChoices tests OpenAI response with no choices.
+func TestAnalyzeFunction_OpenAI_NoChoices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		openaiResp := map[string]interface{}{
+			"choices": []map[string]interface{}{},
+		}
+		json.NewEncoder(w).Encode(openaiResp)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient(server.URL, "grok-test", "test-key")
+
+	fn := &FunctionMetadata{
+		FQN:        "test.func",
+		SourceCode: "def func(): pass",
+	}
+
+	result, err := client.AnalyzeFunction(fn)
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "no choices")
+}
+
+// TestExtractJSONFromMarkdown tests JSON extraction from markdown code blocks.
+func TestExtractJSONFromMarkdown(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "json code block",
+			input:    "```json\n{\"key\": \"value\"}\n```",
+			expected: "\n{\"key\": \"value\"}\n",
+		},
+		{
+			name:     "plain code block",
+			input:    "```\n{\"key\": \"value\"}\n```",
+			expected: "\n{\"key\": \"value\"}\n",
+		},
+		{
+			name:     "no code block",
+			input:    "{\"key\": \"value\"}",
+			expected: "{\"key\": \"value\"}",
+		},
+		{
+			name:     "multiple code blocks",
+			input:    "```\nfirst\n```\nmiddle\n```\nsecond\n```",
+			expected: "\nfirst\n```\nmiddle\n```\nsecond\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractJSONFromMarkdown(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestSaveFailedResponse tests error logging functionality.
+func TestSaveFailedResponse(t *testing.T) {
+	client := NewLLMClient("http://localhost:11434", "test-model")
+
+	// This test just ensures the function doesn't panic
+	// Actual file creation is tested in integration tests
+	client.saveFailedResponse("test.func", `{"incomplete": `, assert.AnError)
+
+	// No assertions needed - just verify no panic
 }

@@ -29,6 +29,7 @@ func TestCompareFunctionResults_BinaryTP(t *testing.T) {
 	llmResult := &LLMAnalysisResult{
 		AnalysisMetadata: AnalysisMetadata{
 			DangerousFlows: 1,
+			TotalFlows:     1,
 		},
 		DataflowTestCases: []DataflowTestCase{
 			{
@@ -108,11 +109,13 @@ func TestCompareFunctionResults_BinaryFN(t *testing.T) {
 	llmResult := &LLMAnalysisResult{
 		AnalysisMetadata: AnalysisMetadata{
 			DangerousFlows: 1,
+			TotalFlows:     1,
 		},
 		DataflowTestCases: []DataflowTestCase{
 			{
 				ExpectedDetection: true,
 				Reasoning:         "Flow should be detected through control flow",
+				FailureCategory:   "control_flow_branch",
 			},
 		},
 	}
