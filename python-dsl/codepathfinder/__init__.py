@@ -28,5 +28,17 @@ from .matchers import calls, variable
 from .decorators import rule
 from .dataflow import flows
 from .propagation import propagates
+from .presets import PropagationPresets
+from .config import set_default_propagation, set_default_scope
 
-__all__ = ["calls", "variable", "rule", "flows", "propagates", "__version__"]
+__all__ = [
+    "calls",
+    "variable",
+    "rule",
+    "flows",
+    "propagates",
+    "PropagationPresets",
+    "set_default_propagation",
+    "set_default_scope",
+    "__version__",
+]

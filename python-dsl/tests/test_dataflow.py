@@ -17,6 +17,8 @@ class TestDataflowMatcherInit:
         matcher = DataflowMatcher(
             from_sources=calls("request.GET"),
             to_sinks=calls("execute"),
+            propagates_through=[],  # Explicit empty
+            scope="global",  # Explicit scope
         )
         assert len(matcher.sources) == 1
         assert len(matcher.sinks) == 1
@@ -117,6 +119,8 @@ class TestDataflowMatcherToIR:
         matcher = DataflowMatcher(
             from_sources=calls("source"),
             to_sinks=calls("sink"),
+            propagates_through=[],  # Explicit empty
+            scope="global",  # Explicit scope
         )
         ir = matcher.to_ir()
         assert ir["type"] == IRType.DATAFLOW.value
@@ -257,8 +261,14 @@ class TestFlowsFunction:
         )
         assert matcher.scope == "global"
 
-    def test_flows_default_propagation_is_empty(self):
-        """flows() defaults to empty propagation list (EXPLICIT!)."""
+    def test_flows_default_propagation_uses_global_config(self):
+        """flows() uses global default propagation when not specified."""
+        # This test now reflects PR #4 behavior
+        from codepathfinder import set_default_propagation
+
+        # Set a known default
+        set_default_propagation([])
+
         matcher = flows(
             from_sources=calls("request.GET"),
             to_sinks=calls("execute"),
