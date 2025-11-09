@@ -42,6 +42,39 @@ func (v *VariableMatcherIR) GetType() IRType {
 	return IRTypeVariableMatcher
 }
 
+// DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
+type DataflowIR struct {
+	Type        string           `json:"type"`        // "dataflow"
+	Sources     []CallMatcherIR  `json:"sources"`     // Where taint originates
+	Sinks       []CallMatcherIR  `json:"sinks"`       // Dangerous functions
+	Sanitizers  []CallMatcherIR  `json:"sanitizers"`  // Taint-removing functions
+	Propagation []PropagationIR  `json:"propagation"` // How taint flows (for future use)
+	Scope       string           `json:"scope"`       // "local" or "global"
+}
+
+// GetType returns the IR type.
+func (d *DataflowIR) GetType() IRType {
+	return IRTypeDataflow
+}
+
+// PropagationIR represents propagation primitives (currently informational only).
+type PropagationIR struct {
+	Type     string                 `json:"type"`     // "assignment", "function_args", etc.
+	Metadata map[string]interface{} `json:"metadata"` // Future use
+}
+
+// DataflowDetection represents a detected taint flow.
+type DataflowDetection struct {
+	FunctionFQN string  // Function containing the vulnerability
+	SourceLine  int     // Line where taint originates
+	SinkLine    int     // Line where taint reaches sink
+	TaintedVar  string  // Variable name that is tainted
+	SinkCall    string  // Sink function name
+	Confidence  float64 // 0.0-1.0 confidence score
+	Sanitized   bool    // Was sanitization detected?
+	Scope       string  // "local" or "global"
+}
+
 // RuleIR represents a complete rule with metadata.
 type RuleIR struct {
 	Rule struct {
