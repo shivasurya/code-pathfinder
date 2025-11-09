@@ -1,8 +1,8 @@
 """Tests for pathfinder.matchers module."""
 
 import pytest
-from pathfinder import calls, variable
-from pathfinder.matchers import CallMatcher, VariableMatcher
+from codepathfinder import calls, variable
+from codepathfinder.matchers import CallMatcher, VariableMatcher
 
 
 class TestCallMatcher:

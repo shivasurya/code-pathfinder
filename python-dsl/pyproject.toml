@@ -14,10 +14,10 @@ license = {text = "MIT"}
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "--cov=pathfinder --cov-report=term-missing --cov-report=html"
+addopts = "--cov=codepathfinder --cov-report=term-missing --cov-report=html"
 
 [tool.coverage.run]
-source = ["pathfinder"]
+source = ["codepathfinder"]
 omit = ["tests/*", "setup.py"]
 
 [tool.coverage.report]
@@ -38,6 +38,6 @@ line-length = 88
 target-version = "py38"
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true

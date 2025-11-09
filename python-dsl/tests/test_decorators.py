@@ -1,7 +1,7 @@
 """Tests for pathfinder.decorators module."""
 
-from pathfinder import rule, calls, variable
-from pathfinder.decorators import Rule
+from codepathfinder import rule, calls, variable
+from codepathfinder.decorators import Rule
 
 
 class TestRuleDecorator:

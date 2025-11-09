@@ -1,4 +1,4 @@
-# Pathfinder Python DSL
+# Code-Pathfinder Python DSL
 
 Python DSL for defining security patterns in code-pathfinder.
 
@@ -11,7 +11,7 @@ pip install codepathfinder
 ## Quick Start
 
 ```python
-from pathfinder import rule, calls, variable
+from codepathfinder import rule, calls, variable
 
 @rule(id="code-injection", severity="critical", cwe="CWE-94")
 def detect_eval():
@@ -31,7 +31,7 @@ def detect_user_input():
 Matches function/method calls.
 
 ```python
-from pathfinder import calls
+from codepathfinder import calls
 
 # Exact match
 calls("eval")
@@ -49,7 +49,7 @@ calls("*.execute")          # Matches cursor.execute, conn.execute, etc.
 Matches variable references.
 
 ```python
-from pathfinder import variable
+from codepathfinder import variable
 
 # Exact match
 variable("user_input")
@@ -59,12 +59,77 @@ variable("user_*")          # Matches user_input, user_data, etc.
 variable("*_id")            # Matches user_id, post_id, etc.
 ```
 
+## Dataflow Analysis
+
+### `flows(from_sources, to_sinks, sanitized_by=None, propagates_through=None, scope="global")`
+
+Tracks tainted data flow from sources to sinks for OWASP Top 10 vulnerability detection.
+
+```python
+from codepathfinder import flows, calls, propagates
+
+# SQL Injection
+flows(
+    from_sources=calls("request.GET", "request.POST"),
+    to_sinks=calls("execute", "executemany"),
+    sanitized_by=calls("quote_sql"),
+    propagates_through=[
+        propagates.assignment(),
+        propagates.function_args(),
+    ],
+    scope="global"
+)
+
+# Command Injection
+flows(
+    from_sources=calls("request.POST"),
+    to_sinks=calls("os.system", "subprocess.call"),
+    sanitized_by=calls("shlex.quote"),
+    propagates_through=[
+        propagates.assignment(),
+        propagates.function_args(),
+        propagates.function_returns(),
+    ]
+)
+
+# Path Traversal
+flows(
+    from_sources=calls("request.GET"),
+    to_sinks=calls("open", "os.path.join"),
+    sanitized_by=calls("os.path.abspath"),
+    propagates_through=[propagates.assignment()],
+    scope="local"
+)
+```
+
+**Parameters:**
+- `from_sources`: Source matcher(s) where taint originates (e.g., user input)
+- `to_sinks`: Sink matcher(s) for dangerous functions
+- `sanitized_by` (optional): Sanitizer matcher(s) that neutralize taint
+- `propagates_through` (optional): List of propagation primitives (EXPLICIT!)
+- `scope`: `"local"` (intra-procedural) or `"global"` (inter-procedural, default)
+
+### Propagation Primitives
+
+Propagation primitives define HOW taint flows through code:
+
+```python
+from codepathfinder import propagates
+
+# Phase 1 (Available Now):
+propagates.assignment()        # x = tainted
+propagates.function_args()     # func(tainted)
+propagates.function_returns()  # return tainted
+```
+
+**Important:** Propagation is EXPLICIT - you must specify which primitives to enable. No defaults are applied.
+
 ## Rule Decorator
 
 The `@rule` decorator marks functions as security rules with metadata.
 
 ```python
-from pathfinder import rule, calls
+from codepathfinder import rule, calls
 
 @rule(
     id="sqli-001",
@@ -90,7 +155,7 @@ The function docstring becomes the rule description.
 Rules serialize to JSON Intermediate Representation (IR) for the Go executor:
 
 ```python
-from pathfinder import rule, calls
+from codepathfinder import rule, calls
 import json
 
 @rule(id="test", severity="high")
@@ -132,13 +197,13 @@ pip install -e ".[dev]"
 pytest
 
 # Format code
-black pathfinder/ tests/
+black codepathfinder/ tests/
 
 # Lint
-ruff check pathfinder/ tests/
+ruff check codepathfinder/ tests/
 
 # Type check
-mypy pathfinder/
+mypy codepathfinder/
 ```
 
 ## Requirements
