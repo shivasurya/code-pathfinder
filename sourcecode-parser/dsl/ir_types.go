@@ -30,6 +30,18 @@ func (c *CallMatcherIR) GetType() IRType {
 	return IRTypeCallMatcher
 }
 
+// VariableMatcherIR represents variable_matcher JSON IR.
+type VariableMatcherIR struct {
+	Type     string `json:"type"`     // "variable_matcher"
+	Pattern  string `json:"pattern"`  // "user_input" or "user_*"
+	Wildcard bool   `json:"wildcard"` // true if pattern has *
+}
+
+// GetType returns the IR type.
+func (v *VariableMatcherIR) GetType() IRType {
+	return IRTypeVariableMatcher
+}
+
 // RuleIR represents a complete rule with metadata.
 type RuleIR struct {
 	Rule struct {
