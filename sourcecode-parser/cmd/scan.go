@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/dsl"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
@@ -33,6 +34,13 @@ Examples:
 		if projectPath == "" {
 			return fmt.Errorf("--project flag is required")
 		}
+
+		// Convert project path to absolute path to ensure consistency
+		absProjectPath, err := filepath.Abs(projectPath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve project path: %w", err)
+		}
+		projectPath = absProjectPath
 
 		// Step 1: Build code graph (AST)
 		log.Printf("Building code graph from %s...\n", projectPath)
