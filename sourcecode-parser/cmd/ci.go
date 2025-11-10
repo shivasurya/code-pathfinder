@@ -251,11 +251,14 @@ func generateJSONOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.Dataf
 
 	// Exit with error code if vulnerabilities found
 	if len(results) > 0 {
-		os.Exit(1)
+		osExit(1)
 	}
 
 	return nil
 }
+
+// Variable to allow mocking os.Exit in tests.
+var osExit = os.Exit
 
 func init() {
 	rootCmd.AddCommand(ciCmd)

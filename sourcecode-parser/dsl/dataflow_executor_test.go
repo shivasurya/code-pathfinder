@@ -42,6 +42,164 @@ func TestDataflowExecutor_Local(t *testing.T) {
 
 		assert.Contains(t, functions, "test.vulnerable")
 	})
+
+	t.Run("executes local analysis and finds detections", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.CallSites["test.dangerous"] = []callgraph.CallSite{
+			{
+				Target:   "request.POST",
+				Location: callgraph.Location{File: "test.py", Line: 5},
+			},
+			{
+				Target:   "execute",
+				Location: callgraph.Location{File: "test.py", Line: 10},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.POST"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeLocal()
+
+		assert.Len(t, detections, 1)
+		assert.Equal(t, "test.dangerous", detections[0].FunctionFQN)
+		assert.Equal(t, 5, detections[0].SourceLine)
+		assert.Equal(t, 10, detections[0].SinkLine)
+		assert.Equal(t, "execute", detections[0].SinkCall)
+		assert.Equal(t, "local", detections[0].Scope)
+		assert.Equal(t, 0.7, detections[0].Confidence)
+		assert.False(t, detections[0].Sanitized)
+	})
+
+	t.Run("detects sanitizer between source and sink", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.CallSites["test.safe"] = []callgraph.CallSite{
+			{
+				Target:   "request.GET",
+				Location: callgraph.Location{File: "test.py", Line: 5},
+			},
+			{
+				Target:   "escape_sql",
+				Location: callgraph.Location{File: "test.py", Line: 8},
+			},
+			{
+				Target:   "execute",
+				Location: callgraph.Location{File: "test.py", Line: 12},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
+			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_sql"}}},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeLocal()
+
+		assert.Len(t, detections, 1)
+		assert.True(t, detections[0].Sanitized, "Should detect sanitizer between source and sink")
+	})
+
+	t.Run("detects sanitizer in reverse order (sink before source)", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.CallSites["test.reverse"] = []callgraph.CallSite{
+			{
+				Target:   "execute",
+				Location: callgraph.Location{File: "test.py", Line: 5},
+			},
+			{
+				Target:   "escape_sql",
+				Location: callgraph.Location{File: "test.py", Line: 8},
+			},
+			{
+				Target:   "request.GET",
+				Location: callgraph.Location{File: "test.py", Line: 12},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
+			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_sql"}}},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeLocal()
+
+		assert.Len(t, detections, 1)
+		assert.True(t, detections[0].Sanitized, "Should detect sanitizer even when sink appears before source")
+	})
+
+	t.Run("ignores cross-function flows in local scope", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.CallSites["test.func1"] = []callgraph.CallSite{
+			{
+				Target:   "request.GET",
+				Location: callgraph.Location{File: "test.py", Line: 5},
+			},
+		}
+		cg.CallSites["test.func2"] = []callgraph.CallSite{
+			{
+				Target:   "eval",
+				Location: callgraph.Location{File: "test.py", Line: 15},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeLocal()
+
+		assert.Empty(t, detections, "Local scope should not detect cross-function flows")
+	})
+
+	t.Run("handles multiple sources and sinks in same function", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.CallSites["test.multi"] = []callgraph.CallSite{
+			{
+				Target:   "request.GET",
+				Location: callgraph.Location{File: "test.py", Line: 5},
+			},
+			{
+				Target:   "request.POST",
+				Location: callgraph.Location{File: "test.py", Line: 7},
+			},
+			{
+				Target:   "eval",
+				Location: callgraph.Location{File: "test.py", Line: 10},
+			},
+			{
+				Target:   "execute",
+				Location: callgraph.Location{File: "test.py", Line: 15},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET", "request.POST"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"eval", "execute"}}},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeLocal()
+
+		// Should find 2 sources * 2 sinks = 4 combinations
+		assert.Len(t, detections, 4)
+	})
 }
 
 func TestDataflowExecutor_Global(t *testing.T) {
@@ -86,6 +244,52 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		assert.Contains(t, path, "test.process")
 	})
 
+	t.Run("executes global analysis and finds cross-function flows", func(t *testing.T) {
+		// Setup: Source in func A, sink in func B, A calls B
+		cg := callgraph.NewCallGraph()
+		cg.Edges = make(map[string][]string)
+		cg.Edges["test.source_func"] = []string{"test.sink_func"}
+
+		cg.CallSites["test.source_func"] = []callgraph.CallSite{
+			{
+				Target:   "request.GET",
+				Location: callgraph.Location{Line: 10, File: "test.py"},
+			},
+		}
+
+		cg.CallSites["test.sink_func"] = []callgraph.CallSite{
+			{
+				Target:   "eval",
+				Location: callgraph.Location{Line: 20, File: "test.py"},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "global",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeGlobal()
+
+		// Should detect cross-function flow
+		assert.NotEmpty(t, detections)
+		found := false
+		for _, d := range detections {
+			if d.FunctionFQN == "test.source_func" && d.Scope == "global" {
+				found = true
+				assert.Equal(t, 10, d.SourceLine)
+				assert.Equal(t, 20, d.SinkLine)
+				assert.Equal(t, "eval", d.SinkCall)
+				assert.False(t, d.Sanitized)
+				assert.Equal(t, 0.8, d.Confidence)
+			}
+		}
+		assert.True(t, found, "Should find cross-function detection")
+	})
+
 	t.Run("detects sanitizer on path", func(t *testing.T) {
 		cg := callgraph.NewCallGraph()
 		cg.Edges = make(map[string][]string)
@@ -114,6 +318,53 @@ func TestDataflowExecutor_Global(t *testing.T) {
 
 		hasSanitizer := executor.pathHasSanitizer(path, sanitizerCalls)
 		assert.True(t, hasSanitizer)
+	})
+
+	t.Run("excludes flows with sanitizer on path", func(t *testing.T) {
+		cg := callgraph.NewCallGraph()
+		cg.Edges = make(map[string][]string)
+		cg.Edges["test.source"] = []string{"test.sanitize"}
+		cg.Edges["test.sanitize"] = []string{"test.sink"}
+
+		cg.CallSites["test.source"] = []callgraph.CallSite{
+			{
+				Target:   "request.POST",
+				Location: callgraph.Location{Line: 5, File: "test.py"},
+			},
+		}
+
+		cg.CallSites["test.sanitize"] = []callgraph.CallSite{
+			{
+				Target:   "escape_html",
+				Location: callgraph.Location{Line: 10, File: "test.py"},
+			},
+		}
+
+		cg.CallSites["test.sink"] = []callgraph.CallSite{
+			{
+				Target:   "render",
+				Location: callgraph.Location{Line: 15, File: "test.py"},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.POST"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"render"}}},
+			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_html"}}},
+			Scope:      "global",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.executeGlobal()
+
+		// Should NOT detect because sanitizer is on the path
+		globalDetections := []DataflowDetection{}
+		for _, d := range detections {
+			if d.Scope == "global" {
+				globalDetections = append(globalDetections, d)
+			}
+		}
+		assert.Empty(t, globalDetections, "Should not detect flows with sanitizer on path")
 	})
 }
 
