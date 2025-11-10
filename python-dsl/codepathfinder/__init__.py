@@ -30,6 +30,7 @@ from .dataflow import flows
 from .propagation import propagates
 from .presets import PropagationPresets
 from .config import set_default_propagation, set_default_scope
+from .logic import And, Or, Not
 
 __all__ = [
     "calls",
@@ -40,5 +41,8 @@ __all__ = [
     "PropagationPresets",
     "set_default_propagation",
     "set_default_scope",
+    "And",
+    "Or",
+    "Not",
     "__version__",
 ]
