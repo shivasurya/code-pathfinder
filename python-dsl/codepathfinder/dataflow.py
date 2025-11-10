@@ -9,6 +9,7 @@ from typing import List, Optional, Union
 from .matchers import CallMatcher
 from .propagation import PropagationPrimitive, create_propagation_list
 from .ir import IRType
+from .config import get_default_propagation, get_default_scope
 
 
 class DataflowMatcher:
@@ -36,7 +37,7 @@ class DataflowMatcher:
         to_sinks: Union[CallMatcher, List[CallMatcher]],
         sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
         propagates_through: Optional[List[PropagationPrimitive]] = None,
-        scope: str = "global",
+        scope: Optional[str] = None,
     ):
         """
         Args:
@@ -84,12 +85,14 @@ class DataflowMatcher:
             sanitized_by = [sanitized_by]
         self.sanitizers = sanitized_by
 
-        # Validate propagation (EXPLICIT!)
+        # Validate propagation (use global default if not specified)
         if propagates_through is None:
-            propagates_through = []  # NO DEFAULT! Developer must specify!
+            propagates_through = get_default_propagation()
         self.propagates_through = propagates_through
 
-        # Validate scope
+        # Validate scope (use global default if not specified)
+        if scope is None:
+            scope = get_default_scope()
         if scope not in ["local", "global"]:
             raise ValueError(f"scope must be 'local' or 'global', got '{scope}'")
         self.scope = scope
@@ -142,7 +145,7 @@ def flows(
     to_sinks: Union[CallMatcher, List[CallMatcher]],
     sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
     propagates_through: Optional[List[PropagationPrimitive]] = None,
-    scope: str = "global",
+    scope: Optional[str] = None,
 ) -> DataflowMatcher:
     """
     Create a dataflow matcher for taint analysis.

@@ -176,9 +176,52 @@ class propagates:
         """
         return PropagationPrimitive(PropagationType.FUNCTION_RETURNS)
 
-    # ===== PHASE 2: STRING OPERATIONS (MVP - Future PR) =====
-    # Will be implemented in PR #4
-    # string_concat(), string_format()
+    # ===== PHASE 2: STRING OPERATIONS (MVP - THIS PR) =====
+
+    @staticmethod
+    def string_concat() -> PropagationPrimitive:
+        """
+        Taint propagates through string concatenation.
+
+        Patterns matched:
+            result = tainted + "suffix"      # Right concat
+            result = "prefix" + tainted      # Left concat
+            result = tainted + safe + more   # Mixed concat
+
+        Critical for SQL/Command injection where queries are built via concat (~10% of flows).
+
+        Examples:
+            user_id = request.GET.get("id")           # source
+            query = "SELECT * FROM users WHERE id = " + user_id  # PROPAGATES via string_concat
+            cursor.execute(query)                     # sink
+
+        Returns:
+            PropagationPrimitive for string concatenation
+        """
+        return PropagationPrimitive(PropagationType.STRING_CONCAT)
+
+    @staticmethod
+    def string_format() -> PropagationPrimitive:
+        """
+        Taint propagates through string formatting.
+
+        Patterns matched:
+            f"{tainted}"                    # f-string
+            "{}".format(tainted)            # str.format()
+            "%s" % tainted                  # % formatting
+            "{name}".format(name=tainted)   # Named placeholders
+
+        Critical for SQL injection where ORM methods use format() (~8% of flows).
+
+        Examples:
+            user_id = request.GET.get("id")           # source
+            query = f"SELECT * FROM users WHERE id = {user_id}"  # PROPAGATES via string_format
+            cursor.execute(query)                     # sink
+
+        Returns:
+            PropagationPrimitive for string formatting
+        """
+        return PropagationPrimitive(PropagationType.STRING_FORMAT)
 
     # ===== PHASE 3-6: POST-MVP =====
     # Will be implemented in post-MVP PRs
