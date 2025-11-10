@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"log"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
@@ -30,63 +29,60 @@ func (e *DataflowExecutor) Execute() []DataflowDetection {
 }
 
 // executeLocal performs intra-procedural taint analysis.
-// REUSES existing AnalyzeIntraProceduralTaint() from callgraph/taint.go.
+// NOTE: This is a simplified implementation that checks for taint flows
+// based on call site patterns rather than full dataflow analysis.
+// Full taint analysis integration requires re-running analysis with DSL patterns.
 func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
-	// Convert IR patterns to strings for existing API
+	// Convert IR patterns to strings
 	sourcePatterns := e.extractPatterns(e.IR.Sources)
 	sinkPatterns := e.extractPatterns(e.IR.Sinks)
 	sanitizerPatterns := e.extractPatterns(e.IR.Sanitizers)
 
-	// Find all source and sink call sites
+	// Find call sites matching sources and sinks
 	sourceCalls := e.findMatchingCalls(sourcePatterns)
 	sinkCalls := e.findMatchingCalls(sinkPatterns)
+	sanitizerCalls := e.findMatchingCalls(sanitizerPatterns)
 
-	// For each function that has both sources and sinks
-	functionsToAnalyze := e.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
+	// For local scope, check if source and sink are in the same function
+	for _, source := range sourceCalls {
+		for _, sink := range sinkCalls {
+			// Only detect within same function for local scope
+			if source.FunctionFQN != sink.FunctionFQN {
+				continue
+			}
 
-	for _, functionFQN := range functionsToAnalyze {
-		// Call EXISTING intra-procedural analysis
-		detection := e.analyzeFunction(functionFQN, sourcePatterns, sinkPatterns, sanitizerPatterns)
-		if detection != nil {
-			detections = append(detections, *detection)
+			// Check if there's a sanitizer in between (same function)
+			hasSanitizer := false
+			for _, sanitizer := range sanitizerCalls {
+				if sanitizer.FunctionFQN == source.FunctionFQN {
+					// If sanitizer is between source and sink, mark as sanitized
+					if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
+						(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
+						hasSanitizer = true
+						break
+					}
+				}
+			}
+
+			// Create detection
+			detection := DataflowDetection{
+				FunctionFQN: source.FunctionFQN,
+				SourceLine:  source.Line,
+				SinkLine:    sink.Line,
+				TaintedVar:  "", // Not tracking variable names in this simplified version
+				SinkCall:    sink.CallSite.Target,
+				Confidence:  0.7, // Medium confidence for pattern-based detection
+				Sanitized:   hasSanitizer,
+				Scope:       "local",
+			}
+
+			detections = append(detections, detection)
 		}
 	}
 
 	return detections
-}
-
-// analyzeFunction calls the EXISTING checkIntraProceduralTaint logic.
-//
-//nolint:unparam // Parameters will be used in future PRs
-func (e *DataflowExecutor) analyzeFunction(
-	functionFQN string,
-	sourcePatterns []string,
-	sinkPatterns []string,
-	sanitizerPatterns []string,
-) *DataflowDetection {
-	// Get function node
-	funcNode, ok := e.CallGraph.Functions[functionFQN]
-	if !ok {
-		return nil
-	}
-
-	// TODO: Full integration requires AST parsing infrastructure
-	// For now, this is a placeholder that demonstrates the integration pattern
-	// The actual implementation would:
-	// 1. Parse the source file to get AST
-	// 2. Find the function node in the AST
-	// 3. Call ExtractStatements(filePath, sourceCode, functionNode)
-	// 4. Build def-use chains
-	// 5. Call AnalyzeIntraProceduralTaint
-	// 6. Convert results to DataflowDetection
-
-	log.Printf("Would analyze function %s in file %s", functionFQN, funcNode.File)
-
-	// Placeholder: return nil for now
-	// Real implementation will be completed in future PRs
-	return nil
 }
 
 // executeGlobal performs inter-procedural taint analysis.

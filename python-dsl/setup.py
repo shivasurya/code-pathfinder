@@ -25,6 +25,7 @@ setup(
     url="https://github.com/shivasurya/code-pathfinder",
     packages=find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.8",
+    license="AGPL-3.0",
     install_requires=[
         # No external dependencies (stdlib only!)
     ],
@@ -40,7 +41,7 @@ setup(
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU Affero General Public License v3",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
