@@ -42,3 +42,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Mypy
+.mypy_cache/

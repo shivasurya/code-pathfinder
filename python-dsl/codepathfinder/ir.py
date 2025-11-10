@@ -88,4 +88,20 @@ def validate_ir(ir: Dict[str, Any]) -> bool:
             and isinstance(ir["wildcard"], bool)
         )
 
+    if ir_type == IRType.DATAFLOW:
+        return (
+            "sources" in ir
+            and isinstance(ir["sources"], list)
+            and len(ir["sources"]) > 0
+            and "sinks" in ir
+            and isinstance(ir["sinks"], list)
+            and len(ir["sinks"]) > 0
+            and "sanitizers" in ir
+            and isinstance(ir["sanitizers"], list)
+            and "propagation" in ir
+            and isinstance(ir["propagation"], list)
+            and "scope" in ir
+            and ir["scope"] in ["local", "global"]
+        )
+
     return True

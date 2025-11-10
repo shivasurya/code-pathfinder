@@ -1,11 +1,11 @@
-"""Setup script for pathfinder Python DSL."""
+"""Setup script for codepathfinder Python DSL."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
 
 # Read version from __init__.py
 version = {}
-with open("pathfinder/__init__.py") as f:
+with open("codepathfinder/__init__.py") as f:
     for line in f:
         if line.startswith("__version__"):
             exec(line, version)

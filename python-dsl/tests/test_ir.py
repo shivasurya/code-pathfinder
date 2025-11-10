@@ -1,8 +1,8 @@
 """Tests for pathfinder.ir module."""
 
 import pytest
-from pathfinder.ir import IRType, serialize_ir, validate_ir
-from pathfinder import calls, variable
+from codepathfinder.ir import IRType, serialize_ir, validate_ir
+from codepathfinder import calls, variable, flows, propagates
 
 
 class TestIRType:
@@ -90,3 +90,107 @@ class TestValidateIR:
         """Test variable_matcher IR with empty pattern is invalid."""
         ir = {"type": "variable_matcher", "pattern": "", "wildcard": False}
         assert validate_ir(ir) is False
+
+    def test_valid_dataflow_ir(self):
+        """Test validating valid dataflow IR."""
+        ir = {
+            "type": "dataflow",
+            "sources": [
+                {"type": "call_matcher", "patterns": ["source"], "wildcard": False}
+            ],
+            "sinks": [
+                {"type": "call_matcher", "patterns": ["sink"], "wildcard": False}
+            ],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "global",
+        }
+        assert validate_ir(ir) is True
+
+    def test_dataflow_missing_sources(self):
+        """Test dataflow IR without 'sources' is invalid."""
+        ir = {
+            "type": "dataflow",
+            "sinks": [{"type": "call_matcher"}],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "global",
+        }
+        assert validate_ir(ir) is False
+
+    def test_dataflow_empty_sources(self):
+        """Test dataflow IR with empty sources list is invalid."""
+        ir = {
+            "type": "dataflow",
+            "sources": [],
+            "sinks": [{"type": "call_matcher"}],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "global",
+        }
+        assert validate_ir(ir) is False
+
+    def test_dataflow_missing_sinks(self):
+        """Test dataflow IR without 'sinks' is invalid."""
+        ir = {
+            "type": "dataflow",
+            "sources": [{"type": "call_matcher"}],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "global",
+        }
+        assert validate_ir(ir) is False
+
+    def test_dataflow_empty_sinks(self):
+        """Test dataflow IR with empty sinks list is invalid."""
+        ir = {
+            "type": "dataflow",
+            "sources": [{"type": "call_matcher"}],
+            "sinks": [],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "global",
+        }
+        assert validate_ir(ir) is False
+
+    def test_dataflow_invalid_scope(self):
+        """Test dataflow IR with invalid scope is invalid."""
+        ir = {
+            "type": "dataflow",
+            "sources": [{"type": "call_matcher"}],
+            "sinks": [{"type": "call_matcher"}],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "invalid",
+        }
+        assert validate_ir(ir) is False
+
+    def test_dataflow_local_scope_valid(self):
+        """Test dataflow IR with local scope is valid."""
+        ir = {
+            "type": "dataflow",
+            "sources": [
+                {"type": "call_matcher", "patterns": ["source"], "wildcard": False}
+            ],
+            "sinks": [
+                {"type": "call_matcher", "patterns": ["sink"], "wildcard": False}
+            ],
+            "sanitizers": [],
+            "propagation": [],
+            "scope": "local",
+        }
+        assert validate_ir(ir) is True
+
+    def test_serialize_dataflow_matcher(self):
+        """Test serializing DataflowMatcher."""
+        matcher = flows(
+            from_sources=calls("request.GET"),
+            to_sinks=calls("execute"),
+            propagates_through=[propagates.assignment()],
+        )
+        ir = serialize_ir(matcher)
+
+        assert ir["type"] == "dataflow"
+        assert len(ir["sources"]) == 1
+        assert len(ir["sinks"]) == 1
+        assert len(ir["propagation"]) == 1
