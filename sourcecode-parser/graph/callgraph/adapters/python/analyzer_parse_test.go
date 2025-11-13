@@ -215,25 +215,9 @@ func TestPythonAnalyzer_SupportsFramework(t *testing.T) {
 // TestPythonAnalyzer_StubMethods verifies unimplemented methods return errors.
 func TestPythonAnalyzer_StubMethods(t *testing.T) {
 	analyzer := NewPythonAnalyzer()
-	module := &callgraph.ParsedModule{}
 
-	// Test all stub methods
-	_, err := analyzer.ExtractFunctions(module)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Contains(t, err.Error(), "PR-03")
-
-	_, err = analyzer.ExtractClasses(module)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Contains(t, err.Error(), "PR-03")
-
-	_, err = analyzer.InferTypes(module, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Contains(t, err.Error(), "PR-03")
-
-	_, err = analyzer.ExtractCallSites(nil)
+	// Test PR-04 stub methods (not yet implemented)
+	_, err := analyzer.ExtractCallSites(nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not implemented")
 	assert.Contains(t, err.Error(), "PR-04")
@@ -252,11 +236,6 @@ func TestPythonAnalyzer_StubMethods(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not implemented")
 	assert.Contains(t, err.Error(), "PR-04")
-
-	_, err = analyzer.ResolveType("", nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented")
-	assert.Contains(t, err.Error(), "PR-03")
 }
 
 // TestPythonAnalyzer_InterfaceCompliance verifies analyzer implements LanguageAnalyzer.

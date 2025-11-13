@@ -91,23 +91,8 @@ func (p *PythonAnalyzer) ExtractImports(module *callgraph.ParsedModule) (*callgr
 	return callgraph.ExtractPythonImports(codeGraph, module.FilePath, source, registry)
 }
 
-// ExtractFunctions extracts all function definitions from the module.
-// Not implemented in Phase 1 - will be added in PR-03.
-func (p *PythonAnalyzer) ExtractFunctions(module *callgraph.ParsedModule) ([]*callgraph.FunctionDef, error) {
-	return nil, fmt.Errorf("not implemented (PR-03)")
-}
-
-// ExtractClasses extracts all class definitions from the module.
-// Not implemented in Phase 1 - will be added in PR-03.
-func (p *PythonAnalyzer) ExtractClasses(module *callgraph.ParsedModule) ([]*callgraph.ClassDef, error) {
-	return nil, fmt.Errorf("not implemented (PR-03)")
-}
-
-// InferTypes performs type inference using Python-specific rules.
-// Not implemented in Phase 1 - will be added in PR-03.
-func (p *PythonAnalyzer) InferTypes(module *callgraph.ParsedModule, registry *callgraph.ModuleRegistry) (*callgraph.TypeContext, error) {
-	return nil, fmt.Errorf("not implemented (PR-03)")
-}
+// ExtractFunctions, ExtractClasses, InferTypes, and ResolveType are implemented in
+// function_extraction.go and type_inference.go files.
 
 // ExtractCallSites returns all function calls within a function.
 // Not implemented in Phase 1 - will be added in PR-04.
@@ -131,12 +116,6 @@ func (p *PythonAnalyzer) ExtractVariables(fn *callgraph.FunctionDef) ([]*callgra
 // Not implemented in Phase 1 - will be added in PR-04.
 func (p *PythonAnalyzer) AnalyzeTaint(fn *callgraph.FunctionDef, cfg *callgraph.CFG) (*callgraph.TaintSummary, error) {
 	return nil, fmt.Errorf("not implemented (PR-04)")
-}
-
-// ResolveType resolves a type expression to TypeInfo.
-// Not implemented in Phase 1 - will be added in PR-03.
-func (p *PythonAnalyzer) ResolveType(expr string, context *callgraph.TypeContext) (*callgraph.TypeInfo, error) {
-	return nil, fmt.Errorf("not implemented (PR-03)")
 }
 
 // SupportsFramework checks if the analyzer supports a framework.
