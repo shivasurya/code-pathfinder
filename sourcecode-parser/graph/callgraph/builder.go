@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,6 +11,19 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
+
+// globalLanguageRegistry is a package-level language registry.
+// This will be used in Phase 2 to enable multi-language support.
+// For now, it's initialized but not used in any code paths.
+//
+//nolint:unused // Will be used in Phase 2
+var globalLanguageRegistry *LanguageRegistry
+
+func init() {
+	globalLanguageRegistry = NewLanguageRegistry()
+	// NOTE: Language adapter registration will be added in Phase 2
+	// Example: globalLanguageRegistry.Register(NewPythonAnalyzer())
+}
 
 // ImportMapCache provides thread-safe caching of ImportMap instances.
 // This avoids re-parsing imports from the same file multiple times.
@@ -1089,4 +1103,33 @@ func findFunctionAtLine(root *sitter.Node, lineNumber uint32) *sitter.Node {
 	}
 
 	return nil
+}
+
+// getAnalyzer returns the language analyzer for a given file path.
+// This helper function is currently unused but will be integrated in Phase 2
+// to enable multi-language support via the adapter pattern.
+//
+// Parameters:
+//   - filePath: absolute path to the source file
+//
+// Returns:
+//   - LanguageAnalyzer: the analyzer for the file's language
+//   - error: if the file extension is not supported
+//
+// Example:
+//
+//	analyzer, err := getAnalyzer("/path/to/file.py")
+//	if err != nil {
+//	    return fmt.Errorf("unsupported language: %w", err)
+//	}
+//	module, err := analyzer.Parse(filePath, sourceCode)
+//
+//nolint:unused // Will be used in Phase 2
+func getAnalyzer(filePath string) (LanguageAnalyzer, error) {
+	ext := filepath.Ext(filePath)
+	analyzer, ok := globalLanguageRegistry.GetByExtension(ext)
+	if !ok {
+		return nil, fmt.Errorf("unsupported file extension: %s", ext)
+	}
+	return analyzer, nil
 }
