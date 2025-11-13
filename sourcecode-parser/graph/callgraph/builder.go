@@ -12,17 +12,27 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 )
 
+// USE_LANGUAGE_ADAPTER is a feature flag for gradual migration to language adapters.
+// Start false, flip to true after validation in PR-05.
+// When false, uses legacy code path (buildLegacy).
+// When true, uses new adapter-based path (buildWithAdapter).
+const USE_LANGUAGE_ADAPTER = false
+
 // globalLanguageRegistry is a package-level language registry.
 // This will be used in Phase 2 to enable multi-language support.
 // For now, it's initialized but not used in any code paths.
-//
-//nolint:unused // Will be used in Phase 2
 var globalLanguageRegistry *LanguageRegistry
 
 func init() {
 	globalLanguageRegistry = NewLanguageRegistry()
-	// NOTE: Language adapter registration will be added in Phase 2
-	// Example: globalLanguageRegistry.Register(NewPythonAnalyzer())
+	// Register all language adapters (defined in adapters_registry.go)
+	registerAdapters()
+}
+
+// GetGlobalLanguageRegistry returns the global language registry.
+// This allows adapters to self-register by calling this from their init() functions.
+func GetGlobalLanguageRegistry() *LanguageRegistry {
+	return globalLanguageRegistry
 }
 
 // ImportMapCache provides thread-safe caching of ImportMap instances.

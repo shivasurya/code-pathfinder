@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/model"
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
+	"github.com/smacker/go-tree-sitter/python"
 )
 
 var verboseFlag bool
@@ -268,4 +271,41 @@ func readFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	return content, nil
+}
+
+// ReadFileContent reads the contents of a file (public version for adapters).
+func ReadFileContent(path string) ([]byte, error) {
+	return readFile(path)
+}
+
+// ParseSingleFile parses a single source file and builds a code graph.
+// This is a helper function for language adapters to parse individual files.
+func ParseSingleFile(filePath string, source []byte) (*CodeGraph, error) {
+	parser := sitter.NewParser()
+	defer parser.Close()
+
+	// Set the language based on file extension
+	ext := filepath.Ext(filePath)
+	switch ext {
+	case ".java":
+		parser.SetLanguage(java.GetLanguage())
+	case ".py":
+		parser.SetLanguage(python.GetLanguage())
+	default:
+		return nil, fmt.Errorf("unsupported file extension: %s", ext)
+	}
+
+	// Parse the source code
+	tree, err := parser.ParseCtx(context.TODO(), nil, source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+	defer tree.Close()
+
+	// Build the code graph
+	codeGraph := NewCodeGraph()
+	rootNode := tree.RootNode()
+	buildGraphFromAST(rootNode, source, codeGraph, nil, filePath)
+
+	return codeGraph, nil
 }
