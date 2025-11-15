@@ -525,3 +525,170 @@ func TestDefUseChainComplexScenario(t *testing.T) {
 	vars := chain.AllVariables()
 	assert.Equal(t, 3, len(vars))
 }
+
+func TestBuildDefUseChains(t *testing.T) {
+	tests := []struct {
+		name       string
+		statements []*Statement
+		checkFn    func(*testing.T, *DefUseChain)
+	}{
+		{
+			name:       "empty statements",
+			statements: []*Statement{},
+			checkFn: func(t *testing.T, chain *DefUseChain) {
+				assert.NotNil(t, chain)
+				assert.Equal(t, 0, len(chain.Defs))
+				assert.Equal(t, 0, len(chain.Uses))
+			},
+		},
+		{
+			name: "single assignment",
+			statements: []*Statement{
+				{LineNumber: 1, Def: "x", Uses: []string{}},
+			},
+			checkFn: func(t *testing.T, chain *DefUseChain) {
+				assert.Equal(t, 1, len(chain.Defs))
+				assert.Equal(t, 1, len(chain.Defs["x"]))
+				assert.Equal(t, 0, len(chain.Uses))
+			},
+		},
+		{
+			name: "def-use chain",
+			statements: []*Statement{
+				{LineNumber: 1, Def: "x", Uses: []string{}},
+				{LineNumber: 2, Def: "y", Uses: []string{"x"}},
+				{LineNumber: 3, Def: "", Uses: []string{"y"}},
+			},
+			checkFn: func(t *testing.T, chain *DefUseChain) {
+				// Check defs
+				assert.Equal(t, 2, len(chain.Defs))
+				assert.Equal(t, 1, len(chain.Defs["x"]))
+				assert.Equal(t, 1, len(chain.Defs["y"]))
+				
+				// Check uses
+				assert.Equal(t, 2, len(chain.Uses))
+				assert.Equal(t, 1, len(chain.Uses["x"]))
+				assert.Equal(t, 1, len(chain.Uses["y"]))
+			},
+		},
+		{
+			name: "multiple defs and uses",
+			statements: []*Statement{
+				{LineNumber: 1, Def: "x", Uses: []string{}},
+				{LineNumber: 2, Def: "x", Uses: []string{"x"}},
+				{LineNumber: 3, Def: "y", Uses: []string{"x", "x"}},
+			},
+			checkFn: func(t *testing.T, chain *DefUseChain) {
+				// Variable x has 2 definitions
+				assert.Equal(t, 2, len(chain.Defs["x"]))
+				
+				// Variable x is used in 2 statements (line 2 and 3)
+				assert.Equal(t, 3, len(chain.Uses["x"]))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := BuildDefUseChains(tt.statements)
+			tt.checkFn(t, chain)
+		})
+	}
+}
+
+func TestDefUseChainComputeStats(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupFn       func() *DefUseChain
+		expectedStats DefUseStats
+	}{
+		{
+			name: "empty chain",
+			setupFn: func() *DefUseChain {
+				return NewDefUseChain()
+			},
+			expectedStats: DefUseStats{
+				NumVariables:       0,
+				NumDefs:            0,
+				NumUses:            0,
+				MaxDefsPerVariable: 0,
+				MaxUsesPerVariable: 0,
+				UndefinedVariables: 0,
+				DeadVariables:      0,
+			},
+		},
+		{
+			name: "simple def-use",
+			setupFn: func() *DefUseChain {
+				statements := []*Statement{
+					{LineNumber: 1, Def: "x", Uses: []string{}},
+					{LineNumber: 2, Def: "y", Uses: []string{"x"}},
+				}
+				return BuildDefUseChains(statements)
+			},
+			expectedStats: DefUseStats{
+				NumVariables:       2,
+				NumDefs:            2,
+				NumUses:            1,
+				MaxDefsPerVariable: 1,
+				MaxUsesPerVariable: 1,
+				UndefinedVariables: 0,
+				DeadVariables:      1, // y is defined but not used
+			},
+		},
+		{
+			name: "undefined variable",
+			setupFn: func() *DefUseChain {
+				statements := []*Statement{
+					{LineNumber: 1, Def: "x", Uses: []string{"y"}}, // y is used but never defined
+				}
+				return BuildDefUseChains(statements)
+			},
+			expectedStats: DefUseStats{
+				NumVariables:       2,
+				NumDefs:            1,
+				NumUses:            1,
+				MaxDefsPerVariable: 1,
+				MaxUsesPerVariable: 1,
+				UndefinedVariables: 1, // y is undefined
+				DeadVariables:      1, // x is never used
+			},
+		},
+		{
+			name: "multiple defs per variable",
+			setupFn: func() *DefUseChain {
+				statements := []*Statement{
+					{LineNumber: 1, Def: "x", Uses: []string{}},
+					{LineNumber: 2, Def: "x", Uses: []string{}},
+					{LineNumber: 3, Def: "x", Uses: []string{}},
+					{LineNumber: 4, Def: "", Uses: []string{"x", "x"}},
+				}
+				return BuildDefUseChains(statements)
+			},
+			expectedStats: DefUseStats{
+				NumVariables:       1,
+				NumDefs:            3,
+				NumUses:            2,
+				MaxDefsPerVariable: 3,
+				MaxUsesPerVariable: 2,
+				UndefinedVariables: 0,
+				DeadVariables:      0,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := tt.setupFn()
+			stats := chain.ComputeStats()
+			
+			assert.Equal(t, tt.expectedStats.NumVariables, stats.NumVariables, "NumVariables mismatch")
+			assert.Equal(t, tt.expectedStats.NumDefs, stats.NumDefs, "NumDefs mismatch")
+			assert.Equal(t, tt.expectedStats.NumUses, stats.NumUses, "NumUses mismatch")
+			assert.Equal(t, tt.expectedStats.MaxDefsPerVariable, stats.MaxDefsPerVariable, "MaxDefsPerVariable mismatch")
+			assert.Equal(t, tt.expectedStats.MaxUsesPerVariable, stats.MaxUsesPerVariable, "MaxUsesPerVariable mismatch")
+			assert.Equal(t, tt.expectedStats.UndefinedVariables, stats.UndefinedVariables, "UndefinedVariables mismatch")
+			assert.Equal(t, tt.expectedStats.DeadVariables, stats.DeadVariables, "DeadVariables mismatch")
+		})
+	}
+}
