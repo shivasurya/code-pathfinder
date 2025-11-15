@@ -9,7 +9,11 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/extraction"
 	cgregistry "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
 )
 
 // ImportMapCache provides thread-safe caching of ImportMap instances.
@@ -26,14 +30,14 @@ import (
 //	cache := NewImportMapCache()
 //	importMap := cache.GetOrExtract(filePath, sourceCode, registry)
 type ImportMapCache struct {
-	cache map[string]*ImportMap // Maps file path to ImportMap
-	mu    sync.RWMutex          // Protects cache map
+	cache map[string]*core.ImportMap // Maps file path to ImportMap
+	mu    sync.RWMutex                // Protects cache map
 }
 
 // NewImportMapCache creates a new empty import map cache.
 func NewImportMapCache() *ImportMapCache {
 	return &ImportMapCache{
-		cache: make(map[string]*ImportMap),
+		cache: make(map[string]*core.ImportMap),
 	}
 }
 
@@ -44,7 +48,7 @@ func NewImportMapCache() *ImportMapCache {
 //
 // Returns:
 //   - ImportMap and true if found in cache, nil and false otherwise
-func (c *ImportMapCache) Get(filePath string) (*ImportMap, bool) {
+func (c *ImportMapCache) Get(filePath string) (*core.ImportMap, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -57,7 +61,7 @@ func (c *ImportMapCache) Get(filePath string) (*ImportMap, bool) {
 // Parameters:
 //   - filePath: absolute path to the Python file
 //   - importMap: the extracted ImportMap to cache
-func (c *ImportMapCache) Put(filePath string, importMap *ImportMap) {
+func (c *ImportMapCache) Put(filePath string, importMap *core.ImportMap) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -80,14 +84,14 @@ func (c *ImportMapCache) Put(filePath string, importMap *ImportMap) {
 //   - Multiple goroutines can safely call GetOrExtract concurrently
 //   - First caller for a file will extract and cache
 //   - Subsequent callers will get cached result
-func (c *ImportMapCache) GetOrExtract(filePath string, sourceCode []byte, registry *ModuleRegistry) (*ImportMap, error) {
+func (c *ImportMapCache) GetOrExtract(filePath string, sourceCode []byte, registry *core.ModuleRegistry) (*core.ImportMap, error) {
 	// Try to get from cache (fast path with read lock)
 	if importMap, ok := c.Get(filePath); ok {
 		return importMap, nil
 	}
 
 	// Cache miss - extract imports (expensive operation)
-	importMap, err := ExtractImports(filePath, sourceCode, registry)
+	importMap, err := resolution.ExtractImports(filePath, sourceCode, registry)
 	if err != nil {
 		return nil, err
 	}
@@ -134,15 +138,15 @@ func (c *ImportMapCache) GetOrExtract(filePath string, sourceCode []byte, regist
 //     edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
 //     reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
 //     callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
-func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projectRoot string) (*CallGraph, error) {
-	callGraph := NewCallGraph()
+func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string) (*core.CallGraph, error) {
+	callGraph := core.NewCallGraph()
 
 	// Initialize import map cache for performance
 	// This avoids re-parsing imports from the same file multiple times
 	importCache := NewImportMapCache()
 
 	// Initialize type inference engine
-	typeEngine := NewTypeInferenceEngine(registry)
+	typeEngine := resolution.NewTypeInferenceEngine(registry)
 	typeEngine.Builtins = cgregistry.NewBuiltinRegistry()
 
 	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
@@ -153,7 +157,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	log.Printf("Detected Python version: %s", pythonVersion)
 
 	// Create remote registry loader
-	remoteLoader := NewStdlibRegistryRemote(
+	remoteLoader := cgregistry.NewStdlibRegistryRemote(
 		"https://codepathfinder.dev/assets/registries",
 		pythonVersion,
 	)
@@ -165,8 +169,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		// Continue without stdlib resolution - not a fatal error
 	} else {
 		// Create adapter to satisfy existing StdlibRegistry interface
-		stdlibRegistry := &StdlibRegistry{
-			Modules:  make(map[string]*StdlibModule),
+		stdlibRegistry := &core.StdlibRegistry{
+			Modules:  make(map[string]*core.StdlibModule),
 			Manifest: remoteLoader.Manifest,
 		}
 
@@ -183,7 +187,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	indexFunctions(codeGraph, callGraph, registry)
 
 	// Phase 2 Task 9: Extract return types from all functions (first pass)
-	allReturnStatements := make([]*ReturnStatement, 0)
+	allReturnStatements := make([]*resolution.ReturnStatement, 0)
 	for modulePath, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
@@ -195,7 +199,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		}
 
 		// Extract return types
-		returns, err := ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
+		returns, err := resolution.ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
 		if err != nil {
 			continue
 		}
@@ -204,7 +208,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 	}
 
 	// Merge return types and add to engine
-	mergedReturns := MergeReturnTypes(allReturnStatements)
+	mergedReturns := resolution.MergeReturnTypes(allReturnStatements)
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
 
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
@@ -219,7 +223,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		}
 
 		// Extract variable assignments for type inference
-		_ = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+		_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
 	}
 
 	// Phase 2 Task 8: Resolve call: placeholders with return types
@@ -238,7 +242,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		}
 
 		// Extract class attributes for self.attr tracking
-		_ = ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
+		_ = extraction.ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
 	}
 
 	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
@@ -266,7 +270,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 		}
 
 		// Extract all call sites from this file
-		callSites, err := ExtractCallSites(filePath, sourceCode, importMap)
+		callSites, err := resolution.ExtractCallSites(filePath, sourceCode, importMap)
 		if err != nil {
 			// Skip files with call site extraction errors
 			continue
@@ -332,7 +336,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 //   - codeGraph: the parsed code graph
 //   - callGraph: the call graph being built
 //   - registry: module registry for resolving file paths to modules
-func indexFunctions(codeGraph *graph.CodeGraph, callGraph *CallGraph, registry *ModuleRegistry) {
+func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
 	for _, node := range codeGraph.Nodes {
 		// Only index function/method definitions
 		if node.Type != "method_declaration" && node.Type != "function_definition" {
@@ -387,7 +391,7 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 //
 // Returns:
 //   - Fully qualified name of the containing function, or empty if not found
-func findContainingFunction(location Location, functions []*graph.Node, modulePath string) string {
+func findContainingFunction(location core.Location, functions []*graph.Node, modulePath string) string {
 	// In Python, module-level code has no indentation (column == 1)
 	// If the call site is at column 1, it's module-level, not inside any function
 	if location.Column == 1 {
@@ -547,7 +551,7 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 	return "unknown"
 }
 
-func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *TypeInferenceEngine, callerFQN string, callGraph *CallGraph) (string, bool, *TypeInfo) {
+func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph) (string, bool, *core.TypeInfo) {
 	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
 	if typeEngine == nil || callerFQN == "" {
 		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
@@ -640,7 +644,7 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	// Phase 2 Task 9: Try type inference for variable.method() calls
 	if typeEngine != nil && callerFQN != "" {
 		// Try function scope first, then fall back to module scope
-		var binding *VariableBinding
+		var binding *resolution.VariableBinding
 
 		// Check function scope first
 		functionScope := typeEngine.GetScope(callerFQN)
@@ -736,8 +740,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 		}
 		// PR #3: Check stdlib registry before user project registry
 		if typeEngine != nil && typeEngine.StdlibRemote != nil {
-			if validateStdlibFQN(fullFQN, typeEngine.StdlibRemote) {
-				return fullFQN, true, nil
+			if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+				if validateStdlibFQN(fullFQN, remoteLoader) {
+					return fullFQN, true, nil
+				}
 			}
 		}
 		if validateFQN(fullFQN, registry) {
@@ -762,8 +768,10 @@ func resolveCallTarget(target string, importMap *ImportMap, registry *ModuleRegi
 	// PR #3: Last resort - check if target is a stdlib call (e.g., os.path.join)
 	// This handles cases where stdlib modules are imported directly (import os.path)
 	if typeEngine != nil && typeEngine.StdlibRemote != nil {
-		if validateStdlibFQN(target, typeEngine.StdlibRemote) {
-			return target, true, nil
+		if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+			if validateStdlibFQN(target, remoteLoader) {
+				return target, true, nil
+			}
 		}
 	}
 
@@ -795,7 +803,7 @@ var stdlibModuleAliases = map[string]string{
 //
 // Returns:
 //   - true if FQN is a stdlib function or class
-func validateStdlibFQN(fqn string, remoteLoader *StdlibRegistryRemote) bool {
+func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote) bool {
 	if remoteLoader == nil {
 		return false
 	}
@@ -869,7 +877,7 @@ func validateStdlibFQN(fqn string, remoteLoader *StdlibRegistryRemote) bool {
 //
 // Returns:
 //   - true if FQN is valid (module or function in existing module)
-func validateFQN(fqn string, registry *ModuleRegistry) bool {
+func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
 	// Check if it's a module
 	if _, ok := registry.Modules[fqn]; ok {
 		return true
@@ -890,7 +898,7 @@ func validateFQN(fqn string, registry *ModuleRegistry) bool {
 
 // resolveCallTargetLegacy is the old resolution logic without type inference.
 // Used for backward compatibility with existing tests.
-func resolveCallTargetLegacy(target string, importMap *ImportMap, registry *ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
+func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
 	// Handle self.method() calls - resolve to current module
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")
@@ -996,7 +1004,7 @@ func readFileBytes(filePath string) ([]byte, error) {
 //   - callGraph: the call graph being built (will be populated with summaries)
 //   - codeGraph: the parsed AST nodes (currently unused, reserved for future use)
 //   - registry: module registry (currently unused, reserved for future use)
-func generateTaintSummaries(callGraph *CallGraph, codeGraph *graph.CodeGraph, registry *ModuleRegistry) {
+func generateTaintSummaries(callGraph *core.CallGraph, codeGraph *graph.CodeGraph, registry *core.ModuleRegistry) {
 	_ = codeGraph  // Reserved for future use
 	_ = registry   // Reserved for future use
 	analyzed := 0
@@ -1012,7 +1020,7 @@ func generateTaintSummaries(callGraph *CallGraph, codeGraph *graph.CodeGraph, re
 		}
 
 		// Parse the Python file to get AST
-		tree, err := ParsePythonFile(sourceCode)
+		tree, err := extraction.ParsePythonFile(sourceCode)
 		if err != nil {
 			log.Printf("Warning: failed to parse %s for taint analysis: %v", funcNode.File, err)
 			continue
@@ -1029,7 +1037,7 @@ func generateTaintSummaries(callGraph *CallGraph, codeGraph *graph.CodeGraph, re
 		}
 
 		// Step 1: Extract statements from function
-		statements, err := ExtractStatements(funcNode.File, sourceCode, functionNode)
+		statements, err := extraction.ExtractStatements(funcNode.File, sourceCode, functionNode)
 		if err != nil {
 			log.Printf("Warning: failed to extract statements from %s: %v", funcFQN, err)
 			if tree != nil {
@@ -1039,11 +1047,11 @@ func generateTaintSummaries(callGraph *CallGraph, codeGraph *graph.CodeGraph, re
 		}
 
 		// Step 2: Build def-use chains
-		defUseChain := BuildDefUseChains(statements)
+		defUseChain := core.BuildDefUseChains(statements)
 
 		// Step 3: Analyze intra-procedural taint
 		// For MVP: use empty sources/sinks/sanitizers (will be populated from patterns in PR #6)
-		summary := AnalyzeIntraProceduralTaint(
+		summary := taint.AnalyzeIntraProceduralTaint(
 			funcFQN,
 			statements,
 			defUseChain,

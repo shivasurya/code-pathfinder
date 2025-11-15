@@ -1,8 +1,10 @@
-package callgraph
+package resolution
 
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +27,7 @@ def get_none():
     return None
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 5)
@@ -53,7 +55,7 @@ def empty_func():
     pass
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Empty(t, returns, "Functions with no explicit return should not generate return types")
@@ -68,7 +70,7 @@ def maybe_string(flag):
         return "no"
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2, "Should capture both return statements")
@@ -87,7 +89,7 @@ def outer():
     return "outer"
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
@@ -111,12 +113,12 @@ def get_value():
     return str(42)
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
-	types := make(map[string]*TypeInfo)
+	types := make(map[string]*core.TypeInfo)
 	for _, ret := range returns {
 		types[ret.FunctionFQN] = ret.ReturnType
 	}
@@ -138,7 +140,7 @@ def process():
     return result
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
@@ -165,7 +167,7 @@ def get_tuple():
     return (1, 2, 3)
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 
@@ -191,7 +193,7 @@ func TestMergeReturnTypes_SingleReturn(t *testing.T) {
 	statements := []*ReturnStatement{
 		{
 			FunctionFQN: "test.func1",
-			ReturnType: &TypeInfo{
+			ReturnType: &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: 1.0,
 				Source:     "return_literal",
@@ -208,7 +210,7 @@ func TestMergeReturnTypes_MultipleReturnsHighestConfidence(t *testing.T) {
 	statements := []*ReturnStatement{
 		{
 			FunctionFQN: "test.func1",
-			ReturnType: &TypeInfo{
+			ReturnType: &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: 1.0,
 				Source:     "return_literal",
@@ -216,7 +218,7 @@ func TestMergeReturnTypes_MultipleReturnsHighestConfidence(t *testing.T) {
 		},
 		{
 			FunctionFQN: "test.func1",
-			ReturnType: &TypeInfo{
+			ReturnType: &core.TypeInfo{
 				TypeFQN:    "call:unknown",
 				Confidence: 0.3,
 				Source:     "return_function_call",
@@ -235,7 +237,7 @@ func TestMergeReturnTypes_DifferentFunctions(t *testing.T) {
 	statements := []*ReturnStatement{
 		{
 			FunctionFQN: "test.func1",
-			ReturnType: &TypeInfo{
+			ReturnType: &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: 1.0,
 				Source:     "return_literal",
@@ -243,7 +245,7 @@ func TestMergeReturnTypes_DifferentFunctions(t *testing.T) {
 		},
 		{
 			FunctionFQN: "test.func2",
-			ReturnType: &TypeInfo{
+			ReturnType: &core.TypeInfo{
 				TypeFQN:    "builtins.int",
 				Confidence: 1.0,
 				Source:     "return_literal",
@@ -258,10 +260,10 @@ func TestMergeReturnTypes_DifferentFunctions(t *testing.T) {
 }
 
 func TestTypeInferenceEngine_AddReturnTypes(t *testing.T) {
-	registry := NewModuleRegistry()
-	engine := NewTypeInferenceEngine(registry)
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
 
-	returnTypes := map[string]*TypeInfo{
+	returnTypes := map[string]*core.TypeInfo{
 		"test.func1": {
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
@@ -287,12 +289,12 @@ def func():
     return "test"
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
 
 	assert.Equal(t, "test.py", returns[0].Location.File)
-	assert.Equal(t, 3, returns[0].Location.Line) // Line 3 (1-indexed)
-	assert.Greater(t, returns[0].Location.Column, 0)
+	assert.Equal(t, uint32(3), returns[0].Location.Line) // Line 3 (1-indexed)
+	assert.Greater(t, returns[0].Location.Column, uint32(0))
 }

@@ -1,10 +1,12 @@
-package callgraph
+package extraction
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,14 +27,14 @@ def test_function():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify
@@ -73,14 +75,14 @@ def calculate():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify
@@ -124,14 +126,14 @@ def process_data():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify
@@ -174,14 +176,14 @@ def check_status():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify
@@ -220,14 +222,14 @@ def process():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify
@@ -257,14 +259,14 @@ def outer():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify outer function scope
@@ -294,14 +296,14 @@ def reassign():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify - should have the last assignment
@@ -324,14 +326,14 @@ func TestExtractVariableAssignments_EmptyFile(t *testing.T) {
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments - should not error
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// No scopes should be created
@@ -351,14 +353,14 @@ def empty_function():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Scope should exist but be empty
@@ -381,14 +383,14 @@ def test():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
 	assert.NoError(t, err)
 
 	// Verify locations
@@ -408,7 +410,7 @@ def test():
 
 // TestInferTypeFromExpression_DirectCalls tests type inference helper.
 func TestInferTypeFromExpression(t *testing.T) {
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 
 	tests := []struct {
 		name         string
@@ -433,13 +435,13 @@ func TestInferTypeFromExpression(t *testing.T) {
 			err := os.WriteFile(filePath, sourceCode, 0644)
 			assert.NoError(t, err)
 
-			registry, err := BuildModuleRegistry(tmpDir)
+			modRegistry, err := registry.BuildModuleRegistry(tmpDir)
 			assert.NoError(t, err)
 
-			typeEngine := NewTypeInferenceEngine(registry)
+			typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
 			typeEngine.Builtins = builtinRegistry
 
-			err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, builtinRegistry)
+			err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, builtinRegistry)
 			assert.NoError(t, err)
 
 			scope := typeEngine.GetScope("test.test")

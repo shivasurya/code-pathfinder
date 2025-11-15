@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +42,7 @@ def process_text():
 	assert.NotEmpty(t, callSites, "Should have at least one call site")
 
 	// Find the data.upper() call site
-	var upperCallSite *CallSite
+	var upperCallSite *core.CallSite
 	for i := range callSites {
 		if callSites[i].Target == "data.upper" {
 			upperCallSite = &callSites[i]

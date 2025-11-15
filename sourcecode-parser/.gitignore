@@ -16,3 +16,4 @@ build/
 # Generated registries (local testing only)
 # Note: Production registries are in docs/public/assets/registries/ (committed for CDN hosting)
 registries/
+*.test

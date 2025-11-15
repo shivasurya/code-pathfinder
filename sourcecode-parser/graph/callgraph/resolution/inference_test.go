@@ -1,9 +1,10 @@
-package callgraph
+package resolution
 
 import (
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +44,7 @@ func TestTypeInfo_Creation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			typeInfo := &TypeInfo{
+			typeInfo := &core.TypeInfo{
 				TypeFQN:    tt.typeFQN,
 				Confidence: tt.confidence,
 				Source:     tt.source,
@@ -65,7 +66,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 		confidence   float32
 		source       string
 		assignedFrom string
-		location     resolution.Location
+		location     Location
 	}{
 		{
 			name:       "simple variable",
@@ -74,7 +75,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 			confidence: 1.0,
 			source:     "assignment",
 			assignedFrom: "myapp.controllers.get_user",
-			location: resolution.Location{
+			location: Location{
 				File:   "/path/to/file.py",
 				Line:   10,
 				Column: 5,
@@ -87,7 +88,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 			confidence: 1.0,
 			source:     "literal",
 			assignedFrom: "",
-			location: resolution.Location{
+			location: Location{
 				File:   "/path/to/file.py",
 				Line:   20,
 				Column: 3,
@@ -97,7 +98,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			typeInfo := &TypeInfo{
+			typeInfo := &core.TypeInfo{
 				TypeFQN:    tt.typeFQN,
 				Confidence: tt.confidence,
 				Source:     tt.source,
@@ -162,24 +163,24 @@ func TestFunctionScope_AddVariable(t *testing.T) {
 	// Add first variable
 	binding1 := &VariableBinding{
 		VarName: "user",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "myapp.models.User",
 			Confidence: 1.0,
 			Source:     "assignment",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	scope.Variables["user"] = binding1
 
 	// Add second variable
 	binding2 := &VariableBinding{
 		VarName: "result",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.dict",
 			Confidence: 0.9,
 			Source:     "heuristic",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 15, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 15, Column: 5},
 	}
 	scope.Variables["result"] = binding2
 
@@ -191,12 +192,12 @@ func TestFunctionScope_AddVariable(t *testing.T) {
 	// Update existing variable
 	binding3 := &VariableBinding{
 		VarName: "user",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "myapp.models.User",
 			Confidence: 1.0,
 			Source:     "annotation",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 20, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 20, Column: 5},
 	}
 	scope.Variables["user"] = binding3
 
@@ -213,7 +214,7 @@ func TestFunctionScope_ReturnType(t *testing.T) {
 	assert.Nil(t, scope.ReturnType)
 
 	// Set return type
-	returnType := &TypeInfo{
+	returnType := &core.TypeInfo{
 		TypeFQN:    "myapp.models.User",
 		Confidence: 1.0,
 		Source:     "annotation",
@@ -229,7 +230,7 @@ func TestFunctionScope_ReturnType(t *testing.T) {
 
 // TestTypeInferenceEngine_Creation tests TypeInferenceEngine initialization.
 func TestTypeInferenceEngine_Creation(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 
 	engine := NewTypeInferenceEngine(registry)
 
@@ -244,7 +245,7 @@ func TestTypeInferenceEngine_Creation(t *testing.T) {
 
 // TestTypeInferenceEngine_AddAndGetScope tests scope management.
 func TestTypeInferenceEngine_AddAndGetScope(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	engine := NewTypeInferenceEngine(registry)
 
 	// Initially no scopes
@@ -254,12 +255,12 @@ func TestTypeInferenceEngine_AddAndGetScope(t *testing.T) {
 	scope1 := NewFunctionScope("myapp.controllers.get_user")
 	scope1.Variables["user"] = &VariableBinding{
 		VarName: "user",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "myapp.models.User",
 			Confidence: 1.0,
 			Source:     "assignment",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	engine.AddScope(scope1)
 
@@ -284,7 +285,7 @@ func TestTypeInferenceEngine_AddAndGetScope(t *testing.T) {
 
 // TestTypeInferenceEngine_AddNilScope tests that adding nil scope is handled gracefully.
 func TestTypeInferenceEngine_AddNilScope(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	engine := NewTypeInferenceEngine(registry)
 
 	// Add nil scope should not panic
@@ -296,19 +297,19 @@ func TestTypeInferenceEngine_AddNilScope(t *testing.T) {
 
 // TestTypeInferenceEngine_UpdateScope tests updating an existing scope.
 func TestTypeInferenceEngine_UpdateScope(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	engine := NewTypeInferenceEngine(registry)
 
 	// Add initial scope
 	scope1 := NewFunctionScope("myapp.controllers.get_user")
 	scope1.Variables["user"] = &VariableBinding{
 		VarName: "user",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "myapp.models.User",
 			Confidence: 0.8,
 			Source:     "heuristic",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	engine.AddScope(scope1)
 
@@ -316,21 +317,21 @@ func TestTypeInferenceEngine_UpdateScope(t *testing.T) {
 	scope2 := NewFunctionScope("myapp.controllers.get_user")
 	scope2.Variables["user"] = &VariableBinding{
 		VarName: "user",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "myapp.models.User",
 			Confidence: 1.0,
 			Source:     "annotation",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	scope2.Variables["result"] = &VariableBinding{
 		VarName: "result",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.dict",
 			Confidence: 1.0,
 			Source:     "literal",
 		},
-		Location: resolution.Location{File: "/path/to/file.py", Line: 15, Column: 5},
+		Location: Location{File: "/path/to/file.py", Line: 15, Column: 5},
 	}
 	engine.AddScope(scope2)
 
@@ -361,7 +362,7 @@ func TestTypeInfo_ConfidenceValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			typeInfo := &TypeInfo{
+			typeInfo := &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: tt.confidence,
 				Source:     "test",
@@ -376,11 +377,11 @@ func TestTypeInfo_ConfidenceValidation(t *testing.T) {
 
 // TestTypeInferenceEngine_ReturnTypeTracking tests tracking return types.
 func TestTypeInferenceEngine_ReturnTypeTracking(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	engine := NewTypeInferenceEngine(registry)
 
 	// Add return type for a function
-	returnType1 := &TypeInfo{
+	returnType1 := &core.TypeInfo{
 		TypeFQN:    "myapp.models.User",
 		Confidence: 1.0,
 		Source:     "annotation",
@@ -388,7 +389,7 @@ func TestTypeInferenceEngine_ReturnTypeTracking(t *testing.T) {
 	engine.ReturnTypes["myapp.controllers.get_user"] = returnType1
 
 	// Add return type for another function
-	returnType2 := &TypeInfo{
+	returnType2 := &core.TypeInfo{
 		TypeFQN:    "builtins.dict",
 		Confidence: 0.9,
 		Source:     "heuristic",
@@ -406,14 +407,14 @@ func TestTypeInferenceEngine_ReturnTypeTracking(t *testing.T) {
 
 // TestTypeInferenceEngine_WithBuiltinRegistry tests using the builtin registry.
 func TestTypeInferenceEngine_WithBuiltinRegistry(t *testing.T) {
-	registry := NewModuleRegistry()
-	engine := NewTypeInferenceEngine(registry)
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
 
 	// Initially nil
 	assert.Nil(t, engine.Builtins)
 
 	// Set builtin registry
-	engine.Builtins = NewBuiltinRegistry()
+	engine.Builtins = registry.NewBuiltinRegistry()
 	assert.NotNil(t, engine.Builtins)
 
 	// Verify we can access builtin types
