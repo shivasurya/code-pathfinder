@@ -1,9 +1,11 @@
-package callgraph
+package resolution
 
 import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -142,16 +144,16 @@ func TestParseStep(t *testing.T) {
 
 func TestResolveChainedCall(t *testing.T) {
 	// Setup test environment
-	registry := NewModuleRegistry()
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
-	typeEngine.ReturnTypes = make(map[string]*TypeInfo)
-	builtins := NewBuiltinRegistry()
+	moduleRegistry := core.NewModuleRegistry()
+	typeEngine := NewTypeInferenceEngine(moduleRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+	typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+	builtins := registry.NewBuiltinRegistry()
 	codeGraph := &graph.CodeGraph{}
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Add a function with known return type
-	typeEngine.ReturnTypes["myapp.create_builder"] = &TypeInfo{
+	typeEngine.ReturnTypes["myapp.create_builder"] = &core.TypeInfo{
 		TypeFQN:    "builtins.str",
 		Confidence: 1.0,
 		Source:     "return_type",
@@ -197,7 +199,7 @@ func TestResolveChainedCall(t *testing.T) {
 				tt.target,
 				typeEngine,
 				builtins,
-				registry,
+				moduleRegistry,
 				codeGraph,
 				tt.callerFQN,
 				tt.currentModule,
@@ -218,13 +220,13 @@ func TestResolveChainedCall(t *testing.T) {
 
 func TestResolveFirstChainStep(t *testing.T) {
 	// Setup
-	registry := NewModuleRegistry()
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.ReturnTypes = make(map[string]*TypeInfo)
-	callGraph := NewCallGraph()
+	moduleRegistry := core.NewModuleRegistry()
+	typeEngine := NewTypeInferenceEngine(moduleRegistry)
+	typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+	callGraph := core.NewCallGraph()
 
 	// Add a function with return type
-	typeEngine.ReturnTypes["myapp.create_builder"] = &TypeInfo{
+	typeEngine.ReturnTypes["myapp.create_builder"] = &core.TypeInfo{
 		TypeFQN:    "myapp.Builder",
 		Confidence: 1.0,
 		Source:     "return_type",
@@ -279,7 +281,7 @@ func TestResolveFirstChainStep(t *testing.T) {
 				typeEngine,
 				tt.callerFQN,
 				tt.currentModule,
-				registry,
+				moduleRegistry,
 				callGraph,
 			)
 
@@ -296,16 +298,16 @@ func TestResolveFirstChainStep(t *testing.T) {
 
 func TestResolveChainMethod(t *testing.T) {
 	// Setup
-	registry := NewModuleRegistry()
-	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Attributes = NewAttributeRegistry()
-	builtins := NewBuiltinRegistry()
-	callGraph := NewCallGraph()
+	moduleRegistry := core.NewModuleRegistry()
+	typeEngine := NewTypeInferenceEngine(moduleRegistry)
+	typeEngine.Attributes = registry.NewAttributeRegistry()
+	builtins := registry.NewBuiltinRegistry()
+	callGraph := core.NewCallGraph()
 
 	tests := []struct {
 		name         string
 		step         ChainStep
-		currentType  *TypeInfo
+		currentType  *core.TypeInfo
 		expectedOK   bool
 		expectedType string
 	}{
@@ -316,7 +318,7 @@ func TestResolveChainMethod(t *testing.T) {
 				Expression: "upper()",
 				IsCall:     true,
 			},
-			currentType: &TypeInfo{
+			currentType: &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: 1.0,
 				Source:     "literal",
@@ -331,7 +333,7 @@ func TestResolveChainMethod(t *testing.T) {
 				Expression: "append()",
 				IsCall:     true,
 			},
-			currentType: &TypeInfo{
+			currentType: &core.TypeInfo{
 				TypeFQN:    "builtins.list",
 				Confidence: 1.0,
 				Source:     "literal",
@@ -346,7 +348,7 @@ func TestResolveChainMethod(t *testing.T) {
 				Expression: "nonexistent_method_xyz()",
 				IsCall:     true,
 			},
-			currentType: &TypeInfo{
+			currentType: &core.TypeInfo{
 				TypeFQN:    "builtins.str",
 				Confidence: 1.0,
 				Source:     "literal",
@@ -363,7 +365,7 @@ func TestResolveChainMethod(t *testing.T) {
 				tt.currentType,
 				builtins,
 				typeEngine,
-				registry,
+				moduleRegistry,
 				callGraph,
 			)
 

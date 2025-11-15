@@ -246,7 +246,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	}
 
 	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
-	ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
+	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
 	// Process each Python file in the project (fourth pass for call site resolution)
 	for modulePath, filePath := range registry.Modules {
@@ -319,7 +319,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	}
 
 	// Phase 3 Task 12: Print attribute failure analysis
-	PrintAttributeFailureStats()
+	resolution.PrintAttributeFailureStats()
 
 	// Pass 5: Generate taint summaries for all functions
 	log.Printf("Pass 5: Generating taint summaries...")
@@ -580,7 +580,7 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	// Phase 3 Task 12: Check for self.attribute.method() patterns BEFORE self.method()
 	// Pattern: self.attr.method (2+ dots starting with self.)
 	if strings.HasPrefix(target, "self.") && strings.Count(target, ".") >= 2 {
-		attrFQN, attrResolved, attrType := ResolveSelfAttributeCall(
+		attrFQN, attrResolved, attrType := resolution.ResolveSelfAttributeCall(
 			target,
 			callerFQN,
 			typeEngine,
