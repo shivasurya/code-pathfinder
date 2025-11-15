@@ -1,9 +1,9 @@
 package callgraph
 
 import (
-	"time"
-
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/patterns"
 )
 
 // InitializeCallGraph builds the call graph from a code graph.
@@ -25,32 +25,15 @@ import (
 //   - PatternRegistry: loaded security patterns
 //   - error: if any step fails
 func InitializeCallGraph(codeGraph *graph.CodeGraph, projectRoot string) (*CallGraph, *ModuleRegistry, *PatternRegistry, error) {
-	// Pass 1: Build module registry
-	startRegistry := time.Now()
-	registry, err := BuildModuleRegistry(projectRoot)
+	// Use builder package for call graph construction
+	callGraph, registry, err := builder.BuildCallGraphFromPath(codeGraph, projectRoot)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	elapsedRegistry := time.Since(startRegistry)
-
-	// Pass 2-3: Build call graph (includes import extraction and call site extraction)
-	startCallGraph := time.Now()
-	callGraph, err := BuildCallGraph(codeGraph, registry, projectRoot)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	elapsedCallGraph := time.Since(startCallGraph)
 
 	// Load security patterns
-	startPatterns := time.Now()
-	patternRegistry := NewPatternRegistry()
+	patternRegistry := patterns.NewPatternRegistry()
 	patternRegistry.LoadDefaultPatterns()
-	elapsedPatterns := time.Since(startPatterns)
-
-	// Log timing information
-	graph.Log("Module registry built in:", elapsedRegistry)
-	graph.Log("Call graph built in:", elapsedCallGraph)
-	graph.Log("Patterns loaded in:", elapsedPatterns)
 
 	return callGraph, registry, patternRegistry, nil
 }
