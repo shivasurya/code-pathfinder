@@ -536,6 +536,7 @@ func TestBuildDefUseChains(t *testing.T) {
 			name:       "empty statements",
 			statements: []*Statement{},
 			checkFn: func(t *testing.T, chain *DefUseChain) {
+				t.Helper()
 				assert.NotNil(t, chain)
 				assert.Equal(t, 0, len(chain.Defs))
 				assert.Equal(t, 0, len(chain.Uses))
@@ -547,6 +548,7 @@ func TestBuildDefUseChains(t *testing.T) {
 				{LineNumber: 1, Def: "x", Uses: []string{}},
 			},
 			checkFn: func(t *testing.T, chain *DefUseChain) {
+				t.Helper()
 				assert.Equal(t, 1, len(chain.Defs))
 				assert.Equal(t, 1, len(chain.Defs["x"]))
 				assert.Equal(t, 0, len(chain.Uses))
@@ -560,11 +562,12 @@ func TestBuildDefUseChains(t *testing.T) {
 				{LineNumber: 3, Def: "", Uses: []string{"y"}},
 			},
 			checkFn: func(t *testing.T, chain *DefUseChain) {
+				t.Helper()
 				// Check defs
 				assert.Equal(t, 2, len(chain.Defs))
 				assert.Equal(t, 1, len(chain.Defs["x"]))
 				assert.Equal(t, 1, len(chain.Defs["y"]))
-				
+
 				// Check uses
 				assert.Equal(t, 2, len(chain.Uses))
 				assert.Equal(t, 1, len(chain.Uses["x"]))
@@ -579,9 +582,10 @@ func TestBuildDefUseChains(t *testing.T) {
 				{LineNumber: 3, Def: "y", Uses: []string{"x", "x"}},
 			},
 			checkFn: func(t *testing.T, chain *DefUseChain) {
+				t.Helper()
 				// Variable x has 2 definitions
 				assert.Equal(t, 2, len(chain.Defs["x"]))
-				
+
 				// Variable x is used in 2 statements (line 2 and 3)
 				assert.Equal(t, 3, len(chain.Uses["x"]))
 			},
@@ -603,10 +607,8 @@ func TestDefUseChainComputeStats(t *testing.T) {
 		expectedStats DefUseStats
 	}{
 		{
-			name: "empty chain",
-			setupFn: func() *DefUseChain {
-				return NewDefUseChain()
-			},
+			name:    "empty chain",
+			setupFn: NewDefUseChain,
 			expectedStats: DefUseStats{
 				NumVariables:       0,
 				NumDefs:            0,
