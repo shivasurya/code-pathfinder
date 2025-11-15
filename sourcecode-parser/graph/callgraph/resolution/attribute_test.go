@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestResolveSelfAttributeCall tests the core attribute resolution function
+// TestResolveSelfAttributeCall tests the core attribute resolution function.
 func TestResolveSelfAttributeCall(t *testing.T) {
 	// Reset failure stats before each test
 	attributeFailureStats = &FailureStats{
@@ -68,6 +68,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 				Source:     "self_attribute",
 			},
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 0, attributeFailureStats.NotSelfPrefix)
 				assert.Equal(t, 0, attributeFailureStats.DeepChains)
@@ -89,6 +90,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.NotSelfPrefix)
 			},
@@ -109,6 +111,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.DeepChains)
 				assert.Equal(t, 1, len(attributeFailureStats.DeepChainSamples))
@@ -132,6 +135,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.ClassNotFound)
 			},
@@ -160,6 +164,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.AttributeNotFound)
 				assert.Equal(t, 1, len(attributeFailureStats.AttributeNotFoundSamples))
@@ -197,6 +202,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.MethodNotInBuiltins)
 			},
@@ -233,6 +239,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 1, attributeFailureStats.CustomClassUnsupported)
 				assert.Equal(t, 1, len(attributeFailureStats.CustomClassSamples))
@@ -254,6 +261,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			expectedFQN:      "",
 			expectedTypeInfo: nil,
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 			},
 		},
@@ -293,6 +301,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 				Source:     "self_attribute",
 			},
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 				assert.Equal(t, 0, attributeFailureStats.NotSelfPrefix)
 			},
@@ -333,6 +342,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 				Source:     "self_attribute",
 			},
 			checkStats: func(t *testing.T) {
+				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
 			},
 		},
@@ -376,7 +386,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 	}
 }
 
-// TestPrintAttributeFailureStats tests the statistics printing function
+// TestPrintAttributeFailureStats tests the statistics printing function.
 func TestPrintAttributeFailureStats(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -396,6 +406,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			},
 			expectOutput: false,
 			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Empty(t, output, "Expected no output when no attempts")
 			},
 		},
@@ -417,6 +428,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			},
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Contains(t, output, "[ATTR_FAILURE_ANALYSIS]")
 				assert.Contains(t, output, "Total attempts:              100")
 				assert.Contains(t, output, "Not self prefix:           20")
@@ -448,19 +460,22 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			},
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
 				// Count how many samples are printed (should be max 10)
 				lines := strings.Split(output, "\n")
 				sampleLines := 0
 				inSampleSection := false
 				for _, line := range lines {
-					if strings.Contains(line, "Deep chain samples") {
+					switch {
+					case strings.Contains(line, "Deep chain samples"):
 						inSampleSection = true
-					} else if inSampleSection && strings.HasPrefix(strings.TrimSpace(line), "-") {
+					case inSampleSection && strings.HasPrefix(strings.TrimSpace(line), "-"):
 						sampleLines++
-					} else if inSampleSection && !strings.HasPrefix(strings.TrimSpace(line), "-") && strings.TrimSpace(line) != "" {
-						break
+					case inSampleSection && !strings.HasPrefix(strings.TrimSpace(line), "-") && strings.TrimSpace(line) != "":
+						goto exitLoop
 					}
 				}
+			exitLoop:
 				assert.LessOrEqual(t, sampleLines, 10, "Should print at most 10 samples")
 			},
 		},
@@ -477,6 +492,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			},
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
 				assert.NotContains(t, output, "Deep chain samples")
 				assert.NotContains(t, output, "Attribute not found samples")
 				assert.NotContains(t, output, "Custom class samples")
@@ -513,7 +529,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 	}
 }
 
-// TestFindClassContainingMethod tests the internal class lookup function
+// TestFindClassContainingMethod tests the internal class lookup function.
 func TestFindClassContainingMethod(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -571,23 +587,13 @@ func TestFindClassContainingMethod(t *testing.T) {
 		{
 			name:      "method name without module",
 			methodFQN: "process",
-			setupRegistry: func() *registry.AttributeRegistry {
-				reg := registry.NewAttributeRegistry()
-				reg.AddClassAttributes(&core.ClassAttributes{
-					ClassFQN:   "test_module.MyClass",
-					Attributes: make(map[string]*core.ClassAttribute),
-					Methods:    []string{"test_module.MyClass.process"},
-				})
-				return reg
-			},
+			setupRegistry: newAttributeRegistryWithClass("test_module.MyClass", []string{"test_module.MyClass.process"}),
 			expectedClass: "test_module.MyClass",
 		},
 		{
-			name:      "empty registry",
-			methodFQN: "test_module.process",
-			setupRegistry: func() *registry.AttributeRegistry {
-				return registry.NewAttributeRegistry()
-			},
+			name:          "empty registry",
+			methodFQN:     "test_module.process",
+			setupRegistry: registry.NewAttributeRegistry,
 			expectedClass: "",
 		},
 	}
@@ -601,7 +607,7 @@ func TestFindClassContainingMethod(t *testing.T) {
 	}
 }
 
-// TestResolveAttributePlaceholders tests placeholder resolution
+// TestResolveAttributePlaceholders tests placeholder resolution.
 func TestResolveAttributePlaceholders(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -639,6 +645,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "user")
 				assert.NotNil(t, attr)
 				assert.Equal(t, "test_module.User", attr.Type.TypeFQN)
@@ -675,6 +682,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "user")
 				assert.NotNil(t, attr)
 				assert.Equal(t, "test_module.User", attr.Type.TypeFQN)
@@ -713,6 +721,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "user")
 				assert.NotNil(t, attr)
 				assert.Equal(t, "test_module.User", attr.Type.TypeFQN)
@@ -743,6 +752,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "value")
 				assert.NotNil(t, attr)
 				assert.Equal(t, "builtins.str", attr.Type.TypeFQN)
@@ -774,6 +784,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "user")
 				assert.NotNil(t, attr)
 				// Should remain as placeholder
@@ -806,6 +817,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				return attrRegistry, typeEngine, moduleRegistry, codeGraph
 			},
 			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
 				attr := reg.GetAttribute("test_module.MyClass", "result")
 				assert.NotNil(t, attr)
 				// Should remain as placeholder
@@ -825,7 +837,7 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 	}
 }
 
-// TestResolveClassName tests class name resolution
+// TestResolveClassName tests class name resolution.
 func TestResolveClassName(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -891,7 +903,7 @@ func TestResolveClassName(t *testing.T) {
 	}
 }
 
-// TestClassExists tests class existence checking
+// TestClassExists tests class existence checking.
 func TestClassExists(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -959,7 +971,7 @@ func TestClassExists(t *testing.T) {
 	}
 }
 
-// TestGetModuleFromClassFQN tests module extraction from class FQN
+// TestGetModuleFromClassFQN tests module extraction from class FQN.
 func TestGetModuleFromClassFQN(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -996,7 +1008,7 @@ func TestGetModuleFromClassFQN(t *testing.T) {
 	}
 }
 
-// TestFailureStats_SampleLimit tests that samples are limited to 20
+// TestFailureStats_SampleLimit tests that samples are limited to 20.
 func TestFailureStats_SampleLimit(t *testing.T) {
 	// Reset stats
 	attributeFailureStats = &FailureStats{
@@ -1022,4 +1034,17 @@ func TestFailureStats_SampleLimit(t *testing.T) {
 	assert.Equal(t, 20, len(attributeFailureStats.DeepChainSamples))
 	assert.Equal(t, 30, attributeFailureStats.TotalAttempts)
 	assert.Equal(t, 30, attributeFailureStats.DeepChains)
+}
+
+// newAttributeRegistryWithClass is a helper to create an AttributeRegistry with a single class.
+func newAttributeRegistryWithClass(classFQN string, methods []string) func() *registry.AttributeRegistry {
+	return func() *registry.AttributeRegistry {
+		reg := registry.NewAttributeRegistry()
+		reg.AddClassAttributes(&core.ClassAttributes{
+			ClassFQN:   classFQN,
+			Attributes: make(map[string]*core.ClassAttribute),
+			Methods:    methods,
+		})
+		return reg
+	}
 }

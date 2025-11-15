@@ -380,7 +380,7 @@ func TestResolveChainMethod(t *testing.T) {
 	}
 }
 
-// TestResolveFirstChainStep_VariableLookup tests variable resolution in scopes
+// TestResolveFirstChainStep_VariableLookup tests variable resolution in scopes.
 func TestResolveFirstChainStep_VariableLookup(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -490,7 +490,7 @@ func TestResolveFirstChainStep_VariableLookup(t *testing.T) {
 	}
 }
 
-// TestResolveFirstChainStep_FunctionCall tests function call resolution
+// TestResolveFirstChainStep_FunctionCall tests function call resolution.
 func TestResolveFirstChainStep_FunctionCall(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -604,7 +604,7 @@ func TestResolveFirstChainStep_FunctionCall(t *testing.T) {
 	}
 }
 
-// TestResolveChainMethod_BuiltinTypes tests builtin method resolution
+// TestResolveChainMethod_BuiltinTypes tests builtin method resolution.
 func TestResolveChainMethod_BuiltinTypes(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -703,7 +703,7 @@ func TestResolveChainMethod_BuiltinTypes(t *testing.T) {
 	}
 }
 
-// TestResolveChainMethod_CustomClass tests custom class method resolution
+// TestResolveChainMethod_CustomClass tests custom class method resolution.
 func TestResolveChainMethod_CustomClass(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -845,7 +845,7 @@ func TestResolveChainMethod_CustomClass(t *testing.T) {
 	}
 }
 
-// TestResolveChainMethod_EdgeCases tests edge cases and error handling
+// TestResolveChainMethod_EdgeCases tests edge cases and error handling.
 func TestResolveChainMethod_EdgeCases(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -936,7 +936,7 @@ func TestResolveChainMethod_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestResolveChainedCall_ComplexChains tests full chain resolution
+// TestResolveChainedCall_ComplexChains tests full chain resolution.
 func TestResolveChainedCall_ComplexChains(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -1040,7 +1040,7 @@ func TestResolveChainedCall_ComplexChains(t *testing.T) {
 	}
 }
 
-// TestResolveFirstChainStep_EdgeCases tests edge cases in first step resolution
+// TestResolveFirstChainStep_EdgeCases tests edge cases in first step resolution.
 func TestResolveFirstChainStep_EdgeCases(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	typeEngine := NewTypeInferenceEngine(moduleRegistry)
