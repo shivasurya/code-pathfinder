@@ -1,7 +1,6 @@
 package callgraph
 
 import (
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/patterns"
 )
 
@@ -43,8 +42,6 @@ type PatternMatchDetails = patterns.PatternMatchDetails
 // MatchPattern checks if a call graph matches a pattern.
 // Deprecated: Use PatternRegistry.MatchPattern from patterns package instead.
 func MatchPattern(pattern *Pattern, callGraph *CallGraph) *PatternMatchDetails {
-	// Convert CallGraph to core.CallGraph if needed
-	coreCallGraph := (*core.CallGraph)(callGraph)
 	registry := patterns.NewPatternRegistry()
-	return registry.MatchPattern(pattern, coreCallGraph)
+	return registry.MatchPattern(pattern, callGraph)
 }

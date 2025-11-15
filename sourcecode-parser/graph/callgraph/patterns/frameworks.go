@@ -19,8 +19,9 @@ func DetectFramework(importMap *core.ImportMap) *Framework {
 	}
 
 	// Check for known frameworks using the core framework definitions
-	for importPath := range importMap.Imports {
-		if isKnown, framework := core.IsKnownFramework(importPath); isKnown {
+	// Iterate over FQNs (values), not aliases (keys)
+	for _, fqn := range importMap.Imports {
+		if isKnown, framework := core.IsKnownFramework(fqn); isKnown {
 			return &Framework{
 				Name:     framework.Name,
 				Category: framework.Category,
