@@ -4,39 +4,32 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
 )
 
 // Deprecated: Use core.TypeInfo instead.
 // This alias will be removed in a future version.
 type TypeInfo = core.TypeInfo
 
-// VariableBinding tracks a variable's type within a scope.
-// It captures the variable name, its inferred type, and source location.
-type VariableBinding struct {
-	VarName      string    // Variable name
-	Type         *TypeInfo // Inferred type information
-	AssignedFrom string    // FQN of function that assigned this value (if from function call)
-	Location     Location  // Source location of the assignment
-}
+// Deprecated: Use resolution.VariableBinding instead.
+// This alias will be removed in a future version.
+type VariableBinding = resolution.VariableBinding
 
-// FunctionScope represents the type environment within a function.
-// It tracks variable types and return type for a specific function.
-type FunctionScope struct {
-	FunctionFQN string                       // Fully qualified name of the function
-	Variables   map[string]*VariableBinding  // Variable name -> binding
-	ReturnType  *TypeInfo                    // Inferred return type of the function
-}
+// Deprecated: Use resolution.FunctionScope instead.
+// This alias will be removed in a future version.
+type FunctionScope = resolution.FunctionScope
 
 // TypeInferenceEngine manages type inference across the codebase.
 // It maintains function scopes, return types, and references to other registries.
 type TypeInferenceEngine struct {
-	Scopes         map[string]*FunctionScope  // Function FQN -> scope
-	ReturnTypes    map[string]*TypeInfo       // Function FQN -> return type
-	Builtins       *BuiltinRegistry           // Builtin types registry
-	Registry       *ModuleRegistry            // Module registry reference
-	Attributes     *AttributeRegistry         // Class attributes registry (Phase 3 Task 12)
-	StdlibRegistry *StdlibRegistry            // Python stdlib registry (PR #2)
-	StdlibRemote   *StdlibRegistryRemote      // Remote loader for lazy module loading (PR #3)
+	Scopes         map[string]*resolution.FunctionScope  // Function FQN -> scope
+	ReturnTypes    map[string]*TypeInfo                  // Function FQN -> return type
+	Builtins       *registry.BuiltinRegistry             // Builtin types registry
+	Registry       *core.ModuleRegistry                  // Module registry reference
+	Attributes     *registry.AttributeRegistry           // Class attributes registry (Phase 3 Task 12)
+	StdlibRegistry *core.StdlibRegistry                  // Python stdlib registry (PR #2)
+	StdlibRemote   *StdlibRegistryRemote                 // Remote loader for lazy module loading (PR #3)
 }
 
 // NewTypeInferenceEngine creates a new type inference engine.
@@ -47,9 +40,9 @@ type TypeInferenceEngine struct {
 //
 // Returns:
 //   - Initialized TypeInferenceEngine
-func NewTypeInferenceEngine(registry *ModuleRegistry) *TypeInferenceEngine {
+func NewTypeInferenceEngine(registry *core.ModuleRegistry) *TypeInferenceEngine {
 	return &TypeInferenceEngine{
-		Scopes:      make(map[string]*FunctionScope),
+		Scopes:      make(map[string]*resolution.FunctionScope),
 		ReturnTypes: make(map[string]*TypeInfo),
 		Registry:    registry,
 	}
@@ -62,7 +55,7 @@ func NewTypeInferenceEngine(registry *ModuleRegistry) *TypeInferenceEngine {
 //
 // Returns:
 //   - FunctionScope if found, nil otherwise
-func (te *TypeInferenceEngine) GetScope(functionFQN string) *FunctionScope {
+func (te *TypeInferenceEngine) GetScope(functionFQN string) *resolution.FunctionScope {
 	return te.Scopes[functionFQN]
 }
 
@@ -70,7 +63,7 @@ func (te *TypeInferenceEngine) GetScope(functionFQN string) *FunctionScope {
 //
 // Parameters:
 //   - scope: the function scope to add
-func (te *TypeInferenceEngine) AddScope(scope *FunctionScope) {
+func (te *TypeInferenceEngine) AddScope(scope *resolution.FunctionScope) {
 	if scope != nil {
 		te.Scopes[scope.FunctionFQN] = scope
 	}
@@ -83,11 +76,8 @@ func (te *TypeInferenceEngine) AddScope(scope *FunctionScope) {
 //
 // Returns:
 //   - Initialized FunctionScope
-func NewFunctionScope(functionFQN string) *FunctionScope {
-	return &FunctionScope{
-		FunctionFQN: functionFQN,
-		Variables:   make(map[string]*VariableBinding),
-	}
+func NewFunctionScope(functionFQN string) *resolution.FunctionScope {
+	return resolution.NewFunctionScope(functionFQN)
 }
 
 // ResolveVariableType resolves the type of a variable assignment from a function call.

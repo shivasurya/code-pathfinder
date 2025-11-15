@@ -6,6 +6,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
 // ReturnStatement represents a return statement in a function.
@@ -20,7 +21,7 @@ func ExtractReturnTypes(
 	filePath string,
 	sourceCode []byte,
 	modulePath string,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) ([]*ReturnStatement, error) {
 	parser := sitter.NewParser()
 	parser.SetLanguage(python.GetLanguage())
@@ -45,7 +46,7 @@ func traverseForReturns(
 	modulePath string,
 	currentFunction string,
 	returns *[]*ReturnStatement,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) {
 	if node == nil {
 		return
@@ -106,7 +107,7 @@ func inferReturnType(
 	node *sitter.Node,
 	sourceCode []byte,
 	modulePath string,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) *TypeInfo {
 	if node == nil {
 		return nil

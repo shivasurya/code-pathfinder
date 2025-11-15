@@ -398,12 +398,12 @@ def test():
 	xBinding := scope.Variables["x"]
 	assert.NotNil(t, xBinding)
 	assert.Equal(t, filePath, xBinding.Location.File)
-	assert.Equal(t, 3, xBinding.Location.Line)
+	assert.Equal(t, uint32(3), xBinding.Location.Line)
 
 	yBinding := scope.Variables["y"]
 	assert.NotNil(t, yBinding)
 	assert.Equal(t, filePath, yBinding.Location.File)
-	assert.Equal(t, 4, yBinding.Location.Line)
+	assert.Equal(t, uint32(4), yBinding.Location.Line)
 }
 
 // TestInferTypeFromExpression_DirectCalls tests type inference helper.

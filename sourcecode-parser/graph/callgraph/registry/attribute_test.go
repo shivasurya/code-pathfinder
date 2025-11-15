@@ -1,9 +1,10 @@
-package callgraph
+package registry
 
 import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,9 +18,9 @@ func TestNewAttributeRegistry(t *testing.T) {
 func TestAddClassAttributes(t *testing.T) {
 	registry := NewAttributeRegistry()
 
-	classAttrs := &ClassAttributes{
+	classAttrs := &core.ClassAttributes{
 		ClassFQN:   "myapp.User",
-		Attributes: make(map[string]*ClassAttribute),
+		Attributes: make(map[string]*core.ClassAttribute),
 		Methods:    []string{"__init__", "save"},
 		FilePath:   "/path/to/user.py",
 	}
@@ -33,9 +34,9 @@ func TestAddClassAttributes(t *testing.T) {
 func TestGetClassAttributes(t *testing.T) {
 	registry := NewAttributeRegistry()
 
-	classAttrs := &ClassAttributes{
+	classAttrs := &core.ClassAttributes{
 		ClassFQN:   "myapp.User",
-		Attributes: make(map[string]*ClassAttribute),
+		Attributes: make(map[string]*core.ClassAttribute),
 		FilePath:   "/path/to/user.py",
 	}
 
@@ -54,9 +55,9 @@ func TestGetClassAttributes(t *testing.T) {
 func TestAddAttribute(t *testing.T) {
 	registry := NewAttributeRegistry()
 
-	attr := &ClassAttribute{
+	attr := &core.ClassAttribute{
 		Name: "name",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
 			Source:     "literal",
@@ -76,9 +77,9 @@ func TestAddAttribute(t *testing.T) {
 	assert.Equal(t, "name", classAttrs.Attributes["name"].Name)
 
 	// Add another attribute to same class
-	attr2 := &ClassAttribute{
+	attr2 := &core.ClassAttribute{
 		Name: "email",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
 			Source:     "literal",
@@ -96,9 +97,9 @@ func TestAddAttribute(t *testing.T) {
 func TestGetAttribute(t *testing.T) {
 	registry := NewAttributeRegistry()
 
-	attr := &ClassAttribute{
+	attr := &core.ClassAttribute{
 		Name: "name",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
 			Source:     "literal",
@@ -128,9 +129,9 @@ func TestGetAllClasses(t *testing.T) {
 	registry := NewAttributeRegistry()
 
 	// Add multiple classes
-	registry.AddClassAttributes(&ClassAttributes{ClassFQN: "myapp.User"})
-	registry.AddClassAttributes(&ClassAttributes{ClassFQN: "myapp.Product"})
-	registry.AddClassAttributes(&ClassAttributes{ClassFQN: "myapp.Order"})
+	registry.AddClassAttributes(&core.ClassAttributes{ClassFQN: "myapp.User"})
+	registry.AddClassAttributes(&core.ClassAttributes{ClassFQN: "myapp.Product"})
+	registry.AddClassAttributes(&core.ClassAttributes{ClassFQN: "myapp.Order"})
 
 	classes := registry.GetAllClasses()
 	assert.Equal(t, 3, len(classes))
@@ -186,9 +187,9 @@ func TestAttributeTypeInference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			registry := NewAttributeRegistry()
 
-			attr := &ClassAttribute{
+			attr := &core.ClassAttribute{
 				Name: tt.attributeName,
-				Type: &TypeInfo{
+				Type: &core.TypeInfo{
 					TypeFQN:    tt.typeFQN,
 					Confidence: float32(tt.expectedConf),
 					Source:     tt.source,
@@ -217,9 +218,9 @@ func TestThreadSafety(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		go func(_ int) {
-			attr := &ClassAttribute{
+			attr := &core.ClassAttribute{
 				Name: "attr",
-				Type: &TypeInfo{
+				Type: &core.TypeInfo{
 					TypeFQN:    "builtins.str",
 					Confidence: 1.0,
 					Source:     "literal",
@@ -257,9 +258,9 @@ func TestMultipleAttributesPerClass(t *testing.T) {
 
 	// Add all attributes
 	for _, attrSpec := range attributes {
-		attr := &ClassAttribute{
+		attr := &core.ClassAttribute{
 			Name: attrSpec.name,
-			Type: &TypeInfo{
+			Type: &core.TypeInfo{
 				TypeFQN:    attrSpec.typeFQN,
 				Confidence: 1.0,
 				Source:     "literal",
@@ -286,9 +287,9 @@ func TestUpdateExistingAttribute(t *testing.T) {
 	registry := NewAttributeRegistry()
 
 	// Add initial attribute
-	attr1 := &ClassAttribute{
+	attr1 := &core.ClassAttribute{
 		Name: "value",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 0.5,
 			Source:     "heuristic",
@@ -299,9 +300,9 @@ func TestUpdateExistingAttribute(t *testing.T) {
 	registry.AddAttribute("test.Class", attr1)
 
 	// Update with better type information
-	attr2 := &ClassAttribute{
+	attr2 := &core.ClassAttribute{
 		Name: "value",
-		Type: &TypeInfo{
+		Type: &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
 			Source:     "annotation",

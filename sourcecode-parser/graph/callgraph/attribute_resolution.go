@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
 // FailureStats tracks why attribute chain resolution fails.
@@ -63,7 +64,7 @@ func ResolveSelfAttributeCall(
 	target string,
 	callerFQN string,
 	typeEngine *TypeInferenceEngine,
-	builtins *BuiltinRegistry,
+	builtins *registry.BuiltinRegistry,
 	callGraph *CallGraph,
 ) (string, bool, *TypeInfo) {
 	attributeFailureStats.TotalAttempts++
@@ -228,7 +229,7 @@ func PrintAttributeFailureStats() {
 //
 // Returns:
 //   - class FQN if found, empty string otherwise
-func findClassContainingMethod(methodFQN string, registry *AttributeRegistry) string {
+func findClassContainingMethod(methodFQN string, registry *registry.AttributeRegistry) string {
 	// Extract method name from FQN (last part after final dot)
 	methodName := methodFQN
 	if lastDot := strings.LastIndex(methodFQN, "."); lastDot != -1 {
@@ -269,7 +270,7 @@ func findClassContainingMethod(methodFQN string, registry *AttributeRegistry) st
 //   - moduleRegistry: module registry for resolving class names
 //   - codeGraph: code graph for finding class definitions
 func ResolveAttributePlaceholders(
-	registry *AttributeRegistry,
+	registry *registry.AttributeRegistry,
 	typeEngine *TypeInferenceEngine,
 	moduleRegistry *ModuleRegistry,
 	codeGraph *graph.CodeGraph,
