@@ -1,5 +1,11 @@
 # SecureFlow Changelog
 
+## Version 0.0.16 - November 14, 2025
+
+### 🚀 What's New?
+
+- **GPT-5.1 Model Support**: Added support for OpenAI's flagship GPT-5.1 model with configurable reasoning effort, 400K context window, and 128K output capacity for complex security workflows
+
 ## Version 0.0.15 - October 17, 2025
 
 ### 🚀 What's New?
