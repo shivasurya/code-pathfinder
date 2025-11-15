@@ -2,7 +2,7 @@
   "name": "secureflow",
   "displayName": "SecureFlow Code Reviewer",
   "description": "AI-powered security copilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "publisher": "codepathfinder",
   "author": {
     "name": "Shivasurya",

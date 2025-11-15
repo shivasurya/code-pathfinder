@@ -1,5 +1,11 @@
 # SecureFlow Changelog
 
+## Version 0.0.17 - November 15, 2025
+
+### 🔧 Improvements
+
+- **TypeScript Build Fixes**: Fixed TypeScript compilation errors in generated model configuration files with proper type annotations
+
 ## Version 0.0.16 - November 14, 2025
 
 ### 🚀 What's New?
