@@ -433,3 +433,226 @@ func TestTypeInferenceEngine_WithBuiltinRegistry(t *testing.T) {
 	assert.Equal(t, "builtins.str", typeInfo.TypeFQN)
 	assert.Equal(t, float32(1.0), typeInfo.Confidence)
 }
+
+// TestTypeInferenceEngine_ResolveVariableType tests variable type resolution from function returns.
+func TestTypeInferenceEngine_ResolveVariableType(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Add a return type for a function
+	engine.ReturnTypes["myapp.models.get_user"] = &core.TypeInfo{
+		TypeFQN:    "myapp.models.User",
+		Confidence: 1.0,
+		Source:     "return_annotation",
+	}
+
+	// Test resolving variable type from function return
+	resolvedType := engine.ResolveVariableType("myapp.models.get_user", 1.0)
+	assert.NotNil(t, resolvedType)
+	assert.Equal(t, "myapp.models.User", resolvedType.TypeFQN)
+	assert.Equal(t, "function_call_propagation", resolvedType.Source)
+	// Confidence should be reduced: 1.0 * 1.0 * 0.95 = 0.95
+	assert.Equal(t, float32(0.95), resolvedType.Confidence)
+
+	// Test with lower base confidence
+	resolvedType2 := engine.ResolveVariableType("myapp.models.get_user", 0.8)
+	assert.NotNil(t, resolvedType2)
+	assert.Equal(t, "myapp.models.User", resolvedType2.TypeFQN)
+	// Confidence: 1.0 * 0.8 * 0.95 = 0.76
+	assert.Equal(t, float32(0.76), resolvedType2.Confidence)
+
+	// Test with function that has no return type
+	resolvedType3 := engine.ResolveVariableType("nonexistent.function", 1.0)
+	assert.Nil(t, resolvedType3)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindingsWithFunctionReturns tests updating call: placeholders.
+func TestTypeInferenceEngine_UpdateVariableBindingsWithFunctionReturns(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return types for functions
+	// Note: Simple names in call: will be qualified with scope's module path
+	// Scope is myapp.controllers.login, so create_user becomes myapp.controllers.create_user
+	engine.ReturnTypes["myapp.controllers.create_user"] = &core.TypeInfo{
+		TypeFQN:    "myapp.models.User",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+	engine.ReturnTypes["myapp.controllers.get_config"] = &core.TypeInfo{
+		TypeFQN:    "builtins.dict",
+		Confidence: 0.9,
+		Source:     "return_literal",
+	}
+
+	// Create a scope with call: placeholders
+	scope := NewFunctionScope("myapp.controllers.login")
+	scope.Variables["user"] = &VariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:create_user",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+	scope.Variables["config"] = &VariableBinding{
+		VarName: "config",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:get_config",
+			Confidence: 0.9,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 15, Column: 5},
+	}
+	scope.Variables["name"] = &VariableBinding{
+		VarName: "name",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.str",
+			Confidence: 1.0,
+			Source:     "literal",
+		},
+		Location: Location{File: "/test/file.py", Line: 20, Column: 5},
+	}
+
+	engine.AddScope(scope)
+
+	// Update variable bindings
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify user was resolved
+	userBinding := engine.GetScope("myapp.controllers.login").Variables["user"]
+	assert.Equal(t, "myapp.models.User", userBinding.Type.TypeFQN)
+	assert.Equal(t, "function_call_propagation", userBinding.Type.Source)
+	assert.Equal(t, "myapp.controllers.create_user", userBinding.AssignedFrom)
+	// Confidence: 1.0 * 0.8 * 0.95 = 0.76
+	assert.Equal(t, float32(0.76), userBinding.Type.Confidence)
+
+	// Verify config was resolved
+	configBinding := engine.GetScope("myapp.controllers.login").Variables["config"]
+	assert.Equal(t, "builtins.dict", configBinding.Type.TypeFQN)
+	assert.Equal(t, "function_call_propagation", configBinding.Type.Source)
+	assert.Equal(t, "myapp.controllers.get_config", configBinding.AssignedFrom)
+
+	// Verify name was NOT changed (not a call: placeholder)
+	nameBinding := engine.GetScope("myapp.controllers.login").Variables["name"]
+	assert.Equal(t, "builtins.str", nameBinding.Type.TypeFQN)
+	assert.Equal(t, "literal", nameBinding.Type.Source)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_QualifiedName tests qualified function calls.
+func TestTypeInferenceEngine_UpdateVariableBindings_QualifiedName(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return type for qualified function
+	engine.ReturnTypes["logging.getLogger"] = &core.TypeInfo{
+		TypeFQN:    "logging.Logger",
+		Confidence: 1.0,
+		Source:     "stdlib",
+	}
+
+	// Create scope with qualified call
+	scope := NewFunctionScope("myapp.utils.helper")
+	scope.Variables["logger"] = &VariableBinding{
+		VarName: "logger",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:logging.getLogger",
+			Confidence: 1.0,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify logger was resolved using the qualified name
+	loggerBinding := engine.GetScope("myapp.utils.helper").Variables["logger"]
+	assert.Equal(t, "logging.Logger", loggerBinding.Type.TypeFQN)
+	assert.Equal(t, "logging.getLogger", loggerBinding.AssignedFrom)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_ModuleLevelScope tests module-level function.
+func TestTypeInferenceEngine_UpdateVariableBindings_ModuleLevelScope(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return type
+	engine.ReturnTypes["myapp.helper"] = &core.TypeInfo{
+		TypeFQN:    "builtins.str",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	// Create module-level scope (no dots in FunctionFQN)
+	scope := NewFunctionScope("myapp")
+	scope.Variables["result"] = &VariableBinding{
+		VarName: "result",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:helper",
+			Confidence: 1.0,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 3, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify result was resolved with module path prepended
+	resultBinding := engine.GetScope("myapp").Variables["result"]
+	assert.Equal(t, "builtins.str", resultBinding.Type.TypeFQN)
+	assert.Equal(t, "myapp.helper", resultBinding.AssignedFrom)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_UnresolvedCall tests unresolved function calls.
+func TestTypeInferenceEngine_UpdateVariableBindings_UnresolvedCall(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Create scope with call that has no return type
+	scope := NewFunctionScope("myapp.controllers.view")
+	scope.Variables["unknown"] = &VariableBinding{
+		VarName: "unknown",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:unknown_func",
+			Confidence: 0.5,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify unknown remains as call: placeholder (not resolved)
+	unknownBinding := engine.GetScope("myapp.controllers.view").Variables["unknown"]
+	assert.Equal(t, "call:unknown_func", unknownBinding.Type.TypeFQN)
+	assert.Equal(t, "assignment", unknownBinding.Type.Source)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_NilType tests handling of nil types.
+func TestTypeInferenceEngine_UpdateVariableBindings_NilType(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Create scope with nil type (edge case)
+	scope := NewFunctionScope("myapp.test")
+	scope.Variables["nullvar"] = &VariableBinding{
+		VarName:  "nullvar",
+		Type:     nil,
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	engine.AddScope(scope)
+
+	// Should not panic
+	assert.NotPanics(t, func() {
+		engine.UpdateVariableBindingsWithFunctionReturns()
+	})
+
+	// Verify variable still has nil type
+	nullvarBinding := engine.GetScope("myapp.test").Variables["nullvar"]
+	assert.Nil(t, nullvarBinding.Type)
+}
