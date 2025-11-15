@@ -101,6 +101,7 @@
           "type": "string",
           "default": "claude-sonnet-4-5-20250929",
           "enum": [
+            "gpt-5.1",
             "gpt-5-pro",
             "gpt-5",
             "gpt-5-mini",
@@ -126,6 +127,7 @@
             "grok-4-fast-reasoning"
           ],
           "enumDescriptions": [
+            "OpenAI GPT-5.1 (2025) - Flagship model for coding and agentic tasks with configurable reasoning effort",
             "OpenAI GPT-5 Pro (2025) - Extended reasoning for most complex tasks",
             "OpenAI GPT-5 (2025) - Most advanced model for coding and agentic tasks",
             "OpenAI GPT-5 Mini (2025) - Faster, cost-efficient version",
