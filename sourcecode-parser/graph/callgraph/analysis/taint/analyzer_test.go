@@ -1,8 +1,9 @@
-package callgraph
+package taint
 
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,16 +53,16 @@ func TestTaintState_GetTaintInfo_Nonexistent(t *testing.T) {
 
 func TestAnalyzeIntraProceduralTaint_SimpleSource(t *testing.T) {
 	// x = request.GET['input']
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
 
-	statements := []*Statement{stmt1}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -78,16 +79,16 @@ func TestAnalyzeIntraProceduralTaint_SimpleSource(t *testing.T) {
 
 func TestAnalyzeIntraProceduralTaint_SimpleSink(t *testing.T) {
 	// eval(x)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"x"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -105,23 +106,23 @@ func TestAnalyzeIntraProceduralTaint_SimpleSink(t *testing.T) {
 func TestAnalyzeIntraProceduralTaint_SourceToSink(t *testing.T) {
 	// x = request.GET['input']
 	// eval(x)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
-	stmt2 := &Statement{
+	stmt2 := &core.Statement{
 		LineNumber: 2,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"x"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1, stmt2}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1, stmt2}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -146,30 +147,30 @@ func TestAnalyzeIntraProceduralTaint_AssignmentPropagation(t *testing.T) {
 	// x = request.GET['input']
 	// y = x
 	// eval(y)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
-	stmt2 := &Statement{
+	stmt2 := &core.Statement{
 		LineNumber: 2,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "y",
 		Uses:       []string{"x"},
 		CallTarget: "x",
 	}
-	stmt3 := &Statement{
+	stmt3 := &core.Statement{
 		LineNumber: 3,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"y"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1, stmt2, stmt3}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1, stmt2, stmt3}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -189,30 +190,30 @@ func TestAnalyzeIntraProceduralTaint_CallPropagation(t *testing.T) {
 	// x = request.GET['input']
 	// y = x.upper()
 	// eval(y)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
-	stmt2 := &Statement{
+	stmt2 := &core.Statement{
 		LineNumber: 2,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "y",
 		Uses:       []string{"x"},
 		CallTarget: "upper",
 	}
-	stmt3 := &Statement{
+	stmt3 := &core.Statement{
 		LineNumber: 3,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"y"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1, stmt2, stmt3}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1, stmt2, stmt3}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -232,30 +233,30 @@ func TestAnalyzeIntraProceduralTaint_Sanitizer(t *testing.T) {
 	// x = request.GET['input']
 	// y = html.escape(x)
 	// eval(y)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
-	stmt2 := &Statement{
+	stmt2 := &core.Statement{
 		LineNumber: 2,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "y",
 		Uses:       []string{"x"},
 		CallTarget: "html.escape",
 	}
-	stmt3 := &Statement{
+	stmt3 := &core.Statement{
 		LineNumber: 3,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"y"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1, stmt2, stmt3}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1, stmt2, stmt3}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -275,30 +276,30 @@ func TestAnalyzeIntraProceduralTaint_NonPropagator(t *testing.T) {
 	// x = request.GET['input']
 	// y = len(x)
 	// eval(y)
-	stmt1 := &Statement{
+	stmt1 := &core.Statement{
 		LineNumber: 1,
-		Type:       StatementTypeAssignment,
+		Type:       core.StatementTypeAssignment,
 		Def:        "x",
 		Uses:       []string{"request"},
 		CallTarget: "request.GET",
 	}
-	stmt2 := &Statement{
+	stmt2 := &core.Statement{
 		LineNumber: 2,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "y",
 		Uses:       []string{"x"},
 		CallTarget: "len",
 	}
-	stmt3 := &Statement{
+	stmt3 := &core.Statement{
 		LineNumber: 3,
-		Type:       StatementTypeCall,
+		Type:       core.StatementTypeCall,
 		Def:        "",
 		Uses:       []string{"y"},
 		CallTarget: "eval",
 	}
 
-	statements := []*Statement{stmt1, stmt2, stmt3}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{stmt1, stmt2, stmt3}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",
@@ -315,8 +316,8 @@ func TestAnalyzeIntraProceduralTaint_NonPropagator(t *testing.T) {
 }
 
 func TestAnalyzeIntraProceduralTaint_EmptyFunction(t *testing.T) {
-	statements := []*Statement{}
-	defUseChain := BuildDefUseChains(statements)
+	statements := []*core.Statement{}
+	defUseChain := core.BuildDefUseChains(statements)
 
 	summary := AnalyzeIntraProceduralTaint(
 		"test.func",

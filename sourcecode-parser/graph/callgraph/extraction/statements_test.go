@@ -1,6 +1,7 @@
-package callgraph
+package extraction
 
 import (
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"context"
 	"testing"
 
@@ -73,7 +74,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeAssignment, stmt.Type)
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
 	assert.Equal(t, uint32(3), stmt.LineNumber) // Line 3 in source
 	assert.Equal(t, "x", stmt.Def)
 	assert.Equal(t, "10", stmt.CallTarget) // RHS stored in CallTarget
@@ -94,7 +95,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeAssignment, stmt.Type)
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
 	assert.Equal(t, "y", stmt.Def)
 	assert.Equal(t, "x", stmt.CallTarget)
 	assert.Equal(t, []string{"x"}, stmt.Uses)
@@ -114,7 +115,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeAssignment, stmt.Type)
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
 	assert.Equal(t, "result", stmt.Def)
 	// Uses should include function name and arguments
 	assert.Contains(t, stmt.Uses, "func")
@@ -136,7 +137,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeAssignment, stmt.Type) // Normalized
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type) // Normalized
 	assert.Equal(t, "x", stmt.Def)
 	assert.Contains(t, stmt.Uses, "x", "Augmented assignment uses LHS")
 }
@@ -189,7 +190,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeCall, stmt.Type)
+	assert.Equal(t, core.StatementTypeCall, stmt.Type)
 	assert.Equal(t, "func", stmt.CallTarget)
 	assert.Equal(t, 0, len(stmt.CallArgs))
 	assert.Equal(t, "", stmt.Def, "Call without assignment has no defs")
@@ -209,7 +210,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeCall, stmt.Type)
+	assert.Equal(t, core.StatementTypeCall, stmt.Type)
 	assert.Equal(t, "eval", stmt.CallTarget)
 	assert.Equal(t, []string{"x"}, stmt.CallArgs)
 	assert.Contains(t, stmt.Uses, "x")
@@ -229,7 +230,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeCall, stmt.Type)
+	assert.Equal(t, core.StatementTypeCall, stmt.Type)
 	assert.Equal(t, "method", stmt.CallTarget, "Should extract method name")
 	assert.Contains(t, stmt.Uses, "obj", "Should track base object")
 }
@@ -291,7 +292,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeReturn, stmt.Type)
+	assert.Equal(t, core.StatementTypeReturn, stmt.Type)
 	assert.Equal(t, "x", stmt.CallTarget) // Return expression stored in CallTarget
 	assert.Equal(t, []string{"x"}, stmt.Uses)
 }
@@ -310,7 +311,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeReturn, stmt.Type)
+	assert.Equal(t, core.StatementTypeReturn, stmt.Type)
 	assert.Equal(t, "", stmt.CallTarget)
 	assert.Equal(t, 0, len(stmt.Uses))
 }
@@ -383,27 +384,27 @@ def vulnerable():
 	assert.Equal(t, 5, len(statements), "Should extract 5 statements")
 
 	// Statement 1: x = request.GET['input']
-	assert.Equal(t, StatementTypeAssignment, statements[0].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[0].Type)
 	assert.Equal(t, "x", statements[0].Def)
 	assert.Contains(t, statements[0].Uses, "request")
 
 	// Statement 2: y = x.upper()
-	assert.Equal(t, StatementTypeAssignment, statements[1].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[1].Type)
 	assert.Equal(t, "y", statements[1].Def)
 	assert.Contains(t, statements[1].Uses, "x")
 
 	// Statement 3: z = y
-	assert.Equal(t, StatementTypeAssignment, statements[2].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[2].Type)
 	assert.Equal(t, "z", statements[2].Def)
 	assert.Contains(t, statements[2].Uses, "y")
 
 	// Statement 4: eval(z)
-	assert.Equal(t, StatementTypeCall, statements[3].Type)
+	assert.Equal(t, core.StatementTypeCall, statements[3].Type)
 	assert.Equal(t, "eval", statements[3].CallTarget)
 	assert.Contains(t, statements[3].Uses, "z")
 
 	// Statement 5: return None
-	assert.Equal(t, StatementTypeReturn, statements[4].Type)
+	assert.Equal(t, core.StatementTypeReturn, statements[4].Type)
 }
 
 func TestExtractStatements_EmptyFunction(t *testing.T) {
@@ -456,9 +457,9 @@ def foo():
 	assert.Equal(t, 3, len(statements))
 
 	// All should be normalized to assignments
-	assert.Equal(t, StatementTypeAssignment, statements[0].Type)
-	assert.Equal(t, StatementTypeAssignment, statements[1].Type)
-	assert.Equal(t, StatementTypeAssignment, statements[2].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[0].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[1].Type)
+	assert.Equal(t, core.StatementTypeAssignment, statements[2].Type)
 
 	// All should include LHS in Uses
 	assert.Contains(t, statements[0].Uses, "x")
@@ -503,7 +504,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeCall, stmt.Type)
+	assert.Equal(t, core.StatementTypeCall, stmt.Type)
 	// CallArgs should include both positional and keyword values
 	assert.Contains(t, stmt.CallArgs, "x")
 	assert.Contains(t, stmt.CallArgs, "5")
@@ -560,7 +561,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeAssignment, stmt.Type)
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
 	assert.Contains(t, stmt.Uses, "obj")
 	assert.Equal(t, "", stmt.Def, "Attribute augmented assignment has no def")
 }
@@ -597,7 +598,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeCall, stmt.Type)
+	assert.Equal(t, core.StatementTypeCall, stmt.Type)
 	// Complex expression should have non-empty target
 	assert.NotEmpty(t, stmt.CallTarget)
 }
@@ -667,7 +668,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeReturn, stmt.Type)
+	assert.Equal(t, core.StatementTypeReturn, stmt.Type)
 	assert.Equal(t, 0, len(stmt.Uses))
 	assert.Equal(t, "", stmt.CallTarget)
 }
@@ -719,7 +720,7 @@ def foo():
 
 	// All should be assignments with no uses (literals)
 	for _, stmt := range statements {
-		assert.Equal(t, StatementTypeAssignment, stmt.Type)
+		assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
 		assert.NotEmpty(t, stmt.Def)
 		assert.Equal(t, 0, len(stmt.Uses))
 	}
@@ -823,7 +824,7 @@ def foo():
 	assert.Equal(t, 1, len(statements))
 
 	stmt := statements[0]
-	assert.Equal(t, StatementTypeReturn, stmt.Type)
+	assert.Equal(t, core.StatementTypeReturn, stmt.Type)
 	assert.Contains(t, stmt.Uses, "x")
 	assert.Contains(t, stmt.Uses, "y")
 }
