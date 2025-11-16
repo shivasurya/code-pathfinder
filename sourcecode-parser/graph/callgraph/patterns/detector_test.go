@@ -1,4 +1,4 @@
-package callgraph
+package patterns
 
 import (
 	"os"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -113,8 +114,8 @@ func TestPatternRegistry_MatchDangerousFunction(t *testing.T) {
 		DangerousFunctions: []string{"eval", "exec"},
 	}
 
-	callGraph := NewCallGraph()
-	callGraph.AddCallSite("myapp.views.process", CallSite{
+	callGraph := core.NewCallGraph()
+	callGraph.AddCallSite("myapp.views.process", core.CallSite{
 		Target:    "eval",
 		TargetFQN: "builtins.eval",
 	})
@@ -132,8 +133,8 @@ func TestPatternRegistry_MatchDangerousFunction_NoMatch(t *testing.T) {
 		DangerousFunctions: []string{"eval", "exec"},
 	}
 
-	callGraph := NewCallGraph()
-	callGraph.AddCallSite("myapp.views.process", CallSite{
+	callGraph := core.NewCallGraph()
+	callGraph.AddCallSite("myapp.views.process", core.CallSite{
 		Target:    "safe_function",
 		TargetFQN: "myapp.utils.safe_function",
 	})
@@ -156,16 +157,16 @@ func TestPatternRegistry_MatchSourceSink(t *testing.T) {
 		Sinks:   []string{"eval"},
 	}
 
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Create a path: get_input() -> process() -> execute_code()
 	// get_input calls input(), execute_code calls eval()
-	callGraph.AddCallSite("myapp.get_input", CallSite{
+	callGraph.AddCallSite("myapp.get_input", core.CallSite{
 		Target:    "input",
 		TargetFQN: "builtins.input",
 	})
 
-	callGraph.AddCallSite("myapp.execute_code", CallSite{
+	callGraph.AddCallSite("myapp.execute_code", core.CallSite{
 		Target:    "eval",
 		TargetFQN: "builtins.eval",
 	})
@@ -188,20 +189,20 @@ func TestPatternRegistry_MatchMissingSanitizer_WithSanitizer(t *testing.T) {
 		Sanitizers: []string{"sanitize"},
 	}
 
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Path with sanitizer: get_input() -> sanitize_input() -> execute_code()
-	callGraph.AddCallSite("myapp.get_input", CallSite{
+	callGraph.AddCallSite("myapp.get_input", core.CallSite{
 		Target:    "input",
 		TargetFQN: "builtins.input",
 	})
 
-	callGraph.AddCallSite("myapp.sanitize_input", CallSite{
+	callGraph.AddCallSite("myapp.sanitize_input", core.CallSite{
 		Target:    "sanitize",
 		TargetFQN: "myapp.utils.sanitize",
 	})
 
-	callGraph.AddCallSite("myapp.execute_code", CallSite{
+	callGraph.AddCallSite("myapp.execute_code", core.CallSite{
 		Target:    "eval",
 		TargetFQN: "builtins.eval",
 	})
@@ -228,15 +229,15 @@ func TestPatternRegistry_MatchMissingSanitizer_WithoutSanitizer(t *testing.T) {
 		Sanitizers: []string{"sanitize"},
 	}
 
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Path without sanitizer: get_input() -> execute_code()
-	callGraph.AddCallSite("myapp.get_input", CallSite{
+	callGraph.AddCallSite("myapp.get_input", core.CallSite{
 		Target:    "input",
 		TargetFQN: "builtins.input",
 	})
 
-	callGraph.AddCallSite("myapp.execute_code", CallSite{
+	callGraph.AddCallSite("myapp.execute_code", core.CallSite{
 		Target:    "eval",
 		TargetFQN: "builtins.eval",
 	})
@@ -250,7 +251,7 @@ func TestPatternRegistry_MatchMissingSanitizer_WithoutSanitizer(t *testing.T) {
 
 func TestPatternRegistry_HasPath(t *testing.T) {
 	registry := NewPatternRegistry()
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Create path: A -> B -> C
 	callGraph.AddEdge("A", "B")
@@ -265,7 +266,7 @@ func TestPatternRegistry_HasPath(t *testing.T) {
 
 func TestPatternRegistry_HasPath_Cycle(t *testing.T) {
 	registry := NewPatternRegistry()
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
 	// Create cycle: A -> B -> C -> A
 	callGraph.AddEdge("A", "B")
@@ -278,19 +279,19 @@ func TestPatternRegistry_HasPath_Cycle(t *testing.T) {
 
 func TestPatternRegistry_FindCallsByFunctions(t *testing.T) {
 	registry := NewPatternRegistry()
-	callGraph := NewCallGraph()
+	callGraph := core.NewCallGraph()
 
-	callGraph.AddCallSite("myapp.func1", CallSite{
+	callGraph.AddCallSite("myapp.func1", core.CallSite{
 		Target:    "input",
 		TargetFQN: "builtins.input",
 	})
 
-	callGraph.AddCallSite("myapp.func2", CallSite{
+	callGraph.AddCallSite("myapp.func2", core.CallSite{
 		Target:    "eval",
 		TargetFQN: "builtins.eval",
 	})
 
-	callGraph.AddCallSite("myapp.func3", CallSite{
+	callGraph.AddCallSite("myapp.func3", core.CallSite{
 		Target:    "print",
 		TargetFQN: "builtins.print",
 	})
@@ -339,17 +340,17 @@ def vulnerable():
 		LineNumber: 2,
 	}
 
-	callGraph := &CallGraph{
+	callGraph := &core.CallGraph{
 		Functions: map[string]*graph.Node{
 			"test.vulnerable": funcNode,
 		},
-		CallSites: map[string][]CallSite{
+		CallSites: map[string][]core.CallSite{
 			"test.vulnerable": {
 				{Target: "input", TargetFQN: "builtins.input"},
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries:    make(map[string]*TaintSummary),
+		Summaries:    make(map[string]*core.TaintSummary),
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
@@ -377,7 +378,7 @@ def vulnerable():
 
 func TestMatchMissingSanitizer_IntraProceduralNoFile(t *testing.T) {
 	// Test graceful handling when file cannot be read
-	callGraph := &CallGraph{
+	callGraph := &core.CallGraph{
 		Functions: map[string]*graph.Node{
 			"test.unknown": {
 				ID:         "test.unknown",
@@ -386,13 +387,13 @@ func TestMatchMissingSanitizer_IntraProceduralNoFile(t *testing.T) {
 				LineNumber: 1,
 			},
 		},
-		CallSites: map[string][]CallSite{
+		CallSites: map[string][]core.CallSite{
 			"test.unknown": {
 				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries:    map[string]*TaintSummary{},
+		Summaries:    map[string]*core.TaintSummary{},
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
@@ -431,18 +432,18 @@ def safe_function():
 		LineNumber: 2,
 	}
 
-	callGraph := &CallGraph{
+	callGraph := &core.CallGraph{
 		Functions: map[string]*graph.Node{
 			"test.safe_function": funcNode,
 		},
-		CallSites: map[string][]CallSite{
+		CallSites: map[string][]core.CallSite{
 			"test.safe_function": {
 				{Target: "input", TargetFQN: "builtins.input"},
 				{Target: "sanitize", TargetFQN: "test.sanitize"},
 				{Target: "eval", TargetFQN: "builtins.eval"},
 			},
 		},
-		Summaries:    make(map[string]*TaintSummary),
+		Summaries:    make(map[string]*core.TaintSummary),
 		Edges:        make(map[string][]string),
 		ReverseEdges: make(map[string][]string),
 	}
@@ -462,12 +463,12 @@ def safe_function():
 
 func TestMatchMissingSanitizer_InterProceduralUnchanged(t *testing.T) {
 	// Test that inter-procedural detection still works
-	callGraph := &CallGraph{
+	callGraph := &core.CallGraph{
 		Functions: map[string]*graph.Node{
 			"test.source_func": {ID: "test.source_func", Name: "source_func"},
 			"test.sink_func":   {ID: "test.sink_func", Name: "sink_func"},
 		},
-		CallSites: map[string][]CallSite{
+		CallSites: map[string][]core.CallSite{
 			"test.source_func": {
 				{Target: "request.GET", TargetFQN: "django.http.request.GET"},
 			},
@@ -481,7 +482,7 @@ func TestMatchMissingSanitizer_InterProceduralUnchanged(t *testing.T) {
 		ReverseEdges: map[string][]string{
 			"test.sink_func": {"test.source_func"},
 		},
-		Summaries: map[string]*TaintSummary{
+		Summaries: map[string]*core.TaintSummary{
 			"test.source_func": {FunctionFQN: "test.source_func"},
 			"test.sink_func":   {FunctionFQN: "test.sink_func"},
 		},
