@@ -3,6 +3,7 @@ package callgraph
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -64,7 +65,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 		confidence   float32
 		source       string
 		assignedFrom string
-		location     Location
+		location     resolution.Location
 	}{
 		{
 			name:       "simple variable",
@@ -73,7 +74,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 			confidence: 1.0,
 			source:     "assignment",
 			assignedFrom: "myapp.controllers.get_user",
-			location: Location{
+			location: resolution.Location{
 				File:   "/path/to/file.py",
 				Line:   10,
 				Column: 5,
@@ -86,7 +87,7 @@ func TestVariableBinding_Creation(t *testing.T) {
 			confidence: 1.0,
 			source:     "literal",
 			assignedFrom: "",
-			location: Location{
+			location: resolution.Location{
 				File:   "/path/to/file.py",
 				Line:   20,
 				Column: 3,
@@ -166,7 +167,7 @@ func TestFunctionScope_AddVariable(t *testing.T) {
 			Confidence: 1.0,
 			Source:     "assignment",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	scope.Variables["user"] = binding1
 
@@ -178,7 +179,7 @@ func TestFunctionScope_AddVariable(t *testing.T) {
 			Confidence: 0.9,
 			Source:     "heuristic",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 15, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 15, Column: 5},
 	}
 	scope.Variables["result"] = binding2
 
@@ -195,7 +196,7 @@ func TestFunctionScope_AddVariable(t *testing.T) {
 			Confidence: 1.0,
 			Source:     "annotation",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 20, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 20, Column: 5},
 	}
 	scope.Variables["user"] = binding3
 
@@ -258,7 +259,7 @@ func TestTypeInferenceEngine_AddAndGetScope(t *testing.T) {
 			Confidence: 1.0,
 			Source:     "assignment",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	engine.AddScope(scope1)
 
@@ -307,7 +308,7 @@ func TestTypeInferenceEngine_UpdateScope(t *testing.T) {
 			Confidence: 0.8,
 			Source:     "heuristic",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	engine.AddScope(scope1)
 
@@ -320,7 +321,7 @@ func TestTypeInferenceEngine_UpdateScope(t *testing.T) {
 			Confidence: 1.0,
 			Source:     "annotation",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 10, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 10, Column: 5},
 	}
 	scope2.Variables["result"] = &VariableBinding{
 		VarName: "result",
@@ -329,7 +330,7 @@ func TestTypeInferenceEngine_UpdateScope(t *testing.T) {
 			Confidence: 1.0,
 			Source:     "literal",
 		},
-		Location: Location{File: "/path/to/file.py", Line: 15, Column: 5},
+		Location: resolution.Location{File: "/path/to/file.py", Line: 15, Column: 5},
 	}
 	engine.AddScope(scope2)
 

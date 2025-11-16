@@ -6,6 +6,8 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
 )
 
 // ExtractVariableAssignments extracts variable assignments from a Python file
@@ -34,7 +36,7 @@ func ExtractVariableAssignments(
 	sourceCode []byte,
 	typeEngine *TypeInferenceEngine,
 	registry *ModuleRegistry,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) error {
 	// Parse with tree-sitter
 	parser := sitter.NewParser()
@@ -87,7 +89,7 @@ func traverseForAssignments(
 	currentFunction string,
 	typeEngine *TypeInferenceEngine,
 	registry *ModuleRegistry,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) {
 	if node == nil {
 		return
@@ -167,7 +169,7 @@ func processAssignment(
 	currentFunction string,
 	typeEngine *TypeInferenceEngine,
 	registry *ModuleRegistry,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) {
 	// Assignment node structure:
 	//   assignment
@@ -211,13 +213,13 @@ func processAssignment(
 	}
 
 	// Create variable binding
-	binding := &VariableBinding{
+	binding := &resolution.VariableBinding{
 		VarName: varName,
 		Type:    typeInfo,
-		Location: Location{
+		Location: resolution.Location{
 			File:   filePath,
-			Line:   int(leftNode.StartPoint().Row) + 1,
-			Column: int(leftNode.StartPoint().Column) + 1,
+			Line:   leftNode.StartPoint().Row + 1,
+			Column: leftNode.StartPoint().Column + 1,
 		},
 	}
 
@@ -267,7 +269,7 @@ func inferTypeFromExpression(
 	filePath string,
 	modulePath string,
 	registry *ModuleRegistry,
-	builtinRegistry *BuiltinRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
 ) *TypeInfo {
 	if node == nil {
 		return nil

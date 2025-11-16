@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
 // ChainStep represents a single step in a method chain.
@@ -181,8 +182,8 @@ func parseStep(expr string) *ChainStep {
 func ResolveChainedCall(
 	target string,
 	typeEngine *TypeInferenceEngine,
-	builtins *BuiltinRegistry,
-	registry *ModuleRegistry,
+	builtins *registry.BuiltinRegistry,
+	moduleRegistry *ModuleRegistry,
 	codeGraph *graph.CodeGraph,
 	callerFQN string,
 	currentModule string,
@@ -209,7 +210,7 @@ func ResolveChainedCall(
 				typeEngine,
 				callerFQN,
 				currentModule,
-				registry,
+				moduleRegistry,
 				callGraph,
 			)
 			if !ok {
@@ -233,7 +234,7 @@ func ResolveChainedCall(
 				currentType,
 				builtins,
 				typeEngine,
-				registry,
+				moduleRegistry,
 				callGraph,
 			)
 			if !ok {
@@ -345,7 +346,7 @@ func resolveFirstChainStep(
 func resolveChainMethod(
 	step ChainStep,
 	currentType *TypeInfo,
-	builtins *BuiltinRegistry,
+	builtins *registry.BuiltinRegistry,
 	typeEngine *TypeInferenceEngine,
 	_ *ModuleRegistry,
 	callGraph *CallGraph,

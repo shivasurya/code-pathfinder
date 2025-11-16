@@ -1,8 +1,9 @@
-package callgraph
+package cfg
 
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ func TestBasicBlock_Creation(t *testing.T) {
 		Type:         BlockTypeNormal,
 		StartLine:    10,
 		EndLine:      15,
-		Instructions: []CallSite{},
+		Instructions: []core.CallSite{},
 		Successors:   []string{"block2"},
 		Predecessors: []string{"entry"},
 	}
@@ -330,14 +331,14 @@ func TestBlockType_Constants(t *testing.T) {
 }
 
 func TestBasicBlock_WithInstructions(t *testing.T) {
-	callSite := CallSite{
+	callSite := core.CallSite{
 		Target: "sanitize",
-		Location: Location{
+		Location: core.Location{
 			File:   "/test/file.py",
 			Line:   10,
 			Column: 5,
 		},
-		Arguments: []Argument{
+		Arguments: []core.Argument{
 			{Value: "data", IsVariable: true, Position: 0},
 		},
 		Resolved:  true,
@@ -349,7 +350,7 @@ func TestBasicBlock_WithInstructions(t *testing.T) {
 		Type:         BlockTypeNormal,
 		StartLine:    10,
 		EndLine:      12,
-		Instructions: []CallSite{callSite},
+		Instructions: []core.CallSite{callSite},
 	}
 
 	assert.Len(t, block.Instructions, 1)
@@ -370,87 +371,9 @@ func TestBasicBlock_ConditionalWithCondition(t *testing.T) {
 	assert.Len(t, block.Successors, 2)
 }
 
-func TestIntersect(t *testing.T) {
-	tests := []struct {
-		name     string
-		a        []string
-		b        []string
-		expected []string
-	}{
-		{
-			name:     "Common elements",
-			a:        []string{"a", "b", "c"},
-			b:        []string{"b", "c", "d"},
-			expected: []string{"b", "c"},
-		},
-		{
-			name:     "No common elements",
-			a:        []string{"a", "b"},
-			b:        []string{"c", "d"},
-			expected: []string{},
-		},
-		{
-			name:     "One empty slice",
-			a:        []string{"a", "b"},
-			b:        []string{},
-			expected: []string{},
-		},
-		{
-			name:     "Identical slices",
-			a:        []string{"a", "b", "c"},
-			b:        []string{"a", "b", "c"},
-			expected: []string{"a", "b", "c"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := intersect(tt.a, tt.b)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestSlicesEqual(t *testing.T) {
-	tests := []struct {
-		name     string
-		a        []string
-		b        []string
-		expected bool
-	}{
-		{
-			name:     "Equal slices",
-			a:        []string{"a", "b", "c"},
-			b:        []string{"a", "b", "c"},
-			expected: true,
-		},
-		{
-			name:     "Different length",
-			a:        []string{"a", "b"},
-			b:        []string{"a", "b", "c"},
-			expected: false,
-		},
-		{
-			name:     "Different order",
-			a:        []string{"a", "b", "c"},
-			b:        []string{"a", "c", "b"},
-			expected: false,
-		},
-		{
-			name:     "Empty slices",
-			a:        []string{},
-			b:        []string{},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := slicesEqual(tt.a, tt.b)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
+// TestIntersect and TestSlicesEqual are not included because intersect and slicesEqual
+// are private functions in the callgraph package. These helper functions are tested
+// indirectly through the dominator computation tests above.
 
 func TestCFG_ComplexExample(t *testing.T) {
 	// Test a more realistic CFG structure representing:
@@ -470,7 +393,7 @@ func TestCFG_ComplexExample(t *testing.T) {
 		Type:      BlockTypeNormal,
 		StartLine: 2,
 		EndLine:   2,
-		Instructions: []CallSite{
+		Instructions: []core.CallSite{
 			{Target: "get_user", TargetFQN: "myapp.db.get_user"},
 		},
 		Successors:   []string{},
@@ -492,7 +415,7 @@ func TestCFG_ComplexExample(t *testing.T) {
 		Type:      BlockTypeNormal,
 		StartLine: 4,
 		EndLine:   4,
-		Instructions: []CallSite{
+		Instructions: []core.CallSite{
 			{Target: "grant_access", TargetFQN: "myapp.auth.grant_access"},
 		},
 		Successors:   []string{},
@@ -504,7 +427,7 @@ func TestCFG_ComplexExample(t *testing.T) {
 		Type:      BlockTypeNormal,
 		StartLine: 6,
 		EndLine:   6,
-		Instructions: []CallSite{
+		Instructions: []core.CallSite{
 			{Target: "deny_access", TargetFQN: "myapp.auth.deny_access"},
 		},
 		Successors:   []string{},
@@ -516,7 +439,7 @@ func TestCFG_ComplexExample(t *testing.T) {
 		Type:      BlockTypeNormal,
 		StartLine: 7,
 		EndLine:   7,
-		Instructions: []CallSite{
+		Instructions: []core.CallSite{
 			{Target: "log_action", TargetFQN: "myapp.logging.log_action"},
 		},
 		Successors:   []string{},

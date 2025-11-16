@@ -1,4 +1,4 @@
-package callgraph
+package registry
 
 import (
 	"os"
@@ -12,7 +12,7 @@ import (
 
 func TestBuildModuleRegistry_SimpleProject(t *testing.T) {
 	// Use the simple_project test fixture
-	testRoot := filepath.Join("..", "..", "..", "test-src", "python", "simple_project")
+	testRoot := filepath.Join("..", "..", "..", "..", "test-src", "python", "simple_project")
 
 	registry, err := BuildModuleRegistry(testRoot)
 	require.NoError(t, err)

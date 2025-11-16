@@ -9,6 +9,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	cgregistry "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
 // ImportMapCache provides thread-safe caching of ImportMap instances.
@@ -142,10 +143,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *ModuleRegistry, projec
 
 	// Initialize type inference engine
 	typeEngine := NewTypeInferenceEngine(registry)
-	typeEngine.Builtins = NewBuiltinRegistry()
+	typeEngine.Builtins = cgregistry.NewBuiltinRegistry()
 
 	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
-	typeEngine.Attributes = NewAttributeRegistry()
+	typeEngine.Attributes = cgregistry.NewAttributeRegistry()
 
 	// PR #3: Detect Python version and load stdlib registry from remote CDN
 	pythonVersion := detectPythonVersion(projectRoot)

@@ -7,6 +7,7 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
 // ExtractClassAttributes extracts all class attributes from a Python file
@@ -37,7 +38,7 @@ func ExtractClassAttributes(
 	sourceCode []byte,
 	modulePath string,
 	typeEngine *TypeInferenceEngine,
-	registry *AttributeRegistry,
+	attrRegistry *registry.AttributeRegistry,
 ) error {
 	// Parse file with tree-sitter
 	parser := sitter.NewParser()
@@ -94,7 +95,7 @@ func ExtractClassAttributes(
 		classAttrs.Attributes = attributeMap
 
 		// Add to registry
-		registry.AddClassAttributes(classAttrs)
+		attrRegistry.AddClassAttributes(classAttrs)
 	}
 
 	return nil

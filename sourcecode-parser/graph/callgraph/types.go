@@ -59,11 +59,6 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// containsString is an alias for contains for consistency.
-func containsString(slice []string, item string) bool {
-	return contains(slice, item)
-}
-
 // extractShortName extracts the last component of a dotted path.
 // Example: "myapp.utils.helpers" → "helpers".
 func extractShortName(modulePath string) string {
