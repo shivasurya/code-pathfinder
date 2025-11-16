@@ -1,0 +1,47 @@
+<!-- src/components/MyCloneWidget.astro -->
+---
+const WIDGET_TOKEN = (import.meta.env.PUBLIC_MYCLONE_WIDGET_TOKEN ?? '').toString();
+const hasToken = WIDGET_TOKEN.trim().length > 0 && WIDGET_TOKEN !== 'undefined' && WIDGET_TOKEN !== 'null';
+
+const {
+  expertUsername = "shiva",
+  position = "bottom-right",
+  primaryColor = "#6366f1",
+  bubbleText = "Chat with me",
+  enableVoice = true,
+  welcomeMessage = "Hello! How can I help you today?"
+} = Astro.props;
+---
+
+{hasToken && (
+  <script is:inline define:vars={{
+    expertUsername,
+    WIDGET_TOKEN,
+    position,
+    primaryColor,
+    bubbleText,
+    enableVoice,
+    welcomeMessage
+  }}>
+    (function() {
+      const script = document.createElement('script');
+      script.src = 'https://app.myclone.is/embed/myclone-embed.js';
+
+      script.onload = function() {
+        if (window.MyClone) {
+          window.MyClone({
+            expertUsername,
+            widgetToken: WIDGET_TOKEN,
+            position,
+            primaryColor,
+            bubbleText,
+            enableVoice,
+            welcomeMessage
+          });
+        }
+      };
+
+      document.head.appendChild(script);
+    })();
+  </script>
+)}
