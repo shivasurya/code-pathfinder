@@ -1,9 +1,10 @@
-package callgraph
+package resolution
 
 import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -256,7 +257,7 @@ func TestValidateDjangoModel(t *testing.T) {
 }
 
 func TestResolveDjangoORMCall(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	nodes := make(map[string]*graph.Node)
 	nodeList := []*graph.Node{
 		{
@@ -366,7 +367,7 @@ func TestResolveSQLAlchemyORMCall(t *testing.T) {
 }
 
 func TestResolveORMCall(t *testing.T) {
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
 
 	tests := []struct {
