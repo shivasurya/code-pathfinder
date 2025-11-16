@@ -3,27 +3,27 @@ package dsl
 import (
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestVariableMatcherExecutor_Execute(t *testing.T) {
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 
-	cg.CallSites["test.main"] = []callgraph.CallSite{
+	cg.CallSites["test.main"] = []core.CallSite{
 		{
 			Target: "eval",
-			Arguments: []callgraph.Argument{
+			Arguments: []core.Argument{
 				{Value: "user_input", IsVariable: true, Position: 0},
 			},
-			Location: callgraph.Location{File: "test.py", Line: 10},
+			Location: core.Location{File: "test.py", Line: 10},
 		},
 		{
 			Target: "print",
-			Arguments: []callgraph.Argument{
+			Arguments: []core.Argument{
 				{Value: "\"hello\"", IsVariable: false, Position: 0},
 			},
-			Location: callgraph.Location{File: "test.py", Line: 15},
+			Location: core.Location{File: "test.py", Line: 15},
 		},
 	}
 
@@ -42,11 +42,11 @@ func TestVariableMatcherExecutor_Execute(t *testing.T) {
 	})
 
 	t.Run("wildcard prefix", func(t *testing.T) {
-		cg2 := callgraph.NewCallGraph()
-		cg2.CallSites["test.main"] = []callgraph.CallSite{
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.main"] = []core.CallSite{
 			{
 				Target: "process",
-				Arguments: []callgraph.Argument{
+				Arguments: []core.Argument{
 					{Value: "user_input", IsVariable: true},
 					{Value: "user_id", IsVariable: true},
 					{Value: "admin_name", IsVariable: true},
@@ -71,11 +71,11 @@ func TestVariableMatcherExecutor_Execute(t *testing.T) {
 			Wildcard: false,
 		}
 
-		cg2 := callgraph.NewCallGraph()
-		cg2.CallSites["test.main"] = []callgraph.CallSite{
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.main"] = []core.CallSite{
 			{
 				Target: "print",
-				Arguments: []callgraph.Argument{
+				Arguments: []core.Argument{
 					{Value: "\"literal\"", IsVariable: false}, // NOT a variable
 				},
 			},

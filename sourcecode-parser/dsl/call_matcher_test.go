@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCallMatcherExecutor_Execute(t *testing.T) {
 	// Setup test callgraph
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 
-	cg.CallSites["test.main"] = []callgraph.CallSite{
-		{Target: "eval", Location: callgraph.Location{File: "test.py", Line: 10}},
-		{Target: "exec", Location: callgraph.Location{File: "test.py", Line: 15}},
-		{Target: "print", Location: callgraph.Location{File: "test.py", Line: 20}},
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{File: "test.py", Line: 10}},
+		{Target: "exec", Location: core.Location{File: "test.py", Line: 15}},
+		{Target: "print", Location: core.Location{File: "test.py", Line: 20}},
 	}
 
 	t.Run("exact match single pattern", func(t *testing.T) {
@@ -45,8 +45,8 @@ func TestCallMatcherExecutor_Execute(t *testing.T) {
 	})
 
 	t.Run("wildcard prefix match", func(t *testing.T) {
-		cg2 := callgraph.NewCallGraph()
-		cg2.CallSites["test.main"] = []callgraph.CallSite{
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.main"] = []core.CallSite{
 			{Target: "request.GET"},
 			{Target: "request.POST"},
 			{Target: "utils.sanitize"},
@@ -64,8 +64,8 @@ func TestCallMatcherExecutor_Execute(t *testing.T) {
 	})
 
 	t.Run("wildcard suffix match", func(t *testing.T) {
-		cg2 := callgraph.NewCallGraph()
-		cg2.CallSites["test.main"] = []callgraph.CallSite{
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.main"] = []core.CallSite{
 			{Target: "request.json"},
 			{Target: "response.json"},
 			{Target: "utils.parse"},
@@ -96,9 +96,9 @@ func TestCallMatcherExecutor_Execute(t *testing.T) {
 }
 
 func TestCallMatcherExecutor_ExecuteWithContext(t *testing.T) {
-	cg := callgraph.NewCallGraph()
-	cg.CallSites["test.process_data"] = []callgraph.CallSite{
-		{Target: "eval", Location: callgraph.Location{File: "app.py", Line: 42}},
+	cg := core.NewCallGraph()
+	cg.CallSites["test.process_data"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{File: "app.py", Line: 42}},
 	}
 
 	ir := &CallMatcherIR{
@@ -118,10 +118,10 @@ func TestCallMatcherExecutor_ExecuteWithContext(t *testing.T) {
 
 func BenchmarkCallMatcherExecutor(b *testing.B) {
 	// Create realistic callgraph (1000 functions, 7 calls each)
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 	for i := 0; i < 1000; i++ {
 		funcName := fmt.Sprintf("module.func_%d", i)
-		cg.CallSites[funcName] = []callgraph.CallSite{
+		cg.CallSites[funcName] = []core.CallSite{
 			{Target: "print"},
 			{Target: "len"},
 			{Target: "str"},

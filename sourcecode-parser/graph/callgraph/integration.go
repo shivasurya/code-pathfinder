@@ -3,105 +3,112 @@ package callgraph
 import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/patterns"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 )
 
-// InitializeCallGraph builds the call graph from a code graph.
-// This integrates the 3-pass algorithm into the main initialization pipeline.
+// SecurityMatch represents a detected security vulnerability.
+type SecurityMatch struct {
+	Severity      string   // "critical", "high", "medium", "low"
+	PatternName   string   // Name of the security pattern
+	Description   string   // Description of the vulnerability
+	CWE           string   // CWE ID (e.g., "CWE-89")
+	OWASP         string   // OWASP category (e.g., "A03:2021")
+	SourceFQN     string   // Fully qualified name of source function
+	SourceCall    string   // The source call name
+	SourceFile    string   // Source file path
+	SourceLine    uint32   // Source line number
+	SourceCode    string   // Source code snippet
+	SinkFQN       string   // Fully qualified name of sink function
+	SinkCall      string   // The sink call name
+	SinkFile      string   // Sink file path
+	SinkLine      uint32   // Sink line number
+	SinkCode      string   // Sink code snippet
+	DataFlowPath  []string // Path from source to sink
+}
+
+// InitializeCallGraph builds a complete call graph with all analysis components.
+// It returns the call graph, module registry, pattern registry, and any error.
 //
-// Algorithm:
-//  1. Build module registry from project directory
-//  2. Build call graph from code graph using registry
-//  3. Load default security patterns
-//  4. Return integrated result
+// This is a convenience function that orchestrates:
+//  1. Module registry building
+//  2. Call graph construction
+//  3. Pattern registry initialization
 //
 // Parameters:
-//   - codeGraph: the parsed code graph from Initialize()
-//   - projectRoot: absolute path to project root directory
+//   - codeGraph: the parsed code graph from graph.Initialize()
+//   - projectPath: absolute path to project root
 //
 // Returns:
 //   - CallGraph: complete call graph with edges and call sites
 //   - ModuleRegistry: module path mappings
-//   - PatternRegistry: loaded security patterns
+//   - PatternRegistry: security patterns for analysis
 //   - error: if any step fails
-func InitializeCallGraph(codeGraph *graph.CodeGraph, projectRoot string) (*CallGraph, *ModuleRegistry, *PatternRegistry, error) {
-	// Use builder package for call graph construction
-	callGraph, registry, err := builder.BuildCallGraphFromPath(codeGraph, projectRoot)
+func InitializeCallGraph(codeGraph *graph.CodeGraph, projectPath string) (*core.CallGraph, *core.ModuleRegistry, *patterns.PatternRegistry, error) {
+	// Build module registry
+	moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Load security patterns
+	// Build call graph
+	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Initialize pattern registry
 	patternRegistry := patterns.NewPatternRegistry()
 	patternRegistry.LoadDefaultPatterns()
 
-	return callGraph, registry, patternRegistry, nil
+	return callGraph, moduleRegistry, patternRegistry, nil
 }
 
-// AnalyzePatterns runs pattern matching against the call graph.
-// Returns a list of matched patterns with their details.
-func AnalyzePatterns(callGraph *CallGraph, patternRegistry *PatternRegistry) []PatternMatch {
-	var matches []PatternMatch
+// AnalyzePatterns detects security vulnerabilities using the pattern registry.
+// It analyzes the call graph against all loaded security patterns.
+//
+// Parameters:
+//   - callGraph: the call graph to analyze
+//   - patternRegistry: security patterns to check
+//
+// Returns:
+//   - []SecurityMatch: list of detected security issues
+func AnalyzePatterns(callGraph *core.CallGraph, patternRegistry *patterns.PatternRegistry) []SecurityMatch {
+	var matches []SecurityMatch
 
-	for _, pattern := range patternRegistry.Patterns {
-		details := patternRegistry.MatchPattern(pattern, callGraph)
-		if details != nil && details.Matched {
-			match := PatternMatch{
-				PatternID:    pattern.ID,
-				PatternName:  pattern.Name,
-				Description:  pattern.Description,
-				Severity:     pattern.Severity,
-				CWE:          pattern.CWE,
-				OWASP:        pattern.OWASP,
-				SourceFQN:    details.SourceFQN,
-				SourceCall:   details.SourceCall,
-				SinkFQN:      details.SinkFQN,
-				SinkCall:     details.SinkCall,
-				DataFlowPath: details.DataFlowPath,
+	// Check each pattern type
+	patternTypes := []patterns.PatternType{
+		patterns.PatternTypeSourceSink,
+		patterns.PatternTypeMissingSanitizer,
+		patterns.PatternTypeDangerousFunction,
+	}
+
+	for _, patternType := range patternTypes {
+		// Get patterns of this type
+		patternsOfType := patternRegistry.GetPatternsByType(patternType)
+
+		// Check each pattern against the call graph
+		for _, pattern := range patternsOfType {
+			match := patternRegistry.MatchPattern(pattern, callGraph)
+			if match.Matched {
+				// Convert PatternMatchDetails to SecurityMatch
+				securityMatch := SecurityMatch{
+					Severity:     string(pattern.Severity),
+					PatternName:  pattern.Name,
+					Description:  pattern.Description,
+					CWE:          pattern.CWE,
+					OWASP:        pattern.OWASP,
+					SourceFQN:    match.SourceFQN,
+					SourceCall:   match.SourceCall,
+					SinkFQN:      match.SinkFQN,
+					SinkCall:     match.SinkCall,
+					DataFlowPath: match.DataFlowPath,
+				}
+				matches = append(matches, securityMatch)
 			}
-
-			// Lookup source function details from call graph
-			if sourceNode, ok := callGraph.Functions[details.SourceFQN]; ok {
-				match.SourceFile = sourceNode.File
-				match.SourceLine = sourceNode.LineNumber
-				match.SourceCode = sourceNode.GetCodeSnippet()
-			}
-
-			// Lookup sink function details from call graph
-			if sinkNode, ok := callGraph.Functions[details.SinkFQN]; ok {
-				match.SinkFile = sinkNode.File
-				match.SinkLine = sinkNode.LineNumber
-				match.SinkCode = sinkNode.GetCodeSnippet()
-			}
-
-			matches = append(matches, match)
 		}
 	}
 
 	return matches
-}
-
-// PatternMatch represents a detected security pattern in the code.
-type PatternMatch struct {
-	PatternID   string   // Pattern identifier
-	PatternName string   // Human-readable name
-	Description string   // What was detected
-	Severity    Severity // Risk level
-	CWE         string   // CWE identifier
-	OWASP       string   // OWASP category
-
-	// Vulnerability location details
-	SourceFQN      string // Fully qualified name of the source function
-	SourceCall     string // The actual dangerous call (e.g., "input", "request.GET")
-	SourceFile     string // File path where source is located
-	SourceLine     uint32 // Line number of source function
-	SourceCode     string // Code snippet of source function
-
-	SinkFQN        string // Fully qualified name of the sink function
-	SinkCall       string // The actual dangerous call (e.g., "eval", "exec")
-	SinkFile       string // File path where sink is located
-	SinkLine       uint32 // Line number of sink function
-	SinkCode       string // Code snippet of sink function
-
-	DataFlowPath   []string // Complete path from source to sink (FQNs)
 }

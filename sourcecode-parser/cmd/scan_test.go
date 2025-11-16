@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/dsl"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,13 +25,13 @@ func createTestRuleScan(id, name, severity, cwe, owasp, description string) dsl.
 
 func TestCountTotalCallSites(t *testing.T) {
 	t.Run("counts call sites across all functions", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["func1"] = []callgraph.CallSite{
-			{Target: "foo", Location: callgraph.Location{Line: 10}},
-			{Target: "bar", Location: callgraph.Location{Line: 20}},
+		cg := core.NewCallGraph()
+		cg.CallSites["func1"] = []core.CallSite{
+			{Target: "foo", Location: core.Location{Line: 10}},
+			{Target: "bar", Location: core.Location{Line: 20}},
 		}
-		cg.CallSites["func2"] = []callgraph.CallSite{
-			{Target: "baz", Location: callgraph.Location{Line: 30}},
+		cg.CallSites["func2"] = []core.CallSite{
+			{Target: "baz", Location: core.Location{Line: 30}},
 		}
 
 		total := countTotalCallSites(cg)
@@ -39,14 +39,14 @@ func TestCountTotalCallSites(t *testing.T) {
 	})
 
 	t.Run("returns zero for empty callgraph", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		total := countTotalCallSites(cg)
 		assert.Equal(t, 0, total)
 	})
 
 	t.Run("handles function with no call sites", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["func1"] = []callgraph.CallSite{}
+		cg := core.NewCallGraph()
+		cg.CallSites["func1"] = []core.CallSite{}
 		total := countTotalCallSites(cg)
 		assert.Equal(t, 0, total)
 	})

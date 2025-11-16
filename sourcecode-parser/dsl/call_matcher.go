@@ -3,17 +3,17 @@ package dsl
 import (
 	"strings"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 )
 
 // CallMatcherExecutor executes call_matcher IR against callgraph.
 type CallMatcherExecutor struct {
 	IR        *CallMatcherIR
-	CallGraph *callgraph.CallGraph
+	CallGraph *core.CallGraph
 }
 
 // NewCallMatcherExecutor creates a new executor.
-func NewCallMatcherExecutor(ir *CallMatcherIR, cg *callgraph.CallGraph) *CallMatcherExecutor {
+func NewCallMatcherExecutor(ir *CallMatcherIR, cg *core.CallGraph) *CallMatcherExecutor {
 	return &CallMatcherExecutor{
 		IR:        ir,
 		CallGraph: cg,
@@ -33,8 +33,8 @@ func NewCallMatcherExecutor(ir *CallMatcherIR, cg *callgraph.CallGraph) *CallMat
 //   C = avg call sites per function (~5-10)
 //   P = number of patterns (~2-5)
 // Typical: 1000 functions * 7 calls * 3 patterns = 21,000 comparisons (fast!)
-func (e *CallMatcherExecutor) Execute() []callgraph.CallSite {
-	matches := []callgraph.CallSite{}
+func (e *CallMatcherExecutor) Execute() []core.CallSite {
+	matches := []core.CallSite{}
 
 	// Iterate over all functions' call sites
 	for _, callSites := range e.CallGraph.CallSites {
@@ -49,7 +49,7 @@ func (e *CallMatcherExecutor) Execute() []callgraph.CallSite {
 }
 
 // matchesCallSite checks if a call site matches any pattern.
-func (e *CallMatcherExecutor) matchesCallSite(cs *callgraph.CallSite) bool {
+func (e *CallMatcherExecutor) matchesCallSite(cs *core.CallSite) bool {
 	target := cs.Target
 
 	for _, pattern := range e.IR.Patterns {
@@ -103,7 +103,7 @@ func (e *CallMatcherExecutor) matchesPattern(target, pattern string) bool {
 
 // CallMatchResult represents a match with additional context.
 type CallMatchResult struct {
-	CallSite    callgraph.CallSite
+	CallSite    core.CallSite
 	MatchedBy   string // Which pattern matched
 	FunctionFQN string // Which function contains this call
 	SourceFile  string // Which file
@@ -132,7 +132,7 @@ func (e *CallMatcherExecutor) ExecuteWithContext() []CallMatchResult {
 }
 
 // getMatchedPattern returns which pattern matched (or empty string if no match).
-func (e *CallMatcherExecutor) getMatchedPattern(cs *callgraph.CallSite) string {
+func (e *CallMatcherExecutor) getMatchedPattern(cs *core.CallSite) string {
 	for _, pattern := range e.IR.Patterns {
 		if e.matchesPattern(cs.Target, pattern) {
 			return pattern

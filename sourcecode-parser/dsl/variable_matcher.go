@@ -3,17 +3,17 @@ package dsl
 import (
 	"strings"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 )
 
 // VariableMatcherExecutor executes variable_matcher IR.
 type VariableMatcherExecutor struct {
 	IR        *VariableMatcherIR
-	CallGraph *callgraph.CallGraph
+	CallGraph *core.CallGraph
 }
 
 // NewVariableMatcherExecutor creates a new executor.
-func NewVariableMatcherExecutor(ir *VariableMatcherIR, cg *callgraph.CallGraph) *VariableMatcherExecutor {
+func NewVariableMatcherExecutor(ir *VariableMatcherIR, cg *core.CallGraph) *VariableMatcherExecutor {
 	return &VariableMatcherExecutor{
 		IR:        ir,
 		CallGraph: cg,
@@ -53,7 +53,7 @@ func (e *VariableMatcherExecutor) Execute() []VariableMatchResult {
 
 // VariableMatchResult contains match information.
 type VariableMatchResult struct {
-	CallSite     callgraph.CallSite
+	CallSite     core.CallSite
 	VariableName string // The matched variable name
 	ArgumentPos  int    // Position in argument list
 	FunctionFQN  string

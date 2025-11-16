@@ -6,8 +6,11 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/spf13/cobra"
 )
+
+// Note: callgraph.InitializeCallGraph is used from the callgraph root package integration
 
 var resolutionReportCmd = &cobra.Command{
 	Use:   "resolution-report",
@@ -79,7 +82,7 @@ type resolutionStatistics struct {
 	FailuresByReason map[string]int                // Category -> count
 	PatternCounts    map[string]int                // Target pattern -> count
 	FrameworkCounts  map[string]int                // Framework prefix -> count (for external_framework category)
-	UnresolvedByFQN  map[string]callgraph.CallSite // For detailed inspection
+	UnresolvedByFQN  map[string]core.CallSite // For detailed inspection
 
 	// Phase 2: Type inference statistics
 	TypeInferenceResolved  int            // Calls resolved via type inference
@@ -100,12 +103,12 @@ type resolutionStatistics struct {
 }
 
 // aggregateResolutionStatistics analyzes the call graph and collects statistics.
-func aggregateResolutionStatistics(cg *callgraph.CallGraph) *resolutionStatistics {
+func aggregateResolutionStatistics(cg *core.CallGraph) *resolutionStatistics {
 	stats := &resolutionStatistics{
 		FailuresByReason:       make(map[string]int),
 		PatternCounts:          make(map[string]int),
 		FrameworkCounts:        make(map[string]int),
-		UnresolvedByFQN:        make(map[string]callgraph.CallSite),
+		UnresolvedByFQN:        make(map[string]core.CallSite),
 		TypesBySource:          make(map[string]int),
 		ConfidenceDistribution: make(map[string]int),
 		StdlibByModule:         make(map[string]int),

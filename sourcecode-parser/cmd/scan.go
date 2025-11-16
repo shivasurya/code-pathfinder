@@ -8,7 +8,9 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/dsl"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -52,16 +54,16 @@ Examples:
 
 		// Step 2: Build module registry
 		log.Printf("Building module registry...\n")
-		registry, err := callgraph.BuildModuleRegistry(projectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 		if err != nil {
 			log.Printf("Warning: failed to build module registry: %v\n", err)
 			// Create empty registry as fallback
-			registry = callgraph.NewModuleRegistry()
+			moduleRegistry = core.NewModuleRegistry()
 		}
 
 		// Step 3: Build callgraph
 		log.Printf("Building callgraph...\n")
-		cg, err := callgraph.BuildCallGraph(codeGraph, registry, projectPath)
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
@@ -105,7 +107,7 @@ Examples:
 	},
 }
 
-func countTotalCallSites(cg *callgraph.CallGraph) int {
+func countTotalCallSites(cg *core.CallGraph) int {
 	total := 0
 	for _, sites := range cg.CallSites {
 		total += len(sites)
