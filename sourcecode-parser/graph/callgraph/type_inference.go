@@ -1,14 +1,14 @@
 package callgraph
 
-import "strings"
+import (
+	"strings"
 
-// TypeInfo represents inferred type information for a variable or expression.
-// It tracks the fully qualified type name, confidence level, and how the type was inferred.
-type TypeInfo struct {
-	TypeFQN    string  // Fully qualified type name (e.g., "builtins.str", "myapp.models.User")
-	Confidence float32 // Confidence level from 0.0 to 1.0 (1.0 = certain, 0.5 = heuristic, 0.0 = unknown)
-	Source     string  // How the type was inferred (e.g., "literal", "assignment", "annotation")
-}
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+)
+
+// Deprecated: Use core.TypeInfo instead.
+// This alias will be removed in a future version.
+type TypeInfo = core.TypeInfo
 
 // VariableBinding tracks a variable's type within a scope.
 // It captures the variable name, its inferred type, and source location.

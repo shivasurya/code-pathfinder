@@ -3,25 +3,16 @@ package callgraph
 import (
 	"sync"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 )
 
-// ClassAttribute represents a single attribute of a class.
-type ClassAttribute struct {
-	Name       string    // Attribute name (e.g., "value", "user")
-	Type       *TypeInfo // Inferred type of the attribute
-	AssignedIn string    // Method where assigned (e.g., "__init__", "setup")
-	Location   *graph.SourceLocation
-	Confidence float64 // Confidence in type inference (0.0-1.0)
-}
+// Deprecated: Use core.ClassAttribute instead.
+// This alias will be removed in a future version.
+type ClassAttribute = core.ClassAttribute
 
-// ClassAttributes holds all attributes for a single class.
-type ClassAttributes struct {
-	ClassFQN   string                        // Fully qualified class name (e.g., "myapp.models.User")
-	Attributes map[string]*ClassAttribute    // Map from attribute name to attribute info
-	Methods    []string                      // List of method FQNs in this class
-	FilePath   string                        // Source file path where class is defined
-}
+// Deprecated: Use core.ClassAttributes instead.
+// This alias will be removed in a future version.
+type ClassAttributes = core.ClassAttributes
 
 // AttributeRegistry is the global registry of class attributes
 // It provides thread-safe access to class attribute information.
