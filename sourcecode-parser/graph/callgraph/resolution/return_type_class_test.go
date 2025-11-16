@@ -1,9 +1,11 @@
-package callgraph
+package resolution
 
 import (
 	"context"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +51,7 @@ func TestResolveClassInstantiation_Simple(t *testing.T) {
 
 	callNode := tree.RootNode().Child(0).Child(0) // expression_statement -> call
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	typeInfo := ResolveClassInstantiation(callNode, sourceCode, "test", nil, registry)
 
 	require.NotNil(t, typeInfo)
@@ -71,7 +73,7 @@ func TestResolveClassInstantiation_WithModule(t *testing.T) {
 
 	callNode := tree.RootNode().Child(0).Child(0)
 
-	importMap := NewImportMap("test.py")
+	importMap := core.NewImportMap("test.py")
 	importMap.AddImport("models", "myapp.models")
 
 	typeInfo := ResolveClassInstantiation(callNode, sourceCode, "test", importMap, nil)
@@ -112,7 +114,7 @@ def build_server():
     return HTTPServer()
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 3)
@@ -140,7 +142,7 @@ def maybe_user(flag):
         return None
 `)
 
-	builtinRegistry := NewBuiltinRegistry()
+	builtinRegistry := registry.NewBuiltinRegistry()
 	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)

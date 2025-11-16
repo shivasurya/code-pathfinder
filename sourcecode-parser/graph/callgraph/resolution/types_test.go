@@ -17,38 +17,7 @@ func TestNewFunctionScope(t *testing.T) {
 	assert.Nil(t, scope.ReturnType)
 }
 
-func TestFunctionScope_AddVariable(t *testing.T) {
-	scope := NewFunctionScope("test.func")
-
-	// Add a variable
-	binding := &VariableBinding{
-		VarName: "x",
-		Type: &core.TypeInfo{
-			TypeFQN:    "builtins.int",
-			Confidence: 1.0,
-			Source:     "literal",
-		},
-		Location: Location{File: "test.py", Line: 10},
-	}
-	scope.AddVariable(binding)
-
-	assert.Equal(t, 1, len(scope.Variables))
-	assert.Equal(t, binding, scope.Variables["x"])
-
-	// Add another variable
-	binding2 := &VariableBinding{
-		VarName: "y",
-		Type: &core.TypeInfo{
-			TypeFQN:    "builtins.str",
-			Confidence: 0.9,
-			Source:     "assignment",
-		},
-	}
-	scope.AddVariable(binding2)
-
-	assert.Equal(t, 2, len(scope.Variables))
-	assert.Equal(t, binding2, scope.Variables["y"])
-}
+// Duplicate test removed - same test exists in inference_test.go
 
 func TestFunctionScope_AddVariable_Nil(t *testing.T) {
 	scope := NewFunctionScope("test.func")

@@ -1,10 +1,11 @@
-package callgraph
+package resolution
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ def process():
     baz()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -39,7 +40,7 @@ def process():
     db.query()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -58,7 +59,7 @@ def process():
     baz(data, size=10)
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -88,7 +89,7 @@ def outer():
     result = foo(bar(x))
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -110,7 +111,7 @@ def func2():
     baz()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -135,7 +136,7 @@ class MyClass:
         other.method()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -155,7 +156,7 @@ def process():
     result = obj.method1().method2()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -170,7 +171,7 @@ foo()
 bar()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -188,7 +189,7 @@ def process():
     foo()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -207,7 +208,7 @@ func TestExtractCallSites_EmptyFile(t *testing.T) {
 # No function calls
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -223,7 +224,7 @@ def process():
     qux(lambda x: x * 2)
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -243,7 +244,7 @@ def process():
     self.db.query()
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -268,7 +269,7 @@ func TestExtractCallSites_WithTestFixture(t *testing.T) {
 	absFixturePath, err := filepath.Abs(fixturePath)
 	require.NoError(t, err)
 
-	importMap := NewImportMap(absFixturePath)
+	importMap := core.NewImportMap(absFixturePath)
 	callSites, err := ExtractCallSites(absFixturePath, sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -288,7 +289,7 @@ func TestExtractCallSites_WithTestFixture(t *testing.T) {
 func TestExtractArguments_EmptyArgumentList(t *testing.T) {
 	sourceCode := []byte(`foo()`)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -302,7 +303,7 @@ def process():
     foo(name="test", value=42, enabled=True)
 `)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -319,7 +320,7 @@ def process():
 func TestExtractCalleeName_Identifier(t *testing.T) {
 	sourceCode := []byte(`foo()`)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)
@@ -330,7 +331,7 @@ func TestExtractCalleeName_Identifier(t *testing.T) {
 func TestExtractCalleeName_Attribute(t *testing.T) {
 	sourceCode := []byte(`obj.method()`)
 
-	importMap := NewImportMap("/test/file.py")
+	importMap := core.NewImportMap("/test/file.py")
 	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
 
 	require.NoError(t, err)

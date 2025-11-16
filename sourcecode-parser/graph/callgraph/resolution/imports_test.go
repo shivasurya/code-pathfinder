@@ -1,10 +1,11 @@
-package callgraph
+package resolution
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ import sys
 import json
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -47,7 +48,7 @@ from sys import argv
 from collections import OrderedDict
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -77,7 +78,7 @@ import sys as system
 import json as js
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -111,7 +112,7 @@ from sys import argv as arguments
 from collections import OrderedDict as OD
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -150,7 +151,7 @@ import json as js
 from collections import OrderedDict as OD
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -187,7 +188,7 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -218,7 +219,7 @@ def foo():
     pass
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -232,7 +233,7 @@ func TestExtractImports_InvalidSyntax(t *testing.T) {
 import this is not valid python
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	// Tree-sitter is fault-tolerant, so parsing may succeed even with errors
@@ -304,7 +305,7 @@ func TestExtractImports_WithTestFixtures(t *testing.T) {
 			sourceCode, err := os.ReadFile(fixturePath)
 			require.NoError(t, err)
 
-			registry := NewModuleRegistry()
+			registry := core.NewModuleRegistry()
 			importMap, err := ExtractImports(fixturePath, sourceCode, registry)
 
 			require.NoError(t, err)
@@ -331,7 +332,7 @@ func TestExtractImports_MultipleImportsPerLine(t *testing.T) {
 from collections import OrderedDict, defaultdict, Counter
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -350,7 +351,7 @@ func TestExtractCaptures(t *testing.T) {
 import os
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)
@@ -365,7 +366,7 @@ from    sys   import   argv
 import json    as    js
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	importMap, err := ExtractImports("/test/file.py", sourceCode, registry)
 
 	require.NoError(t, err)

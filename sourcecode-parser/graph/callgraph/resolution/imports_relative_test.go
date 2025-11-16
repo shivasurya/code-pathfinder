@@ -1,10 +1,12 @@
-package callgraph
+package resolution
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +17,7 @@ func TestResolveRelativeImport_SingleDot(t *testing.T) {
 	// Import: from . import utils
 	// Expected: myapp.submodule.utils
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.submodule.handler", "/project/myapp/submodule/handler.py")
 	registry.AddModule("myapp.submodule.utils", "/project/myapp/submodule/utils.py")
 
@@ -29,7 +31,7 @@ func TestResolveRelativeImport_SingleDotNoSuffix(t *testing.T) {
 	// Import: from . import *
 	// Expected: myapp.submodule
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.submodule.handler", "/project/myapp/submodule/handler.py")
 
 	result := resolveRelativeImport("/project/myapp/submodule/handler.py", 1, "", registry)
@@ -42,7 +44,7 @@ func TestResolveRelativeImport_TwoDots(t *testing.T) {
 	// Import: from .. import config
 	// Expected: myapp.config
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.submodule.handler", "/project/myapp/submodule/handler.py")
 	registry.AddModule("myapp.config", "/project/myapp/config/__init__.py")
 
@@ -56,7 +58,7 @@ func TestResolveRelativeImport_TwoDotsNoSuffix(t *testing.T) {
 	// Import: from .. import *
 	// Expected: myapp
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.submodule.handler", "/project/myapp/submodule/handler.py")
 
 	result := resolveRelativeImport("/project/myapp/submodule/handler.py", 2, "", registry)
@@ -69,7 +71,7 @@ func TestResolveRelativeImport_ThreeDots(t *testing.T) {
 	// Import: from ... import utils
 	// Expected: myapp.utils
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.submodule.deep.handler", "/project/myapp/submodule/deep/handler.py")
 	registry.AddModule("myapp.utils", "/project/myapp/utils/__init__.py")
 
@@ -83,7 +85,7 @@ func TestResolveRelativeImport_TooManyDots(t *testing.T) {
 	// Import: from ... import something (3 dots but only 1 level deep)
 	// Expected: something (clamped to root)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp.handler", "/project/myapp/handler.py")
 
 	result := resolveRelativeImport("/project/myapp/handler.py", 3, "something", registry)
@@ -94,7 +96,7 @@ func TestResolveRelativeImport_NotInRegistry(t *testing.T) {
 	// Test file not in registry
 	// Expected: return suffix as-is
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 
 	result := resolveRelativeImport("/project/unknown/file.py", 2, "module", registry)
 	assert.Equal(t, "module", result)
@@ -106,7 +108,7 @@ func TestResolveRelativeImport_RootPackage(t *testing.T) {
 	// Import: from . import utils
 	// Expected: utils (no parent package)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	registry.AddModule("myapp", "/project/myapp/__init__.py")
 
 	result := resolveRelativeImport("/project/myapp/__init__.py", 1, "utils", registry)
@@ -123,7 +125,7 @@ from ..config import settings
 `)
 
 	// Build registry for the test structure
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	filePath := "/project/myapp/submodule/handler.py"
 	registry.AddModule("myapp.submodule.handler", filePath)
 	registry.AddModule("myapp.submodule.utils", "/project/myapp/submodule/utils.py")
@@ -163,7 +165,7 @@ from . import utils
 from ..config import settings
 `)
 
-	registry := NewModuleRegistry()
+	registry := core.NewModuleRegistry()
 	filePath := "/project/myapp/submodule/handler.py"
 	registry.AddModule("myapp.submodule.handler", filePath)
 	registry.AddModule("myapp.submodule.utils", "/project/myapp/submodule/utils.py")
@@ -195,11 +197,12 @@ from ..config import settings
 
 func TestExtractImports_WithTestFixture_RelativeImports(t *testing.T) {
 	// Build module registry for the test fixture - use absolute path from start
-	projectRoot := filepath.Join("..", "..", "..", "test-src", "python", "relative_imports_test")
+	// Note: This file is now in resolution/ subpackage, so we need one extra ..
+	projectRoot := filepath.Join("..", "..", "..", "..", "test-src", "python", "relative_imports_test")
 	absProjectRoot, err := filepath.Abs(projectRoot)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(absProjectRoot)
+	modRegistry, err := registry.BuildModuleRegistry(absProjectRoot)
 	require.NoError(t, err)
 
 	// Test with actual fixture file - construct from absolute project root
@@ -213,7 +216,7 @@ func TestExtractImports_WithTestFixture_RelativeImports(t *testing.T) {
 	sourceCode, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
 
-	importMap, err := ExtractImports(fixturePath, sourceCode, registry)
+	importMap, err := ExtractImports(fixturePath, sourceCode, modRegistry)
 
 	require.NoError(t, err)
 	require.NotNil(t, importMap)
@@ -288,7 +291,7 @@ func TestResolveRelativeImport_NestedPackages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			registry := NewModuleRegistry()
+			registry := core.NewModuleRegistry()
 			registry.AddModule(tt.modulePath, tt.filePath)
 
 			result := resolveRelativeImport(tt.filePath, tt.dotCount, tt.moduleSuffix, registry)
