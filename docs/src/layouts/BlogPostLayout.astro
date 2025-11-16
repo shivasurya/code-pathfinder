@@ -5,6 +5,7 @@
 const { frontmatter, hideTitle = false } = Astro.props;
 const isSplashTemplate = frontmatter.template === 'splash';
 import { Icon } from '@astrojs/starlight/components';
+import MyCloneWidget from '../components/MyCloneWidget.astro';
 import '../styles/blog-post.css';
 ---
 
@@ -114,4 +115,7 @@ import '../styles/blog-post.css';
       </a>
     </div>
   </div>
+
+  <!-- Chat widget -->
+  <MyCloneWidget />
 </div>
