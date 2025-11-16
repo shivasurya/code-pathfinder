@@ -3,7 +3,7 @@ package diagnostic
 import (
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/extraction"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -131,7 +131,7 @@ def function_two():
     pass
 `)
 
-	tree, err := callgraph.ParsePythonFile(sourceCode)
+	tree, err := extraction.ParsePythonFile(sourceCode)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 

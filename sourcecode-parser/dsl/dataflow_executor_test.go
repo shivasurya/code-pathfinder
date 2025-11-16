@@ -3,22 +3,22 @@ package dsl
 import (
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDataflowExecutor_Local(t *testing.T) {
 	t.Run("finds functions with sources and sinks", func(t *testing.T) {
 		// Setup: Function with source and sink in same function
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.vulnerable"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.vulnerable"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{File: "test.py", Line: 10},
+				Location: core.Location{File: "test.py", Line: 10},
 			},
 			{
 				Target:   "eval",
-				Location: callgraph.Location{File: "test.py", Line: 15},
+				Location: core.Location{File: "test.py", Line: 15},
 			},
 		}
 
@@ -44,15 +44,15 @@ func TestDataflowExecutor_Local(t *testing.T) {
 	})
 
 	t.Run("executes local analysis and finds detections", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.dangerous"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.dangerous"] = []core.CallSite{
 			{
 				Target:   "request.POST",
-				Location: callgraph.Location{File: "test.py", Line: 5},
+				Location: core.Location{File: "test.py", Line: 5},
 			},
 			{
 				Target:   "execute",
-				Location: callgraph.Location{File: "test.py", Line: 10},
+				Location: core.Location{File: "test.py", Line: 10},
 			},
 		}
 
@@ -77,19 +77,19 @@ func TestDataflowExecutor_Local(t *testing.T) {
 	})
 
 	t.Run("detects sanitizer between source and sink", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.safe"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.safe"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{File: "test.py", Line: 5},
+				Location: core.Location{File: "test.py", Line: 5},
 			},
 			{
 				Target:   "escape_sql",
-				Location: callgraph.Location{File: "test.py", Line: 8},
+				Location: core.Location{File: "test.py", Line: 8},
 			},
 			{
 				Target:   "execute",
-				Location: callgraph.Location{File: "test.py", Line: 12},
+				Location: core.Location{File: "test.py", Line: 12},
 			},
 		}
 
@@ -108,19 +108,19 @@ func TestDataflowExecutor_Local(t *testing.T) {
 	})
 
 	t.Run("detects sanitizer in reverse order (sink before source)", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.reverse"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.reverse"] = []core.CallSite{
 			{
 				Target:   "execute",
-				Location: callgraph.Location{File: "test.py", Line: 5},
+				Location: core.Location{File: "test.py", Line: 5},
 			},
 			{
 				Target:   "escape_sql",
-				Location: callgraph.Location{File: "test.py", Line: 8},
+				Location: core.Location{File: "test.py", Line: 8},
 			},
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{File: "test.py", Line: 12},
+				Location: core.Location{File: "test.py", Line: 12},
 			},
 		}
 
@@ -139,17 +139,17 @@ func TestDataflowExecutor_Local(t *testing.T) {
 	})
 
 	t.Run("ignores cross-function flows in local scope", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.func1"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.func1"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{File: "test.py", Line: 5},
+				Location: core.Location{File: "test.py", Line: 5},
 			},
 		}
-		cg.CallSites["test.func2"] = []callgraph.CallSite{
+		cg.CallSites["test.func2"] = []core.CallSite{
 			{
 				Target:   "eval",
-				Location: callgraph.Location{File: "test.py", Line: 15},
+				Location: core.Location{File: "test.py", Line: 15},
 			},
 		}
 
@@ -167,23 +167,23 @@ func TestDataflowExecutor_Local(t *testing.T) {
 	})
 
 	t.Run("handles multiple sources and sinks in same function", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
-		cg.CallSites["test.multi"] = []callgraph.CallSite{
+		cg := core.NewCallGraph()
+		cg.CallSites["test.multi"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{File: "test.py", Line: 5},
+				Location: core.Location{File: "test.py", Line: 5},
 			},
 			{
 				Target:   "request.POST",
-				Location: callgraph.Location{File: "test.py", Line: 7},
+				Location: core.Location{File: "test.py", Line: 7},
 			},
 			{
 				Target:   "eval",
-				Location: callgraph.Location{File: "test.py", Line: 10},
+				Location: core.Location{File: "test.py", Line: 10},
 			},
 			{
 				Target:   "execute",
-				Location: callgraph.Location{File: "test.py", Line: 15},
+				Location: core.Location{File: "test.py", Line: 15},
 			},
 		}
 
@@ -205,26 +205,26 @@ func TestDataflowExecutor_Local(t *testing.T) {
 func TestDataflowExecutor_Global(t *testing.T) {
 	t.Run("detects cross-function flow", func(t *testing.T) {
 		// Setup: Source in func A, sink in func B, A calls B
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
 		cg.Edges["test.get_input"] = []string{"test.process"}
 
-		cg.CallSites["test.get_input"] = []callgraph.CallSite{
+		cg.CallSites["test.get_input"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{Line: 10},
+				Location: core.Location{Line: 10},
 			},
 			{
 				Target:    "process",
 				TargetFQN: "test.process",
-				Location:  callgraph.Location{Line: 12},
+				Location:  core.Location{Line: 12},
 			},
 		}
 
-		cg.CallSites["test.process"] = []callgraph.CallSite{
+		cg.CallSites["test.process"] = []core.CallSite{
 			{
 				Target:   "eval",
-				Location: callgraph.Location{Line: 20},
+				Location: core.Location{Line: 20},
 			},
 		}
 
@@ -246,21 +246,21 @@ func TestDataflowExecutor_Global(t *testing.T) {
 
 	t.Run("executes global analysis and finds cross-function flows", func(t *testing.T) {
 		// Setup: Source in func A, sink in func B, A calls B
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
 		cg.Edges["test.source_func"] = []string{"test.sink_func"}
 
-		cg.CallSites["test.source_func"] = []callgraph.CallSite{
+		cg.CallSites["test.source_func"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: callgraph.Location{Line: 10, File: "test.py"},
+				Location: core.Location{Line: 10, File: "test.py"},
 			},
 		}
 
-		cg.CallSites["test.sink_func"] = []callgraph.CallSite{
+		cg.CallSites["test.sink_func"] = []core.CallSite{
 			{
 				Target:   "eval",
-				Location: callgraph.Location{Line: 20, File: "test.py"},
+				Location: core.Location{Line: 20, File: "test.py"},
 			},
 		}
 
@@ -291,15 +291,15 @@ func TestDataflowExecutor_Global(t *testing.T) {
 	})
 
 	t.Run("detects sanitizer on path", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
 		cg.Edges["test.source"] = []string{"test.sanitize"}
 		cg.Edges["test.sanitize"] = []string{"test.sink"}
 
-		cg.CallSites["test.sanitize"] = []callgraph.CallSite{
+		cg.CallSites["test.sanitize"] = []core.CallSite{
 			{
 				Target:   "escape_sql",
-				Location: callgraph.Location{Line: 15},
+				Location: core.Location{Line: 15},
 			},
 		}
 
@@ -321,29 +321,29 @@ func TestDataflowExecutor_Global(t *testing.T) {
 	})
 
 	t.Run("excludes flows with sanitizer on path", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
 		cg.Edges["test.source"] = []string{"test.sanitize"}
 		cg.Edges["test.sanitize"] = []string{"test.sink"}
 
-		cg.CallSites["test.source"] = []callgraph.CallSite{
+		cg.CallSites["test.source"] = []core.CallSite{
 			{
 				Target:   "request.POST",
-				Location: callgraph.Location{Line: 5, File: "test.py"},
+				Location: core.Location{Line: 5, File: "test.py"},
 			},
 		}
 
-		cg.CallSites["test.sanitize"] = []callgraph.CallSite{
+		cg.CallSites["test.sanitize"] = []core.CallSite{
 			{
 				Target:   "escape_html",
-				Location: callgraph.Location{Line: 10, File: "test.py"},
+				Location: core.Location{Line: 10, File: "test.py"},
 			},
 		}
 
-		cg.CallSites["test.sink"] = []callgraph.CallSite{
+		cg.CallSites["test.sink"] = []core.CallSite{
 			{
 				Target:   "render",
-				Location: callgraph.Location{Line: 15, File: "test.py"},
+				Location: core.Location{Line: 15, File: "test.py"},
 			},
 		}
 
@@ -369,7 +369,7 @@ func TestDataflowExecutor_Global(t *testing.T) {
 }
 
 func TestDataflowExecutor_PatternMatching(t *testing.T) {
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 	ir := &DataflowIR{}
 	executor := NewDataflowExecutor(ir, cg)
 

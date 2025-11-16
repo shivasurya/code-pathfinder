@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,15 +76,15 @@ if __name__ == "__main__":
 }
 
 func TestRuleLoader_ExecuteRule(t *testing.T) {
-	cg := callgraph.NewCallGraph()
-	cg.CallSites["test.main"] = []callgraph.CallSite{
+	cg := core.NewCallGraph()
+	cg.CallSites["test.main"] = []core.CallSite{
 		{
 			Target:   "eval",
-			Location: callgraph.Location{File: "test.py", Line: 10},
+			Location: core.Location{File: "test.py", Line: 10},
 		},
 		{
 			Target:   "exec",
-			Location: callgraph.Location{File: "test.py", Line: 15},
+			Location: core.Location{File: "test.py", Line: 15},
 		},
 	}
 
@@ -136,14 +136,14 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 	})
 
 	t.Run("executes variable_matcher rule", func(t *testing.T) {
-		cg2 := callgraph.NewCallGraph()
-		cg2.CallSites["test.func"] = []callgraph.CallSite{
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.func"] = []core.CallSite{
 			{
 				Target: "process",
-				Arguments: []callgraph.Argument{
+				Arguments: []core.Argument{
 					{Value: "user_input", IsVariable: true, Position: 0},
 				},
-				Location: callgraph.Location{Line: 20},
+				Location: core.Location{Line: 20},
 			},
 		}
 
@@ -206,7 +206,7 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 
 func TestRuleLoader_ExecuteLogic(t *testing.T) {
 	t.Run("logic operators return empty for now", func(t *testing.T) {
-		cg := callgraph.NewCallGraph()
+		cg := core.NewCallGraph()
 		loader := NewRuleLoader("")
 
 		rule := &RuleIR{

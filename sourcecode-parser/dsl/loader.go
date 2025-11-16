@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 )
 
 // RuleLoader loads Python DSL rules and executes them.
@@ -52,7 +52,7 @@ func (l *RuleLoader) LoadRules() ([]RuleIR, error) {
 }
 
 // ExecuteRule executes a single rule against callgraph.
-func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *callgraph.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Determine matcher type and execute
 	matcherMap, ok := rule.Matcher.(map[string]interface{})
 	if !ok {
@@ -82,7 +82,7 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *callgraph.CallGraph) ([]Dataf
 	}
 }
 
-func (l *RuleLoader) executeCallMatcher(matcherMap map[string]interface{}, cg *callgraph.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeCallMatcher(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to CallMatcherIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -113,7 +113,7 @@ func (l *RuleLoader) executeCallMatcher(matcherMap map[string]interface{}, cg *c
 	return detections, nil
 }
 
-func (l *RuleLoader) executeDataflow(matcherMap map[string]interface{}, cg *callgraph.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeDataflow(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to DataflowIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -129,7 +129,7 @@ func (l *RuleLoader) executeDataflow(matcherMap map[string]interface{}, cg *call
 	return executor.Execute(), nil
 }
 
-func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]interface{}, cg *callgraph.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to VariableMatcherIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -161,7 +161,7 @@ func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]interface{}, c
 }
 
 //nolint:unparam // Will be implemented in future PRs
-func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]interface{}, cg *callgraph.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// TODO: Handle And/Or/Not logic operators
 	// This requires recursive execution of nested matchers
 	// For now, return empty detections as placeholder

@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/extraction"
 )
 
 // FunctionTaintResult represents the structured taint analysis result for a single function.
@@ -82,7 +84,7 @@ func AnalyzeSingleFunction(
 
 	// Parse function source code
 	sourceCode := []byte(fn.SourceCode)
-	tree, err := callgraph.ParsePythonFile(sourceCode)
+	tree, err := extraction.ParsePythonFile(sourceCode)
 	if err != nil {
 		result.AnalysisError = true
 		result.ErrorMessage = fmt.Sprintf("Parse error: %v", err)
@@ -98,7 +100,7 @@ func AnalyzeSingleFunction(
 	}
 
 	// Extract statements (using existing logic from statement_extraction.go)
-	statements, err := callgraph.ExtractStatements(fn.FilePath, sourceCode, functionNode)
+	statements, err := extraction.ExtractStatements(fn.FilePath, sourceCode, functionNode)
 	if err != nil {
 		result.AnalysisError = true
 		result.ErrorMessage = fmt.Sprintf("Statement extraction error: %v", err)
@@ -106,10 +108,10 @@ func AnalyzeSingleFunction(
 	}
 
 	// Build def-use chains (using existing logic from statement.go)
-	defUseChain := callgraph.BuildDefUseChains(statements)
+	defUseChain := core.BuildDefUseChains(statements)
 
 	// Run taint analysis (using existing logic from taint.go)
-	taintSummary := callgraph.AnalyzeIntraProceduralTaint(
+	taintSummary := taint.AnalyzeIntraProceduralTaint(
 		fn.FQN,
 		statements,
 		defUseChain,

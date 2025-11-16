@@ -3,17 +3,17 @@ package dsl
 import (
 	"strings"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 )
 
 // DataflowExecutor wraps existing taint analysis functions.
 type DataflowExecutor struct {
 	IR        *DataflowIR
-	CallGraph *callgraph.CallGraph
+	CallGraph *core.CallGraph
 }
 
 // NewDataflowExecutor creates a new executor.
-func NewDataflowExecutor(ir *DataflowIR, cg *callgraph.CallGraph) *DataflowExecutor {
+func NewDataflowExecutor(ir *DataflowIR, cg *core.CallGraph) *DataflowExecutor {
 	return &DataflowExecutor{
 		IR:        ir,
 		CallGraph: cg,
@@ -196,7 +196,7 @@ func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
 
 // CallSiteMatch represents a matched call site.
 type CallSiteMatch struct {
-	CallSite    callgraph.CallSite
+	CallSite    core.CallSite
 	FunctionFQN string
 	Line        int
 }

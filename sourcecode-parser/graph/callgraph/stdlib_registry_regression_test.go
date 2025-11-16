@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -270,7 +271,7 @@ def file_exists(path):
 }
 
 // collectStats is a helper to aggregate statistics from call graph.
-func collectStats(cg *CallGraph) *CallGraphStats {
+func collectStats(cg *core.CallGraph) *CallGraphStats {
 	stats := &CallGraphStats{
 		StdlibByModule: make(map[string]int),
 	}

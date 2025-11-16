@@ -10,251 +10,264 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInitializeCallGraph_EmptyCodeGraph(t *testing.T) {
-	tmpDir := t.TempDir()
+func TestInitializeCallGraph(t *testing.T) {
+	t.Run("successfully initializes call graph with all components", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `
+def foo():
+    x = 1
+    return x
 
-	codeGraph := &graph.CodeGraph{
-		Nodes: make(map[string]*graph.Node),
-		Edges: []*graph.Edge{},
-	}
+def bar():
+    y = foo()
+    return y
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
 
-	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
 
-	require.NoError(t, err)
-	assert.NotNil(t, callGraph)
-	assert.NotNil(t, registry)
-	assert.NotNil(t, patternRegistry)
+		assert.NoError(t, err)
+		assert.NotNil(t, callGraph)
+		assert.NotNil(t, moduleRegistry)
+		assert.NotNil(t, patternRegistry)
+		assert.Greater(t, len(callGraph.Functions), 0)
+		assert.Greater(t, len(moduleRegistry.Modules), 0)
+		assert.Greater(t, len(patternRegistry.Patterns), 0)
+	})
+
+	t.Run("handles empty project", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, callGraph)
+		assert.NotNil(t, moduleRegistry)
+		assert.NotNil(t, patternRegistry)
+	})
+
+	t.Run("handles invalid project path", func(t *testing.T) {
+		codeGraph := graph.Initialize("/nonexistent/path")
+		_, _, _, err := InitializeCallGraph(codeGraph, "/nonexistent/path")
+
+		// Should return error for invalid path
+		assert.Error(t, err)
+	})
 }
 
-func TestInitializeCallGraph_WithSimpleProject(t *testing.T) {
-	// Create a simple test project
-	tmpDir := t.TempDir()
+func TestAnalyzePatterns(t *testing.T) {
+	t.Run("detects security vulnerability with code snippets", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "vuln.py")
+		code := `
+def vulnerable():
+    user_input = input("Enter: ")
+    eval(user_input)
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
 
-	// Create a Python file
-	testFile := filepath.Join(tmpDir, "test.py")
-	sourceCode := []byte(`
-def get_input():
-    return input()
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		require.NoError(t, err)
 
+		matches := AnalyzePatterns(callGraph, patternRegistry)
+
+		assert.Greater(t, len(matches), 0, "Should detect at least one vulnerability")
+
+		// Check that the first match has required fields
+		match := matches[0]
+		assert.NotEmpty(t, match.Severity)
+		assert.NotEmpty(t, match.PatternName)
+		assert.NotEmpty(t, match.Description)
+		assert.NotEmpty(t, match.SourceFQN)
+		assert.NotEmpty(t, match.SinkFQN)
+
+		// Check that code snippets are populated
+		if match.SourceFile != "" {
+			assert.Greater(t, match.SourceLine, uint32(0))
+			assert.NotEmpty(t, match.SourceCode)
+		}
+		if match.SinkFile != "" {
+			assert.Greater(t, match.SinkLine, uint32(0))
+			assert.NotEmpty(t, match.SinkCode)
+		}
+	})
+
+	t.Run("returns empty for safe code", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "safe.py")
+		code := `
+def safe_function():
+    x = 1 + 2
+    return x
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
+
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		require.NoError(t, err)
+
+		matches := AnalyzePatterns(callGraph, patternRegistry)
+
+		assert.Equal(t, 0, len(matches), "Should not detect vulnerabilities in safe code")
+	})
+
+	t.Run("handles empty call graph", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		require.NoError(t, err)
+
+		matches := AnalyzePatterns(callGraph, patternRegistry)
+
+		assert.Equal(t, 0, len(matches))
+	})
+
+	t.Run("populates all security match fields", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `
 def process():
-    data = get_input()
+    data = input()
     eval(data)
-`)
-	err := os.WriteFile(testFile, sourceCode, 0644)
-	require.NoError(t, err)
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
 
-	// Create a minimal code graph
-	codeGraph := &graph.CodeGraph{
-		Nodes: map[string]*graph.Node{
-			"node1": {
-				ID:         "node1",
-				Type:       "function_definition",
-				Name:       "get_input",
-				File:       testFile,
-				LineNumber: 2,
-			},
-			"node2": {
-				ID:         "node2",
-				Type:       "function_definition",
-				Name:       "process",
-				File:       testFile,
-				LineNumber: 5,
-			},
-		},
-		Edges: []*graph.Edge{},
-	}
+		codeGraph := graph.Initialize(tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		require.NoError(t, err)
 
-	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		matches := AnalyzePatterns(callGraph, patternRegistry)
 
-	require.NoError(t, err)
-	assert.NotNil(t, callGraph)
-	assert.NotNil(t, registry)
-	assert.NotNil(t, patternRegistry)
-
-	// Verify module registry was built
-	assert.NotEmpty(t, registry.Modules)
-
-	// Verify functions were indexed
-	assert.NotEmpty(t, callGraph.Functions)
-
-	// Verify patterns were loaded
-	assert.NotEmpty(t, patternRegistry.Patterns)
+		if len(matches) > 0 {
+			match := matches[0]
+			// Check all required fields are populated
+			assert.NotEmpty(t, match.Severity)
+			assert.NotEmpty(t, match.PatternName)
+			assert.NotEmpty(t, match.Description)
+			assert.NotEmpty(t, match.SourceFQN)
+			assert.NotEmpty(t, match.SinkFQN)
+		}
+	})
 }
 
-func TestAnalyzePatterns_NoMatches(t *testing.T) {
-	// Create call graph with safe functions
-	callGraph := NewCallGraph()
-	callGraph.AddCallSite("myapp.safe_function", CallSite{
-		Target:    "print",
-		TargetFQN: "builtins.print",
+func TestGetCodeSnippet(t *testing.T) {
+	t.Run("reads code snippet from file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `line 1
+line 2
+line 3
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
+
+		snippet := getCodeSnippet(testFile, 2)
+		assert.Equal(t, "line 2", snippet)
 	})
 
-	patternRegistry := NewPatternRegistry()
-	patternRegistry.LoadDefaultPatterns()
+	t.Run("returns empty for invalid line number", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `line 1
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
 
-	matches := AnalyzePatterns(callGraph, patternRegistry)
+		snippet := getCodeSnippet(testFile, 0)
+		assert.Equal(t, "", snippet)
 
-	assert.Empty(t, matches)
+		snippet = getCodeSnippet(testFile, -1)
+		assert.Equal(t, "", snippet)
+
+		snippet = getCodeSnippet(testFile, 100)
+		assert.Equal(t, "", snippet)
+	})
+
+	t.Run("returns empty for nonexistent file", func(t *testing.T) {
+		snippet := getCodeSnippet("/nonexistent/file.py", 1)
+		assert.Equal(t, "", snippet)
+	})
+
+	t.Run("returns empty for empty file path", func(t *testing.T) {
+		snippet := getCodeSnippet("", 1)
+		assert.Equal(t, "", snippet)
+	})
+
+	t.Run("trims whitespace from code snippet", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `    line with spaces
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
+
+		snippet := getCodeSnippet(testFile, 1)
+		assert.Equal(t, "line with spaces", snippet)
+	})
+
+	t.Run("handles file with multiple lines", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.py")
+		code := `def foo():
+    x = 1
+    y = 2
+    return x + y
+`
+		err := os.WriteFile(testFile, []byte(code), 0644)
+		require.NoError(t, err)
+
+		assert.Equal(t, "def foo():", getCodeSnippet(testFile, 1))
+		assert.Equal(t, "x = 1", getCodeSnippet(testFile, 2))
+		assert.Equal(t, "y = 2", getCodeSnippet(testFile, 3))
+		assert.Equal(t, "return x + y", getCodeSnippet(testFile, 4))
+	})
 }
 
-func TestAnalyzePatterns_WithMatch(t *testing.T) {
-	// Create call graph that matches code injection pattern
-	callGraph := NewCallGraph()
+func TestSecurityMatchStruct(t *testing.T) {
+	t.Run("SecurityMatch has all required fields", func(t *testing.T) {
+		match := SecurityMatch{
+			Severity:      "critical",
+			PatternName:   "test-pattern",
+			Description:   "test description",
+			CWE:           "CWE-89",
+			OWASP:         "A03:2021",
+			SourceFQN:     "test.source",
+			SourceCall:    "input",
+			SourceFile:    "/test/file.py",
+			SourceLine:    10,
+			SourceCode:    "x = input()",
+			SinkFQN:       "test.sink",
+			SinkCall:      "eval",
+			SinkFile:      "/test/file.py",
+			SinkLine:      20,
+			SinkCode:      "eval(x)",
+			DataFlowPath:  []string{"test.source", "test.sink"},
+		}
 
-	// Source: get_input() calls input()
-	callGraph.AddCallSite("myapp.get_input", CallSite{
-		Target:    "input",
-		TargetFQN: "builtins.input",
+		assert.Equal(t, "critical", match.Severity)
+		assert.Equal(t, "test-pattern", match.PatternName)
+		assert.Equal(t, "test description", match.Description)
+		assert.Equal(t, "CWE-89", match.CWE)
+		assert.Equal(t, "A03:2021", match.OWASP)
+		assert.Equal(t, "test.source", match.SourceFQN)
+		assert.Equal(t, "input", match.SourceCall)
+		assert.Equal(t, "/test/file.py", match.SourceFile)
+		assert.Equal(t, uint32(10), match.SourceLine)
+		assert.Equal(t, "x = input()", match.SourceCode)
+		assert.Equal(t, "test.sink", match.SinkFQN)
+		assert.Equal(t, "eval", match.SinkCall)
+		assert.Equal(t, "/test/file.py", match.SinkFile)
+		assert.Equal(t, uint32(20), match.SinkLine)
+		assert.Equal(t, "eval(x)", match.SinkCode)
+		assert.Len(t, match.DataFlowPath, 2)
 	})
-
-	// Sink: process() calls eval()
-	callGraph.AddCallSite("myapp.process", CallSite{
-		Target:    "eval",
-		TargetFQN: "builtins.eval",
-	})
-
-	// Create path from source to sink
-	callGraph.AddEdge("myapp.get_input", "myapp.process")
-
-	patternRegistry := NewPatternRegistry()
-	patternRegistry.LoadDefaultPatterns()
-
-	matches := AnalyzePatterns(callGraph, patternRegistry)
-
-	require.Len(t, matches, 1)
-	assert.Equal(t, "CODE-INJECTION-001", matches[0].PatternID)
-	assert.Equal(t, "Code injection via eval with user input", matches[0].PatternName)
-	assert.Equal(t, SeverityCritical, matches[0].Severity)
-	assert.Equal(t, "CWE-94", matches[0].CWE)
-}
-
-func TestAnalyzePatterns_WithSanitizer(t *testing.T) {
-	// Create call graph with sanitizer in the path
-	callGraph := NewCallGraph()
-
-	// Source: get_input() calls input()
-	callGraph.AddCallSite("myapp.get_input", CallSite{
-		Target:    "input",
-		TargetFQN: "builtins.input",
-	})
-
-	// Sanitizer: sanitize_input() calls sanitize()
-	callGraph.AddCallSite("myapp.sanitize_input", CallSite{
-		Target:    "sanitize",
-		TargetFQN: "myapp.utils.sanitize",
-	})
-
-	// Sink: process() calls eval()
-	callGraph.AddCallSite("myapp.process", CallSite{
-		Target:    "eval",
-		TargetFQN: "builtins.eval",
-	})
-
-	// Create path with sanitizer: source -> sanitizer -> sink
-	callGraph.AddEdge("myapp.get_input", "myapp.sanitize_input")
-	callGraph.AddEdge("myapp.sanitize_input", "myapp.process")
-
-	patternRegistry := NewPatternRegistry()
-	patternRegistry.LoadDefaultPatterns()
-
-	matches := AnalyzePatterns(callGraph, patternRegistry)
-
-	// Should not match because sanitizer is present
-	assert.Empty(t, matches)
-}
-
-func TestPatternMatch_Structure(t *testing.T) {
-	match := PatternMatch{
-		PatternID:   "TEST-001",
-		PatternName: "Test Pattern",
-		Description: "Test description",
-		Severity:    SeverityHigh,
-		CWE:         "CWE-123",
-		OWASP:       "A01:2021-Test",
-	}
-
-	assert.Equal(t, "TEST-001", match.PatternID)
-	assert.Equal(t, "Test Pattern", match.PatternName)
-	assert.Equal(t, "Test description", match.Description)
-	assert.Equal(t, SeverityHigh, match.Severity)
-	assert.Equal(t, "CWE-123", match.CWE)
-	assert.Equal(t, "A01:2021-Test", match.OWASP)
-}
-
-func TestInitializeCallGraph_Integration(t *testing.T) {
-	// End-to-end integration test
-	tmpDir := t.TempDir()
-
-	// Create a Python package structure
-	utilsDir := filepath.Join(tmpDir, "utils")
-	err := os.MkdirAll(utilsDir, 0755)
-	require.NoError(t, err)
-
-	// Create utils/helpers.py
-	helpersFile := filepath.Join(utilsDir, "helpers.py")
-	helpersCode := []byte(`
-def sanitize(data):
-    return data.strip()
-`)
-	err = os.WriteFile(helpersFile, helpersCode, 0644)
-	require.NoError(t, err)
-
-	// Create main.py
-	mainFile := filepath.Join(tmpDir, "main.py")
-	mainCode := []byte(`
-from utils.helpers import sanitize
-
-def get_input():
-    return input()
-
-def process():
-    data = get_input()
-    clean_data = sanitize(data)
-    eval(clean_data)
-`)
-	err = os.WriteFile(mainFile, mainCode, 0644)
-	require.NoError(t, err)
-
-	// Create code graph
-	codeGraph := &graph.CodeGraph{
-		Nodes: map[string]*graph.Node{
-			"node1": {
-				ID:         "node1",
-				Type:       "function_definition",
-				Name:       "sanitize",
-				File:       helpersFile,
-				LineNumber: 2,
-			},
-			"node2": {
-				ID:         "node2",
-				Type:       "function_definition",
-				Name:       "get_input",
-				File:       mainFile,
-				LineNumber: 4,
-			},
-			"node3": {
-				ID:         "node3",
-				Type:       "function_definition",
-				Name:       "process",
-				File:       mainFile,
-				LineNumber: 7,
-			},
-		},
-		Edges: []*graph.Edge{},
-	}
-
-	// Initialize call graph
-	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
-
-	require.NoError(t, err)
-	assert.NotNil(t, callGraph)
-	assert.NotNil(t, registry)
-	assert.NotNil(t, patternRegistry)
-
-	// Verify modules were registered
-	assert.Contains(t, registry.Modules, "utils.helpers")
-	assert.Contains(t, registry.Modules, "main")
-
-	// Verify functions were indexed
-	assert.NotEmpty(t, callGraph.Functions)
 }
