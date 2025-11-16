@@ -3,302 +3,270 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"log"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/owenrumney/go-sarif/v2/sarif"
-
+	sarif "github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/dsl"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
-
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/spf13/cobra"
 )
 
-type Rule struct {
-	ID           string `json:"id"`
-	Description  string `json:"description"`
-	Impact       string `json:"impact"`
-	Severity     string `json:"severity"`
-	Passed       bool   `json:"passed" default:"true"`
-	Query        string `json:"query"`
-	RuleProvider string `json:"ruleProvider"`
-}
-
 var ciCmd = &cobra.Command{
 	Use:   "ci",
-	Short: "Scan a project for vulnerabilities with ruleset in ci mode",
-	Run: func(cmd *cobra.Command, _ []string) {
-		rulesetConfig := cmd.Flag("ruleset").Value.String()
-		projectInput := cmd.Flag("project").Value.String()
-		output := cmd.Flag("output").Value.String()
-		outputFile := cmd.Flag("output-file").Value.String()
-		verboseFlag, _ = cmd.Flags().GetBool("verbose") //nolint:all
+	Short: "CI mode with SARIF or JSON output for CI/CD integration",
+	Long: `CI mode for integrating security scans into CI/CD pipelines.
 
-		var ruleset []string
-		var outputResult []map[string]interface{}
-		var err error
+Outputs results in SARIF or JSON format for consumption by CI tools.
 
-		if verboseFlag {
-			fmt.Println("Executing in CI mode")
+Examples:
+  # Generate SARIF report
+  pathfinder ci --rules rules/owasp_top10.py --project . --output sarif > results.sarif
+
+  # Generate JSON report
+  pathfinder ci --rules rules/owasp_top10.py --project . --output json > results.json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		rulesPath, _ := cmd.Flags().GetString("rules")
+		projectPath, _ := cmd.Flags().GetString("project")
+		outputFormat, _ := cmd.Flags().GetString("output")
+
+		if rulesPath == "" {
+			return fmt.Errorf("--rules flag is required")
 		}
 
-		if rulesetConfig == "" {
-			fmt.Println("ruleset are not specified. Please specify a ruleset eg: cpf/java or directory path")
-			os.Exit(1)
+		if projectPath == "" {
+			return fmt.Errorf("--project flag is required")
 		}
 
-		if projectInput == "" {
-			fmt.Println("Project not specified")
-			os.Exit(1)
+		if outputFormat != "sarif" && outputFormat != "json" {
+			return fmt.Errorf("--output must be 'sarif' or 'json'")
 		}
 
-		ruleset, err = loadRules(rulesetConfig, strings.HasPrefix(rulesetConfig, "cpf/"))
+		// Build code graph (AST)
+		log.Printf("Building code graph from %s...\n", projectPath)
+		codeGraph := graph.Initialize(projectPath)
+		if len(codeGraph.Nodes) == 0 {
+			return fmt.Errorf("no source files found in project")
+		}
+		log.Printf("Code graph built: %d nodes\n", len(codeGraph.Nodes))
+
+		// Build module registry
+		log.Printf("Building module registry...\n")
+		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 		if err != nil {
-			if verboseFlag {
-				fmt.Printf("%s - error loading rules or ruleset not found: \nStacktrace: \n%s \n", rulesetConfig, err)
-			}
-			os.Exit(1)
-		}
-		codeGraph := initializeProject(projectInput)
-		for _, rule := range ruleset {
-			queryInput := ParseQuery(rule)
-			rulesetResult := make(map[string]interface{})
-			result, err := processQuery(queryInput.Query, codeGraph, output, 0, 0)
-
-			if output == "json" || output == "sarif" {
-				var resultObject map[string]interface{}
-				json.Unmarshal([]byte(result), &resultObject) //nolint:all
-				rulesetResult["query"] = queryInput.Query
-				rulesetResult["rule"] = queryInput
-				rulesetResult["result"] = resultObject
-				outputResult = append(outputResult, rulesetResult)
-			} else {
-				fmt.Println(result)
-			}
-			if err != nil {
-				fmt.Println("Error processing query: ", err)
-			}
+			log.Printf("Warning: failed to build module registry: %v\n", err)
+			moduleRegistry = core.NewModuleRegistry()
 		}
 
-		// TODO: Add sarif file support
-		if output == "json" {
-			if outputFile != "" {
-				if graph.IsGitHubActions() {
-					// append GITHUB_WORKSPACE to output file path
-					outputFile = os.Getenv("GITHUB_WORKSPACE") + "/" + outputFile
-				}
-				file, err := os.Create(outputFile)
-				if err != nil {
-					fmt.Println("Error creating output file: ", err)
-				}
-				defer func(file *os.File) {
-					err := file.Close()
-					if err != nil {
-						fmt.Println("Error closing output file: ", err)
-						os.Exit(1)
-					}
-				}(file)
-				// convert outputResult to json
-				outputResultJSON, err := json.MarshalIndent(outputResult, "", "  ")
-				if err != nil {
-					fmt.Println("Error converting output to json: ", err)
-				}
-				_, err = file.WriteString(string(outputResultJSON))
-				if err != nil {
-					fmt.Println("Error writing output file: ", err)
-				}
-			}
-		} else if output == "sarif" {
-			sarifReport, err := generateSarifReport(outputResult)
+		// Build callgraph
+		log.Printf("Building callgraph...\n")
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+		if err != nil {
+			return fmt.Errorf("failed to build callgraph: %w", err)
+		}
+		log.Printf("Callgraph built: %d functions, %d call sites\n",
+			len(cg.Functions), countTotalCallSites(cg))
+
+		// Load Python DSL rules
+		log.Printf("Loading rules from %s...\n", rulesPath)
+		loader := dsl.NewRuleLoader(rulesPath)
+		rules, err := loader.LoadRules()
+		if err != nil {
+			return fmt.Errorf("failed to load rules: %w", err)
+		}
+		log.Printf("Loaded %d rules\n", len(rules))
+
+		// Execute rules against callgraph
+		log.Printf("Running security scan...\n")
+		allDetections := make(map[string][]dsl.DataflowDetection)
+		totalDetections := 0
+		for _, rule := range rules {
+			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
-				fmt.Println("Error generating sarif report: ", err)
-				os.Exit(1)
+				log.Printf("Error executing rule %s: %v\n", rule.Rule.ID, err)
+				continue
 			}
-			if graph.IsGitHubActions() {
-				// append GITHUB_WORKSPACE to output file path
-				outputFile = os.Getenv("GITHUB_WORKSPACE") + "/" + outputFile
-			}
-			if err := sarifReport.WriteFile(outputFile); err != nil {
-				fmt.Println("Error writing sarif report: ", err)
-				os.Exit(1)
+
+			if len(detections) > 0 {
+				allDetections[rule.Rule.ID] = detections
+				totalDetections += len(detections)
 			}
 		}
+
+		log.Printf("Scan complete. Found %d vulnerabilities.\n", totalDetections)
+		log.Printf("Generating %s output...\n", outputFormat)
+
+		// Generate output
+		if outputFormat == "sarif" {
+			return generateSARIFOutput(rules, allDetections)
+		}
+		return generateJSONOutput(rules, allDetections)
 	},
 }
 
-func generateSarifReport(results []map[string]interface{}) (*sarif.Report, error) {
+func generateSARIFOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.DataflowDetection) error {
 	report, err := sarif.New(sarif.Version210)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create SARIF report: %w", err)
 	}
-	run := sarif.NewRunWithInformationURI("CodePathFinder", "https://codepathfinder.dev")
-	for _, result := range results {
-		localresult := result["result"].(map[string]interface{}) //nolint:all
-		resultSet := localresult["result_set"].([]interface{})   //nolint:all
-		pb := sarif.NewPropertyBag()
-		rule := result["rule"].(Rule) //nolint:all
-		pb.Add("impact", rule.Impact)
-		pb.Add("ruleProvider", rule.RuleProvider)
 
-		run.AddRule(rule.ID).
-			WithDescription(rule.Description).
-			WithProperties(pb.Properties).
-			WithMarkdownHelp("# markdown")
+	run := sarif.NewRunWithInformationURI("Code Pathfinder", "https://github.com/shivasurya/code-pathfinder")
 
-		for _, finding := range resultSet {
-			findingMap := finding.(map[string]interface{}) //nolint:all
-			file, _ := findingMap["file"].(string)         //nolint:all
-			line, _ := findingMap["line"].(float64)        //nolint:all
-			// convert line to int
-			lineInt := int(line)
+	// Add all rules to the run
+	for _, rule := range rules {
+		// Create full description with CWE and OWASP info
+		fullDesc := rule.Rule.Description
+		if rule.Rule.CWE != "" || rule.Rule.OWASP != "" {
+			fullDesc += " ("
+			if rule.Rule.CWE != "" {
+				fullDesc += rule.Rule.CWE
+			}
+			if rule.Rule.OWASP != "" {
+				if rule.Rule.CWE != "" {
+					fullDesc += ", "
+				}
+				fullDesc += rule.Rule.OWASP
+			}
+			fullDesc += ")"
+		}
 
-			run.CreateResultForRule(rule.ID).
-				WithLevel(strings.ToLower(rule.Severity)).
-				WithMessage(sarif.NewTextMessage(rule.Description)).
-				AddLocation(
-					sarif.NewLocationWithPhysicalLocation(
+		sarifRule := run.AddRule(rule.Rule.ID).
+			WithDescription(fullDesc).
+			WithName(rule.Rule.Name)
+
+		// Map severity to SARIF level
+		level := "warning"
+		switch rule.Rule.Severity {
+		case "critical", "high":
+			level = "error"
+		case "medium":
+			level = "warning"
+		case "low":
+			level = "note"
+		}
+		sarifRule.WithDefaultConfiguration(sarif.NewReportingConfiguration().WithLevel(level))
+	}
+
+	// Add detections as results
+	for _, rule := range rules {
+		detections, ok := allDetections[rule.Rule.ID]
+		if !ok {
+			continue
+		}
+
+		for _, detection := range detections {
+			// Create detailed message
+			message := fmt.Sprintf("%s in %s", rule.Rule.Description, detection.FunctionFQN)
+			if detection.SinkCall != "" {
+				message += fmt.Sprintf(" (sink: %s, confidence: %.0f%%)", detection.SinkCall, detection.Confidence*100)
+			}
+
+			result := run.CreateResultForRule(rule.Rule.ID).
+				WithMessage(sarif.NewTextMessage(message))
+
+			// Add location
+			if detection.FunctionFQN != "" {
+				location := sarif.NewLocation().
+					WithPhysicalLocation(
 						sarif.NewPhysicalLocation().
-							WithArtifactLocation(
-								sarif.NewSimpleArtifactLocation(file),
-							).WithRegion(
-							sarif.NewSimpleRegion(lineInt, lineInt),
-						),
-					),
-				)
+							WithRegion(
+								sarif.NewRegion().
+									WithStartLine(detection.SinkLine).
+									WithEndLine(detection.SinkLine),
+							),
+					)
+
+				result.AddLocation(location)
+			}
+
+			// Note: Additional detection info (functionFQN, sinkCall, etc.) is included in the message
+			// SARIF v2 spec doesn't have a straightforward way to add custom properties to results
 		}
 	}
+
 	report.AddRun(run)
-	return report, nil
+
+	// Write to stdout
+	sarifJSON, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal SARIF: %w", err)
+	}
+
+	fmt.Println(string(sarifJSON))
+	return nil
 }
+
+func generateJSONOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.DataflowDetection) error {
+	output := make(map[string]interface{})
+	output["tool"] = "Code Pathfinder"
+	output["version"] = Version
+
+	results := []map[string]interface{}{}
+	for _, rule := range rules {
+		detections, ok := allDetections[rule.Rule.ID]
+		if !ok {
+			continue
+		}
+
+		for _, detection := range detections {
+			result := map[string]interface{}{
+				"ruleId":      rule.Rule.ID,
+				"ruleName":    rule.Rule.Name,
+				"severity":    rule.Rule.Severity,
+				"cwe":         rule.Rule.CWE,
+				"owasp":       rule.Rule.OWASP,
+				"description": rule.Rule.Description,
+				"functionFQN": detection.FunctionFQN,
+				"sinkLine":    detection.SinkLine,
+				"sinkCall":    detection.SinkCall,
+				"scope":       detection.Scope,
+				"confidence":  detection.Confidence,
+			}
+
+			if detection.SourceLine > 0 {
+				result["sourceLine"] = detection.SourceLine
+			}
+
+			if detection.TaintedVar != "" {
+				result["taintedVar"] = detection.TaintedVar
+			}
+
+			results = append(results, result)
+		}
+	}
+
+	output["results"] = results
+	output["summary"] = map[string]interface{}{
+		"totalVulnerabilities": len(results),
+		"rulesExecuted":        len(rules),
+	}
+
+	jsonOutput, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	fmt.Println(string(jsonOutput))
+
+	// Exit with error code if vulnerabilities found
+	if len(results) > 0 {
+		osExit(1)
+	}
+
+	return nil
+}
+
+// Variable to allow mocking os.Exit in tests.
+var osExit = os.Exit
 
 func init() {
 	rootCmd.AddCommand(ciCmd)
-	ciCmd.Flags().StringP("output", "o", "", "Supported output format: json, sarif")
-	ciCmd.Flags().StringP("output-file", "f", "", "Output file path")
-	ciCmd.Flags().StringP("project", "p", "", "Source code to analyze")
-	ciCmd.Flags().StringP("ruleset", "r", "", "Ruleset to use example: cfp/java or directory path")
-}
-
-func loadRules(rulesDirectory string, isHosted bool) ([]string, error) {
-	var rules []string
-	var err error
-
-	if isHosted {
-		rules, err = downloadRuleset(rulesDirectory)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err = filepath.Walk(rulesDirectory, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() && strings.HasSuffix(info.Name(), ".cql") {
-				contents, err := os.ReadFile(path)
-				if err != nil {
-					fmt.Printf("Error reading file %s: %v\n", path, err)
-					return nil
-				}
-				rules = append(rules, string(contents))
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf("error walking through rules directory: %w", err)
-		}
-	}
-
-	return rules, nil
-}
-
-func downloadRuleset(ruleset string) ([]string, error) {
-	rules := []string{}
-	ruleset = strings.TrimPrefix(ruleset, "cpf/")
-	url := "https://codepathfinder.dev/rules/" + ruleset + ".json"
-	//nolint:all
-	resp, err := http.Get(url)
-	if err != nil {
-		err := fmt.Errorf("error downloading ruleset: %w", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-	// read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		err := fmt.Errorf("error downloading ruleset: %w", err)
-		return nil, err
-	}
-	// parse response body
-	var response map[string]interface{}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		err := fmt.Errorf("error downloading ruleset: %w", err)
-		return nil, err
-	}
-	// add rules to rules
-	if files, ok := response["files"].([]interface{}); ok {
-		for _, file := range files {
-			if rule, ok := file.(map[string]interface{}); ok {
-				if content, ok := rule["content"].(string); ok {
-					rules = append(rules, content)
-				}
-			}
-		}
-	}
-	return rules, nil
-}
-
-func ParseQuery(query string) Rule {
-	// split query into lines
-	lines := strings.Split(query, "\n")
-	findLineFound := false
-	commentLineFound := false
-	query = ""
-	comment := ""
-	rule := Rule{}
-	for _, line := range lines {
-		// check if line starts with :
-		if strings.HasPrefix(strings.TrimSpace(line), "/*") { //nolint:all
-			comment += line
-			commentLineFound = true
-		} else if strings.HasPrefix(strings.TrimSpace(line), "predicate") || strings.HasPrefix(strings.TrimSpace(line), "FROM") {
-			findLineFound = true
-			query += line + " "
-		} else if findLineFound {
-			query += line + " "
-		} else if commentLineFound {
-			comment += line
-			key, value := ParseCommentLine(line)
-			switch key {
-			case "@id":
-				rule.ID = value
-			case "@description":
-				rule.Description = value
-			case "@problem.severity":
-				rule.Severity = value
-			case "@security-severity":
-				rule.Impact = value
-			case "@ruleprovider":
-				rule.RuleProvider = value
-			}
-		} else if strings.HasPrefix(strings.TrimSpace(line), "*/") {
-			commentLineFound = false
-		}
-	}
-	rule.Query = strings.TrimSpace(query)
-	return rule
-}
-
-func ParseCommentLine(line string) (key, value string) {
-	// parse comment start with "* @name <VALUE_MAY_CONTAIN_SPACE>"
-	comment := strings.TrimSpace(line)
-	comment = strings.TrimPrefix(comment, "*")
-	comment = strings.TrimSpace(comment)
-	parts := strings.Split(comment, " ")
-	if len(parts) > 1 {
-		return parts[0], strings.Join(parts[1:], " ")
-	}
-	return "", ""
+	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file (required)")
+	ciCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
+	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif or json (default: sarif)")
+	ciCmd.MarkFlagRequired("rules")
+	ciCmd.MarkFlagRequired("project")
 }

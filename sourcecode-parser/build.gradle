@@ -115,4 +115,24 @@ task createTag(dependsOn: tagExists) {
     }
 }
 
+// Python DSL tasks
+task testPython(type: Exec) {
+    workingDir '../python-dsl'
+    commandLine 'pytest', '--cov=codepathfinder', '--cov-report=term-missing', '--cov-fail-under=95'
+}
+
+task lintPython(type: Exec) {
+    workingDir '../python-dsl'
+    commandLine 'sh', '-c', 'black --check codepathfinder/ tests/ && ruff check codepathfinder/ tests/ && mypy codepathfinder/'
+}
+
+task buildPython(type: Exec, dependsOn: ['testPython', 'lintPython']) {
+    workingDir '../python-dsl'
+    commandLine 'python', 'setup.py', 'sdist', 'bdist_wheel'
+}
+
+// Make Go tests depend on Python tests
+testGo.dependsOn testPython
+lintGo.dependsOn lintPython
+
 clean.dependsOn cleanGo

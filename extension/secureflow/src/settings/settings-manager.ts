@@ -10,8 +10,9 @@ import * as vscode from 'vscode';
  * Run `npm run generate:models` from the CLI package to update
  */
 
-// Import AIModel type from generated configuration
+// Import and re-export AIModel type from generated configuration
 import type { AIModel } from '../generated/model-config';
+export type { AIModel };
 
 /**
  * Settings manager for SecureFlow extension

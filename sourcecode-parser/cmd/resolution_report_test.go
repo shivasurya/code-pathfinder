@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,31 +12,31 @@ import (
 
 func TestAggregateResolutionStatistics(t *testing.T) {
 	// Create a mock call graph with various call sites
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 
 	// Add resolved call sites
-	cg.AddCallSite("test.func1", callgraph.CallSite{
+	cg.AddCallSite("test.func1", core.CallSite{
 		Target:    "print",
 		Resolved:  true,
 		TargetFQN: "builtins.print",
 	})
 
 	// Add unresolved call sites with different failure reasons
-	cg.AddCallSite("test.func2", callgraph.CallSite{
+	cg.AddCallSite("test.func2", core.CallSite{
 		Target:        "models.ForeignKey",
 		Resolved:      false,
 		TargetFQN:     "django.db.models.ForeignKey",
 		FailureReason: "external_framework",
 	})
 
-	cg.AddCallSite("test.func3", callgraph.CallSite{
+	cg.AddCallSite("test.func3", core.CallSite{
 		Target:        "Task.objects.filter",
 		Resolved:      false,
 		TargetFQN:     "tasks.models.Task.objects.filter",
 		FailureReason: "orm_pattern",
 	})
 
-	cg.AddCallSite("test.func4", callgraph.CallSite{
+	cg.AddCallSite("test.func4", core.CallSite{
 		Target:        "response.json",
 		Resolved:      false,
 		TargetFQN:     "response.json",
@@ -161,10 +161,10 @@ func TestDetermineStdlibType(t *testing.T) {
 
 func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	// Create a mock call graph with stdlib call sites
-	cg := callgraph.NewCallGraph()
+	cg := core.NewCallGraph()
 
 	// Add stdlib resolved via builtin registry
-	cg.AddCallSite("test.func1", callgraph.CallSite{
+	cg.AddCallSite("test.func1", core.CallSite{
 		Target:     "getcwd",
 		Resolved:   true,
 		TargetFQN:  "os.getcwd",
@@ -172,7 +172,7 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	})
 
 	// Add stdlib resolved via annotation
-	cg.AddCallSite("test.func2", callgraph.CallSite{
+	cg.AddCallSite("test.func2", core.CallSite{
 		Target:     "dumps",
 		Resolved:   true,
 		TargetFQN:  "json.dumps",
@@ -180,7 +180,7 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	})
 
 	// Add stdlib resolved via type inference
-	cg.AddCallSite("test.func3", callgraph.CallSite{
+	cg.AddCallSite("test.func3", core.CallSite{
 		Target:                   "Path",
 		Resolved:                 true,
 		TargetFQN:                "pathlib.Path",
@@ -189,7 +189,7 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	})
 
 	// Add non-stdlib resolved call
-	cg.AddCallSite("test.func4", callgraph.CallSite{
+	cg.AddCallSite("test.func4", core.CallSite{
 		Target:    "myfunction",
 		Resolved:  true,
 		TargetFQN: "myproject.utils.myfunction",

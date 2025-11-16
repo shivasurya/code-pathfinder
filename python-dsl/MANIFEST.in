@@ -1,0 +1,11 @@
+include LICENSE
+include README.md
+include pyproject.toml
+recursive-include codepathfinder *.py
+recursive-exclude tests *
+recursive-exclude htmlcov *
+recursive-exclude .pytest_cache *
+recursive-exclude .mypy_cache *
+recursive-exclude .ruff_cache *
+global-exclude *.pyc
+global-exclude __pycache__
