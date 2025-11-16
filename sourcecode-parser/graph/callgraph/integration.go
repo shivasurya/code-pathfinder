@@ -1,6 +1,10 @@
 package callgraph
 
 import (
+	"bufio"
+	"os"
+	"strings"
+
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
@@ -105,10 +109,67 @@ func AnalyzePatterns(callGraph *core.CallGraph, patternRegistry *patterns.Patter
 					SinkCall:     match.SinkCall,
 					DataFlowPath: match.DataFlowPath,
 				}
+
+				// Look up source location and code
+				if match.SourceFQN != "" && match.SourceCall != "" {
+					if callSites, ok := callGraph.CallSites[match.SourceFQN]; ok {
+						for _, site := range callSites {
+							if site.Target == match.SourceCall || site.TargetFQN == match.SourceCall {
+								securityMatch.SourceFile = site.Location.File
+								securityMatch.SourceLine = uint32(site.Location.Line)
+								securityMatch.SourceCode = getCodeSnippet(site.Location.File, site.Location.Line)
+								break
+							}
+						}
+					}
+				}
+
+				// Look up sink location and code
+				if match.SinkFQN != "" && match.SinkCall != "" {
+					if callSites, ok := callGraph.CallSites[match.SinkFQN]; ok {
+						for _, site := range callSites {
+							if site.Target == match.SinkCall || site.TargetFQN == match.SinkCall {
+								securityMatch.SinkFile = site.Location.File
+								securityMatch.SinkLine = uint32(site.Location.Line)
+								securityMatch.SinkCode = getCodeSnippet(site.Location.File, site.Location.Line)
+								break
+							}
+						}
+					}
+				}
+
 				matches = append(matches, securityMatch)
 			}
 		}
 	}
 
 	return matches
+}
+
+// getCodeSnippet reads a line of code from a file.
+// Returns the line at the specified line number (1-indexed).
+// Returns empty string if the file cannot be read or line number is invalid.
+func getCodeSnippet(filePath string, lineNumber int) string {
+	if filePath == "" || lineNumber < 1 {
+		return ""
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	currentLine := 1
+
+	for scanner.Scan() {
+		if currentLine == lineNumber {
+			line := strings.TrimSpace(scanner.Text())
+			return line
+		}
+		currentLine++
+	}
+
+	return ""
 }
