@@ -1,4 +1,4 @@
-package callgraph
+package registry
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,16 +16,16 @@ func TestStdlibRegistryLoader_LoadManifest(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create manifest
-	manifest := &Manifest{
+	manifest := &core.Manifest{
 		SchemaVersion:   "1.0.0",
 		RegistryVersion: "v1",
-		PythonVersion: PythonVersionInfo{
+		PythonVersion: core.PythonVersionInfo{
 			Major: 3,
 			Minor: 14,
 			Patch: 0,
 			Full:  "3.14.0",
 		},
-		Modules: []*ModuleEntry{
+		Modules: []*core.ModuleEntry{
 			{
 				Name:      "os",
 				File:      "os_stdlib.json",
@@ -32,7 +33,7 @@ func TestStdlibRegistryLoader_LoadManifest(t *testing.T) {
 				Checksum:  "sha256:abc123",
 			},
 		},
-		Statistics: &RegistryStats{
+		Statistics: &core.RegistryStats{
 			TotalModules:   1,
 			TotalFunctions: 10,
 		},
@@ -60,25 +61,25 @@ func TestStdlibRegistryLoader_LoadModule(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create module
-	module := &StdlibModule{
+	module := &core.StdlibModule{
 		Module:        "os",
 		PythonVersion: "3.14.0",
-		Functions: map[string]*StdlibFunction{
+		Functions: map[string]*core.StdlibFunction{
 			"getcwd": {
 				ReturnType: "builtins.str",
 				Confidence: 1.0,
-				Params:     []*FunctionParam{},
+				Params:     []*core.FunctionParam{},
 				Source:     "annotation",
 			},
 		},
-		Constants: map[string]*StdlibConstant{
+		Constants: map[string]*core.StdlibConstant{
 			"sep": {
 				Type:       "builtins.str",
 				Value:      "\"/\"",
 				Confidence: 1.0,
 			},
 		},
-		Attributes: map[string]*StdlibAttribute{
+		Attributes: map[string]*core.StdlibAttribute{
 			"environ": {
 				Type:        "os._Environ",
 				BehavesLike: "builtins.dict",
@@ -109,7 +110,7 @@ func TestStdlibRegistryLoader_LoadModule(t *testing.T) {
 
 func TestStdlibRegistryLoader_LoadRegistry(t *testing.T) {
 	// Use actual generated registries if they exist
-	registryPath := "../../registries/python3.14/stdlib/v1"
+	registryPath := "../../../registries/python3.14/stdlib/v1"
 	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
 		t.Skip("Skipping test: registries not generated yet")
 	}
@@ -195,21 +196,21 @@ func TestStdlibRegistryLoader_CorruptedManifest(t *testing.T) {
 }
 
 func TestStdlibRegistry_GetMethods(t *testing.T) {
-	registry := NewStdlibRegistry()
+	registry := core.NewStdlibRegistry()
 
 	// Add test module
-	registry.Modules["test"] = &StdlibModule{
+	registry.Modules["test"] = &core.StdlibModule{
 		Module: "test",
-		Functions: map[string]*StdlibFunction{
+		Functions: map[string]*core.StdlibFunction{
 			"func1": {ReturnType: "str"},
 		},
-		Classes: map[string]*StdlibClass{
+		Classes: map[string]*core.StdlibClass{
 			"Class1": {Type: "class"},
 		},
-		Constants: map[string]*StdlibConstant{
+		Constants: map[string]*core.StdlibConstant{
 			"CONST1": {Type: "int"},
 		},
-		Attributes: map[string]*StdlibAttribute{
+		Attributes: map[string]*core.StdlibAttribute{
 			"attr1": {Type: "dict"},
 		},
 	}
