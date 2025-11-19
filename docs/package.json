@@ -19,7 +19,7 @@
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.5",
     "@uiw/codemirror-theme-monokai": "^4.23.10",
-    "astro": "^5.15.6",
+    "astro": "^5.15.9",
     "codemirror": "^6.0.1",
     "sharp": "^0.32.5"
   },
