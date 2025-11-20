@@ -4,24 +4,36 @@ Core matchers for the pathfinder Python DSL.
 These matchers generate JSON IR for the Go executor.
 """
 
+from typing import Dict, Optional, Union, List, Any
 from .ir import IRType
+
+ArgumentValue = Union[str, int, float, bool, List[Union[str, int, float, bool]]]
 
 
 class CallMatcher:
     """
-    Matches function/method calls in the callgraph.
+    Matches function/method calls with optional argument constraints.
 
     Examples:
         calls("eval")                    # Exact match
         calls("eval", "exec")            # Multiple patterns
         calls("request.*")               # Wildcard (any request.* call)
         calls("*.json")                  # Wildcard (any *.json call)
+        calls("app.run", match_name={"debug": True})  # Keyword argument matching
+        calls("socket.bind", match_position={0: "0.0.0.0"})  # Positional argument matching
     """
 
-    def __init__(self, *patterns: str):
+    def __init__(
+        self,
+        *patterns: str,
+        match_position: Optional[Dict[int, ArgumentValue]] = None,
+        match_name: Optional[Dict[str, ArgumentValue]] = None
+    ):
         """
         Args:
             *patterns: Function names to match. Supports wildcards (*).
+            match_position: Match positional arguments by index {position: value}
+            match_name: Match named/keyword arguments {name: value}
 
         Raises:
             ValueError: If no patterns provided or pattern is empty
@@ -34,6 +46,35 @@ class CallMatcher:
 
         self.patterns = list(patterns)
         self.wildcard = any("*" in p for p in patterns)
+        self.match_position = match_position or {}
+        self.match_name = match_name or {}
+
+    def _make_constraint(self, value: ArgumentValue) -> Dict[str, Any]:
+        """
+        Create an argument constraint from a value.
+
+        Automatically detects wildcard characters in string values.
+
+        Args:
+            value: The argument value or list of values
+
+        Returns:
+            Dictionary with 'value' and 'wildcard' keys
+        """
+        # Check if wildcard characters are present in string values
+        has_wildcard = False
+        if isinstance(value, str) and ('*' in value or '?' in value):
+            has_wildcard = True
+        elif isinstance(value, list):
+            has_wildcard = any(
+                isinstance(v, str) and ('*' in v or '?' in v)
+                for v in value
+            )
+
+        return {
+            "value": value,
+            "wildcard": has_wildcard or self.wildcard
+        }
 
     def to_ir(self) -> dict:
         """
@@ -44,15 +85,33 @@ class CallMatcher:
                 "type": "call_matcher",
                 "patterns": ["eval", "exec"],
                 "wildcard": false,
-                "match_mode": "any"  # matches if ANY pattern matches
+                "matchMode": "any",
+                "keywordArgs": { "debug": {"value": true, "wildcard": false} },
+                "positionalArgs": { "0": {"value": "0.0.0.0", "wildcard": false} }
             }
         """
-        return {
+        ir = {
             "type": IRType.CALL_MATCHER.value,
             "patterns": self.patterns,
             "wildcard": self.wildcard,
-            "match_mode": "any",
+            "matchMode": "any",
         }
+
+        # Add positional argument constraints
+        if self.match_position:
+            ir["positionalArgs"] = {
+                str(pos): self._make_constraint(value)
+                for pos, value in self.match_position.items()
+            }
+
+        # Add keyword argument constraints
+        if self.match_name:
+            ir["keywordArgs"] = {
+                name: self._make_constraint(value)
+                for name, value in self.match_name.items()
+            }
+
+        return ir
 
     def __repr__(self) -> str:
         patterns_str = ", ".join(f'"{p}"' for p in self.patterns)
@@ -105,12 +164,18 @@ class VariableMatcher:
 
 
 # Public API
-def calls(*patterns: str) -> CallMatcher:
+def calls(
+    *patterns: str,
+    match_position: Optional[Dict[int, ArgumentValue]] = None,
+    match_name: Optional[Dict[str, ArgumentValue]] = None
+) -> CallMatcher:
     """
-    Create a matcher for function/method calls.
+    Create a matcher for function/method calls with optional argument constraints.
 
     Args:
         *patterns: Function names to match (supports wildcards)
+        match_position: Match positional arguments by index {position: value}
+        match_name: Match named/keyword arguments {name: value}
 
     Returns:
         CallMatcher instance
@@ -124,8 +189,23 @@ def calls(*patterns: str) -> CallMatcher:
 
         >>> calls("urllib.*")
         calls("urllib.*")
+
+        >>> calls("app.run", match_name={"debug": True})
+        calls("app.run")
+
+        >>> calls("socket.bind", match_position={0: "0.0.0.0"})
+        calls("socket.bind")
+
+        >>> calls("yaml.load", match_position={1: ["Loader", "UnsafeLoader"]})
+        calls("yaml.load")
+
+        >>> calls("chmod", match_position={1: "0o7*"})
+        calls("chmod")
+
+        >>> calls("app.run", match_position={0: "localhost"}, match_name={"debug": True})
+        calls("app.run")
     """
-    return CallMatcher(*patterns)
+    return CallMatcher(*patterns, match_position=match_position, match_name=match_name)
 
 
 def variable(pattern: str) -> VariableMatcher:
