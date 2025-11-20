@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
@@ -48,17 +49,36 @@ func (e *CallMatcherExecutor) Execute() []core.CallSite {
 	return matches
 }
 
-// matchesCallSite checks if a call site matches any pattern.
+// matchesCallSite checks if a call site matches the pattern AND argument constraints.
+//
+// Algorithm:
+//  1. Check if function name matches any pattern
+//  2. Check if arguments satisfy constraints
+//  3. Return true only if both match
+//
+// Performance: O(P + A) where P=patterns, A=arguments.
 func (e *CallMatcherExecutor) matchesCallSite(cs *core.CallSite) bool {
 	target := cs.Target
 
+	// Step 1: Check if function name matches
+	matchesTarget := false
 	for _, pattern := range e.IR.Patterns {
 		if e.matchesPattern(target, pattern) {
-			return true // match_mode="any" (default)
+			matchesTarget = true
+			break
 		}
 	}
 
-	return false
+	if !matchesTarget {
+		return false // Function name doesn't match
+	}
+
+	// Step 2: Check argument constraints
+	if !e.matchesArguments(cs) {
+		return false // Arguments don't match constraints
+	}
+
+	return true // Both function name and arguments match!
 }
 
 // matchesPattern checks if target matches pattern (with wildcard support)
@@ -178,4 +198,161 @@ func (e *CallMatcherExecutor) parseKeywordArguments(args []core.Argument) map[st
 	}
 
 	return kwargs
+}
+
+// matchesArguments checks if CallSite arguments satisfy all constraints.
+//
+// Algorithm:
+//  1. If no constraints, return true (backward compatibility)
+//  2. Parse keyword arguments from CallSite
+//  3. Check each constraint against actual values
+//  4. Return true only if all constraints satisfied
+//
+// Performance: O(K) where K = number of keyword constraints (~1-3 typically).
+func (e *CallMatcherExecutor) matchesArguments(cs *core.CallSite) bool {
+	// No constraints = always match (backward compatibility)
+	if len(e.IR.KeywordArgs) == 0 {
+		return true
+	}
+
+	// Parse keyword arguments from CallSite
+	keywordArgs := e.parseKeywordArguments(cs.Arguments)
+
+	// Check each keyword argument constraint
+	for name, constraint := range e.IR.KeywordArgs {
+		actualValue, exists := keywordArgs[name]
+		if !exists {
+			// Required keyword argument not present in call
+			return false
+		}
+
+		if !e.matchesArgumentValue(actualValue, constraint) {
+			// Argument value doesn't match constraint
+			return false
+		}
+	}
+
+	return true // All constraints satisfied!
+}
+
+// matchesArgumentValue checks if actual value matches constraint.
+//
+// Handles:
+//   - Exact string match: "0.0.0.0" == "0.0.0.0"
+//   - Boolean match: "True" == true, "False" == false
+//   - Number match: "777" == 777, "0o777" == 0o777 (octal)
+//   - Case-insensitive for booleans: "true" == "True" == "TRUE"
+//
+// Performance: O(1) for single values.
+func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint ArgumentConstraint) bool {
+	// Clean actual value (remove quotes, trim whitespace)
+	actual = e.cleanValue(actual)
+
+	// Get expected value from constraint
+	expected := constraint.Value
+
+	// Type-specific matching
+	switch v := expected.(type) {
+	case string:
+		// String comparison
+		return e.normalizeValue(actual) == e.normalizeValue(v)
+
+	case bool:
+		// Boolean comparison
+		return e.matchesBoolean(actual, v)
+
+	case float64:
+		// Number comparison (JSON numbers are float64)
+		return e.matchesNumber(actual, v)
+
+	case nil:
+		// Null/None comparison
+		return actual == "None" || actual == "nil" || actual == "null"
+
+	default:
+		// Unknown type
+		return false
+	}
+}
+
+// cleanValue removes surrounding quotes and whitespace from argument values.
+//
+// Examples:
+//   "\"0.0.0.0\"" → "0.0.0.0"
+//   "'localhost'" → "localhost"
+//   "  True  "    → "True"
+func (e *CallMatcherExecutor) cleanValue(value string) string {
+	value = strings.TrimSpace(value)
+
+	// Remove surrounding quotes (single or double)
+	if len(value) >= 2 {
+		if (value[0] == '"' && value[len(value)-1] == '"') ||
+			(value[0] == '\'' && value[len(value)-1] == '\'') {
+			value = value[1 : len(value)-1]
+		}
+	}
+
+	return value
+}
+
+// normalizeValue normalizes string values for comparison.
+//
+// Handles:
+//   - Case-insensitive for specific values: "true" == "True" == "TRUE"
+//   - Preserves case for general strings: "MyValue" != "myvalue"
+func (e *CallMatcherExecutor) normalizeValue(value string) string {
+	lower := strings.ToLower(value)
+
+	// Normalize boolean strings (case-insensitive)
+	if lower == "true" || lower == "false" {
+		return lower
+	}
+
+	// Normalize None/null (case-insensitive)
+	if lower == "none" || lower == "null" || lower == "nil" {
+		return "none"
+	}
+
+	// For everything else, return as-is (case-sensitive)
+	return value
+}
+
+// matchesBoolean checks if string represents a boolean value.
+//
+// Matches:
+//   - Python: True, False, true, false, TRUE, FALSE
+//   - JSON: true, false
+//   - Numeric: 1 (true), 0 (false)
+func (e *CallMatcherExecutor) matchesBoolean(actual string, expected bool) bool {
+	actual = strings.ToLower(strings.TrimSpace(actual))
+
+	if expected {
+		// Match truthy values
+		return actual == "true" || actual == "1"
+	}
+	// Match falsy values
+	return actual == "false" || actual == "0"
+}
+
+// matchesNumber checks if string represents a numeric value.
+//
+// Handles:
+//   - Integers: "777", "42"
+//   - Octal: "0o777", "0777" (Go format)
+//   - Hex: "0xFF", "0xff"
+//   - Floats: "3.14"
+func (e *CallMatcherExecutor) matchesNumber(actual string, expected float64) bool {
+	actual = strings.TrimSpace(actual)
+
+	// Try parsing as integer (supports decimal, octal, hex)
+	if i, err := strconv.ParseInt(actual, 0, 64); err == nil {
+		return float64(i) == expected
+	}
+
+	// Try parsing as float
+	if f, err := strconv.ParseFloat(actual, 64); err == nil {
+		return f == expected
+	}
+
+	return false
 }
