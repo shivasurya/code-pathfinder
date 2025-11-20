@@ -23,8 +23,11 @@ var ciCmd = &cobra.Command{
 Outputs results in SARIF or JSON format for consumption by CI tools.
 
 Examples:
-  # Generate SARIF report
+  # Generate SARIF report with single rules file
   pathfinder ci --rules rules/owasp_top10.py --project . --output sarif > results.sarif
+
+  # Generate SARIF report with rules directory
+  pathfinder ci --rules rules/ --project . --output sarif > results.sarif
 
   # Generate JSON report
   pathfinder ci --rules rules/owasp_top10.py --project . --output json > results.json`,
@@ -264,7 +267,7 @@ var osExit = os.Exit
 
 func init() {
 	rootCmd.AddCommand(ciCmd)
-	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file (required)")
+	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
 	ciCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif or json (default: sarif)")
 	ciCmd.MarkFlagRequired("rules")

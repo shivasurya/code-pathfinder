@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
@@ -23,32 +25,89 @@ func NewRuleLoader(rulesPath string) *RuleLoader {
 // LoadRules loads and executes Python DSL rules.
 //
 // Algorithm:
-//  1. Execute Python rules file with timeout: python3 rules.py
-//  2. Capture JSON IR output from stdout
-//  3. Parse JSON IR into RuleIR structs
-//  4. Return list of rules
+//  1. Check if path is file or directory
+//  2. If directory, find all .py files recursively
+//  3. Execute each Python file with timeout: python3 rules.py
+//  4. Capture JSON IR output from stdout
+//  5. Parse and consolidate JSON IR into RuleIR structs
+//  6. Return combined list of rules
 func (l *RuleLoader) LoadRules() ([]RuleIR, error) {
+	// Check if path is file or directory
+	info, err := os.Stat(l.RulesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access rules path: %w", err)
+	}
+
+	// If single file, load directly
+	if !info.IsDir() {
+		return l.loadRulesFromFile(l.RulesPath)
+	}
+
+	// If directory, find all .py files and load them
+	return l.loadRulesFromDirectory(l.RulesPath)
+}
+
+// loadRulesFromFile loads rules from a single Python file.
+func (l *RuleLoader) loadRulesFromFile(filePath string) ([]RuleIR, error) {
 	// Create context with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Execute Python script with context
-	cmd := exec.CommandContext(ctx, "python3", l.RulesPath)
+	cmd := exec.CommandContext(ctx, "python3", filePath)
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("Python rule execution timed out after 30s")
+			return nil, fmt.Errorf("Python rule execution timed out after 30s for file: %s", filePath)
 		}
-		return nil, fmt.Errorf("failed to execute Python rules: %w", err)
+		return nil, fmt.Errorf("failed to execute Python rules from %s: %w", filePath, err)
 	}
 
 	// Parse JSON IR
 	var rules []RuleIR
 	if err := json.Unmarshal(output, &rules); err != nil {
-		return nil, fmt.Errorf("failed to parse rule JSON IR: %w", err)
+		return nil, fmt.Errorf("failed to parse rule JSON IR from %s: %w", filePath, err)
 	}
 
 	return rules, nil
+}
+
+// loadRulesFromDirectory loads rules from all .py files in a directory.
+func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
+	var allRules []RuleIR
+
+	// Walk directory and find all .py files
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip non-Python files
+		if info.IsDir() || filepath.Ext(path) != ".py" {
+			return nil
+		}
+
+		// Load rules from this file
+		rules, err := l.loadRulesFromFile(path)
+		if err != nil {
+			// Log error but continue processing other files
+			fmt.Fprintf(os.Stderr, "Warning: failed to load rules from %s: %v\n", path, err)
+			return nil
+		}
+
+		allRules = append(allRules, rules...)
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk directory %s: %w", dirPath, err)
+	}
+
+	if len(allRules) == 0 {
+		return nil, fmt.Errorf("no rules found in directory: %s", dirPath)
+	}
+
+	return allRules, nil
 }
 
 // ExecuteRule executes a single rule against callgraph.

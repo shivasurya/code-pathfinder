@@ -20,8 +20,11 @@ var scanCmd = &cobra.Command{
 	Long: `Scan codebase using Python DSL security rules.
 
 Examples:
-  # Scan with OWASP rules
+  # Scan with a single rules file
   pathfinder scan --rules rules/owasp_top10.py --project /path/to/project
+
+  # Scan with a directory of rules
+  pathfinder scan --rules rules/ --project /path/to/project
 
   # Scan with custom rules
   pathfinder scan --rules my_rules.py --project .`,
@@ -138,7 +141,7 @@ func printDetections(rule dsl.RuleIR, detections []dsl.DataflowDetection) {
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
-	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file (required)")
+	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	scanCmd.MarkFlagRequired("rules")
 	scanCmd.MarkFlagRequired("project")
