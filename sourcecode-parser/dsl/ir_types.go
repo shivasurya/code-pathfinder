@@ -36,6 +36,12 @@ type CallMatcherIR struct {
 	Wildcard  bool     `json:"wildcard"`  // true if any pattern has *
 	MatchMode string   `json:"matchMode"` // "any" (OR) or "all" (AND)
 
+	// PositionalArgs maps positional argument index (as string) to expected value(s).
+	// Example: {"0": ArgumentConstraint{Value: "0.0.0.0"}}
+	// Position is stored as string key to match JSON format from Python DSL.
+	// This field is optional and will be omitted from JSON if empty.
+	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
+
 	// KeywordArgs maps keyword argument name to expected value(s).
 	// Example: {"debug": ArgumentConstraint{Value: true}}
 	// This field is optional and will be omitted from JSON if empty.
