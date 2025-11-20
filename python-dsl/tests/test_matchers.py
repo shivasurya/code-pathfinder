@@ -157,11 +157,9 @@ class TestCallMatcherKeywordArguments:
 
     def test_multiple_keyword_args(self):
         """Test matching multiple keyword arguments."""
-        matcher = calls("app.run", match_name={
-            "host": "0.0.0.0",
-            "port": 5000,
-            "debug": True
-        })
+        matcher = calls(
+            "app.run", match_name={"host": "0.0.0.0", "port": 5000, "debug": True}
+        )
         ir = matcher.to_ir()
 
         assert len(ir["keywordArgs"]) == 3
@@ -171,9 +169,9 @@ class TestCallMatcherKeywordArguments:
 
     def test_keyword_arg_or_logic(self):
         """Test matching keyword argument with multiple values (OR logic)."""
-        matcher = calls("yaml.load", match_name={
-            "Loader": ["Loader", "UnsafeLoader", "FullLoader"]
-        })
+        matcher = calls(
+            "yaml.load", match_name={"Loader": ["Loader", "UnsafeLoader", "FullLoader"]}
+        )
         ir = matcher.to_ir()
 
         assert isinstance(ir["keywordArgs"]["Loader"]["value"], list)
@@ -194,10 +192,7 @@ class TestCallMatcherPositionalArguments:
 
     def test_multiple_positional_args(self):
         """Test matching multiple positional arguments."""
-        matcher = calls("chmod", match_position={
-            0: "/tmp/file",
-            1: 0o777
-        })
+        matcher = calls("chmod", match_position={0: "/tmp/file", 1: 0o777})
         ir = matcher.to_ir()
 
         assert len(ir["positionalArgs"]) == 2
@@ -206,9 +201,7 @@ class TestCallMatcherPositionalArguments:
 
     def test_positional_arg_or_logic(self):
         """Test matching positional argument with multiple values."""
-        matcher = calls("open", match_position={
-            1: ["w", "a", "w+", "a+"]
-        })
+        matcher = calls("open", match_position={1: ["w", "a", "w+", "a+"]})
         ir = matcher.to_ir()
 
         assert isinstance(ir["positionalArgs"]["1"]["value"], list)
@@ -220,9 +213,11 @@ class TestCallMatcherCombinedArguments:
 
     def test_both_positional_and_keyword(self):
         """Test matching both positional and keyword arguments."""
-        matcher = calls("app.run",
-                       match_position={0: "localhost"},
-                       match_name={"debug": True, "port": 5000})
+        matcher = calls(
+            "app.run",
+            match_position={0: "localhost"},
+            match_name={"debug": True, "port": 5000},
+        )
         ir = matcher.to_ir()
 
         assert "positionalArgs" in ir
@@ -289,13 +284,11 @@ class TestCallMatcherIRSerialization:
         """Test that complex IR can be serialized to JSON."""
         import json
 
-        matcher = calls("app.run",
-                       match_position={0: "0.0.0.0"},
-                       match_name={
-                           "debug": True,
-                           "port": 5000,
-                           "host": ["localhost", "0.0.0.0"]
-                       })
+        matcher = calls(
+            "app.run",
+            match_position={0: "0.0.0.0"},
+            match_name={"debug": True, "port": 5000, "host": ["localhost", "0.0.0.0"]},
+        )
         ir = matcher.to_ir()
 
         # Should be JSON-serializable
@@ -332,12 +325,15 @@ class TestCallMatcherEdgeCases:
 
     def test_mixed_value_types(self):
         """Test mixing different value types in same rule."""
-        matcher = calls("config.set", match_name={
-            "timeout": 30,          # int
-            "enabled": True,        # bool
-            "host": "localhost",    # string
-            "retry": 5.5           # float
-        })
+        matcher = calls(
+            "config.set",
+            match_name={
+                "timeout": 30,  # int
+                "enabled": True,  # bool
+                "host": "localhost",  # string
+                "retry": 5.5,  # float
+            },
+        )
         ir = matcher.to_ir()
 
         assert ir["keywordArgs"]["timeout"]["value"] == 30

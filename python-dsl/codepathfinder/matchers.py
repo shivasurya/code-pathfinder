@@ -27,7 +27,7 @@ class CallMatcher:
         self,
         *patterns: str,
         match_position: Optional[Dict[int, ArgumentValue]] = None,
-        match_name: Optional[Dict[str, ArgumentValue]] = None
+        match_name: Optional[Dict[str, ArgumentValue]] = None,
     ):
         """
         Args:
@@ -63,18 +63,14 @@ class CallMatcher:
         """
         # Check if wildcard characters are present in string values
         has_wildcard = False
-        if isinstance(value, str) and ('*' in value or '?' in value):
+        if isinstance(value, str) and ("*" in value or "?" in value):
             has_wildcard = True
         elif isinstance(value, list):
             has_wildcard = any(
-                isinstance(v, str) and ('*' in v or '?' in v)
-                for v in value
+                isinstance(v, str) and ("*" in v or "?" in v) for v in value
             )
 
-        return {
-            "value": value,
-            "wildcard": has_wildcard or self.wildcard
-        }
+        return {"value": value, "wildcard": has_wildcard or self.wildcard}
 
     def to_ir(self) -> dict:
         """
@@ -167,7 +163,7 @@ class VariableMatcher:
 def calls(
     *patterns: str,
     match_position: Optional[Dict[int, ArgumentValue]] = None,
-    match_name: Optional[Dict[str, ArgumentValue]] = None
+    match_name: Optional[Dict[str, ArgumentValue]] = None,
 ) -> CallMatcher:
     """
     Create a matcher for function/method calls with optional argument constraints.
