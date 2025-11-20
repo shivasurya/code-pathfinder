@@ -161,7 +161,7 @@ func (e *CallMatcherExecutor) getMatchedPattern(cs *core.CallSite) string {
 //  3. Split by "=" to get name and value
 //  4. Trim whitespace and store in map
 //
-// Performance: O(N) where N = number of arguments (~2-5 typically)
+// Performance: O(N) where N = number of arguments (~2-5 typically).
 func (e *CallMatcherExecutor) parseKeywordArguments(args []core.Argument) map[string]string {
 	kwargs := make(map[string]string)
 

@@ -39,7 +39,7 @@ type CallMatcherIR struct {
 	// KeywordArgs maps keyword argument name to expected value(s).
 	// Example: {"debug": ArgumentConstraint{Value: true}}
 	// This field is optional and will be omitted from JSON if empty.
-	KeywordArgs map[string]ArgumentConstraint `json:"keyword_args,omitempty"`
+	KeywordArgs map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
 }
 
 // GetType returns the IR type.
