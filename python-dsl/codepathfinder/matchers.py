@@ -20,7 +20,9 @@ class CallMatcher:
         calls("request.*")               # Wildcard (any request.* call)
         calls("*.json")                  # Wildcard (any *.json call)
         calls("app.run", match_name={"debug": True})  # Keyword argument matching
-        calls("socket.bind", match_position={0: "0.0.0.0"})  # Positional argument matching
+        calls("open", match_position={1: "w"})  # Positional argument matching
+        calls("socket.bind", match_position={"0[0]": "0.0.0.0"})  # Tuple indexing
+        calls("connect", match_position={"0[0]": "192.168.*"})  # Wildcard + tuple
     """
 
     def __init__(
@@ -32,8 +34,14 @@ class CallMatcher:
         """
         Args:
             *patterns: Function names to match. Supports wildcards (*).
-            match_position: Match positional arguments by index {position: value}
+            match_position: Match positional arguments by index or tuple index.
+                           Examples: {0: "value"}, {1: ["a", "b"]}, {"0[0]": "0.0.0.0"}
             match_name: Match named/keyword arguments {name: value}
+
+        Position indexing:
+            - Simple: {0: "value"} matches first argument
+            - Tuple: {"0[0]": "value"} matches first element of first argument tuple
+            - Wildcard: {"0[0]": "192.168.*"} matches with wildcard pattern
 
         Raises:
             ValueError: If no patterns provided or pattern is empty
