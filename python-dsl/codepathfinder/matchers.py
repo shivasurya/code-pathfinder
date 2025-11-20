@@ -70,6 +70,9 @@ class CallMatcher:
             Dictionary with 'value' and 'wildcard' keys
         """
         # Check if wildcard characters are present in string values
+        # NOTE: Argument wildcard is independent of pattern wildcard (self.wildcard)
+        # Pattern wildcard applies to function name matching (e.g., "*.bind")
+        # Argument wildcard applies to argument value matching (e.g., "192.168.*")
         has_wildcard = False
         if isinstance(value, str) and ("*" in value or "?" in value):
             has_wildcard = True
@@ -78,7 +81,7 @@ class CallMatcher:
                 isinstance(v, str) and ("*" in v or "?" in v) for v in value
             )
 
-        return {"value": value, "wildcard": has_wildcard or self.wildcard}
+        return {"value": value, "wildcard": has_wildcard}
 
     def to_ir(self) -> dict:
         """
