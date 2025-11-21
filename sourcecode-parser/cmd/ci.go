@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
-	sarif "github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/dsl"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
@@ -132,7 +130,19 @@ Examples:
 		// Generate output
 		switch outputFormat {
 		case "sarif":
-			return generateSARIFOutput(rules, allDetections)
+			scanInfo := output.ScanInfo{
+				Target:        projectPath,
+				RulesExecuted: len(rules),
+				Errors:        scanErrors,
+			}
+			formatter := output.NewSARIFFormatter(nil)
+			if err := formatter.Format(allEnriched, scanInfo); err != nil {
+				return fmt.Errorf("failed to format SARIF output: %w", err)
+			}
+			if len(allEnriched) > 0 {
+				osExit(1)
+			}
+			return nil
 		case "json":
 			summary := output.BuildSummary(allEnriched, len(rules))
 			scanInfo := output.ScanInfo{
@@ -163,97 +173,6 @@ Examples:
 	},
 }
 
-func generateSARIFOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.DataflowDetection) error {
-	report, err := sarif.New(sarif.Version210)
-	if err != nil {
-		return fmt.Errorf("failed to create SARIF report: %w", err)
-	}
-
-	run := sarif.NewRunWithInformationURI("Code Pathfinder", "https://github.com/shivasurya/code-pathfinder")
-
-	// Add all rules to the run
-	for _, rule := range rules {
-		// Create full description with CWE and OWASP info
-		fullDesc := rule.Rule.Description
-		if rule.Rule.CWE != "" || rule.Rule.OWASP != "" {
-			fullDesc += " ("
-			if rule.Rule.CWE != "" {
-				fullDesc += rule.Rule.CWE
-			}
-			if rule.Rule.OWASP != "" {
-				if rule.Rule.CWE != "" {
-					fullDesc += ", "
-				}
-				fullDesc += rule.Rule.OWASP
-			}
-			fullDesc += ")"
-		}
-
-		sarifRule := run.AddRule(rule.Rule.ID).
-			WithDescription(fullDesc).
-			WithName(rule.Rule.Name)
-
-		// Map severity to SARIF level
-		level := "warning"
-		switch rule.Rule.Severity {
-		case "critical", "high":
-			level = "error"
-		case "medium":
-			level = "warning"
-		case "low":
-			level = "note"
-		}
-		sarifRule.WithDefaultConfiguration(sarif.NewReportingConfiguration().WithLevel(level))
-	}
-
-	// Add detections as results
-	for _, rule := range rules {
-		detections, ok := allDetections[rule.Rule.ID]
-		if !ok {
-			continue
-		}
-
-		for _, detection := range detections {
-			// Create detailed message
-			message := fmt.Sprintf("%s in %s", rule.Rule.Description, detection.FunctionFQN)
-			if detection.SinkCall != "" {
-				message += fmt.Sprintf(" (sink: %s, confidence: %.0f%%)", detection.SinkCall, detection.Confidence*100)
-			}
-
-			result := run.CreateResultForRule(rule.Rule.ID).
-				WithMessage(sarif.NewTextMessage(message))
-
-			// Add location
-			if detection.FunctionFQN != "" {
-				location := sarif.NewLocation().
-					WithPhysicalLocation(
-						sarif.NewPhysicalLocation().
-							WithRegion(
-								sarif.NewRegion().
-									WithStartLine(detection.SinkLine).
-									WithEndLine(detection.SinkLine),
-							),
-					)
-
-				result.AddLocation(location)
-			}
-
-			// Note: Additional detection info (functionFQN, sinkCall, etc.) is included in the message
-			// SARIF v2 spec doesn't have a straightforward way to add custom properties to results
-		}
-	}
-
-	report.AddRun(run)
-
-	// Write to stdout
-	sarifJSON, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal SARIF: %w", err)
-	}
-
-	fmt.Println(string(sarifJSON))
-	return nil
-}
 
 
 // Variable to allow mocking os.Exit in tests.
