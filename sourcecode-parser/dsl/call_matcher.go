@@ -140,3 +140,42 @@ func (e *CallMatcherExecutor) getMatchedPattern(cs *core.CallSite) string {
 	}
 	return ""
 }
+
+// parseKeywordArguments extracts keyword arguments from CallSite.Arguments.
+//
+// Example:
+//
+//	Input:  []Argument{
+//	          {Value: "x", Position: 0},
+//	          {Value: "y=2", Position: 1},
+//	          {Value: "debug=True", Position: 2}
+//	        }
+//	Output: map[string]string{
+//	          "y": "2",
+//	          "debug": "True"
+//	        }
+//
+// Algorithm:
+//  1. Iterate through all arguments
+//  2. Check if argument contains "=" (keyword arg format)
+//  3. Split by "=" to get name and value
+//  4. Trim whitespace and store in map
+//
+// Performance: O(N) where N = number of arguments (~2-5 typically).
+func (e *CallMatcherExecutor) parseKeywordArguments(args []core.Argument) map[string]string {
+	kwargs := make(map[string]string)
+
+	for _, arg := range args {
+		// Check if argument is in "key=value" format
+		if strings.Contains(arg.Value, "=") {
+			parts := strings.SplitN(arg.Value, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				kwargs[key] = value
+			}
+		}
+	}
+
+	return kwargs
+}

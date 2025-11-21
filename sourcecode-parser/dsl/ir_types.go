@@ -17,12 +17,29 @@ type MatcherIR interface {
 	GetType() IRType
 }
 
+// ArgumentConstraint represents a constraint on a single argument value.
+type ArgumentConstraint struct {
+	// Value is the expected argument value(s).
+	// Can be a single value or a list of acceptable values (OR logic).
+	// Examples: "0.0.0.0", "true", "777", ["Loader", "UnsafeLoader"]
+	Value interface{} `json:"value"`
+
+	// Wildcard enables pattern matching with * and ? in Value.
+	// Example: "0o7*" matches "0o777", "0o755", etc.
+	Wildcard bool `json:"wildcard"`
+}
+
 // CallMatcherIR represents call_matcher JSON IR.
 type CallMatcherIR struct {
 	Type      string   `json:"type"`      // "call_matcher"
 	Patterns  []string `json:"patterns"`  // ["eval", "exec"]
 	Wildcard  bool     `json:"wildcard"`  // true if any pattern has *
 	MatchMode string   `json:"matchMode"` // "any" (OR) or "all" (AND)
+
+	// KeywordArgs maps keyword argument name to expected value(s).
+	// Example: {"debug": ArgumentConstraint{Value: true}}
+	// This field is optional and will be omitted from JSON if empty.
+	KeywordArgs map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
 }
 
 // GetType returns the IR type.
