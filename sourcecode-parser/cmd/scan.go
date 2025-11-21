@@ -94,26 +94,41 @@ Examples:
 		logger.Statistic("Loaded %d rules", len(rules))
 
 		// Step 5: Execute rules against callgraph
-		logger.Progress("\n=== Running Security Scan ===")
-		totalDetections := 0
+		logger.Progress("Running security scan...")
+
+		// Create enricher for adding context to detections
+		enricher := output.NewEnricher(cg, &output.OutputOptions{
+			ProjectRoot:  projectPath,
+			ContextLines: 3,
+			Verbosity:    verbosity,
+		})
+
+		// Execute all rules and collect enriched detections
+		var allEnriched []*dsl.EnrichedDetection
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
-				logger.Error("executing rule %s: %v", rule.Rule.ID, err)
+				logger.Warning("Error executing rule %s: %v", rule.Rule.ID, err)
 				continue
 			}
 
 			if len(detections) > 0 {
-				printDetections(rule, detections)
-				totalDetections += len(detections)
+				enriched, _ := enricher.EnrichAll(detections, rule)
+				allEnriched = append(allEnriched, enriched...)
 			}
 		}
 
-		// Step 6: Print summary
-		logger.Progress("\n=== Scan Complete ===")
-		logger.Statistic("Total vulnerabilities found: %d", totalDetections)
+		// Step 6: Format and display results
+		summary := output.BuildSummary(allEnriched, len(rules))
+		formatter := output.NewTextFormatter(&output.OutputOptions{
+			Verbosity: verbosity,
+		}, logger)
 
-		if totalDetections > 0 {
+		if err := formatter.Format(allEnriched, summary); err != nil {
+			return fmt.Errorf("failed to format output: %w", err)
+		}
+
+		if len(allEnriched) > 0 {
 			os.Exit(1) // Exit with error code if vulnerabilities found
 		}
 
@@ -129,6 +144,7 @@ func countTotalCallSites(cg *core.CallGraph) int {
 	return total
 }
 
+// printDetections outputs detections in simple format (used by query command).
 func printDetections(rule dsl.RuleIR, detections []dsl.DataflowDetection) {
 	fmt.Printf("\n[%s] %s (%s)\n", rule.Rule.Severity, rule.Rule.ID, rule.Rule.Name)
 	fmt.Printf("  CWE: %s | OWASP: %s\n", rule.Rule.CWE, rule.Rule.OWASP)
