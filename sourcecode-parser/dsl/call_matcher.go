@@ -152,7 +152,14 @@ func (e *CallMatcherExecutor) ExecuteWithContext() []CallMatchResult {
 }
 
 // getMatchedPattern returns which pattern matched (or empty string if no match).
+// Also checks argument constraints to ensure full matching logic is applied.
 func (e *CallMatcherExecutor) getMatchedPattern(cs *core.CallSite) string {
+	// Check if the callsite matches (both pattern AND arguments)
+	if !e.matchesCallSite(cs) {
+		return "" // Doesn't match pattern or arguments don't satisfy constraints
+	}
+
+	// Find which pattern matched
 	for _, pattern := range e.IR.Patterns {
 		if e.matchesPattern(cs.Target, pattern) {
 			return pattern
@@ -293,10 +300,12 @@ func parseTupleIndex(posStr string) (int, int, bool, bool) {
 //  5. Clean up quotes and whitespace
 //
 // Examples:
-//   - extractTupleElement("(\"0.0.0.0\", 8080)", 0) → "0.0.0.0"
-//   - extractTupleElement("(\"0.0.0.0\", 8080)", 1) → "8080"
-//   - extractTupleElement("(\"a\", \"b\", \"c\")", 1) → "b"
-//   - extractTupleElement("not_a_tuple", 0) → "not_a_tuple"
+//   - extractTupleElement("(\"0.0.0.0\", 8080)", 0) → ("0.0.0.0", true)
+//   - extractTupleElement("(\"0.0.0.0\", 8080)", 1) → ("8080", true)
+//   - extractTupleElement("(\"a\", \"b\", \"c\")", 1) → ("b", true)
+//   - extractTupleElement("(\"a\", \"b\")", 5) → ("", false)  // out of bounds
+//   - extractTupleElement("(\"\", 8080)", 0) → ("", true)     // empty string is valid
+//   - extractTupleElement("not_a_tuple", 0) → ("not_a_tuple", true)
 //
 // Limitations:
 //   - Does not handle nested tuples/lists
@@ -307,8 +316,9 @@ func parseTupleIndex(posStr string) (int, int, bool, bool) {
 //   - index: 0-indexed position of element to extract
 //
 // Returns:
-//   - Extracted element as string, or empty string if index out of bounds
-func extractTupleElement(tupleStr string, index int) string {
+//   - value: Extracted element as string (can be empty string if that's the actual value)
+//   - ok: true if extraction succeeded, false if index out of bounds
+func extractTupleElement(tupleStr string, index int) (string, bool) {
 	tupleStr = strings.TrimSpace(tupleStr)
 
 	// Check if it's a tuple or list
@@ -317,13 +327,19 @@ func extractTupleElement(tupleStr string, index int) string {
 		if index == 0 {
 			// Remove quotes from plain strings too
 			result := strings.Trim(tupleStr, `"'`)
-			return result
+			return result, true
 		}
-		return "" // Index out of bounds for non-tuple
+		return "", false // Index out of bounds for non-tuple
 	}
 
 	// Strip outer parentheses or brackets
 	inner := tupleStr[1 : len(tupleStr)-1]
+	inner = strings.TrimSpace(inner)
+
+	// Handle empty tuple/list
+	if inner == "" {
+		return "", false // Empty tuple has no elements
+	}
 
 	// Split by comma
 	// Note: This is a simple implementation that doesn't handle nested structures
@@ -331,7 +347,7 @@ func extractTupleElement(tupleStr string, index int) string {
 	elements := strings.Split(inner, ",")
 
 	if index >= len(elements) {
-		return "" // Index out of bounds
+		return "", false // Index out of bounds
 	}
 
 	element := strings.TrimSpace(elements[index])
@@ -339,7 +355,7 @@ func extractTupleElement(tupleStr string, index int) string {
 	// Remove quotes if present (handles both single and double quotes)
 	element = strings.Trim(element, `"'`)
 
-	return element
+	return element, true
 }
 
 // matchesPositionalArguments checks positional argument constraints.
@@ -381,10 +397,12 @@ func (e *CallMatcherExecutor) matchesPositionalArguments(args []core.Argument) b
 
 		// Extract tuple element if tuple indexing used
 		if isTupleIndex {
-			actualValue = extractTupleElement(actualValue, tupleIdx)
-			if actualValue == "" {
+			var ok bool
+			actualValue, ok = extractTupleElement(actualValue, tupleIdx)
+			if !ok {
 				return false // Tuple index out of bounds
 			}
+			// Note: actualValue can be empty string if that's the actual tuple element value
 		}
 
 		// Match against constraint

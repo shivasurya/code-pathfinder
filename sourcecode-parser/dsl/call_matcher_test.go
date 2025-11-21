@@ -1564,83 +1564,103 @@ func TestParseTupleIndex(t *testing.T) {
 // TestExtractTupleElement tests extraction of elements from tuple strings.
 func TestExtractTupleElement(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		index    int
-		expected string
+		name       string
+		input      string
+		index      int
+		expected   string
+		expectedOk bool
 	}{
 		{
-			name:     "extract first element from string tuple",
-			input:    `("0.0.0.0", 8080)`,
-			index:    0,
-			expected: "0.0.0.0",
+			name:       "extract first element from string tuple",
+			input:      `("0.0.0.0", 8080)`,
+			index:      0,
+			expected:   "0.0.0.0",
+			expectedOk: true,
 		},
 		{
-			name:     "extract second element from string tuple",
-			input:    `("0.0.0.0", 8080)`,
-			index:    1,
-			expected: "8080",
+			name:       "extract second element from string tuple",
+			input:      `("0.0.0.0", 8080)`,
+			index:      1,
+			expected:   "8080",
+			expectedOk: true,
 		},
 		{
-			name:     "extract from single-quoted string",
-			input:    `('0.0.0.0', 8080)`,
-			index:    0,
-			expected: "0.0.0.0",
+			name:       "extract from single-quoted string",
+			input:      `('0.0.0.0', 8080)`,
+			index:      0,
+			expected:   "0.0.0.0",
+			expectedOk: true,
 		},
 		{
-			name:     "extract from tuple with spaces",
-			input:    `( "0.0.0.0" , 8080 )`,
-			index:    0,
-			expected: "0.0.0.0",
+			name:       "extract from tuple with spaces",
+			input:      `( "0.0.0.0" , 8080 )`,
+			index:      0,
+			expected:   "0.0.0.0",
+			expectedOk: true,
 		},
 		{
-			name:     "extract from three-element tuple",
-			input:    `("a", "b", "c")`,
-			index:    1,
-			expected: "b",
+			name:       "extract from three-element tuple",
+			input:      `("a", "b", "c")`,
+			index:      1,
+			expected:   "b",
+			expectedOk: true,
 		},
 		{
-			name:     "extract from list syntax",
-			input:    `["host", 8080]`,
-			index:    0,
-			expected: "host",
+			name:       "extract from list syntax",
+			input:      `["host", 8080]`,
+			index:      0,
+			expected:   "host",
+			expectedOk: true,
 		},
 		{
-			name:     "index out of bounds",
-			input:    `("0.0.0.0", 8080)`,
-			index:    5,
-			expected: "",
+			name:       "index out of bounds",
+			input:      `("0.0.0.0", 8080)`,
+			index:      5,
+			expected:   "",
+			expectedOk: false,
 		},
 		{
-			name:     "not a tuple - return as is for index 0",
-			input:    `"plain_string"`,
-			index:    0,
-			expected: "plain_string",
+			name:       "not a tuple - return as is for index 0",
+			input:      `"plain_string"`,
+			index:      0,
+			expected:   "plain_string",
+			expectedOk: true,
 		},
 		{
-			name:     "not a tuple - empty for index > 0",
-			input:    `"plain_string"`,
-			index:    1,
-			expected: "",
+			name:       "not a tuple - empty for index > 0",
+			input:      `"plain_string"`,
+			index:      1,
+			expected:   "",
+			expectedOk: false,
 		},
 		{
-			name:     "empty tuple",
-			input:    `()`,
-			index:    0,
-			expected: "",
+			name:       "empty tuple",
+			input:      `()`,
+			index:      0,
+			expected:   "",
+			expectedOk: false,
 		},
 		{
-			name:     "tuple with numeric values",
-			input:    `(80, 443, 8080)`,
-			index:    1,
-			expected: "443",
+			name:       "tuple with numeric values",
+			input:      `(80, 443, 8080)`,
+			index:      1,
+			expected:   "443",
+			expectedOk: true,
+		},
+		{
+			name:       "tuple with empty string - should extract empty string successfully",
+			input:      `("", 8080)`,
+			index:      0,
+			expected:   "",
+			expectedOk: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractTupleElement(tt.input, tt.index)
+			result, ok := extractTupleElement(tt.input, tt.index)
 			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expectedOk, ok)
 		})
 	}
 }
