@@ -17,10 +17,10 @@ import (
 
 var ciCmd = &cobra.Command{
 	Use:   "ci",
-	Short: "CI mode with SARIF or JSON output for CI/CD integration",
+	Short: "CI mode with SARIF, JSON, or CSV output for CI/CD integration",
 	Long: `CI mode for integrating security scans into CI/CD pipelines.
 
-Outputs results in SARIF or JSON format for consumption by CI tools.
+Outputs results in SARIF, JSON, or CSV format for consumption by CI tools.
 
 Examples:
   # Generate SARIF report with single rules file
@@ -30,7 +30,10 @@ Examples:
   pathfinder ci --rules rules/ --project . --output sarif > results.sarif
 
   # Generate JSON report
-  pathfinder ci --rules rules/owasp_top10.py --project . --output json > results.json`,
+  pathfinder ci --rules rules/owasp_top10.py --project . --output json > results.json
+
+  # Generate CSV report
+  pathfinder ci --rules rules/owasp_top10.py --project . --output csv > results.csv`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
@@ -55,8 +58,8 @@ Examples:
 			return fmt.Errorf("--project flag is required")
 		}
 
-		if outputFormat != "sarif" && outputFormat != "json" {
-			return fmt.Errorf("--output must be 'sarif' or 'json'")
+		if outputFormat != "sarif" && outputFormat != "json" && outputFormat != "csv" {
+			return fmt.Errorf("--output must be 'sarif', 'json', or 'csv'")
 		}
 
 		// Build code graph (AST)
@@ -95,29 +98,68 @@ Examples:
 
 		// Execute rules against callgraph
 		logger.Progress("Running security scan...")
-		allDetections := make(map[string][]dsl.DataflowDetection)
-		totalDetections := 0
+
+		// Create enricher for adding context to detections
+		enricher := output.NewEnricher(cg, &output.OutputOptions{
+			ProjectRoot:  projectPath,
+			ContextLines: 3,
+		})
+
+		// Execute all rules and collect enriched detections
+		var allEnriched []*dsl.EnrichedDetection
+		allDetections := make(map[string][]dsl.DataflowDetection) // For SARIF compatibility
+		var scanErrors []string
+
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
-				logger.Error("executing rule %s: %v", rule.Rule.ID, err)
+				errMsg := fmt.Sprintf("Error executing rule %s: %v", rule.Rule.ID, err)
+				logger.Warning("%s", errMsg)
+				scanErrors = append(scanErrors, errMsg)
 				continue
 			}
 
 			if len(detections) > 0 {
 				allDetections[rule.Rule.ID] = detections
-				totalDetections += len(detections)
+				enriched, _ := enricher.EnrichAll(detections, rule)
+				allEnriched = append(allEnriched, enriched...)
 			}
 		}
 
-		logger.Statistic("Scan complete. Found %d vulnerabilities", totalDetections)
+		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
 
 		// Generate output
-		if outputFormat == "sarif" {
+		switch outputFormat {
+		case "sarif":
 			return generateSARIFOutput(rules, allDetections)
+		case "json":
+			summary := output.BuildSummary(allEnriched, len(rules))
+			scanInfo := output.ScanInfo{
+				Target:        projectPath,
+				RulesExecuted: len(rules),
+				Errors:        scanErrors,
+			}
+			formatter := output.NewJSONFormatter(nil)
+			if err := formatter.Format(allEnriched, summary, scanInfo); err != nil {
+				return fmt.Errorf("failed to format JSON output: %w", err)
+			}
+			if len(allEnriched) > 0 {
+				osExit(1)
+			}
+			return nil
+		case "csv":
+			formatter := output.NewCSVFormatter(nil)
+			if err := formatter.Format(allEnriched); err != nil {
+				return fmt.Errorf("failed to format CSV output: %w", err)
+			}
+			if len(allEnriched) > 0 {
+				osExit(1)
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown output format: %s", outputFormat)
 		}
-		return generateJSONOutput(rules, allDetections)
 	},
 }
 
@@ -213,65 +255,6 @@ func generateSARIFOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.Data
 	return nil
 }
 
-func generateJSONOutput(rules []dsl.RuleIR, allDetections map[string][]dsl.DataflowDetection) error {
-	output := make(map[string]interface{})
-	output["tool"] = "Code Pathfinder"
-	output["version"] = Version
-
-	results := []map[string]interface{}{}
-	for _, rule := range rules {
-		detections, ok := allDetections[rule.Rule.ID]
-		if !ok {
-			continue
-		}
-
-		for _, detection := range detections {
-			result := map[string]interface{}{
-				"ruleId":      rule.Rule.ID,
-				"ruleName":    rule.Rule.Name,
-				"severity":    rule.Rule.Severity,
-				"cwe":         rule.Rule.CWE,
-				"owasp":       rule.Rule.OWASP,
-				"description": rule.Rule.Description,
-				"functionFQN": detection.FunctionFQN,
-				"sinkLine":    detection.SinkLine,
-				"sinkCall":    detection.SinkCall,
-				"scope":       detection.Scope,
-				"confidence":  detection.Confidence,
-			}
-
-			if detection.SourceLine > 0 {
-				result["sourceLine"] = detection.SourceLine
-			}
-
-			if detection.TaintedVar != "" {
-				result["taintedVar"] = detection.TaintedVar
-			}
-
-			results = append(results, result)
-		}
-	}
-
-	output["results"] = results
-	output["summary"] = map[string]interface{}{
-		"totalVulnerabilities": len(results),
-		"rulesExecuted":        len(rules),
-	}
-
-	jsonOutput, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-
-	fmt.Println(string(jsonOutput))
-
-	// Exit with error code if vulnerabilities found
-	if len(results) > 0 {
-		osExit(1)
-	}
-
-	return nil
-}
 
 // Variable to allow mocking os.Exit in tests.
 var osExit = os.Exit

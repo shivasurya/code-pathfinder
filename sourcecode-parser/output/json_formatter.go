@@ -54,13 +54,13 @@ type JSONScan struct {
 	Target        string  `json:"target"`
 	Timestamp     string  `json:"timestamp"`
 	Duration      float64 `json:"duration"`
-	RulesExecuted int     `json:"rules_executed"`
+	RulesExecuted int     `json:"rules_executed"` //nolint:tagliatelle
 }
 
 // JSONResult represents a single finding.
 type JSONResult struct {
-	RuleID     string         `json:"rule_id"`
-	RuleName   string         `json:"rule_name"`
+	RuleID     string         `json:"rule_id"`   //nolint:tagliatelle
+	RuleName   string         `json:"rule_name"` //nolint:tagliatelle
 	Message    string         `json:"message"`
 	Severity   string         `json:"severity"`
 	Confidence string         `json:"confidence"`
@@ -80,8 +80,8 @@ type JSONLocation struct {
 
 // JSONSnippet contains code context.
 type JSONSnippet struct {
-	StartLine int      `json:"start_line"`
-	EndLine   int      `json:"end_line"`
+	StartLine int      `json:"start_line"` //nolint:tagliatelle
+	EndLine   int      `json:"end_line"`   //nolint:tagliatelle
 	Lines     []string `json:"lines"`
 }
 
@@ -89,7 +89,7 @@ type JSONSnippet struct {
 type JSONDetection struct {
 	Type            string          `json:"type"`
 	Scope           string          `json:"scope,omitempty"`
-	ConfidenceScore float64         `json:"confidence_score"`
+	ConfidenceScore float64         `json:"confidence_score"` //nolint:tagliatelle
 	Source          *JSONTaintNode  `json:"source,omitempty"`
 	Sink            *JSONTaintNode  `json:"sink,omitempty"`
 }
@@ -111,8 +111,8 @@ type JSONMetadata struct {
 // JSONSummary contains aggregated statistics.
 type JSONSummary struct {
 	Total           int            `json:"total"`
-	BySeverity      map[string]int `json:"by_severity"`
-	ByDetectionType map[string]int `json:"by_detection_type"`
+	BySeverity      map[string]int `json:"by_severity"`       //nolint:tagliatelle
+	ByDetectionType map[string]int `json:"by_detection_type"` //nolint:tagliatelle
 }
 
 // ScanInfo contains metadata about the scan.
