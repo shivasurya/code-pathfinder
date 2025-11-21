@@ -308,8 +308,10 @@ func (e *CallMatcherExecutor) matchesKeywordArguments(args []core.Argument) bool
 //   - Boolean match: "True" == true, "False" == false
 //   - Number match: "777" == 777, "0o777" == 0o777 (octal)
 //   - Case-insensitive for booleans: "true" == "True" == "TRUE"
+//   - OR logic: ["w", "a", "w+"] matches any value in list
+//   - Wildcard matching: "0o7*" matches "0o777", "0o755", etc.
 //
-// Performance: O(1) for single values.
+// Performance: O(1) for single values, O(N) for OR logic with N values.
 func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint ArgumentConstraint) bool {
 	// Clean actual value (remove quotes, trim whitespace)
 	actual = e.cleanValue(actual)
@@ -317,11 +319,45 @@ func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint Arg
 	// Get expected value from constraint
 	expected := constraint.Value
 
-	// Type-specific matching
+	// Handle list of values (OR logic)
+	if values, isList := expected.([]interface{}); isList {
+		return e.matchesAnyValue(actual, values, constraint.Wildcard)
+	}
+
+	// Single value matching
+	return e.matchesSingleValue(actual, expected, constraint.Wildcard)
+}
+
+// matchesAnyValue checks if actual matches any value in list (OR logic).
+//
+// Algorithm:
+//  1. Iterate through all values in list
+//  2. Return true if any value matches
+//  3. Return false if no values match
+//
+// Performance: O(N) where N = number of values in list.
+func (e *CallMatcherExecutor) matchesAnyValue(actual string, values []interface{}, wildcard bool) bool {
+	for _, v := range values {
+		if e.matchesSingleValue(actual, v, wildcard) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesSingleValue checks if actual matches a single expected value.
+//
+// Algorithm:
+//  1. Determine type of expected value
+//  2. Call appropriate type-specific matcher
+//  3. Return match result
+//
+// Performance: O(1) for non-wildcard, O(M) for wildcard where M = string length.
+func (e *CallMatcherExecutor) matchesSingleValue(actual string, expected interface{}, wildcard bool) bool {
 	switch v := expected.(type) {
 	case string:
-		// String comparison
-		return e.normalizeValue(actual) == e.normalizeValue(v)
+		// String comparison with optional wildcard
+		return e.matchesString(actual, v, wildcard)
 
 	case bool:
 		// Boolean comparison
@@ -339,6 +375,88 @@ func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint Arg
 		// Unknown type
 		return false
 	}
+}
+
+// matchesString matches string values with optional wildcard support.
+//
+// Algorithm:
+//  1. If wildcard is enabled, use wildcard matching
+//  2. Otherwise, use normalized exact match
+//
+// Performance: O(1) for exact match, O(M) for wildcard where M = string length.
+func (e *CallMatcherExecutor) matchesString(actual string, expected string, wildcard bool) bool {
+	if wildcard {
+		return e.matchesWildcard(actual, expected)
+	}
+	return e.normalizeValue(actual) == e.normalizeValue(expected)
+}
+
+// matchesWildcard performs wildcard pattern matching.
+//
+// Supports:
+//   - * (zero or more characters)
+//   - ? (single character)
+//
+// Examples:
+//   - "0.0.*" matches "0.0.0.0", "0.0.255.255"
+//   - "0o7*" matches "0o777", "0o755"
+//   - "test-??.txt" matches "test-01.txt"
+//
+// Performance: O(M + N) where M = string length, N = pattern length.
+func (e *CallMatcherExecutor) matchesWildcard(actual string, pattern string) bool {
+	// Normalize both strings
+	actual = e.normalizeValue(actual)
+	pattern = e.normalizeValue(pattern)
+
+	return e.wildcardMatch(actual, pattern)
+}
+
+// wildcardMatch implements wildcard matching algorithm.
+//
+// Algorithm:
+//  1. Use two-pointer approach with backtracking
+//  2. Handle * by recording position and trying to match rest
+//  3. Handle ? by matching single character
+//  4. Backtrack to last * if current match fails
+//
+// Performance: O(M + N) average case, O(M * N) worst case.
+func (e *CallMatcherExecutor) wildcardMatch(str string, pattern string) bool {
+	sIdx, pIdx := 0, 0
+	starIdx, matchIdx := -1, 0
+
+	for sIdx < len(str) {
+		if pIdx < len(pattern) {
+			if pattern[pIdx] == '*' {
+				// Record star position
+				starIdx = pIdx
+				matchIdx = sIdx
+				pIdx++
+				continue
+			} else if pattern[pIdx] == '?' || pattern[pIdx] == str[sIdx] {
+				// Match single character
+				sIdx++
+				pIdx++
+				continue
+			}
+		}
+
+		// No match, backtrack to last star
+		if starIdx != -1 {
+			pIdx = starIdx + 1
+			matchIdx++
+			sIdx = matchIdx
+			continue
+		}
+
+		return false
+	}
+
+	// Handle remaining stars in pattern
+	for pIdx < len(pattern) && pattern[pIdx] == '*' {
+		pIdx++
+	}
+
+	return pIdx == len(pattern)
 }
 
 // cleanValue removes surrounding quotes and whitespace from argument values.

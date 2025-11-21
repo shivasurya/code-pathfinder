@@ -1098,3 +1098,384 @@ func TestPositionalArguments_BackwardCompatibility(t *testing.T) {
 	assert.Len(t, matches, 1, "Old IR should still work")
 	assert.Equal(t, "eval", matches[0].Target, "Old IR should match correctly")
 }
+
+// ========== OR Logic Tests ==========
+
+// TestMatchesArgumentValue_ORLogic_Strings tests OR logic with string values.
+func TestMatchesArgumentValue_ORLogic_Strings(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"open"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"1": {
+					Value:    []interface{}{"w", "a", "w+", "a+"},
+					Wildcard: false,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		actualValue string
+		shouldMatch bool
+	}{
+		{"Match w", "\"w\"", true},
+		{"Match a", "\"a\"", true},
+		{"Match w+", "\"w+\"", true},
+		{"Match a+", "\"a+\"", true},
+		{"No match r", "\"r\"", false},
+		{"No match rb", "\"rb\"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &core.CallSite{
+				Target: "open",
+				Arguments: []core.Argument{
+					{Value: "\"/tmp/file\"", Position: 0},
+					{Value: tt.actualValue, Position: 1},
+				},
+			}
+			result := executor.matchesArguments(cs)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestMatchesArgumentValue_ORLogic_Mixed tests OR logic with keyword arguments.
+func TestMatchesArgumentValue_ORLogic_Mixed(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"config.set"},
+			KeywordArgs: map[string]ArgumentConstraint{
+				"mode": {
+					Value:    []interface{}{"debug", "development", "test"},
+					Wildcard: false,
+				},
+			},
+		},
+	}
+
+	// Should match any of the three values
+	cs1 := &core.CallSite{
+		Target: "config.set",
+		Arguments: []core.Argument{
+			{Value: "mode=debug", Position: 0},
+		},
+	}
+	assert.True(t, executor.matchesArguments(cs1))
+
+	cs2 := &core.CallSite{
+		Target: "config.set",
+		Arguments: []core.Argument{
+			{Value: "mode=development", Position: 0},
+		},
+	}
+	assert.True(t, executor.matchesArguments(cs2))
+
+	// Should not match production
+	cs3 := &core.CallSite{
+		Target: "config.set",
+		Arguments: []core.Argument{
+			{Value: "mode=production", Position: 0},
+		},
+	}
+	assert.False(t, executor.matchesArguments(cs3))
+}
+
+// TestMatchesArgumentValue_ORLogic_Numbers tests OR logic with numeric values.
+func TestMatchesArgumentValue_ORLogic_Numbers(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"chmod"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"1": {
+					Value:    []interface{}{float64(511), float64(493), float64(448)}, // 0o777, 0o755, 0o700
+					Wildcard: false,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		actualValue string
+		shouldMatch bool
+	}{
+		{"Match 0o777", "0o777", true},
+		{"Match 0o755", "0o755", true},
+		{"Match 0o700", "0o700", true},
+		{"No match 0o644", "0o644", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &core.CallSite{
+				Target: "chmod",
+				Arguments: []core.Argument{
+					{Value: "/tmp/file", Position: 0},
+					{Value: tt.actualValue, Position: 1},
+				},
+			}
+			result := executor.matchesArguments(cs)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// ========== Wildcard Matching Tests ==========
+
+// TestMatchesWildcard_BasicPatterns tests basic wildcard patterns.
+func TestMatchesWildcard_BasicPatterns(t *testing.T) {
+	executor := &CallMatcherExecutor{}
+
+	tests := []struct {
+		name        string
+		actual      string
+		pattern     string
+		shouldMatch bool
+	}{
+		// Star wildcard
+		{"Star prefix", "0.0.0.0", "0.0.*", true},
+		{"Star suffix", "0.0.0.0", "*.0.0", true},
+		{"Star middle", "test-file.txt", "test-*", true},
+		{"Star all", "anything", "*", true},
+		{"Star no match", "192.168.1.1", "10.*", false},
+
+		// Question wildcard
+		{"Question single", "abc", "a?c", true},
+		{"Question multiple", "test", "t??t", true},
+		{"Question no match", "abc", "a?d", false},
+
+		// Combined wildcards
+		{"Star and question", "test-01.txt", "test-??.txt", true},
+		{"Complex pattern", "192.168.1.100", "192.*.1.*", true},
+
+		// Exact match (no wildcards)
+		{"Exact match", "exact", "exact", true},
+		{"Exact no match", "exact", "different", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := executor.matchesWildcard(tt.actual, tt.pattern)
+			assert.Equal(t, tt.shouldMatch, result,
+				"Pattern: %s, Actual: %s", tt.pattern, tt.actual)
+		})
+	}
+}
+
+// TestMatchesWildcard_OctalPatterns tests wildcard matching with octal values.
+func TestMatchesWildcard_OctalPatterns(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"chmod"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"1": {
+					Value:    "0o7*", // Match 0o7XX (world-writable)
+					Wildcard: true,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		actualValue string
+		shouldMatch bool
+	}{
+		{"0o777", "0o777", true},
+		{"0o755", "0o755", true},
+		{"0o700", "0o700", true},
+		{"0o644", "0o644", false}, // Doesn't start with 7
+		{"0o600", "0o600", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &core.CallSite{
+				Target: "chmod",
+				Arguments: []core.Argument{
+					{Value: "\"/tmp/file\"", Position: 0},
+					{Value: tt.actualValue, Position: 1},
+				},
+			}
+			result := executor.matchesArguments(cs)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestMatchesWildcard_IPAddressPatterns tests wildcard matching with IP addresses.
+func TestMatchesWildcard_IPAddressPatterns(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {
+					Value:    "0.0.*", // Match 0.0.X.X
+					Wildcard: true,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		ip          string
+		shouldMatch bool
+	}{
+		{"0.0.0.0", "\"0.0.0.0\"", true},
+		{"0.0.0.1", "\"0.0.0.1\"", true},
+		{"0.0.255.255", "\"0.0.255.255\"", true},
+		{"127.0.0.1", "\"127.0.0.1\"", false},
+		{"192.168.1.1", "\"192.168.1.1\"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &core.CallSite{
+				Target: "socket.bind",
+				Arguments: []core.Argument{
+					{Value: tt.ip, Position: 0},
+				},
+			}
+			result := executor.matchesArguments(cs)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestMatchesArgumentValue_ORLogicWithWildcards tests combined OR + wildcard.
+func TestMatchesArgumentValue_ORLogicWithWildcards(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"yaml.load"},
+			KeywordArgs: map[string]ArgumentConstraint{
+				"Loader": {
+					Value:    []interface{}{"*Loader", "*UnsafeLoader"},
+					Wildcard: true,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		loader      string
+		shouldMatch bool
+	}{
+		{"FullLoader", "Loader=FullLoader", true},
+		{"UnsafeLoader", "Loader=UnsafeLoader", true},
+		{"yaml.UnsafeLoader", "Loader=yaml.UnsafeLoader", true},
+		{"SafeLoader", "Loader=SafeLoader", true},
+		{"BaseLoader", "Loader=BaseLoader", true},
+		{"None", "Loader=None", false}, // Doesn't end with Loader or UnsafeLoader
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &core.CallSite{
+				Target: "yaml.load",
+				Arguments: []core.Argument{
+					{Value: "data", Position: 0},
+					{Value: tt.loader, Position: 1},
+				},
+			}
+			result := executor.matchesArguments(cs)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestMatchesArgumentValue_EdgeCases tests edge cases for value matching.
+func TestMatchesArgumentValue_EdgeCases(t *testing.T) {
+	executor := &CallMatcherExecutor{}
+
+	tests := []struct {
+		name        string
+		actual      string
+		expected    interface{}
+		wildcard    bool
+		shouldMatch bool
+	}{
+		// Empty values
+		{"Empty actual", "", "value", false, false},
+		{"Empty pattern", "value", "", false, false},
+		{"Both empty", "", "", false, true},
+
+		// Wildcard edge cases
+		{"Only star", "anything", "*", true, true},
+		{"Multiple stars", "test", "***", true, true},
+		{"Star at end", "prefix", "prefix*", true, true},
+		{"Star at start", "suffix", "*suffix", true, true},
+
+		// Question mark edge cases
+		{"Single question", "a", "?", true, true},
+		{"Question too many", "ab", "???", true, false},
+		{"Question too few", "abc", "?", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := executor.matchesSingleValue(tt.actual, tt.expected, tt.wildcard)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// TestWildcardMatch_ComplexPatterns tests complex wildcard scenarios.
+func TestWildcardMatch_ComplexPatterns(t *testing.T) {
+	executor := &CallMatcherExecutor{}
+
+	tests := []struct {
+		name        string
+		str         string
+		pattern     string
+		shouldMatch bool
+	}{
+		// Multiple stars
+		{"Two stars", "abcdef", "*c*f", true},
+		{"Three stars", "test-file-123.txt", "*-*-*.*", true},
+
+		// Mixed wildcards
+		{"Star and questions", "test-01.txt", "test-??.*", true},
+		{"Question and star", "file123.txt", "file???.txt", true},
+
+		// Edge patterns
+		{"Empty pattern", "test", "", false},
+		{"Pattern longer", "ab", "abc", false},
+		{"String longer", "abc", "ab", false},
+
+		// Special cases
+		{"All questions", "test", "????", true},
+		{"All stars", "anything", "***", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := executor.wildcardMatch(tt.str, tt.pattern)
+			assert.Equal(t, tt.shouldMatch, result)
+		})
+	}
+}
+
+// Benchmark wildcard matching.
+func BenchmarkWildcardMatch_Simple(b *testing.B) {
+	executor := &CallMatcherExecutor{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		executor.wildcardMatch("192.168.1.100", "192.*.1.*")
+	}
+}
+
+func BenchmarkWildcardMatch_Complex(b *testing.B) {
+	executor := &CallMatcherExecutor{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		executor.wildcardMatch("test-file-12345.txt", "test-*-?????.txt")
+	}
+}
