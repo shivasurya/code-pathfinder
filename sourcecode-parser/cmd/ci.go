@@ -77,7 +77,7 @@ Examples:
 
 		// Build callgraph
 		logger.Progress("Building callgraph...")
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}

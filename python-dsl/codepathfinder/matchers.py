@@ -106,17 +106,25 @@ class CallMatcher:
 
         # Add positional argument constraints
         if self.match_position:
-            ir["positionalArgs"] = {
-                str(pos): self._make_constraint(value)
-                for pos, value in self.match_position.items()
-            }
+            positional_args = {}
+            for pos, value in self.match_position.items():
+                constraint = self._make_constraint(value)
+                # Propagate wildcard flag from pattern to argument constraints
+                if self.wildcard:
+                    constraint["wildcard"] = True
+                positional_args[str(pos)] = constraint
+            ir["positionalArgs"] = positional_args
 
         # Add keyword argument constraints
         if self.match_name:
-            ir["keywordArgs"] = {
-                name: self._make_constraint(value)
-                for name, value in self.match_name.items()
-            }
+            keyword_args = {}
+            for name, value in self.match_name.items():
+                constraint = self._make_constraint(value)
+                # Propagate wildcard flag from pattern to argument constraints
+                if self.wildcard:
+                    constraint["wildcard"] = True
+                keyword_args[name] = constraint
+            ir["keywordArgs"] = keyword_args
 
         return ir
 

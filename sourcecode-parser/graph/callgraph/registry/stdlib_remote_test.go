@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,9 +9,14 @@ import (
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestLogger() *output.Logger {
+	return output.NewLoggerWithWriter(output.VerbosityDefault, &bytes.Buffer{})
+}
 
 func TestNewStdlibRegistryRemote(t *testing.T) {
 	remote := NewStdlibRegistryRemote("https://example.com/registries", "3.14")
@@ -49,7 +55,7 @@ func TestStdlibRegistryRemote_LoadManifest_Success(t *testing.T) {
 
 	// Test
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 
 	require.NoError(t, err)
 	assert.NotNil(t, remote.Manifest)
@@ -64,7 +70,7 @@ func TestStdlibRegistryRemote_LoadManifest_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "manifest download failed with status: 404")
@@ -78,7 +84,7 @@ func TestStdlibRegistryRemote_LoadManifest_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse manifest JSON")
@@ -114,10 +120,10 @@ func TestStdlibRegistryRemote_GetModule_Success(t *testing.T) {
 
 	// Test
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	loadedModule, err := remote.GetModule("os")
+	loadedModule, err := remote.GetModule("os", newTestLogger())
 	require.NoError(t, err)
 	assert.NotNil(t, loadedModule)
 	assert.Equal(t, "os", loadedModule.Module)
@@ -148,17 +154,17 @@ func TestStdlibRegistryRemote_GetModule_Caching(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
 	// First call - should download
-	module1, err := remote.GetModule("os")
+	module1, err := remote.GetModule("os", newTestLogger())
 	require.NoError(t, err)
 	assert.NotNil(t, module1)
 	assert.Equal(t, 1, downloadCount)
 
 	// Second call - should use cache
-	module2, err := remote.GetModule("os")
+	module2, err := remote.GetModule("os", newTestLogger())
 	require.NoError(t, err)
 	assert.NotNil(t, module2)
 	assert.Equal(t, 1, downloadCount, "Should not download again")
@@ -181,17 +187,17 @@ func TestStdlibRegistryRemote_GetModule_NotFound(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	module, err := remote.GetModule("nonexistent")
+	module, err := remote.GetModule("nonexistent", newTestLogger())
 	assert.NoError(t, err)
 	assert.Nil(t, module)
 }
 
 func TestStdlibRegistryRemote_GetModule_ManifestNotLoaded(t *testing.T) {
 	remote := NewStdlibRegistryRemote("https://example.com", "3.14")
-	module, err := remote.GetModule("os")
+	module, err := remote.GetModule("os", newTestLogger())
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "manifest not loaded")
@@ -218,10 +224,10 @@ func TestStdlibRegistryRemote_GetModule_ChecksumMismatch(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	module, err := remote.GetModule("os")
+	module, err := remote.GetModule("os", newTestLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "checksum mismatch")
 	assert.Nil(t, module)
@@ -272,10 +278,10 @@ func TestStdlibRegistryRemote_GetFunction(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	fn := remote.GetFunction("os", "getcwd")
+	fn := remote.GetFunction("os", "getcwd", newTestLogger())
 	require.NotNil(t, fn, "GetFunction should return non-nil function")
 	assert.Equal(t, "str", fn.ReturnType)
 }
@@ -305,10 +311,10 @@ func TestStdlibRegistryRemote_GetClass(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	cls := remote.GetClass("pathlib", "Path")
+	cls := remote.GetClass("pathlib", "Path", newTestLogger())
 	require.NotNil(t, cls, "GetClass should return non-nil class")
 	assert.Equal(t, "class", cls.Type)
 }
@@ -371,10 +377,10 @@ func TestStdlibRegistryRemote_GetFunction_ModuleNotFound(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	fn := remote.GetFunction("os", "getcwd")
+	fn := remote.GetFunction("os", "getcwd", newTestLogger())
 	assert.Nil(t, fn)
 }
 
@@ -404,11 +410,11 @@ func TestStdlibRegistryRemote_GetFunction_FunctionNotFound(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
 	// Request a function that doesn't exist
-	fn := remote.GetFunction("os", "nonexistent")
+	fn := remote.GetFunction("os", "nonexistent", newTestLogger())
 	assert.Nil(t, fn)
 }
 
@@ -426,10 +432,10 @@ func TestStdlibRegistryRemote_GetClass_ModuleNotFound(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	cls := remote.GetClass("os", "Path")
+	cls := remote.GetClass("os", "Path", newTestLogger())
 	assert.Nil(t, cls)
 }
 
@@ -459,11 +465,11 @@ func TestStdlibRegistryRemote_GetClass_ClassNotFound(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
 	// Request a class that doesn't exist
-	cls := remote.GetClass("pathlib", "NonExistent")
+	cls := remote.GetClass("pathlib", "NonExistent", newTestLogger())
 	assert.Nil(t, cls)
 }
 
@@ -485,11 +491,11 @@ func TestStdlibRegistryRemote_GetFunction_ModuleLoadError(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
 	// This will trigger an error in GetModule due to checksum mismatch
-	fn := remote.GetFunction("os", "getcwd")
+	fn := remote.GetFunction("os", "getcwd", newTestLogger())
 	assert.Nil(t, fn)
 }
 
@@ -511,11 +517,11 @@ func TestStdlibRegistryRemote_GetClass_ModuleLoadError(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
 	// This will trigger an error in GetModule due to checksum mismatch
-	cls := remote.GetClass("pathlib", "Path")
+	cls := remote.GetClass("pathlib", "Path", newTestLogger())
 	assert.Nil(t, cls)
 }
 
@@ -528,7 +534,7 @@ func TestStdlibRegistryRemote_LoadManifest_ReadError(t *testing.T) {
 	server.Close() // Close server to cause connection error
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to download manifest")
@@ -552,10 +558,10 @@ func TestStdlibRegistryRemote_GetModule_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	module, err := remote.GetModule("os")
+	module, err := remote.GetModule("os", newTestLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse module JSON")
 	assert.Nil(t, module)
@@ -579,10 +585,10 @@ func TestStdlibRegistryRemote_GetModule_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	remote := NewStdlibRegistryRemote(server.URL, "3.14")
-	err := remote.LoadManifest()
+	err := remote.LoadManifest(newTestLogger())
 	require.NoError(t, err)
 
-	module, err := remote.GetModule("os")
+	module, err := remote.GetModule("os", newTestLogger())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "module download failed with status: 404")
 	assert.Nil(t, module)

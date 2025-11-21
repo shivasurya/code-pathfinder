@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +39,7 @@ def vulnerable():
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	assert.NoError(t, err)
 
-	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir)
+	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
 	assert.NoError(t, err)
 
 	// Verify summaries were generated (indirectly tests generateTaintSummaries)

@@ -10,6 +10,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/patterns"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 )
 
 // SecurityMatch represents a detected security vulnerability.
@@ -43,13 +44,14 @@ type SecurityMatch struct {
 // Parameters:
 //   - codeGraph: the parsed code graph from graph.Initialize()
 //   - projectPath: absolute path to project root
+//   - logger: structured logger for diagnostics
 //
 // Returns:
 //   - CallGraph: complete call graph with edges and call sites
 //   - ModuleRegistry: module path mappings
 //   - PatternRegistry: security patterns for analysis
 //   - error: if any step fails
-func InitializeCallGraph(codeGraph *graph.CodeGraph, projectPath string) (*core.CallGraph, *core.ModuleRegistry, *patterns.PatternRegistry, error) {
+func InitializeCallGraph(codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) (*core.CallGraph, *core.ModuleRegistry, *patterns.PatternRegistry, error) {
 	// Build module registry
 	moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 	if err != nil {
@@ -57,7 +59,7 @@ func InitializeCallGraph(codeGraph *graph.CodeGraph, projectPath string) (*core.
 	}
 
 	// Build call graph
-	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 	if err != nil {
 		return nil, nil, nil, err
 	}

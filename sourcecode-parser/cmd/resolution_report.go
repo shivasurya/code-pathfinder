@@ -7,6 +7,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +35,7 @@ improvements to the resolution logic.`,
 		codeGraph := graph.Initialize(projectInput)
 
 		fmt.Println("Building call graph...")
-		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput)
+		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			fmt.Printf("Error building call graph: %v\n", err)
 			return
