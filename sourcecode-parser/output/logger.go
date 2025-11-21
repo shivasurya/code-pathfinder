@@ -38,7 +38,7 @@ func NewLoggerWithWriter(verbosity VerbosityLevel, w io.Writer) *Logger {
 }
 
 // Progress logs progress messages (shown in verbose and debug modes).
-// Use for high-level progress like "Building code graph..."
+// Use for high-level progress like "Building code graph...".
 func (l *Logger) Progress(format string, args ...interface{}) {
 	if l.verbosity >= VerbosityVerbose {
 		fmt.Fprintf(l.writer, format+"\n", args...)
@@ -46,7 +46,7 @@ func (l *Logger) Progress(format string, args ...interface{}) {
 }
 
 // Statistic logs statistics (shown in verbose and debug modes).
-// Use for counts and metrics like "Code graph built: 1234 nodes"
+// Use for counts and metrics like "Code graph built: 1234 nodes".
 func (l *Logger) Statistic(format string, args ...interface{}) {
 	if l.verbosity >= VerbosityVerbose {
 		fmt.Fprintf(l.writer, format+"\n", args...)
@@ -106,7 +106,7 @@ func (l *Logger) PrintTimingSummary() {
 	}
 }
 
-// formatDuration formats duration as MM:SS.mmm
+// formatDuration formats duration as MM:SS.mmm.
 func formatDuration(d time.Duration) string {
 	minutes := int(d.Minutes())
 	seconds := int(d.Seconds()) % 60
