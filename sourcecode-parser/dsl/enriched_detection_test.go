@@ -30,3 +30,53 @@ func TestLocationInfo_IsValid(t *testing.T) {
 		t.Error("expected empty location")
 	}
 }
+
+func TestEnrichedDetection_ConfidenceLevel(t *testing.T) {
+	tests := []struct {
+		name       string
+		confidence float64
+		expected   string
+	}{
+		{"high confidence 0.9", 0.9, "high"},
+		{"high confidence 0.8", 0.8, "high"},
+		{"medium confidence 0.7", 0.7, "medium"},
+		{"medium confidence 0.5", 0.5, "medium"},
+		{"low confidence 0.4", 0.4, "low"},
+		{"low confidence 0.0", 0.0, "low"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ed := &EnrichedDetection{
+				Detection: DataflowDetection{Confidence: tt.confidence},
+			}
+			got := ed.ConfidenceLevel()
+			if got != tt.expected {
+				t.Errorf("got %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEnrichedDetection_DetectionBadge(t *testing.T) {
+	tests := []struct {
+		name     string
+		detType  DetectionType
+		expected string
+	}{
+		{"pattern badge", DetectionTypePattern, "[Pattern]"},
+		{"taint-local badge", DetectionTypeTaintLocal, "[Taint-Local]"},
+		{"taint-global badge", DetectionTypeTaintGlobal, "[Taint-Global]"},
+		{"unknown badge", DetectionType("unknown"), "[Unknown]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ed := &EnrichedDetection{DetectionType: tt.detType}
+			got := ed.DetectionBadge()
+			if got != tt.expected {
+				t.Errorf("got %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
