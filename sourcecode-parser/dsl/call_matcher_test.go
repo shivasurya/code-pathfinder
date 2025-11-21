@@ -641,3 +641,460 @@ func TestMatchesCallSite_Integration(t *testing.T) {
 
 	assert.False(t, executor.matchesCallSite(&wrongFunctionCallSite), "Expected NOT to match other.run() even with correct argument")
 }
+
+// TestMatchesPositionalArguments_NoConstraints tests backward compatibility with no positional constraints.
+func TestMatchesPositionalArguments_NoConstraints(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			// No PositionalArgs = should always match
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "\"0.0.0.0\"", Position: 0},
+		{Value: "8080", Position: 1},
+	}
+
+	assert.True(t, executor.matchesPositionalArguments(args), "Expected to match when no positional constraints present")
+}
+
+// TestMatchesPositionalArguments_SingleArg tests matching single positional argument.
+func TestMatchesPositionalArguments_SingleArg(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "0.0.0.0", Wildcard: false},
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "\"0.0.0.0\"", Position: 0},
+	}
+
+	assert.True(t, executor.matchesPositionalArguments(args), "Expected to match position 0 with \"0.0.0.0\"")
+}
+
+// TestMatchesPositionalArguments_SingleArgNoMatch tests single positional argument mismatch.
+func TestMatchesPositionalArguments_SingleArgNoMatch(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "0.0.0.0", Wildcard: false},
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "\"127.0.0.1\"", Position: 0},
+	}
+
+	assert.False(t, executor.matchesPositionalArguments(args), "Expected NOT to match position 0 with \"127.0.0.1\"")
+}
+
+// TestMatchesPositionalArguments_MultipleArgs tests matching multiple positional arguments.
+func TestMatchesPositionalArguments_MultipleArgs(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"chmod"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "/tmp/file", Wildcard: false},
+				"1": {Value: float64(511), Wildcard: false}, // 0o777 = 511
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "/tmp/file", Position: 0},
+		{Value: "0o777", Position: 1},
+	}
+
+	assert.True(t, executor.matchesPositionalArguments(args), "Expected to match both positional arguments")
+}
+
+// TestMatchesPositionalArguments_PartialMatch tests that all positional constraints must match.
+func TestMatchesPositionalArguments_PartialMatch(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"chmod"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "/tmp/file", Wildcard: false},
+				"1": {Value: float64(511), Wildcard: false},
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "/tmp/file", Position: 0},   // Matches
+		{Value: "0o755", Position: 1},       // Doesn't match (755 octal = 493 decimal)
+	}
+
+	assert.False(t, executor.matchesPositionalArguments(args), "Expected NOT to match when one positional constraint fails")
+}
+
+// TestMatchesPositionalArguments_OutOfBounds tests position doesn't exist in arguments.
+func TestMatchesPositionalArguments_OutOfBounds(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"open"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"2": {Value: "utf-8", Wildcard: false}, // Position 2 doesn't exist
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "file.txt", Position: 0},
+		{Value: "w", Position: 1},
+		// No position 2
+	}
+
+	assert.False(t, executor.matchesPositionalArguments(args), "Expected NOT to match when position doesn't exist")
+}
+
+// TestMatchesPositionalArguments_InvalidPosition tests invalid position string.
+func TestMatchesPositionalArguments_InvalidPosition(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"test"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"invalid": {Value: "test", Wildcard: false},
+			},
+		},
+	}
+
+	args := []core.Argument{
+		{Value: "test", Position: 0},
+	}
+
+	assert.False(t, executor.matchesPositionalArguments(args), "Expected NOT to match with invalid position string")
+}
+
+// TestMatchesPositionalArguments_WithQuotes tests quote stripping.
+func TestMatchesPositionalArguments_WithQuotes(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"open"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "file.txt", Wildcard: false},
+			},
+		},
+	}
+
+	// Actual call has quotes, constraint doesn't
+	args := []core.Argument{
+		{Value: "\"file.txt\"", Position: 0},
+	}
+
+	assert.True(t, executor.matchesPositionalArguments(args), "Expected to match after stripping quotes")
+}
+
+// TestMatchesPositionalArguments_NumberTypes tests various number types.
+func TestMatchesPositionalArguments_NumberTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		constraint  float64
+		actualValue string
+		shouldMatch bool
+	}{
+		{"decimal", 777.0, "777", true},
+		{"octal", 511.0, "0o777", true},
+		{"hex", 255.0, "0xFF", true},
+		{"float", 3.14, "3.14", true},
+		{"mismatch", 777.0, "778", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			executor := &CallMatcherExecutor{
+				IR: &CallMatcherIR{
+					Patterns: []string{"test"},
+					PositionalArgs: map[string]ArgumentConstraint{
+						"0": {Value: test.constraint, Wildcard: false},
+					},
+				},
+			}
+
+			args := []core.Argument{
+				{Value: test.actualValue, Position: 0},
+			}
+
+			result := executor.matchesPositionalArguments(args)
+			assert.Equal(t, test.shouldMatch, result, "Expected matchesPositionalArguments to be %v for %s", test.shouldMatch, test.name)
+		})
+	}
+}
+
+// TestMatchesArguments_CombinedPositionalAndKeyword tests matching both types together.
+func TestMatchesArguments_CombinedPositionalAndKeyword(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"app.run"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "localhost", Wildcard: false},
+			},
+			KeywordArgs: map[string]ArgumentConstraint{
+				"debug": {Value: true, Wildcard: false},
+				"port":  {Value: float64(5000), Wildcard: false},
+			},
+		},
+	}
+
+	callSite := core.CallSite{
+		Target: "app.run",
+		Arguments: []core.Argument{
+			{Value: "localhost", Position: 0},
+			{Value: "debug=True", Position: 1},
+			{Value: "port=5000", Position: 2},
+		},
+	}
+
+	assert.True(t, executor.matchesArguments(&callSite), "Expected to match when both positional and keyword constraints satisfied")
+}
+
+// TestMatchesArguments_CombinedPartialMatch tests partial match with combined constraints.
+func TestMatchesArguments_CombinedPartialMatch(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"app.run"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "localhost", Wildcard: false},
+			},
+			KeywordArgs: map[string]ArgumentConstraint{
+				"debug": {Value: true, Wildcard: false},
+			},
+		},
+	}
+
+	callSite := core.CallSite{
+		Target: "app.run",
+		Arguments: []core.Argument{
+			{Value: "localhost", Position: 0}, // Matches positional
+			{Value: "debug=False", Position: 1}, // Doesn't match keyword
+		},
+	}
+
+	assert.False(t, executor.matchesArguments(&callSite), "Expected NOT to match when keyword constraint fails")
+}
+
+// TestMatchesArguments_CombinedPositionalFails tests positional failure with combined constraints.
+func TestMatchesArguments_CombinedPositionalFails(t *testing.T) {
+	executor := &CallMatcherExecutor{
+		IR: &CallMatcherIR{
+			Patterns: []string{"app.run"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "localhost", Wildcard: false},
+			},
+			KeywordArgs: map[string]ArgumentConstraint{
+				"debug": {Value: true, Wildcard: false},
+			},
+		},
+	}
+
+	callSite := core.CallSite{
+		Target: "app.run",
+		Arguments: []core.Argument{
+			{Value: "0.0.0.0", Position: 0}, // Doesn't match positional
+			{Value: "debug=True", Position: 1}, // Matches keyword
+		},
+	}
+
+	assert.False(t, executor.matchesArguments(&callSite), "Expected NOT to match when positional constraint fails")
+}
+
+// TestPositionalArguments_RealWorldPatterns tests real-world security patterns.
+func TestPositionalArguments_RealWorldPatterns(t *testing.T) {
+	tests := []struct {
+		name       string
+		pattern    string
+		constraint map[string]ArgumentConstraint
+		callSite   core.CallSite
+		shouldMatch bool
+	}{
+		{
+			name:    "socket.bind with 0.0.0.0",
+			pattern: "socket.bind",
+			constraint: map[string]ArgumentConstraint{
+				"0": {Value: "0.0.0.0", Wildcard: false},
+			},
+			callSite: core.CallSite{
+				Target: "socket.bind",
+				Arguments: []core.Argument{
+					{Value: "\"0.0.0.0\"", Position: 0},
+				},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:    "chmod with dangerous permissions",
+			pattern: "chmod",
+			constraint: map[string]ArgumentConstraint{
+				"1": {Value: float64(511), Wildcard: false}, // 0o777
+			},
+			callSite: core.CallSite{
+				Target: "chmod",
+				Arguments: []core.Argument{
+					{Value: "/tmp/file", Position: 0},
+					{Value: "0o777", Position: 1},
+				},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:    "open with write mode",
+			pattern: "open",
+			constraint: map[string]ArgumentConstraint{
+				"1": {Value: "w", Wildcard: false},
+			},
+			callSite: core.CallSite{
+				Target: "open",
+				Arguments: []core.Argument{
+					{Value: "file.txt", Position: 0},
+					{Value: "\"w\"", Position: 1},
+				},
+			},
+			shouldMatch: true,
+		},
+		{
+			name:    "open with read mode - no match",
+			pattern: "open",
+			constraint: map[string]ArgumentConstraint{
+				"1": {Value: "w", Wildcard: false},
+			},
+			callSite: core.CallSite{
+				Target: "open",
+				Arguments: []core.Argument{
+					{Value: "file.txt", Position: 0},
+					{Value: "\"r\"", Position: 1},
+				},
+			},
+			shouldMatch: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			executor := &CallMatcherExecutor{
+				IR: &CallMatcherIR{
+					Patterns:       []string{test.pattern},
+					PositionalArgs: test.constraint,
+				},
+			}
+
+			result := executor.matchesCallSite(&test.callSite)
+			assert.Equal(t, test.shouldMatch, result, "Expected matchesCallSite to be %v for %s", test.shouldMatch, test.name)
+		})
+	}
+}
+
+// TestCallMatcherExecutor_PositionalIntegration tests full end-to-end with Execute().
+func TestCallMatcherExecutor_PositionalIntegration(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["test.main"] = []core.CallSite{
+		{
+			Target: "socket.bind",
+			Arguments: []core.Argument{
+				{Value: "\"0.0.0.0\"", Position: 0},
+				{Value: "8080", Position: 1},
+			},
+			Location: core.Location{File: "server.py", Line: 10},
+		},
+		{
+			Target: "socket.bind",
+			Arguments: []core.Argument{
+				{Value: "\"127.0.0.1\"", Position: 0},
+				{Value: "8080", Position: 1},
+			},
+			Location: core.Location{File: "server.py", Line: 20},
+		},
+		{
+			Target: "chmod",
+			Arguments: []core.Argument{
+				{Value: "/tmp/file", Position: 0},
+				{Value: "0o777", Position: 1},
+			},
+			Location: core.Location{File: "file_ops.py", Line: 30},
+		},
+	}
+
+	t.Run("match 0.0.0.0 binds only", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "0.0.0.0", Wildcard: false},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 1, "Expected to match only 0.0.0.0 bind")
+		assert.Equal(t, "socket.bind", matches[0].Target)
+		assert.Equal(t, 10, matches[0].Location.Line)
+	})
+
+	t.Run("match dangerous chmod", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"chmod"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"1": {Value: float64(511), Wildcard: false}, // 0o777
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 1, "Expected to match chmod with 0o777")
+		assert.Equal(t, "chmod", matches[0].Target)
+		assert.Equal(t, 30, matches[0].Location.Line)
+	})
+
+	t.Run("no matches for strict constraint", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0": {Value: "192.168.1.1", Wildcard: false},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 0, "Expected no matches for non-existent IP")
+	})
+}
+
+// TestPositionalArguments_BackwardCompatibility tests that IR without PositionalArgs still works.
+func TestPositionalArguments_BackwardCompatibility(t *testing.T) {
+	// Old IR without PositionalArgs field
+	ir := CallMatcherIR{
+		Type:      "call_matcher",
+		Patterns:  []string{"eval", "exec"},
+		Wildcard:  false,
+		MatchMode: "any",
+	}
+
+	// Should work fine (PositionalArgs is nil/empty)
+	assert.Nil(t, ir.PositionalArgs, "Expected nil PositionalArgs for backward compatibility")
+
+	// Verify it can still be used with executor
+	cg := core.NewCallGraph()
+	cg.CallSites["test.main"] = []core.CallSite{
+		{
+			Target: "eval",
+			Arguments: []core.Argument{
+				{Value: "code", Position: 0},
+			},
+			Location: core.Location{File: "test.py", Line: 10},
+		},
+	}
+
+	executor := NewCallMatcherExecutor(&ir, cg)
+	matches := executor.Execute()
+
+	assert.Len(t, matches, 1, "Old IR should still work")
+	assert.Equal(t, "eval", matches[0].Target, "Old IR should match correctly")
+}

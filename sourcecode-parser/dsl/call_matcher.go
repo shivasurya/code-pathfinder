@@ -200,23 +200,89 @@ func (e *CallMatcherExecutor) parseKeywordArguments(args []core.Argument) map[st
 	return kwargs
 }
 
-// matchesArguments checks if CallSite arguments satisfy all constraints.
+// matchesArguments checks both positional and keyword argument constraints.
 //
 // Algorithm:
 //  1. If no constraints, return true (backward compatibility)
-//  2. Parse keyword arguments from CallSite
-//  3. Check each constraint against actual values
+//  2. Check positional arguments first
+//  3. Check keyword arguments
 //  4. Return true only if all constraints satisfied
 //
-// Performance: O(K) where K = number of keyword constraints (~1-3 typically).
+// Performance: O(P + K) where P=positional constraints, K=keyword constraints.
 func (e *CallMatcherExecutor) matchesArguments(cs *core.CallSite) bool {
 	// No constraints = always match (backward compatibility)
-	if len(e.IR.KeywordArgs) == 0 {
+	if len(e.IR.PositionalArgs) == 0 && len(e.IR.KeywordArgs) == 0 {
 		return true
 	}
 
+	// Check positional arguments first
+	if !e.matchesPositionalArguments(cs.Arguments) {
+		return false
+	}
+
+	// Check keyword arguments
+	if !e.matchesKeywordArguments(cs.Arguments) {
+		return false
+	}
+
+	return true // All constraints satisfied!
+}
+
+// matchesPositionalArguments checks positional argument constraints.
+//
+// Algorithm:
+//  1. If no positional constraints, return true
+//  2. For each position constraint:
+//     a. Convert position string to int
+//     b. Check if position exists in arguments
+//     c. Extract and match argument value
+//
+// Performance: O(P) where P = number of positional constraints.
+func (e *CallMatcherExecutor) matchesPositionalArguments(args []core.Argument) bool {
+	if len(e.IR.PositionalArgs) == 0 {
+		return true // No positional constraints
+	}
+
+	for posStr, constraint := range e.IR.PositionalArgs {
+		// Convert position string to int
+		pos, err := strconv.Atoi(posStr)
+		if err != nil {
+			// Invalid position string - should not happen with valid IR
+			return false
+		}
+
+		// Check if position exists in arguments
+		if pos >= len(args) {
+			return false // Argument at position doesn't exist
+		}
+
+		// Get actual argument value
+		actualValue := args[pos].Value
+
+		// Match against constraint
+		if !e.matchesArgumentValue(actualValue, constraint) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// matchesKeywordArguments checks keyword argument constraints (refactored from PR #2).
+//
+// Algorithm:
+//  1. If no keyword constraints, return true
+//  2. Parse keyword arguments from CallSite
+//  3. Check each constraint against actual values
+//
+// Performance: O(K) where K = number of keyword constraints.
+func (e *CallMatcherExecutor) matchesKeywordArguments(args []core.Argument) bool {
+	if len(e.IR.KeywordArgs) == 0 {
+		return true // No keyword constraints
+	}
+
 	// Parse keyword arguments from CallSite
-	keywordArgs := e.parseKeywordArguments(cs.Arguments)
+	keywordArgs := e.parseKeywordArguments(args)
 
 	// Check each keyword argument constraint
 	for name, constraint := range e.IR.KeywordArgs {
