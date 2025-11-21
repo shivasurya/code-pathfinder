@@ -228,14 +228,133 @@ func (e *CallMatcherExecutor) matchesArguments(cs *core.CallSite) bool {
 	return true // All constraints satisfied!
 }
 
+// parseTupleIndex parses position strings with optional tuple indexing.
+//
+// Supports:
+//   - Simple position: "0" → (0, 0, false)
+//   - Tuple indexing: "0[1]" → (0, 1, true)
+//
+// Parameters:
+//   - posStr: position string from IR (e.g., "0", "0[1]")
+//
+// Returns:
+//   - pos: argument position (0-indexed)
+//   - tupleIdx: tuple element index (0-indexed, only valid if isTupleIndex=true)
+//   - isTupleIndex: whether tuple indexing syntax was used
+func parseTupleIndex(posStr string) (int, int, bool, bool) {
+	// Check if it looks like tuple indexing syntax
+	hasOpenBracket := strings.Contains(posStr, "[")
+	hasCloseBracket := strings.Contains(posStr, "]")
+
+	// Simple position (no brackets)
+	if !hasOpenBracket {
+		pos, err := strconv.Atoi(posStr)
+		if err != nil {
+			return 0, 0, false, false // Parse error
+		}
+		return pos, 0, false, true // Valid simple position
+	}
+
+	// Malformed: has bracket but not both open and close
+	if !hasCloseBracket {
+		// Try to parse just the part before [ as a fallback
+		parts := strings.SplitN(posStr, "[", 2)
+		pos, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, 0, false, false // Parse error
+		}
+		return pos, 0, false, true // Return simple position, not tuple index
+	}
+
+	// Parse "0[1]" format
+	parts := strings.SplitN(posStr, "[", 2)
+	pos, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, false, false // Parse error
+	}
+
+	// Extract index from "[1]" (remove brackets)
+	idxStr := strings.TrimSuffix(parts[1], "]")
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		return 0, 0, false, false // Parse error
+	}
+
+	return pos, idx, true, true // Valid tuple index
+}
+
+// extractTupleElement extracts an element at the specified index from a tuple string.
+//
+// Algorithm:
+//  1. Check if string looks like a tuple (starts with '(' or '[')
+//  2. Strip outer parentheses/brackets
+//  3. Split by comma (handles simple cases, not nested structures)
+//  4. Extract element at index
+//  5. Clean up quotes and whitespace
+//
+// Examples:
+//   - extractTupleElement("(\"0.0.0.0\", 8080)", 0) → "0.0.0.0"
+//   - extractTupleElement("(\"0.0.0.0\", 8080)", 1) → "8080"
+//   - extractTupleElement("(\"a\", \"b\", \"c\")", 1) → "b"
+//   - extractTupleElement("not_a_tuple", 0) → "not_a_tuple"
+//
+// Limitations:
+//   - Does not handle nested tuples/lists
+//   - Uses simple comma splitting (could break on complex expressions)
+//
+// Parameters:
+//   - tupleStr: string representation of tuple from AST
+//   - index: 0-indexed position of element to extract
+//
+// Returns:
+//   - Extracted element as string, or empty string if index out of bounds
+func extractTupleElement(tupleStr string, index int) string {
+	tupleStr = strings.TrimSpace(tupleStr)
+
+	// Check if it's a tuple or list
+	if !strings.HasPrefix(tupleStr, "(") && !strings.HasPrefix(tupleStr, "[") {
+		// Not a tuple/list, return as-is if index is 0
+		if index == 0 {
+			// Remove quotes from plain strings too
+			result := strings.Trim(tupleStr, `"'`)
+			return result
+		}
+		return "" // Index out of bounds for non-tuple
+	}
+
+	// Strip outer parentheses or brackets
+	inner := tupleStr[1 : len(tupleStr)-1]
+
+	// Split by comma
+	// Note: This is a simple implementation that doesn't handle nested structures
+	// For production, we'd need a proper parser
+	elements := strings.Split(inner, ",")
+
+	if index >= len(elements) {
+		return "" // Index out of bounds
+	}
+
+	element := strings.TrimSpace(elements[index])
+
+	// Remove quotes if present (handles both single and double quotes)
+	element = strings.Trim(element, `"'`)
+
+	return element
+}
+
 // matchesPositionalArguments checks positional argument constraints.
 //
 // Algorithm:
 //  1. If no positional constraints, return true
 //  2. For each position constraint:
-//     a. Convert position string to int
+//     a. Parse position string (supports tuple indexing: "0[1]")
 //     b. Check if position exists in arguments
-//     c. Extract and match argument value
+//     c. Extract tuple element if tuple indexing used
+//     d. Match argument value against constraint
+//
+// Supports:
+//   - Simple positional: {0: "value"} matches args[0] == "value"
+//   - Tuple indexing: {"0[1]": "value"} matches args[0] tuple element 1 == "value"
 //
 // Performance: O(P) where P = number of positional constraints.
 func (e *CallMatcherExecutor) matchesPositionalArguments(args []core.Argument) bool {
@@ -244,11 +363,12 @@ func (e *CallMatcherExecutor) matchesPositionalArguments(args []core.Argument) b
 	}
 
 	for posStr, constraint := range e.IR.PositionalArgs {
-		// Convert position string to int
-		pos, err := strconv.Atoi(posStr)
-		if err != nil {
-			// Invalid position string - should not happen with valid IR
-			return false
+		// Parse position string (supports tuple indexing)
+		pos, tupleIdx, isTupleIndex, valid := parseTupleIndex(posStr)
+
+		// Check if position string was valid
+		if !valid {
+			return false // Invalid position string
 		}
 
 		// Check if position exists in arguments
@@ -258,6 +378,14 @@ func (e *CallMatcherExecutor) matchesPositionalArguments(args []core.Argument) b
 
 		// Get actual argument value
 		actualValue := args[pos].Value
+
+		// Extract tuple element if tuple indexing used
+		if isTupleIndex {
+			actualValue = extractTupleElement(actualValue, tupleIdx)
+			if actualValue == "" {
+				return false // Tuple index out of bounds
+			}
+		}
 
 		// Match against constraint
 		if !e.matchesArgumentValue(actualValue, constraint) {

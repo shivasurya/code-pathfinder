@@ -1479,3 +1479,411 @@ func BenchmarkWildcardMatch_Complex(b *testing.B) {
 		executor.wildcardMatch("test-file-12345.txt", "test-*-?????.txt")
 	}
 }
+
+// TestParseTupleIndex tests parsing of tuple indexing syntax.
+func TestParseTupleIndex(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedPos   int
+		expectedIdx   int
+		expectedIsTup bool
+	}{
+		{
+			name:          "simple position",
+			input:         "0",
+			expectedPos:   0,
+			expectedIdx:   0,
+			expectedIsTup: false,
+		},
+		{
+			name:          "simple position 5",
+			input:         "5",
+			expectedPos:   5,
+			expectedIdx:   0,
+			expectedIsTup: false,
+		},
+		{
+			name:          "tuple index first element",
+			input:         "0[0]",
+			expectedPos:   0,
+			expectedIdx:   0,
+			expectedIsTup: true,
+		},
+		{
+			name:          "tuple index second element",
+			input:         "0[1]",
+			expectedPos:   0,
+			expectedIdx:   1,
+			expectedIsTup: true,
+		},
+		{
+			name:          "tuple index position 3 element 2",
+			input:         "3[2]",
+			expectedPos:   3,
+			expectedIdx:   2,
+			expectedIsTup: true,
+		},
+		{
+			name:          "invalid format - no closing bracket",
+			input:         "0[1",
+			expectedPos:   0,
+			expectedIdx:   0,
+			expectedIsTup: false,
+		},
+		{
+			name:          "invalid format - non-numeric position",
+			input:         "x[0]",
+			expectedPos:   0,
+			expectedIdx:   0,
+			expectedIsTup: false,
+		},
+		{
+			name:          "invalid format - non-numeric index",
+			input:         "0[x]",
+			expectedPos:   0,
+			expectedIdx:   0,
+			expectedIsTup: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pos, idx, isTup, valid := parseTupleIndex(tt.input)
+			if tt.expectedIsTup || tt.expectedPos > 0 {
+				// For valid cases, should be valid=true
+				assert.True(t, valid, "should be valid")
+			}
+			assert.Equal(t, tt.expectedPos, pos, "position mismatch")
+			assert.Equal(t, tt.expectedIdx, idx, "index mismatch")
+			assert.Equal(t, tt.expectedIsTup, isTup, "isTupleIndex mismatch")
+		})
+	}
+}
+
+// TestExtractTupleElement tests extraction of elements from tuple strings.
+func TestExtractTupleElement(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		index    int
+		expected string
+	}{
+		{
+			name:     "extract first element from string tuple",
+			input:    `("0.0.0.0", 8080)`,
+			index:    0,
+			expected: "0.0.0.0",
+		},
+		{
+			name:     "extract second element from string tuple",
+			input:    `("0.0.0.0", 8080)`,
+			index:    1,
+			expected: "8080",
+		},
+		{
+			name:     "extract from single-quoted string",
+			input:    `('0.0.0.0', 8080)`,
+			index:    0,
+			expected: "0.0.0.0",
+		},
+		{
+			name:     "extract from tuple with spaces",
+			input:    `( "0.0.0.0" , 8080 )`,
+			index:    0,
+			expected: "0.0.0.0",
+		},
+		{
+			name:     "extract from three-element tuple",
+			input:    `("a", "b", "c")`,
+			index:    1,
+			expected: "b",
+		},
+		{
+			name:     "extract from list syntax",
+			input:    `["host", 8080]`,
+			index:    0,
+			expected: "host",
+		},
+		{
+			name:     "index out of bounds",
+			input:    `("0.0.0.0", 8080)`,
+			index:    5,
+			expected: "",
+		},
+		{
+			name:     "not a tuple - return as is for index 0",
+			input:    `"plain_string"`,
+			index:    0,
+			expected: "plain_string",
+		},
+		{
+			name:     "not a tuple - empty for index > 0",
+			input:    `"plain_string"`,
+			index:    1,
+			expected: "",
+		},
+		{
+			name:     "empty tuple",
+			input:    `()`,
+			index:    0,
+			expected: "",
+		},
+		{
+			name:     "tuple with numeric values",
+			input:    `(80, 443, 8080)`,
+			index:    1,
+			expected: "443",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTupleElement(tt.input, tt.index)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestMatchesPositionalArguments_TupleIndexing tests tuple indexing in positional arguments.
+func TestMatchesPositionalArguments_TupleIndexing(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          []core.Argument
+		constraints   map[string]ArgumentConstraint
+		shouldMatch   bool
+		description   string
+	}{
+		{
+			name: "tuple first element matches",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "socket.bind(('0.0.0.0', 8080)) with match_position={'0[0]': '0.0.0.0'}",
+		},
+		{
+			name: "tuple second element matches",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[1]": {Value: "8080", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "socket.bind(('0.0.0.0', 8080)) with match_position={'0[1]': 8080}",
+		},
+		{
+			name: "both tuple elements match",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+				"0[1]": {Value: "8080", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "Both elements match",
+		},
+		{
+			name: "tuple first element doesn't match",
+			args: []core.Argument{
+				{Value: `("127.0.0.1", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+			},
+			shouldMatch: false,
+			description: "Wrong IP address",
+		},
+		{
+			name: "tuple index out of bounds",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[5]": {Value: "something", Wildcard: false},
+			},
+			shouldMatch: false,
+			description: "Index 5 doesn't exist in 2-element tuple",
+		},
+		{
+			name: "mixed tuple and simple positional",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+				{Value: "timeout", Position: 1},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+				"1":    {Value: "timeout", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "Tuple indexing and simple positional together",
+		},
+		{
+			name: "backward compatibility - simple positional still works",
+			args: []core.Argument{
+				{Value: "w", Position: 0},
+				{Value: "file.txt", Position: 1},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0": {Value: "w", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "Ensure backward compatibility with simple positional",
+		},
+		{
+			name: "list syntax extraction",
+			args: []core.Argument{
+				{Value: `["0.0.0.0", 8080]`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "List brackets should work like tuples",
+		},
+		{
+			name: "single quoted strings in tuple",
+			args: []core.Argument{
+				{Value: `('0.0.0.0', 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+			},
+			shouldMatch: true,
+			description: "Handle single-quoted strings",
+		},
+		{
+			name: "tuple with OR logic",
+			args: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {
+					Value:    []interface{}{"0.0.0.0", "127.0.0.1", "localhost"},
+					Wildcard: false,
+				},
+			},
+			shouldMatch: true,
+			description: "Tuple indexing with OR logic",
+		},
+		{
+			name: "tuple with wildcard",
+			args: []core.Argument{
+				{Value: `("192.168.1.100", 8080)`, Position: 0},
+			},
+			constraints: map[string]ArgumentConstraint{
+				"0[0]": {Value: "192.168.*", Wildcard: true},
+			},
+			shouldMatch: true,
+			description: "Tuple indexing with wildcard matching",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := &CallMatcherExecutor{
+				IR: &CallMatcherIR{
+					PositionalArgs: tt.constraints,
+				},
+			}
+
+			result := executor.matchesPositionalArguments(tt.args)
+			assert.Equal(t, tt.shouldMatch, result, tt.description)
+		})
+	}
+}
+
+// TestSocketBindDetection tests end-to-end socket.bind detection with tuples.
+func TestSocketBindDetection(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Simulate various socket.bind calls
+	cg.CallSites["test.main"] = []core.CallSite{
+		{
+			Target: "socket.bind",
+			Arguments: []core.Argument{
+				{Value: `("0.0.0.0", 8080)`, Position: 0},
+			},
+			Location: core.Location{File: "test.py", Line: 10},
+		},
+		{
+			Target: "socket.bind",
+			Arguments: []core.Argument{
+				{Value: `("127.0.0.1", 8080)`, Position: 0},
+			},
+			Location: core.Location{File: "test.py", Line: 15},
+		},
+		{
+			Target: "socket.bind",
+			Arguments: []core.Argument{
+				{Value: `("192.168.1.5", 8080)`, Position: 0},
+			},
+			Location: core.Location{File: "test.py", Line: 20},
+		},
+	}
+
+	t.Run("detect 0.0.0.0 binding", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 1, "Should match only 0.0.0.0 binding")
+		assert.Equal(t, 10, matches[0].Location.Line)
+	})
+
+	t.Run("detect private network binding with wildcard", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0[0]": {Value: "192.168.*", Wildcard: true},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 1, "Should match 192.168.x.x binding")
+		assert.Equal(t, 20, matches[0].Location.Line)
+	})
+
+	t.Run("detect port 8080", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0[1]": {Value: "8080", Wildcard: false},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 3, "All three use port 8080")
+	})
+
+	t.Run("detect both host and port", func(t *testing.T) {
+		ir := &CallMatcherIR{
+			Patterns: []string{"socket.bind"},
+			PositionalArgs: map[string]ArgumentConstraint{
+				"0[0]": {Value: "0.0.0.0", Wildcard: false},
+				"0[1]": {Value: "8080", Wildcard: false},
+			},
+		}
+
+		executor := NewCallMatcherExecutor(ir, cg)
+		matches := executor.Execute()
+
+		assert.Len(t, matches, 1, "Should match specific host+port combo")
+		assert.Equal(t, 10, matches[0].Location.Line)
+	})
+}
