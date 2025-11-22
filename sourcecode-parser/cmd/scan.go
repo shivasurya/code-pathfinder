@@ -33,6 +33,7 @@ Examples:
 		projectPath, _ := cmd.Flags().GetString("project")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
+		failOnStr, _ := cmd.Flags().GetString("fail-on")
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -42,6 +43,14 @@ Examples:
 			verbosity = output.VerbosityVerbose
 		}
 		logger := output.NewLogger(verbosity)
+
+		// Parse and validate --fail-on severities
+		failOn := output.ParseFailOn(failOnStr)
+		if len(failOn) > 0 {
+			if err := output.ValidateSeverities(failOn); err != nil {
+				return err
+			}
+		}
 
 		if rulesPath == "" {
 			return fmt.Errorf("--rules flag is required")
@@ -105,10 +114,12 @@ Examples:
 
 		// Execute all rules and collect enriched detections
 		var allEnriched []*dsl.EnrichedDetection
+		var scanErrors bool
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
 				logger.Warning("Error executing rule %s: %v", rule.Rule.ID, err)
+				scanErrors = true
 				continue
 			}
 
@@ -128,8 +139,10 @@ Examples:
 			return fmt.Errorf("failed to format output: %w", err)
 		}
 
-		if len(allEnriched) > 0 {
-			os.Exit(1) // Exit with error code if vulnerabilities found
+		// Determine exit code based on findings and --fail-on flag
+		exitCode := output.DetermineExitCode(allEnriched, failOn, scanErrors)
+		if exitCode != output.ExitCodeSuccess {
+			os.Exit(int(exitCode))
 		}
 
 		return nil
@@ -172,6 +185,7 @@ func init() {
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	scanCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
 	scanCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
+	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	scanCmd.MarkFlagRequired("rules")
 	scanCmd.MarkFlagRequired("project")
 }

@@ -38,6 +38,7 @@ Examples:
 		outputFormat, _ := cmd.Flags().GetString("output")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
+		failOnStr, _ := cmd.Flags().GetString("fail-on")
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -47,6 +48,14 @@ Examples:
 			verbosity = output.VerbosityVerbose
 		}
 		logger := output.NewLogger(verbosity)
+
+		// Parse and validate --fail-on severities
+		failOn := output.ParseFailOn(failOnStr)
+		if len(failOn) > 0 {
+			if err := output.ValidateSeverities(failOn); err != nil {
+				return err
+			}
+		}
 
 		if rulesPath == "" {
 			return fmt.Errorf("--rules flag is required")
@@ -107,6 +116,7 @@ Examples:
 		var allEnriched []*dsl.EnrichedDetection
 		allDetections := make(map[string][]dsl.DataflowDetection) // For SARIF compatibility
 		var scanErrors []string
+		hadErrors := false
 
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
@@ -114,6 +124,7 @@ Examples:
 				errMsg := fmt.Sprintf("Error executing rule %s: %v", rule.Rule.ID, err)
 				logger.Warning("%s", errMsg)
 				scanErrors = append(scanErrors, errMsg)
+				hadErrors = true
 				continue
 			}
 
@@ -139,10 +150,6 @@ Examples:
 			if err := formatter.Format(allEnriched, scanInfo); err != nil {
 				return fmt.Errorf("failed to format SARIF output: %w", err)
 			}
-			if len(allEnriched) > 0 {
-				osExit(1)
-			}
-			return nil
 		case "json":
 			summary := output.BuildSummary(allEnriched, len(rules))
 			scanInfo := output.ScanInfo{
@@ -154,22 +161,22 @@ Examples:
 			if err := formatter.Format(allEnriched, summary, scanInfo); err != nil {
 				return fmt.Errorf("failed to format JSON output: %w", err)
 			}
-			if len(allEnriched) > 0 {
-				osExit(1)
-			}
-			return nil
 		case "csv":
 			formatter := output.NewCSVFormatter(nil)
 			if err := formatter.Format(allEnriched); err != nil {
 				return fmt.Errorf("failed to format CSV output: %w", err)
 			}
-			if len(allEnriched) > 0 {
-				osExit(1)
-			}
-			return nil
 		default:
 			return fmt.Errorf("unknown output format: %s", outputFormat)
 		}
+
+		// Determine exit code based on findings and --fail-on flag
+		exitCode := output.DetermineExitCode(allEnriched, failOn, hadErrors)
+		if exitCode != output.ExitCodeSuccess {
+			osExit(int(exitCode))
+		}
+
+		return nil
 	},
 }
 
@@ -185,6 +192,7 @@ func init() {
 	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif or json (default: sarif)")
 	ciCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
 	ciCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
+	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }
