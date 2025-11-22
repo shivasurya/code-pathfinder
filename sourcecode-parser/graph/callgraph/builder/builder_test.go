@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ def main():
 	require.NoError(t, err)
 
 	// Build call graph
-	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir)
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 
@@ -254,7 +255,7 @@ def caller():
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
 	require.NoError(t, err)
 
-	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir)
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 
 	// Verify edges were created

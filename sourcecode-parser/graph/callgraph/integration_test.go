@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +28,7 @@ def bar():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 
 		assert.NoError(t, err)
 		assert.NotNil(t, callGraph)
@@ -42,7 +43,7 @@ def bar():
 		tmpDir := t.TempDir()
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 
 		assert.NoError(t, err)
 		assert.NotNil(t, callGraph)
@@ -52,7 +53,7 @@ def bar():
 
 	t.Run("handles invalid project path", func(t *testing.T) {
 		codeGraph := graph.Initialize("/nonexistent/path")
-		_, _, _, err := InitializeCallGraph(codeGraph, "/nonexistent/path")
+		_, _, _, err := InitializeCallGraph(codeGraph, "/nonexistent/path", output.NewLogger(output.VerbosityDefault))
 
 		// Should return error for invalid path
 		assert.Error(t, err)
@@ -72,7 +73,7 @@ def vulnerable():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		matches := AnalyzePatterns(callGraph, patternRegistry)
@@ -110,7 +111,7 @@ def safe_function():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		matches := AnalyzePatterns(callGraph, patternRegistry)
@@ -122,7 +123,7 @@ def safe_function():
 		tmpDir := t.TempDir()
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		matches := AnalyzePatterns(callGraph, patternRegistry)
@@ -142,7 +143,7 @@ def process():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		matches := AnalyzePatterns(callGraph, patternRegistry)

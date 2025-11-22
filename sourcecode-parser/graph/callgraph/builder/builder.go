@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"log"
 	"path/filepath"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/extraction"
 	cgregistry "github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 )
 
 // BuildCallGraph constructs the complete call graph for a Python project.
@@ -48,7 +48,7 @@ import (
 //     edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
 //     reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
 //     callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
-func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string) (*core.CallGraph, error) {
+func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string, logger *output.Logger) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
 	// Initialize import map cache for performance
@@ -64,7 +64,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 	// PR #3: Detect Python version and load stdlib registry from remote CDN
 	pythonVersion := DetectPythonVersion(projectRoot)
-	log.Printf("Detected Python version: %s", pythonVersion)
+	logger.Debug("Detected Python version: %s", pythonVersion)
 
 	// Create remote registry loader
 	remoteLoader := cgregistry.NewStdlibRegistryRemote(
@@ -73,9 +73,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	)
 
 	// Load manifest from CDN
-	err := remoteLoader.LoadManifest()
+	err := remoteLoader.LoadManifest(logger)
 	if err != nil {
-		log.Printf("Warning: Failed to load stdlib registry from CDN: %v", err)
+		logger.Warning("Failed to load stdlib registry from CDN: %v", err)
 		// Continue without stdlib resolution - not a fatal error
 	} else {
 		// Create adapter to satisfy existing StdlibRegistry interface
@@ -89,7 +89,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 		typeEngine.StdlibRegistry = stdlibRegistry
 		typeEngine.StdlibRemote = remoteLoader
 
-		log.Printf("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
+		logger.Statistic("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
 	}
 
 	// First, index all function definitions from the code graph
@@ -199,7 +199,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 			}
 
 			// Resolve the call target to a fully qualified name
-			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph)
+			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
 
 			// Update call site with resolution information
 			callSite.TargetFQN = targetFQN
@@ -232,9 +232,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	resolution.PrintAttributeFailureStats()
 
 	// Pass 5: Generate taint summaries for all functions
-	log.Printf("Pass 5: Generating taint summaries...")
+	logger.Progress("Pass 5: Generating taint summaries...")
 	GenerateTaintSummaries(callGraph, codeGraph, registry)
-	log.Printf("Generated taint summaries for %d functions", len(callGraph.Summaries))
+	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
 
 	return callGraph, nil
 }
@@ -480,12 +480,12 @@ var pythonBuiltins = map[string]bool{
 //
 //   target="obj.method", imports={}
 //     → "obj.method", false, nil  (needs type inference)
-func ResolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph) (string, bool, *core.TypeInfo) {
-	return resolveCallTarget(target, importMap, registry, currentModule, codeGraph, typeEngine, callerFQN, callGraph)
+func ResolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph, logger *output.Logger) (string, bool, *core.TypeInfo) {
+	return resolveCallTarget(target, importMap, registry, currentModule, codeGraph, typeEngine, callerFQN, callGraph, logger)
 }
 
 // resolveCallTarget is the internal implementation of ResolveCallTarget.
-func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph) (string, bool, *core.TypeInfo) {
+func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph, logger *output.Logger) (string, bool, *core.TypeInfo) {
 	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
 	if typeEngine == nil || callerFQN == "" {
 		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
@@ -675,7 +675,7 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		// PR #3: Check stdlib registry before user project registry
 		if typeEngine != nil && typeEngine.StdlibRemote != nil {
 			if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
-				if validateStdlibFQN(fullFQN, remoteLoader) {
+				if validateStdlibFQN(fullFQN, remoteLoader, logger) {
 					return fullFQN, true, nil
 				}
 			}
@@ -703,7 +703,7 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	// This handles cases where stdlib modules are imported directly (import os.path)
 	if typeEngine != nil && typeEngine.StdlibRemote != nil {
 		if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
-			if validateStdlibFQN(target, remoteLoader) {
+			if validateStdlibFQN(target, remoteLoader, logger) {
 				return target, true, nil
 			}
 		}
@@ -734,15 +734,16 @@ var stdlibModuleAliases = map[string]string{
 // Parameters:
 //   - fqn: fully qualified name to check
 //   - remoteLoader: remote stdlib registry loader
+//   - logger: structured logger for warnings
 //
 // Returns:
 //   - true if FQN is a stdlib function or class
-func ValidateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote) bool {
-	return validateStdlibFQN(fqn, remoteLoader)
+func ValidateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote, logger *output.Logger) bool {
+	return validateStdlibFQN(fqn, remoteLoader, logger)
 }
 
 // validateStdlibFQN is the internal implementation of ValidateStdlibFQN.
-func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote) bool {
+func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote, logger *output.Logger) bool {
 	if remoteLoader == nil {
 		return false
 	}
@@ -770,9 +771,9 @@ func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote
 		}
 
 		// Lazy load module from remote registry
-		module, err := remoteLoader.GetModule(moduleName)
+		module, err := remoteLoader.GetModule(moduleName, logger)
 		if err != nil {
-			log.Printf("Warning: Failed to load stdlib module %s: %v", moduleName, err)
+			logger.Warning("Failed to load stdlib module %s: %v", moduleName, err)
 			continue
 		}
 		if module == nil {

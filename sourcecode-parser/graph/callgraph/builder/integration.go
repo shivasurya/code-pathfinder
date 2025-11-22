@@ -6,6 +6,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 )
 
 // BuildCallGraphFromPath is a convenience function that builds a call graph
@@ -19,12 +20,13 @@ import (
 // Parameters:
 //   - codeGraph: the parsed code graph from graph.Initialize()
 //   - projectPath: absolute path to project root
+//   - logger: structured logger for diagnostics
 //
 // Returns:
 //   - CallGraph: complete call graph with edges and call sites
 //   - ModuleRegistry: module path mappings
 //   - error: if any step fails
-func BuildCallGraphFromPath(codeGraph *graph.CodeGraph, projectPath string) (*core.CallGraph, *core.ModuleRegistry, error) {
+func BuildCallGraphFromPath(codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) (*core.CallGraph, *core.ModuleRegistry, error) {
 	// Pass 1: Build module registry
 	startRegistry := time.Now()
 	moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
@@ -35,7 +37,7 @@ func BuildCallGraphFromPath(codeGraph *graph.CodeGraph, projectPath string) (*co
 
 	// Pass 2-3: Build call graph (includes import extraction and call site extraction)
 	startCallGraph := time.Now()
-	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 	if err != nil {
 		return nil, nil, err
 	}

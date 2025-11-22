@@ -7,6 +7,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ def get_config_path():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		// Verify os.getcwd and os.path.join are resolved
@@ -54,7 +55,7 @@ def create_directory(name):
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -76,7 +77,7 @@ def process_data(json_string):
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -99,7 +100,7 @@ def get_version():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -147,7 +148,7 @@ def main():
 	require.NoError(t, err)
 
 	codeGraph := graph.Initialize(tmpDir)
-	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 
 	stats := collectStats(callGraph)
@@ -183,7 +184,7 @@ def join_paths():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -203,7 +204,7 @@ def check_path(path):
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -226,7 +227,7 @@ def process():
 		require.NoError(t, err)
 
 		codeGraph := graph.Initialize(tmpDir)
-		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
 		stats := collectStats(callGraph)
@@ -258,7 +259,7 @@ def file_exists(path):
 	require.NoError(t, err)
 
 	codeGraph := graph.Initialize(tmpDir)
-	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir)
+	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 
 	stats := collectStats(callGraph)

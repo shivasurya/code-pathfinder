@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ if __name__ == "__main__":
 	assert.NotNil(t, codeGraph)
 
 	// Build call graph from path
-	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir)
+	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 	assert.NotNil(t, moduleRegistry)
@@ -54,7 +55,7 @@ func TestBuildCallGraphFromPath_EmptyProject(t *testing.T) {
 	codeGraph := graph.Initialize(tmpDir)
 
 	// Build call graph should succeed but be empty
-	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir)
+	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 	assert.NotNil(t, moduleRegistry)
@@ -88,7 +89,7 @@ def main():
 	codeGraph := graph.Initialize(tmpDir)
 
 	// Build call graph
-	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir)
+	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 	assert.NotNil(t, moduleRegistry)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,7 @@ var analyzeCmd = &cobra.Command{
 		codeGraph := graph.Initialize(projectInput)
 
 		fmt.Println("Building call graph and analyzing security patterns...")
-		cg, registry, patternRegistry, err := callgraph.InitializeCallGraph(codeGraph, projectInput)
+		cg, registry, patternRegistry, err := callgraph.InitializeCallGraph(codeGraph, projectInput, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			fmt.Println("Error building call graph:", err)
 			return

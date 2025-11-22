@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +31,17 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		debug, _ := cmd.Flags().GetBool("debug")
+
+		// Setup logger with appropriate verbosity
+		verbosity := output.VerbosityDefault
+		if debug {
+			verbosity = output.VerbosityDebug
+		} else if verbose {
+			verbosity = output.VerbosityVerbose
+		}
+		logger := output.NewLogger(verbosity)
 
 		if rulesPath == "" {
 			return fmt.Errorf("--rules flag is required")
@@ -48,47 +59,47 @@ Examples:
 		projectPath = absProjectPath
 
 		// Step 1: Build code graph (AST)
-		log.Printf("Building code graph from %s...\n", projectPath)
+		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
 		if len(codeGraph.Nodes) == 0 {
 			return fmt.Errorf("no source files found in project")
 		}
-		log.Printf("Code graph built: %d nodes\n", len(codeGraph.Nodes))
+		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Step 2: Build module registry
-		log.Printf("Building module registry...\n")
+		logger.Progress("Building module registry...")
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 		if err != nil {
-			log.Printf("Warning: failed to build module registry: %v\n", err)
+			logger.Warning("failed to build module registry: %v", err)
 			// Create empty registry as fallback
 			moduleRegistry = core.NewModuleRegistry()
 		}
 
 		// Step 3: Build callgraph
-		log.Printf("Building callgraph...\n")
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+		logger.Progress("Building callgraph...")
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
-		log.Printf("Callgraph built: %d functions, %d call sites\n",
+		logger.Statistic("Callgraph built: %d functions, %d call sites",
 			len(cg.Functions), countTotalCallSites(cg))
 
 		// Step 4: Load Python DSL rules
-		log.Printf("Loading rules from %s...\n", rulesPath)
+		logger.Progress("Loading rules from %s...", rulesPath)
 		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
-		log.Printf("Loaded %d rules\n", len(rules))
+		logger.Statistic("Loaded %d rules", len(rules))
 
 		// Step 5: Execute rules against callgraph
-		log.Printf("\n=== Running Security Scan ===\n")
+		logger.Progress("\n=== Running Security Scan ===")
 		totalDetections := 0
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
-				log.Printf("Error executing rule %s: %v\n", rule.Rule.ID, err)
+				logger.Error("executing rule %s: %v", rule.Rule.ID, err)
 				continue
 			}
 
@@ -99,8 +110,8 @@ Examples:
 		}
 
 		// Step 6: Print summary
-		log.Printf("\n=== Scan Complete ===\n")
-		log.Printf("Total vulnerabilities found: %d\n", totalDetections)
+		logger.Progress("\n=== Scan Complete ===")
+		logger.Statistic("Total vulnerabilities found: %d", totalDetections)
 
 		if totalDetections > 0 {
 			os.Exit(1) // Exit with error code if vulnerabilities found
@@ -143,6 +154,8 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
+	scanCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
+	scanCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	scanCmd.MarkFlagRequired("rules")
 	scanCmd.MarkFlagRequired("project")
 }

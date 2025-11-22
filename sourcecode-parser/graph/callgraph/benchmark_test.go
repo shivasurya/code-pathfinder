@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 )
 
 // Benchmark project paths
@@ -238,7 +239,7 @@ func BenchmarkInitializeCallGraph_Small(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// Include full pipeline: graph initialization + call graph initialization
 		codeGraph := graph.Initialize(smallProjectPath)
-		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath)
+		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			b.Fatalf("Failed to initialize call graph: %v", err)
 		}
@@ -265,7 +266,7 @@ func BenchmarkInitializeCallGraph_Medium(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		codeGraph := graph.Initialize(mediumProjectPath)
-		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath)
+		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			b.Fatalf("Failed to initialize call graph: %v", err)
 		}
@@ -287,7 +288,7 @@ func BenchmarkInitializeCallGraph_Medium(b *testing.B) {
 func BenchmarkPatternMatching_Small(b *testing.B) {
 	// Pre-build call graph and pattern registry
 	codeGraph := graph.Initialize(smallProjectPath)
-	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath)
+	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath, output.NewLogger(output.VerbosityDefault))
 	if err != nil {
 		b.Fatalf("Failed to initialize call graph: %v", err)
 	}
@@ -310,7 +311,7 @@ func BenchmarkPatternMatching_Small(b *testing.B) {
 func BenchmarkPatternMatching_Medium(b *testing.B) {
 	// Pre-build call graph and pattern registry
 	codeGraph := graph.Initialize(mediumProjectPath)
-	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath)
+	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath, output.NewLogger(output.VerbosityDefault))
 	if err != nil {
 		b.Fatalf("Failed to initialize call graph: %v", err)
 	}

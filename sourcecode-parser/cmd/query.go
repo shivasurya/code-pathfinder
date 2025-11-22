@@ -9,6 +9,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/spf13/cobra"
 )
 
@@ -55,7 +56,7 @@ Examples:
 
 		// Build callgraph
 		log.Printf("Building callgraph...\n")
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}

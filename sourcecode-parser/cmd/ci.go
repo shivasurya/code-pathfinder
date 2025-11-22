@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	sarif "github.com/owenrumney/go-sarif/v2/sarif"
@@ -12,6 +11,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +35,17 @@ Examples:
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
 		outputFormat, _ := cmd.Flags().GetString("output")
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		debug, _ := cmd.Flags().GetBool("debug")
+
+		// Setup logger with appropriate verbosity
+		verbosity := output.VerbosityDefault
+		if debug {
+			verbosity = output.VerbosityDebug
+		} else if verbose {
+			verbosity = output.VerbosityVerbose
+		}
+		logger := output.NewLogger(verbosity)
 
 		if rulesPath == "" {
 			return fmt.Errorf("--rules flag is required")
@@ -49,47 +60,47 @@ Examples:
 		}
 
 		// Build code graph (AST)
-		log.Printf("Building code graph from %s...\n", projectPath)
+		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
 		if len(codeGraph.Nodes) == 0 {
 			return fmt.Errorf("no source files found in project")
 		}
-		log.Printf("Code graph built: %d nodes\n", len(codeGraph.Nodes))
+		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Build module registry
-		log.Printf("Building module registry...\n")
+		logger.Progress("Building module registry...")
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
 		if err != nil {
-			log.Printf("Warning: failed to build module registry: %v\n", err)
+			logger.Warning("failed to build module registry: %v", err)
 			moduleRegistry = core.NewModuleRegistry()
 		}
 
 		// Build callgraph
-		log.Printf("Building callgraph...\n")
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath)
+		logger.Progress("Building callgraph...")
+		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
-		log.Printf("Callgraph built: %d functions, %d call sites\n",
+		logger.Statistic("Callgraph built: %d functions, %d call sites",
 			len(cg.Functions), countTotalCallSites(cg))
 
 		// Load Python DSL rules
-		log.Printf("Loading rules from %s...\n", rulesPath)
+		logger.Progress("Loading rules from %s...", rulesPath)
 		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
-		log.Printf("Loaded %d rules\n", len(rules))
+		logger.Statistic("Loaded %d rules", len(rules))
 
 		// Execute rules against callgraph
-		log.Printf("Running security scan...\n")
+		logger.Progress("Running security scan...")
 		allDetections := make(map[string][]dsl.DataflowDetection)
 		totalDetections := 0
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
-				log.Printf("Error executing rule %s: %v\n", rule.Rule.ID, err)
+				logger.Error("executing rule %s: %v", rule.Rule.ID, err)
 				continue
 			}
 
@@ -99,8 +110,8 @@ Examples:
 			}
 		}
 
-		log.Printf("Scan complete. Found %d vulnerabilities.\n", totalDetections)
-		log.Printf("Generating %s output...\n", outputFormat)
+		logger.Statistic("Scan complete. Found %d vulnerabilities", totalDetections)
+		logger.Progress("Generating %s output...", outputFormat)
 
 		// Generate output
 		if outputFormat == "sarif" {
@@ -270,6 +281,8 @@ func init() {
 	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
 	ciCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif or json (default: sarif)")
+	ciCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
+	ciCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

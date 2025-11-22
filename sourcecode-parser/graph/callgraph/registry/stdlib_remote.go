@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sourcecode-parser/output"
 )
 
 // StdlibRegistryRemote loads Python stdlib registries from a remote CDN.
@@ -48,13 +48,16 @@ func NewStdlibRegistryRemote(baseURL, pythonVersion string) *StdlibRegistryRemot
 
 // LoadManifest downloads and parses the manifest.json file from the CDN.
 //
+// Parameters:
+//   - logger: structured logger for diagnostics
+//
 // Returns:
 //   - error if download or parsing fails
-func (r *StdlibRegistryRemote) LoadManifest() error {
+func (r *StdlibRegistryRemote) LoadManifest(logger *output.Logger) error {
 	manifestURL := fmt.Sprintf("%s/python%s/stdlib/v1/manifest.json",
 		r.BaseURL, r.PythonVersion)
 
-	log.Printf("Downloading manifest from: %s", manifestURL)
+	logger.Debug("Downloading manifest from: %s", manifestURL)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, manifestURL, nil)
 	if err != nil {
@@ -82,7 +85,7 @@ func (r *StdlibRegistryRemote) LoadManifest() error {
 	}
 
 	r.Manifest = &manifest
-	log.Printf("Loaded manifest: %d modules", len(manifest.Modules))
+	logger.Statistic("Loaded manifest: %d modules", len(manifest.Modules))
 
 	return nil
 }
@@ -92,11 +95,12 @@ func (r *StdlibRegistryRemote) LoadManifest() error {
 //
 // Parameters:
 //   - moduleName: name of the module (e.g., "os", "sys")
+//   - logger: structured logger for diagnostics
 //
 // Returns:
 //   - StdlibModule if found, nil otherwise
 //   - error if download or parsing fails
-func (r *StdlibRegistryRemote) GetModule(moduleName string) (*core.StdlibModule, error) {
+func (r *StdlibRegistryRemote) GetModule(moduleName string, logger *output.Logger) (*core.StdlibModule, error) {
 	// Check cache first (read lock)
 	r.CacheMutex.RLock()
 	if module, ok := r.ModuleCache[moduleName]; ok {
@@ -135,7 +139,7 @@ func (r *StdlibRegistryRemote) GetModule(moduleName string) (*core.StdlibModule,
 	moduleURL := fmt.Sprintf("%s/python%s/stdlib/v1/%s",
 		r.BaseURL, r.PythonVersion, moduleEntry.File)
 
-	log.Printf("Downloading module: %s from %s", moduleName, moduleURL)
+	logger.Debug("Downloading module: %s from %s", moduleName, moduleURL)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, moduleURL, nil)
 	if err != nil {
@@ -214,13 +218,14 @@ func (r *StdlibRegistryRemote) HasModule(moduleName string) bool {
 // Parameters:
 //   - moduleName: name of the module (e.g., "os")
 //   - functionName: name of the function (e.g., "getcwd")
+//   - logger: structured logger for diagnostics
 //
 // Returns:
 //   - StdlibFunction if found, nil otherwise
-func (r *StdlibRegistryRemote) GetFunction(moduleName, functionName string) *core.StdlibFunction {
-	module, err := r.GetModule(moduleName)
+func (r *StdlibRegistryRemote) GetFunction(moduleName, functionName string, logger *output.Logger) *core.StdlibFunction {
+	module, err := r.GetModule(moduleName, logger)
 	if err != nil {
-		log.Printf("Warning: failed to get module %s: %v", moduleName, err)
+		logger.Warning("Failed to get module %s: %v", moduleName, err)
 		return nil
 	}
 	if module == nil {
@@ -235,13 +240,14 @@ func (r *StdlibRegistryRemote) GetFunction(moduleName, functionName string) *cor
 // Parameters:
 //   - moduleName: name of the module
 //   - className: name of the class
+//   - logger: structured logger for diagnostics
 //
 // Returns:
 //   - StdlibClass if found, nil otherwise
-func (r *StdlibRegistryRemote) GetClass(moduleName, className string) *core.StdlibClass {
-	module, err := r.GetModule(moduleName)
+func (r *StdlibRegistryRemote) GetClass(moduleName, className string, logger *output.Logger) *core.StdlibClass {
+	module, err := r.GetModule(moduleName, logger)
 	if err != nil {
-		log.Printf("Warning: failed to get module %s: %v", moduleName, err)
+		logger.Warning("Failed to get module %s: %v", moduleName, err)
 		return nil
 	}
 	if module == nil {
