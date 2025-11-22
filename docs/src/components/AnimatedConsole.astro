@@ -26,7 +26,7 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     font-family: 'Courier New', 'Courier', monospace;
     font-size: 14px;
-    line-height: 1.4;
+    line-height: 1.25;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -127,7 +127,7 @@
   }
 
   .rule-name {
-    color: #89dceb;
+    color: #a6e3a1;
   }
 
   .cwe {
@@ -135,7 +135,7 @@
   }
 
   .filename {
-    color: #a6e3a1;
+    color: #89dceb;
   }
 
   .line-number {
@@ -174,83 +174,237 @@
   const cursor = document.getElementById('cursor');
   const container = document.querySelector('.terminal-body');
 
-  const lines = [
-    { text: '$ ', className: 'prompt', charDelay: 80 },
-    { text: 'pathfinder scan --project ./python_cpf_app --rules ./cpf_rules/', className: 'command', charDelay: 15 },
-    { text: '\n\n', className: '', charDelay: 500 },
-
-    { text: 'Code Pathfinder Security Scan\n\n', className: 'header', charDelay: 3 },
-    { text: 'Results:\n\n', className: 'results-label', charDelay: 2 },
-    { text: 'Critical Issues (2):\n\n', className: 'critical-label', charDelay: 3 },
-
-    { text: '  [', className: 'critical-label', charDelay: 2 },
-    { text: 'critical', className: 'severity-tag', charDelay: 3 },
-    { text: '] [Taint-Local] ', className: 'critical-label', charDelay: 2 },
-    { text: 'python-sqli-execute', className: 'rule-name', charDelay: 2 },
-    { text: ': detect_sql_injection_execute\n', className: 'critical-label', charDelay: 2 },
-    { text: '    ', className: 'critical-label', charDelay: 2 },
-    { text: 'CWE-89', className: 'cwe', charDelay: 3 },
-    { text: ' | ', className: 'critical-label', charDelay: 2 },
-    { text: 'A03:2021', className: 'cwe', charDelay: 3 },
-    { text: '\n\n', className: '', charDelay: 50 },
-
-    { text: '    app.py', className: 'filename', charDelay: 2 },
-    { text: ':45\n', className: 'line-number', charDelay: 2 },
-    { text: '        42 | \n', className: 'line-number', charDelay: 1 },
-    { text: '        43 |     ', className: 'line-number', charDelay: 1 },
-    { text: '# VULNERABLE: String concatenation\n', className: 'comment', charDelay: 2 },
-    { text: '        44 |     sql = "SELECT * FROM users WHERE name LIKE \'%\' + search_term + \'%\'"\n', className: 'code-line', charDelay: 1 },
-    { text: '      > 45 |     ', className: 'pointer', charDelay: 2 },
-    { text: 'cursor.execute(sql)\n', className: 'code-line', charDelay: 2 },
-    { text: '        46 | \n', className: 'line-number', charDelay: 1 },
-    { text: '        47 |     results = cursor.fetchall()\n', className: 'code-line', charDelay: 1 },
-    { text: '        48 |     conn.close()\n\n', className: 'code-line', charDelay: 1 },
-
-    { text: '    ', className: '', charDelay: 50 },
-    { text: 'Confidence: Medium', className: 'confidence', charDelay: 3 },
-    { text: ' | ', className: '', charDelay: 2 },
-    { text: 'Detection: Intra-procedural taint analysis\n\n', className: 'confidence', charDelay: 2 },
-
-    { text: '  [', className: 'critical-label', charDelay: 2 },
-    { text: 'critical', className: 'severity-tag', charDelay: 3 },
-    { text: '] [Taint-Local] ', className: 'critical-label', charDelay: 2 },
-    { text: 'python-cmdi-system', className: 'rule-name', charDelay: 2 },
-    { text: ': detect_command_injection_system\n', className: 'critical-label', charDelay: 2 },
-    { text: '    ', className: 'critical-label', charDelay: 2 },
-    { text: 'CWE-78', className: 'cwe', charDelay: 3 },
-    { text: ' | ', className: 'critical-label', charDelay: 2 },
-    { text: 'A03:2021', className: 'cwe', charDelay: 3 },
-    { text: '\n\n', className: '', charDelay: 50 },
-
-    { text: '    app.py', className: 'filename', charDelay: 2 },
-    { text: ':59\n', className: 'line-number', charDelay: 2 },
-    { text: '        56 |     host = request.args.get(\'host\', \'localhost\')\n', className: 'code-line', charDelay: 1 },
-    { text: '        57 | \n', className: 'line-number', charDelay: 1 },
-    { text: '        58 |     ', className: 'line-number', charDelay: 1 },
-    { text: '# VULNERABLE: User input in system command\n', className: 'comment', charDelay: 2 },
-    { text: '      > 59 |     ', className: 'pointer', charDelay: 2 },
-    { text: 'result = os.system(f"ping -c 1 {host}")\n', className: 'code-line', charDelay: 2 },
-    { text: '        60 |     return f"Ping result: {result}"\n', className: 'code-line', charDelay: 1 },
-
-    { text: '\n    ', className: '', charDelay: 50 },
-    { text: 'Confidence: Medium', className: 'confidence', charDelay: 3 },
-    { text: ' | ', className: '', charDelay: 2 },
-    { text: 'Detection: Intra-procedural taint analysis', className: 'confidence', charDelay: 2 },
+  // Pool of 10 different vulnerabilities
+  const vulnerabilities = [
+    {
+      rule: 'python-sqli-execute',
+      description: 'detect_sql_injection_execute',
+      cwe: 'CWE-89',
+      owasp: 'A03:2021',
+      file: 'app.py',
+      line: 45,
+      comment: '# VULNERABLE: String concatenation',
+      code: [
+        { line: 42, text: '' },
+        { line: 43, text: '    # VULNERABLE: String concatenation' },
+        { line: 44, text: '    sql = "SELECT * FROM users WHERE name LIKE \'%\' + search_term + \'%\'"' },
+        { line: 45, text: '    cursor.execute(sql)', pointer: true },
+        { line: 46, text: '' },
+        { line: 47, text: '    results = cursor.fetchall()' },
+        { line: 48, text: '    conn.close()' },
+      ]
+    },
+    {
+      rule: 'python-cmdi-system',
+      description: 'detect_command_injection_system',
+      cwe: 'CWE-78',
+      owasp: 'A03:2021',
+      file: 'app.py',
+      line: 59,
+      code: [
+        { line: 56, text: '    host = request.args.get(\'host\', \'localhost\')' },
+        { line: 57, text: '' },
+        { line: 58, text: '    # VULNERABLE: User input in system command' },
+        { line: 59, text: '    result = os.system(f"ping -c 1 {host}")', pointer: true },
+        { line: 60, text: '    return f"Ping result: {result}"' },
+      ]
+    },
+    {
+      rule: 'python-code-injection-eval',
+      description: 'detect_code_injection_eval',
+      cwe: 'CWE-94',
+      owasp: 'A03:2021',
+      file: 'calculator.py',
+      line: 23,
+      code: [
+        { line: 21, text: '    expression = request.args.get(\'expr\', \'1+1\')' },
+        { line: 22, text: '    # VULNERABLE: eval on user input' },
+        { line: 23, text: '    result = eval(expression)', pointer: true },
+        { line: 24, text: '    return f"Result: {result}"' },
+      ]
+    },
+    {
+      rule: 'python-path-traversal-open',
+      description: 'detect_path_traversal_open',
+      cwe: 'CWE-22',
+      owasp: 'A01:2021',
+      file: 'fileserver.py',
+      line: 34,
+      code: [
+        { line: 32, text: '    filename = request.args.get(\'file\', \'default.txt\')' },
+        { line: 33, text: '    # VULNERABLE: User input in file path' },
+        { line: 34, text: '    with open(filepath, \'r\') as f:', pointer: true },
+        { line: 35, text: '        content = f.read()' },
+        { line: 36, text: '    return content' },
+      ]
+    },
+    {
+      rule: 'python-deserialization-pickle',
+      description: 'detect_insecure_deserialization_pickle',
+      cwe: 'CWE-502',
+      owasp: 'A08:2021',
+      file: 'session.py',
+      line: 18,
+      code: [
+        { line: 16, text: '    data = request.args.get(\'data\', \'\')' },
+        { line: 17, text: '    # VULNERABLE: pickle.loads on user input' },
+        { line: 18, text: '    obj = pickle.loads(data.encode())', pointer: true },
+        { line: 19, text: '    return str(obj)' },
+      ]
+    },
+    {
+      rule: 'python-ssrf-requests',
+      description: 'detect_ssrf_requests_get',
+      cwe: 'CWE-918',
+      owasp: 'A10:2021',
+      file: 'proxy.py',
+      line: 27,
+      code: [
+        { line: 25, text: '    url = request.args.get(\'url\', \'http://example.com\')' },
+        { line: 26, text: '    # VULNERABLE: User-controlled URL' },
+        { line: 27, text: '    response = requests.get(url)', pointer: true },
+        { line: 28, text: '    return response.text' },
+      ]
+    },
+    {
+      rule: 'python-template-injection',
+      description: 'detect_template_injection',
+      cwe: 'CWE-1336',
+      owasp: 'A03:2021',
+      file: 'views.py',
+      line: 42,
+      code: [
+        { line: 40, text: '    name = request.args.get(\'name\', \'Guest\')' },
+        { line: 41, text: '    # VULNERABLE: User input in template' },
+        { line: 42, text: '    return render_template_string(f"<h1>Hello {name}!</h1>")', pointer: true },
+        { line: 43, text: '' },
+      ]
+    },
+    {
+      rule: 'python-yaml-unsafe-load',
+      description: 'detect_insecure_deserialization_yaml',
+      cwe: 'CWE-502',
+      owasp: 'A08:2021',
+      file: 'config.py',
+      line: 15,
+      code: [
+        { line: 13, text: '    config_data = request.form.get(\'yaml\', \'\')' },
+        { line: 14, text: '    # VULNERABLE: yaml.load without SafeLoader' },
+        { line: 15, text: '    config = yaml.load(config_data)', pointer: true },
+        { line: 16, text: '    return str(config)' },
+      ]
+    },
+    {
+      rule: 'python-subprocess-shell',
+      description: 'detect_command_injection_subprocess',
+      cwe: 'CWE-78',
+      owasp: 'A03:2021',
+      file: 'runner.py',
+      line: 52,
+      code: [
+        { line: 50, text: '    cmd = request.form.get(\'command\', \'ls\')' },
+        { line: 51, text: '    # VULNERABLE: Shell=True with user input' },
+        { line: 52, text: '    output = subprocess.Popen(cmd, shell=True)', pointer: true },
+        { line: 53, text: '    return output.stdout.read()' },
+      ]
+    },
+    {
+      rule: 'python-exec-injection',
+      description: 'detect_code_injection_exec',
+      cwe: 'CWE-94',
+      owasp: 'A03:2021',
+      file: 'executor.py',
+      line: 31,
+      code: [
+        { line: 29, text: '    code = request.form.get(\'code\', \'print("hello")\')' },
+        { line: 30, text: '    # VULNERABLE: exec on user input' },
+        { line: 31, text: '    exec(code)', pointer: true },
+        { line: 32, text: '    return "Code executed"' },
+      ]
+    },
   ];
 
+  let lines = [];
   let lineIndex = 0;
   let charIndex = 0;
   let hasStarted = false;
+
+  function buildLines(selectedVulns) {
+    const newLines = [
+      { text: '$ ', className: 'prompt', charDelay: 80 },
+      { text: 'pathfinder scan --project ./flask_webapp --rules ./owasp_ruleset', className: 'command', charDelay: 8 },
+      { text: '\n\n', className: '', charDelay: 300 },
+      { text: '  Code Pathfinder Security Scan\n\n', className: 'header', charDelay: 1 },
+      { text: '  Results:\n\n', className: 'results-label', charDelay: 1 },
+      { text: '  Critical Issues (2):\n\n', className: 'critical-label', charDelay: 1 },
+    ];
+
+    selectedVulns.forEach((vuln, idx) => {
+      // Vulnerability header
+      newLines.push(
+        { text: '    [', className: 'critical-label', charDelay: 1 },
+        { text: 'critical', className: 'severity-tag', charDelay: 1 },
+        { text: '] [Taint-Local] ', className: 'critical-label', charDelay: 1 },
+        { text: vuln.rule, className: 'rule-name', charDelay: 1 },
+        { text: `: ${vuln.description}\n`, className: 'critical-label', charDelay: 1 },
+        { text: '      ', className: 'critical-label', charDelay: 1 },
+        { text: vuln.cwe, className: 'cwe', charDelay: 1 },
+        { text: ' | ', className: 'critical-label', charDelay: 1 },
+        { text: vuln.owasp, className: 'cwe', charDelay: 1 },
+        { text: '\n\n', className: '', charDelay: 20 },
+      );
+
+      // File location
+      newLines.push(
+        { text: `      ${vuln.file}`, className: 'filename', charDelay: 1 },
+        { text: `:${vuln.line}\n`, className: 'line-number', charDelay: 1 },
+      );
+
+      // Code snippet
+      vuln.code.forEach(codeLine => {
+        const prefix = codeLine.pointer ? '        > ' : '          ';
+        const className = codeLine.pointer ? 'pointer' : 'line-number';
+        newLines.push({
+          text: `${prefix}${codeLine.line} |     ${codeLine.text}\n`,
+          className: codeLine.text === '' ? 'line-number' : (codeLine.text.includes('#') ? 'comment' : 'code-line'),
+          charDelay: 1
+        });
+      });
+
+      // Confidence and detection
+      newLines.push(
+        { text: '\n      ', className: '', charDelay: 20 },
+        { text: 'Confidence: Medium', className: 'confidence', charDelay: 1 },
+        { text: ' | ', className: '', charDelay: 1 },
+        { text: 'Detection: Intra-procedural taint analysis', className: 'confidence', charDelay: 1 },
+      );
+
+      // Add spacing between vulnerabilities
+      if (idx < selectedVulns.length - 1) {
+        newLines.push({ text: '\n\n', className: '', charDelay: 20 });
+      }
+    });
+
+    return newLines;
+  }
+
+  function selectRandomVulnerabilities() {
+    const shuffled = [...vulnerabilities].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 2);
+  }
 
   function typeCharacter() {
     if (lineIndex >= lines.length) {
       // Animation complete - hide cursor temporarily
       cursor.style.display = 'none';
 
-      // Restart animation after 5 seconds
+      // Restart animation after 5 seconds with new random vulnerabilities
       setTimeout(() => {
         // Clear output
         output.innerHTML = '';
+        // Select new random vulnerabilities and rebuild lines
+        const selectedVulns = selectRandomVulnerabilities();
+        lines = buildLines(selectedVulns);
         // Reset state
         lineIndex = 0;
         charIndex = 0;
@@ -298,6 +452,10 @@
       setTimeout(typeCharacter, 50);
     }
   }
+
+  // Initialize with random vulnerabilities
+  const initialVulns = selectRandomVulnerabilities();
+  lines = buildLines(initialVulns);
 
   // Start animation when console becomes visible
   const consoleContainer = document.querySelector('.animated-console-container');
