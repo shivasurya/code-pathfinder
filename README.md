@@ -94,30 +94,144 @@ Read the [official documentation](https://codepathfinder.dev/), or run `pathfind
 
 ## Usage
 
+### Scan Command (Interactive)
+
 ```bash
-$ cd sourcecode-parser
+# Basic scan
+pathfinder scan --rules rules/ --project /path/to/project
 
-$ gradle buildGo (or) npm install -g codepathfinder
+# With verbose output
+pathfinder scan --rules rules/ --project . --verbose
 
-$ ./pathfinder query --project <path_to_project> --stdin
-2024/06/30 21:35:29 Graph built successfully
-Path-Finder Query Console: 
->FROM method_declaration AS md 
- WHERE md.getName() == "getPaneChanges"
- SELECT md, "query for pane changes layout methods"
-Executing query: FROM method_declaration AS md WHERE md.getName() == "getPaneChanges"
+# With debug output
+pathfinder scan --rules rules/ --project . --debug
 
-┌───┬──────────────────────────────────────────┬─────────────┬────────────────────┬────────────────┬──────────────────────────────────────────────────────────────┐
-│ # │ FILE                                     │ LINE NUMBER │ TYPE               │ NAME           │ CODE SNIPPET                                                 │
-├───┼──────────────────────────────────────────┼─────────────┼────────────────────┼────────────────┼──────────────────────────────────────────────────────────────┤
-│ 1 │ /Users/shiva/src/code-pathfinder/test-sr │         148 │ method_declaration │ getPaneChanges │ protected void getPaneChanges() throws ClassCastException {  │
-│   │ c/android/app/src/main/java/com/ivb/udac │             │                    │                │         mTwoPane = findViewById(R.id.movie_detail_container) │
-│   │ ity/movieListActivity.java               │             │                    │                │  != null;                                                    │
-│   │                                          │             │                    │                │     }                                                        │
-└───┴──────────────────────────────────────────┴─────────────┴────────────────────┴────────────────┴──────────────────────────────────────────────────────────────┘
-Path-Finder Query Console: 
->:quit
-Okay, Bye!
+# Fail on specific severities
+pathfinder scan --rules rules/ --project . --fail-on=critical,high
+```
+
+### CI Command (Machine-Readable)
+
+```bash
+# JSON output
+pathfinder ci --rules rules/ --project . --output json > results.json
+
+# CSV output
+pathfinder ci --rules rules/ --project . --output csv > results.csv
+
+# SARIF output (GitHub Code Scanning)
+pathfinder ci --rules rules/ --project . --output sarif > results.sarif
+
+# With failure control
+pathfinder ci --rules rules/ --project . --output json --fail-on=critical
+```
+
+## Output Formats
+
+### Text Output (Default for scan)
+
+```
+Code Pathfinder Security Scan
+
+Results:
+
+Critical Issues (1):
+
+  [critical] [Taint-Local] command-injection: Command Injection
+    CWE-78 | A1:2017
+
+    auth/login.py:127
+      > 125 |     user_input = request.form['username']
+        126 |     # Process input
+      > 127 |     os.system(f"echo {user_input}")
+
+    Flow: user_input (line 125) -> os.system (line 127)
+    Confidence: High | Detection: Intra-procedural taint analysis
+
+Summary:
+  1 findings across 10 rules
+  1 critical
+```
+
+### JSON Output
+
+```json
+{
+  "tool": {
+    "name": "Code Pathfinder",
+    "version": "0.0.25"
+  },
+  "scan": {
+    "target": "/path/to/project",
+    "rules_executed": 10
+  },
+  "results": [
+    {
+      "rule_id": "command-injection",
+      "severity": "critical",
+      "location": {
+        "file": "auth/login.py",
+        "line": 127
+      },
+      "detection": {
+        "type": "taint-local",
+        "source": {"line": 125, "variable": "user_input"},
+        "sink": {"line": 127, "call": "os.system"}
+      }
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "by_severity": {"critical": 1}
+  }
+}
+```
+
+### CSV Output
+
+```csv
+severity,confidence,rule_id,rule_name,cwe,owasp,file,line,column,function,message,detection_type,detection_scope,source_line,sink_line,tainted_var,sink_call
+critical,high,command-injection,Command Injection,CWE-78,A1:2017,auth/login.py,127,8,login,User input flows to shell,taint-local,local,125,127,user_input,os.system
+```
+
+### SARIF Output
+
+SARIF 2.1.0 compatible output for GitHub Code Scanning integration.
+
+```bash
+# Upload to GitHub Code Scanning
+gh api /repos/:owner/:repo/code-scanning/sarifs -F sarif=@results.sarif
+```
+
+## Verbosity Levels
+
+| Flag | Output |
+|------|--------|
+| (default) | Clean results only |
+| `--verbose` | Results + progress + statistics |
+| `--debug` | All output + timestamps |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (no findings, or findings without --fail-on match) |
+| 1 | Findings match --fail-on severities |
+| 2 | Configuration or execution error |
+
+### Examples
+
+```bash
+# Default: always exit 0
+pathfinder scan --rules rules/ --project .
+echo $?  # 0 even with findings
+
+# Fail on critical or high
+pathfinder scan --rules rules/ --project . --fail-on=critical,high
+echo $?  # 1 if critical/high found, 0 otherwise
+
+# Fail on any finding
+pathfinder scan --rules rules/ --project . --fail-on=critical,high,medium,low
 ```
 
 ## Acknowledgements
