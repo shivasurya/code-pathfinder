@@ -14,11 +14,13 @@
     padding: 28px 32px;
     margin: 40px auto;
     max-width: 920px;
+    max-height: 500px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     font-family: 'Courier New', 'Courier', monospace;
     font-size: 14px;
     line-height: 1.6;
     overflow-x: auto;
+    overflow-y: auto;
   }
 
   .console-pre {
@@ -124,6 +126,7 @@
   // Code Pathfinder Security Scan typing animation
   const output = document.getElementById('console-output');
   const cursor = document.getElementById('cursor');
+  const container = document.querySelector('.animated-console-container');
 
   const lines = [
     { text: '$ ', className: 'prompt', charDelay: 80 },
@@ -212,6 +215,11 @@
       span.textContent = text[charIndex];
       output.appendChild(span);
 
+      // Auto-scroll to bottom
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+
       charIndex++;
 
       // Type next character with some variance for natural feel
@@ -242,7 +250,6 @@
     threshold: 0.3 // Start when 30% of element is visible
   });
 
-  const container = document.querySelector('.animated-console-container');
   if (container) {
     observer.observe(container);
   }
