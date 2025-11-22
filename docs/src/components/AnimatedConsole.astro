@@ -198,8 +198,25 @@
 
   function typeCharacter() {
     if (lineIndex >= lines.length) {
-      // Animation complete - hide cursor
+      // Animation complete - hide cursor temporarily
       cursor.style.display = 'none';
+
+      // Restart animation after 5 seconds
+      setTimeout(() => {
+        // Clear output
+        output.innerHTML = '';
+        // Reset state
+        lineIndex = 0;
+        charIndex = 0;
+        // Show cursor
+        cursor.style.display = 'inline-block';
+        // Scroll to top
+        if (container) {
+          container.scrollTop = 0;
+        }
+        // Start animation again
+        setTimeout(typeCharacter, 500);
+      }, 5000);
       return;
     }
 
