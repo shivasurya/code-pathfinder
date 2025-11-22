@@ -23,6 +23,7 @@ hero:
 import { Card, CardGrid, Icon } from '@astrojs/starlight/components';
 import PostHogLayout from '../../layouts/PostHogLayout.astro';
 import { getCollection } from 'astro:content';
+import AnimatedConsole from '../../components/AnimatedConsole.astro';
 import '../../styles/motion-gradient.css';
 import '../../styles/blog-cards.css';
 import '../../styles/feature-cards.css';
@@ -41,20 +42,7 @@ export const latestPosts = [...allPosts]
 
 <div class="motion-gradient"></div>
 
-<div style="display: flex; justify-content: center;">
-```bash
-Code-PathFinder Console:
-> FROM method_declaration AS md
-  WHERE md.getVisibility() == "public" && md.getName() == "main"
-  SELECT md, "Listing all main methods"
-
-public static void main(String[] args) {
-    System.out.println("Set thy heart upon thy work,");
-    System.out.println("but never on its reward. - Bhagavad Gita, Chapter 2, Verse 47");
-}
-```
-
-</div>
+<AnimatedConsole />
 
 <br />
 <div style="text-align: center;">
