@@ -4,21 +4,67 @@
 ---
 
 <div class="animated-console-container">
-  <pre id="console-output" class="console-pre"></pre><span class="cursor" id="cursor"></span>
+  <div class="terminal-header">
+    <div class="terminal-buttons">
+      <span class="terminal-button red"></span>
+      <span class="terminal-button yellow"></span>
+      <span class="terminal-button green"></span>
+    </div>
+  </div>
+  <div class="terminal-body">
+    <pre id="console-output" class="console-pre"></pre><span class="cursor" id="cursor"></span>
+  </div>
 </div>
 
 <style>
   .animated-console-container {
     background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%);
     border-radius: 12px;
-    padding: 28px 32px;
     margin: 40px auto;
     max-width: 920px;
-    max-height: 500px;
+    height: 500px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     font-family: 'Courier New', 'Courier', monospace;
     font-size: 14px;
     line-height: 1.6;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .terminal-header {
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .terminal-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  .terminal-button {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .terminal-button.red {
+    background: #ff5f56;
+  }
+
+  .terminal-button.yellow {
+    background: #ffbd2e;
+  }
+
+  .terminal-button.green {
+    background: #27c93f;
+  }
+
+  .terminal-body {
+    padding: 20px 32px 28px 32px;
+    flex: 1;
     overflow-x: auto;
     overflow-y: auto;
   }
@@ -126,7 +172,7 @@
   // Code Pathfinder Security Scan typing animation
   const output = document.getElementById('console-output');
   const cursor = document.getElementById('cursor');
-  const container = document.querySelector('.animated-console-container');
+  const container = document.querySelector('.terminal-body');
 
   const lines = [
     { text: '$ ', className: 'prompt', charDelay: 80 },
@@ -254,6 +300,7 @@
   }
 
   // Start animation when console becomes visible
+  const consoleContainer = document.querySelector('.animated-console-container');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting && !hasStarted) {
@@ -267,7 +314,7 @@
     threshold: 0.3 // Start when 30% of element is visible
   });
 
-  if (container) {
-    observer.observe(container);
+  if (consoleContainer) {
+    observer.observe(consoleContainer);
   }
 </script>
