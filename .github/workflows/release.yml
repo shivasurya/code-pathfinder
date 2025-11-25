@@ -21,6 +21,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for Linux AMD64
         env:
@@ -51,6 +53,49 @@ jobs:
             sourcecode-parser/pathfinder-linux-amd64.sha256sum.txt
             sourcecode-parser/pathfinder-linux-amd64.tar.gz
 
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm  # Native ARM64 runner (public repos only)
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+
+      - name: Build for Linux ARM64
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 1  # Required for tree-sitter
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
+        run: |
+          cd sourcecode-parser
+          gitCommit=$(git describe --tags)
+          projectVersion=$(cat VERSION)
+          posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-arm64 .
+          chmod +x pathfinder-linux-arm64
+
+      - name: Calculate SHA256
+        run: |
+          cd sourcecode-parser
+          sha256sum pathfinder-linux-arm64 > pathfinder-linux-arm64.sha256sum.txt
+          cp pathfinder-linux-arm64 pathfinder
+          tar -czvf pathfinder-linux-arm64.tar.gz pathfinder
+
+      - name: Upload Linux ARM64 Release Asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathfinder-linux-arm64
+          path: |
+            sourcecode-parser/pathfinder-linux-arm64
+            sourcecode-parser/pathfinder-linux-arm64.sha256sum.txt
+            sourcecode-parser/pathfinder-linux-arm64.tar.gz
+
   build-windows:
     runs-on: windows-latest
     steps:
@@ -61,6 +106,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for Windows AMD64
         env:
@@ -100,6 +147,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for macOS ARM64
         env:
@@ -130,8 +179,51 @@ jobs:
             sourcecode-parser/pathfinder-darwin-arm64.sha256sum.txt
             sourcecode-parser/pathfinder-darwin-arm64.tar.gz
 
+  build-macos-intel:
+    runs-on: macos-13  # Last Intel-based macOS runner
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+
+      - name: Build for macOS AMD64
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_ENABLED: 1  # Required for tree-sitter
+          POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
+        run: |
+          cd sourcecode-parser
+          gitCommit=$(git describe --tags)
+          projectVersion=$(cat VERSION)
+          posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-amd64 .
+          chmod +x pathfinder-darwin-amd64
+
+      - name: Calculate SHA256
+        run: |
+          cd sourcecode-parser
+          shasum -a 256 pathfinder-darwin-amd64 > pathfinder-darwin-amd64.sha256sum.txt
+          cp pathfinder-darwin-amd64 pathfinder
+          tar -czvf pathfinder-darwin-amd64.tar.gz pathfinder
+
+      - name: Upload macOS Intel Release Asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathfinder-darwin-amd64
+          path: |
+            sourcecode-parser/pathfinder-darwin-amd64
+            sourcecode-parser/pathfinder-darwin-amd64.sha256sum.txt
+            sourcecode-parser/pathfinder-darwin-amd64.tar.gz
+
   release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-linux, build-linux-arm64, build-windows, build-macos, build-macos-intel]
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux Release Asset
@@ -139,15 +231,25 @@ jobs:
         with:
           name: pathfinder-linux-amd64
 
+      - name: Download Linux ARM64 Release Asset
+        uses: actions/download-artifact@v4.1.7
+        with:
+          name: pathfinder-linux-arm64
+
       - name: Download Windows Release Asset
         uses: actions/download-artifact@v4.1.7
         with:
           name: pathfinder-windows-amd64
 
-      - name: Download Windows Release Asset
+      - name: Download macOS ARM64 Release Asset
         uses: actions/download-artifact@v4.1.7
         with:
           name: pathfinder-darwin-arm64
+
+      - name: Download macOS Intel Release Asset
+        uses: actions/download-artifact@v4.1.7
+        with:
+          name: pathfinder-darwin-amd64
 
       - name: Create Release
         id: create_release
@@ -178,6 +280,26 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./pathfinder-linux-amd64.tar.gz
           asset_name: pathfinder-linux-amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Linux ARM64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-linux-arm64
+          asset_name: pathfinder-linux-arm64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux ARM64 tar.gz Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-linux-arm64.tar.gz
+          asset_name: pathfinder-linux-arm64.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload Windows Release Asset
@@ -220,6 +342,26 @@ jobs:
           asset_name: pathfinder-darwin-arm64.tar.gz
           asset_content_type: application/gzip
 
+      - name: Upload macOS Intel Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-darwin-amd64
+          asset_name: pathfinder-darwin-amd64
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS Intel tar.gz Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-darwin-amd64.tar.gz
+          asset_name: pathfinder-darwin-amd64.tar.gz
+          asset_content_type: application/gzip
+
       - name: Upload Linux SHA256 Checksum
         uses: actions/upload-release-asset@v1
         env:
@@ -248,4 +390,24 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./pathfinder-darwin-arm64.sha256sum.txt
           asset_name: pathfinder-darwin-arm64.sha256sum.txt
+          asset_content_type: text/plain
+
+      - name: Upload Linux ARM64 SHA256 Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-linux-arm64.sha256sum.txt
+          asset_name: pathfinder-linux-arm64.sha256sum.txt
+          asset_content_type: text/plain
+
+      - name: Upload macOS Intel SHA256 Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./pathfinder-darwin-amd64.sha256sum.txt
+          asset_name: pathfinder-darwin-amd64.sha256sum.txt
           asset_content_type: text/plain
