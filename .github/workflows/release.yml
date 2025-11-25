@@ -25,6 +25,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for Linux AMD64
         env:
@@ -65,6 +67,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for Linux ARM64
         env:
@@ -106,6 +110,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for Windows AMD64
         env:
@@ -145,6 +151,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for macOS ARM64
         env:
@@ -185,6 +193,8 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
 
       - name: Build for macOS AMD64
         env:
