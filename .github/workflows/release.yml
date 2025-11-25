@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - '*'
-  pull_request:
-    paths:
-      - '.github/workflows/release.yml'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -229,7 +225,6 @@ jobs:
   release:
     needs: [build-linux, build-linux-arm64, build-windows, build-macos, build-macos-intel]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download Linux Release Asset
         uses: actions/download-artifact@v4.1.7
