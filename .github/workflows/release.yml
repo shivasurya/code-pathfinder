@@ -411,12 +411,3 @@ jobs:
           asset_path: ./pathfinder-darwin-amd64.sha256sum.txt
           asset_name: pathfinder-darwin-amd64.sha256sum.txt
           asset_content_type: text/plain
-
-      # Trigger Homebrew tap formula update
-      - name: Trigger Homebrew tap update
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          repository: shivasurya/homebrew-tap
-          event-type: new-release
-          client-payload: '{"version": "${{ github.ref_name }}"}'
