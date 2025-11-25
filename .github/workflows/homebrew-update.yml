@@ -1,0 +1,22 @@
+name: Homebrew Tap Update
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  trigger-homebrew-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Homebrew tap formula update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          repository: shivasurya/homebrew-tap
+          event-type: new-release
+          client-payload: '{"version": "${{ github.event.release.tag_name }}"}'
+
+      - name: Log trigger
+        run: |
+          echo "Triggered homebrew-tap update for version: ${{ github.event.release.tag_name }}"
+          echo "Release URL: ${{ github.event.release.html_url }}"
