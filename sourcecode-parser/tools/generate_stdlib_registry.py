@@ -472,9 +472,10 @@ def main():
 
     print(f"{'='*60}\n")
 
-    # Platform-specific modules that are expected to fail on Linux/macOS
-    WINDOWS_ONLY_MODULES = {'msvcrt', 'nt', 'winreg', 'winsound', '_winapi'}
-    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES
+    # Platform-specific modules that are expected to fail on certain platforms
+    WINDOWS_ONLY_MODULES = {'msvcrt', 'nt', 'winreg', 'winsound', '_winapi', 'msilib'}
+    UNIX_SPECIFIC_MODULES = {'nis'}  # Network Information Service (may not be available on all systems)
+    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES | UNIX_SPECIFIC_MODULES
 
     # Check if any non-platform-specific modules failed
     unexpected_failures = [m for m in failed if m not in PLATFORM_SPECIFIC_MODULES]
