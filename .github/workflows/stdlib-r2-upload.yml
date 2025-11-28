@@ -1,0 +1,104 @@
+name: Upload Stdlib Registries to R2
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      force_upload:
+        description: 'Force upload even if not a release'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  upload-stdlib-registries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Verify Python installations
+        run: |
+          echo "Verifying Python installations..."
+          python3.11 --version
+          python3.12 --version
+          python3.14 --version
+
+      - name: Configure AWS CLI for R2
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Generate and upload stdlib registries
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          cd sourcecode-parser/tools
+          chmod +x upload_to_r2.sh
+          ./upload_to_r2.sh
+
+      - name: Verify uploads
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          echo "Verifying uploaded files..."
+          for version in 3.11 3.12 3.14; do
+            echo "Checking Python $version manifest..."
+            aws s3 ls "s3://code-pathfinder-assets/registries/python${version}/stdlib/v1/manifest.json" \
+              --endpoint-url "$R2_ENDPOINT" || echo "Warning: manifest.json not found for Python $version"
+          done
+
+      - name: Test public accessibility
+        run: |
+          echo "Testing public URLs..."
+          for version in 3.11 3.12 3.14; do
+            URL="https://assets.codepathfinder.dev/registries/python${version}/stdlib/v1/manifest.json"
+            echo "Testing: $URL"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "✓ Python $version manifest is publicly accessible"
+            else
+              echo "✗ Python $version manifest returned HTTP $STATUS"
+            fi
+          done
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "Stdlib Registry Upload Complete"
+          echo "========================================="
+          echo ""
+          echo "Registries are now available at:"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.11/stdlib/v1/manifest.json"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.12/stdlib/v1/manifest.json"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.14/stdlib/v1/manifest.json"
+          echo ""
+          echo "These will be used by code-pathfinder for Python stdlib type inference."

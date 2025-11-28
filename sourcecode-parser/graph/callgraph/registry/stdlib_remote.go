@@ -19,7 +19,7 @@ import (
 // StdlibRegistryRemote loads Python stdlib registries from a remote CDN.
 // It uses lazy loading (downloads modules on-demand) and in-memory caching.
 type StdlibRegistryRemote struct {
-	BaseURL       string                        // CDN base URL (e.g., "https://codepathfinder.dev/registries")
+	BaseURL       string                        // CDN base URL (e.g., "https://assets.codepathfinder.dev/registries")
 	PythonVersion string                        // Python version (e.g., "3.14")
 	Manifest      *core.Manifest                // Loaded manifest
 	ModuleCache   map[string]*core.StdlibModule // In-memory cache of loaded modules
@@ -30,7 +30,7 @@ type StdlibRegistryRemote struct {
 // NewStdlibRegistryRemote creates a new remote registry loader.
 //
 // Parameters:
-//   - baseURL: CDN base URL (e.g., "https://codepathfinder.dev/registries")
+//   - baseURL: CDN base URL (e.g., "https://assets.codepathfinder.dev/registries")
 //   - pythonVersion: Python version (e.g., "3.14")
 //
 // Returns:
