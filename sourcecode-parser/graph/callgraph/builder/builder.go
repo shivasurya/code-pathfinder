@@ -68,7 +68,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 	// Create remote registry loader
 	remoteLoader := cgregistry.NewStdlibRegistryRemote(
-		"https://codepathfinder.dev/assets/registries",
+		"https://assets.codepathfinder.dev/registries",
 		pythonVersion,
 	)
 

@@ -295,7 +295,7 @@ def introspect_module(module_name: str) -> Optional[Dict[str, Any]]:
 
 def generate_manifest(output_dir: Path, python_version: tuple, modules: List[str]) -> Dict[str, Any]:
     """Generate manifest.json with registry metadata."""
-    base_url = f"https://codepathfinder.dev/assets/registries/python{python_version[0]}.{python_version[1]}/stdlib/v1"
+    base_url = f"https://assets.codepathfinder.dev/registries/python{python_version[0]}.{python_version[1]}/stdlib/v1"
 
     manifest = {
         "schema_version": "1.0.0",
