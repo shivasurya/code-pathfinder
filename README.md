@@ -9,6 +9,7 @@
 [![npm version](https://img.shields.io/npm/v/@codepathfinder/secureflow-cli?logo=npm)](https://www.npmjs.com/package/@codepathfinder/secureflow-cli)
 [![Open VSX](https://img.shields.io/open-vsx/v/codepathfinder/secureflow?label=Open%20VSX&logo=vscodium)](https://open-vsx.org/extension/codepathfinder/secureflow)
 [![AGPL-3.0 License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shivasurya/code-pathfinder)
 </div>
 
 # Code Pathfinder 
