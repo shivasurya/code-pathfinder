@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Building the Binary
 ```bash
-cd sourcecode-parser
+cd sast-engine
 gradle buildGo
 ```
 The binary is output to `build/go/pathfinder`. The build automatically cleans previous builds first.
@@ -65,7 +65,7 @@ Output Formats (JSON, SARIF, Table)
 
 ### Core Packages
 
-**sourcecode-parser/graph/** - Code graph construction and management
+**sast-engine/graph/** - Code graph construction and management
 - `initialize.go`: Multi-threaded file parsing with 5 workers
 - `parser.go`: AST traversal orchestrator (language-agnostic entry point)
 - `parser_java.go`: Java-specific node parsing
@@ -73,21 +73,21 @@ Output Formats (JSON, SARIF, Table)
 - `query.go`: Query execution engine with Cartesian product optimization
 - `utils.go`: SHA256-based ID generation, file operations
 
-**sourcecode-parser/antlr/** - Query language parsing
+**sast-engine/antlr/** - Query language parsing
 - `Query.g4`: ANTLR grammar for PathFinder query language
 - `listener_impl.go`: Semantic analysis of parsed queries
 
-**sourcecode-parser/cmd/** - CLI interface
+**sast-engine/cmd/** - CLI interface
 - `query.go`: Interactive/batch query execution with pagination
 - `ci.go`: CI/CD integration with rule loading from codepathfinder.dev
 - `scan.go`: Scan project against local ruleset
 
-**sourcecode-parser/model/** - AST data models
+**sast-engine/model/** - AST data models
 - `stmt.go`: Statement models (if/while/for/blocks)
 - `expr.go`: Expression models
 - `location.go`: Source location tracking for lazy loading
 
-**sourcecode-parser/analytics/** - Optional PostHog telemetry
+**sast-engine/analytics/** - Optional PostHog telemetry
 
 ## Critical Design Patterns
 
@@ -398,7 +398,7 @@ This counteracts non-determinism from multi-threaded parsing.
 ## Release and Versioning
 
 ### Version Management
-Version is stored in `sourcecode-parser/VERSION` and injected at build time:
+Version is stored in `sast-engine/VERSION` and injected at build time:
 ```gradle
 // In build.gradle
 commandLine 'go', 'build', '-ldflags',

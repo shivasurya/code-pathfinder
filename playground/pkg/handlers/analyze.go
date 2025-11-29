@@ -9,8 +9,8 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/playground/pkg/models"
 	"github.com/shivasurya/code-pathfinder/playground/pkg/utils"
-	parser "github.com/shivasurya/code-pathfinder/sourcecode-parser/antlr"
-	"github.com/shivasurya/code-pathfinder/sourcecode-parser/graph"
+	parser "github.com/shivasurya/code-pathfinder/sast-engine/antlr"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 )
 
 const (

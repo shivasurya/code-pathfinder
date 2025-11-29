@@ -7,7 +7,7 @@ on:
       - master
   pull_request:
     paths:
-      - 'sourcecode-parser/**'
+      - 'sast-engine/**'
       - 'playground/**'
       - 'pathfinder-rules/**'
 
@@ -33,12 +33,12 @@ jobs:
 
       - name: Get dependencies
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           go mod download
 
       - name: Test
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           go test -p 2 -v ./... -coverprofile=coverage.out -covermode=atomic
 
       - name: Upload coverage reports to Codecov
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sourcecode-parser
+        working-directory: sast-engine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -61,4 +61,4 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.5.0
-          working-directory: sourcecode-parser
+          working-directory: sast-engine

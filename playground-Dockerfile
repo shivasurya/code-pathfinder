@@ -4,8 +4,8 @@ FROM cgr.dev/chainguard/go:latest as builder
 # Set working directory
 WORKDIR /build
 
-# First, copy the sourcecode-parser module
-COPY ./sourcecode-parser /build/sourcecode-parser
+# First, copy the sast-engine module
+COPY ./sast-engine /build/sast-engine
 
 # Copy the playground module
 COPY ./playground /build/playground
