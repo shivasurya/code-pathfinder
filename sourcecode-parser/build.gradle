@@ -22,12 +22,6 @@ task buildGo(type: Exec, dependsOn: 'cleanGo') {
     commandLine 'go', 'build', '-ldflags', "-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${analyticskey}", '-o', "${outputDir}/pathfinder", '.'
 }
 
-// gradle run --console=plain 
-task runGo(type: Exec, dependsOn: build) {
-    commandLine "${buildDir}/go/pathfinder", '--project', '../test-src/android', '--stdin', 'true'
-    standardInput = System.in
-}
-
 task testGo(type: Exec) {
     commandLine 'go', 'test', './...'
 }

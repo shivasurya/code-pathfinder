@@ -295,7 +295,7 @@ func TestExtractImports_WithTestFixtures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fixturePath := filepath.Join("..", "..", "..", "test-src", "python", "imports_test", tt.fixtureFile)
+			fixturePath := filepath.Join("..", "..", "..", "test-fixtures", "python", "imports_test", tt.fixtureFile)
 
 			// Check if fixture exists
 			if _, err := os.Stat(fixturePath); os.IsNotExist(err) {
