@@ -256,7 +256,7 @@ def process():
 
 func TestExtractCallSites_WithTestFixture(t *testing.T) {
 	// Create a test fixture
-	fixturePath := filepath.Join("..", "..", "..", "test-src", "python", "callsites_test", "simple_calls.py")
+	fixturePath := filepath.Join("..", "..", "..", "test-fixtures", "python", "callsites_test", "simple_calls.py")
 
 	// Check if fixture exists
 	if _, err := os.Stat(fixturePath); os.IsNotExist(err) {

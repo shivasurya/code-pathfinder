@@ -39,7 +39,7 @@ $ secureflow scan ./path/to/project
 ### Code-Pathfinder CLI
 
 ```bash
-docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest ci --project /src/code-pathfinder/test-src --ruleset cpf/java
+docker run --rm -v "./src:/src" shivasurya/code-pathfinder:stable-latest ci --project /src/your-project --ruleset cpf/java
 ```
 
 ## :book: Documentation

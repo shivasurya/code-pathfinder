@@ -198,7 +198,7 @@ from ..config import settings
 func TestExtractImports_WithTestFixture_RelativeImports(t *testing.T) {
 	// Build module registry for the test fixture - use absolute path from start
 	// Note: This file is now in resolution/ subpackage, so we need one extra ..
-	projectRoot := filepath.Join("..", "..", "..", "..", "test-src", "python", "relative_imports_test")
+	projectRoot := filepath.Join("..", "..", "..", "test-fixtures", "python", "relative_imports_test")
 	absProjectRoot, err := filepath.Abs(projectRoot)
 	require.NoError(t, err)
 

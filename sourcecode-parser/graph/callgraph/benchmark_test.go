@@ -15,7 +15,7 @@ import (
 // These paths are used for performance testing against real-world codebases.
 const (
 	// Small project: ~5 Python files, simple imports.
-	smallProjectPath = "../../../test-src/python/simple_project"
+	smallProjectPath = "../test-fixtures/python/simple_project"
 
 	// Medium project: label-studio (~1000 Python files, complex imports).
 	mediumProjectPath = "/Users/shiva/src/label-studio/label_studio"
