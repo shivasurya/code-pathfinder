@@ -29,7 +29,7 @@ jobs:
       - name: Compute Version and Commit Info
         id: cpfinfo
         run: |
-          VERSION=$(cat sourcecode-parser/VERSION)
+          VERSION=$(cat sast-engine/VERSION)
           COMMIT=$(git describe --tags)
           echo $VERSION
           echo $COMMIT
@@ -40,11 +40,11 @@ jobs:
         id: vars
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=$(cat sourcecode-parser/VERSION)
+            VERSION=$(cat sast-engine/VERSION)
             echo "tag1=v${VERSION}" >> $GITHUB_OUTPUT
             echo "tag2=stable-latest" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            VERSION=$(cat sourcecode-parser/VERSION)
+            VERSION=$(cat sast-engine/VERSION)
             echo "tag1=dev-${VERSION}" >> $GITHUB_OUTPUT
             echo "tag2=nightly-latest" >> $GITHUB_OUTPUT
           else

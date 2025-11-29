@@ -55,7 +55,7 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          cd sourcecode-parser/tools
+          cd sast-engine/tools
           chmod +x upload_to_r2.sh
           ./upload_to_r2.sh
 

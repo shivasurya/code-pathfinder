@@ -1,2 +1,2 @@
 ignore:
-  - "sourcecode-parser/antlr/"  # ignore folders and all its contents
+  - "sast-engine/antlr/"  # ignore folders and all its contents

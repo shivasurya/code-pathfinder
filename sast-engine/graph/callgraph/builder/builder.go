@@ -1,0 +1,1012 @@
+package builder
+
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
+	cgregistry "github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
+)
+
+// BuildCallGraph constructs the complete call graph for a Python project.
+// This is Pass 3 of the 3-pass algorithm:
+//   - Pass 1: BuildModuleRegistry - map files to modules
+//   - Pass 2: ExtractImports + ExtractCallSites - parse imports and calls
+//   - Pass 3: BuildCallGraph - resolve calls and build graph
+//
+// Algorithm:
+//  1. For each Python file in the project:
+//     a. Extract imports to build ImportMap
+//     b. Extract call sites from AST
+//     c. Extract function definitions from main graph
+//  2. For each call site:
+//     a. Resolve target name using ImportMap
+//     b. Find target function definition in registry
+//     c. Add edge from caller to callee
+//     d. Store detailed call site information
+//
+// Parameters:
+//   - codeGraph: the existing code graph with parsed AST nodes
+//   - registry: module registry mapping files to modules
+//   - projectRoot: absolute path to project root
+//
+// Returns:
+//   - CallGraph: complete call graph with edges and call sites
+//   - error: if any step fails
+//
+// Example:
+//   Given:
+//     File: myapp/views.py
+//       def get_user():
+//           sanitize(data)  # call to myapp.utils.sanitize
+//
+//   Creates:
+//     edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
+//     reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
+//     callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
+func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string, logger *output.Logger) (*core.CallGraph, error) {
+	callGraph := core.NewCallGraph()
+
+	// Initialize import map cache for performance
+	// This avoids re-parsing imports from the same file multiple times
+	importCache := NewImportMapCache()
+
+	// Initialize type inference engine
+	typeEngine := resolution.NewTypeInferenceEngine(registry)
+	typeEngine.Builtins = cgregistry.NewBuiltinRegistry()
+
+	// Phase 3 Task 12: Initialize attribute registry for tracking class attributes
+	typeEngine.Attributes = cgregistry.NewAttributeRegistry()
+
+	// PR #3: Detect Python version and load stdlib registry from remote CDN
+	pythonVersion := DetectPythonVersion(projectRoot)
+	logger.Debug("Detected Python version: %s", pythonVersion)
+
+	// Create remote registry loader
+	remoteLoader := cgregistry.NewStdlibRegistryRemote(
+		"https://assets.codepathfinder.dev/registries",
+		pythonVersion,
+	)
+
+	// Load manifest from CDN
+	err := remoteLoader.LoadManifest(logger)
+	if err != nil {
+		logger.Warning("Failed to load stdlib registry from CDN: %v", err)
+		// Continue without stdlib resolution - not a fatal error
+	} else {
+		// Create adapter to satisfy existing StdlibRegistry interface
+		stdlibRegistry := &core.StdlibRegistry{
+			Modules:  make(map[string]*core.StdlibModule),
+			Manifest: remoteLoader.Manifest,
+		}
+
+		// The remote loader will lazy-load modules as needed
+		// We store a reference to it for on-demand loading
+		typeEngine.StdlibRegistry = stdlibRegistry
+		typeEngine.StdlibRemote = remoteLoader
+
+		logger.Statistic("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
+	}
+
+	// First, index all function definitions from the code graph
+	// This builds the Functions map for quick lookup
+	indexFunctions(codeGraph, callGraph, registry)
+
+	// Phase 2 Task 9: Extract return types from all functions (first pass)
+	allReturnStatements := make([]*resolution.ReturnStatement, 0)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := ReadFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract return types
+		returns, err := resolution.ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
+		if err != nil {
+			continue
+		}
+
+		allReturnStatements = append(allReturnStatements, returns...)
+	}
+
+	// Merge return types and add to engine
+	mergedReturns := resolution.MergeReturnTypes(allReturnStatements)
+	typeEngine.AddReturnTypesToEngine(mergedReturns)
+
+	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
+	for _, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := ReadFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract variable assignments for type inference
+		_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+	}
+
+	// Phase 2 Task 8: Resolve call: placeholders with return types
+	// This MUST happen before we start resolving call sites!
+	typeEngine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Phase 3 Task 12: Extract class attributes (third pass)
+	for modulePath, filePath := range registry.Modules {
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		sourceCode, err := ReadFileBytes(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Extract class attributes for self.attr tracking
+		_ = extraction.ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
+	}
+
+	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
+	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
+
+	// Process each Python file in the project (fourth pass for call site resolution)
+	for modulePath, filePath := range registry.Modules {
+		// Skip non-Python files
+		if !strings.HasSuffix(filePath, ".py") {
+			continue
+		}
+
+		// Read source code for parsing
+		sourceCode, err := ReadFileBytes(filePath)
+		if err != nil {
+			// Skip files we can't read
+			continue
+		}
+
+		// Extract imports using cache (avoids re-parsing if already cached)
+		importMap, err := importCache.GetOrExtract(filePath, sourceCode, registry)
+		if err != nil {
+			// Skip files with import errors
+			continue
+		}
+
+		// Extract all call sites from this file
+		callSites, err := resolution.ExtractCallSites(filePath, sourceCode, importMap)
+		if err != nil {
+			// Skip files with call site extraction errors
+			continue
+		}
+
+		// Get all function definitions in this file
+		fileFunctions := getFunctionsInFile(codeGraph, filePath)
+
+		// Process each call site to resolve targets and build edges
+		for _, callSite := range callSites {
+			// Find the caller function containing this call site
+			callerFQN := findContainingFunction(callSite.Location, fileFunctions, modulePath)
+			if callerFQN == "" {
+				// Call at module level - use module name as caller
+				callerFQN = modulePath
+			}
+
+			// Resolve the call target to a fully qualified name
+			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
+
+			// Update call site with resolution information
+			callSite.TargetFQN = targetFQN
+			callSite.Resolved = resolved
+
+			// Phase 2 Task 10: Populate type inference metadata
+			if typeInfo != nil {
+				callSite.ResolvedViaTypeInference = true
+				callSite.InferredType = typeInfo.TypeFQN
+				callSite.TypeConfidence = typeInfo.Confidence
+				callSite.TypeSource = typeInfo.Source
+			}
+
+			// If resolution failed, categorize the failure reason
+			if !resolved {
+				callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+			}
+
+			// Add call site to graph (dereference pointer)
+			callGraph.AddCallSite(callerFQN, *callSite)
+
+			// Add edge if we successfully resolved the target
+			if resolved {
+				callGraph.AddEdge(callerFQN, targetFQN)
+			}
+		}
+	}
+
+	// Phase 3 Task 12: Print attribute failure analysis
+	resolution.PrintAttributeFailureStats()
+
+	// Pass 5: Generate taint summaries for all functions
+	logger.Progress("Pass 5: Generating taint summaries...")
+	GenerateTaintSummaries(callGraph, codeGraph, registry)
+	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
+
+	return callGraph, nil
+}
+
+// IndexFunctions builds the Functions map in the call graph.
+// Extracts all function definitions from the code graph and maps them by FQN.
+//
+// Parameters:
+//   - codeGraph: the parsed code graph
+//   - callGraph: the call graph being built
+//   - registry: module registry for resolving file paths to modules
+func IndexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
+	indexFunctions(codeGraph, callGraph, registry)
+}
+
+// indexFunctions is the internal implementation of IndexFunctions.
+func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
+	for _, node := range codeGraph.Nodes {
+		// Only index function/method definitions
+		if node.Type != "method_declaration" && node.Type != "function_definition" {
+			continue
+		}
+
+		// Get the module path for this function's file
+		modulePath, ok := registry.FileToModule[node.File]
+		if !ok {
+			continue
+		}
+
+		// Build fully qualified name: module.function
+		fqn := modulePath + "." + node.Name
+		callGraph.Functions[fqn] = node
+	}
+}
+
+// GetFunctionsInFile returns all function definitions in a specific file.
+//
+// Parameters:
+//   - codeGraph: the parsed code graph
+//   - filePath: absolute path to the file
+//
+// Returns:
+//   - List of function/method nodes in the file, sorted by line number
+func GetFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.Node {
+	return getFunctionsInFile(codeGraph, filePath)
+}
+
+// getFunctionsInFile is the internal implementation of GetFunctionsInFile.
+func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.Node {
+	var functions []*graph.Node
+
+	for _, node := range codeGraph.Nodes {
+		if node.File == filePath &&
+			(node.Type == "method_declaration" || node.Type == "function_definition") {
+			functions = append(functions, node)
+		}
+	}
+
+	return functions
+}
+
+// FindContainingFunction finds the function that contains a given call site location.
+// Uses line numbers to determine which function a call belongs to.
+//
+// Algorithm:
+//  1. Iterate through all functions in the file
+//  2. Find function with the highest line number that's still <= call line
+//  3. Return the FQN of that function
+//
+// Parameters:
+//   - location: source location of the call site
+//   - functions: all function definitions in the file
+//   - modulePath: module path of the file
+//
+// Returns:
+//   - Fully qualified name of the containing function, or empty if not found
+func FindContainingFunction(location core.Location, functions []*graph.Node, modulePath string) string {
+	return findContainingFunction(location, functions, modulePath)
+}
+
+// findContainingFunction is the internal implementation of FindContainingFunction.
+func findContainingFunction(location core.Location, functions []*graph.Node, modulePath string) string {
+	// In Python, module-level code has no indentation (column == 1)
+	// If the call site is at column 1, it's module-level, not inside any function
+	if location.Column == 1 {
+		return ""
+	}
+
+	var bestMatch *graph.Node
+	var bestLine uint32
+
+	for _, fn := range functions {
+		// Check if call site is after this function definition
+		if uint32(location.Line) >= fn.LineNumber {
+			// Keep track of the closest preceding function
+			if bestMatch == nil || fn.LineNumber > bestLine {
+				bestMatch = fn
+				bestLine = fn.LineNumber
+			}
+		}
+	}
+
+	if bestMatch != nil {
+		return modulePath + "." + bestMatch.Name
+	}
+
+	return ""
+}
+
+// categorizeResolutionFailure determines why a call target failed to resolve.
+// This enables diagnostic reporting to understand resolution gaps.
+//
+// Categories:
+//   - "external_framework" - Known external frameworks (Django, REST, pytest, stdlib)
+//   - "orm_pattern" - Django ORM patterns (Model.objects.*, queryset.*)
+//   - "attribute_chain" - Method calls on objects/return values
+//   - "variable_method" - Method calls that appear to be on variables
+//   - "super_call" - Calls via super() mechanism
+//   - "not_in_imports" - Simple name not found in imports
+//   - "unknown" - Other unresolved patterns
+//
+// Parameters:
+//   - target: original call target string (e.g., "models.ForeignKey")
+//   - targetFQN: resolved fully qualified name (e.g., "django.db.models.ForeignKey")
+//
+// Returns:
+//   - category string describing the failure reason
+func categorizeResolutionFailure(target, targetFQN string) string {
+	// Check for external frameworks (common patterns)
+	if strings.HasPrefix(targetFQN, "django.") ||
+		strings.HasPrefix(targetFQN, "rest_framework.") ||
+		strings.HasPrefix(targetFQN, "pytest.") ||
+		strings.HasPrefix(targetFQN, "unittest.") ||
+		strings.HasPrefix(targetFQN, "json.") ||
+		strings.HasPrefix(targetFQN, "logging.") ||
+		strings.HasPrefix(targetFQN, "os.") ||
+		strings.HasPrefix(targetFQN, "sys.") ||
+		strings.HasPrefix(targetFQN, "re.") ||
+		strings.HasPrefix(targetFQN, "pathlib.") ||
+		strings.HasPrefix(targetFQN, "collections.") ||
+		strings.HasPrefix(targetFQN, "datetime.") {
+		return "external_framework"
+	}
+
+	// Check for Django ORM patterns
+	if strings.Contains(target, ".objects.") ||
+		strings.HasSuffix(target, ".objects") ||
+		(strings.Contains(target, ".") && (strings.HasSuffix(target, ".filter") ||
+			strings.HasSuffix(target, ".get") ||
+			strings.HasSuffix(target, ".create") ||
+			strings.HasSuffix(target, ".update") ||
+			strings.HasSuffix(target, ".delete") ||
+			strings.HasSuffix(target, ".all") ||
+			strings.HasSuffix(target, ".first") ||
+			strings.HasSuffix(target, ".last") ||
+			strings.HasSuffix(target, ".count") ||
+			strings.HasSuffix(target, ".exists"))) {
+		return "orm_pattern"
+	}
+
+	// Check for super() calls
+	if strings.HasPrefix(target, "super(") || strings.HasPrefix(target, "super.") {
+		return "super_call"
+	}
+
+	// Check for attribute chains (has dots, looks like obj.method())
+	// Heuristic: lowercase first component likely means variable/object
+	if dotIndex := strings.Index(target, "."); dotIndex != -1 {
+		firstComponent := target[:dotIndex]
+		// If starts with lowercase and not a known module pattern, likely attribute chain
+		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
+			// Could be variable method or attribute chain
+			// Check common variable-like patterns
+			if firstComponent == "self" || firstComponent == "cls" ||
+				firstComponent == "request" || firstComponent == "response" ||
+				firstComponent == "queryset" || firstComponent == "user" ||
+				firstComponent == "obj" || firstComponent == "value" ||
+				firstComponent == "data" || firstComponent == "result" {
+				return "variable_method"
+			}
+			return "attribute_chain"
+		}
+	}
+
+	// Simple name (no dots) - not in imports
+	if !strings.Contains(target, ".") {
+		return "not_in_imports"
+	}
+
+	// Everything else
+	return "unknown"
+}
+
+// Python built-in functions that should not be resolved as module functions.
+var pythonBuiltins = map[string]bool{
+	"eval":       true,
+	"exec":       true,
+	"input":      true,
+	"raw_input":  true,
+	"compile":    true,
+	"__import__": true,
+}
+
+// ResolveCallTarget resolves a call target name to a fully qualified name.
+// This is the core resolution logic that handles:
+//   - Direct function calls: sanitize() → myapp.utils.sanitize
+//   - Method calls: obj.method() → (unresolved, needs type inference)
+//   - Imported functions: from utils import sanitize; sanitize() → myapp.utils.sanitize
+//   - Qualified calls: utils.sanitize() → myapp.utils.sanitize
+//
+// Algorithm:
+//  1. Check if target is a simple name (no dots)
+//     a. Look up in import map
+//     b. If found, return FQN from import
+//     c. If not found, try to find in same module
+//  2. If target has dots (qualified name)
+//     a. Split into base and rest
+//     b. Resolve base using import map
+//     c. Append rest to get full FQN
+//  3. If all else fails, check if it exists in the registry
+//
+// Parameters:
+//   - target: the call target name (e.g., "sanitize", "utils.sanitize", "obj.method")
+//   - importMap: import mappings for the current file
+//   - registry: module registry for validation
+//   - currentModule: the module containing this call
+//   - codeGraph: the parsed code graph for validation
+//   - typeEngine: type inference engine
+//   - callerFQN: fully qualified name of the calling function
+//   - callGraph: the call graph being built
+//
+// Returns:
+//   - Fully qualified name of the target
+//   - Boolean indicating if resolution was successful
+//   - TypeInfo if resolved via type inference
+//
+// Examples:
+//   target="sanitize", imports={"sanitize": "myapp.utils.sanitize"}
+//     → "myapp.utils.sanitize", true, nil
+//
+//   target="utils.sanitize", imports={"utils": "myapp.utils"}
+//     → "myapp.utils.sanitize", true, nil
+//
+//   target="obj.method", imports={}
+//     → "obj.method", false, nil  (needs type inference)
+func ResolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph, logger *output.Logger) (string, bool, *core.TypeInfo) {
+	return resolveCallTarget(target, importMap, registry, currentModule, codeGraph, typeEngine, callerFQN, callGraph, logger)
+}
+
+// resolveCallTarget is the internal implementation of ResolveCallTarget.
+func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph, logger *output.Logger) (string, bool, *core.TypeInfo) {
+	// Backward compatibility: if typeEngine or callerFQN not provided, skip type inference
+	if typeEngine == nil || callerFQN == "" {
+		fqn, resolved := resolveCallTargetLegacy(target, importMap, registry, currentModule, codeGraph)
+		return fqn, resolved, nil
+	}
+
+	// Phase 3 Task 11: Check for method chaining BEFORE other resolution
+	// Chains have pattern "()." indicating call followed by attribute access
+	if strings.Contains(target, ").") {
+		chainFQN, chainResolved, chainType := resolution.ResolveChainedCall(
+			target,
+			typeEngine,
+			typeEngine.Builtins,
+			registry,
+			codeGraph,
+			callerFQN,
+			currentModule,
+			callGraph,
+		)
+		if chainResolved {
+			return chainFQN, true, chainType
+		}
+		// Chain parsing attempted but failed - fall through to regular resolution
+	}
+
+	// Phase 3 Task 12: Check for self.attribute.method() patterns BEFORE self.method()
+	// Pattern: self.attr.method (2+ dots starting with self.)
+	if strings.HasPrefix(target, "self.") && strings.Count(target, ".") >= 2 {
+		attrFQN, attrResolved, attrType := resolution.ResolveSelfAttributeCall(
+			target,
+			callerFQN,
+			typeEngine,
+			typeEngine.Builtins,
+			callGraph,
+		)
+		if attrResolved {
+			return attrFQN, true, attrType
+		}
+		// Attribute resolution attempted but failed - fall through
+	}
+
+	// Handle self.method() calls - resolve to current module
+	if strings.HasPrefix(target, "self.") {
+		methodName := strings.TrimPrefix(target, "self.")
+		// Resolve to module.method
+		moduleFQN := currentModule + "." + methodName
+		// Validate exists
+		if validateFQN(moduleFQN, registry) {
+			return moduleFQN, true, nil
+		}
+		// Return unresolved but with module prefix
+		return moduleFQN, false, nil
+	}
+
+	// Handle simple names (no dots)
+	if !strings.Contains(target, ".") {
+		// Check if it's a Python built-in
+		if pythonBuiltins[target] {
+			// Return as builtins.function for pattern matching
+			return "builtins." + target, true, nil
+		}
+
+		// Try to resolve through imports
+		if fqn, ok := importMap.Resolve(target); ok {
+			// Found in imports - return the FQN
+			// Check if it's a known framework
+			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
+				return fqn, true, nil
+			}
+			// Validate if it exists in registry
+			resolved := validateFQN(fqn, registry)
+			return fqn, resolved, nil
+		}
+
+		// Not in imports - might be in same module
+		sameLevelFQN := currentModule + "." + target
+		if validateFQN(sameLevelFQN, registry) {
+			return sameLevelFQN, true, nil
+		}
+
+		// Can't resolve - return as-is
+		return target, false, nil
+	}
+
+	// Handle qualified names (with dots)
+	parts := strings.SplitN(target, ".", 2)
+	base := parts[0]
+	rest := parts[1]
+
+	// Phase 2 Task 9: Try type inference for variable.method() calls
+	if typeEngine != nil && callerFQN != "" {
+		// Try function scope first, then fall back to module scope
+		var binding *resolution.VariableBinding
+
+		// Check function scope first
+		functionScope := typeEngine.GetScope(callerFQN)
+		if functionScope != nil {
+			if b, exists := functionScope.Variables[base]; exists {
+				binding = b
+			}
+		}
+
+		// If not found in function scope, try module scope
+		if binding == nil {
+			moduleScope := typeEngine.GetScope(currentModule)
+			if moduleScope != nil {
+				if b, exists := moduleScope.Variables[base]; exists {
+					binding = b
+				}
+			}
+		}
+
+		if binding != nil {
+			// Check if variable has type information
+			if binding.Type != nil {
+				typeFQN := binding.Type.TypeFQN
+
+				// Skip placeholders (call:, var:) - not yet resolved
+				if strings.HasPrefix(typeFQN, "call:") || strings.HasPrefix(typeFQN, "var:") {
+					// Continue to legacy resolution
+				} else {
+					// Check if it's a builtin type
+					if typeEngine.Builtins != nil && strings.HasPrefix(typeFQN, "builtins.") {
+						method := typeEngine.Builtins.GetMethod(typeFQN, rest)
+						if method != nil {
+							// Resolved to builtin method - return with type info
+							return typeFQN + "." + rest, true, binding.Type
+						}
+					}
+
+					// Check if it's a project type (user-defined class/method)
+					methodFQN := typeFQN + "." + rest
+
+					// Validate method exists in code graph
+					if codeGraph != nil {
+						if node, ok := codeGraph.Nodes[methodFQN]; ok {
+							if node.Type == "method_declaration" || node.Type == "function_definition" {
+								// Resolved via code graph validation - return with type info
+								return methodFQN, true, binding.Type
+							}
+						}
+
+						// Python class methods are stored at module level (e.g., test.save, not test.User.save)
+						// Try stripping the class name and looking for module.method
+						lastDot := strings.LastIndex(typeFQN, ".")
+						if lastDot >= 0 {
+							modulePart := typeFQN[:lastDot]
+							className := typeFQN[lastDot+1:]
+
+							// Check if it looks like a Python class (PascalCase)
+							if len(className) > 0 && className[0] >= 'A' && className[0] <= 'Z' {
+								pythonMethodFQN := modulePart + "." + rest
+								if callGraph != nil {
+									if node, ok := callGraph.Functions[pythonMethodFQN]; ok {
+										if node.Type == "method_declaration" || node.Type == "function_definition" {
+											// Resolved via Python module-level method lookup
+											return pythonMethodFQN, true, binding.Type
+										}
+									}
+								}
+							}
+						}
+					}
+
+					// Heuristic: If type has good confidence (>= 0.7), assume method exists
+					if binding.Type.Confidence >= 0.7 {
+						// Resolved via confidence heuristic - return with type info
+						return methodFQN, true, binding.Type
+					}
+
+				}
+			}
+		}
+	}
+
+	// Try to resolve base through imports
+	if baseFQN, ok := importMap.Resolve(base); ok {
+		fullFQN := baseFQN + "." + rest
+		// Check if it's a known framework
+		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
+			return fullFQN, true, nil
+		}
+		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
+		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+			return ormFQN, true, nil
+		}
+		// PR #3: Check stdlib registry before user project registry
+		if typeEngine != nil && typeEngine.StdlibRemote != nil {
+			if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+				if validateStdlibFQN(fullFQN, remoteLoader, logger) {
+					return fullFQN, true, nil
+				}
+			}
+		}
+		if validateFQN(fullFQN, registry) {
+			return fullFQN, true, nil
+		}
+		return fullFQN, false, nil
+	}
+
+	// Base not in imports - might be module-level access
+	// Try current module
+	fullFQN := currentModule + "." + target
+	if validateFQN(fullFQN, registry) {
+		return fullFQN, true, nil
+	}
+
+	// Before giving up, check if it's an ORM pattern (Django, SQLAlchemy, etc.)
+	// ORM methods are dynamically generated at runtime and won't be in source
+	if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+		return ormFQN, true, nil
+	}
+
+	// PR #3: Last resort - check if target is a stdlib call (e.g., os.path.join)
+	// This handles cases where stdlib modules are imported directly (import os.path)
+	if typeEngine != nil && typeEngine.StdlibRemote != nil {
+		if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+			if validateStdlibFQN(target, remoteLoader, logger) {
+				return target, true, nil
+			}
+		}
+	}
+
+	// Can't resolve - return as-is
+	return target, false, nil
+}
+
+// stdlibModuleAliases maps platform-specific module aliases to their canonical names.
+// For example, os.path is posixpath on Unix/Linux/Mac and ntpath on Windows.
+var stdlibModuleAliases = map[string]string{
+	"os.path": "posixpath", // On POSIX systems (Unix, Linux, macOS)
+	// Note: On Windows, os.path would be ntpath, but we default to POSIX
+	// since most development happens on Unix-like systems
+}
+
+// ValidateStdlibFQN checks if a fully qualified name is a stdlib function.
+// Supports module.function, module.submodule.function, and module.Class patterns.
+// Handles platform-specific module aliases (e.g., os.path -> posixpath).
+// Uses lazy loading via remote registry to download modules on-demand.
+//
+// Examples:
+//   "os.getcwd" - returns true if os.getcwd exists in stdlib
+//   "os.path.join" - returns true if posixpath.join exists in stdlib (alias resolution)
+//   "json.dumps" - returns true if json.dumps exists in stdlib
+//
+// Parameters:
+//   - fqn: fully qualified name to check
+//   - remoteLoader: remote stdlib registry loader
+//   - logger: structured logger for warnings
+//
+// Returns:
+//   - true if FQN is a stdlib function or class
+func ValidateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote, logger *output.Logger) bool {
+	return validateStdlibFQN(fqn, remoteLoader, logger)
+}
+
+// validateStdlibFQN is the internal implementation of ValidateStdlibFQN.
+func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote, logger *output.Logger) bool {
+	if remoteLoader == nil {
+		return false
+	}
+
+	// Split FQN into parts: os.path.join -> ["os", "path", "join"]
+	parts := strings.Split(fqn, ".")
+	if len(parts) < 2 {
+		return false
+	}
+
+	// Try different module combinations
+	// For "os.path.join", try:
+	//   1. module="os.path", function="join" (with alias resolution)
+	//   2. module="os", function="path.join"
+	//   3. module="os", function="path" (submodule)
+
+	// Try longest match first (os.path)
+	for i := len(parts) - 1; i >= 1; i-- {
+		moduleName := strings.Join(parts[:i], ".")
+		functionName := parts[i]
+
+		// Check if this module is an alias (e.g., os.path -> posixpath)
+		if canonicalName, isAlias := stdlibModuleAliases[moduleName]; isAlias {
+			moduleName = canonicalName
+		}
+
+		// Lazy load module from remote registry
+		module, err := remoteLoader.GetModule(moduleName, logger)
+		if err != nil {
+			logger.Warning("Failed to load stdlib module %s: %v", moduleName, err)
+			continue
+		}
+		if module == nil {
+			continue
+		}
+
+		// Check if it's a function
+		if _, ok := module.Functions[functionName]; ok {
+			return true
+		}
+
+		// Check if it's a class
+		if _, ok := module.Classes[functionName]; ok {
+			return true
+		}
+
+		// Check if it's a constant
+		if _, ok := module.Constants[functionName]; ok {
+			return true
+		}
+
+		// Check if it's an attribute
+		if _, ok := module.Attributes[functionName]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ValidateFQN checks if a fully qualified name exists in the registry.
+// Handles both module names and function names within modules.
+//
+// Examples:
+//   "myapp.utils" - checks if module exists
+//   "myapp.utils.sanitize" - checks if module "myapp.utils" exists
+//
+// Parameters:
+//   - fqn: fully qualified name to validate
+//   - registry: module registry
+//
+// Returns:
+//   - true if FQN is valid (module or function in existing module)
+func ValidateFQN(fqn string, registry *core.ModuleRegistry) bool {
+	return validateFQN(fqn, registry)
+}
+
+// validateFQN is the internal implementation of ValidateFQN.
+func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
+	// Check if it's a module
+	if _, ok := registry.Modules[fqn]; ok {
+		return true
+	}
+
+	// Check if parent module exists (for functions)
+	// "myapp.utils.sanitize" → check if "myapp.utils" exists
+	lastDot := strings.LastIndex(fqn, ".")
+	if lastDot > 0 {
+		parentModule := fqn[:lastDot]
+		if _, ok := registry.Modules[parentModule]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolveCallTargetLegacy is the old resolution logic without type inference.
+// Used for backward compatibility with existing tests.
+func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
+	// Handle self.method() calls - resolve to current module
+	if strings.HasPrefix(target, "self.") {
+		methodName := strings.TrimPrefix(target, "self.")
+		// Resolve to module.method
+		moduleFQN := currentModule + "." + methodName
+		// Validate exists
+		if validateFQN(moduleFQN, registry) {
+			return moduleFQN, true
+		}
+		// Return unresolved but with module prefix
+		return moduleFQN, false
+	}
+
+	// Handle simple names (no dots)
+	if !strings.Contains(target, ".") {
+		// Check if it's a Python built-in
+		if pythonBuiltins[target] {
+			// Return as builtins.function for pattern matching
+			return "builtins." + target, true
+		}
+
+		// Try to resolve through imports
+		if fqn, ok := importMap.Resolve(target); ok {
+			// Found in imports - return the FQN
+			// Check if it's a known framework
+			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
+				return fqn, true
+			}
+			// Validate if it exists in registry
+			resolved := validateFQN(fqn, registry)
+			return fqn, resolved
+		}
+
+		// Not in imports - might be in same module
+		sameLevelFQN := currentModule + "." + target
+		if validateFQN(sameLevelFQN, registry) {
+			return sameLevelFQN, true
+		}
+
+		// Can't resolve - return as-is
+		return target, false
+	}
+
+	// Handle qualified names (with dots)
+	parts := strings.SplitN(target, ".", 2)
+	base := parts[0]
+	rest := parts[1]
+
+	// Try to resolve base through imports
+	if baseFQN, ok := importMap.Resolve(base); ok {
+		fullFQN := baseFQN + "." + rest
+		// Check if it's a known framework
+		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
+			return fullFQN, true
+		}
+		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
+		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+			return ormFQN, true
+		}
+		if validateFQN(fullFQN, registry) {
+			return fullFQN, true
+		}
+		return fullFQN, false
+	}
+
+	// Base not in imports - might be module-level access
+	// Try current module
+	fullFQN := currentModule + "." + target
+	if validateFQN(fullFQN, registry) {
+		return fullFQN, true
+	}
+
+	// Before giving up, check if it's an ORM pattern (Django, SQLAlchemy, etc.)
+	// ORM methods are dynamically generated at runtime and won't be in source
+	if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
+		return ormFQN, true
+	}
+
+	// Can't resolve - return as-is
+	return target, false
+}
+
+// DetectPythonVersion infers Python version from project files.
+// It checks in order:
+//  1. .python-version file
+//  2. pyproject.toml [tool.poetry.dependencies] or [project] requires-python
+//  3. Defaults to "3.14"
+//
+// Parameters:
+//   - projectPath: absolute path to the project root
+//
+// Returns:
+//   - Python version string (e.g., "3.14", "3.11", "3.9")
+func DetectPythonVersion(projectPath string) string {
+	return detectPythonVersionInternal(projectPath)
+}
+
+// detectPythonVersionInternal is the implementation - extracted from python_version_detector.go.
+func detectPythonVersionInternal(projectPath string) string {
+	// 1. Check .python-version file
+	if version := readPythonVersionFile(projectPath); version != "" {
+		return version
+	}
+
+	// 2. Check pyproject.toml
+	if version := parsePyprojectToml(projectPath); version != "" {
+		return version
+	}
+
+	// 3. Default to 3.14
+	return "3.14"
+}
+
+// Helper functions for DetectPythonVersion.
+func readPythonVersionFile(projectPath string) string {
+	versionFile := filepath.Join(projectPath, ".python-version")
+	data, err := ReadFileBytes(versionFile)
+	if err != nil {
+		return ""
+	}
+
+	version := strings.TrimSpace(string(data))
+	return extractMajorMinor(version)
+}
+
+func parsePyprojectToml(projectPath string) string {
+	// Import the functionality from cgregistry which has the full implementation
+	// For now, we'll use a simplified version
+	tomlFile := filepath.Join(projectPath, "pyproject.toml")
+	data, err := ReadFileBytes(tomlFile)
+	if err != nil {
+		return ""
+	}
+
+	// Very simple regex-free parsing - just look for version numbers
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		// Check for requires-python or python = patterns
+		if strings.Contains(line, "requires-python") || strings.Contains(line, "python") {
+			// Extract version number pattern (e.g., 3.11, 3.9, etc.)
+			parts := strings.Fields(line)
+			for _, part := range parts {
+				part = strings.Trim(part, `"'>=<~^`)
+				if strings.Contains(part, ".") && len(part) >= 3 && len(part) <= 5 {
+					// Check if it looks like a version (starts with digit)
+					if len(part) > 0 && part[0] >= '0' && part[0] <= '9' {
+						return extractMajorMinor(part)
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+func extractMajorMinor(version string) string {
+	parts := strings.Split(version, ".")
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return ""
+}

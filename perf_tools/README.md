@@ -34,7 +34,7 @@ Options:
   -p, --project DIR     Project directory to analyze (default: ~/src/shivasurya/salt)
   -q, --query QUERY     Query to run (default: 'FROM function_definition AS fd SELECT fd')
   -o, --output NAME     Output file prefix (default: 'benchmark')
-  -b, --binary PATH     Path to pathfinder binary (default: ../sourcecode-parser/build/go/pathfinder)
+  -b, --binary PATH     Path to pathfinder binary (default: ../sast-engine/build/go/pathfinder)
   -h, --help            Show this help message
 ```
 
@@ -117,7 +117,7 @@ Memory Usage Over Time
 
 ### Required
 - Bash shell
-- Built pathfinder binary (run `cd ../sourcecode-parser && gradle buildGo`)
+- Built pathfinder binary (run `cd ../sast-engine && gradle buildGo`)
 
 ### Optional
 - Python 3 with matplotlib and pandas for graph generation
@@ -133,7 +133,7 @@ If you want more control, use the individual scripts:
 
 ```bash
 # Terminal 1: Start query
-../sourcecode-parser/build/go/pathfinder query --project ~/salt --query "..." &
+../sast-engine/build/go/pathfinder query --project ~/salt --query "..." &
 PID=$!
 
 # Terminal 2: Monitor memory
@@ -163,12 +163,12 @@ To measure the impact of performance optimizations:
 ```bash
 # Before optimization
 git checkout main
-cd sourcecode-parser && gradle clean buildGo && cd ../perf_tools
+cd sast-engine && gradle clean buildGo && cd ../perf_tools
 ./benchmark.sh -o before_optimization
 
 # After optimization
 git checkout feature-branch
-cd sourcecode-parser && gradle clean buildGo && cd ../perf_tools
+cd sast-engine && gradle clean buildGo && cd ../perf_tools
 ./benchmark.sh -o after_optimization
 
 # Compare results
@@ -182,7 +182,7 @@ echo "After:  $(grep 'Peak RSS' after_optimization.csv | tail -1)"
 
 Build the binary first:
 ```bash
-cd ../sourcecode-parser
+cd ../sast-engine
 gradle clean buildGo
 cd ../perf_tools
 ```

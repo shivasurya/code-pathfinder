@@ -12,7 +12,7 @@ We recommend using the following IDEs for developing with Code Pathfinder:
 
 ## Core Project
 
-The core of Code Pathfinder is the `sourcecode-parser` project, written in Go.
+The core of Code Pathfinder is the `sast-engine` project, written in Go.
 
 ## Build System
 

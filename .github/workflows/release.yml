@@ -30,16 +30,16 @@ jobs:
           GOARCH: amd64
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-amd64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-amd64 .
           chmod +x pathfinder-linux-amd64
 
       - name: Calculate SHA256
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           sha256sum pathfinder-linux-amd64 > pathfinder-linux-amd64.sha256sum.txt
           cp pathfinder-linux-amd64 pathfinder
           tar -czvf pathfinder-linux-amd64.tar.gz pathfinder
@@ -49,9 +49,9 @@ jobs:
         with:
           name: pathfinder-linux-amd64
           path: |
-            sourcecode-parser/pathfinder-linux-amd64
-            sourcecode-parser/pathfinder-linux-amd64.sha256sum.txt
-            sourcecode-parser/pathfinder-linux-amd64.tar.gz
+            sast-engine/pathfinder-linux-amd64
+            sast-engine/pathfinder-linux-amd64.sha256sum.txt
+            sast-engine/pathfinder-linux-amd64.tar.gz
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm  # Native ARM64 runner (public repos only)
@@ -73,16 +73,16 @@ jobs:
           CGO_ENABLED: 1  # Required for tree-sitter
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-arm64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${posthogkey}" -v -o pathfinder-linux-arm64 .
           chmod +x pathfinder-linux-arm64
 
       - name: Calculate SHA256
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           sha256sum pathfinder-linux-arm64 > pathfinder-linux-arm64.sha256sum.txt
           cp pathfinder-linux-arm64 pathfinder
           tar -czvf pathfinder-linux-arm64.tar.gz pathfinder
@@ -92,9 +92,9 @@ jobs:
         with:
           name: pathfinder-linux-arm64
           path: |
-            sourcecode-parser/pathfinder-linux-arm64
-            sourcecode-parser/pathfinder-linux-arm64.sha256sum.txt
-            sourcecode-parser/pathfinder-linux-arm64.tar.gz
+            sast-engine/pathfinder-linux-arm64
+            sast-engine/pathfinder-linux-arm64.sha256sum.txt
+            sast-engine/pathfinder-linux-arm64.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -115,15 +115,15 @@ jobs:
           GOARCH: amd64
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           $gitCommit = (git describe --tags).Trim()
           $projectVersion = Get-Content VERSION
           $posthogkey=$env:POSTHOG_WEB_ANALYTICS          
-          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-windows-amd64.exe .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${posthogkey}" -v -o pathfinder-windows-amd64.exe .
 
       - name: Calculate SHA256
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           Get-FileHash -Algorithm SHA256 pathfinder-windows-amd64.exe | Select-Object Hash | Out-File -Encoding UTF8 pathfinder-windows-amd64.exe.sha256sum.txt
           Copy-Item pathfinder-windows-amd64.exe pathfinder.exe
           Compress-Archive -Path pathfinder.exe -DestinationPath pathfinder-windows-amd64.zip
@@ -133,9 +133,9 @@ jobs:
         with:
           name: pathfinder-windows-amd64
           path: |
-            sourcecode-parser/pathfinder-windows-amd64.exe
-            sourcecode-parser/pathfinder-windows-amd64.exe.sha256sum.txt
-            sourcecode-parser/pathfinder-windows-amd64.zip
+            sast-engine/pathfinder-windows-amd64.exe
+            sast-engine/pathfinder-windows-amd64.exe.sha256sum.txt
+            sast-engine/pathfinder-windows-amd64.zip
 
   build-macos:
     runs-on: macos-latest
@@ -156,16 +156,16 @@ jobs:
           GOARCH: arm64
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-arm64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-arm64 .
           chmod +x pathfinder-darwin-arm64
 
       - name: Calculate SHA256
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           shasum -a 256 pathfinder-darwin-arm64 > pathfinder-darwin-arm64.sha256sum.txt
           cp pathfinder-darwin-arm64 pathfinder
           tar -czvf pathfinder-darwin-arm64.tar.gz pathfinder
@@ -175,9 +175,9 @@ jobs:
         with:
           name: pathfinder-darwin-arm64
           path: |
-            sourcecode-parser/pathfinder-darwin-arm64
-            sourcecode-parser/pathfinder-darwin-arm64.sha256sum.txt
-            sourcecode-parser/pathfinder-darwin-arm64.tar.gz
+            sast-engine/pathfinder-darwin-arm64
+            sast-engine/pathfinder-darwin-arm64.sha256sum.txt
+            sast-engine/pathfinder-darwin-arm64.tar.gz
 
   build-macos-intel:
     runs-on: macos-13  # Last Intel-based macOS runner
@@ -199,16 +199,16 @@ jobs:
           CGO_ENABLED: 1  # Required for tree-sitter
           POSTHOG_WEB_ANALYTICS: ${{ secrets.POSTHOG_WEB_ANALYTICS }}
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           gitCommit=$(git describe --tags)
           projectVersion=$(cat VERSION)
           posthogkey=$(echo $POSTHOG_WEB_ANALYTICS)
-          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sourcecode-parser/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-amd64 .
+          go build -ldflags="-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${posthogkey}" -v -o pathfinder-darwin-amd64 .
           chmod +x pathfinder-darwin-amd64
 
       - name: Calculate SHA256
         run: |
-          cd sourcecode-parser
+          cd sast-engine
           shasum -a 256 pathfinder-darwin-amd64 > pathfinder-darwin-amd64.sha256sum.txt
           cp pathfinder-darwin-amd64 pathfinder
           tar -czvf pathfinder-darwin-amd64.tar.gz pathfinder
@@ -218,9 +218,9 @@ jobs:
         with:
           name: pathfinder-darwin-amd64
           path: |
-            sourcecode-parser/pathfinder-darwin-amd64
-            sourcecode-parser/pathfinder-darwin-amd64.sha256sum.txt
-            sourcecode-parser/pathfinder-darwin-amd64.tar.gz
+            sast-engine/pathfinder-darwin-amd64
+            sast-engine/pathfinder-darwin-amd64.sha256sum.txt
+            sast-engine/pathfinder-darwin-amd64.tar.gz
 
   release:
     needs: [build-linux, build-linux-arm64, build-windows, build-macos, build-macos-intel]

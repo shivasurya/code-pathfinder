@@ -1,0 +1,132 @@
+plugins {
+    id 'base'
+}
+
+ext {
+    versionFile = file('VERSION')
+    projectVersion  = versionFile.text
+    analyticskey = System.getenv('ANALYTICS_KEY')
+    gitCommit = 'git rev-parse --short HEAD'.execute().text.trim()
+}
+
+task version {
+    doLast {
+        println "Version: ${projectVersion}"
+        println "Git Commit: ${gitCommit}"
+    }
+}
+
+task buildGo(type: Exec, dependsOn: 'cleanGo') {
+    def outputDir = "${buildDir}/go"
+    outputs.dir outputDir
+    commandLine 'go', 'build', '-ldflags', "-s -w -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.Version=${projectVersion} -X github.com/shivasurya/code-pathfinder/sast-engine/cmd.GitCommit=${gitCommit} -X github.com/shivasurya/code-pathfinder/sast-engine/analytics.PublicKey=${analyticskey}", '-o', "${outputDir}/pathfinder", '.'
+}
+
+task testGo(type: Exec) {
+    commandLine 'go', 'test', './...'
+}
+
+task lintGo(type: Exec) {
+    commandLine 'golangci-lint', 'run'
+}
+
+task cleanGo(type: Delete) {
+    delete "${buildDir}/go"
+}
+
+task bumpVersion {
+    doLast {
+        def currentVersion = versionFile.text.trim()
+        def (major, minor, patch) = currentVersion.tokenize('.').collect { it.toInteger() }
+        patch += 1
+        if (patch > 999) {
+            patch = 0
+            minor += 1
+            if (minor > 999) {
+                minor = 0
+                major += 1
+            }
+        }
+        def newVersion = "${major}.${minor}.${patch}"
+        versionFile.text = newVersion
+        println "Version bumped to ${newVersion}"
+
+        // Update package.json
+        def packageJsonFile = file("../package.json")
+        if (packageJsonFile.exists()) {
+            def packageJson = new groovy.json.JsonSlurper().parse(packageJsonFile)
+            packageJson.version = newVersion
+            packageJsonFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(packageJson))
+            println "Updated package.json version to ${newVersion}"
+        } else {
+            println "package.json not found in root directory"
+        }
+    }
+}
+
+task prepareRelease(dependsOn: bumpVersion) {
+    doLast {
+        project.exec {
+            commandLine 'git', 'checkout', '-b', "bump/v${versionFile.text.trim()}"
+        }
+        project.exec {
+            commandLine 'git', 'add', 'VERSION'
+        }
+        project.exec {
+            commandLine 'git', 'commit', '-m', "Bump version to ${versionFile.text.trim()}"
+        }
+        project.exec {
+            commandLine 'git', 'push', 'origin', "bump/v${versionFile.text.trim()}"
+        }
+        println "New version finalized: ${versionFile.text.trim()}"
+    }
+}
+
+task tagExists {
+    doLast {
+        def result = project.exec {
+            commandLine 'git', 'rev-parse', "v${versionFile.text.trim()}"
+            ignoreExitValue true
+        }
+        if (result.exitValue == 0) {
+            println "Tag v${versionFile.text.trim()} already exists."
+            throw new GradleException("Tag already exists")
+        } else {
+            println "Tag v${versionFile.text.trim()} does not exist."
+        }
+    }
+}
+
+task createTag(dependsOn: tagExists) {
+    doLast {
+        project.exec {
+            commandLine 'git', 'tag', "v${versionFile.text.trim()}"
+        }
+        project.exec {
+            commandLine 'git', 'push', 'origin', "v${versionFile.text.trim()}"
+        }
+        println "New version tag published: v${versionFile.text.trim()}"
+    }
+}
+
+// Python DSL tasks
+task testPython(type: Exec) {
+    workingDir '../python-dsl'
+    commandLine 'pytest', '--cov=codepathfinder', '--cov-report=term-missing', '--cov-fail-under=95'
+}
+
+task lintPython(type: Exec) {
+    workingDir '../python-dsl'
+    commandLine 'sh', '-c', 'black --check codepathfinder/ tests/ && ruff check codepathfinder/ tests/ && mypy codepathfinder/'
+}
+
+task buildPython(type: Exec, dependsOn: ['testPython', 'lintPython']) {
+    workingDir '../python-dsl'
+    commandLine 'python', 'setup.py', 'sdist', 'bdist_wheel'
+}
+
+// Make Go tests depend on Python tests
+testGo.dependsOn testPython
+lintGo.dependsOn lintPython
+
+clean.dependsOn cleanGo
