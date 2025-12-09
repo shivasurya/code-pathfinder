@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -296,6 +297,268 @@ volumes:
 
 	assert.Equal(t, 0, len(graph.Services))
 	assert.Equal(t, 1, len(graph.Volumes))
+}
+
+func TestParseDockerCompose_ValidFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	composePath := tmpDir + "/docker-compose.yml"
+	content := `
+version: "3.8"
+services:
+  web:
+    image: nginx
+`
+	err := os.WriteFile(composePath, []byte(content), 0644)
+	assert.NoError(t, err)
+
+	graph, err := ParseDockerCompose(composePath)
+	assert.NoError(t, err)
+	assert.NotNil(t, graph)
+	assert.Equal(t, composePath, graph.FilePath)
+	assert.Equal(t, 1, len(graph.Services))
+}
+
+func TestParseDockerCompose_FileNotFound(t *testing.T) {
+	graph, err := ParseDockerCompose("/nonexistent/docker-compose.yml")
+	assert.Error(t, err)
+	assert.Nil(t, graph)
+}
+
+func TestComposeGraph_ServiceHas_NonExistentService(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHas("nonexistent", "image", "nginx"))
+}
+
+func TestComposeGraph_ServiceGet_DifferentValueTypes(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    replicas: 3
+    privileged: true
+`
+	graph := parseComposeFromString(yaml)
+
+	// String value
+	assert.Equal(t, "nginx", graph.ServiceGet("web", "image"))
+	// Int value
+	assert.Equal(t, 3, graph.ServiceGet("web", "replicas"))
+	// Bool value
+	assert.Equal(t, true, graph.ServiceGet("web", "privileged"))
+}
+
+func TestComposeGraph_GetPrivilegedServices_NonePrivileged(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+  db:
+    image: postgres
+`
+	graph := parseComposeFromString(yaml)
+	privileged := graph.GetPrivilegedServices()
+
+	assert.Equal(t, 0, len(privileged))
+}
+
+func TestComposeGraph_ServicesWithDockerSocket_NoVolumes(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+	exposed := graph.ServicesWithDockerSocket()
+
+	assert.Equal(t, 0, len(exposed))
+}
+
+func TestComposeGraph_ServicesWithDockerSocket_NonStringVolume(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    volumes:
+      data: /data
+`
+	graph := parseComposeFromString(yaml)
+	exposed := graph.ServicesWithDockerSocket()
+
+	assert.Equal(t, 0, len(exposed))
+}
+
+func TestComposeGraph_ServiceHasSecurityOpt_NoSecurityOpt(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHasSecurityOpt("web", "seccomp:unconfined"))
+}
+
+func TestComposeGraph_ServiceHasCapability_NoCapabilities(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHasCapability("web", "SYS_ADMIN", "cap_add"))
+}
+
+func TestComposeGraph_ServiceHasCapability_NonExistentService(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHasCapability("nonexistent", "SYS_ADMIN", "cap_add"))
+}
+
+func TestComposeGraph_ServiceHasCapability_CapDrop(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    cap_drop:
+      - ALL
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.True(t, graph.ServiceHasCapability("web", "ALL", "cap_drop"))
+	assert.False(t, graph.ServiceHasCapability("web", "SYS_ADMIN", "cap_drop"))
+}
+
+func TestComposeGraph_ServicesWithHostNetwork_None(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+	hostMode := graph.ServicesWithHostNetwork()
+
+	assert.Equal(t, 0, len(hostMode))
+}
+
+func TestComposeGraph_ServiceExposesPort_NoPorts(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceExposesPort("web", 80))
+}
+
+func TestComposeGraph_ServiceExposesPort_NonStringPort(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    ports:
+      80: 80
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceExposesPort("web", 80))
+}
+
+func TestComposeGraph_ServiceExposesPort_InvalidPortFormat(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    ports:
+      - "invalid"
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceExposesPort("web", 80))
+}
+
+func TestComposeGraph_ServiceHasEnvVar_NoEnv(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHasEnvVar("web", "DATABASE_URL"))
+}
+
+func TestComposeGraph_ServiceHasEnvVar_NonExistentService(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.False(t, graph.ServiceHasEnvVar("nonexistent", "VAR"))
+}
+
+func TestComposeGraph_ServicesWithoutReadOnly_ExplicitTrue(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+    read_only: true
+`
+	graph := parseComposeFromString(yaml)
+	writable := graph.ServicesWithoutReadOnly()
+
+	assert.Equal(t, 0, len(writable))
+}
+
+func TestComposeGraph_NoVersion(t *testing.T) {
+	yaml := `
+services:
+  web:
+    image: nginx
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.Equal(t, "", graph.Version)
+}
+
+func TestComposeGraph_NetworksIndexing(t *testing.T) {
+	yaml := `
+networks:
+  frontend:
+  backend:
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.Equal(t, 2, len(graph.Networks))
+	assert.NotNil(t, graph.Networks["frontend"])
+	assert.NotNil(t, graph.Networks["backend"])
+}
+
+func TestComposeGraph_VolumesIndexing(t *testing.T) {
+	yaml := `
+volumes:
+  data:
+  logs:
+`
+	graph := parseComposeFromString(yaml)
+
+	assert.Equal(t, 2, len(graph.Volumes))
+	assert.NotNil(t, graph.Volumes["data"])
+	assert.NotNil(t, graph.Volumes["logs"])
 }
 
 // Helper to parse YAML string for testing.
