@@ -242,7 +242,7 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
-// getFiles walks through a directory and returns all Java and Python source files.
+// getFiles walks through a directory and returns all source files (Java, Python, Dockerfile, docker-compose).
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
@@ -250,9 +250,17 @@ func getFiles(directory string) ([]string, error) {
 			return err
 		}
 		if !info.IsDir() {
-			// append only java and python files
+			// append java, python, dockerfile, and docker-compose files
 			ext := filepath.Ext(path)
+			base := filepath.Base(path)
+
 			if ext == ".java" || ext == ".py" {
+				files = append(files, path)
+			} else if strings.HasPrefix(strings.ToLower(base), "dockerfile") {
+				// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
+				files = append(files, path)
+			} else if strings.Contains(strings.ToLower(base), "docker-compose") && (ext == ".yml" || ext == ".yaml") {
+				// Match docker-compose.yml, docker-compose.yaml, etc.
 				files = append(files, path)
 			}
 		}
