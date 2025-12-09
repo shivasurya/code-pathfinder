@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  web:
+    image: nginx:1.21-alpine
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:8080:80"
+    tmpfs:
+      - /tmp
+      - /var/run
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  app:
+    image: myapp:1.0.0
+    read_only: true
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=info
+
+  database:
+    image: postgres:14-alpine
+    read_only: false  # Database needs writable filesystem
+    user: "postgres"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=myapp
+    # Password should be set via Docker secrets, not environment
+
+volumes:
+  db-data:

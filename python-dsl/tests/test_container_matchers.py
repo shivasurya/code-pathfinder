@@ -33,10 +33,7 @@ class TestInstructionMatcher:
         assert d["user_name_regex"] == r"^root$"
 
     def test_arg_with_regex(self):
-        m = instruction(
-            type="ARG",
-            arg_name_regex=r"(?i).*password.*"
-        )
+        m = instruction(type="ARG", arg_name_regex=r"(?i).*password.*")
         d = m.to_dict()
         assert d["arg_name_regex"] == r"(?i).*password.*"
 
@@ -56,7 +53,7 @@ class TestInstructionMatcher:
             base_image="ubuntu",
             image_tag="latest",
             image_tag_regex=r".*latest.*",
-            missing_digest=True
+            missing_digest=True,
         )
         d = m.to_dict()
         assert d["base_image"] == "ubuntu"
@@ -70,7 +67,7 @@ class TestInstructionMatcher:
             port=80,
             port_less_than=1024,
             port_greater_than=1023,
-            protocol="tcp"
+            protocol="tcp",
         )
         d = m.to_dict()
         assert d["port"] == 80
@@ -80,9 +77,7 @@ class TestInstructionMatcher:
 
     def test_arg_params(self):
         m = instruction(
-            type="ARG",
-            arg_name="VERSION",
-            arg_name_regex=r"(?i).*password.*"
+            type="ARG", arg_name="VERSION", arg_name_regex=r"(?i).*password.*"
         )
         d = m.to_dict()
         assert d["arg_name"] == "VERSION"
@@ -90,10 +85,7 @@ class TestInstructionMatcher:
 
     def test_copy_params(self):
         m = instruction(
-            type="COPY",
-            copy_from="builder",
-            chown="user:group",
-            missing_flag="--chown"
+            type="COPY", copy_from="builder", chown="user:group", missing_flag="--chown"
         )
         d = m.to_dict()
         assert d["copy_from"] == "builder"
@@ -105,7 +97,7 @@ class TestInstructionMatcher:
             type="HEALTHCHECK",
             healthcheck_interval_less_than="30s",
             healthcheck_timeout_greater_than="10s",
-            healthcheck_retries_greater_than=3
+            healthcheck_retries_greater_than=3,
         )
         d = m.to_dict()
         assert d["healthcheck_interval_less_than"] == "30s"
@@ -114,9 +106,7 @@ class TestInstructionMatcher:
 
     def test_label_params(self):
         m = instruction(
-            type="LABEL",
-            label_key="maintainer",
-            label_value_regex=r".*@example\.com"
+            type="LABEL", label_key="maintainer", label_value_regex=r".*@example\.com"
         )
         d = m.to_dict()
         assert d["label_key"] == "maintainer"
@@ -133,10 +123,7 @@ class TestInstructionMatcher:
         assert d["workdir_not_absolute"] is True
 
     def test_stopsignal_params(self):
-        m = instruction(
-            type="STOPSIGNAL",
-            signal_not_in=["SIGTERM", "SIGKILL"]
-        )
+        m = instruction(type="STOPSIGNAL", signal_not_in=["SIGTERM", "SIGKILL"])
         d = m.to_dict()
         assert d["signal_not_in"] == ["SIGTERM", "SIGKILL"]
 
@@ -146,7 +133,7 @@ class TestInstructionMatcher:
             contains="sudo",
             not_contains="rm -rf",
             regex=r".*apt-get.*",
-            not_regex=r".*yum.*"
+            not_regex=r".*yum.*",
         )
         d = m.to_dict()
         assert d["contains"] == "sudo"
@@ -184,17 +171,13 @@ class TestServiceHasMatcher:
 
     def test_contains_any(self):
         m = service_has(
-            key="volumes",
-            contains_any=["/var/run/docker.sock", "/run/docker.sock"]
+            key="volumes", contains_any=["/var/run/docker.sock", "/run/docker.sock"]
         )
         d = m.to_dict()
         assert len(d["contains_any"]) == 2
 
     def test_env_regex(self):
-        m = service_has(
-            key="environment",
-            env_name_regex=r"(?i).*password.*"
-        )
+        m = service_has(key="environment", env_name_regex=r"(?i).*password.*")
         d = m.to_dict()
         assert d["env_name_regex"] == r"(?i).*password.*"
 
@@ -212,7 +195,7 @@ class TestServiceHasMatcher:
             volume_type="bind",
             source_regex=r"^/host",
             target_regex=r"^/container",
-            published_port_less_than=1024
+            published_port_less_than=1024,
         )
         d = m.to_dict()
         assert d["equals"] == "/data"
@@ -237,9 +220,6 @@ class TestServiceMissingMatcher:
         assert d["key"] == "read_only"
 
     def test_missing_with_value(self):
-        m = service_missing(
-            key="security_opt",
-            value_contains="no-new-privileges"
-        )
+        m = service_missing(key="security_opt", value_contains="no-new-privileges")
         d = m.to_dict()
         assert d["value_contains"] == "no-new-privileges"

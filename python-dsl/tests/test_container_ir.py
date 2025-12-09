@@ -84,13 +84,13 @@ class TestIRCompilation:
         def file_rule():
             return missing(instruction="USER")
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             filepath = f.name
 
         try:
             write_ir_file(filepath, pretty=True)
 
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 content = f.read()
                 parsed = json.loads(content)
                 assert "dockerfile" in parsed
