@@ -107,23 +107,55 @@ func isInstructionNode(node *sitter.Node) bool {
 	return instructionTypes[nodeType]
 }
 
-// convertInstruction is a placeholder for PR #3.
-// It will be replaced with actual conversion logic.
+// convertInstruction dispatches to the appropriate converter based on node type.
 func (dp *DockerfileParser) convertInstruction(
 	node *sitter.Node,
 	source []byte,
 ) *DockerfileNode {
-	// Placeholder implementation - creates basic node with type and line.
-	// Full implementation in PR #3.
-
 	nodeType := node.Type()
-	instructionType := extractInstructionType(nodeType)
+	lineNumber := int(node.StartPoint().Row) + 1
 
-	dockerNode := NewDockerfileNode(
-		instructionType,
-		int(node.StartPoint().Row)+1, // 1-indexed line number
-	)
+	dockerNode := NewDockerfileNode(extractInstructionType(nodeType), lineNumber)
 	dockerNode.RawInstruction = node.Content(source)
+
+	switch nodeType {
+	case "from_instruction":
+		convertFROM(node, source, dockerNode)
+	case "run_instruction":
+		convertRUN(node, source, dockerNode)
+	case "copy_instruction":
+		convertCOPY(node, source, dockerNode)
+	case "add_instruction":
+		convertADD(node, source, dockerNode)
+	case "env_instruction":
+		convertENV(node, source, dockerNode)
+	case "arg_instruction":
+		convertARG(node, source, dockerNode)
+	case "user_instruction":
+		convertUSER(node, source, dockerNode)
+	case "expose_instruction":
+		convertEXPOSE(node, source, dockerNode)
+	case "workdir_instruction":
+		convertWORKDIR(node, source, dockerNode)
+	case "cmd_instruction":
+		convertCMD(node, source, dockerNode)
+	case "entrypoint_instruction":
+		convertENTRYPOINT(node, source, dockerNode)
+	case "volume_instruction":
+		convertVOLUME(node, source, dockerNode)
+	case "shell_instruction":
+		convertSHELL(node, source, dockerNode)
+	case "healthcheck_instruction":
+		convertHEALTHCHECK(node, source, dockerNode)
+	case "label_instruction":
+		convertLABEL(node, source, dockerNode)
+	case "onbuild_instruction":
+		convertONBUILD(node, source, dockerNode)
+	case "stopsignal_instruction":
+		convertSTOPSIGNAL(node, source, dockerNode)
+	case "maintainer_instruction":
+		convertMAINTAINER(node, source, dockerNode)
+	}
 
 	return dockerNode
 }
