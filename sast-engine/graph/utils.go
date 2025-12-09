@@ -253,13 +253,15 @@ func getFiles(directory string) ([]string, error) {
 			// append java, python, dockerfile, and docker-compose files
 			ext := filepath.Ext(path)
 			base := filepath.Base(path)
+			baseLower := strings.ToLower(base)
 
-			if ext == ".java" || ext == ".py" {
+			switch {
+			case ext == ".java" || ext == ".py":
 				files = append(files, path)
-			} else if strings.HasPrefix(strings.ToLower(base), "dockerfile") {
+			case strings.HasPrefix(baseLower, "dockerfile"):
 				// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
 				files = append(files, path)
-			} else if strings.Contains(strings.ToLower(base), "docker-compose") && (ext == ".yml" || ext == ".yaml") {
+			case strings.Contains(baseLower, "docker-compose") && (ext == ".yml" || ext == ".yaml"):
 				// Match docker-compose.yml, docker-compose.yaml, etc.
 				files = append(files, path)
 			}

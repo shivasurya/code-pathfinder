@@ -147,7 +147,7 @@ func parseDockerCompose(filePath string, graph *CodeGraph) error {
 
 	// Convert each service to a CodeGraph node
 	for serviceName, serviceNode := range composeGraph.Services {
-		node := convertComposeServiceToNode(serviceName, serviceNode, filePath, composeGraph)
+		node := convertComposeServiceToNode(serviceName, serviceNode, filePath)
 		graph.AddNode(node)
 	}
 
@@ -155,7 +155,7 @@ func parseDockerCompose(filePath string, graph *CodeGraph) error {
 }
 
 // convertComposeServiceToNode converts a docker-compose service to a CodeGraph Node.
-func convertComposeServiceToNode(serviceName string, serviceNode *YAMLNode, filePath string, composeGraph *ComposeGraph) *Node {
+func convertComposeServiceToNode(serviceName string, serviceNode *YAMLNode, filePath string) *Node {
 	// Generate unique ID with line number (YAML doesn't provide column, default to 1)
 	// For YAML, we don't have exact line numbers from the parser, so we use a hash
 	// Format: "compose:<file>:<service>"
@@ -177,13 +177,13 @@ func convertComposeServiceToNode(serviceName string, serviceNode *YAMLNode, file
 
 	// Extract service properties and store in MethodArgumentsValue
 	// This allows DSL rules to query service configuration
-	node.MethodArgumentsValue = extractComposeServiceProperties(serviceName, serviceNode, composeGraph)
+	node.MethodArgumentsValue = extractComposeServiceProperties(serviceNode)
 
 	return node
 }
 
 // extractComposeServiceProperties extracts properties from a docker-compose service.
-func extractComposeServiceProperties(serviceName string, serviceNode *YAMLNode, composeGraph *ComposeGraph) []string {
+func extractComposeServiceProperties(serviceNode *YAMLNode) []string {
 	props := []string{}
 
 	// Extract common security-relevant properties
