@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
@@ -289,6 +290,9 @@ func executeContainerRules(
 			cweList = []string{match.CWE}
 		}
 
+		// Generate code snippet
+		snippet := generateCodeSnippet(match.FilePath, match.LineNumber, 3)
+
 		detection := &dsl.EnrichedDetection{
 			Detection: dsl.DataflowDetection{
 				FunctionFQN: match.FilePath, // Use file path as function identifier for container rules
@@ -301,10 +305,11 @@ func executeContainerRules(
 				RelPath:  relPath,
 				Line:     match.LineNumber,
 			},
+			Snippet: snippet,
 			Rule: dsl.RuleMetadata{
 				ID:          match.RuleID,
 				Name:        match.RuleName,
-				Severity:    match.Severity,
+				Severity:    strings.ToLower(match.Severity), // Normalize to lowercase for formatter
 				Description: description,
 				CWE:         cweList,
 			},
@@ -315,6 +320,69 @@ func executeContainerRules(
 	}
 
 	return enriched
+}
+
+// generateCodeSnippet creates a code snippet with context lines around the target line.
+func generateCodeSnippet(filePath string, lineNumber int, contextLines int) dsl.CodeSnippet {
+	// Read file contents
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return dsl.CodeSnippet{}
+	}
+
+	lines := splitLines(string(content))
+	if lineNumber < 1 || lineNumber > len(lines) {
+		return dsl.CodeSnippet{}
+	}
+
+	// Calculate start and end lines (1-indexed)
+	startLine := lineNumber - contextLines
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := lineNumber + contextLines
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	// Build snippet lines
+	var snippetLines []dsl.SnippetLine
+	for i := startLine; i <= endLine; i++ {
+		snippetLines = append(snippetLines, dsl.SnippetLine{
+			Number:      i,
+			Content:     lines[i-1], // lines is 0-indexed
+			IsHighlight: i == lineNumber,
+		})
+	}
+
+	return dsl.CodeSnippet{
+		Lines:         snippetLines,
+		StartLine:     startLine,
+		HighlightLine: lineNumber,
+	}
+}
+
+// splitLines splits content into lines preserving empty lines.
+func splitLines(content string) []string {
+	if content == "" {
+		return []string{}
+	}
+	// Split by newline but preserve empty lines
+	lines := []string{}
+	currentLine := ""
+	for _, ch := range content {
+		if ch == '\n' {
+			lines = append(lines, currentLine)
+			currentLine = ""
+		} else if ch != '\r' { // Skip carriage returns
+			currentLine += string(ch)
+		}
+	}
+	// Add last line if not empty or if content doesn't end with newline
+	if currentLine != "" || len(content) > 0 && content[len(content)-1] != '\n' {
+		lines = append(lines, currentLine)
+	}
+	return lines
 }
 
 // printDetections outputs detections in simple format (used by query command).

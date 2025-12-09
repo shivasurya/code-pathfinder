@@ -187,6 +187,10 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 	case "logic_and", "logic_or", "logic_not":
 		return l.executeLogic(matcherType, matcherMap, cg)
 
+	// Container matchers - skip silently (handled by ContainerRuleExecutor)
+	case "missing_instruction", "instruction", "service_has", "service_missing", "any_of", "all_of", "none_of":
+		return []DataflowDetection{}, nil
+
 	default:
 		return nil, fmt.Errorf("unknown matcher type: %s", matcherType)
 	}
