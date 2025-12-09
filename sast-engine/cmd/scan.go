@@ -70,6 +70,9 @@ Examples:
 		}
 		projectPath = absProjectPath
 
+		// Create rule loader (used for both container and code analysis rules)
+		loader := dsl.NewRuleLoader(rulesPath)
+
 		// Step 1: Build code graph (AST)
 		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
@@ -84,31 +87,19 @@ Examples:
 		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
 			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
 
-			// Find compiled container rules - try relative to project first, then system paths
-			compiledRulesPaths := []string{
-				filepath.Join(projectPath, "..", "python-dsl", "compiled_rules.json"),
-				filepath.Join(rulesPath, "..", "..", "python-dsl", "compiled_rules.json"),
-				"/Users/shiva/src/shivasurya/code-pathfinder/python-dsl/compiled_rules.json",
-			}
-
-			var compiledRulesPath string
-			for _, path := range compiledRulesPaths {
-				if absPath, err := filepath.Abs(path); err == nil {
-					if _, statErr := os.Stat(absPath); statErr == nil {
-						compiledRulesPath = absPath
-						break
-					}
-				}
-			}
-
-			if compiledRulesPath != "" {
-				logger.Debug("Using container rules from: %s", compiledRulesPath)
-				containerDetections = executeContainerRules(compiledRulesPath, dockerFiles, composeFiles, projectPath, logger)
+			// Load container rules from the same rules path (runtime generation)
+			logger.Progress("Loading container rules...")
+			containerRulesJSON, err := loader.LoadContainerRules()
+			if err != nil {
+				logger.Warning("No container rules found: %v", err)
+			} else {
+				logger.Progress("Executing container rules...")
+				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
 				if len(containerDetections) > 0 {
 					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
+				} else {
+					logger.Progress("No container issues detected")
 				}
-			} else {
-				logger.Debug("Skipping container rules: compiled_rules.json not found")
 			}
 		}
 
@@ -132,7 +123,6 @@ Examples:
 
 		// Step 4: Load Python DSL rules
 		logger.Progress("Loading rules from %s...", rulesPath)
-		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
@@ -222,19 +212,12 @@ func extractContainerFiles(codeGraph *graph.CodeGraph) (dockerFiles []string, co
 
 // executeContainerRules executes container security rules and returns enriched detections.
 func executeContainerRules(
-	compiledRulesPath string,
+	rulesJSON []byte,
 	dockerFiles []string,
 	composeFiles []string,
 	projectPath string,
 	logger *output.Logger,
 ) []*dsl.EnrichedDetection {
-	// Load compiled rules
-	rulesJSON, err := os.ReadFile(compiledRulesPath)
-	if err != nil {
-		logger.Warning("Failed to load compiled container rules: %v", err)
-		return nil
-	}
-
 	// Create executor and load rules
 	exec := &executor.ContainerRuleExecutor{}
 	if err := exec.LoadRules(rulesJSON); err != nil {
@@ -270,7 +253,7 @@ func executeContainerRules(
 	}
 
 	// Convert RuleMatch to EnrichedDetection
-	var enriched []*dsl.EnrichedDetection
+	enriched := make([]*dsl.EnrichedDetection, 0, len(allMatches))
 	for _, match := range allMatches {
 		// Make file path relative to project root
 		relPath, err := filepath.Rel(projectPath, match.FilePath)

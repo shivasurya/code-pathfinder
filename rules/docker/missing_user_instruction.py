@@ -113,9 +113,15 @@ if __name__ == "__main__":
     import json
     import sys
     sys.path.insert(0, '/Users/shiva/src/shivasurya/code-pathfinder/python-dsl')
-    
+
     from rules import container_decorators, container_ir
-    
+
     # Get registered rules and convert to JSON IR
     json_ir = container_ir.compile_all_rules()
-    print(json.dumps(json_ir.get("dockerfile", [])))
+
+    # Output complete structure with both dockerfile and compose arrays
+    output = {
+        "dockerfile": json_ir.get("dockerfile", []),
+        "compose": json_ir.get("compose", [])
+    }
+    print(json.dumps(output))
