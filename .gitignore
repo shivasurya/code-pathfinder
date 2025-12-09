@@ -33,4 +33,3 @@ docs/public/rules/*.json
 
 node_modules
 __pycache__/
-compiled_rules.json
