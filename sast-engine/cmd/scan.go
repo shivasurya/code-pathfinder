@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/docker"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
 )
@@ -75,6 +77,40 @@ Examples:
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
+		// Step 1.5: Execute container rules if Docker/Compose files are present
+		var containerDetections []*dsl.EnrichedDetection
+		dockerFiles, composeFiles := extractContainerFiles(codeGraph)
+		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
+			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
+
+			// Find compiled container rules - try relative to project first, then system paths
+			compiledRulesPaths := []string{
+				filepath.Join(projectPath, "..", "python-dsl", "compiled_rules.json"),
+				filepath.Join(rulesPath, "..", "..", "python-dsl", "compiled_rules.json"),
+				"/Users/shiva/src/shivasurya/code-pathfinder/python-dsl/compiled_rules.json",
+			}
+
+			var compiledRulesPath string
+			for _, path := range compiledRulesPaths {
+				if absPath, err := filepath.Abs(path); err == nil {
+					if _, statErr := os.Stat(absPath); statErr == nil {
+						compiledRulesPath = absPath
+						break
+					}
+				}
+			}
+
+			if compiledRulesPath != "" {
+				logger.Debug("Using container rules from: %s", compiledRulesPath)
+				containerDetections = executeContainerRules(compiledRulesPath, dockerFiles, composeFiles, projectPath, logger)
+				if len(containerDetections) > 0 {
+					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
+				}
+			} else {
+				logger.Debug("Skipping container rules: compiled_rules.json not found")
+			}
+		}
+
 		// Step 2: Build module registry
 		logger.Progress("Building module registry...")
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
@@ -129,6 +165,9 @@ Examples:
 			}
 		}
 
+		// Merge container detections with code analysis detections
+		allEnriched = append(allEnriched, containerDetections...)
+
 		// Step 6: Format and display results
 		summary := output.BuildSummary(allEnriched, len(rules))
 		formatter := output.NewTextFormatter(&output.OutputOptions{
@@ -155,6 +194,127 @@ func countTotalCallSites(cg *core.CallGraph) int {
 		total += len(sites)
 	}
 	return total
+}
+
+// extractContainerFiles extracts unique Docker and docker-compose file paths from CodeGraph.
+func extractContainerFiles(codeGraph *graph.CodeGraph) (dockerFiles []string, composeFiles []string) {
+	dockerFileSet := make(map[string]bool)
+	composeFileSet := make(map[string]bool)
+
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "dockerfile_instruction" {
+			dockerFileSet[node.File] = true
+		} else if node.Type == "compose_service" {
+			composeFileSet[node.File] = true
+		}
+	}
+
+	for file := range dockerFileSet {
+		dockerFiles = append(dockerFiles, file)
+	}
+	for file := range composeFileSet {
+		composeFiles = append(composeFiles, file)
+	}
+
+	return dockerFiles, composeFiles
+}
+
+// executeContainerRules executes container security rules and returns enriched detections.
+func executeContainerRules(
+	compiledRulesPath string,
+	dockerFiles []string,
+	composeFiles []string,
+	projectPath string,
+	logger *output.Logger,
+) []*dsl.EnrichedDetection {
+	// Load compiled rules
+	rulesJSON, err := os.ReadFile(compiledRulesPath)
+	if err != nil {
+		logger.Warning("Failed to load compiled container rules: %v", err)
+		return nil
+	}
+
+	// Create executor and load rules
+	exec := &executor.ContainerRuleExecutor{}
+	if err := exec.LoadRules(rulesJSON); err != nil {
+		logger.Warning("Failed to parse container rules: %v", err)
+		return nil
+	}
+
+	var allMatches []executor.RuleMatch
+
+	// Execute rules on Dockerfiles
+	for _, dockerFilePath := range dockerFiles {
+		parser := docker.NewDockerfileParser()
+		dockerGraph, err := parser.ParseFile(dockerFilePath)
+		if err != nil {
+			logger.Warning("Failed to parse Dockerfile %s: %v", dockerFilePath, err)
+			continue
+		}
+
+		matches := exec.ExecuteDockerfile(dockerGraph)
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Execute rules on docker-compose files
+	for _, composeFilePath := range composeFiles {
+		composeGraph, err := graph.ParseDockerCompose(composeFilePath)
+		if err != nil {
+			logger.Warning("Failed to parse docker-compose %s: %v", composeFilePath, err)
+			continue
+		}
+
+		matches := exec.ExecuteCompose(composeGraph)
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Convert RuleMatch to EnrichedDetection
+	var enriched []*dsl.EnrichedDetection
+	for _, match := range allMatches {
+		// Make file path relative to project root
+		relPath, err := filepath.Rel(projectPath, match.FilePath)
+		if err != nil {
+			relPath = match.FilePath
+		}
+
+		// Build description with service name if present (compose rules)
+		description := match.Message
+		if match.ServiceName != "" {
+			description = fmt.Sprintf("[Service: %s] %s", match.ServiceName, match.Message)
+		}
+
+		// Parse CWE into slice format
+		cweList := []string{}
+		if match.CWE != "" {
+			cweList = []string{match.CWE}
+		}
+
+		detection := &dsl.EnrichedDetection{
+			Detection: dsl.DataflowDetection{
+				FunctionFQN: match.FilePath, // Use file path as function identifier for container rules
+				SinkLine:    match.LineNumber,
+				Confidence:  1.0, // Container rules are deterministic
+				Scope:       "file",
+			},
+			Location: dsl.LocationInfo{
+				FilePath: match.FilePath,
+				RelPath:  relPath,
+				Line:     match.LineNumber,
+			},
+			Rule: dsl.RuleMetadata{
+				ID:          match.RuleID,
+				Name:        match.RuleName,
+				Severity:    match.Severity,
+				Description: description,
+				CWE:         cweList,
+			},
+			DetectionType: dsl.DetectionTypePattern,
+		}
+
+		enriched = append(enriched, detection)
+	}
+
+	return enriched
 }
 
 // printDetections outputs detections in simple format (used by query command).
