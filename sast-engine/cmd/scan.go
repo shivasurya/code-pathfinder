@@ -19,6 +19,10 @@ var scanCmd = &cobra.Command{
 	Short: "Scan code for security vulnerabilities using Python DSL rules",
 	Long: `Scan codebase using Python DSL security rules.
 
+Automatically scans:
+  - Source code (.py, .java, etc.) for dataflow vulnerabilities
+  - Container files (Dockerfile, docker-compose.yml) for security issues
+
 Examples:
   # Scan with a single rules file
   pathfinder scan --rules rules/owasp_top10.py --project /path/to/project
@@ -67,13 +71,14 @@ Examples:
 		}
 		projectPath = absProjectPath
 
-		// Step 1: Build code graph (AST)
+		// Step 1: Build code graph (AST) for source code
 		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
 		if len(codeGraph.Nodes) == 0 {
-			return fmt.Errorf("no source files found in project")
+			logger.Warning("No source files found in project")
+		} else {
+			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}
-		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Step 2: Build module registry
 		logger.Progress("Building module registry...")
@@ -93,16 +98,16 @@ Examples:
 		logger.Statistic("Callgraph built: %d functions, %d call sites",
 			len(cg.Functions), countTotalCallSites(cg))
 
-		// Step 4: Load Python DSL rules
+		// Step 4: Load Python DSL rules (for source code scanning)
 		logger.Progress("Loading rules from %s...", rulesPath)
 		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
-		logger.Statistic("Loaded %d rules", len(rules))
+		logger.Statistic("Loaded %d dataflow rules", len(rules))
 
-		// Step 5: Execute rules against callgraph
+		// Step 5: Execute dataflow rules against callgraph
 		logger.Progress("Running security scan...")
 
 		// Create enricher for adding context to detections
@@ -129,8 +134,17 @@ Examples:
 			}
 		}
 
-		// Step 6: Format and display results
-		summary := output.BuildSummary(allEnriched, len(rules))
+		// Step 6: Automatically scan container files (Dockerfile, docker-compose.yml)
+		// This is transparent - happens automatically if container files exist and rules are available
+		projectRoot := findProjectRoot(projectPath)
+		containerFindings := TryContainerScan(projectRoot, projectPath, logger)
+		if containerFindings != nil && len(containerFindings) > 0 {
+			allEnriched = append(allEnriched, containerFindings...)
+		}
+
+		// Step 7: Format and display results
+		totalRulesCount := len(rules) // Could add container rule count if available
+		summary := output.BuildSummary(allEnriched, totalRulesCount)
 		formatter := output.NewTextFormatter(&output.OutputOptions{
 			Verbosity: verbosity,
 		}, logger)
