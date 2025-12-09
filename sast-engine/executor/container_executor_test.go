@@ -49,6 +49,7 @@ func TestContainerRuleExecutor_LoadRules(t *testing.T) {
 			}`,
 			wantErr: false,
 			checkFn: func(t *testing.T, e *ContainerRuleExecutor) {
+				t.Helper()
 				assert.Len(t, e.dockerfileRules, 1)
 				assert.Len(t, e.composeRules, 1)
 				assert.Equal(t, "TEST-001", e.dockerfileRules[0].ID)
@@ -68,6 +69,7 @@ func TestContainerRuleExecutor_LoadRules(t *testing.T) {
 			}`,
 			wantErr: false,
 			checkFn: func(t *testing.T, e *ContainerRuleExecutor) {
+				t.Helper()
 				assert.Len(t, e.dockerfileRules, 0)
 				assert.Len(t, e.composeRules, 0)
 			},
@@ -646,6 +648,683 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
 		matches := executor.ExecuteDockerfile(dockerfile)
 		assert.Empty(t, matches)
+	})
+
+	t.Run("missing_instruction with wrong type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-WRONG-TYPE",
+					Matcher: map[string]interface{}{
+						"type":        "missing_instruction",
+						"instruction": 123, // Wrong type - should be string
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("instruction with wrong type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-WRONG-INST",
+					Matcher: map[string]interface{}{
+						"type":        "instruction",
+						"instruction": 456, // Wrong type
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("instruction with no matching nodes", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-NO-MATCH",
+					Matcher: map[string]interface{}{
+						"type":        "instruction",
+						"instruction": "HEALTHCHECK",
+					},
+				},
+			},
+		}
+
+		// Dockerfile without HEALTHCHECK
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			BaseImage:       "ubuntu",
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("invalid regex in arg_name_regex", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-INVALID-REGEX",
+					Matcher: map[string]interface{}{
+						"type":           "instruction",
+						"instruction":    "ARG",
+						"arg_name_regex": "[invalid(regex",
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "ARG",
+			ArgName:         "TEST_ARG",
+			LineNumber:      5,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches) // Invalid regex should not match
+	})
+
+	t.Run("criteria mismatch - image_tag", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-TAG-MISMATCH",
+					Matcher: map[string]interface{}{
+						"type":        "instruction",
+						"instruction": "FROM",
+						"image_tag":   "latest",
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			ImageTag:        "22.04", // Different tag
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("criteria mismatch - user_name", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-USER-MISMATCH",
+					Matcher: map[string]interface{}{
+						"type":        "instruction",
+						"instruction": "USER",
+						"user_name":   "root",
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "USER",
+			UserName:        "appuser", // Different user
+			LineNumber:      10,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("port_less_than with no matching ports", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-PORT-NO-MATCH",
+					Matcher: map[string]interface{}{
+						"type":           "instruction",
+						"instruction":    "EXPOSE",
+						"port_less_than": float64(1024),
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "EXPOSE",
+			Ports:           []int{8080, 9000}, // All ports >= 1024
+			LineNumber:      15,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("missing_digest false with digest present", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-DIGEST-PRESENT",
+					Matcher: map[string]interface{}{
+						"type":           "instruction",
+						"instruction":    "FROM",
+						"missing_digest": false, // Requires digest
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			ImageDigest:     "sha256:abc123", // Has digest
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		require.Len(t, matches, 1)
+	})
+
+	t.Run("missing_digest false without digest", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-DIGEST-MISSING",
+					Matcher: map[string]interface{}{
+						"type":           "instruction",
+						"instruction":    "FROM",
+						"missing_digest": false,
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			ImageDigest:     "", // No digest
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("base_image mismatch", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-BASE-MISMATCH",
+					Matcher: map[string]interface{}{
+						"type":        "instruction",
+						"instruction": "FROM",
+						"base_image":  "alpine",
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			BaseImage:       "ubuntu", // Different image
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_has wrong key type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-WRONG-KEY",
+					Matcher: map[string]interface{}{
+						"type": "service_has",
+						"key":  123, // Wrong type
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {Type: "mapping", Children: map[string]*graph.YAMLNode{}},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_missing wrong key type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-MISSING-WRONG",
+					Matcher: map[string]interface{}{
+						"type": "service_missing",
+						"key":  456,
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {Type: "mapping", Children: map[string]*graph.YAMLNode{}},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - invalid matcher type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-INVALID",
+					Matcher: map[string]interface{}{
+						"type": "unknown_compose_type",
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {Type: "mapping", Children: map[string]*graph.YAMLNode{}},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_has no equals match", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-NO-MATCH",
+					Matcher: map[string]interface{}{
+						"type":   "service_has",
+						"key":    "privileged",
+						"equals": true,
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {
+					Type: "mapping",
+					Children: map[string]*graph.YAMLNode{
+						"privileged": {Type: "scalar", Value: false}, // Not true
+					},
+				},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_has contains_any no match", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-CONTAINS-NO-MATCH",
+					Matcher: map[string]interface{}{
+						"type": "service_has",
+						"key":  "volumes",
+						"contains_any": []interface{}{
+							"/var/run/docker.sock",
+						},
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {
+					Type: "mapping",
+					Children: map[string]*graph.YAMLNode{
+						"volumes": {
+							Type:  "sequence",
+							Value: []interface{}{"/data:/data"}, // Different volume
+						},
+					},
+				},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_has contains_any with non-string", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-NON-STRING",
+					Matcher: map[string]interface{}{
+						"type": "service_has",
+						"key":  "volumes",
+						"contains_any": []interface{}{
+							123, // Non-string value
+						},
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {
+					Type: "mapping",
+					Children: map[string]*graph.YAMLNode{
+						"volumes": {Type: "sequence", Value: []interface{}{"volume1"}},
+					},
+				},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("compose - service_missing with service having key", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-HAS-KEY",
+					Matcher: map[string]interface{}{
+						"type": "service_missing",
+						"key":  "read_only",
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {
+					Type: "mapping",
+					Children: map[string]*graph.YAMLNode{
+						"read_only": {Type: "scalar", Value: true}, // Key exists
+					},
+				},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("all_of with malformed condition", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ALLOF-MALFORMED",
+					Matcher: map[string]interface{}{
+						"type": "all_of",
+						"conditions": []interface{}{
+							"not_a_map", // Invalid condition type
+						},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("all_of with one condition failing", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ALLOF-FAIL",
+					Matcher: map[string]interface{}{
+						"type": "all_of",
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":        "instruction",
+								"instruction": "FROM",
+								"image_tag":   "latest",
+							},
+							map[string]interface{}{
+								"type":        "instruction",
+								"instruction": "HEALTHCHECK", // This won't exist
+							},
+						},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			ImageTag:        "latest",
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches) // all_of should fail because HEALTHCHECK missing
+	})
+
+	t.Run("all_of with wrong conditions type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ALLOF-WRONG-TYPE",
+					Matcher: map[string]interface{}{
+						"type":       "all_of",
+						"conditions": "not_an_array",
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("any_of with all conditions failing", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ANYOF-ALL-FAIL",
+					Matcher: map[string]interface{}{
+						"type": "any_of",
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":        "instruction",
+								"instruction": "HEALTHCHECK",
+							},
+							map[string]interface{}{
+								"type":        "instruction",
+								"instruction": "STOPSIGNAL",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches) // any_of should fail because no conditions match
+	})
+
+	t.Run("any_of with malformed condition", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ANYOF-MALFORMED",
+					Matcher: map[string]interface{}{
+						"type": "any_of",
+						"conditions": []interface{}{
+							123, // Invalid type
+						},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("any_of with wrong conditions type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-ANYOF-WRONG-TYPE",
+					Matcher: map[string]interface{}{
+						"type":       "any_of",
+						"conditions": 789,
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("none_of with no conditions matching", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-NONEOF-NO-MATCH",
+					Matcher: map[string]interface{}{
+						"type": "none_of",
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":        "instruction",
+								"instruction": "HEALTHCHECK",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Dockerfile without HEALTHCHECK
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "FROM",
+			LineNumber:      1,
+		})
+
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches) // none_of should not trigger because no conditions matched
+	})
+
+	t.Run("none_of with malformed condition", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-NONEOF-MALFORMED",
+					Matcher: map[string]interface{}{
+						"type": "none_of",
+						"conditions": []interface{}{
+							false, // Invalid type
+						},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("none_of with wrong conditions type", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			dockerfileRules: []CompiledRule{
+				{
+					ID: "TEST-NONEOF-WRONG-TYPE",
+					Matcher: map[string]interface{}{
+						"type":       "none_of",
+						"conditions": map[string]interface{}{},
+					},
+				},
+			},
+		}
+
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		matches := executor.ExecuteDockerfile(dockerfile)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("multiple services in compose", func(t *testing.T) {
+		executor := &ContainerRuleExecutor{
+			composeRules: []CompiledRule{
+				{
+					ID: "COMPOSE-MULTI",
+					Matcher: map[string]interface{}{
+						"type":   "service_has",
+						"key":    "privileged",
+						"equals": true,
+					},
+				},
+			},
+		}
+
+		compose := &graph.ComposeGraph{
+			Services: map[string]*graph.YAMLNode{
+				"web": {
+					Type:     "mapping",
+					Children: map[string]*graph.YAMLNode{},
+				},
+				"db": {
+					Type: "mapping",
+					Children: map[string]*graph.YAMLNode{
+						"privileged": {Type: "scalar", Value: true},
+					},
+				},
+			},
+			FilePath: "docker-compose.yml",
+		}
+
+		matches := executor.ExecuteCompose(compose)
+		require.Len(t, matches, 1)
+		assert.Equal(t, "db", matches[0].ServiceName)
 	})
 }
 
