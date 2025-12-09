@@ -20,6 +20,10 @@ var ciCmd = &cobra.Command{
 
 Outputs results in SARIF, JSON, or CSV format for consumption by CI tools.
 
+Automatically scans:
+  - Source code (.py, .java, etc.) for dataflow vulnerabilities
+  - Container files (Dockerfile, docker-compose.yml) for security issues
+
 Examples:
   # Generate SARIF report with single rules file
   pathfinder ci --rules rules/owasp_top10.py --project . --output sarif > results.sarif
@@ -73,9 +77,10 @@ Examples:
 		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
 		if len(codeGraph.Nodes) == 0 {
-			return fmt.Errorf("no source files found in project")
+			logger.Warning("No source files found in project")
+		} else {
+			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}
-		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Build module registry
 		logger.Progress("Building module registry...")
@@ -133,6 +138,14 @@ Examples:
 				enriched, _ := enricher.EnrichAll(detections, rule)
 				allEnriched = append(allEnriched, enriched...)
 			}
+		}
+
+		// Automatically scan container files (Dockerfile, docker-compose.yml)
+		// This is transparent - happens automatically if container files exist and rules are available
+		projectRoot := findProjectRoot(projectPath)
+		containerFindings := TryContainerScan(projectRoot, projectPath, logger)
+		if containerFindings != nil && len(containerFindings) > 0 {
+			allEnriched = append(allEnriched, containerFindings...)
 		}
 
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -201,6 +202,9 @@ func convertToEnrichedDetection(match executor.RuleMatch, filePath string, proje
 		cweList = []string{match.CWE}
 	}
 
+	// Extract code snippet from file
+	snippet := extractCodeSnippet(filePath, match.LineNumber, 3)
+
 	return &dsl.EnrichedDetection{
 		Detection: dsl.DataflowDetection{
 			// Container findings don't have dataflow, use basic fields
@@ -217,11 +221,7 @@ func convertToEnrichedDetection(match executor.RuleMatch, filePath string, proje
 			Column:   1,
 			Function: "",
 		},
-		Snippet: dsl.CodeSnippet{
-			Lines:         []dsl.SnippetLine{},
-			StartLine:     match.LineNumber,
-			HighlightLine: match.LineNumber,
-		},
+		Snippet: snippet,
 		Rule: dsl.RuleMetadata{
 			ID:          match.RuleID,
 			Name:        match.RuleName,
@@ -234,6 +234,57 @@ func convertToEnrichedDetection(match executor.RuleMatch, filePath string, proje
 		TaintPath:     nil,                            // Container rules don't have taint paths
 		DetectionType: dsl.DetectionTypePattern, // Container rules are pattern-based
 	}
+}
+
+// extractCodeSnippet reads the file and extracts context lines around the target line.
+func extractCodeSnippet(filePath string, lineNumber int, contextLines int) dsl.CodeSnippet {
+	snippet := dsl.CodeSnippet{
+		HighlightLine: lineNumber,
+		StartLine:     lineNumber,
+	}
+
+	// Read file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return snippet
+	}
+	defer file.Close()
+
+	// Read all lines
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if scanner.Err() != nil {
+		return snippet
+	}
+
+	// Calculate range
+	startLine := lineNumber - contextLines
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := lineNumber + contextLines
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	snippet.StartLine = startLine
+
+	// Build snippet lines
+	for i := startLine; i <= endLine; i++ {
+		if i > 0 && i <= len(lines) {
+			snippet.Lines = append(snippet.Lines, dsl.SnippetLine{
+				Number:      i,
+				Content:     lines[i-1],
+				IsHighlight: i == lineNumber,
+			})
+		}
+	}
+
+	return snippet
 }
 
 func filterByType(files []ContainerFile, fileType string) []ContainerFile {
