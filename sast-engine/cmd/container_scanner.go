@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
@@ -14,19 +16,19 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
 
-// ContainerFile represents a discovered container configuration file
+// ContainerFile represents a discovered container configuration file.
 type ContainerFile struct {
 	Path string
 	Type string // "dockerfile" or "compose"
 }
 
-// DiscoverContainerFiles finds all Dockerfile and docker-compose files in a project
+// DiscoverContainerFiles finds all Dockerfile and docker-compose files in a project.
 func DiscoverContainerFiles(projectPath string, logger *output.Logger) ([]ContainerFile, error) {
 	var files []ContainerFile
 
 	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip inaccessible paths
+			return err // Propagate error
 		}
 
 		if info.IsDir() {
@@ -64,7 +66,7 @@ func DiscoverContainerFiles(projectPath string, logger *output.Logger) ([]Contai
 	return files, err
 }
 
-// CompileContainerRules compiles Python DSL container rules to JSON IR
+// CompileContainerRules compiles Python DSL container rules to JSON IR.
 func CompileContainerRules(projectRoot string, logger *output.Logger) ([]byte, error) {
 	// Find compile script in python-dsl directory
 	scriptPath := filepath.Join(projectRoot, "python-dsl", "compile_container_rules.py")
@@ -76,8 +78,10 @@ func CompileContainerRules(projectRoot string, logger *output.Logger) ([]byte, e
 
 	logger.Debug("Compiling container rules using: %s", scriptPath)
 
-	// Run Python compilation script (suppress warnings)
-	cmd := exec.Command("python3", "-W", "ignore", scriptPath)
+	// Run Python compilation script (suppress warnings) with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", "-W", "ignore", scriptPath)
 	cmd.Dir = filepath.Dir(scriptPath)
 
 	// Capture output
@@ -98,7 +102,7 @@ func CompileContainerRules(projectRoot string, logger *output.Logger) ([]byte, e
 	return jsonData, nil
 }
 
-// ScanContainerFiles executes container security rules against discovered files
+// ScanContainerFiles executes container security rules against discovered files.
 func ScanContainerFiles(files []ContainerFile, compiledRules []byte, projectPath string, logger *output.Logger) ([]*dsl.EnrichedDetection, error) {
 	if len(files) == 0 {
 		return nil, nil
@@ -117,7 +121,7 @@ func ScanContainerFiles(files []ContainerFile, compiledRules []byte, projectPath
 	if len(dockerfiles) > 0 {
 		logger.Debug("Scanning %d Dockerfiles", len(dockerfiles))
 		for _, file := range dockerfiles {
-			findings, err := scanDockerfile(file.Path, exec, projectPath, logger)
+			findings, err := scanDockerfile(file.Path, exec, projectPath)
 			if err != nil {
 				logger.Warning("Failed to scan %s: %v", file.Path, err)
 				continue
@@ -131,7 +135,7 @@ func ScanContainerFiles(files []ContainerFile, compiledRules []byte, projectPath
 	if len(composeFiles) > 0 {
 		logger.Debug("Scanning %d docker-compose files", len(composeFiles))
 		for _, file := range composeFiles {
-			findings, err := scanComposeFile(file.Path, exec, projectPath, logger)
+			findings, err := scanComposeFile(file.Path, exec, projectPath)
 			if err != nil {
 				logger.Warning("Failed to scan %s: %v", file.Path, err)
 				continue
@@ -143,7 +147,7 @@ func ScanContainerFiles(files []ContainerFile, compiledRules []byte, projectPath
 	return allFindings, nil
 }
 
-func scanDockerfile(filePath string, exec *executor.ContainerRuleExecutor, projectPath string, logger *output.Logger) ([]*dsl.EnrichedDetection, error) {
+func scanDockerfile(filePath string, exec *executor.ContainerRuleExecutor, projectPath string) ([]*dsl.EnrichedDetection, error) {
 	parser := docker.NewDockerfileParser()
 	dockerfileGraph, err := parser.ParseFile(filePath)
 	if err != nil {
@@ -153,7 +157,7 @@ func scanDockerfile(filePath string, exec *executor.ContainerRuleExecutor, proje
 	matches := exec.ExecuteDockerfile(dockerfileGraph)
 
 	// Convert matches to EnrichedDetection format
-	var findings []*dsl.EnrichedDetection
+	findings := make([]*dsl.EnrichedDetection, 0, len(matches))
 	for _, match := range matches {
 		findings = append(findings, convertToEnrichedDetection(match, filePath, projectPath))
 	}
@@ -161,7 +165,7 @@ func scanDockerfile(filePath string, exec *executor.ContainerRuleExecutor, proje
 	return findings, nil
 }
 
-func scanComposeFile(filePath string, exec *executor.ContainerRuleExecutor, projectPath string, logger *output.Logger) ([]*dsl.EnrichedDetection, error) {
+func scanComposeFile(filePath string, exec *executor.ContainerRuleExecutor, projectPath string) ([]*dsl.EnrichedDetection, error) {
 	composeGraph, err := graph.ParseDockerCompose(filePath)
 	if err != nil {
 		return nil, err
@@ -170,7 +174,7 @@ func scanComposeFile(filePath string, exec *executor.ContainerRuleExecutor, proj
 	matches := exec.ExecuteCompose(composeGraph)
 
 	// Convert matches to EnrichedDetection format
-	var findings []*dsl.EnrichedDetection
+	findings := make([]*dsl.EnrichedDetection, 0, len(matches))
 	for _, match := range matches {
 		findings = append(findings, convertToEnrichedDetection(match, filePath, projectPath))
 	}
@@ -285,7 +289,7 @@ func TryContainerScan(projectRoot, projectPath string, logger *output.Logger) []
 	return findings
 }
 
-// getContainerRulesJSON loads or compiles container rules
+// getContainerRulesJSON loads or compiles container rules.
 func getContainerRulesJSON(projectRoot string, logger *output.Logger) ([]byte, error) {
 	// Try to find pre-compiled rules first
 	compiledPath := filepath.Join(projectRoot, "python-dsl", "compiled_rules.json")
@@ -300,7 +304,7 @@ func getContainerRulesJSON(projectRoot string, logger *output.Logger) ([]byte, e
 	return CompileContainerRules(projectRoot, logger)
 }
 
-// getContainerSummary builds a summary string for container scan results
+// getContainerSummary builds a summary string for container scan results.
 func getContainerSummary(findings []*dsl.EnrichedDetection) string {
 	if len(findings) == 0 {
 		return "no issues"
@@ -331,8 +335,8 @@ func getContainerSummary(findings []*dsl.EnrichedDetection) string {
 	return fmt.Sprintf("%d issues (%s)", len(findings), strings.Join(parts, ", "))
 }
 
-// findProjectRoot walks up from projectPath to find the actual project root
-// (looks for python-dsl directory, otherwise uses projectPath)
+// findProjectRoot walks up from projectPath to find the actual project root.
+// It looks for python-dsl directory, otherwise uses projectPath.
 func findProjectRoot(projectPath string) string {
 	current := projectPath
 	for {
