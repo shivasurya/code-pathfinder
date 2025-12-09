@@ -9,9 +9,10 @@ import (
 
 // YAMLNode represents a node in the YAML tree.
 type YAMLNode struct {
-	Value    interface{}
-	Children map[string]*YAMLNode
-	Type     string // "scalar", "mapping", "sequence"
+	Value      interface{}
+	Children   map[string]*YAMLNode
+	Type       string // "scalar", "mapping", "sequence"
+	LineNumber int    // Line number in source file (1-indexed)
 }
 
 // YAMLGraph represents a parsed YAML document.
@@ -32,8 +33,8 @@ func ParseYAML(filePath string) (*YAMLGraph, error) {
 
 // ParseYAMLString parses a YAML string and returns a YAMLGraph.
 func ParseYAMLString(content string, filePath ...string) (*YAMLGraph, error) {
-	var data interface{}
-	err := yaml.Unmarshal([]byte(content), &data)
+	var node yaml.Node
+	err := yaml.Unmarshal([]byte(content), &node)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
@@ -43,13 +44,83 @@ func ParseYAMLString(content string, filePath ...string) (*YAMLGraph, error) {
 		path = filePath[0]
 	}
 
+	// The root node is a document node, get its content (first child)
+	var rootContent *yaml.Node
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		rootContent = node.Content[0]
+	} else {
+		rootContent = &node
+	}
+
 	return &YAMLGraph{
-		Root:     convertToYAMLNode(data),
+		Root:     convertYAMLNodeToInternal(rootContent),
 		FilePath: path,
 	}, nil
 }
 
-// convertToYAMLNode converts a generic interface{} to YAMLNode.
+// convertYAMLNodeToInternal converts yaml.Node to our internal YAMLNode with line numbers.
+func convertYAMLNodeToInternal(node *yaml.Node) *YAMLNode {
+	if node == nil {
+		return &YAMLNode{Type: "scalar", Value: nil, LineNumber: 0}
+	}
+
+	result := &YAMLNode{
+		LineNumber: node.Line,
+	}
+
+	switch node.Kind {
+	case yaml.MappingNode:
+		result.Type = "mapping"
+		result.Children = make(map[string]*YAMLNode)
+
+		// Mapping nodes have alternating key-value pairs in Content
+		for i := 0; i < len(node.Content); i += 2 {
+			if i+1 < len(node.Content) {
+				keyNode := node.Content[i]
+				valueNode := node.Content[i+1]
+
+				key := keyNode.Value
+				result.Children[key] = convertYAMLNodeToInternal(valueNode)
+			}
+		}
+
+	case yaml.SequenceNode:
+		result.Type = "sequence"
+		var items []interface{}
+		for _, item := range node.Content {
+			converted := convertYAMLNodeToInternal(item)
+			if converted.Type == "scalar" {
+				items = append(items, converted.Value)
+			} else {
+				items = append(items, converted)
+			}
+		}
+		result.Value = items
+
+	case yaml.ScalarNode:
+		result.Type = "scalar"
+		// Decode scalar value to proper type (bool, int, float, string)
+		var decoded interface{}
+		if err := node.Decode(&decoded); err == nil {
+			result.Value = decoded
+		} else {
+			// Fall back to string value if decoding fails
+			result.Value = node.Value
+		}
+
+	case yaml.AliasNode:
+		// Dereference alias
+		return convertYAMLNodeToInternal(node.Alias)
+
+	default:
+		result.Type = "scalar"
+		result.Value = nil
+	}
+
+	return result
+}
+
+// convertToYAMLNode converts a generic interface{} to YAMLNode (deprecated, use convertYAMLNodeToInternal).
 func convertToYAMLNode(data interface{}) *YAMLNode {
 	if data == nil {
 		return &YAMLNode{Type: "scalar", Value: nil}

@@ -289,7 +289,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 				Message:     rule.Message,
 				FilePath:    compose.FilePath,
 				ServiceName: serviceName,
-				LineNumber:  1,
+				LineNumber:  compose.ServiceGetLineNumber(serviceName, key),
 			}
 		}
 	}
@@ -297,6 +297,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 	// Check contains (single string)
 	if contains, ok := rule.Matcher["contains"].(string); ok {
 		value := compose.ServiceGet(serviceName, key)
+		lineNumber := compose.ServiceGetLineNumber(serviceName, key)
 		// Handle string value
 		if valueStr, ok := value.(string); ok {
 			if strings.Contains(valueStr, contains) {
@@ -308,7 +309,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 					Message:     rule.Message,
 					FilePath:    compose.FilePath,
 					ServiceName: serviceName,
-					LineNumber:  1,
+					LineNumber:  lineNumber,
 				}
 			}
 		}
@@ -324,7 +325,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 						Message:     rule.Message,
 						FilePath:    compose.FilePath,
 						ServiceName: serviceName,
-						LineNumber:  1,
+						LineNumber:  lineNumber,
 					}
 				}
 			}
@@ -333,6 +334,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 
 	// Check contains_any
 	if containsAny, ok := rule.Matcher["contains_any"].([]interface{}); ok {
+		lineNumber := compose.ServiceGetLineNumber(serviceName, key)
 		for _, val := range containsAny {
 			valStr, ok := val.(string)
 			if !ok {
@@ -351,7 +353,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 							Message:     rule.Message,
 							FilePath:    compose.FilePath,
 							ServiceName: serviceName,
-							LineNumber:  1,
+							LineNumber:  lineNumber,
 						}
 					}
 				}
@@ -373,6 +375,8 @@ func (e *ContainerRuleExecutor) evaluateServiceMissing(
 	}
 
 	if !compose.ServiceHasKey(serviceName, key) {
+		// For missing properties, point to service declaration line
+		serviceLineNumber := compose.ServiceGetLineNumber(serviceName, "")
 		return &RuleMatch{
 			RuleID:      rule.ID,
 			RuleName:    rule.Name,
@@ -381,7 +385,7 @@ func (e *ContainerRuleExecutor) evaluateServiceMissing(
 			Message:     rule.Message,
 			FilePath:    compose.FilePath,
 			ServiceName: serviceName,
-			LineNumber:  1,
+			LineNumber:  serviceLineNumber,
 		}
 	}
 
@@ -493,6 +497,7 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 
 		if match := e.evaluateDockerfileRule(tempRule, dockerfile); match != nil {
 			// One condition matched, so none_of triggers
+			// Use the line number from the match that violated the rule
 			return &RuleMatch{
 				RuleID:     rule.ID,
 				RuleName:   rule.Name,
@@ -500,7 +505,7 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 				CWE:        rule.CWE,
 				Message:    rule.Message,
 				FilePath:   dockerfile.FilePath,
-				LineNumber: 1,
+				LineNumber: match.LineNumber,
 			}
 		}
 	}

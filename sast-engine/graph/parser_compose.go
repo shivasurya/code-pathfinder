@@ -115,6 +115,28 @@ func (c *ComposeGraph) ServiceGet(serviceName, key string) interface{} {
 	return child.Value
 }
 
+// ServiceGetLineNumber retrieves the line number for a service property.
+// Returns the line number of the property's value, or the service line if property doesn't exist.
+func (c *ComposeGraph) ServiceGetLineNumber(serviceName, key string) int {
+	service, exists := c.Services[serviceName]
+	if !exists {
+		return 1
+	}
+
+	// Try to get the specific property
+	child := service.GetChild(key)
+	if child != nil && child.LineNumber > 0 {
+		return child.LineNumber
+	}
+
+	// Fall back to service line number
+	if service.LineNumber > 0 {
+		return service.LineNumber
+	}
+
+	return 1
+}
+
 // --- Security Query Methods ---
 
 // GetPrivilegedServices returns services with privileged: true.
