@@ -15,8 +15,7 @@ from rules.container_combinators import (
 class TestAllOf:
     def test_basic(self):
         m = all_of(
-            instruction(type="FROM", image_tag="latest"),
-            missing(instruction="USER")
+            instruction(type="FROM", image_tag="latest"), missing(instruction="USER")
         )
         d = m.to_dict()
         assert d["type"] == "all_of"
@@ -25,10 +24,9 @@ class TestAllOf:
     def test_nested(self):
         m = all_of(
             any_of(
-                instruction(type="USER", user_name="root"),
-                missing(instruction="USER")
+                instruction(type="USER", user_name="root"), missing(instruction="USER")
             ),
-            instruction(type="FROM")
+            instruction(type="FROM"),
         )
         d = m.to_dict()
         assert d["conditions"][0]["type"] == "any_of"
@@ -37,16 +35,13 @@ class TestAllOf:
         m = all_of(
             instruction(type="FROM", image_tag="latest"),
             missing(instruction="USER"),
-            instruction(type="RUN", contains="sudo")
+            instruction(type="RUN", contains="sudo"),
         )
         d = m.to_dict()
         assert len(d["conditions"]) == 3
 
     def test_with_dict(self):
-        m = all_of(
-            {"type": "custom", "value": "test"},
-            instruction(type="FROM")
-        )
+        m = all_of({"type": "custom", "value": "test"}, instruction(type="FROM"))
         d = m.to_dict()
         assert d["conditions"][0]["type"] == "custom"
 
@@ -54,10 +49,7 @@ class TestAllOf:
         def custom_func():
             return True
 
-        m = all_of(
-            custom_func,
-            instruction(type="FROM")
-        )
+        m = all_of(custom_func, instruction(type="FROM"))
         d = m.to_dict()
         assert d["conditions"][0]["type"] == "custom_function"
         assert d["conditions"][0]["has_callable"] is True
@@ -67,16 +59,14 @@ class TestAnyOf:
     def test_basic(self):
         m = any_of(
             instruction(type="FROM", image_tag="latest"),
-            instruction(type="FROM", base_image="scratch")
+            instruction(type="FROM", base_image="scratch"),
         )
         d = m.to_dict()
         assert d["type"] == "any_of"
         assert len(d["conditions"]) == 2
 
     def test_single_condition(self):
-        m = any_of(
-            instruction(type="USER", user_name="root")
-        )
+        m = any_of(instruction(type="USER", user_name="root"))
         d = m.to_dict()
         assert len(d["conditions"]) == 1
 
@@ -85,7 +75,7 @@ class TestAnyOf:
             instruction(type="USER", user_name="root"),
             missing(instruction="USER"),
             instruction(type="FROM", base_image="scratch"),
-            instruction(type="RUN", contains="sudo")
+            instruction(type="RUN", contains="sudo"),
         )
         d = m.to_dict()
         assert len(d["conditions"]) == 4
@@ -93,17 +83,12 @@ class TestAnyOf:
 
 class TestNoneOf:
     def test_basic(self):
-        m = none_of(
-            instruction(type="HEALTHCHECK")
-        )
+        m = none_of(instruction(type="HEALTHCHECK"))
         d = m.to_dict()
         assert d["type"] == "none_of"
 
     def test_multiple_conditions(self):
-        m = none_of(
-            instruction(type="HEALTHCHECK"),
-            instruction(type="USER")
-        )
+        m = none_of(instruction(type="HEALTHCHECK"), instruction(type="USER"))
         d = m.to_dict()
         assert len(d["conditions"]) == 2
 
@@ -124,34 +109,26 @@ class TestInstructionSequence:
     def test_with_matcher(self):
         m = instruction_after(
             instruction=instruction(type="RUN", contains="apt-get install"),
-            after=instruction(type="RUN", contains="apt-get update")
+            after=instruction(type="RUN", contains="apt-get update"),
         )
         d = m.to_dict()
         assert "contains" in d["instruction"]
         assert "contains" in d["reference"]
 
     def test_not_followed_by(self):
-        m = instruction_after(
-            instruction="RUN",
-            after="FROM",
-            not_followed_by=True
-        )
+        m = instruction_after(instruction="RUN", after="FROM", not_followed_by=True)
         d = m.to_dict()
         assert d["not_followed_by"] is True
 
     def test_before_with_matcher(self):
         m = instruction_before(
-            instruction=instruction(type="USER", user_name="root"),
-            before="CMD"
+            instruction=instruction(type="USER", user_name="root"), before="CMD"
         )
         d = m.to_dict()
         assert d["instruction"]["user_name"] == "root"
 
     def test_with_dict(self):
-        m = instruction_after(
-            instruction={"type": "custom"},
-            after={"type": "other"}
-        )
+        m = instruction_after(instruction={"type": "custom"}, after={"type": "other"})
         d = m.to_dict()
         assert d["instruction"]["type"] == "custom"
         assert d["reference"]["type"] == "other"
@@ -193,16 +170,13 @@ class TestStageMatcher:
         assert d["instruction"] == "USER"
 
     def test_final_stage_has_instruction_matcher(self):
-        m = final_stage_has(
-            instruction=instruction(type="USER", user_name="root")
-        )
+        m = final_stage_has(instruction=instruction(type="USER", user_name="root"))
         d = m.to_dict()
         assert d["instruction"]["user_name"] == "root"
 
     def test_final_stage_has_both_params(self):
         m = final_stage_has(
-            instruction=instruction(type="RUN"),
-            missing_instruction="HEALTHCHECK"
+            instruction=instruction(type="RUN"), missing_instruction="HEALTHCHECK"
         )
         d = m.to_dict()
         assert "instruction" in d
