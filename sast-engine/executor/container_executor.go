@@ -398,6 +398,9 @@ func (e *ContainerRuleExecutor) evaluateAllOf(
 		return nil
 	}
 
+	// Track first match to get line number
+	var firstMatch *RuleMatch
+
 	// All conditions must match
 	for _, cond := range conditions {
 		condMap, ok := cond.(map[string]interface{})
@@ -414,22 +417,20 @@ func (e *ContainerRuleExecutor) evaluateAllOf(
 			Matcher:  condMap,
 		}
 
-		if e.evaluateDockerfileRule(tempRule, dockerfile) == nil {
+		match := e.evaluateDockerfileRule(tempRule, dockerfile)
+		if match == nil {
 			// One condition didn't match, so all_of fails
 			return nil
 		}
+
+		// Capture first match to get line number and file path
+		if firstMatch == nil {
+			firstMatch = match
+		}
 	}
 
-	// All conditions matched
-	return &RuleMatch{
-		RuleID:     rule.ID,
-		RuleName:   rule.Name,
-		Severity:   rule.Severity,
-		CWE:        rule.CWE,
-		Message:    rule.Message,
-		FilePath:   dockerfile.FilePath,
-		LineNumber: 1,
-	}
+	// All conditions matched, return first match with proper line number
+	return firstMatch
 }
 
 func (e *ContainerRuleExecutor) evaluateAnyOf(

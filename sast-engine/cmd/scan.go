@@ -160,7 +160,12 @@ Examples:
 		allEnriched = append(allEnriched, containerDetections...)
 
 		// Step 6: Format and display results
-		summary := output.BuildSummary(allEnriched, len(rules))
+		// Count unique rule IDs from all detections (includes both code and container rules)
+		uniqueRules := make(map[string]bool)
+		for _, det := range allEnriched {
+			uniqueRules[det.Rule.ID] = true
+		}
+		summary := output.BuildSummary(allEnriched, len(uniqueRules))
 		formatter := output.NewTextFormatter(&output.OutputOptions{
 			Verbosity: verbosity,
 		}, logger)
