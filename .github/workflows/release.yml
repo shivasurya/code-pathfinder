@@ -180,7 +180,7 @@ jobs:
             sast-engine/pathfinder-darwin-arm64.tar.gz
 
   build-macos-intel:
-    runs-on: macos-13  # Last Intel-based macOS runner
+    runs-on: macos-15-intel  # Intel-based macOS runner (macOS 15)
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
