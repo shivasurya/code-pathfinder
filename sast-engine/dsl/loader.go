@@ -114,9 +114,18 @@ func (l *RuleLoader) loadRulesFromFile(filePath string) ([]RuleIR, error) {
 		return nil, fmt.Errorf("failed to execute Python rules from %s: %w", filePath, err)
 	}
 
-	// Parse JSON IR
+	// Parse JSON IR - try array format first (code analysis rules)
 	var rules []RuleIR
 	if err := json.Unmarshal(output, &rules); err != nil {
+		// If array parsing fails, check if it's a container rule (object format)
+		var containerTest struct {
+			Dockerfile []interface{} `json:"dockerfile"`
+			Compose    []interface{} `json:"compose"`
+		}
+		if containerErr := json.Unmarshal(output, &containerTest); containerErr == nil {
+			// This is a container rule file, skip it (handled by LoadContainerRules)
+			return []RuleIR{}, nil
+		}
 		return nil, fmt.Errorf("failed to parse rule JSON IR from %s: %w", filePath, err)
 	}
 
@@ -141,8 +150,8 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 		// Load rules from this file
 		rules, err := l.loadRulesFromFile(path)
 		if err != nil {
-			// Log error but continue processing other files
-			fmt.Fprintf(os.Stderr, "Warning: failed to load rules from %s: %v\n", path, err)
+			// Silently skip files that fail to load (may be container rules)
+			//nolint:nilerr // Intentionally skip files that aren't code analysis rules
 			return nil
 		}
 
@@ -154,11 +163,163 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 		return nil, fmt.Errorf("failed to walk directory %s: %w", dirPath, err)
 	}
 
-	if len(allRules) == 0 {
-		return nil, fmt.Errorf("no rules found in directory: %s", dirPath)
+	// It's OK to have zero code analysis rules (directory might only contain container rules)
+	return allRules, nil
+}
+
+// LoadContainerRules loads container rules (Dockerfile/Compose) from Python DSL files.
+// Returns JSON IR in format: {"dockerfile": [...], "compose": [...]}.
+func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
+	// Check if path is file or directory
+	info, err := os.Stat(l.RulesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access rules path: %w", err)
 	}
 
-	return allRules, nil
+	var containerRulesJSON struct {
+		Dockerfile []map[string]interface{} `json:"dockerfile"`
+		Compose    []map[string]interface{} `json:"compose"`
+	}
+
+	// If single file, load directly
+	if !info.IsDir() {
+		jsonIR, err := l.loadContainerRulesFromFile(l.RulesPath)
+		if err != nil {
+			return nil, err
+		}
+		// Parse and merge
+		var fileRules struct {
+			Dockerfile []map[string]interface{} `json:"dockerfile"`
+			Compose    []map[string]interface{} `json:"compose"`
+		}
+		if err := json.Unmarshal(jsonIR, &fileRules); err != nil {
+			return nil, fmt.Errorf("failed to parse container rules JSON: %w", err)
+		}
+		containerRulesJSON.Dockerfile = append(containerRulesJSON.Dockerfile, fileRules.Dockerfile...)
+		containerRulesJSON.Compose = append(containerRulesJSON.Compose, fileRules.Compose...)
+	} else {
+		// If directory, find all .py files and load them
+		err := filepath.Walk(l.RulesPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Skip non-Python files
+			if info.IsDir() || filepath.Ext(path) != ".py" {
+				return nil
+			}
+
+			// Load container rules from this file
+			jsonIR, err := l.loadContainerRulesFromFile(path)
+			if err != nil {
+				// Skip files that don't contain container rules (they might be code analysis rules)
+				//nolint:nilerr // Intentionally skip files that aren't container rules
+				return nil
+			}
+
+			// Parse and merge
+			var fileRules struct {
+				Dockerfile []map[string]interface{} `json:"dockerfile"`
+				Compose    []map[string]interface{} `json:"compose"`
+			}
+			if err := json.Unmarshal(jsonIR, &fileRules); err != nil {
+				// Skip files with invalid JSON (might not be container rules)
+				//nolint:nilerr // Intentionally skip files with wrong format
+				return nil
+			}
+
+			containerRulesJSON.Dockerfile = append(containerRulesJSON.Dockerfile, fileRules.Dockerfile...)
+			containerRulesJSON.Compose = append(containerRulesJSON.Compose, fileRules.Compose...)
+			return nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to walk directory %s: %w", l.RulesPath, err)
+		}
+	}
+
+	// Return combined JSON
+	return json.Marshal(containerRulesJSON)
+}
+
+// loadContainerRulesFromFile loads container rules from a single Python file or directory.
+// Creates a temporary Python script to import and compile all rules, then executes it.
+func (l *RuleLoader) loadContainerRulesFromFile(rulesPath string) ([]byte, error) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create a temporary Python script that compiles rules from the given path
+	compileScript := fmt.Sprintf(`
+import json
+import importlib.util
+from pathlib import Path
+
+from rules import container_decorators, container_ir
+
+# Import rule file(s)
+rule_path = Path('%s')
+
+if rule_path.is_file():
+    # Single file - import it
+    spec = importlib.util.spec_from_file_location("user_rule", rule_path)
+    if spec and spec.loader:
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+elif rule_path.is_dir():
+    # Directory - import all .py files
+    for rule_file in rule_path.glob("*.py"):
+        if rule_file.name == "__init__.py":
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location(rule_file.stem, rule_file)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+        except Exception:
+            pass  # Skip files that fail to import
+
+# Compile and output
+json_ir = container_ir.compile_all_rules()
+print(json.dumps(json_ir))
+`, rulesPath)
+
+	// Execute Python script
+	var cmd *exec.Cmd
+	if isSandboxEnabled() {
+		// For sandbox mode, write script to temp file and execute with nsjail
+		tmpFile, err := os.CreateTemp("/tmp", "container_rules_*.py")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temp script file: %w", err)
+		}
+		defer os.Remove(tmpFile.Name())
+
+		if _, err := tmpFile.WriteString(compileScript); err != nil {
+			return nil, fmt.Errorf("failed to write temp script: %w", err)
+		}
+		tmpFile.Close()
+
+		cmd = buildNsjailCommand(ctx, tmpFile.Name())
+	} else {
+		// Direct Python execution (development mode)
+		cmd = exec.CommandContext(ctx, "python3", "-c", compileScript)
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("Python rule execution timed out after 30s")
+		}
+		return nil, fmt.Errorf("failed to compile container rules: %w", err)
+	}
+
+	// Validate it's valid JSON
+	var test interface{}
+	if err := json.Unmarshal(output, &test); err != nil {
+		return nil, fmt.Errorf("invalid JSON output from container rules: %w", err)
+	}
+
+	return output, nil
 }
 
 // ExecuteRule executes a single rule against callgraph.
@@ -186,6 +347,10 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 
 	case "logic_and", "logic_or", "logic_not":
 		return l.executeLogic(matcherType, matcherMap, cg)
+
+	// Container matchers - skip silently (handled by ContainerRuleExecutor)
+	case "missing_instruction", "instruction", "service_has", "service_missing", "any_of", "all_of", "none_of":
+		return []DataflowDetection{}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown matcher type: %s", matcherType)

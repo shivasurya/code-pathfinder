@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Helper function to create test rules (duplicated from ci_test.go).
@@ -169,5 +171,175 @@ func TestPrintDetections(t *testing.T) {
 		assert.Contains(t, output, "test.func2:20")
 		assert.Contains(t, output, "Confidence: 80%")
 		assert.Contains(t, output, "Confidence: 70%")
+	})
+}
+
+func TestExtractContainerFiles(t *testing.T) {
+	t.Run("extracts Dockerfile and docker-compose files", func(t *testing.T) {
+		cg := &graph.CodeGraph{
+			Nodes: map[string]*graph.Node{
+				"node1": {Type: "dockerfile_instruction", File: "/path/to/Dockerfile"},
+				"node2": {Type: "dockerfile_instruction", File: "/path/to/Dockerfile.dev"},
+				"node3": {Type: "compose_service", File: "/path/to/docker-compose.yml"},
+				"node4": {Type: "method_declaration", File: "/path/to/main.go"},
+			},
+		}
+
+		dockerFiles, composeFiles := extractContainerFiles(cg)
+
+		assert.Equal(t, 2, len(dockerFiles))
+		assert.Contains(t, dockerFiles, "/path/to/Dockerfile")
+		assert.Contains(t, dockerFiles, "/path/to/Dockerfile.dev")
+
+		assert.Equal(t, 1, len(composeFiles))
+		assert.Contains(t, composeFiles, "/path/to/docker-compose.yml")
+	})
+
+	t.Run("handles duplicates", func(t *testing.T) {
+		cg := &graph.CodeGraph{
+			Nodes: map[string]*graph.Node{
+				"node1": {Type: "dockerfile_instruction", File: "/path/to/Dockerfile"},
+				"node2": {Type: "dockerfile_instruction", File: "/path/to/Dockerfile"},
+				"node3": {Type: "compose_service", File: "/path/to/docker-compose.yml"},
+				"node4": {Type: "compose_service", File: "/path/to/docker-compose.yml"},
+			},
+		}
+
+		dockerFiles, composeFiles := extractContainerFiles(cg)
+
+		// Should deduplicate
+		assert.Equal(t, 1, len(dockerFiles))
+		assert.Equal(t, 1, len(composeFiles))
+	})
+
+	t.Run("returns empty for no container files", func(t *testing.T) {
+		cg := &graph.CodeGraph{
+			Nodes: map[string]*graph.Node{
+				"node1": {Type: "method_declaration", File: "/path/to/main.go"},
+				"node2": {Type: "class_declaration", File: "/path/to/app.java"},
+			},
+		}
+
+		dockerFiles, composeFiles := extractContainerFiles(cg)
+
+		assert.Equal(t, 0, len(dockerFiles))
+		assert.Equal(t, 0, len(composeFiles))
+	})
+}
+
+func TestSplitLines(t *testing.T) {
+	t.Run("splits simple content", func(t *testing.T) {
+		content := "line 1\nline 2\nline 3"
+		lines := splitLines(content)
+
+		assert.Equal(t, 3, len(lines))
+		assert.Equal(t, "line 1", lines[0])
+		assert.Equal(t, "line 2", lines[1])
+		assert.Equal(t, "line 3", lines[2])
+	})
+
+	t.Run("handles empty lines", func(t *testing.T) {
+		content := "line 1\n\nline 3"
+		lines := splitLines(content)
+
+		assert.Equal(t, 3, len(lines))
+		assert.Equal(t, "line 1", lines[0])
+		assert.Equal(t, "", lines[1])
+		assert.Equal(t, "line 3", lines[2])
+	})
+
+	t.Run("handles Windows line endings", func(t *testing.T) {
+		content := "line 1\r\nline 2\r\nline 3"
+		lines := splitLines(content)
+
+		assert.Equal(t, 3, len(lines))
+		assert.Equal(t, "line 1", lines[0])
+		assert.Equal(t, "line 2", lines[1])
+		assert.Equal(t, "line 3", lines[2])
+	})
+
+	t.Run("handles empty content", func(t *testing.T) {
+		lines := splitLines("")
+		assert.Equal(t, 0, len(lines))
+	})
+
+	t.Run("preserves last line without newline", func(t *testing.T) {
+		content := "line 1\nline 2"
+		lines := splitLines(content)
+
+		assert.Equal(t, 2, len(lines))
+		assert.Equal(t, "line 1", lines[0])
+		assert.Equal(t, "line 2", lines[1])
+	})
+}
+
+func TestGenerateCodeSnippet(t *testing.T) {
+	// Create a temporary test file
+	content := `line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7`
+
+	tmpFile, err := os.CreateTemp("", "test-snippet-*.txt")
+	require.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.WriteString(content)
+	require.NoError(t, err)
+	tmpFile.Close()
+
+	t.Run("generates snippet with context", func(t *testing.T) {
+		snippet := generateCodeSnippet(tmpFile.Name(), 4, 2)
+
+		assert.Equal(t, 5, len(snippet.Lines))
+		assert.Equal(t, 2, snippet.StartLine)
+		assert.Equal(t, 4, snippet.HighlightLine)
+
+		// Check line numbers and content
+		assert.Equal(t, 2, snippet.Lines[0].Number)
+		assert.Equal(t, "line 2", snippet.Lines[0].Content)
+		assert.False(t, snippet.Lines[0].IsHighlight)
+
+		assert.Equal(t, 4, snippet.Lines[2].Number)
+		assert.Equal(t, "line 4", snippet.Lines[2].Content)
+		assert.True(t, snippet.Lines[2].IsHighlight)
+
+		assert.Equal(t, 6, snippet.Lines[4].Number)
+		assert.Equal(t, "line 6", snippet.Lines[4].Content)
+	})
+
+	t.Run("handles line at start of file", func(t *testing.T) {
+		snippet := generateCodeSnippet(tmpFile.Name(), 1, 2)
+
+		assert.Equal(t, 3, len(snippet.Lines)) // Lines 1, 2, 3
+		assert.Equal(t, 1, snippet.StartLine)
+		assert.Equal(t, 1, snippet.HighlightLine)
+		assert.True(t, snippet.Lines[0].IsHighlight)
+	})
+
+	t.Run("handles line at end of file", func(t *testing.T) {
+		snippet := generateCodeSnippet(tmpFile.Name(), 7, 2)
+
+		assert.Equal(t, 3, len(snippet.Lines)) // Lines 5, 6, 7
+		assert.Equal(t, 5, snippet.StartLine)
+		assert.Equal(t, 7, snippet.HighlightLine)
+		assert.True(t, snippet.Lines[2].IsHighlight)
+	})
+
+	t.Run("handles invalid line number", func(t *testing.T) {
+		snippet := generateCodeSnippet(tmpFile.Name(), 100, 2)
+
+		assert.Equal(t, 0, len(snippet.Lines))
+		assert.Equal(t, 0, snippet.StartLine)
+		assert.Equal(t, 0, snippet.HighlightLine)
+	})
+
+	t.Run("handles nonexistent file", func(t *testing.T) {
+		snippet := generateCodeSnippet("/nonexistent/file.txt", 1, 2)
+
+		assert.Equal(t, 0, len(snippet.Lines))
 	})
 }

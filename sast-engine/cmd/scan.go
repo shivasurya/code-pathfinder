@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/docker"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
 )
@@ -67,6 +70,9 @@ Examples:
 		}
 		projectPath = absProjectPath
 
+		// Create rule loader (used for both container and code analysis rules)
+		loader := dsl.NewRuleLoader(rulesPath)
+
 		// Step 1: Build code graph (AST)
 		logger.Progress("Building code graph from %s...", projectPath)
 		codeGraph := graph.Initialize(projectPath)
@@ -74,6 +80,28 @@ Examples:
 			return fmt.Errorf("no source files found in project")
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
+
+		// Step 1.5: Execute container rules if Docker/Compose files are present
+		var containerDetections []*dsl.EnrichedDetection
+		dockerFiles, composeFiles := extractContainerFiles(codeGraph)
+		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
+			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
+
+			// Load container rules from the same rules path (runtime generation)
+			logger.Progress("Loading container rules...")
+			containerRulesJSON, err := loader.LoadContainerRules()
+			if err != nil {
+				logger.Warning("No container rules found: %v", err)
+			} else {
+				logger.Progress("Executing container rules...")
+				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
+				if len(containerDetections) > 0 {
+					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
+				} else {
+					logger.Progress("No container issues detected")
+				}
+			}
+		}
 
 		// Step 2: Build module registry
 		logger.Progress("Building module registry...")
@@ -95,7 +123,6 @@ Examples:
 
 		// Step 4: Load Python DSL rules
 		logger.Progress("Loading rules from %s...", rulesPath)
-		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
@@ -129,8 +156,16 @@ Examples:
 			}
 		}
 
+		// Merge container detections with code analysis detections
+		allEnriched = append(allEnriched, containerDetections...)
+
 		// Step 6: Format and display results
-		summary := output.BuildSummary(allEnriched, len(rules))
+		// Count unique rule IDs from all detections (includes both code and container rules)
+		uniqueRules := make(map[string]bool)
+		for _, det := range allEnriched {
+			uniqueRules[det.Rule.ID] = true
+		}
+		summary := output.BuildSummary(allEnriched, len(uniqueRules))
 		formatter := output.NewTextFormatter(&output.OutputOptions{
 			Verbosity: verbosity,
 		}, logger)
@@ -155,6 +190,187 @@ func countTotalCallSites(cg *core.CallGraph) int {
 		total += len(sites)
 	}
 	return total
+}
+
+// extractContainerFiles extracts unique Docker and docker-compose file paths from CodeGraph.
+func extractContainerFiles(codeGraph *graph.CodeGraph) (dockerFiles []string, composeFiles []string) {
+	dockerFileSet := make(map[string]bool)
+	composeFileSet := make(map[string]bool)
+
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "dockerfile_instruction" {
+			dockerFileSet[node.File] = true
+		} else if node.Type == "compose_service" {
+			composeFileSet[node.File] = true
+		}
+	}
+
+	for file := range dockerFileSet {
+		dockerFiles = append(dockerFiles, file)
+	}
+	for file := range composeFileSet {
+		composeFiles = append(composeFiles, file)
+	}
+
+	return dockerFiles, composeFiles
+}
+
+// executeContainerRules executes container security rules and returns enriched detections.
+func executeContainerRules(
+	rulesJSON []byte,
+	dockerFiles []string,
+	composeFiles []string,
+	projectPath string,
+	logger *output.Logger,
+) []*dsl.EnrichedDetection {
+	// Create executor and load rules
+	exec := &executor.ContainerRuleExecutor{}
+	if err := exec.LoadRules(rulesJSON); err != nil {
+		logger.Warning("Failed to parse container rules: %v", err)
+		return nil
+	}
+
+	var allMatches []executor.RuleMatch
+
+	// Execute rules on Dockerfiles
+	for _, dockerFilePath := range dockerFiles {
+		parser := docker.NewDockerfileParser()
+		dockerGraph, err := parser.ParseFile(dockerFilePath)
+		if err != nil {
+			logger.Warning("Failed to parse Dockerfile %s: %v", dockerFilePath, err)
+			continue
+		}
+
+		matches := exec.ExecuteDockerfile(dockerGraph)
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Execute rules on docker-compose files
+	for _, composeFilePath := range composeFiles {
+		composeGraph, err := graph.ParseDockerCompose(composeFilePath)
+		if err != nil {
+			logger.Warning("Failed to parse docker-compose %s: %v", composeFilePath, err)
+			continue
+		}
+
+		matches := exec.ExecuteCompose(composeGraph)
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Convert RuleMatch to EnrichedDetection
+	enriched := make([]*dsl.EnrichedDetection, 0, len(allMatches))
+	for _, match := range allMatches {
+		// Make file path relative to project root
+		relPath, err := filepath.Rel(projectPath, match.FilePath)
+		if err != nil {
+			relPath = match.FilePath
+		}
+
+		// Build description with service name if present (compose rules)
+		description := match.Message
+		if match.ServiceName != "" {
+			description = fmt.Sprintf("[Service: %s] %s", match.ServiceName, match.Message)
+		}
+
+		// Parse CWE into slice format
+		cweList := []string{}
+		if match.CWE != "" {
+			cweList = []string{match.CWE}
+		}
+
+		// Generate code snippet
+		snippet := generateCodeSnippet(match.FilePath, match.LineNumber, 3)
+
+		detection := &dsl.EnrichedDetection{
+			Detection: dsl.DataflowDetection{
+				FunctionFQN: match.FilePath, // Use file path as function identifier for container rules
+				SinkLine:    match.LineNumber,
+				Confidence:  1.0, // Container rules are deterministic
+				Scope:       "file",
+			},
+			Location: dsl.LocationInfo{
+				FilePath: match.FilePath,
+				RelPath:  relPath,
+				Line:     match.LineNumber,
+			},
+			Snippet: snippet,
+			Rule: dsl.RuleMetadata{
+				ID:          match.RuleID,
+				Name:        match.RuleName,
+				Severity:    strings.ToLower(match.Severity), // Normalize to lowercase for formatter
+				Description: description,
+				CWE:         cweList,
+			},
+			DetectionType: dsl.DetectionTypePattern,
+		}
+
+		enriched = append(enriched, detection)
+	}
+
+	return enriched
+}
+
+// generateCodeSnippet creates a code snippet with context lines around the target line.
+func generateCodeSnippet(filePath string, lineNumber int, contextLines int) dsl.CodeSnippet {
+	// Read file contents
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return dsl.CodeSnippet{}
+	}
+
+	lines := splitLines(string(content))
+	if lineNumber < 1 || lineNumber > len(lines) {
+		return dsl.CodeSnippet{}
+	}
+
+	// Calculate start and end lines (1-indexed)
+	startLine := lineNumber - contextLines
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := lineNumber + contextLines
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	// Build snippet lines
+	var snippetLines []dsl.SnippetLine
+	for i := startLine; i <= endLine; i++ {
+		snippetLines = append(snippetLines, dsl.SnippetLine{
+			Number:      i,
+			Content:     lines[i-1], // lines is 0-indexed
+			IsHighlight: i == lineNumber,
+		})
+	}
+
+	return dsl.CodeSnippet{
+		Lines:         snippetLines,
+		StartLine:     startLine,
+		HighlightLine: lineNumber,
+	}
+}
+
+// splitLines splits content into lines preserving empty lines.
+func splitLines(content string) []string {
+	if content == "" {
+		return []string{}
+	}
+	// Split by newline but preserve empty lines
+	lines := []string{}
+	currentLine := ""
+	for _, ch := range content {
+		if ch == '\n' {
+			lines = append(lines, currentLine)
+			currentLine = ""
+		} else if ch != '\r' { // Skip carriage returns
+			currentLine += string(ch)
+		}
+	}
+	// Add last line if not empty or if content doesn't end with newline
+	if currentLine != "" || len(content) > 0 && content[len(content)-1] != '\n' {
+		lines = append(lines, currentLine)
+	}
+	return lines
 }
 
 // printDetections outputs detections in simple format (used by query command).
