@@ -135,7 +135,7 @@ from rules.container_matchers import service_missing
 
 
 @compose_rule(
-    id="COMPOSE-SEC-009",
+    id="COMPOSE-SEC-011",
     name="Missing no-new-privileges Security Option",
     severity="MEDIUM",
     cwe="CWE-732",

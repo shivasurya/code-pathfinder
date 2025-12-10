@@ -5,7 +5,7 @@ from rules.container_matchers import instruction
 
 
 @dockerfile_rule(
-    id="DOCKER-BP-008",
+    id="DOCKER-BP-029",
     name="Avoid yum update",
     severity="MEDIUM",
     category="best-practice",

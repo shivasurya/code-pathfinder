@@ -73,7 +73,7 @@ from rules.container_matchers import instruction
 
 
 @dockerfile_rule(
-    id="DOCKER-SEC-001",
+    id="DOCKER-SEC-009",
     name="Last USER Instruction is Root",
     severity="HIGH",
     cwe="CWE-269",

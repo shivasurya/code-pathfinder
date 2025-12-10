@@ -5,7 +5,7 @@ from rules.container_matchers import instruction
 
 
 @dockerfile_rule(
-    id="DOCKER-BP-007",
+    id="DOCKER-BP-028",
     name="Avoid apk upgrade",
     severity="MEDIUM",
     category="best-practice",

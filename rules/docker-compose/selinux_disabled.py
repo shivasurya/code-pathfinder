@@ -183,7 +183,7 @@ from rules.container_matchers import service_has
 
 
 @compose_rule(
-    id="COMPOSE-SEC-010",
+    id="COMPOSE-SEC-012",
     name="SELinux Separation Disabled",
     severity="MEDIUM",
     cwe="CWE-732",
