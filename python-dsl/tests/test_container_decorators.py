@@ -61,6 +61,7 @@ class TestDockerfileRule:
 
     def test_invalid_matcher_type(self):
         with pytest.raises(ValueError) as excinfo:
+
             @dockerfile_rule(id="TEST-004")
             def bad_rule():
                 return "not a matcher"
@@ -103,6 +104,7 @@ class TestComposeRule:
 
     def test_invalid_matcher_type(self):
         with pytest.raises(ValueError) as excinfo:
+
             @compose_rule(id="COMPOSE-003")
             def bad_rule():
                 return "not a matcher"

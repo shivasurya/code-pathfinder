@@ -57,8 +57,7 @@ class TestProgrammaticMatcher:
 
     def test_to_dict(self):
         pm = ProgrammaticMatcher(
-            check_function=lambda x: True,
-            description="Lambda test"
+            check_function=lambda x: True, description="Lambda test"
         )
         d = pm.to_dict()
         assert d["type"] == "programmatic"

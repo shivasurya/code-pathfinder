@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,8 +41,38 @@ func Initialize(directory string) *CodeGraph {
 		for file := range fileChan {
 			fileName := filepath.Base(file)
 			fileExt := filepath.Ext(file)
+			fileBase := strings.ToLower(fileName)
+			localGraph := NewCodeGraph()
 
-			// Set the language based on file extension
+			// Check if it's a Dockerfile or docker-compose file
+			isDockerfile := strings.HasPrefix(fileBase, "dockerfile")
+			isDockerCompose := strings.Contains(fileBase, "docker-compose") && (fileExt == ".yml" || fileExt == ".yaml")
+
+			if isDockerfile {
+				// Handle Dockerfile parsing
+				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Parsing Dockerfile %s\033[0m", workerID, fileName)
+				if err := parseDockerfile(file, localGraph); err != nil {
+					Log("Error parsing Dockerfile:", err)
+					continue
+				}
+				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing Dockerfile %s\033[0m", workerID, fileName)
+				resultChan <- localGraph
+				progressChan <- 1
+				continue
+			} else if isDockerCompose {
+				// Handle docker-compose.yml parsing
+				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Parsing docker-compose %s\033[0m", workerID, fileName)
+				if err := parseDockerCompose(file, localGraph); err != nil {
+					Log("Error parsing docker-compose:", err)
+					continue
+				}
+				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing docker-compose %s\033[0m", workerID, fileName)
+				resultChan <- localGraph
+				progressChan <- 1
+				continue
+			}
+
+			// Handle tree-sitter based parsing for Java and Python
 			switch fileExt {
 			case ".java":
 				parser.SetLanguage(java.GetLanguage())
@@ -58,7 +89,7 @@ func Initialize(directory string) *CodeGraph {
 				Log("File not found:", err)
 				continue
 			}
-			
+
 			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 			if err != nil {
 				Log("Error parsing file:", err)
@@ -68,7 +99,6 @@ func Initialize(directory string) *CodeGraph {
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
-			localGraph := NewCodeGraph()
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
 			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file)
 			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)

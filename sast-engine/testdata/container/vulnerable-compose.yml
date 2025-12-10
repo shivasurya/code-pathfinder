@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # COMPOSE-SEC-001: Privileged mode
+  # COMPOSE-SEC-002: Docker socket exposed
+  # COMPOSE-SEC-007: Host network mode
+  web:
+    image: nginx:latest
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # COMPOSE-SEC-006: No read_only (writable filesystem)
+
+  # COMPOSE-SEC-003: Seccomp disabled
+  # COMPOSE-SEC-008: Dangerous capabilities
+  app:
+    image: myapp:latest
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_PTRACE
+
+  # COMPOSE-SEC-009: Host PID mode
+  # COMPOSE-SEC-010: Host IPC mode
+  database:
+    image: postgres:14
+    pid: host
+    ipc: host
+    environment:
+      - POSTGRES_PASSWORD=changeme

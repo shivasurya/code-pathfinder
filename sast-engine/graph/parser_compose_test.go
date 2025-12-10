@@ -561,6 +561,47 @@ volumes:
 	assert.NotNil(t, graph.Volumes["logs"])
 }
 
+func TestComposeGraph_ServiceGetLineNumber(t *testing.T) {
+	yaml := `version: '3.8'
+services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+    privileged: true
+    volumes:
+      - ./data:/data
+`
+	graph := parseComposeFromString(yaml)
+
+	t.Run("returns line number for existing property", func(t *testing.T) {
+		line := graph.ServiceGetLineNumber("web", "privileged")
+		assert.Greater(t, line, 1)
+		assert.LessOrEqual(t, line, 10)
+	})
+
+	t.Run("returns service line for missing property", func(t *testing.T) {
+		line := graph.ServiceGetLineNumber("web", "read_only")
+		// Should return service line (not 0, not 1)
+		assert.Greater(t, line, 1)
+	})
+
+	t.Run("returns 1 for nonexistent service", func(t *testing.T) {
+		line := graph.ServiceGetLineNumber("nonexistent", "any")
+		assert.Equal(t, 1, line)
+	})
+
+	t.Run("returns line number for nested property", func(t *testing.T) {
+		line := graph.ServiceGetLineNumber("web", "ports")
+		assert.Greater(t, line, 1)
+	})
+
+	t.Run("returns service line for empty key", func(t *testing.T) {
+		line := graph.ServiceGetLineNumber("web", "")
+		assert.Greater(t, line, 1)
+	})
+}
+
 // Helper to parse YAML string for testing.
 func parseComposeFromString(yaml string) *ComposeGraph {
 	yamlGraph, _ := ParseYAMLString(yaml)

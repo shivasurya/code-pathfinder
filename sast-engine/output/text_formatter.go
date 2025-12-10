@@ -95,8 +95,8 @@ func (f *TextFormatter) writeSeverityGroup(severity string, detections []*dsl.En
 	fmt.Fprintln(f.writer, title)
 	fmt.Fprintln(f.writer)
 
-	// Critical and high get detailed output
-	showDetailed := severity == "critical" || severity == "high"
+	// All severities get detailed output with code snippets except info
+	showDetailed := severity != "info"
 
 	for _, det := range detections {
 		if showDetailed {

@@ -32,3 +32,5 @@ docs/public/rules/*.json
 .DS_Store
 
 node_modules
+__pycache__/
+compiled_rules.json
