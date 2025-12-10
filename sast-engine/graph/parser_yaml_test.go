@@ -335,3 +335,160 @@ func TestYAMLNode_BoolValue(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertYAMLNodeToInternal_LineNumbers(t *testing.T) {
+	yaml := `version: '3.8'
+services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+    privileged: true
+`
+	graph, err := ParseYAMLString(yaml)
+	assert.NoError(t, err)
+
+	t.Run("preserves line numbers for scalar values", func(t *testing.T) {
+		versionNode := graph.Query("version")
+		assert.NotNil(t, versionNode)
+		assert.Greater(t, versionNode.LineNumber, 0)
+		assert.Equal(t, "3.8", versionNode.Value)
+	})
+
+	t.Run("preserves line numbers for mapping nodes", func(t *testing.T) {
+		servicesNode := graph.Query("services")
+		assert.NotNil(t, servicesNode)
+		assert.Greater(t, servicesNode.LineNumber, 0)
+		assert.Equal(t, "mapping", servicesNode.Type)
+	})
+
+	t.Run("preserves line numbers for nested properties", func(t *testing.T) {
+		servicesNode := graph.Query("services")
+		webNode := servicesNode.GetChild("web")
+		assert.NotNil(t, webNode)
+		assert.Greater(t, webNode.LineNumber, 0)
+
+		imageNode := webNode.GetChild("image")
+		assert.NotNil(t, imageNode)
+		assert.Greater(t, imageNode.LineNumber, 0)
+	})
+
+	t.Run("decodes bool values correctly", func(t *testing.T) {
+		servicesNode := graph.Query("services")
+		webNode := servicesNode.GetChild("web")
+		privilegedNode := webNode.GetChild("privileged")
+		assert.NotNil(t, privilegedNode)
+		assert.Equal(t, true, privilegedNode.Value)
+		assert.True(t, privilegedNode.BoolValue())
+	})
+}
+
+func TestConvertYAMLNodeToInternal_SequenceNodes(t *testing.T) {
+	yaml := `
+items:
+  - item1
+  - item2
+  - 42
+`
+	graph, err := ParseYAMLString(yaml)
+	assert.NoError(t, err)
+
+	itemsNode := graph.Query("items")
+	assert.NotNil(t, itemsNode)
+	assert.Equal(t, "sequence", itemsNode.Type)
+	assert.Greater(t, itemsNode.LineNumber, 0)
+
+	list := itemsNode.ListValues()
+	assert.NotNil(t, list)
+	assert.Equal(t, 3, len(list))
+	assert.Equal(t, "item1", list[0])
+	assert.Equal(t, "item2", list[1])
+	assert.Equal(t, 42, list[2])
+}
+
+func TestConvertYAMLNodeToInternal_ScalarTypeDecoding(t *testing.T) {
+	yaml := `
+string_val: "test"
+int_val: 42
+float_val: 3.14
+bool_true: true
+bool_false: false
+null_val: null
+`
+	graph, err := ParseYAMLString(yaml)
+	assert.NoError(t, err)
+
+	t.Run("decodes string values", func(t *testing.T) {
+		node := graph.Query("string_val")
+		assert.NotNil(t, node)
+		assert.Equal(t, "test", node.Value)
+		assert.Equal(t, "scalar", node.Type)
+	})
+
+	t.Run("decodes int values", func(t *testing.T) {
+		node := graph.Query("int_val")
+		assert.NotNil(t, node)
+		assert.Equal(t, 42, node.Value)
+	})
+
+	t.Run("decodes float values", func(t *testing.T) {
+		node := graph.Query("float_val")
+		assert.NotNil(t, node)
+		assert.Equal(t, 3.14, node.Value)
+	})
+
+	t.Run("decodes bool true", func(t *testing.T) {
+		node := graph.Query("bool_true")
+		assert.NotNil(t, node)
+		assert.Equal(t, true, node.Value)
+		assert.True(t, node.BoolValue())
+	})
+
+	t.Run("decodes bool false", func(t *testing.T) {
+		node := graph.Query("bool_false")
+		assert.NotNil(t, node)
+		assert.Equal(t, false, node.Value)
+		assert.False(t, node.BoolValue())
+	})
+
+	t.Run("decodes null values", func(t *testing.T) {
+		node := graph.Query("null_val")
+		assert.NotNil(t, node)
+		assert.Nil(t, node.Value)
+	})
+}
+
+func TestConvertYAMLNodeToInternal_NilNode(t *testing.T) {
+	result := convertYAMLNodeToInternal(nil)
+	assert.NotNil(t, result)
+	assert.Equal(t, "scalar", result.Type)
+	assert.Nil(t, result.Value)
+	assert.Equal(t, 0, result.LineNumber)
+}
+
+func TestConvertYAMLNodeToInternal_SequenceWithNestedMaps(t *testing.T) {
+	yaml := `
+volumes:
+  - name: data
+    path: /data
+  - name: logs
+    path: /logs
+`
+	graph, err := ParseYAMLString(yaml)
+	assert.NoError(t, err)
+
+	volumesNode := graph.Query("volumes")
+	assert.NotNil(t, volumesNode)
+	assert.Equal(t, "sequence", volumesNode.Type)
+
+	list := volumesNode.ListValues()
+	assert.NotNil(t, list)
+	assert.Equal(t, 2, len(list))
+
+	// First item should be a YAMLNode (mapping)
+	firstItem, ok := list[0].(*YAMLNode)
+	assert.True(t, ok)
+	assert.Equal(t, "mapping", firstItem.Type)
+	assert.NotNil(t, firstItem.Children["name"])
+	assert.Equal(t, "data", firstItem.Children["name"].Value)
+}
