@@ -226,6 +226,8 @@ func TestRuleLoader_ExecuteLogic(t *testing.T) {
 func TestRuleLoader_LoadContainerRules(t *testing.T) {
 	t.Run("loads container rules from single file", func(t *testing.T) {
 		// Create test container rule file
+		// NOTE: Rule files should NOT have if __name__ == "__main__" blocks
+		// The loader's wrapper script handles compilation via container_ir.compile_all_rules()
 		rulesContent := `from rules.container_decorators import dockerfile_rule
 from rules.container_matchers import missing
 
@@ -239,16 +241,6 @@ from rules.container_matchers import missing
 )
 def test_rule():
     return missing(instruction="USER")
-
-if __name__ == "__main__":
-    import json
-    from rules import container_ir
-    json_ir = container_ir.compile_all_rules()
-    output = {
-        "dockerfile": json_ir.get("dockerfile", []),
-        "compose": json_ir.get("compose", [])
-    }
-    print(json.dumps(output))
 `
 		tmpFile := createTempPythonFile(t, rulesContent)
 		defer os.Remove(tmpFile)
@@ -271,18 +263,13 @@ if __name__ == "__main__":
 		tmpDir := t.TempDir()
 
 		// Create multiple rule files
+		// NOTE: Rule files should NOT have if __name__ == "__main__" blocks
 		rule1 := `from rules.container_decorators import dockerfile_rule
 from rules.container_matchers import missing
 
 @dockerfile_rule(id="RULE-1", name="Rule 1", severity="HIGH", cwe="", category="security", message="msg")
 def rule1():
     return missing(instruction="USER")
-
-if __name__ == "__main__":
-    import json
-    from rules import container_ir
-    output = {"dockerfile": container_ir.compile_all_rules().get("dockerfile", []), "compose": []}
-    print(json.dumps(output))
 `
 
 		rule2 := `from rules.container_decorators import compose_rule
@@ -291,12 +278,6 @@ from rules.container_matchers import service_has
 @compose_rule(id="RULE-2", name="Rule 2", severity="CRITICAL", cwe="", category="security", message="msg")
 def rule2():
     return service_has(key="privileged", equals=True)
-
-if __name__ == "__main__":
-    import json
-    from rules import container_ir
-    output = {"dockerfile": [], "compose": container_ir.compile_all_rules().get("compose", [])}
-    print(json.dumps(output))
 `
 
 		err := os.WriteFile(filepath.Join(tmpDir, "rule1.py"), []byte(rule1), 0644)
