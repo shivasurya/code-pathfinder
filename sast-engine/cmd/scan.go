@@ -37,6 +37,9 @@ Examples:
 
   # Scan and print JSON to stdout (for piping)
   pathfinder scan --rules rules/ --project . --output json | jq .`,
+	// Note: The main RunE logic is covered by integration tests in exit_code_integration_test.go
+	// Unit testing cobra commands requires complex mocking of file systems, graph building, etc.
+	// Integration tests provide better coverage for the full execution path.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
