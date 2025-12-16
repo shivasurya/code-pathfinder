@@ -98,7 +98,7 @@ Read the [official documentation](https://codepathfinder.dev/), or run `pathfind
 ### Scan Command (Interactive)
 
 ```bash
-# Basic scan
+# Basic scan (text output to console)
 pathfinder scan --rules rules/ --project /path/to/project
 
 # With verbose output
@@ -106,6 +106,18 @@ pathfinder scan --rules rules/ --project . --verbose
 
 # With debug output
 pathfinder scan --rules rules/ --project . --debug
+
+# JSON output to file
+pathfinder scan --rules rules/ --project . --output json --output-file results.json
+
+# SARIF output to file (GitHub Code Scanning compatible)
+pathfinder scan --rules rules/ --project . --output sarif --output-file results.sarif
+
+# CSV output to file
+pathfinder scan --rules rules/ --project . --output csv --output-file results.csv
+
+# JSON output to stdout (for piping)
+pathfinder scan --rules rules/ --project . --output json | jq .
 
 # Fail on specific severities
 pathfinder scan --rules rules/ --project . --fail-on=critical,high

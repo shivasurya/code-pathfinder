@@ -228,8 +228,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 		}
 	}
 
-	// Phase 3 Task 12: Print attribute failure analysis
-	resolution.PrintAttributeFailureStats()
+	// Phase 3 Task 12: Print attribute failure analysis (debug mode only)
+	resolution.PrintAttributeFailureStats(logger)
 
 	// Pass 5: Generate taint summaries for all functions
 	logger.Progress("Pass 5: Generating taint summaries...")

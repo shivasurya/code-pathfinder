@@ -1,6 +1,6 @@
 {
     "name": "codepathfinder",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Code Pathfinder, the open-source alternative to CodeQL. Designed for precise flow analysis and advanced structural search, it identifies vulnerabilities in source code.",
     "goBinary": {
         "name": "pathfinder",

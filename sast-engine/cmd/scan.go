@@ -29,14 +29,25 @@ Examples:
   # Scan with a directory of rules
   pathfinder scan --rules rules/ --project /path/to/project
 
-  # Scan with custom rules
-  pathfinder scan --rules my_rules.py --project .`,
+  # Scan with custom rules and output to JSON file
+  pathfinder scan --rules my_rules.py --project . --output json --output-file results.json
+
+  # Scan with SARIF output for CI/CD integration
+  pathfinder scan --rules rules/ --project . --output sarif --output-file results.sarif
+
+  # Scan and print JSON to stdout (for piping)
+  pathfinder scan --rules rules/ --project . --output json | jq .`,
+	// Note: The main RunE logic is covered by integration tests in exit_code_integration_test.go
+	// Unit testing cobra commands requires complex mocking of file systems, graph building, etc.
+	// Integration tests provide better coverage for the full execution path.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
+		outputFormat, _ := cmd.Flags().GetString("output")
+		outputFile, _ := cmd.Flags().GetString("output-file")
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -61,6 +72,10 @@ Examples:
 
 		if projectPath == "" {
 			return fmt.Errorf("--project flag is required")
+		}
+
+		if outputFormat != "" && outputFormat != "text" && outputFormat != "json" && outputFormat != "sarif" && outputFormat != "csv" {
+			return fmt.Errorf("--output must be 'text', 'json', 'sarif', or 'csv'")
 		}
 
 		// Convert project path to absolute path to ensure consistency
@@ -166,12 +181,81 @@ Examples:
 			uniqueRules[det.Rule.ID] = true
 		}
 		summary := output.BuildSummary(allEnriched, len(uniqueRules))
-		formatter := output.NewTextFormatter(&output.OutputOptions{
-			Verbosity: verbosity,
-		}, logger)
 
-		if err := formatter.Format(allEnriched, summary); err != nil {
-			return fmt.Errorf("failed to format output: %w", err)
+		// Default to text format if not specified
+		if outputFormat == "" {
+			outputFormat = "text"
+		}
+
+		logger.Progress("Generating %s output...", outputFormat)
+
+		// Setup output writer (file or stdout)
+		var outputWriter *os.File
+		if outputFile != "" {
+			var err error
+			outputWriter, err = os.Create(outputFile)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %w", err)
+			}
+			defer outputWriter.Close()
+			logger.Progress("Writing output to %s", outputFile)
+		}
+
+		// Generate output based on format
+		switch outputFormat {
+		case "text":
+			formatter := output.NewTextFormatter(&output.OutputOptions{
+				Verbosity: verbosity,
+			}, logger)
+			if err := formatter.Format(allEnriched, summary); err != nil {
+				return fmt.Errorf("failed to format output: %w", err)
+			}
+		case "json":
+			scanInfo := output.ScanInfo{
+				Target:        projectPath,
+				RulesExecuted: len(uniqueRules),
+				Errors:        []string{},
+			}
+			var formatter *output.JSONFormatter
+			if outputWriter != nil {
+				formatter = output.NewJSONFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewJSONFormatter(nil)
+			}
+			if err := formatter.Format(allEnriched, summary, scanInfo); err != nil {
+				return fmt.Errorf("failed to format JSON output: %w", err)
+			}
+		case "sarif":
+			scanInfo := output.ScanInfo{
+				Target:        projectPath,
+				RulesExecuted: len(uniqueRules),
+				Errors:        []string{},
+			}
+			var formatter *output.SARIFFormatter
+			if outputWriter != nil {
+				formatter = output.NewSARIFFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewSARIFFormatter(nil)
+			}
+			if err := formatter.Format(allEnriched, scanInfo); err != nil {
+				return fmt.Errorf("failed to format SARIF output: %w", err)
+			}
+		case "csv":
+			var formatter *output.CSVFormatter
+			if outputWriter != nil {
+				formatter = output.NewCSVFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewCSVFormatter(nil)
+			}
+			if err := formatter.Format(allEnriched); err != nil {
+				return fmt.Errorf("failed to format CSV output: %w", err)
+			}
+		default:
+			return fmt.Errorf("unknown output format: %s", outputFormat)
+		}
+
+		if outputWriter != nil {
+			logger.Progress("Successfully wrote results to %s", outputFile)
 		}
 
 		// Determine exit code based on findings and --fail-on flag
@@ -399,6 +483,8 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
+	scanCmd.Flags().StringP("output", "o", "text", "Output format: text, json, sarif, or csv (default: text)")
+	scanCmd.Flags().StringP("output-file", "f", "", "Write output to file instead of stdout")
 	scanCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
 	scanCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")

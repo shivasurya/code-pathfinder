@@ -386,11 +386,21 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 	}
 }
 
+// mockLogger implements the logger interface for testing.
+type mockLogger struct {
+	isDebug bool
+}
+
+func (m *mockLogger) IsDebug() bool {
+	return m.isDebug
+}
+
 // TestPrintAttributeFailureStats tests the statistics printing function.
 func TestPrintAttributeFailureStats(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupStats    func()
+		logger        interface{ IsDebug() bool }
 		expectOutput  bool
 		checkOutput   func(*testing.T, string)
 	}{
@@ -404,10 +414,47 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 					CustomClassSamples:       make([]string, 0, 20),
 				}
 			},
+			logger:       nil,
 			expectOutput: false,
 			checkOutput: func(t *testing.T, output string) {
 				t.Helper()
 				assert.Empty(t, output, "Expected no output when no attempts")
+			},
+		},
+		{
+			name: "logger not in debug mode - should be silent",
+			setupStats: func() {
+				attributeFailureStats = &FailureStats{
+					TotalAttempts:            100,
+					DeepChainSamples:         []string{"self.a.b.c"},
+					AttributeNotFoundSamples: make([]string, 0, 20),
+					CustomClassSamples:       make([]string, 0, 20),
+				}
+			},
+			logger:       &mockLogger{isDebug: false},
+			expectOutput: false,
+			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
+				assert.Empty(t, output, "Expected no output when not in debug mode")
+			},
+		},
+		{
+			name: "logger in debug mode - should print",
+			setupStats: func() {
+				attributeFailureStats = &FailureStats{
+					TotalAttempts:            10,
+					NotSelfPrefix:            5,
+					DeepChainSamples:         make([]string, 0, 20),
+					AttributeNotFoundSamples: make([]string, 0, 20),
+					CustomClassSamples:       make([]string, 0, 20),
+				}
+			},
+			logger:       &mockLogger{isDebug: true},
+			expectOutput: true,
+			checkOutput: func(t *testing.T, output string) {
+				t.Helper()
+				assert.Contains(t, output, "[ATTR_FAILURE_ANALYSIS]")
+				assert.Contains(t, output, "Total attempts:              10")
 			},
 		},
 		{
@@ -426,6 +473,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 					CustomClassSamples:     []string{"self.user.get_name (type: myapp.User)"},
 				}
 			},
+			logger:       nil,
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
 				t.Helper()
@@ -458,6 +506,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 					CustomClassSamples:       make([]string, 0, 20),
 				}
 			},
+			logger:       nil,
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
 				t.Helper()
@@ -490,6 +539,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 					CustomClassSamples:       make([]string, 0, 20),
 				}
 			},
+			logger:       nil,
 			expectOutput: true,
 			checkOutput: func(t *testing.T, output string) {
 				t.Helper()
@@ -509,7 +559,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
-			PrintAttributeFailureStats()
+			PrintAttributeFailureStats(tt.logger)
 
 			w.Close()
 			os.Stdout = oldStdout
