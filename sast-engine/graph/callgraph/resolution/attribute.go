@@ -153,7 +153,12 @@ func ResolveSelfAttributeCall(
 }
 
 // PrintAttributeFailureStats prints detailed statistics about attribute chain failures.
-func PrintAttributeFailureStats() {
+// Only prints if debug mode is enabled via the provided logger.
+func PrintAttributeFailureStats(logger interface{ IsDebug() bool }) {
+	// Don't print if not in debug mode or no attempts made
+	if logger != nil && !logger.IsDebug() {
+		return
+	}
 	if attributeFailureStats.TotalAttempts == 0 {
 		return
 	}

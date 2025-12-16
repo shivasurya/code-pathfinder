@@ -273,6 +273,70 @@ func TestSplitLines(t *testing.T) {
 	})
 }
 
+func TestScanCommandOutputFormats(t *testing.T) {
+	// Note: These are integration-style tests that verify the command flags are properly registered
+	t.Run("scan command has output flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("output")
+		require.NotNil(t, flag, "output flag should be registered")
+		assert.Equal(t, "text", flag.DefValue, "default output should be text")
+	})
+
+	t.Run("scan command has output-file flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("output-file")
+		require.NotNil(t, flag, "output-file flag should be registered")
+		assert.Equal(t, "", flag.DefValue, "default output-file should be empty")
+	})
+
+	t.Run("scan command has rules flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("rules")
+		require.NotNil(t, flag, "rules flag should be registered")
+	})
+
+	t.Run("scan command has project flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("project")
+		require.NotNil(t, flag, "project flag should be registered")
+	})
+
+	t.Run("scan command has verbose flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("verbose")
+		require.NotNil(t, flag, "verbose flag should be registered")
+	})
+
+	t.Run("scan command has debug flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("debug")
+		require.NotNil(t, flag, "debug flag should be registered")
+	})
+
+	t.Run("scan command has fail-on flag", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("fail-on")
+		require.NotNil(t, flag, "fail-on flag should be registered")
+	})
+
+	t.Run("output format validation", func(t *testing.T) {
+		// Valid formats
+		validFormats := []string{"text", "json", "sarif", "csv"}
+		for _, format := range validFormats {
+			t.Run("accepts "+format, func(t *testing.T) {
+				// This just verifies the flag accepts these values
+				err := scanCmd.Flags().Set("output", format)
+				assert.NoError(t, err)
+			})
+		}
+	})
+
+	t.Run("output flag short form", func(t *testing.T) {
+		flag := scanCmd.Flags().ShorthandLookup("o")
+		require.NotNil(t, flag, "output flag should have short form -o")
+		assert.Equal(t, "output", flag.Name)
+	})
+
+	t.Run("output-file flag short form", func(t *testing.T) {
+		flag := scanCmd.Flags().ShorthandLookup("f")
+		require.NotNil(t, flag, "output-file flag should have short form -f")
+		assert.Equal(t, "output-file", flag.Name)
+	})
+}
+
 func TestGenerateCodeSnippet(t *testing.T) {
 	// Create a temporary test file
 	content := `line 1

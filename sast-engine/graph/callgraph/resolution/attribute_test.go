@@ -509,7 +509,8 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
-			PrintAttributeFailureStats()
+			// Pass nil to print unconditionally (for testing)
+		PrintAttributeFailureStats(nil)
 
 			w.Close()
 			os.Stdout = oldStdout

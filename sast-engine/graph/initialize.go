@@ -139,7 +139,10 @@ func Initialize(directory string) *CodeGraph {
 				}
 				progress++
 			}
-			fmt.Print("\033[H\033[J") // Clear the screen
+			// Only print progress in verbose mode to avoid polluting structured output
+			if verboseFlag {
+				fmt.Print("\033[H\033[J") // Clear the screen
+			}
 			for _, line := range statusLines {
 				Log(line)
 			}
