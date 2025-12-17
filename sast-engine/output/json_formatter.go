@@ -118,6 +118,7 @@ type JSONSummary struct {
 // ScanInfo contains metadata about the scan.
 type ScanInfo struct {
 	Target        string
+	Version       string
 	Duration      time.Duration
 	RulesExecuted int
 	Errors        []string
@@ -133,10 +134,15 @@ func (f *JSONFormatter) Format(detections []*dsl.EnrichedDetection, summary *Sum
 }
 
 func (f *JSONFormatter) buildOutput(detections []*dsl.EnrichedDetection, summary *Summary, scanInfo ScanInfo) JSONOutput {
+	version := scanInfo.Version
+	if version == "" {
+		version = "unknown"
+	}
+
 	output := JSONOutput{
 		Tool: JSONTool{
 			Name:    "Code Pathfinder",
-			Version: "0.0.25", // TODO: Get from version package
+			Version: version,
 			URL:     "https://github.com/shivasurya/code-pathfinder",
 		},
 		Scan: JSONScan{
