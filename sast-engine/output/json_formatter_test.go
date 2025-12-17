@@ -53,6 +53,7 @@ func TestJSONFormatterStructure(t *testing.T) {
 	summary := BuildSummary(detections, 10)
 	scanInfo := ScanInfo{
 		Target:        "/project/path",
+		Version:       "1.2.3-test",
 		RulesExecuted: 10,
 		Duration:      5 * time.Second,
 	}
@@ -72,8 +73,8 @@ func TestJSONFormatterStructure(t *testing.T) {
 	if output.Tool.Name != "Code Pathfinder" {
 		t.Errorf("tool.name: got %q, want %q", output.Tool.Name, "Code Pathfinder")
 	}
-	if output.Tool.Version != "0.0.25" {
-		t.Errorf("tool.version: got %q, want %q", output.Tool.Version, "0.0.25")
+	if output.Tool.Version != "1.2.3-test" {
+		t.Errorf("tool.version: got %q, want %q", output.Tool.Version, "1.2.3-test")
 	}
 	if output.Tool.URL != "https://github.com/shivasurya/code-pathfinder" {
 		t.Errorf("tool.url: got %q", output.Tool.URL)

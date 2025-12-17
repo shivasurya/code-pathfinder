@@ -213,6 +213,7 @@ Examples:
 		case "json":
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
+				Version:       Version,
 				RulesExecuted: len(uniqueRules),
 				Errors:        []string{},
 			}
@@ -228,6 +229,7 @@ Examples:
 		case "sarif":
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
+				Version:       Version,
 				RulesExecuted: len(uniqueRules),
 				Errors:        []string{},
 			}
