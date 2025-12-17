@@ -4,8 +4,60 @@ Decorators for pathfinder rule definitions.
 The @rule decorator marks functions as security patterns.
 """
 
-from typing import Callable, Optional
+import atexit
+import json
+import sys
+from typing import Callable, Optional, List
 from .ir import serialize_ir
+
+
+# Global registry for auto-execution
+_rule_registry: List["Rule"] = []
+_auto_execute_enabled = False
+
+
+def _enable_auto_execute() -> None:
+    """
+    Enable automatic rule execution when script ends.
+
+    This should be called once when the first rule is registered
+    and the module is being executed as a script (not imported).
+    """
+    global _auto_execute_enabled
+    if _auto_execute_enabled:
+        return
+
+    _auto_execute_enabled = True
+
+    def _output_rules():
+        """Output all registered rules as JSON when script ends."""
+        if not _rule_registry:
+            return
+
+        # Execute all rules and collect their JSON IR
+        rules_json = [rule.execute() for rule in _rule_registry]
+
+        # Output to stdout for Go loader to capture
+        print(json.dumps(rules_json))
+
+    # Register cleanup handler
+    atexit.register(_output_rules)
+
+
+def _register_rule(rule_obj: "Rule") -> None:
+    """
+    Register a rule for auto-execution.
+
+    Args:
+        rule_obj: The Rule instance to register
+    """
+    _rule_registry.append(rule_obj)
+
+    # Enable auto-execution on first rule registration
+    # Check if module is being executed directly (not imported)
+    frame = sys._getframe(2)  # Get caller's frame (the module defining the rule)
+    if frame.f_globals.get("__name__") == "__main__":
+        _enable_auto_execute()
 
 
 class Rule:
@@ -99,6 +151,8 @@ def rule(
     """
 
     def decorator(func: Callable) -> Rule:
-        return Rule(id=id, severity=severity, func=func, cwe=cwe, owasp=owasp)
+        rule_obj = Rule(id=id, severity=severity, func=func, cwe=cwe, owasp=owasp)
+        _register_rule(rule_obj)
+        return rule_obj
 
     return decorator
