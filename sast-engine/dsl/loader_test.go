@@ -20,16 +20,13 @@ func TestRuleLoader_New(t *testing.T) {
 func TestRuleLoader_LoadRules(t *testing.T) {
 	t.Run("loads valid Python DSL rules", func(t *testing.T) {
 		// Create test rules file
+		// Note: Rules auto-execute when run as __main__ (no manual __main__ block needed)
 		rulesContent := `from codepathfinder import rule, calls
 
 @rule(id="test-eval", severity="high", cwe="CWE-94")
 def detect_eval():
     """Test rule."""
     return calls("eval")
-
-if __name__ == "__main__":
-    import json
-    print(json.dumps([detect_eval.execute()], indent=2))
 `
 		tmpFile := createTempPythonFile(t, rulesContent)
 		defer os.Remove(tmpFile)
