@@ -48,6 +48,7 @@ func buildNsjailCommand(ctx context.Context, filePath string) *exec.Cmd {
 		"--disable_proc",               // Disable /proc (no process visibility)
 		"--bindmount_ro", "/usr:/usr",  // Read-only /usr
 		"--bindmount_ro", "/lib:/lib",  // Read-only /lib
+		"--bindmount_ro", "/lib64:/lib64", // Read-only /lib64 (64-bit libraries)
 		"--bindmount", "/tmp:/tmp",     // Writable /tmp (for output)
 		"--cwd", "/tmp",                // Working directory
 		"--rlimit_as", "512",           // Memory limit: 512MB
