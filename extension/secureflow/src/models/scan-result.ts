@@ -47,6 +47,11 @@ export interface ScanResult {
    * AI model used for the analysis
    */
   model: string;
+
+  /**
+   * ID of the profile this scan belongs to (optional for backwards compatibility)
+   */
+  profileId?: string;
 }
 
 /**

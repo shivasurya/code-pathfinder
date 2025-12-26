@@ -37,11 +37,22 @@ function loadConfig() {
   const fileCfg = readJsonSafe(CONFIG_FILE);
   const env = process.env;
 
+  const model = env.SECUREFLOW_MODEL || fileCfg.model || 'claude-sonnet-4-5-20250929';
+  const explicitProvider = env.SECUREFLOW_PROVIDER || fileCfg.provider;
+
   const cfg = {
-    model: env.SECUREFLOW_MODEL || fileCfg.model || 'claude-sonnet-4-5-20250929',
+    model: model,
     apiKey:
-      env.SECUREFLOW_API_KEY || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || fileCfg.apiKey || '',
-    provider: env.SECUREFLOW_PROVIDER || fileCfg.provider || inferProvider(env, fileCfg),
+      env.SECUREFLOW_API_KEY ||
+      env.ANTHROPIC_API_KEY ||
+      env.OPENAI_API_KEY ||
+      env.OPENROUTER_API_KEY ||
+      env.GOOGLE_API_KEY ||
+      env.XAI_API_KEY ||
+      fileCfg.apiKey || '',
+    provider: explicitProvider && explicitProvider !== 'auto'
+      ? explicitProvider
+      : inferProvider(env, model),
     analytics: {
       enabled: getBool(env.SECUREFLOW_ANALYTICS_ENABLED, fileCfg?.analytics?.enabled, true) // Default: enabled
     }
@@ -50,19 +61,33 @@ function loadConfig() {
   return cfg;
 }
 
-function inferProvider(env, fileCfg) {
-  if (env.ANTHROPIC_API_KEY || /claude|anthropic/i.test(fileCfg?.model || '')) {
+function inferProvider(env, model) {
+  // Only infer provider from model ID format, NOT from API keys
+  // This ensures users explicitly choose their provider
+
+  // Check for OpenRouter models (they contain a "/" in the model name)
+  if (/^[a-z0-9-]+\/[a-z0-9-]+/i.test(model)) {
+    return 'openrouter';
+  }
+
+  // Infer from model name patterns
+  if (/claude|anthropic/i.test(model)) {
     return 'anthropic';
   }
-  if (env.OPENAI_API_KEY || /gpt|o1|o3|openai/i.test(fileCfg?.model || '')) {
+  if (/gpt|o1|o3|o4|openai/i.test(model)) {
     return 'openai';
   }
-  if (/gemini/i.test(fileCfg?.model || '')) {
+  if (/gemini/i.test(model)) {
     return 'google';
   }
-  if (/qwen/i.test(fileCfg?.model || '')) {
+  if (/grok/i.test(model)) {
+    return 'xai';
+  }
+  if (/qwen/i.test(model)) {
     return 'ollama';
   }
+
+  // Default to anthropic
   return 'anthropic';
 }
 

@@ -35,7 +35,12 @@ class AISecurityAnalyzer {
       // Send context to AI and get response
       const aiResponse = await this._sendToAI(null, iteration, messages);
       messages.push({ role: 'assistant', content: aiResponse });
-      
+
+      // Print the LLM response
+      console.log(cyan(`\n========== LLM RESPONSE - Iteration ${iteration} ==========`));
+      console.log(aiResponse);
+      console.log(cyan(`========== END LLM RESPONSE ==========\n`));
+
       this.analysisLog.push({
         iteration,
         timestamp: new Date().toISOString(),
@@ -50,7 +55,15 @@ class AISecurityAnalyzer {
 
       // Check if AI wants to list files
       const listFileRequests = this._extractListFileRequests(aiResponse);
-      
+
+      console.log(yellow(`📊 Iteration ${iteration} Analysis:`));
+      console.log(`   - File requests found: ${fileRequests.length}`);
+      console.log(`   - List file requests: ${listFileRequests.length}`);
+      console.log(`   - New file requests: ${newFileRequests.length}`);
+      if (fileRequests.length > 0) {
+        console.log(`   - Requested files:`, fileRequests.map(f => f.path));
+      }
+
       if (fileRequests.length > 0 || listFileRequests.length > 0) {
         let fileResults = [];
         let listResults = [];
@@ -90,6 +103,7 @@ class AISecurityAnalyzer {
 
       } else {
         // No more file or list requests, this should be the final analysis
+        console.log(yellow(`\n⚠️  No file requests in iteration ${iteration} - treating as final analysis`));
         finalAnalysis = aiResponse;
         break;
       }

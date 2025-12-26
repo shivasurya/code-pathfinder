@@ -1,5 +1,4 @@
 import { AIClient } from './ai-client';
-import { AIModel } from './types';
 
 /**
  * Factory class for creating AI clients
@@ -7,8 +6,8 @@ import { AIModel } from './types';
 export declare class AIClientFactory {
   /**
    * Get the appropriate AI client based on the model
-   * @param model The AI model to use
+   * @param model The AI model to use (can be any string including custom OpenRouter model IDs)
    * @returns The AI client for the specified model
    */
-  static getClient(model: AIModel): AIClient;
+  static getClient(model: string): AIClient;
 }

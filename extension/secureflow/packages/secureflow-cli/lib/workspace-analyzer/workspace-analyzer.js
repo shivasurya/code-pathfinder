@@ -28,7 +28,9 @@ class ApplicationProfile {
 class WorkspaceAnalyzer {
   constructor(options = {}) {
     this.selectedModel = options.selectedModel || 'claude-sonnet-4-5-20250929';
+    console.log('WorkspaceAnalyzer: Initializing with model:', this.selectedModel);
     this.aiClient = AIClientFactory.getClient(this.selectedModel);
+    console.log('WorkspaceAnalyzer: Client type:', this.aiClient.constructor.name);
     this.tokenTracker = new TokenTracker(this.selectedModel);
   }
 
@@ -114,10 +116,12 @@ class WorkspaceAnalyzer {
 
       try {
         // Call the AI client to analyze the workspace
+        console.log('WorkspaceAnalyzer: Sending request with model:', this.selectedModel);
         const response = await this.aiClient.sendRequest(prompt, {
           temperature: 0, // Lower temperature for more deterministic results
           maxTokens: 2048, // Ensure enough tokens for the response
-          apiKey: secretApiKey // The API key should be managed by the client
+          apiKey: secretApiKey, // The API key should be managed by the client
+          model: this.selectedModel // Explicitly pass the model
         });
 
         // Record token usage from API response

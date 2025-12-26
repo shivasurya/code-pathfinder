@@ -74,7 +74,7 @@ function renderMarkdownBasic(md: string): string {
  */
 export async function performSecurityAnalysisAsync(
   code: string,
-  aiModel: AIModel,
+  aiModel: string,
   apiKey?: string,
   filePath?: string,
   context?: vscode.ExtensionContext,
@@ -128,7 +128,7 @@ function generateSelectionAnalysisHtml(
   issues: SecurityIssue[],
   filePath: string,
   startLine: number,
-  aiModel: AIModel
+  aiModel: string
 ): string {
   // Helper to get relative path from workspace root
   function getRelativePath(filePath: string): string {
@@ -365,7 +365,7 @@ function updateSelectionWebview(
   issues: SecurityIssue[],
   filePath: string,
   startLine: number,
-  aiModel: AIModel
+  aiModel: string
 ) {
   panel.webview.html = generateSelectionAnalysisHtml(
     scanNumber,

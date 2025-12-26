@@ -52,6 +52,7 @@ export class ScanStorageService {
    * @param reviewContent The consolidated review content that was analyzed
    * @param fileCount Number of files analyzed
    * @param model AI model used for analysis
+   * @param profileId Optional ID of the profile this scan belongs to
    * @returns The saved scan result with assigned scan number
    */
   public async saveScan(
@@ -63,7 +64,8 @@ export class ScanStorageService {
     summary: string,
     reviewContent: string,
     fileCount: number,
-    model: string
+    model: string,
+    profileId?: string
   ): Promise<ScanResult> {
     const scanNumber = this.data.nextScanNumber;
     const timestamp = Date.now();
@@ -77,7 +79,8 @@ export class ScanStorageService {
       summary,
       reviewContent,
       fileCount,
-      model
+      model,
+      profileId
     };
 
     // Save the scan
@@ -107,6 +110,18 @@ export class ScanStorageService {
     return Object.values(this.data.scans).sort(
       (a, b) => b.scanNumber - a.scanNumber
     );
+  }
+
+  /**
+   * Get all scans for a specific profile
+   *
+   * @param profileId The profile ID to filter by
+   * @returns Array of scan results for the profile, sorted by scan number (newest first)
+   */
+  public getScansForProfile(profileId: string): ScanResult[] {
+    return Object.values(this.data.scans)
+      .filter((scan) => scan.profileId === profileId)
+      .sort((a, b) => b.scanNumber - a.scanNumber);
   }
 
   /**

@@ -22,6 +22,10 @@ class CLIFullScanCommand {
     this.outputFile = options.outputFile;
     this.defectDojoOptions = options.defectDojoOptions || {};
     this.tokenTracker = null; // Will be initialized when model is known
+    this.maxIterations = options.maxIterations || 20; // Default to 20 if not specified
+
+    // Allow passing config directly (for programmatic usage like VSCode extension)
+    this.configOverride = options.config || null;
   }
 
   /**
@@ -35,8 +39,8 @@ class CLIFullScanCommand {
     console.log('');
 
     try {
-      // Load configuration
-      const config = loadConfig();
+      // Load configuration - use override if provided, otherwise load from environment/file
+      const config = this.configOverride || loadConfig();
       if (!config.apiKey) {
         throw new Error('API key not configured. Please run: secureflow config --show');
       }
@@ -78,7 +82,7 @@ class CLIFullScanCommand {
 
       // Initialize AI security analyzer with token tracking
       const aiAnalyzer = new AISecurityAnalyzer(aiClient, projectPath, {
-        maxIterations: 20,
+        maxIterations: this.maxIterations,
         maxFileLines: 5000,
         partialReadLines: 500,
         tokenTracker: this.tokenTracker

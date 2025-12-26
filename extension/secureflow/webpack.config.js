@@ -3,12 +3,14 @@
 'use strict';
 
 const path = require('path');
+const webviewConfig = require('./webpack.webview.config');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
 /** @type WebpackConfig */
 const extensionConfig = {
+  name: 'extension',
   target: 'node', // VS Code extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
 	mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
 
@@ -17,7 +19,8 @@ const extensionConfig = {
     // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    clean: false
   },
   externals: {
     vscode: 'commonjs vscode' // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
@@ -46,15 +49,13 @@ const extensionConfig = {
   },
   // Copy the resources to the output folder
   plugins: [
-    // Clean dist directory before build
-    new (require('clean-webpack-plugin').CleanWebpackPlugin)(),
     new (require('copy-webpack-plugin'))({
       patterns: [
         { from: 'resources', to: 'resources' },
-        { from: 'src/ui/webview', to: 'webview' },
         { from: 'packages/secureflow-cli/lib/prompts', to: 'prompts' }
       ]
     })
   ],
 };
-module.exports = [ extensionConfig ];
+// Export webview config first so it builds before extension
+module.exports = [ webviewConfig, extensionConfig ];

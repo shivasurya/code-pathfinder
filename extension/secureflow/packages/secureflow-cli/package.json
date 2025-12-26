@@ -17,6 +17,7 @@
     "prepublishOnly": "npm run generate:models"
   },
   "dependencies": {
+    "@openrouter/sdk": "^0.3.10",
     "colorette": "^2.0.20",
     "commander": "^11.1.0",
     "posthog-node": "^5.10.0"

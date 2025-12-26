@@ -149,7 +149,7 @@ function findRelevantProfile(
  */
 export async function analyzeSecurityWithAI(
   code: string,
-  aiModel: AIModel,
+  aiModel: string,
   apiKey: string,
   filePath?: string,
   context?: vscode.ExtensionContext,
@@ -195,6 +195,7 @@ export async function analyzeSecurityWithAI(
 
     const response = await aiClient.sendRequest(prompt, {
       apiKey,
+      model: aiModel,
       temperature: 0,
       maxTokens: 2000
     });
@@ -238,7 +239,7 @@ export async function analyzeSecurityWithAI(
  */
 export async function analyzeSecurityWithAIStreaming(
   code: string,
-  aiModel: AIModel,
+  aiModel: string,
   apiKey: string,
   progressCallback: (message: string) => void
 ): Promise<SecurityIssue[]> {
@@ -301,6 +302,7 @@ export async function analyzeSecurityWithAIStreaming(
           },
           {
             apiKey,
+            model: aiModel,
             temperature: 0.3,
             maxTokens: 2000
           }

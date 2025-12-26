@@ -15,6 +15,11 @@ import type { AIModel } from '../generated/model-config';
 export type { AIModel };
 
 /**
+ * AI Provider type
+ */
+export type AIProvider = 'auto' | 'openai' | 'anthropic' | 'google' | 'xai' | 'ollama' | 'openrouter';
+
+/**
  * Settings manager for SecureFlow extension
  */
 export class SettingsManager {
@@ -25,15 +30,24 @@ export class SettingsManager {
   }
 
   /**
-   * Get the selected AI Model from user preferences
+   * Get the selected AI Provider from user preferences
    */
-  public getSelectedAIModel(): AIModel {
+  public getSelectedProvider(): AIProvider {
     const config = vscode.workspace.getConfiguration('secureflow');
-    return config.get<AIModel>('AIModel') || 'claude-sonnet-4-5-20250929';
+    return config.get<AIProvider>('Provider') || 'auto';
   }
 
   /**
-   * Get the API Key from secure storage
+   * Get the selected AI Model from user preferences
+   * Note: For OpenRouter, this can be any model ID (e.g., "anthropic/claude-3-5-sonnet")
+   */
+  public getSelectedAIModel(): string {
+    const config = vscode.workspace.getConfiguration('secureflow');
+    return config.get<string>('AIModel') || 'claude-sonnet-4-5-20250929';
+  }
+
+  /**
+   * Get the API Key from workspace settings
    * @returns The API key if found, otherwise undefined
    */
   public async getApiKey(): Promise<string | undefined> {
