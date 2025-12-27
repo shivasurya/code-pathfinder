@@ -6,10 +6,10 @@ const path = require('path');
 const sveltePreprocess = require('svelte-preprocess');
 
 /** @type {import('webpack').Configuration} */
-const webviewConfig = {
+const webviewConfig = (env, argv) => ({
   name: 'webview',
   target: 'web',
-  mode: 'none',
+  mode: argv.mode || 'none',
   entry: './src/ui/svelte-webview/main.ts',
   output: {
     path: path.resolve(__dirname, 'dist', 'svelte-webview'),
@@ -35,10 +35,10 @@ const webviewConfig = {
           loader: 'svelte-loader',
           options: {
             compilerOptions: {
-              dev: false
+              dev: argv.mode !== 'production'
             },
             emitCss: false,
-            hotReload: false,
+            hotReload: argv.mode !== 'production',
             preprocess: sveltePreprocess()
           }
         }
@@ -61,7 +61,7 @@ const webviewConfig = {
       }
     ]
   },
-  devtool: 'source-map',
+  devtool: argv.mode === 'production' ? false : 'source-map',
   plugins: [
     new (require('copy-webpack-plugin'))({
       patterns: [
@@ -69,6 +69,6 @@ const webviewConfig = {
       ]
     })
   ]
-};
+});
 
 module.exports = webviewConfig;

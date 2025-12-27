@@ -9,10 +9,10 @@ const webviewConfig = require('./webpack.webview.config');
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
 /** @type WebpackConfig */
-const extensionConfig = {
+const extensionConfig = (env, argv) => ({
   name: 'extension',
   target: 'node', // VS Code extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
-	mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
+	mode: argv.mode || 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
 
   entry: './src/extension.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
   output: {
@@ -43,7 +43,7 @@ const extensionConfig = {
       }
     ]
   },
-  devtool: 'nosources-source-map',
+  devtool: argv.mode === 'production' ? false : 'nosources-source-map',
   infrastructureLogging: {
     level: "log", // enables logging required for problem matchers
   },
@@ -56,6 +56,6 @@ const extensionConfig = {
       ]
     })
   ],
-};
+});
 // Export webview config first so it builds before extension
 module.exports = [ webviewConfig, extensionConfig ];
