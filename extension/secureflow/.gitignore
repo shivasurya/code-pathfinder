@@ -5,3 +5,4 @@ node_modules/
 # VSCode test cache
 .vscode-test/
 out/
+coverage/
