@@ -1,56 +1,10 @@
 <script lang="ts">
   import Button from './ui/Button.svelte';
-  import Select from './ui/Select.svelte';
-  import Card from './ui/Card.svelte';
-  import FormField from './ui/FormField.svelte';
 
   export let vscode: any;
   export let profiles: any[];
-  export let modelConfig: any = null;
 
-  let showSettings = false;
   let isScanning = false;
-  let settingsData = {
-    provider: 'auto',
-    model: 'claude-sonnet-4-5-20250929',
-    apiKey: ''
-  };
-
-  // Provider options matching onboarding
-  const providerOptions = [
-    { value: 'auto', label: 'Auto-detect from model', description: 'Automatically detect provider from your model selection' },
-    { value: 'anthropic', label: 'Anthropic (Claude)', description: 'Claude models from Anthropic' },
-    { value: 'openai', label: 'OpenAI (GPT)', description: 'GPT models from OpenAI' },
-    { value: 'google', label: 'Google (Gemini)', description: 'Gemini models from Google' },
-    { value: 'xai', label: 'xAI (Grok)', description: 'Grok models from xAI' },
-    { value: 'openrouter', label: 'OpenRouter', description: 'Access 300+ models with one API key' },
-    { value: 'ollama', label: 'Ollama (Local)', description: 'Local models, no API key needed' }
-  ];
-
-  // Group models by provider from modelConfig
-  function groupModelsByProvider(models: any[]) {
-    const groups = {
-      anthropic: { label: 'Anthropic', models: [] },
-      openai: { label: 'OpenAI', models: [] },
-      google: { label: 'Google', models: [] },
-      xai: { label: 'xAI', models: [] },
-      openrouter: { label: 'OpenRouter', models: [] },
-      ollama: { label: 'Ollama', models: [] }
-    };
-
-    models.forEach((model: any) => {
-      if (groups[model.provider]) {
-        groups[model.provider].models.push(model);
-      }
-    });
-
-    return Object.entries(groups)
-      .filter(([_, group]: any) => group.models.length > 0)
-      .map(([key, group]: any) => ({ key, ...group }));
-  }
-
-  // Get grouped models from modelConfig
-  $: groupedModels = modelConfig ? groupModelsByProvider(modelConfig.models || []) : [];
 
   function handleScanWorkspace() {
     if (vscode) {
@@ -71,57 +25,23 @@
   }
 
   function openSettings() {
-    showSettings = true;
-    // Load current settings from vscode
+    // Send message to show settings view
     if (vscode) {
-      vscode.postMessage({ type: 'loadSettings' });
+      vscode.postMessage({ type: 'showSettings' });
     }
   }
 
-  function closeSettings() {
-    showSettings = false;
-  }
-
-  function saveSettings() {
-    if (vscode) {
-      vscode.postMessage({
-        type: 'saveSettings',
-        settings: settingsData
-      });
-    }
-    showSettings = false;
-  }
-
-  function handleProviderChange(event: CustomEvent) {
-    settingsData.provider = event.detail.value;
-  }
-
-  function handleModelChange(event: CustomEvent) {
-    settingsData.model = event.detail.value;
-  }
-
-  function handleApiKeyInput(event: CustomEvent) {
-    settingsData.apiKey = event.detail;
-  }
-
-  // Listen for settings data from extension
+  // Listen for scan completion
   window.addEventListener('message', (event) => {
     const message = event.data;
-    if (message.type === 'settingsLoaded') {
-      settingsData = {
-        provider: message.settings.provider || 'anthropic',
-        model: message.settings.model || 'claude-sonnet-4.5',
-        apiKey: message.settings.apiKey || ''
-      };
-    } else if (message.type === 'scanComplete') {
+    if (message.type === 'scanComplete') {
       isScanning = false;
     }
   });
 </script>
 
-{#if !showSettings}
-  <!-- Profiles List View -->
-  <div class="profiles-container">
+<!-- Profiles List View -->
+<div class="profiles-container">
     <div class="header">
       <div class="header-content">
         <div class="header-text">
@@ -220,79 +140,7 @@
         {/each}
       {/if}
     </div>
-  </div>
-{:else}
-  <!-- Settings Page View -->
-  <div class="settings-page">
-    <Card>
-      <div class="settings-content">
-        <div class="header">
-          <div class="icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          </div>
-          <h1>Settings</h1>
-          <p class="subtitle">Configure your AI provider and model preferences</p>
-        </div>
-
-        <div class="form">
-          <FormField
-            label="AI Provider"
-            description="Select your AI service provider"
-          >
-            <Select
-              options={providerOptions}
-              value={settingsData.provider}
-              on:change={handleProviderChange}
-              placeholder="Select provider..."
-            />
-          </FormField>
-
-          <FormField
-            label="AI Model"
-            description="Choose the AI model for security analysis"
-          >
-            <Select
-              grouped={true}
-              groups={groupedModels}
-              value={settingsData.model}
-              on:change={handleModelChange}
-              placeholder="Select AI model..."
-            />
-          </FormField>
-
-          <FormField
-            label="API Key"
-            description="Your API key is stored securely in VSCode settings"
-          >
-            <input
-              type="password"
-              class="api-key-input"
-              bind:value={settingsData.apiKey}
-              placeholder="Enter your API key..."
-            />
-          </FormField>
-
-          <div class="actions">
-            <Button variant="secondary" size="medium" on:click={closeSettings}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="medium" on:click={saveSettings}>
-              <span slot="icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; display: block;">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </span>
-              Save Changes
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Card>
-  </div>
-{/if}
+</div>
 
 <style>
   .profiles-container {
@@ -571,74 +419,6 @@
   .view-details-btn:hover .arrow-icon {
     transform: translateX(2px);
     opacity: 1;
-  }
-
-  /* Settings Page */
-  .settings-page {
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 20px;
-  }
-
-  .settings-content .header {
-    text-align: center;
-    margin-bottom: 32px;
-  }
-
-  .settings-content .icon {
-    margin-bottom: 16px;
-    display: flex;
-    justify-content: center;
-    color: var(--vscode-button-background);
-  }
-
-  .settings-content h1 {
-    font-size: 24px;
-    font-weight: 600;
-    margin: 0 0 8px 0;
-    color: var(--vscode-foreground);
-  }
-
-  .settings-content .subtitle {
-    font-size: 14px;
-    margin: 0;
-    opacity: 0.8;
-  }
-
-  .settings-content .form {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .api-key-input {
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 13px;
-    font-family: var(--vscode-font-family);
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .api-key-input:focus {
-    outline: none;
-    border-color: var(--vscode-focusBorder);
-  }
-
-  .api-key-input::placeholder {
-    color: var(--vscode-input-placeholderForeground);
-    opacity: 0.6;
-  }
-
-  .settings-content .actions {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 8px;
   }
 
   /* Spinner animation */

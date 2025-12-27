@@ -6,6 +6,7 @@
   export let variant: 'primary' | 'secondary' = 'primary';
   export let size: 'small' | 'medium' | 'large' = 'medium';
   export let disabled: boolean = false;
+  export let type: 'button' | 'submit' | 'reset' = 'button';
 
   function handleClick() {
     if (!disabled) {
@@ -18,6 +19,7 @@
   class="button {variant} {size}"
   on:click={handleClick}
   {disabled}
+  {type}
 >
   {#if $$slots.icon}
     <span class="icon">

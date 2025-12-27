@@ -22,7 +22,7 @@
         <optgroup label={group.label}>
           {#each group.models as model}
             <option value={model.id}>
-              {model.displayName}{#if model.recommended} ⭐{/if}
+              {model.displayName}
             </option>
           {/each}
         </optgroup>

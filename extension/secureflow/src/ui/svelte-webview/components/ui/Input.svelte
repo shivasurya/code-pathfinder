@@ -10,7 +10,8 @@
 
   function handleInput(event: Event) {
     const target = event.target as HTMLInputElement;
-    dispatch('input', { value: target.value });
+    value = target.value;
+    dispatch('input', target.value);
   }
 </script>
 

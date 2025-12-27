@@ -104,12 +104,7 @@
 
   // Handle custom model input
   function handleCustomModelInput(event: CustomEvent) {
-    customModelId = event.detail.value;
-  }
-
-  // Handle API key input
-  function handleApiKeyInput(event: CustomEvent) {
-    apiKey = event.detail.value;
+    customModelId = event.detail;
   }
 
   // Handle form submission
@@ -208,8 +203,7 @@
             <Input
               type="text"
               placeholder="Or enter any OpenRouter model ID (e.g., cohere/command-r-plus)"
-              value={customModelId}
-              on:input={handleCustomModelInput}
+              bind:value={customModelId}
             />
             <p class="hint">Browse all models at <a href="https://openrouter.ai/models" target="_blank">openrouter.ai/models</a></p>
           </div>
@@ -223,8 +217,7 @@
         <Input
           type="password"
           placeholder="Enter your API key..."
-          value={apiKey}
-          on:input={handleApiKeyInput}
+          bind:value={apiKey}
           icon="🔒"
         />
       </FormField>

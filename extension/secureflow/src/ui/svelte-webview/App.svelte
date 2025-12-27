@@ -1,5 +1,6 @@
 <script lang="ts">
   import Onboarding from './components/Onboarding.svelte';
+  import Settings from './components/Settings.svelte';
   import ProfilesList from './components/ProfilesList.svelte';
   import ProfileDetails from './components/ProfileDetails.svelte';
   import { onMount } from 'svelte';
@@ -11,7 +12,7 @@
   let modelConfig: any = null;
 
   // Application state
-  type View = 'onboarding' | 'profiles' | 'profileDetails';
+  type View = 'onboarding' | 'settings' | 'profiles' | 'profileDetails';
   let currentView: View = 'onboarding';
   let profiles: any[] = [];
   let selectedProfile: any = null;
@@ -84,6 +85,14 @@
             vscode.postMessage({ type: 'getProfiles' });
           }
           break;
+
+        case 'showSettings':
+          currentView = 'settings';
+          break;
+
+        case 'backToProfiles':
+          currentView = 'profiles';
+          break;
       }
     });
 
@@ -104,8 +113,10 @@
   {#if modelConfig}
     {#if currentView === 'onboarding'}
       <Onboarding {vscode} {modelConfig} />
+    {:else if currentView === 'settings'}
+      <Settings {vscode} {modelConfig} />
     {:else if currentView === 'profiles'}
-      <ProfilesList {vscode} {profiles} {modelConfig} />
+      <ProfilesList {vscode} {profiles} />
     {:else if currentView === 'profileDetails' && selectedProfile}
       <ProfileDetails {vscode} profile={selectedProfile} {scans} onBack={handleBackToProfiles} />
     {/if}

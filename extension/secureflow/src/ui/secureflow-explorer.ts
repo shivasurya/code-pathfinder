@@ -191,6 +191,40 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
           });
           await this.loadScans();
           break;
+        case 'showSettings':
+          analytics.trackEvent('Settings Opened', {
+            trigger: 'user_request'
+          });
+          if (this._view) {
+            this._view.webview.postMessage({
+              type: 'showSettings'
+            });
+          }
+          break;
+        case 'backToProfiles':
+          if (this._view) {
+            this._view.webview.postMessage({
+              type: 'backToProfiles'
+            });
+          }
+          break;
+        case 'getCurrentConfig':
+          if (this._view) {
+            const settingsManager = new SettingsManager(this._context);
+            const currentModel = settingsManager.getSelectedAIModel();
+            const currentApiKey = await settingsManager.getApiKey();
+            const currentProvider = settingsManager.getSelectedProvider();
+
+            this._view.webview.postMessage({
+              type: 'currentConfig',
+              config: {
+                model: currentModel,
+                apiKey: currentApiKey || '',
+                provider: currentProvider
+              }
+            });
+          }
+          break;
         case 'viewScan':
           analytics.trackEvent('Scan Results Opened', {
             scan_number: message.scanNumber
@@ -503,61 +537,57 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
 
             console.log('SecureFlow: Configuration saved successfully');
 
-            // Show success notification
-            vscode.window.showInformationMessage(
-              'SecureFlow configuration saved! Starting workspace security scan...'
-            );
-
             if (this._view) {
               this._view.webview.postMessage({
                 type: 'configSaved',
                 success: true
               });
+
+              // Update onboarding status to configured
+              this._view.webview.postMessage({
+                type: 'onboardingStatus',
+                isConfigured: true
+              });
             }
 
-            // Automatically start workspace scan
-            console.log('SecureFlow: Starting automatic workspace scan...');
-            try {
-              await this._profileService.scanWorkspace();
-              await this.loadProfiles();
-              console.log('SecureFlow: Automatic workspace scan completed');
-
-              // Notify webview that scan is complete
-              if (this._view) {
-                this._view.webview.postMessage({
-                  type: 'scanComplete',
-                  success: true,
-                  profileCount: this._profiles.length
-                });
-
-                // Wait a moment for the success message to be visible
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                // Send profiles data to update the view
-                this._view.webview.postMessage({
-                  type: 'updateProfiles',
-                  profiles: this._profiles
-                });
-              }
-
-              // Show success notification with action button
+            // Only start workspace scan if not skipped (e.g., from Settings page)
+            if (!message.skipScan) {
+              // Show success notification
               vscode.window.showInformationMessage(
-                `Workspace security scan completed! Found ${this._profiles.length} application profile(s). Check the SecureFlow panel.`
+                'SecureFlow configuration saved! Starting workspace security scan...'
               );
-            } catch (scanError) {
-              console.error('SecureFlow: Error during automatic scan:', scanError);
 
-              // Notify webview of scan failure
-              if (this._view) {
-                this._view.webview.postMessage({
-                  type: 'scanComplete',
-                  success: false,
-                  error: scanError instanceof Error ? scanError.message : 'Unknown error'
-                });
+              // Automatically start workspace scan
+              console.log('SecureFlow: Starting automatic workspace scan...');
+              try {
+                await this._profileService.scanWorkspace();
+                await this.loadProfiles();
+                console.log('SecureFlow: Automatic workspace scan completed');
+
+                // Notify webview that scan is complete
+                if (this._view) {
+                  this._view.webview.postMessage({
+                    type: 'scanComplete',
+                    success: true,
+                    profileCount: this._profiles.length
+                  });
+
+                  // Wait a moment for the success message to be visible
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+
+                  // Send profiles data to update the view
+                  this._view.webview.postMessage({
+                    type: 'updateProfiles',
+                    profiles: this._profiles
+                  });
+                }
+              } catch (error) {
+                console.error('SecureFlow: Workspace scan failed:', error);
               }
-
-              vscode.window.showWarningMessage(
-                'Configuration saved, but workspace scan failed. You can manually trigger a scan from the SecureFlow panel.'
+            } else {
+              // Just show success notification for settings update
+              vscode.window.showInformationMessage(
+                'SecureFlow settings saved successfully!'
               );
             }
           } catch (error) {
