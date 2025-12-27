@@ -229,6 +229,7 @@
   },
   "devDependencies": {
     "@tsconfig/svelte": "^5.0.6",
+    "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.99.0",
@@ -240,6 +241,7 @@
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.2",
     "eslint": "^9.25.1",
+    "glob": "^13.0.0",
     "prettier": "^3.6.2",
     "style-loader": "^4.0.0",
     "svelte": "^4.2.20",
