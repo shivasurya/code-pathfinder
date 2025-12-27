@@ -16,6 +16,13 @@ class FileRequestHandler {
     this.maxFileLines = 5000;
     this.partialReadLines = 5000;
     this.requestLog = [];
+    this.silent = options.silent || false;
+  }
+
+  log(...args) {
+    if (!this.silent) {
+      console.log(...args);
+    }
   }
 
   /**
@@ -26,8 +33,8 @@ class FileRequestHandler {
     const results = [];
 
     for (const request of requests) {
-      console.log(cyan(`Read(${request.path})`));
-      console.log(dim(`  └ • Read ${path.basename(request.path)} (${request.reason})`));
+      this.log(cyan(`Read(${request.path})`));
+      this.log(dim(`  └ • Read ${path.basename(request.path)} (${request.reason})`));
       
       const result = await this._handleFileRequest(request);
       results.push(result);
@@ -55,8 +62,8 @@ class FileRequestHandler {
     const results = [];
 
     for (const request of requests) {
-      console.log(cyan(`ListFiles(${request.path})`));
-      console.log(dim(`  └ • List directory ${path.basename(request.path)} (${request.reason})`));
+      this.log(cyan(`ListFiles(${request.path})`));
+      this.log(dim(`  └ • List directory ${path.basename(request.path)} (${request.reason})`));
       
       const result = await this._handleListFileRequest(request);
       results.push(result);
@@ -126,7 +133,7 @@ class FileRequestHandler {
       
       // Check if file is within project scope
       if (!this._isWithinProjectScope(fullPath)) {
-        console.log(red(`❌ File outside project scope: ${requestedPath}`));
+        this.log(red(`❌ File outside project scope: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'File is outside project directory scope',
@@ -136,7 +143,7 @@ class FileRequestHandler {
 
       // Check if it's a hidden file
       if (this._isHiddenFile(fullPath)) {
-        console.log(yellow(`⚠️  Hidden file ignored: ${requestedPath}`));
+        this.log(yellow(`⚠️  Hidden file ignored: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Hidden files are ignored',
@@ -146,7 +153,7 @@ class FileRequestHandler {
 
       // Check if it's a symlink
       if (await this._isSymlink(fullPath)) {
-        console.log(yellow(`⚠️  Symlink ignored: ${requestedPath}`));
+        this.log(yellow(`⚠️  Symlink ignored: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Symlinks are ignored',
@@ -156,7 +163,7 @@ class FileRequestHandler {
 
       // Check if file exists
       if (!fs.existsSync(fullPath)) {
-        console.log(red(`❌ File not found: ${requestedPath}`));
+        this.log(red(`❌ File not found: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'File does not exist',
@@ -167,8 +174,8 @@ class FileRequestHandler {
       // Read file content with size limits
       const content = await this._readFileWithLimits(fullPath);
       
-      // console.log(green(`✅ File read: ${requestedPath} (${content.split('\n').length} lines)`));
-      // console.log(dim(`   Reason: ${reason}`));
+      // this.log(green(`✅ File read: ${requestedPath} (${content.split('\n').length} lines)`));
+      // this.log(dim(`   Reason: ${reason}`));
 
       return {
         status: 'success',
@@ -180,7 +187,7 @@ class FileRequestHandler {
       };
 
     } catch (error) {
-      console.log(red(`❌ Error reading file ${requestedPath}: ${error.message}`));
+      this.log(red(`❌ Error reading file ${requestedPath}: ${error.message}`));
       return {
         status: 'error',
         reason: error.message,
@@ -201,7 +208,7 @@ class FileRequestHandler {
       
       // Check if directory is within project scope
       if (!this._isWithinProjectScope(fullPath)) {
-        console.log(red(`❌ Directory outside project scope: ${requestedPath}`));
+        this.log(red(`❌ Directory outside project scope: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Directory is outside project directory scope',
@@ -211,7 +218,7 @@ class FileRequestHandler {
 
       // Check if it's a hidden directory
       if (this._isHiddenFile(fullPath)) {
-        console.log(yellow(`⚠️  Hidden directory ignored: ${requestedPath}`));
+        this.log(yellow(`⚠️  Hidden directory ignored: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Hidden directories are ignored',
@@ -221,7 +228,7 @@ class FileRequestHandler {
 
       // Check if directory exists
       if (!fs.existsSync(fullPath)) {
-        console.log(red(`❌ Directory not found: ${requestedPath}`));
+        this.log(red(`❌ Directory not found: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Directory does not exist',
@@ -232,7 +239,7 @@ class FileRequestHandler {
       // Check if it's actually a directory
       const stats = await stat(fullPath);
       if (!stats.isDirectory()) {
-        console.log(red(`❌ Path is not a directory: ${requestedPath}`));
+        this.log(red(`❌ Path is not a directory: ${requestedPath}`));
         return {
           status: 'rejected',
           reason: 'Path is not a directory',
@@ -257,7 +264,7 @@ class FileRequestHandler {
       };
 
     } catch (error) {
-      console.log(red(`❌ Error listing directory ${requestedPath}: ${error.message}`));
+      this.log(red(`❌ Error listing directory ${requestedPath}: ${error.message}`));
       return {
         status: 'error',
         reason: error.message,
@@ -380,7 +387,7 @@ class FileRequestHandler {
     }
 
     // File is too large, read first portion
-    console.log(yellow(`📄 Large file detected (${lines.length} lines), reading first ${this.partialReadLines} lines`));
+    this.log(yellow(`📄 Large file detected (${lines.length} lines), reading first ${this.partialReadLines} lines`));
     
     const partialContent = lines.slice(0, this.partialReadLines).join('\n');
     const truncationNote = `\n\n/* [SECUREFLOW] File truncated - showing first ${this.partialReadLines} of ${lines.length} lines */`;

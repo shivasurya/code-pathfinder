@@ -79,6 +79,7 @@ export class ProfileScanService {
         outputFormat: 'json',
         outputFile: outputFile,
         maxIterations: 20, // Maximum iterations for thorough analysis
+        silent: true, // Disable console output for extension usage
         config: {
           apiKey: apiKey,
           model: model,

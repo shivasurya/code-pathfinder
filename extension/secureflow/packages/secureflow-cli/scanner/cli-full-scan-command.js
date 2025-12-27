@@ -26,6 +26,18 @@ class CLIFullScanCommand {
 
     // Allow passing config directly (for programmatic usage like VSCode extension)
     this.configOverride = options.config || null;
+
+    // Silent mode for programmatic usage (VSCode extension)
+    this.silent = options.silent || false;
+  }
+
+  /**
+   * Conditional logging - only log if not in silent mode
+   */
+  log(...args) {
+    if (!this.silent) {
+      console.log(...args);
+    }
   }
 
   /**
@@ -33,10 +45,10 @@ class CLIFullScanCommand {
    */
   async execute(projectPath, options = {}) {
     const startTime = Date.now();
-    console.log(magenta('🛡️  SecureFlow Full Security Scan'));
-    console.log(dim(`Project: ${path.resolve(projectPath)}`));
-    console.log(dim(`Model: ${this.selectedModel || 'default'}`));
-    console.log('');
+    this.log(magenta('🛡️  SecureFlow Full Security Scan'));
+    this.log(dim(`Project: ${path.resolve(projectPath)}`));
+    this.log(dim(`Model: ${this.selectedModel || 'default'}`));
+    this.log('');
 
     try {
       // Load configuration - use override if provided, otherwise load from environment/file
@@ -54,21 +66,21 @@ class CLIFullScanCommand {
         errorMessage: red('❌ Project analysis failed')
       });
       
-      console.log(green(`✅ Found ${projectSummary.totalFiles} files in project`));
-      console.log(dim(`   Extensions: ${Object.keys(projectSummary.filesByExtension).join(', ')}`));
-      console.log(dim(`   Important files: ${projectSummary.importantFiles.length}`));
+      this.log(green(`✅ Found ${projectSummary.totalFiles} files in project`));
+      this.log(dim(`   Extensions: ${Object.keys(projectSummary.filesByExtension).join(', ')}`));
+      this.log(dim(`   Important files: ${projectSummary.importantFiles.length}`));
       
       // // Display directory tree
-      // console.log(cyan('\n📂 Project Structure:'));
+      // this.log(cyan('\n📂 Project Structure:'));
       // const directoryStructure = await projectAnalyzer.getDirectoryStructure();
-      // console.log(projectAnalyzer.formatDirectoryTreeForCLI(directoryStructure));
+      // this.log(projectAnalyzer.formatDirectoryTreeForCLI(directoryStructure));
 
       // Load profile information if available
       const profileInfo = await this._loadProfileInfo(projectPath);
       if (profileInfo) {
-        console.log(green(`✅ Using profile: ${profileInfo.name} (${profileInfo.category})`));
+        this.log(green(`✅ Using profile: ${profileInfo.name} (${profileInfo.category})`));
       } else {
-        console.log(yellow('⚠️  No profile found, proceeding without context'));
+        this.log(yellow('⚠️  No profile found, proceeding without context'));
       }
       
       const reviewPrompt = await loadPrompt('common/security-review-cli.txt');
@@ -85,7 +97,8 @@ class CLIFullScanCommand {
         maxIterations: this.maxIterations,
         maxFileLines: 5000,
         partialReadLines: 500,
-        tokenTracker: this.tokenTracker
+        tokenTracker: this.tokenTracker,
+        silent: this.silent
       });
 
       const analysisResult = await aiAnalyzer.analyzeProject(
@@ -124,14 +137,14 @@ class CLIFullScanCommand {
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(green(`\n✅ Scan completed in ${duration}s`));
-      console.log(dim(`   Files analyzed: ${scanResult.filesAnalyzed}/${scanResult.totalFiles}`));
-      console.log(dim(`   AI iterations: ${scanResult.iterations}`));
+      this.log(green(`\n✅ Scan completed in ${duration}s`));
+      this.log(dim(`   Files analyzed: ${scanResult.filesAnalyzed}/${scanResult.totalFiles}`));
+      this.log(dim(`   AI iterations: ${scanResult.iterations}`));
       
       if (scanResult.issues.length > 0) {
-        console.log(red(`   Security issues found: ${scanResult.issues.length}`));
+        this.log(red(`   Security issues found: ${scanResult.issues.length}`));
       } else {
-        console.log(green(`   No security issues found`));
+        this.log(green(`   No security issues found`));
       }
 
     } catch (error) {
@@ -164,7 +177,7 @@ class CLIFullScanCommand {
 
       return null;
     } catch (error) {
-      console.log(yellow(`⚠️  Could not load profile: ${error.message}`));
+      this.log(yellow(`⚠️  Could not load profile: ${error.message}`));
       return null;
     }
   }
@@ -226,9 +239,9 @@ class CLIFullScanCommand {
       
       if (this.outputFile) {
         fs.writeFileSync(this.outputFile, output);
-        console.log(green(`📄 Results saved to: ${this.outputFile}`));
+        this.log(green(`📄 Results saved to: ${this.outputFile}`));
       } else {
-        console.log('\n' + output);
+        this.log('\n' + output);
       }
     } else if (this.outputFormat === 'defectdojo') {
       // DefectDojo format output
@@ -247,7 +260,7 @@ class CLIFullScanCommand {
       // Save to file if specified
       if (this.outputFile) {
         fs.writeFileSync(this.outputFile, output);
-        console.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
+        this.log(green(`📄 DefectDojo findings saved to: ${this.outputFile}`));
       }
       
       // Submit to DefectDojo API if configured
@@ -262,7 +275,7 @@ class CLIFullScanCommand {
       if (this.outputFile) {
         const textOutput = this._generateTextOutput(scanResult, analysisResult);
         fs.writeFileSync(this.outputFile, textOutput);
-        console.log(green(`📄 Results saved to: ${this.outputFile}`));
+        this.log(green(`📄 Results saved to: ${this.outputFile}`));
       }
     }
   }
@@ -271,37 +284,37 @@ class CLIFullScanCommand {
    * Output results in text format
    */
   _outputTextResults(scanResult, analysisResult) {
-    console.log('\n' + '='.repeat(60));
-    console.log(magenta('🛡️  SECUREFLOW SECURITY SCAN RESULTS'));
-    console.log('='.repeat(60));
+    this.log('\n' + '='.repeat(60));
+    this.log(magenta('🛡️  SECUREFLOW SECURITY SCAN RESULTS'));
+    this.log('='.repeat(60));
     
-    console.log(`📅 Timestamp: ${scanResult.timestamp}`);
-    console.log(`📁 Project: ${scanResult.projectPath}`);
-    console.log(`🤖 Model: ${scanResult.model}`);
-    console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
-    console.log(`🔄 Iterations: ${scanResult.iterations}`);
+    this.log(`📅 Timestamp: ${scanResult.timestamp}`);
+    this.log(`📁 Project: ${scanResult.projectPath}`);
+    this.log(`🤖 Model: ${scanResult.model}`);
+    this.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
+    this.log(`🔄 Iterations: ${scanResult.iterations}`);
     
-    console.log('\n📈 ISSUE SUMMARY:');
-    console.log(`   Critical: ${scanResult.summary.critical}`);
-    console.log(`   High:     ${scanResult.summary.high}`);
-    console.log(`   Medium:   ${scanResult.summary.medium}`);
-    console.log(`   Low:      ${scanResult.summary.low}`);
-    console.log(`   Total:    ${scanResult.issues.length}`);
+    this.log('\n📈 ISSUE SUMMARY:');
+    this.log(`   Critical: ${scanResult.summary.critical}`);
+    this.log(`   High:     ${scanResult.summary.high}`);
+    this.log(`   Medium:   ${scanResult.summary.medium}`);
+    this.log(`   Low:      ${scanResult.summary.low}`);
+    this.log(`   Total:    ${scanResult.issues.length}`);
 
     if (scanResult.issues.length > 0) {
-      console.log('\n🔍 SECURITY ISSUES:');
-      console.log('-'.repeat(60));
+      this.log('\n🔍 SECURITY ISSUES:');
+      this.log('-'.repeat(60));
       
       scanResult.issues.forEach((issue, index) => {
         const severityColor = this._getSeverityColor(issue.severity);
-        console.log(`\n${index + 1}. ${issue.title}`);
-        console.log(`   Severity: ${severityColor(issue.severity)}`);
-        console.log(`   Description: ${issue.description}`);
-        console.log(`   Recommendation: ${issue.recommendation}`);
+        this.log(`\n${index + 1}. ${issue.title}`);
+        this.log(`   Severity: ${severityColor(issue.severity)}`);
+        this.log(`   Description: ${issue.description}`);
+        this.log(`   Recommendation: ${issue.recommendation}`);
       });
     }
 
-    console.log('\n' + '='.repeat(60));
+    this.log('\n' + '='.repeat(60));
   }
 
   /**
@@ -343,7 +356,7 @@ class CLIFullScanCommand {
    * Output DefectDojo summary for user convenience
    */
   _outputDefectDojoSummary(scanResult, defectDojoFindings) {    
-    console.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
+    this.log(`📊 Files: ${scanResult.filesAnalyzed}/${scanResult.totalFiles} analyzed`);
     
     const summaryCounts = {
       critical: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'critical').length,
@@ -353,7 +366,7 @@ class CLIFullScanCommand {
       info: defectDojoFindings.findings.filter(f => f.severity.toLowerCase() === 'info').length
     };
 
-    console.log(
+    this.log(
       `\n${magenta(`Critical:${summaryCounts.critical}`)} ${cyan(`High:${summaryCounts.high}`)} ${yellow(`Medium:${summaryCounts.medium}`)} ${green(`Low:${summaryCounts.low}`)} ${dim(`Info:${summaryCounts.info}`)}`
     );
 
@@ -361,14 +374,14 @@ class CLIFullScanCommand {
       // Show first 3 findings as examples
       defectDojoFindings.findings.forEach((finding, index) => {
         const severityColor = this._getSeverityColor(finding.severity);
-        console.log(`\n${index + 1}. ${finding.title}`);
-        console.log(`   Severity: ${severityColor(finding.severity)}`);
-        console.log(`   ID: ${finding.unique_id_from_tool}`);
+        this.log(`\n${index + 1}. ${finding.title}`);
+        this.log(`   Severity: ${severityColor(finding.severity)}`);
+        this.log(`   ID: ${finding.unique_id_from_tool}`);
         if (finding.file_path) {
-          console.log(`   File: ${finding.file_path}${finding.line ? `:${finding.line}` : ''}`);
+          this.log(`   File: ${finding.file_path}${finding.line ? `:${finding.line}` : ''}`);
         }
         if (finding.tags && finding.tags.length > 0) {
-          console.log(`   Tags: ${finding.tags.join(', ')}`);
+          this.log(`   Tags: ${finding.tags.join(', ')}`);
         }
       });
     }
@@ -381,12 +394,12 @@ class CLIFullScanCommand {
     // Check if DefectDojo API options are provided (engagement ID is optional)
     if (!this.defectDojoOptions.url || !this.defectDojoOptions.token || 
         !this.defectDojoOptions.productId) {
-      console.log(dim('ℹ️  DefectDojo API not configured - skipping automatic submission'));
-      console.log(dim('    Required: --defectdojo-url, --defectdojo-token, --defectdojo-product-id'));
+      this.log(dim('ℹ️  DefectDojo API not configured - skipping automatic submission'));
+      this.log(dim('    Required: --defectdojo-url, --defectdojo-token, --defectdojo-product-id'));
       return;
     }
     try {
-      // console.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
+      // this.log(cyan('\n🔗 Submitting findings to DefectDojo...'));
       
       // Create DefectDojo client and validate configuration
       const defectDojoClient = new DefectDojoClient(this.defectDojoOptions);
@@ -398,13 +411,13 @@ class CLIFullScanCommand {
       
       // Notify if engagement was created
       // if (validation.engagementCreated) {
-      //   console.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
+      //   this.log(yellow('   📝 Created new engagement (ID: ' + validation.engagementId + ')'));
       // }
       
       // Submit findings
       const result = await defectDojoClient.submitFindings(defectDojoFindings);
       if (result.success) {
-        console.log(green('✅ Findings submitted to DefectDojo'));
+        this.log(green('✅ Findings submitted to DefectDojo'));
       } else {
         console.error(red('❌ DefectDojo submission failed'));
         console.error(red(`   ${result.errorMessage}`));
