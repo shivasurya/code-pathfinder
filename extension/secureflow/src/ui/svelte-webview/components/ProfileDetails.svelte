@@ -10,9 +10,6 @@
   // Tab state
   let activeTab: 'overview' | 'history' | 'vulnerabilities' = 'overview';
 
-  // Details pane state
-  let selectedVulnerability: any = null;
-
   // Computed values for dashboard
   $: latestScan = scans[0];
   $: totalIssues = latestScan?.issues?.length || 0;
@@ -1292,30 +1289,6 @@
     width: 12px;
     height: 12px;
     stroke: currentColor;
-  }
-
-  .severity-critical {
-    background: rgba(220, 38, 38, 0.2);
-    color: #fca5a5;
-    border: 1px solid rgba(220, 38, 38, 0.3);
-  }
-
-  .severity-high {
-    background: rgba(251, 146, 60, 0.2);
-    color: #fdba74;
-    border: 1px solid rgba(251, 146, 60, 0.3);
-  }
-
-  .severity-medium {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-  }
-
-  .severity-low {
-    background: rgba(34, 197, 94, 0.2);
-    color: #86efac;
-    border: 1px solid rgba(34, 197, 94, 0.3);
   }
 
   .scan-actions {
