@@ -129,49 +129,11 @@
         "description": "Premium model combining maximum intelligence with practical performance",
         "status": "available"
       },
-      "claude-opus-4-1-20250805": {
-        "contextWindow": 200000,
-        "maxOutput": 64000,
-        "description": "Exceptional model for specialized complex tasks",
-        "status": "available"
-      },
-      "claude-opus-4-20250514": {
-        "contextWindow": 200000,
-        "contextWindowBeta": 1000000,
-        "maxOutput": 64000,
-        "description": "Previous flagship model (1M beta available)",
-        "status": "available"
-      },
-      "claude-sonnet-4-20250514": {
-        "contextWindow": 200000,
-        "contextWindowBeta": 1000000,
-        "maxOutput": 64000,
-        "description": "High-performance model (1M beta available)",
-        "status": "available"
-      },
-      "claude-3-7-sonnet-20250219": {
-        "contextWindow": 200000,
-        "maxOutput": 128000,
-        "description": "High-performance with toggleable extended thinking (128K output)",
-        "status": "available"
-      },
       "claude-haiku-4-5": {
         "contextWindow": 200000,
         "maxOutput": 64000,
         "description": "Fastest model with near-frontier intelligence",
         "status": "available"
-      },
-      "claude-3-5-haiku-20241022": {
-        "contextWindow": 200000,
-        "maxOutput": 8192,
-        "description": "Fastest model with blazing speeds (Older version)",
-        "status": "available"
-      },
-      "claude-3-5-sonnet-20241022": {
-        "contextWindow": 200000,
-        "maxOutput": 8192,
-        "description": "DEPRECATED - Use Claude Sonnet 4.5 instead",
-        "status": "deprecated"
       }
     },
     "ollama": {
@@ -191,12 +153,10 @@
       "OpenAI o1-mini shutting down October 27, 2025 (replaced by o4-mini)",
       "OpenAI gpt-4.5-preview shut down July 14, 2025 (replaced by gpt-4.1)",
       "OpenAI o1-preview shut down July 28, 2025 (replaced by o3)",
-      "Claude Sonnet 4.5 and Claude Sonnet 4 support 1M context with beta header",
-      "Claude 3.7 Sonnet supports 128K max output tokens (vs 64K for Claude 4 models)",
+      "Claude Sonnet 4.5 supports 1M context with beta header",
       "Gemini 2.5 models use 65,536 max output tokens (not 65,535)",
       "GPT-5 family are the latest frontier models from OpenAI",
       "Assistants API will be deprecated August 26, 2026",
-      "Claude 3.5 Sonnet (20241022) is deprecated - use Claude Sonnet 4.5",
       "All specifications verified as of October 2025",
       "Knowledge cutoffs vary by model - check official docs for details"
     ],
@@ -213,12 +173,12 @@
         "claude-sonnet-4-5",
         "gemini-2.5-flash",
         "gpt-4o",
-        "claude-opus-4-1"
+        "claude-opus-4-5"
       ],
       "fast": [
         "gpt-5-nano",
         "gpt-4.1-mini",
-        "claude-3-5-haiku",
+        "claude-haiku-4-5",
         "gemini-2.5-flash-lite"
       ],
       "reasoning": [

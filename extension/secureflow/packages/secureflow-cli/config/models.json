@@ -239,60 +239,6 @@
       "order": 18
     },
     {
-      "id": "claude-opus-4-1-20250805",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude Opus 4.1",
-      "description": "Exceptional for specialized tasks",
-      "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 64000,
-      "status": "available",
-      "recommended": false,
-      "order": 19
-    },
-    {
-      "id": "claude-opus-4-20250514",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude Opus 4",
-      "description": "Previous flagship model",
-      "year": 2025,
-      "contextWindow": 200000,
-      "contextWindowBeta": 1000000,
-      "maxOutput": 64000,
-      "status": "available",
-      "recommended": false,
-      "order": 19
-    },
-    {
-      "id": "claude-sonnet-4-20250514",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude Sonnet 4",
-      "description": "High-performance model",
-      "year": 2025,
-      "contextWindow": 200000,
-      "contextWindowBeta": 1000000,
-      "maxOutput": 64000,
-      "status": "available",
-      "recommended": false,
-      "order": 20
-    },
-    {
-      "id": "claude-3-7-sonnet-20250219",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude 3.7 Sonnet",
-      "description": "With toggleable extended thinking",
-      "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 128000,
-      "status": "available",
-      "recommended": false,
-      "order": 21
-    },
-    {
       "id": "claude-haiku-4-5",
       "provider": "anthropic",
       "client": "ClaudeClient",
@@ -303,20 +249,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 22
-    },
-    {
-      "id": "claude-3-5-haiku-20241022",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude 3.5 Haiku",
-      "description": "Fastest model (Older version)",
-      "year": 2024,
-      "contextWindow": 200000,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 23
+      "order": 19
     },
     {
       "id": "grok-4-fast-reasoning",
@@ -329,20 +262,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 24
-    },
-    {
-      "id": "anthropic/claude-3-5-sonnet",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "Claude 3.5 Sonnet (OpenRouter)",
-      "description": "High-performance via OpenRouter",
-      "year": 2024,
-      "contextWindow": 200000,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 25
+      "order": 20
     },
     {
       "id": "openai/gpt-4o",
@@ -355,7 +275,7 @@
       "maxOutput": 16384,
       "status": "available",
       "recommended": false,
-      "order": 26
+      "order": 21
     },
     {
       "id": "google/gemini-2.0-flash-exp",
@@ -368,7 +288,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 27
+      "order": 22
     },
     {
       "id": "deepseek/deepseek-chat",
@@ -381,7 +301,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 28
+      "order": 23
     },
     {
       "id": "qwen/qwen-2.5-coder-32b-instruct",
@@ -394,7 +314,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 29
+      "order": 24
     },
     {
       "id": "meta-llama/llama-3.3-70b-instruct",
@@ -407,7 +327,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 30
+      "order": 25
     },
     {
       "id": "mistralai/mistral-large",
@@ -420,7 +340,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 31
+      "order": 26
     },
     {
       "id": "x-ai/grok-2",
@@ -433,7 +353,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 32
+      "order": 27
     }
   ],
   "providerInfo": {
