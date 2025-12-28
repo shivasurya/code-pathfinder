@@ -198,6 +198,10 @@
           placeholder="Select AI model..."
         />
 
+        {#if !showCustomModelInput}
+          <p class="hint">Missing a model? <a href="https://github.com/shivasurya/code-pathfinder/issues" target="_blank">Request to include it here</a></p>
+        {/if}
+
         {#if showCustomModelInput}
           <div class="custom-model-input">
             <Input

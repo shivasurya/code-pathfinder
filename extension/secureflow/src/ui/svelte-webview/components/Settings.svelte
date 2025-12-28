@@ -166,6 +166,9 @@
               value={selectedModel}
               on:change={handleModelChange}
             />
+            <div class="help-text">
+              Missing a model? <a href="https://github.com/shivasurya/code-pathfinder/issues" target="_blank">Request to include it here</a>
+            </div>
           </FormField>
         {/if}
 

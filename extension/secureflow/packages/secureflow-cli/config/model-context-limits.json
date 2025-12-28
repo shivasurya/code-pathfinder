@@ -24,30 +24,6 @@
         "maxOutput": 32000,
         "description": "Fastest, most cost-efficient version of GPT-5",
         "status": "available"
-      },
-      "o3": {
-        "contextWindow": 200000,
-        "maxOutput": 32768,
-        "description": "Most powerful reasoning model (succeeded by GPT-5)",
-        "status": "available"
-      },
-      "o3-pro": {
-        "contextWindow": 200000,
-        "maxOutput": 32768,
-        "description": "O3 with extended thinking for complex problems",
-        "status": "available"
-      },
-      "o3-mini": {
-        "contextWindow": 200000,
-        "maxOutput": 100000,
-        "description": "Cost-efficient reasoning model",
-        "status": "available"
-      },
-      "o4-mini": {
-        "contextWindow": 200000,
-        "maxOutput": 65536,
-        "description": "Fast, cost-efficient reasoning model",
-        "status": "available"
       }
     },
     "google": {
@@ -140,23 +116,20 @@
       ],
       "reasoning": [
         "gpt-5 (with thinking)",
-        "o3",
-        "o3-pro",
-        "o4-mini",
-        "gemini-3-pro-preview (with thinking)"
+        "gemini-3-pro-preview (with thinking)",
+        "claude-opus-4-5"
       ],
       "highOutput": [
         "gpt-5 (128K output)",
-        "o3-mini (100K output)",
-        "o4-mini (65.5K output)",
         "gemini-3-pro-preview (65.5K output)",
-        "gemini-2.5-flash (65.5K output)"
+        "gemini-2.5-flash (65.5K output)",
+        "claude-sonnet-4-5 (64K output)"
       ],
       "coding": [
         "gpt-5",
         "claude-sonnet-4-5",
-        "o3",
-        "gemini-3-pro-preview"
+        "gemini-3-pro-preview",
+        "qwen3-coder"
       ]
     }
   }
