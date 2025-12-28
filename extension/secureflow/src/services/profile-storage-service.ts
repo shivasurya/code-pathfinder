@@ -279,10 +279,8 @@ export class ProfileStorageService {
         await this.storeProfile(profile, workspaceFolders[0].uri.toString());
       }
     } catch (error) {
-      console.error(
-        `Error scanning workspace folder ${workspaceFolders[0].name}:`,
-        error
-      );
+      // Re-throw the error for caller to handle
+      throw error;
     }
   }
 
@@ -339,7 +337,6 @@ export class ProfileStorageService {
 
       return undefined;
     } catch (error) {
-      console.error(`Error rescanning profile ${profile.id}:`, error);
       throw error;
     }
   }

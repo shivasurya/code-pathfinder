@@ -1,6 +1,6 @@
 {
   "name": "@codepathfinder/secureflow-cli",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "AI-powered security analysis CLI tool with intelligent file discovery and comprehensive vulnerability scanning",
   "license": "AGPL-3.0",
   "bin": {
@@ -17,6 +17,7 @@
     "prepublishOnly": "npm run generate:models"
   },
   "dependencies": {
+    "@openrouter/sdk": "^0.3.10",
     "colorette": "^2.0.20",
     "commander": "^11.1.0",
     "posthog-node": "^5.10.0"

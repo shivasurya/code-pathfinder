@@ -5,6 +5,7 @@ const { ClaudeClient } = require('./claude-client');
 const { GeminiClient } = require('./gemini-client');
 const { OpenAIClient } = require('./openai-client');
 const { OllamaClient } = require('./ollama-client');
+const { OpenRouterClient } = require('./openrouter-client');
 const { HttpClient } = require('./http-client');
 const { AIModel } = require('./types');
 
@@ -25,6 +26,7 @@ module.exports = {
   GeminiClient,
   OpenAIClient,
   OllamaClient,
+  OpenRouterClient,
   HttpClient,
   AIModel,
   getPromptPath,

@@ -52,6 +52,7 @@ secureflow config --show
 - **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `o1`, `o1-mini`, `gpt-4.1-2025-04-14`, `o3-mini-2025-01-31`
 - **Google Gemini**: `gemini-2.5-pro`, `gemini-2.5-flash`
 - **xAI Grok**: `grok-4-fast-reasoning`
+- **OpenRouter**: Access 200+ models from multiple providers (use format: `provider/model` e.g., `anthropic/claude-3-5-sonnet`)
 - **Ollama**: `qwen3:4b`
 
 ### 3. Run Your First Scan
@@ -143,6 +144,7 @@ SecureFlow CLI stores configuration in a local config file. The location is show
 - **OpenAI**: [platform.openai.com](https://platform.openai.com)
 - **Google**: [ai.google.dev](https://ai.google.dev)
 - **Grok (xAI)**: [console.x.ai](https://console.x.ai)
+- **OpenRouter**: [openrouter.ai](https://openrouter.ai/settings/keys)
 
 ## 🎯 Usage Examples
 

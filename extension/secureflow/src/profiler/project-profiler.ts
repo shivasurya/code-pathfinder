@@ -85,6 +85,7 @@ export class ProjectProfiler {
     const selectedModel =
       this.settingsManager?.getSelectedAIModel() ||
       'claude-sonnet-4-5-20250929';
+    console.log('ProjectProfiler: Initializing with model:', selectedModel);
     this.workspaceAnalyzer = new WorkspaceAnalyzer({ selectedModel });
   }
 

@@ -1,5 +1,44 @@
 # SecureFlow Changelog
 
+## Version 0.0.18 - December 27, 2025
+
+### What's New
+
+- **Latest AI Models**: Support for cutting-edge AI models from OpenAI, Google, xAI, and OpenRouter
+  - **GPT-5.2**: OpenAI's best model for coding and agentic tasks across industries (400K context, 128K output)
+  - **Gemini 3 Pro & Flash**: Google's newest multimodal AI with thinking capabilities (1M context)
+  - **Grok 4.1 Fast**: xAI's frontier model optimized for high-performance agentic tool calling (2M context)
+  - **MiniMax M2**: Compact high-efficiency model optimized for coding and agentic workflows via OpenRouter (196K context)
+  - **DeepSeek V3.2**: High computational efficiency with strong reasoning and agentic tool-use performance via OpenRouter (163K context)
+  - All models available at the top of Settings and Onboarding for easy selection
+- **OpenRouter Support**: Access 200+ AI models from multiple providers through a single API key
+  - Use models from Anthropic, OpenAI, Google, Meta, Mistral, and many more
+  - Switch between models without changing API keys
+  - Perfect for comparing different AI models for security analysis
+- **Modern User Interface**: Completely redesigned interface with better navigation
+  - New Profile management page to organize your scans
+  - Dedicated Results page with full scan history
+  - Easy-to-use Settings page for configuration
+  - Cleaner, more intuitive layout
+- **Enhanced Provider Selection**: Choose your preferred AI provider
+  - New Provider setting in configuration
+  - Auto-detection or manual selection
+  - Supported providers: Anthropic Claude, OpenAI, Google Gemini, OpenRouter
+- **Improved Workspace Profiling**: Better project detection and scanning
+  - Automatically identifies your project's technology stack
+  - One-click security scanning for detected profiles
+  - Faster, more accurate analysis
+- **Scan History**: Keep track of all your security scans
+  - View complete history of all scans
+  - See which profile each scan belongs to
+  - Review severity breakdowns and trends over time
+
+### Improvements
+
+- **Cleaner Output**: Removed unnecessary logging and debug messages
+- **Faster Performance**: Optimized for smaller bundle size and faster loading
+- **Better Settings Experience**: Improved input validation and helpful guidance
+
 ## Version 0.0.17 - November 15, 2025
 
 ### 🔧 Improvements

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { StoredProfile } from '../models/profile-store';
 import { ProfileStorageService } from '../services/profile-storage-service';
 import { ScanStorageService } from '../services/scan-storage-service';
+import { ProfileScanService } from '../services/profile-scan-service';
 import { ScanResult } from '../models/scan-result';
 import { AnalyticsService } from '../services/analytics';
 import { SettingsManager } from '../settings/settings-manager';
@@ -49,6 +50,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
   private _scans: ScanResult[] = [];
   private _profileService: ProfileStorageService;
   private _scanService: ScanStorageService;
+  private _profileScanService: ProfileScanService;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -56,13 +58,24 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
   ) {
     this._profileService = new ProfileStorageService(this._context);
     this._scanService = new ScanStorageService(this._context);
+    this._profileScanService = new ProfileScanService(this._context);
     this.loadProfiles();
     this.loadScans();
   }
 
   private async loadProfiles() {
     try {
-      const profiles = await this._profileService.getAllProfiles();
+      // Get profiles only for the current workspace folders
+      const workspaceFolders = vscode.workspace.workspaceFolders || [];
+      let profiles: StoredProfile[] = [];
+
+      for (const folder of workspaceFolders) {
+        const workspaceProfiles = this._profileService.getWorkspaceProfiles(
+          folder.uri.toString()
+        );
+        profiles = profiles.concat(workspaceProfiles);
+      }
+
       this._profiles = profiles;
 
       if (this._view) {
@@ -111,6 +124,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ) {
+    console.log('SecureFlow: resolveWebviewView called');
     this._view = webviewView;
 
     webviewView.webview.options = {
@@ -118,7 +132,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this._extensionUri]
     };
 
+    console.log('SecureFlow: Webview options set, generating HTML...');
+
     webviewView.webview.onDidReceiveMessage(async (message) => {
+      console.log('SecureFlow: Received message from webview:', message.type);
       // Initialize analytics service for all message handlers
       const analytics = AnalyticsService.getInstance();
 
@@ -174,15 +191,82 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
           });
           await this.loadScans();
           break;
+        case 'showSettings':
+          analytics.trackEvent('Settings Opened', {
+            trigger: 'user_request'
+          });
+          if (this._view) {
+            this._view.webview.postMessage({
+              type: 'showSettings'
+            });
+          }
+          break;
+        case 'backToProfiles':
+          if (this._view) {
+            this._view.webview.postMessage({
+              type: 'backToProfiles'
+            });
+          }
+          break;
+        case 'getCurrentConfig':
+          if (this._view) {
+            const settingsManager = new SettingsManager(this._context);
+            const currentModel = settingsManager.getSelectedAIModel();
+            const currentApiKey = await settingsManager.getApiKey();
+            const currentProvider = settingsManager.getSelectedProvider();
+
+            this._view.webview.postMessage({
+              type: 'currentConfig',
+              config: {
+                model: currentModel,
+                apiKey: currentApiKey || '',
+                provider: currentProvider
+              }
+            });
+          }
+          break;
         case 'viewScan':
           analytics.trackEvent('Scan Results Opened', {
             scan_number: message.scanNumber
           });
-          const scan = this._scans.find(
-            (s) => s.scanNumber === message.scanNumber
-          );
+          // Get scan from storage service (not filtered _scans)
+          const scan = this._scanService.getScanByNumber(message.scanNumber);
           if (scan) {
+            console.log('SecureFlow: Opening scan results', {
+              scanNumber: scan.scanNumber,
+              issuesCount: scan.issues?.length || 0
+            });
             this.openScanResultsWebview(scan);
+          } else {
+            console.error('SecureFlow: Scan not found:', message.scanNumber);
+            vscode.window.showErrorMessage(`Scan #${message.scanNumber} not found`);
+          }
+          break;
+        case 'openVulnerabilityDetails':
+          analytics.trackEvent('Vulnerability Details Opened', {
+            vulnerability_title: message.vulnerability.title
+          });
+          this.openVulnerabilityDetailsWebview(message.vulnerability);
+          break;
+        case 'openFile':
+          try {
+            const document = await vscode.workspace.openTextDocument(message.filePath);
+            const editor = await vscode.window.showTextDocument(document);
+            const position = new vscode.Position(message.line - 1, 0);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position));
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to open file: ${message.filePath}`);
+          }
+          break;
+        case 'scanGitChanges':
+          analytics.trackEvent('Git Changes Scan Triggered', {
+            trigger: 'profile_action'
+          });
+          try {
+            await vscode.commands.executeCommand('secureflow.reviewChanges');
+          } catch (error) {
+            vscode.window.showErrorMessage('Failed to scan git changes');
           }
           break;
         case 'profileSelected':
@@ -192,22 +276,118 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
           const profile = this._profiles.find(
             (p) => p.id === message.profileId
           );
-          if (profile && this._view) {
-            this._view.webview.postMessage({
-              type: 'profileDetails',
-              profile: {
-                id: profile.id,
-                name: profile.name,
-                path: profile.path,
-                category: profile.category,
-                subcategory: profile.subcategory || 'N/A',
-                technology: profile.technology || 'N/A',
-                confidence: profile.confidence,
-                languages: profile.languages || [],
-                isActive: profile.isActive,
-                timestamp: new Date(profile.timestamp).toLocaleString()
+          if (profile) {
+            // Load scans for this specific profile
+            const profileScans = this._scanService.getScansForProfile(profile.id);
+
+            // Send profile details and scans to webview
+            if (this._view) {
+              this._view.webview.postMessage({
+                type: 'profileDetails',
+                profile: profile
+              });
+              this._view.webview.postMessage({
+                type: 'updateScans',
+                scans: profileScans
+              });
+            }
+          }
+          break;
+
+        case 'rescanProfile':
+          analytics.trackEvent('Profile Rescan Started', {
+            profile_id: message.profileId,
+            scan_trigger: 'manual_button_click'
+          });
+
+          const profileToRescan = this._profiles.find(
+            (p) => p.id === message.profileId
+          );
+
+          if (profileToRescan) {
+            // Run scan with progress notification
+            await vscode.window.withProgress(
+              {
+                location: vscode.ProgressLocation.Notification,
+                title: `Scanning ${profileToRescan.name}`,
+                cancellable: false
+              },
+              async (progress) => {
+                try {
+                  progress.report({ message: 'Initializing scan...' });
+
+                  // Run the scan using CLI scanner
+                  const savedScan = await this._profileScanService.scanProfile(
+                    profileToRescan,
+                    (progressMessage) => {
+                      progress.report({ message: progressMessage });
+                      console.log('ProfileScan:', progressMessage);
+                    }
+                  );
+
+                  // Track success
+                  analytics.trackEvent('Profile Rescan Completed', {
+                    profile_id: profileToRescan.id,
+                    scan_result: 'success',
+                    issues_found: savedScan.issues?.length || 0
+                  });
+
+                  // Reload scans for this profile
+                  const profileScans = this._scanService.getScansForProfile(profileToRescan.id);
+
+                  // Update UI
+                  if (this._view) {
+                    this._view.webview.postMessage({
+                      type: 'updateScans',
+                      scans: profileScans
+                    });
+                  }
+
+                  // Show completion message
+                  const issuesCount = savedScan.issues?.length || 0;
+                  const message = `✓ Scan complete! Found ${issuesCount} issue${issuesCount !== 1 ? 's' : ''}.`;
+                  vscode.window.showInformationMessage(message);
+                } catch (error: any) {
+                  // Track failure
+                  analytics.trackEvent('Profile Rescan Failed', {
+                    profile_id: message.profileId,
+                    error_type: error.message || 'unknown'
+                  });
+
+                  console.error('Error rescanning profile:', error);
+                  vscode.window.showErrorMessage(
+                    `Failed to scan profile: ${error.message || error}`
+                  );
+                }
               }
-            });
+            );
+          }
+          break;
+
+        case 'deleteProfile':
+          analytics.trackEvent('Profile Deletion Requested', {
+            profile_id: message.profileId
+          });
+
+          try {
+            await this._profileService.deleteProfile(message.profileId);
+            await this.loadProfiles();
+
+            if (this._view) {
+              this._view.webview.postMessage({
+                type: 'profileDeleted',
+                profileId: message.profileId
+              });
+              this._view.webview.postMessage({
+                type: 'updateProfiles',
+                profiles: this._profiles
+              });
+            }
+
+            vscode.window.showInformationMessage('Profile deleted successfully');
+          } catch (error) {
+            console.error('Error deleting profile:', error);
+            vscode.window.showErrorMessage('Failed to delete profile');
           }
           break;
         case 'confirmDelete':
@@ -260,41 +440,6 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             }
           }
           break;
-        case 'rescanProfile':
-          analytics.trackEvent('Security Profile Rescan Started', {
-            rescan_trigger: 'manual_request'
-          });
-
-          try {
-            const profile = this._profiles.find(
-              (p) => p.id === message.profileId
-            );
-            if (profile) {
-              // Trigger a rescan for the specific profile path
-              // You'll need to implement the actual rescan logic in your service
-              await this._profileService.rescanProfile(profile);
-              await this.loadProfiles();
-
-              // Track API success
-              analytics.trackEvent('Security Profile Rescan Completed', {
-                profile_id: message.profileId,
-                rescan_result: 'success'
-              });
-            }
-          } catch (error) {
-            // Track API failure
-            analytics.trackEvent('Security Profile Rescan Failed', {
-              error_type: 'rescan_execution_error'
-            });
-
-            if (this._view) {
-              this._view.webview.postMessage({
-                type: 'error',
-                message: 'Failed to rescan profile'
-              });
-            }
-          }
-          break;
         case 'rescanAll':
           try {
             // Implement logic to rescan all profiles
@@ -333,30 +478,107 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'saveConfig':
+          console.log('SecureFlow: saveConfig message received', {
+            provider: message.provider,
+            model: message.model,
+            hasApiKey: !!message.apiKey
+          });
+
           analytics.trackEvent('Configuration Saved', {
-            model: message.model
+            model: message.model,
+            provider: message.provider
           });
 
           try {
             const config = vscode.workspace.getConfiguration('secureflow');
+            if (message.provider) {
+              console.log('SecureFlow: Updating provider to:', message.provider);
+              await config.update(
+                'Provider',
+                message.provider,
+                vscode.ConfigurationTarget.Global
+              );
+            }
+            console.log('SecureFlow: Updating AIModel to:', message.model);
             await config.update(
               'AIModel',
               message.model,
               vscode.ConfigurationTarget.Global
             );
+
+            // Verify it was saved
+            const savedModel = config.get<string>('AIModel');
+            console.log('SecureFlow: Verified AIModel saved as:', savedModel);
+
+            console.log('SecureFlow: Updating APIKey');
             await config.update(
               'APIKey',
               message.apiKey,
               vscode.ConfigurationTarget.Global
             );
 
+            console.log('SecureFlow: Configuration saved successfully');
+
             if (this._view) {
               this._view.webview.postMessage({
                 type: 'configSaved',
                 success: true
               });
+
+              // Update onboarding status to configured
+              this._view.webview.postMessage({
+                type: 'onboardingStatus',
+                isConfigured: true
+              });
+            }
+
+            // Only start workspace scan if not skipped (e.g., from Settings page)
+            if (!message.skipScan) {
+              // Show success notification
+              vscode.window.showInformationMessage(
+                'SecureFlow configuration saved! Starting workspace security scan...'
+              );
+
+              // Automatically start workspace scan
+              console.log('SecureFlow: Starting automatic workspace scan...');
+              try {
+                await this._profileService.scanWorkspace();
+                await this.loadProfiles();
+                console.log('SecureFlow: Automatic workspace scan completed');
+
+                // Notify webview that scan is complete
+                if (this._view) {
+                  this._view.webview.postMessage({
+                    type: 'scanComplete',
+                    success: true,
+                    profileCount: this._profiles.length
+                  });
+
+                  // Wait a moment for the success message to be visible
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+
+                  // Send profiles data to update the view
+                  this._view.webview.postMessage({
+                    type: 'updateProfiles',
+                    profiles: this._profiles
+                  });
+                }
+              } catch (error) {
+                console.error('SecureFlow: Workspace scan failed:', error);
+              }
+            } else {
+              // Just show success notification for settings update
+              vscode.window.showInformationMessage(
+                'SecureFlow settings saved successfully!'
+              );
             }
           } catch (error) {
+            console.error('SecureFlow: Error saving configuration:', error);
+
+            vscode.window.showErrorMessage(
+              'Failed to save SecureFlow configuration. Please try again.'
+            );
+
             if (this._view) {
               this._view.webview.postMessage({
                 type: 'configSaved',
@@ -369,7 +591,11 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    webviewView.webview.html = this._getHtmlContent(webviewView.webview);
+    const htmlContent = this._getHtmlContent(webviewView.webview);
+    console.log('SecureFlow: HTML content generated, length:', htmlContent.length);
+    console.log('SecureFlow: HTML preview:', htmlContent.substring(0, 200));
+    webviewView.webview.html = htmlContent;
+    console.log('SecureFlow: Webview HTML set successfully');
   }
 
   private openScanResultsWebview(scan: ScanResult) {
@@ -385,6 +611,268 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     );
 
     panel.webview.html = this.generateScanResultHtml(scan);
+  }
+
+  private openVulnerabilityDetailsWebview(vulnerability: any) {
+    // Create a new webview panel for displaying vulnerability details
+    const panel = vscode.window.createWebviewPanel(
+      'secureflowVulnerabilityDetails',
+      vulnerability.title,
+      vscode.ViewColumn.Two,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true
+      }
+    );
+
+    // Handle messages from the webview
+    panel.webview.onDidReceiveMessage(async (message) => {
+      switch (message.type) {
+        case 'openFile':
+          try {
+            const document = await vscode.workspace.openTextDocument(message.filePath);
+            const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
+            const position = new vscode.Position(message.line - 1, 0);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position));
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to open file: ${message.filePath}`);
+          }
+          break;
+        case 'closeVulnerabilityDetails':
+          panel.dispose();
+          break;
+      }
+    });
+
+    panel.webview.html = this.generateVulnerabilityDetailsHtml(panel.webview, vulnerability);
+  }
+
+  private generateVulnerabilityDetailsHtml(webview: vscode.Webview, vulnerability: any): string {
+    const occurrencesHtml = vulnerability.occurrences
+      .map((occurrence: any) => `
+        <button class="occurrence-card" onclick="openFile('${occurrence.filePath}', ${occurrence.startLine})">
+          <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+            <polyline points="13 2 13 9 20 9"></polyline>
+          </svg>
+          <div class="occurrence-details">
+            <div class="occurrence-file">${this.getRelativePath(occurrence.filePath)}</div>
+            <div class="occurrence-line">Line ${occurrence.startLine}</div>
+          </div>
+          <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      `)
+      .join('');
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${vulnerability.title}</title>
+  <style>
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
+      margin: 0;
+      padding: 20px;
+    }
+    .vulnerability-details-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .details-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--vscode-widget-border);
+    }
+    .details-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .details-body {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .details-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      opacity: 0.6;
+      letter-spacing: 0.5px;
+    }
+    .section-value {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .issue-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .recommendation {
+      background: var(--vscode-textBlockQuote-background);
+      border-left: 3px solid var(--vscode-button-background);
+      padding: 12px;
+      border-radius: 4px;
+    }
+    .severity-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      width: fit-content;
+    }
+    .severity-critical {
+      background: rgba(220, 38, 38, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(220, 38, 38, 0.3);
+    }
+    .severity-high {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fdba74;
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+    .severity-medium {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .severity-low {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .occurrences-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .occurrence-card {
+      background: var(--vscode-button-secondaryBackground);
+      border: 1px solid var(--vscode-widget-border);
+      border-radius: 6px;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-foreground);
+      text-align: left;
+      width: 100%;
+    }
+    .occurrence-card:hover {
+      border-color: var(--vscode-button-background);
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      transform: translateX(4px);
+    }
+    .file-icon, .arrow-icon {
+      flex-shrink: 0;
+      stroke: currentColor;
+    }
+    .file-icon {
+      width: 18px;
+      height: 18px;
+    }
+    .arrow-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.5;
+    }
+    .occurrence-card:hover .arrow-icon {
+      opacity: 1;
+    }
+    .occurrence-details {
+      flex: 1;
+      min-width: 0;
+    }
+    .occurrence-file {
+      font-size: 13px;
+      font-family: var(--vscode-editor-font-family);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .occurrence-line {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="vulnerability-details-container">
+    <div class="details-header">
+      <h2 class="details-title">Vulnerability Details</h2>
+    </div>
+
+    <div class="details-body">
+      <div class="details-section">
+        <div class="section-label">Issue</div>
+        <div class="section-value issue-title">${vulnerability.title}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Severity</div>
+        <span class="severity-badge severity-${vulnerability.severity.toLowerCase()}">
+          ${vulnerability.severity}
+        </span>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Description</div>
+        <div class="section-value">${vulnerability.description}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Recommendation</div>
+        <div class="section-value recommendation">${vulnerability.recommendation}</div>
+      </div>
+
+      <div class="details-section">
+        <div class="section-label">Affected Locations (${vulnerability.occurrences.length})</div>
+        <div class="occurrences-grid">
+          ${occurrencesHtml}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    function openFile(filePath, line) {
+      vscode.postMessage({
+        type: 'openFile',
+        filePath: filePath,
+        line: line
+      });
+    }
+  </script>
+</body>
+</html>
+    `;
   }
 
   private formatTimestamp(timestamp: number | string): string {
@@ -621,55 +1109,97 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtmlContent(webview: vscode.Webview): string {
-    // Get paths to resource files
-    const htmlPath = vscode.Uri.joinPath(
-      this._extensionUri,
-      'dist',
-      'webview',
-      'index.html'
-    );
-    const mainScriptPath = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'main.js')
-    );
-    const stylesPath = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'styles.css')
-    );
-    const iconPath = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'resources', 'icon.png')
-    );
+    try {
+      // Get paths to Svelte webview resources
+      const htmlPath = vscode.Uri.joinPath(
+        this._extensionUri,
+        'dist',
+        'svelte-webview',
+        'index.html'
+      );
+      const scriptPath = webview.asWebviewUri(
+        vscode.Uri.joinPath(this._extensionUri, 'dist', 'svelte-webview', 'webview.js')
+      );
 
-    // Read and return the HTML content
-    const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      console.log('SecureFlow: Paths:', {
+        htmlPath: htmlPath.fsPath,
+        scriptPath: scriptPath.toString()
+      });
 
-    // Prepare model configuration for injection
-    const modelConfigData = {
-      models: ModelConfig.getAllActive(),
-      providers: {
-        openai: ModelConfig.getProviderInfo('openai'),
-        anthropic: ModelConfig.getProviderInfo('anthropic'),
-        google: ModelConfig.getProviderInfo('google'),
-        xai: ModelConfig.getProviderInfo('xai'),
-        ollama: ModelConfig.getProviderInfo('ollama')
+      // Check if files exist
+      if (!fs.existsSync(htmlPath.fsPath)) {
+        throw new Error(`HTML file not found: ${htmlPath.fsPath}`);
       }
-    };
 
-    // Create inline script to inject model config before main script loads
-    const modelConfigScript = `
-      <script>
-        window.modelConfig = ${JSON.stringify(modelConfigData)};
-      </script>
-    `;
+      const scriptFsPath = vscode.Uri.joinPath(this._extensionUri, 'dist', 'svelte-webview', 'webview.js').fsPath;
+      if (!fs.existsSync(scriptFsPath)) {
+        throw new Error(`Script file not found: ${scriptFsPath}`);
+      }
 
-    // Replace placeholders with actual URIs
-    let data = htmlContent
-      .replace(/\$\{scriptUri\}/g, mainScriptPath.toString())
-      .replace(/\$\{stylesUri\}/g, stylesPath.toString())
-      .replace(/\$\{iconUri\}/g, iconPath.toString())
-      .replace(/\$\{cspSource\}/g, webview.cspSource);
-    
-    // Inject model config script before the main script tag
-    data = data.replace('</head>', `${modelConfigScript}</head>`);
-    
-    return data;
+      // Read the HTML template
+      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      console.log('SecureFlow: HTML template read, length:', htmlContent.length);
+
+      // Prepare model configuration for injection
+      const modelConfigData = {
+        models: ModelConfig.getAllActive(),
+        providers: {
+          openai: ModelConfig.getProviderInfo('openai'),
+          anthropic: ModelConfig.getProviderInfo('anthropic'),
+          google: ModelConfig.getProviderInfo('google'),
+          xai: ModelConfig.getProviderInfo('xai'),
+          ollama: ModelConfig.getProviderInfo('ollama'),
+          openrouter: ModelConfig.getProviderInfo('openrouter')
+        }
+      };
+
+      console.log('SecureFlow: Injecting model config:', {
+        modelCount: modelConfigData.models.length,
+        providers: Object.keys(modelConfigData.providers),
+        openrouterInfo: modelConfigData.providers.openrouter
+      });
+
+      // Replace placeholders with actual values
+      const html = htmlContent
+        .replace(/\$\{cspSource\}/g, webview.cspSource)
+        .replace(/\$\{scriptUri\}/g, scriptPath.toString())
+        .replace(/\$\{modelConfig\}/g, JSON.stringify(modelConfigData));
+
+      console.log('SecureFlow: HTML placeholders replaced');
+      return html;
+    } catch (error) {
+      console.error('SecureFlow: Error loading webview:', error);
+      // Return fallback HTML with error message
+      return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
+      padding: 20px;
+    }
+    .error {
+      color: var(--vscode-errorForeground);
+      background: var(--vscode-inputValidation-errorBackground);
+      border: 1px solid var(--vscode-inputValidation-errorBorder);
+      padding: 10px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h3>SecureFlow - Error Loading View</h3>
+  <div class="error">
+    <p>Failed to load SecureFlow webview.</p>
+    <p>Error: ${error instanceof Error ? error.message : String(error)}</p>
+    <p>Please check the Extension Host output for more details.</p>
+  </div>
+</body>
+</html>`;
+    }
   }
 }

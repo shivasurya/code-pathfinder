@@ -3,6 +3,7 @@
 out/**
 node_modules/**
 src/**
+coverage/**
 .gitignore
 .yarnrc
 webpack.config.js
@@ -14,6 +15,6 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 
 
-# ignore hidden directories and files 
+# ignore hidden directories and files
 .windsurf/**
 packages/secureflow-cli/**

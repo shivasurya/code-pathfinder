@@ -4,6 +4,19 @@
   "lastUpdated": "2025-10-18",
   "models": [
     {
+      "id": "gpt-5.2",
+      "provider": "openai",
+      "client": "OpenAIClient",
+      "displayName": "GPT-5.2",
+      "description": "Best model for coding and agentic tasks across industries",
+      "year": 2025,
+      "contextWindow": 400000,
+      "maxOutput": 128000,
+      "status": "available",
+      "recommended": false,
+      "order": 1
+    },
+    {
       "id": "gpt-5.1",
       "provider": "openai",
       "client": "OpenAIClient",
@@ -14,7 +27,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 1
+      "order": 2
     },
     {
       "id": "gpt-5-pro",
@@ -27,7 +40,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 2
+      "order": 3
     },
     {
       "id": "gpt-5",
@@ -40,7 +53,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 3
+      "order": 4
     },
     {
       "id": "gpt-5-mini",
@@ -53,7 +66,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 4
+      "order": 5
     },
     {
       "id": "gpt-5-nano",
@@ -66,124 +79,33 @@
       "maxOutput": 32000,
       "status": "available",
       "recommended": false,
-      "order": 5
-    },
-    {
-      "id": "o3",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O3",
-      "description": "Most powerful reasoning model",
-      "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 32768,
-      "status": "available",
-      "recommended": false,
       "order": 6
     },
     {
-      "id": "o3-pro",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O3 Pro",
-      "description": "O3 with extended thinking",
+      "id": "gemini-3-pro-preview",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 3 Pro",
+      "description": "Most advanced multimodal AI with thinking capabilities",
       "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 32768,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
       "status": "available",
       "recommended": false,
       "order": 7
     },
     {
-      "id": "o3-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O3 Mini",
-      "description": "Cost-efficient reasoning model",
+      "id": "gemini-3-flash-preview",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 3 Flash",
+      "description": "Fast multimodal AI with thinking capabilities",
       "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 100000,
-      "status": "available",
-      "recommended": false,
-      "order": 8
-    },
-    {
-      "id": "o4-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O4 Mini",
-      "description": "Fast, cost-efficient reasoning model",
-      "year": 2025,
-      "contextWindow": 200000,
+      "contextWindow": 1048576,
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 9
-    },
-    {
-      "id": "gpt-4.1",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4.1",
-      "description": "Smartest non-reasoning model, 1M context",
-      "year": 2025,
-      "contextWindow": 1000000,
-      "maxOutput": 32768,
-      "status": "available",
-      "recommended": false,
-      "order": 10
-    },
-    {
-      "id": "gpt-4.1-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4.1 Mini",
-      "description": "Fast, capable, efficient small model",
-      "year": 2025,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 11
-    },
-    {
-      "id": "gpt-4o",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4o",
-      "description": "Fast, intelligent, flexible GPT model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 12
-    },
-    {
-      "id": "gpt-4o-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4o Mini",
-      "description": "Fast, affordable small model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 13
-    },
-    {
-      "id": "o1",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O1",
-      "description": "Previous full o-series reasoning model",
-      "year": 2024,
-      "contextWindow": 200000,
-      "maxOutput": 32768,
-      "status": "available",
-      "recommended": false,
-      "order": 14
+      "order": 8
     },
     {
       "id": "gemini-2.5-pro",
@@ -196,7 +118,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 15
+      "order": 9
     },
     {
       "id": "gemini-2.5-flash",
@@ -209,7 +131,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 16
+      "order": 10
     },
     {
       "id": "claude-sonnet-4-5-20250929",
@@ -223,61 +145,20 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": true,
-      "order": 17
+      "order": 11
     },
     {
-      "id": "claude-opus-4-1-20250805",
+      "id": "claude-opus-4-5",
       "provider": "anthropic",
       "client": "ClaudeClient",
-      "displayName": "Claude Opus 4.1",
-      "description": "Exceptional for specialized tasks",
+      "displayName": "Claude 4.5 Opus",
+      "description": "Premium model combining maximum intelligence with practical performance",
       "year": 2025,
       "contextWindow": 200000,
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 18
-    },
-    {
-      "id": "claude-opus-4-20250514",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude Opus 4",
-      "description": "Previous flagship model",
-      "year": 2025,
-      "contextWindow": 200000,
-      "contextWindowBeta": 1000000,
-      "maxOutput": 64000,
-      "status": "available",
-      "recommended": false,
-      "order": 19
-    },
-    {
-      "id": "claude-sonnet-4-20250514",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude Sonnet 4",
-      "description": "High-performance model",
-      "year": 2025,
-      "contextWindow": 200000,
-      "contextWindowBeta": 1000000,
-      "maxOutput": 64000,
-      "status": "available",
-      "recommended": false,
-      "order": 20
-    },
-    {
-      "id": "claude-3-7-sonnet-20250219",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude 3.7 Sonnet",
-      "description": "With toggleable extended thinking",
-      "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 128000,
-      "status": "available",
-      "recommended": false,
-      "order": 21
+      "order": 12
     },
     {
       "id": "claude-haiku-4-5",
@@ -290,20 +171,20 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 22
+      "order": 13
     },
     {
-      "id": "claude-3-5-haiku-20241022",
-      "provider": "anthropic",
-      "client": "ClaudeClient",
-      "displayName": "Claude 3.5 Haiku",
-      "description": "Fastest model (Older version)",
-      "year": 2024,
-      "contextWindow": 200000,
-      "maxOutput": 8192,
+      "id": "grok-4-1-fast-reasoning",
+      "provider": "xai",
+      "client": "GrokClient",
+      "displayName": "Grok 4.1 Fast",
+      "description": "Frontier multimodal model optimized for high-performance agentic tool calling",
+      "year": 2025,
+      "contextWindow": 2000000,
+      "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 23
+      "order": 14
     },
     {
       "id": "grok-4-fast-reasoning",
@@ -316,7 +197,59 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 24
+      "order": 15
+    },
+    {
+      "id": "qwen/qwen3-coder",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "Qwen3 Coder",
+      "description": "Specialized coding model via OpenRouter",
+      "year": 2024,
+      "contextWindow": 32768,
+      "maxOutput": 8192,
+      "status": "available",
+      "recommended": false,
+      "order": 16
+    },
+    {
+      "id": "z-ai/glm-4.7",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "GLM 4.7",
+      "description": "High-performance AI model via OpenRouter",
+      "year": 2024,
+      "contextWindow": 128000,
+      "maxOutput": 8192,
+      "status": "available",
+      "recommended": false,
+      "order": 17
+    },
+    {
+      "id": "minimax/minimax-m2",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "MiniMax M2",
+      "description": "Compact high-efficiency model optimized for coding and agentic workflows",
+      "year": 2025,
+      "contextWindow": 196608,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 18
+    },
+    {
+      "id": "deepseek/deepseek-v3.2",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "DeepSeek V3.2",
+      "description": "High computational efficiency with strong reasoning and agentic tool-use performance",
+      "year": 2025,
+      "contextWindow": 163840,
+      "maxOutput": 32768,
+      "status": "available",
+      "recommended": false,
+      "order": 19
     }
   ],
   "providerInfo": {
@@ -339,6 +272,10 @@
     "ollama": {
       "name": "Ollama",
       "apiKeyEnvVar": null
+    },
+    "openrouter": {
+      "name": "OpenRouter",
+      "apiKeyEnvVar": "OPENROUTER_API_KEY"
     }
   }
 }

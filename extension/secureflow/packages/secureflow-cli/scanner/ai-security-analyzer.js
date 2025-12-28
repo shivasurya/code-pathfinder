@@ -14,6 +14,13 @@ class AISecurityAnalyzer {
     this.maxIterations = options.maxIterations || 3;
     this.analysisLog = [];
     this.tokenTracker = options.tokenTracker || null;
+    this.silent = options.silent || false;
+  }
+
+  log(...args) {
+    if (!this.silent) {
+      console.log(...args);
+    }
   }
 
   /**
@@ -35,7 +42,7 @@ class AISecurityAnalyzer {
       // Send context to AI and get response
       const aiResponse = await this._sendToAI(null, iteration, messages);
       messages.push({ role: 'assistant', content: aiResponse });
-      
+
       this.analysisLog.push({
         iteration,
         timestamp: new Date().toISOString(),
@@ -50,7 +57,7 @@ class AISecurityAnalyzer {
 
       // Check if AI wants to list files
       const listFileRequests = this._extractListFileRequests(aiResponse);
-      
+
       if (fileRequests.length > 0 || listFileRequests.length > 0) {
         let fileResults = [];
         let listResults = [];
@@ -97,7 +104,6 @@ class AISecurityAnalyzer {
 
     // If we reached max iterations, get final analysis
     if (!finalAnalysis) {
-      console.log(yellow('⚠️  Reached maximum iterations, requesting final analysis'));
       finalAnalysis = await this._getFinalAnalysis(currentContext, messages);
     }
 

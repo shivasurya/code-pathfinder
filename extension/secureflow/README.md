@@ -12,23 +12,58 @@
 [SecureFlow AI](https://codepathfinder.dev/secureflow-ai) is your AI security copilot for smarter, safer code, right in your editor. This VS Code extension helps you identify potential security vulnerabilities in your code directly within your development workflow.
 
 ## Features
- 
-- **Quick Security Analysis**: Run security analysis on your code and changes
-- **Real-time Feedback**: Get immediate feedback on potential security issues
-- **Detailed Reports**: View comprehensive reports with severity ratings, descriptions, and recommendations
-- **In-Editor Experience**: All analysis happens right in your VS Code editor with no need to switch contexts
 
-### Configuration
+- **Profile-Based Scanning**: Automatically detect your project stack and run targeted security analysis
+- **Multi-Provider Support**: Choose from Anthropic Claude, OpenAI, Google Gemini, or OpenRouter for 200+ models
+- **Modern UI**: Beautiful Svelte-based interface with intuitive navigation and real-time updates
+- **Comprehensive Reports**: View detailed vulnerability reports with severity ratings, file locations, and actionable recommendations
+- **Quick Analysis**: Run security analysis on git changes or full workspace scans
+- **Scan History**: Track all security scans with auto-incrementing scan numbers and profile linkage
+- **In-Editor Experience**: All analysis happens right in your VS Code editor with no context switching
 
-Set the following settings in your VS Code settings:
+## Getting Started
 
-- `secureflow.AIModel`: Select the AI Model to use for security analysis
-- `secureflow.APIKey`: API Key for the selected AI provider
+### 1. Installation
 
-### Usage
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) or search for "SecureFlow" in VS Code Extensions.
 
-- Profile your workspace by running `SecureFlow: Profile Workspace for Security Analysis`
-- Analyze Code changes by running `SecureFlow: Review Git Changes for Security Issues`
+### 2. Configuration
+
+Configure your AI provider in VS Code settings:
+
+**Required Settings:**
+- `secureflow.Provider`: Choose your AI provider (auto/anthropic/openai/google/openrouter)
+- `secureflow.AIModel`: Select the AI model for security analysis
+- `secureflow.APIKey`: Your API key for the selected provider
+
+**Supported Providers:**
+- **Anthropic Claude**: Industry-leading security analysis with Claude Sonnet 4.5 (recommended)
+- **OpenAI**: Access GPT-4o, o1, and other OpenAI models
+- **Google Gemini**: Use Gemini 2.5 Pro or Flash models
+- **OpenRouter**: Access 200+ models from multiple providers through a single API
+
+**Getting API Keys:**
+- Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- Google: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- OpenRouter: [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)
+
+### 3. Usage
+
+**Profile Your Workspace:**
+1. Open the SecureFlow view in the Activity Bar
+2. Click "Profile Workspace" or run command: `SecureFlow: Profile Workspace for Security Analysis`
+3. Review detected application profiles and select one to scan
+
+**Run Security Analysis:**
+- **Full Profile Scan**: Click "Scan" button on any detected profile
+- **Git Changes**: Run `SecureFlow: Review Git Changes for Security Issues`
+- **Quick Scan**: Use the "Scan Profile" action from the profiles list
+
+**View Results:**
+- Navigate to the Results tab to see all scan history
+- Click on any scan to view detailed vulnerability findings
+- Review severity levels: Critical 🔴, High 🟠, Medium 🟡, Low 🔵, Info ℹ️
 
 ## License Notice
 

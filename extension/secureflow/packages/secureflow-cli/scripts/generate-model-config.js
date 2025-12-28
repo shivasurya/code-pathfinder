@@ -51,7 +51,7 @@ ${modelIds};
 
 export interface ModelConfig {
   id: AIModel;
-  provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'ollama';
+  provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'ollama' | 'openrouter';
   client: string;
   displayName: string;
   description: string;
@@ -94,7 +94,7 @@ function generateJavaScriptTypes() {
 /**
  * @typedef {Object} ModelConfig
  * @property {AIModel} id
- * @property {'openai' | 'anthropic' | 'google' | 'xai' | 'ollama'} provider
+ * @property {'openai' | 'anthropic' | 'google' | 'xai' | 'ollama' | 'openrouter'} provider
  * @property {string} client
  * @property {string} displayName
  * @property {string} description
@@ -169,7 +169,7 @@ class ModelConfig {
 
   /**
    * Get models by provider
-   * @param {string} provider - Provider name (openai, anthropic, google, xai, ollama)
+   * @param {string} provider - Provider name (openai, anthropic, google, xai, ollama, openrouter)
    * @returns {Array} Array of model configurations for the provider
    */
   static getByProvider(provider) {
@@ -259,7 +259,7 @@ ${modelIds};
 
 export interface ModelConfigType {
   id: AIModel;
-  provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'ollama';
+  provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'ollama' | 'openrouter';
   client: string;
   displayName: string;
   description: string;
