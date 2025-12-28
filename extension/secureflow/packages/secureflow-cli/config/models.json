@@ -226,6 +226,19 @@
       "order": 17
     },
     {
+      "id": "claude-opus-4-5",
+      "provider": "anthropic",
+      "client": "ClaudeClient",
+      "displayName": "Claude 4.5 Opus",
+      "description": "Premium model combining maximum intelligence with practical performance",
+      "year": 2025,
+      "contextWindow": 200000,
+      "maxOutput": 64000,
+      "status": "available",
+      "recommended": false,
+      "order": 18
+    },
+    {
       "id": "claude-opus-4-1-20250805",
       "provider": "anthropic",
       "client": "ClaudeClient",
@@ -236,7 +249,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 18
+      "order": 19
     },
     {
       "id": "claude-opus-4-20250514",

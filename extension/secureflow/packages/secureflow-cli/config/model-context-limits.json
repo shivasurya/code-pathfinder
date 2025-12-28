@@ -123,6 +123,12 @@
         "description": "Best model for complex agents and coding (1M beta available)",
         "status": "available"
       },
+      "claude-opus-4-5": {
+        "contextWindow": 200000,
+        "maxOutput": 64000,
+        "description": "Premium model combining maximum intelligence with practical performance",
+        "status": "available"
+      },
       "claude-opus-4-1-20250805": {
         "contextWindow": 200000,
         "maxOutput": 64000,
