@@ -1,5 +1,37 @@
 # SecureFlow Changelog
 
+## Version 0.0.18 - December 27, 2025
+
+### What's New
+
+- **OpenRouter Support**: Access 200+ AI models from multiple providers through a single API key
+  - Use models from Anthropic, OpenAI, Google, Meta, Mistral, and many more
+  - Switch between models without changing API keys
+  - Perfect for comparing different AI models for security analysis
+- **Modern User Interface**: Completely redesigned interface with better navigation
+  - New Profile management page to organize your scans
+  - Dedicated Results page with full scan history
+  - Easy-to-use Settings page for configuration
+  - Cleaner, more intuitive layout
+- **Enhanced Provider Selection**: Choose your preferred AI provider
+  - New Provider setting in configuration
+  - Auto-detection or manual selection
+  - Supported providers: Anthropic Claude, OpenAI, Google Gemini, OpenRouter
+- **Improved Workspace Profiling**: Better project detection and scanning
+  - Automatically identifies your project's technology stack
+  - One-click security scanning for detected profiles
+  - Faster, more accurate analysis
+- **Scan History**: Keep track of all your security scans
+  - View complete history of all scans
+  - See which profile each scan belongs to
+  - Review severity breakdowns and trends over time
+
+### Improvements
+
+- **Cleaner Output**: Removed unnecessary logging and debug messages
+- **Faster Performance**: Optimized for smaller bundle size and faster loading
+- **Better Settings Experience**: Improved input validation and helpful guidance
+
 ## Version 0.0.17 - November 15, 2025
 
 ### 🔧 Improvements
