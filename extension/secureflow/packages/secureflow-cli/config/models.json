@@ -4,6 +4,19 @@
   "lastUpdated": "2025-10-18",
   "models": [
     {
+      "id": "gpt-5.2",
+      "provider": "openai",
+      "client": "OpenAIClient",
+      "displayName": "GPT-5.2",
+      "description": "Best model for coding and agentic tasks across industries",
+      "year": 2025,
+      "contextWindow": 400000,
+      "maxOutput": 128000,
+      "status": "available",
+      "recommended": false,
+      "order": 1
+    },
+    {
       "id": "gpt-5.1",
       "provider": "openai",
       "client": "OpenAIClient",
@@ -14,7 +27,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 1
+      "order": 2
     },
     {
       "id": "gpt-5-pro",
@@ -27,7 +40,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 2
+      "order": 3
     },
     {
       "id": "gpt-5",
@@ -40,7 +53,7 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 3
+      "order": 4
     },
     {
       "id": "gpt-5-mini",
@@ -53,7 +66,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 4
+      "order": 5
     },
     {
       "id": "gpt-5-nano",
@@ -66,7 +79,7 @@
       "maxOutput": 32000,
       "status": "available",
       "recommended": false,
-      "order": 5
+      "order": 6
     },
     {
       "id": "gemini-3-pro-preview",
@@ -79,7 +92,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 6
+      "order": 7
     },
     {
       "id": "gemini-3-flash-preview",
@@ -92,7 +105,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 7
+      "order": 8
     },
     {
       "id": "gemini-2.5-pro",
@@ -105,7 +118,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 8
+      "order": 9
     },
     {
       "id": "gemini-2.5-flash",
@@ -118,7 +131,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 9
+      "order": 10
     },
     {
       "id": "claude-sonnet-4-5-20250929",
@@ -132,7 +145,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": true,
-      "order": 10
+      "order": 11
     },
     {
       "id": "claude-opus-4-5",
@@ -145,7 +158,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 11
+      "order": 12
     },
     {
       "id": "claude-haiku-4-5",
@@ -158,7 +171,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 12
+      "order": 13
     },
     {
       "id": "grok-4-1-fast-reasoning",
@@ -171,7 +184,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 13
+      "order": 14
     },
     {
       "id": "grok-4-fast-reasoning",
@@ -184,7 +197,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 14
+      "order": 15
     },
     {
       "id": "qwen/qwen3-coder",
@@ -197,7 +210,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 15
+      "order": 16
     },
     {
       "id": "z-ai/glm-4.7",
@@ -210,7 +223,7 @@
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 16
+      "order": 17
     }
   ],
   "providerInfo": {

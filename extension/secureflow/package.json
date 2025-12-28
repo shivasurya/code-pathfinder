@@ -125,6 +125,7 @@
           "default": "claude-sonnet-4-5-20250929",
           "markdownDescription": "AI Model to use for security analysis.\n\n**For standard providers:** Use model IDs like `claude-sonnet-4-5-20250929`, `gpt-4o`, `gemini-2.5-pro`.\n\n**For OpenRouter:** Enter the full model ID (e.g., `anthropic/claude-3-5-sonnet`, `openai/gpt-4o`, `deepseek/deepseek-chat`, `meta-llama/llama-3.3-70b-instruct`). Browse all 300+ available models at [openrouter.ai/models](https://openrouter.ai/models)",
           "enum": [
+            "gpt-5.2",
             "gpt-5.1",
             "gpt-5-pro",
             "gpt-5",
@@ -143,6 +144,7 @@
             "z-ai/glm-4.7"
           ],
           "enumDescriptions": [
+            "OpenAI GPT-5.2 (2025) - Best model for coding and agentic tasks across industries",
             "OpenAI GPT-5.1 (2025) - Flagship model for coding and agentic tasks with configurable reasoning effort",
             "OpenAI GPT-5 Pro (2025) - Extended reasoning for most complex tasks",
             "OpenAI GPT-5 (2025) - Most advanced model for coding and agentic tasks",

@@ -4,6 +4,11 @@
 
 ### What's New
 
+- **Latest AI Models**: Support for cutting-edge AI models from OpenAI, Google, and xAI
+  - **GPT-5.2**: OpenAI's best model for coding and agentic tasks across industries (400K context, 128K output)
+  - **Gemini 3 Pro & Flash**: Google's newest multimodal AI with thinking capabilities (1M context)
+  - **Grok 4.1 Fast**: xAI's frontier model optimized for high-performance agentic tool calling (2M context)
+  - All models available at the top of Settings and Onboarding for easy selection
 - **OpenRouter Support**: Access 200+ AI models from multiple providers through a single API key
   - Use models from Anthropic, OpenAI, Google, Meta, Mistral, and many more
   - Switch between models without changing API keys
