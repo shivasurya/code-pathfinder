@@ -343,28 +343,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
                     });
                   }
 
-                  // Show completion message with option to view logs
+                  // Show completion message
                   const issuesCount = savedScan.issues?.length || 0;
                   const message = `✓ Scan complete! Found ${issuesCount} issue${issuesCount !== 1 ? 's' : ''}.`;
-
-                  vscode.window.showInformationMessage(
-                    message,
-                    'View Logs'
-                  ).then(async (selection) => {
-                    if (selection === 'View Logs') {
-                      // Open logs directory
-                      const logsDir = vscode.Uri.joinPath(
-                        this._context.globalStorageUri,
-                        'scan-logs'
-                      );
-                      try {
-                        await vscode.commands.executeCommand('revealFileInOS', logsDir);
-                      } catch (error) {
-                        // Fallback: try to open in VSCode
-                        vscode.env.openExternal(logsDir);
-                      }
-                    }
-                  });
+                  vscode.window.showInformationMessage(message);
                 } catch (error: any) {
                   // Track failure
                   analytics.trackEvent('Profile Rescan Failed', {
