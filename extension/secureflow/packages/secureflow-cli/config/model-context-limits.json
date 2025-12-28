@@ -92,6 +92,32 @@
         "description": "Qwen 3:4B local model with large context window",
         "status": "available"
       }
+    },
+    "openrouter": {
+      "qwen/qwen3-coder": {
+        "contextWindow": 32768,
+        "maxOutput": 8192,
+        "description": "Specialized coding model via OpenRouter",
+        "status": "available"
+      },
+      "z-ai/glm-4.7": {
+        "contextWindow": 128000,
+        "maxOutput": 8192,
+        "description": "High-performance AI model via OpenRouter",
+        "status": "available"
+      },
+      "minimax/minimax-m2": {
+        "contextWindow": 196608,
+        "maxOutput": 65536,
+        "description": "Compact high-efficiency model optimized for coding and agentic workflows",
+        "status": "available"
+      },
+      "deepseek/deepseek-v3.2": {
+        "contextWindow": 163840,
+        "maxOutput": 32768,
+        "description": "High computational efficiency with strong reasoning and agentic tool-use performance",
+        "status": "available"
+      }
     }
   },
   "metadata": {
@@ -130,6 +156,7 @@
         "gpt-5.2 (with thinking)",
         "gpt-5 (with thinking)",
         "gemini-3-pro-preview (with thinking)",
+        "deepseek/deepseek-v3.2",
         "claude-opus-4-5"
       ],
       "highOutput": [
@@ -144,7 +171,8 @@
         "gpt-5",
         "claude-sonnet-4-5",
         "gemini-3-pro-preview",
-        "qwen3-coder"
+        "minimax/minimax-m2",
+        "qwen/qwen3-coder"
       ]
     }
   }

@@ -141,7 +141,9 @@
             "grok-4-1-fast-reasoning",
             "grok-4-fast-reasoning",
             "qwen/qwen3-coder",
-            "z-ai/glm-4.7"
+            "z-ai/glm-4.7",
+            "minimax/minimax-m2",
+            "deepseek/deepseek-v3.2"
           ],
           "enumDescriptions": [
             "OpenAI GPT-5.2 (2025) - Best model for coding and agentic tasks across industries",
@@ -160,7 +162,9 @@
             "xAI Grok 4.1 Fast (2025) - Frontier multimodal model optimized for high-performance agentic tool calling",
             "xAI Grok 4 Fast Reasoning (2025) - Fast reasoning with 2M context",
             "OpenRouter Qwen3 Coder (2024) - Specialized coding model via OpenRouter",
-            "OpenRouter GLM 4.7 (2024) - High-performance AI model via OpenRouter"
+            "OpenRouter GLM 4.7 (2024) - High-performance AI model via OpenRouter",
+            "OpenRouter MiniMax M2 (2025) - Compact high-efficiency model optimized for coding and agentic workflows",
+            "OpenRouter DeepSeek V3.2 (2025) - High computational efficiency with strong reasoning and agentic tool-use performance"
           ]
         },
         "secureflow.APIKey": {

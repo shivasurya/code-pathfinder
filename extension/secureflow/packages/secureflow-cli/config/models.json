@@ -224,6 +224,32 @@
       "status": "available",
       "recommended": false,
       "order": 17
+    },
+    {
+      "id": "minimax/minimax-m2",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "MiniMax M2",
+      "description": "Compact high-efficiency model optimized for coding and agentic workflows",
+      "year": 2025,
+      "contextWindow": 196608,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 18
+    },
+    {
+      "id": "deepseek/deepseek-v3.2",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "DeepSeek V3.2",
+      "description": "High computational efficiency with strong reasoning and agentic tool-use performance",
+      "year": 2025,
+      "contextWindow": 163840,
+      "maxOutput": 32768,
+      "status": "available",
+      "recommended": false,
+      "order": 19
     }
   ],
   "providerInfo": {
