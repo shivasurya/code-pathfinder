@@ -121,71 +121,6 @@
       "order": 9
     },
     {
-      "id": "gpt-4.1",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4.1",
-      "description": "Smartest non-reasoning model, 1M context",
-      "year": 2025,
-      "contextWindow": 1000000,
-      "maxOutput": 32768,
-      "status": "available",
-      "recommended": false,
-      "order": 10
-    },
-    {
-      "id": "gpt-4.1-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4.1 Mini",
-      "description": "Fast, capable, efficient small model",
-      "year": 2025,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 11
-    },
-    {
-      "id": "gpt-4o",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4o",
-      "description": "Fast, intelligent, flexible GPT model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 12
-    },
-    {
-      "id": "gpt-4o-mini",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "GPT-4o Mini",
-      "description": "Fast, affordable small model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 13
-    },
-    {
-      "id": "o1",
-      "provider": "openai",
-      "client": "OpenAIClient",
-      "displayName": "O1",
-      "description": "Previous full o-series reasoning model",
-      "year": 2024,
-      "contextWindow": 200000,
-      "maxOutput": 32768,
-      "status": "available",
-      "recommended": false,
-      "order": 14
-    },
-    {
       "id": "gemini-2.5-pro",
       "provider": "google",
       "client": "GeminiClient",
@@ -196,7 +131,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 15
+      "order": 10
     },
     {
       "id": "gemini-2.5-flash",
@@ -209,7 +144,33 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 16
+      "order": 11
+    },
+    {
+      "id": "gemini-3-pro-preview",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 3 Pro",
+      "description": "Most advanced multimodal AI with thinking capabilities",
+      "year": 2025,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 12
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 3 Flash",
+      "description": "Fast multimodal AI with thinking capabilities",
+      "year": 2025,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 13
     },
     {
       "id": "claude-sonnet-4-5-20250929",
@@ -223,7 +184,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": true,
-      "order": 17
+      "order": 14
     },
     {
       "id": "claude-opus-4-5",
@@ -236,7 +197,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 18
+      "order": 15
     },
     {
       "id": "claude-haiku-4-5",
@@ -249,7 +210,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 19
+      "order": 16
     },
     {
       "id": "grok-4-fast-reasoning",
@@ -262,98 +223,33 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 20
+      "order": 17
     },
     {
-      "id": "openai/gpt-4o",
+      "id": "qwen/qwen3-coder",
       "provider": "openrouter",
       "client": "OpenRouterClient",
-      "displayName": "GPT-4o (OpenRouter)",
-      "description": "Fast and intelligent via OpenRouter",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 16384,
-      "status": "available",
-      "recommended": false,
-      "order": 21
-    },
-    {
-      "id": "google/gemini-2.0-flash-exp",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "Gemini 2.0 Flash (OpenRouter)",
-      "description": "Fast multimodal via OpenRouter",
-      "year": 2024,
-      "contextWindow": 1000000,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 22
-    },
-    {
-      "id": "deepseek/deepseek-chat",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "DeepSeek Chat",
-      "description": "High-performance open model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 23
-    },
-    {
-      "id": "qwen/qwen-2.5-coder-32b-instruct",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "Qwen 2.5 Coder 32B",
-      "description": "Specialized coding model",
+      "displayName": "Qwen3 Coder",
+      "description": "Specialized coding model via OpenRouter",
       "year": 2024,
       "contextWindow": 32768,
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 24
+      "order": 18
     },
     {
-      "id": "meta-llama/llama-3.3-70b-instruct",
+      "id": "z-ai/glm-4.7",
       "provider": "openrouter",
       "client": "OpenRouterClient",
-      "displayName": "Llama 3.3 70B",
-      "description": "Meta's flagship open model",
+      "displayName": "GLM 4.7",
+      "description": "High-performance AI model via OpenRouter",
       "year": 2024,
       "contextWindow": 128000,
       "maxOutput": 8192,
       "status": "available",
       "recommended": false,
-      "order": 25
-    },
-    {
-      "id": "mistralai/mistral-large",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "Mistral Large",
-      "description": "Powerful multilingual model",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 26
-    },
-    {
-      "id": "x-ai/grok-2",
-      "provider": "openrouter",
-      "client": "OpenRouterClient",
-      "displayName": "Grok 2 (OpenRouter)",
-      "description": "xAI's model via OpenRouter",
-      "year": 2024,
-      "contextWindow": 131072,
-      "maxOutput": 8192,
-      "status": "available",
-      "recommended": false,
-      "order": 27
+      "order": 19
     }
   ],
   "providerInfo": {
