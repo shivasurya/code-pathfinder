@@ -64,7 +64,7 @@ brew install shivasurya/tap/pathfinder
 
 ### pip
 
-Install via pip to get **both** the CLI binary and Python DSL for writing custom security rules.
+Install via pip to get **both** the CLI binary and Python DSL for writing security rules.
 
 ```bash
 pip install codepathfinder
