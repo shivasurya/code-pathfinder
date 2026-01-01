@@ -82,7 +82,7 @@ jobs:
             platform: macosx_11_0_arm64
             binary_suffix: darwin-arm64
             archive_ext: .tar.gz
-          - os: macos-13
+          - os: macos-15-intel
             platform: macosx_10_9_x86_64
             binary_suffix: darwin-amd64
             archive_ext: .tar.gz
@@ -108,8 +108,8 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            # Fallback for workflow_dispatch
-            VERSION=$(cat python-dsl/codepathfinder/__init__.py | grep '__version__' | cut -d'"' -f2)
+            # Fallback for workflow_dispatch and pull_request
+            VERSION=$(python -c "import sys; sys.path.insert(0, 'python-dsl'); from codepathfinder import __version__; print(__version__)")
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
@@ -237,7 +237,7 @@ jobs:
           - os: macos-latest
             platform: macosx_11_0_arm64
             python-version: '3.11'
-          - os: macos-13
+          - os: macos-15-intel
             platform: macosx_10_9_x86_64
             python-version: '3.11'
           - os: windows-latest
