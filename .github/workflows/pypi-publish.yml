@@ -292,9 +292,6 @@ jobs:
     needs: [build-wheels, build-sdist]
     if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi == 'true')
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write  # For PyPI Trusted Publishing
 
     steps:
       - name: Download all artifacts
@@ -312,3 +309,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}
