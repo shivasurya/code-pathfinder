@@ -217,6 +217,7 @@ jobs:
 
   publish:
     needs: [build-wheels, build-sdist]
+    if: always() && needs.build-wheels.result == 'success' && needs.build-sdist.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
