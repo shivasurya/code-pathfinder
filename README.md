@@ -62,9 +62,31 @@ The easiest way to install on macOS or Linux. Available from version 0.0.34 onwa
 brew install shivasurya/tap/pathfinder
 ```
 
+### pip
+
+Install via pip to get **both** the CLI binary and Python DSL for writing security rules.
+
+```bash
+pip install codepathfinder
+```
+
+**Verify installation:**
+
+```bash
+# Test CLI binary
+pathfinder --version
+
+# Test Python DSL
+python -c "from codepathfinder import rule, calls; print('DSL OK')"
+```
+
+**Supported platforms:** Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), Windows (x64)
+
+> **Migrating from npm?** The npm package is deprecated. Run `npm uninstall -g codepathfinder` then `pip install codepathfinder`.
+
 ### Docker
 
-Quickest way to get started. Ideal for CI/CD pipelines.
+Ideal for CI/CD pipelines and containerized workflows.
 
 ```bash
 docker pull shivasurya/code-pathfinder:stable-latest
