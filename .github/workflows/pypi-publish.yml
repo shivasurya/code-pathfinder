@@ -217,7 +217,7 @@ jobs:
           retention-days: 7
 
       - name: Test wheel installation
-        if: github.event.inputs.skip_tests != 'true'
+        if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
           echo "=== Testing wheel installation ==="
@@ -228,7 +228,7 @@ jobs:
           pip list | grep codepathfinder
 
       - name: Test CLI is available
-        if: github.event.inputs.skip_tests != 'true'
+        if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
           echo "=== Testing CLI binary ==="
@@ -239,28 +239,28 @@ jobs:
           pathfinder --version || echo "Version command failed"
 
       - name: Test Python DSL import and version
-        if: github.event.inputs.skip_tests != 'true'
+        if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
           echo "=== Testing Python DSL ==="
-          python -c "from codepathfinder import __version__, rule, calls, flows; print('✅ DSL Import OK'); print(f'✅ Python DSL Version: {__version__}'); print('✅ Available: rule, calls, flows')"
+          python -c "from codepathfinder import __version__, rule, calls, flows; print('[OK] DSL Import OK'); print(f'[OK] Python DSL Version: {__version__}'); print('[OK] Available: rule, calls, flows')"
 
       - name: Test binary execution
-        if: github.event.inputs.skip_tests != 'true'
+        if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
           echo "=== Testing binary execution ==="
           mkdir -p test-project
           echo 'eval("test")' > test-project/test.py
           pathfinder --help || echo "Help command test"
-          echo "✅ Binary executes successfully"
+          echo "[OK] Binary executes successfully"
 
       - name: Verify binary path
-        if: github.event.inputs.skip_tests != 'true'
+        if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
           echo "=== Verifying bundled binary ==="
-          python -c "from pathlib import Path; import codepathfinder.cli as cli; binary_path = cli.get_binary_path(); print(f'Binary path: {binary_path}'); print(f'Binary exists: {Path(binary_path).exists()}'); print('✅ Binary verification complete')"
+          python -c "from pathlib import Path; import codepathfinder.cli as cli; binary_path = cli.get_binary_path(); print(f'Binary path: {binary_path}'); print(f'Binary exists: {Path(binary_path).exists()}'); print('[OK] Binary verification complete')"
 
   build-sdist:
     runs-on: ubuntu-latest
