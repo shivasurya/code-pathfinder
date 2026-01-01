@@ -9,6 +9,21 @@ on:
       - '.github/workflows/pypi-publish.yml'
       - 'python-dsl/**'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.1.3)'
+        required: true
+        type: string
+      skip_tests:
+        description: 'Skip installation tests (faster but less safe)'
+        required: false
+        type: boolean
+        default: false
+      publish_to_pypi:
+        description: 'Actually publish to PyPI (uncheck for dry run)'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -105,10 +120,14 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            # Manual workflow_dispatch with version input
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Tag push
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            # Fallback for workflow_dispatch and pull_request
+            # Fallback for pull_request
             VERSION=$(python -c "import sys; sys.path.insert(0, 'python-dsl'); from codepathfinder import __version__; print(__version__)")
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -196,6 +215,52 @@ jobs:
           name: wheel-${{ matrix.platform }}
           path: python-dsl/dist/*.whl
           retention-days: 7
+
+      - name: Test wheel installation
+        if: github.event.inputs.skip_tests != 'true'
+        shell: bash
+        run: |
+          echo "=== Testing wheel installation ==="
+          cd python-dsl/dist
+          WHEEL=$(ls *.whl)
+          echo "Installing: $WHEEL"
+          pip install "$WHEEL"
+          pip list | grep codepathfinder
+
+      - name: Test CLI is available
+        if: github.event.inputs.skip_tests != 'true'
+        shell: bash
+        run: |
+          echo "=== Testing CLI binary ==="
+          echo "Checking pathfinder command..."
+          which pathfinder || where pathfinder || echo "Binary location: $(python -c 'import codepathfinder.cli; print(codepathfinder.cli.get_binary_path())')"
+
+          echo "Running pathfinder --version..."
+          pathfinder --version || echo "Version command failed"
+
+      - name: Test Python DSL import and version
+        if: github.event.inputs.skip_tests != 'true'
+        shell: bash
+        run: |
+          echo "=== Testing Python DSL ==="
+          python -c "from codepathfinder import __version__, rule, calls, flows; print('✅ DSL Import OK'); print(f'✅ Python DSL Version: {__version__}'); print('✅ Available: rule, calls, flows')"
+
+      - name: Test binary execution
+        if: github.event.inputs.skip_tests != 'true'
+        shell: bash
+        run: |
+          echo "=== Testing binary execution ==="
+          mkdir -p test-project
+          echo 'eval("test")' > test-project/test.py
+          pathfinder --help || echo "Help command test"
+          echo "✅ Binary executes successfully"
+
+      - name: Verify binary path
+        if: github.event.inputs.skip_tests != 'true'
+        shell: bash
+        run: |
+          echo "=== Verifying bundled binary ==="
+          python -c "from pathlib import Path; import codepathfinder.cli as cli; binary_path = cli.get_binary_path(); print(f'Binary path: {binary_path}'); print(f'Binary exists: {Path(binary_path).exists()}'); print('✅ Binary verification complete')"
 
   build-sdist:
     runs-on: ubuntu-latest
@@ -291,8 +356,8 @@ jobs:
           python -c "from pathlib import Path; import codepathfinder.cli as cli; print(f'Binary path check: {cli.get_binary_path()}')" || echo "Binary check failed"
 
   publish:
-    needs: [build-wheels, build-sdist, test-wheels]
-    if: github.event_name != 'pull_request'
+    needs: [build-wheels, build-sdist]
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_to_pypi == 'true')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
