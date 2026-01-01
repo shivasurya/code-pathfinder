@@ -1,7 +1,8 @@
 {
     "name": "codepathfinder",
-    "version": "1.1.2",
-    "description": "Code Pathfinder, the open-source alternative to CodeQL. Designed for precise flow analysis and advanced structural search, it identifies vulnerabilities in source code.",
+    "version": "1.1.3",
+    "description": "DEPRECATED - Use 'pip install codepathfinder' instead. See https://codepathfinder.dev/install",
+    "deprecated": "This package is deprecated. Please use 'pip install codepathfinder' for the complete installation including both CLI and Python DSL.",
     "goBinary": {
         "name": "pathfinder",
         "path": "./bin",
@@ -20,6 +21,7 @@
     ],
     "files": [
         "package.json",
+        "deprecation-notice.js",
         "LICENSE",
         "README.md"
     ],
@@ -33,7 +35,7 @@
     },
     "homepage": "https://codepathfinder.dev",
     "scripts": {
-        "postinstall": "go-npm install",
+        "postinstall": "node deprecation-notice.js && go-npm install",
         "preuninstall": "go-npm uninstall"
     }
 }
