@@ -82,7 +82,7 @@ python -c "from codepathfinder import rule, calls; print('DSL OK')"
 
 **Supported platforms:** Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), Windows (x64)
 
-> **Migrating from npm?** The npm package is deprecated. Run `npm uninstall -g codepathfinder` then `pip install codepathfinder`. See [migration guide](https://codepathfinder.dev/install).
+> **Migrating from npm?** The npm package is deprecated. Run `npm uninstall -g codepathfinder` then `pip install codepathfinder`.
 
 ### Docker
 
