@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  pull_request:
-    paths:
-      - '.github/workflows/pypi-publish.yml'
-      - 'python-dsl/**'
   workflow_dispatch:
     inputs:
       version:
@@ -29,46 +25,9 @@ permissions:
   contents: read
 
 jobs:
-  # Build test binaries for PR testing
-  build-test-binaries:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create test binaries
-        run: |
-          mkdir -p test-binaries
-
-          # Create simple test binaries that output version info
-          for suffix in linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64; do
-            if [[ "$suffix" == *"windows"* ]]; then
-              echo '#!/bin/bash' > test-binaries/pathfinder.exe
-              echo 'echo "pathfinder test version (windows)"' >> test-binaries/pathfinder.exe
-              echo 'if [ "$1" = "--version" ]; then echo "1.1.3-test"; fi' >> test-binaries/pathfinder.exe
-              chmod +x test-binaries/pathfinder.exe
-              cd test-binaries && zip pathfinder-${suffix}.zip pathfinder.exe && cd ..
-            else
-              echo '#!/bin/bash' > test-binaries/pathfinder
-              echo 'echo "pathfinder test version ('${suffix}')"' >> test-binaries/pathfinder
-              echo 'if [ "$1" = "--version" ]; then echo "1.1.3-test"; fi' >> test-binaries/pathfinder
-              chmod +x test-binaries/pathfinder
-              cd test-binaries && tar -czf pathfinder-${suffix}.tar.gz pathfinder && cd ..
-            fi
-          done
-
-          ls -la test-binaries/
-
-      - name: Upload test binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-binaries
-          path: test-binaries/*
-          retention-days: 1
-
   # Wait for release workflow to complete and create binaries
   wait-for-binaries:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Wait for release artifacts
@@ -78,8 +37,8 @@ jobs:
           sleep 60  # Give release workflow time to upload artifacts
 
   build-wheels:
-    needs: [wait-for-binaries, build-test-binaries]
-    if: always() && (needs.wait-for-binaries.result == 'success' || needs.build-test-binaries.result == 'success' || needs.wait-for-binaries.result == 'skipped' || needs.build-test-binaries.result == 'skipped')
+    needs: wait-for-binaries
+    if: always() && (needs.wait-for-binaries.result == 'success' || needs.wait-for-binaries.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -137,34 +96,8 @@ jobs:
         shell: bash
         run: mkdir -p python-dsl/codepathfinder/bin
 
-      - name: Download test binaries (PR mode)
-        if: github.event_name == 'pull_request'
-        uses: actions/download-artifact@v4
-        with:
-          name: test-binaries
-          path: test-binaries
-
-      - name: Extract test binary (PR mode - Unix)
-        if: github.event_name == 'pull_request' && runner.os != 'Windows'
-        shell: bash
-        run: |
-          SUFFIX=${{ matrix.binary_suffix }}
-          echo "Extracting test binary: pathfinder-${SUFFIX}.tar.gz"
-          tar -xzf test-binaries/pathfinder-${SUFFIX}.tar.gz -C python-dsl/codepathfinder/bin/
-          chmod +x python-dsl/codepathfinder/bin/pathfinder
-          ls -la python-dsl/codepathfinder/bin/
-
-      - name: Extract test binary (PR mode - Windows)
-        if: github.event_name == 'pull_request' && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $SUFFIX = "${{ matrix.binary_suffix }}"
-          Write-Host "Extracting test binary: pathfinder-${SUFFIX}.zip"
-          Expand-Archive -Path test-binaries/pathfinder-${SUFFIX}.zip -DestinationPath python-dsl/codepathfinder/bin/
-          Get-ChildItem python-dsl/codepathfinder/bin/
-
-      - name: Download binary (Release mode - Unix)
-        if: github.event_name != 'pull_request' && runner.os != 'Windows'
+      - name: Download binary (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           VERSION=${{ steps.version.outputs.version }}
@@ -175,8 +108,8 @@ jobs:
           chmod +x python-dsl/codepathfinder/bin/pathfinder
           ls -la python-dsl/codepathfinder/bin/
 
-      - name: Download binary (Release mode - Windows)
-        if: github.event_name != 'pull_request' && runner.os == 'Windows'
+      - name: Download binary (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $VERSION = "${{ steps.version.outputs.version }}"
@@ -357,11 +290,11 @@ jobs:
 
   publish:
     needs: [build-wheels, build-sdist]
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_to_pypi == 'true')
+    if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi == 'true')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write  # For trusted publishing
+      id-token: write  # For PyPI Trusted Publishing
 
     steps:
       - name: Download all artifacts
