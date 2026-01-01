@@ -222,7 +222,7 @@ jobs:
 
   publish:
     needs: [build-wheels, build-sdist]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi != 'false')
     runs-on: ubuntu-latest
 
     steps:
