@@ -20,20 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  # Wait for release workflow to complete and create binaries
-  wait-for-binaries:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for release artifacts
-        run: |
-          echo "Waiting for release binaries to be available..."
-          echo "Release workflow should complete before this runs"
-          sleep 60  # Give release workflow time to upload artifacts
-
   build-wheels:
-    needs: wait-for-binaries
-    if: always() && (needs.wait-for-binaries.result == 'success' || needs.wait-for-binaries.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
