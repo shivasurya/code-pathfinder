@@ -16,6 +16,26 @@ Python DSL for defining security patterns in Code Pathfinder - an open-source se
 pip install codepathfinder
 ```
 
+This installs **both** the Python DSL and the `pathfinder` CLI binary for your platform.
+
+### Verify Installation
+
+```bash
+# Test CLI binary
+pathfinder --version
+
+# Test Python DSL
+python -c "from codepathfinder import rule, calls; print('DSL OK')"
+```
+
+### Supported Platforms
+
+- Linux (glibc): x86_64, aarch64
+- macOS: arm64 (Apple Silicon), x86_64 (Intel)
+- Windows: x86_64
+
+Source distributions are available for other platforms - the binary will be downloaded automatically on first use.
+
 ## Quick Example
 
 ```python
