@@ -2,6 +2,7 @@ include LICENSE
 include README.md
 include pyproject.toml
 recursive-include codepathfinder *.py
+recursive-include codepathfinder/bin *
 recursive-exclude tests *
 recursive-exclude htmlcov *
 recursive-exclude .pytest_cache *
