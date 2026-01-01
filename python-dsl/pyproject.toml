@@ -76,7 +76,7 @@ warn_unused_configs = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["codepathfinder*"]
+include = ["codepathfinder*", "rules*"]
 
 [tool.setuptools.package-data]
 codepathfinder = ["bin/*"]
