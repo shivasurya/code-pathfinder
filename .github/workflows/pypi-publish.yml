@@ -15,11 +15,6 @@ on:
         required: false
         type: boolean
         default: false
-      publish_to_pypi:
-        description: 'Actually publish to PyPI (uncheck for dry run)'
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -222,7 +217,6 @@ jobs:
 
   publish:
     needs: [build-wheels, build-sdist]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi != 'false')
     runs-on: ubuntu-latest
 
     steps:
