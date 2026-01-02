@@ -168,13 +168,63 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 	return allRules, nil
 }
 
+// hasContainerRuleDecorators checks if a Python file contains container rule decorators.
+// It scans for @dockerfile_rule or @compose_rule annotations.
+func hasContainerRuleDecorators(filePath string) bool {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+
+	// Check for container rule decorators
+	fileContent := string(content)
+	return strings.Contains(fileContent, "@dockerfile_rule") ||
+		strings.Contains(fileContent, "@compose_rule")
+}
+
+// hasAnyContainerRulesInPath checks if any Python files in the given path contain container rule decorators.
+func (l *RuleLoader) hasAnyContainerRulesInPath() bool {
+	info, err := os.Stat(l.RulesPath)
+	if err != nil {
+		return false
+	}
+
+	// If single file, check directly
+	if !info.IsDir() {
+		return hasContainerRuleDecorators(l.RulesPath)
+	}
+
+	// If directory, check all .py files
+	hasRules := false
+	filepath.Walk(l.RulesPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || hasRules {
+			return nil
+		}
+
+		// Check Python files only
+		if !info.IsDir() && filepath.Ext(path) == ".py" {
+			if hasContainerRuleDecorators(path) {
+				hasRules = true
+			}
+		}
+		return nil
+	})
+
+	return hasRules
+}
+
 // LoadContainerRules loads container rules (Dockerfile/Compose) from Python DSL files.
 // Returns JSON IR in format: {"dockerfile": [...], "compose": [...]}.
 func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
-	// Check if path is file or directory
+	// Check if path is file or directory (check existence first)
 	info, err := os.Stat(l.RulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access rules path: %w", err)
+	}
+
+	// Early filtering: check if any files contain container rule decorators
+	if !l.hasAnyContainerRulesInPath() {
+		return nil, fmt.Errorf("no container rules detected (no @dockerfile_rule or @compose_rule decorators found)")
 	}
 
 	var containerRulesJSON struct {
@@ -207,6 +257,11 @@ func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
 
 			// Skip non-Python files
 			if info.IsDir() || filepath.Ext(path) != ".py" {
+				return nil
+			}
+
+			// Skip files without container rule decorators
+			if !hasContainerRuleDecorators(path) {
 				return nil
 			}
 

@@ -307,6 +307,56 @@ def rule2():
 
 		assert.Error(t, err)
 	})
+
+	t.Run("returns error for empty directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		loader := NewRuleLoader(tmpDir)
+		_, err := loader.LoadContainerRules()
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
+	})
+
+	t.Run("returns error for directory without container rule decorators", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create Python file without container rule decorators (code analysis rule)
+		rulesContent := `from codepathfinder import rule, calls
+
+@rule(id="test-eval", severity="high", cwe="CWE-94")
+def detect_eval():
+    """Test rule."""
+    return calls("eval")
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "code_rule.py"), []byte(rulesContent), 0644)
+		require.NoError(t, err)
+
+		loader := NewRuleLoader(tmpDir)
+		_, err = loader.LoadContainerRules()
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
+		assert.Contains(t, err.Error(), "no @dockerfile_rule or @compose_rule decorators found")
+	})
+
+	t.Run("returns error for file without container rule decorators", func(t *testing.T) {
+		rulesContent := `from codepathfinder import rule, calls
+
+@rule(id="test-eval", severity="high", cwe="CWE-94")
+def detect_eval():
+    """Test rule."""
+    return calls("eval")
+`
+		tmpFile := createTempPythonFile(t, rulesContent)
+		defer os.Remove(tmpFile)
+
+		loader := NewRuleLoader(tmpFile)
+		_, err := loader.LoadContainerRules()
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
+	})
 }
 
 func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
