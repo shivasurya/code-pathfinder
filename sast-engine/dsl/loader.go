@@ -80,8 +80,11 @@ func (l *RuleLoader) LoadRules() ([]RuleIR, error) {
 		return nil, fmt.Errorf("failed to access rules path: %w", err)
 	}
 
-	// If single file, load directly
+	// If single file, check for rule decorators first
 	if !info.IsDir() {
+		if !hasCodeAnalysisRuleDecorators(l.RulesPath) {
+			return nil, fmt.Errorf("file does not contain code analysis rules (no @rule decorator or codepathfinder imports found)")
+		}
 		return l.loadRulesFromFile(l.RulesPath)
 	}
 
@@ -148,6 +151,11 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 			return nil
 		}
 
+		// Skip files without code analysis rule decorators (early filtering to avoid executing non-rule files)
+		if !hasCodeAnalysisRuleDecorators(path) {
+			return nil
+		}
+
 		// Load rules from this file
 		rules, err := l.loadRulesFromFile(path)
 		if err != nil {
@@ -166,6 +174,21 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 
 	// It's OK to have zero code analysis rules (directory might only contain container rules)
 	return allRules, nil
+}
+
+// hasCodeAnalysisRuleDecorators checks if a Python file contains code analysis rule decorators.
+// It scans for @rule decorator or codepathfinder imports.
+func hasCodeAnalysisRuleDecorators(filePath string) bool {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+
+	fileContent := string(content)
+	// Check for rule decorator or codepathfinder imports
+	return strings.Contains(fileContent, "@rule(") ||
+		strings.Contains(fileContent, "from codepathfinder import") ||
+		strings.Contains(fileContent, "import codepathfinder")
 }
 
 // hasContainerRuleDecorators checks if a Python file contains container rule decorators.

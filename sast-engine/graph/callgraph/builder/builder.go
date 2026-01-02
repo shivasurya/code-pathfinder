@@ -97,6 +97,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	indexFunctions(codeGraph, callGraph, registry)
 
 	// Phase 2 Task 9: Extract return types from all functions (first pass)
+	logger.Progress("Extracting return types from %d modules...", len(registry.Modules))
 	allReturnStatements := make([]*resolution.ReturnStatement, 0)
 	for modulePath, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
@@ -122,6 +123,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
 
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
+	logger.Progress("Extracting variable assignments...")
 	for _, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
@@ -141,6 +143,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
 	// Phase 3 Task 12: Extract class attributes (third pass)
+	logger.Progress("Extracting class attributes...")
 	for modulePath, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
@@ -159,6 +162,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
 	// Process each Python file in the project (fourth pass for call site resolution)
+	logger.Progress("Resolving call sites...")
 	for modulePath, filePath := range registry.Modules {
 		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
