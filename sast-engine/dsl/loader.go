@@ -16,7 +16,9 @@ import (
 // Logger interface for verbose logging (avoids import cycle with output package).
 type Logger interface {
 	Debug(format string, args ...interface{})
+	Statistic(format string, args ...interface{})
 	IsDebug() bool
+	IsVerbose() bool
 }
 
 // RuleLoader loads Python DSL rules and executes them.
@@ -140,9 +142,9 @@ func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR
 	}
 
 	// Log loaded rules in verbose mode
-	if logger != nil && logger.IsDebug() {
+	if logger != nil && logger.IsVerbose() {
 		for _, rule := range rules {
-			logger.Debug("Loaded code analysis rule: %s from %s", rule.Rule.ID, filePath)
+			logger.Statistic("  - Loaded rule %s from %s", rule.Rule.ID, filePath)
 		}
 	}
 
@@ -330,19 +332,7 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 		}
 	}
 
-	// Log loaded container rules in verbose mode
-	if logger != nil && logger.IsDebug() {
-		for _, dockerfileRule := range containerRulesJSON.Dockerfile {
-			if id, ok := dockerfileRule["id"].(string); ok {
-				logger.Debug("Loaded Dockerfile rule: %s", id)
-			}
-		}
-		for _, composeRule := range containerRulesJSON.Compose {
-			if id, ok := composeRule["id"].(string); ok {
-				logger.Debug("Loaded docker-compose rule: %s", id)
-			}
-		}
-	}
+	// Log loaded container rules in verbose mode (removed - logging happens in loadContainerRulesFromFile with paths)
 
 	// Return combined JSON
 	return json.Marshal(containerRulesJSON)
@@ -429,15 +419,15 @@ print(json.dumps(json_ir))
 	}
 
 	// Log loaded rules in verbose mode
-	if logger != nil && logger.IsDebug() {
+	if logger != nil && logger.IsVerbose() {
 		for _, dockerfileRule := range containerRules.Dockerfile {
 			if id, ok := dockerfileRule["id"].(string); ok {
-				logger.Debug("Loaded Dockerfile rule: %s from %s", id, rulesPath)
+				logger.Statistic("  - Loaded Dockerfile rule %s from %s", id, rulesPath)
 			}
 		}
 		for _, composeRule := range containerRules.Compose {
 			if id, ok := composeRule["id"].(string); ok {
-				logger.Debug("Loaded docker-compose rule: %s from %s", id, rulesPath)
+				logger.Statistic("  - Loaded docker-compose rule %s from %s", id, rulesPath)
 			}
 		}
 	}
