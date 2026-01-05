@@ -236,6 +236,7 @@ func (l *RuleLoader) hasAnyContainerRulesInPath() bool {
 	hasRules := false
 	filepath.Walk(l.RulesPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || hasRules {
+			//nolint:nilerr // Intentionally ignore errors during walk - just return false
 			return nil
 		}
 
