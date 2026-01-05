@@ -10,29 +10,26 @@ from .container_matchers import Matcher
 @dataclass
 class CombinatorMatcher:
     """Represents a logic combinator (AND, OR, NOT)."""
+
     combinator_type: str  # "all_of", "any_of", "none_of"
-    conditions: List[Union[Matcher, 'CombinatorMatcher', Dict, Callable]]
+    conditions: List[Union[Matcher, "CombinatorMatcher", Dict, Callable]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON IR."""
         serialized_conditions = []
         for cond in self.conditions:
-            if hasattr(cond, 'to_dict'):
+            if hasattr(cond, "to_dict"):
                 serialized_conditions.append(cond.to_dict())
             elif isinstance(cond, dict):
                 serialized_conditions.append(cond)
             elif callable(cond):
-                serialized_conditions.append({
-                    "type": "custom_function",
-                    "has_callable": True
-                })
+                serialized_conditions.append(
+                    {"type": "custom_function", "has_callable": True}
+                )
             else:
                 serialized_conditions.append(cond)
 
-        return {
-            "type": self.combinator_type,
-            "conditions": serialized_conditions
-        }
+        return {"type": self.combinator_type, "conditions": serialized_conditions}
 
 
 def all_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
@@ -47,10 +44,7 @@ def all_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
             instruction(type="RUN", contains="sudo")
         )
     """
-    return CombinatorMatcher(
-        combinator_type="all_of",
-        conditions=list(conditions)
-    )
+    return CombinatorMatcher(combinator_type="all_of", conditions=list(conditions))
 
 
 def any_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
@@ -65,10 +59,7 @@ def any_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
             instruction(type="FROM", base_image="scratch")
         )
     """
-    return CombinatorMatcher(
-        combinator_type="any_of",
-        conditions=list(conditions)
-    )
+    return CombinatorMatcher(combinator_type="any_of", conditions=list(conditions))
 
 
 def none_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
@@ -83,15 +74,13 @@ def none_of(*conditions: Union[Matcher, Dict, Callable]) -> CombinatorMatcher:
             instruction(type="USER", user_name_not="root")
         )
     """
-    return CombinatorMatcher(
-        combinator_type="none_of",
-        conditions=list(conditions)
-    )
+    return CombinatorMatcher(combinator_type="none_of", conditions=list(conditions))
 
 
 @dataclass
 class SequenceMatcher:
     """Represents instruction sequence validation."""
+
     sequence_type: str  # "after" or "before"
     instruction: Union[str, Matcher, Dict]
     reference: Union[str, Matcher, Dict]
@@ -99,10 +88,11 @@ class SequenceMatcher:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON IR."""
+
         def serialize_ref(ref):
             if isinstance(ref, str):
                 return {"instruction": ref}
-            elif hasattr(ref, 'to_dict'):
+            elif hasattr(ref, "to_dict"):
                 return ref.to_dict()
             elif isinstance(ref, dict):
                 return ref
@@ -112,14 +102,14 @@ class SequenceMatcher:
             "type": f"instruction_{self.sequence_type}",
             "instruction": serialize_ref(self.instruction),
             "reference": serialize_ref(self.reference),
-            "not_followed_by": self.not_followed_by
+            "not_followed_by": self.not_followed_by,
         }
 
 
 def instruction_after(
     instruction: Union[str, Matcher],
     after: Union[str, Matcher],
-    not_followed_by: bool = False
+    not_followed_by: bool = False,
 ) -> SequenceMatcher:
     """
     Check that an instruction appears after another.
@@ -138,14 +128,14 @@ def instruction_after(
         sequence_type="after",
         instruction=instruction,
         reference=after,
-        not_followed_by=not_followed_by
+        not_followed_by=not_followed_by,
     )
 
 
 def instruction_before(
     instruction: Union[str, Matcher],
     before: Union[str, Matcher],
-    not_followed_by: bool = False
+    not_followed_by: bool = False,
 ) -> SequenceMatcher:
     """
     Check that an instruction appears before another.
@@ -157,21 +147,19 @@ def instruction_before(
         sequence_type="before",
         instruction=instruction,
         reference=before,
-        not_followed_by=not_followed_by
+        not_followed_by=not_followed_by,
     )
 
 
 @dataclass
 class StageMatcher:
     """Matcher for multi-stage build stage queries."""
+
     stage_type: str
     params: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": f"stage_{self.stage_type}",
-            **self.params
-        }
+        return {"type": f"stage_{self.stage_type}", **self.params}
 
 
 def stage(
@@ -213,7 +201,7 @@ def final_stage_has(
     if instruction is not None:
         if isinstance(instruction, str):
             params["instruction"] = instruction
-        elif hasattr(instruction, 'to_dict'):
+        elif hasattr(instruction, "to_dict"):
             params["instruction"] = instruction.to_dict()
     if missing_instruction is not None:
         params["missing_instruction"] = missing_instruction

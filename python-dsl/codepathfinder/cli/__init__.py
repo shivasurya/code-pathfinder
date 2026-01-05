@@ -3,6 +3,7 @@
 This module provides the entry point for the `pathfinder` command.
 It locates and executes the bundled Go binary, passing through all arguments.
 """
+
 import os
 import sys
 import subprocess
@@ -49,6 +50,7 @@ def get_binary_path() -> Path:
 
     # 2. Check PATH (development mode or manual install)
     import shutil
+
     path_binary = shutil.which("pathfinder")
     if path_binary:
         return Path(path_binary)
@@ -60,13 +62,13 @@ def get_binary_path() -> Path:
 def _is_musl() -> bool:
     """Detect if running on musl libc (Alpine Linux, etc.)."""
     try:
-        result = subprocess.run(['ldd', '--version'], capture_output=True, text=True)
-        return 'musl' in result.stderr.lower() or 'musl' in result.stdout.lower()
+        result = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+        return "musl" in result.stderr.lower() or "musl" in result.stdout.lower()
     except Exception:
         try:
-            with open('/etc/os-release') as f:
+            with open("/etc/os-release") as f:
                 content = f.read().lower()
-                return 'alpine' in content
+                return "alpine" in content
         except Exception:
             return False
 
@@ -155,7 +157,9 @@ def _download_binary(bin_dir: Path, binary_name: str) -> Path:
             if archive_ext == ".tar.gz":
                 with tarfile.open(tmp.name, "r:gz") as tar:
                     for member in tar.getmembers():
-                        if member.name == "pathfinder" or member.name.endswith("/pathfinder"):
+                        if member.name == "pathfinder" or member.name.endswith(
+                            "/pathfinder"
+                        ):
                             member.name = binary_name
                             tar.extract(member, bin_dir)
                             break

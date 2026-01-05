@@ -58,6 +58,7 @@ def discover_and_import_rules(rules_dir: Path, rule_type: str):
         except Exception as e:
             print(f"  ✗ Failed to import {rule_file.name}: {e}")
             import traceback
+
             traceback.print_exc()
 
     return imported_count

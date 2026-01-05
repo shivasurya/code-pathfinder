@@ -9,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class ProgrammaticMatcher:
     """Wraps a custom validation function."""
+
     check_function: Callable
     description: str = ""
 
@@ -20,10 +21,7 @@ class ProgrammaticMatcher:
         }
 
 
-def custom_check(
-    check: Callable,
-    description: str = ""
-) -> ProgrammaticMatcher:
+def custom_check(check: Callable, description: str = "") -> ProgrammaticMatcher:
     """
     Create a custom validation function.
 
@@ -38,10 +36,7 @@ def custom_check(
                 return final_user is None or final_user.user_name == "root"
             return custom_check(check, "Check if last USER is root")
     """
-    return ProgrammaticMatcher(
-        check_function=check,
-        description=description
-    )
+    return ProgrammaticMatcher(check_function=check, description=description)
 
 
 class DockerfileAccess:

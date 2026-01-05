@@ -100,5 +100,5 @@ def write_ir_file(filepath: str, pretty: bool = True):
         pretty: If True, format with indentation.
     """
     json_str = compile_to_json(pretty=pretty)
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         f.write(json_str)

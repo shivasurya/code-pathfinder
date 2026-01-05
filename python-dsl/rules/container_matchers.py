@@ -9,18 +9,17 @@ from dataclasses import dataclass, field
 @dataclass
 class Matcher:
     """Base class for all matchers."""
+
     type: str
     params: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert matcher to dictionary for JSON IR."""
-        return {
-            "type": self.type,
-            **self.params
-        }
+        return {"type": self.type, **self.params}
 
 
 # --- Dockerfile Matchers ---
+
 
 def instruction(
     type: str,
@@ -157,6 +156,7 @@ def missing(
 
 
 # --- docker-compose Matchers ---
+
 
 def service_has(
     key: str,
