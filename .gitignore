@@ -35,3 +35,9 @@ node_modules
 __pycache__/
 compiled_rules.json
 scan.json
+
+# test coverage
+*.coverage
+.coverage
+coverage.out
+htmlcov/
