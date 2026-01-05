@@ -32,7 +32,7 @@ def main():
 	codeGraph := graph.Initialize(tmpDir)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Build call graph
@@ -72,7 +72,7 @@ class MyClass:
 	codeGraph := graph.Initialize(tmpDir)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Create call graph and index functions
@@ -252,7 +252,7 @@ def caller():
 	// Parse and build call graph
 	codeGraph := graph.Initialize(tmpDir)
 
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))

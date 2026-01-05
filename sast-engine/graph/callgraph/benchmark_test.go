@@ -32,7 +32,7 @@ const (
 func BenchmarkBuildModuleRegistry_Small(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath, false)
 		if err != nil {
 			b.Fatalf("Failed to build module registry: %v", err)
 		}
@@ -50,7 +50,7 @@ func BenchmarkBuildModuleRegistry_Small(b *testing.B) {
 func BenchmarkBuildModuleRegistry_Medium(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		moduleRegistry, err := registry.BuildModuleRegistry(mediumProjectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(mediumProjectPath, false)
 		if err != nil {
 			b.Fatalf("Failed to build module registry: %v", err)
 		}
@@ -68,7 +68,7 @@ func BenchmarkBuildModuleRegistry_Medium(b *testing.B) {
 func BenchmarkBuildModuleRegistry_Large(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		moduleRegistry, err := registry.BuildModuleRegistry(largeProjectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(largeProjectPath, false)
 		if err != nil {
 			b.Fatalf("Failed to build module registry: %v", err)
 		}
@@ -85,7 +85,7 @@ func BenchmarkBuildModuleRegistry_Large(b *testing.B) {
 // It measures parser initialization and AST traversal overhead.
 func BenchmarkExtractImports_Small(b *testing.B) {
 	// Pre-build registry to isolate import extraction performance
-	moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath)
+	moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath, false)
 	if err != nil {
 		b.Fatalf("Failed to build module registry: %v", err)
 	}
@@ -116,7 +116,7 @@ func BenchmarkExtractImports_Small(b *testing.B) {
 // It validates that tree-sitter parsing scales to production projects.
 func BenchmarkExtractImports_Medium(b *testing.B) {
 	// Pre-build registry to isolate import extraction performance
-	moduleRegistry, err := registry.BuildModuleRegistry(mediumProjectPath)
+	moduleRegistry, err := registry.BuildModuleRegistry(mediumProjectPath, false)
 	if err != nil {
 		b.Fatalf("Failed to build module registry: %v", err)
 	}
@@ -149,7 +149,7 @@ func BenchmarkExtractImports_Medium(b *testing.B) {
 // It measures the overhead of finding all function/method calls in the AST.
 func BenchmarkExtractCallSites_Small(b *testing.B) {
 	// Pre-build registry and import maps
-	moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath)
+	moduleRegistry, err := registry.BuildModuleRegistry(smallProjectPath, false)
 	if err != nil {
 		b.Fatalf("Failed to build module registry: %v", err)
 	}

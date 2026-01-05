@@ -14,7 +14,7 @@ func TestBuildModuleRegistry_SimpleProject(t *testing.T) {
 	// Use the simple_project test fixture
 	testRoot := filepath.Join("..", "..", "..", "test-fixtures", "python", "simple_project")
 
-	registry, err := BuildModuleRegistry(testRoot)
+	registry, err := BuildModuleRegistry(testRoot, false)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -48,7 +48,7 @@ func TestBuildModuleRegistry_SimpleProject(t *testing.T) {
 }
 
 func TestBuildModuleRegistry_NonExistentPath(t *testing.T) {
-	registry, err := BuildModuleRegistry("/nonexistent/path/to/project")
+	registry, err := BuildModuleRegistry("/nonexistent/path/to/project", false)
 
 	assert.Error(t, err)
 	assert.Nil(t, registry)
@@ -238,7 +238,7 @@ func TestBuildModuleRegistry_SkipsDirectories(t *testing.T) {
 	}
 
 	// Build registry
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should only have the app.py file
@@ -271,7 +271,7 @@ func TestBuildModuleRegistry_AmbiguousModules(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build registry
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Both helpers files should be in the short name index
@@ -291,7 +291,7 @@ func TestBuildModuleRegistry_AmbiguousModules(t *testing.T) {
 func TestBuildModuleRegistry_EmptyDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have no modules
@@ -307,7 +307,7 @@ func TestBuildModuleRegistry_OnlyNonPythonFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have no modules
@@ -325,7 +325,7 @@ func TestBuildModuleRegistry_MixedFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "utils.py"), []byte("# utils"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should only have Python files
@@ -350,7 +350,7 @@ func TestBuildModuleRegistry_DeepNesting(t *testing.T) {
 	err = os.WriteFile(filepath.Join(deepPath, "deep.py"), []byte("# deep"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have the deeply nested file
@@ -399,7 +399,7 @@ func TestBuildModuleRegistry_WalkError(t *testing.T) {
 	defer os.Chmod(restrictedDir, 0755) // Restore permissions for cleanup
 
 	// Build registry - should handle the error gracefully
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 
 	// On some systems, filepath.Walk may skip unreadable directories without error
 	// So we accept both error and success cases
@@ -446,7 +446,7 @@ func TestBuildModuleRegistry_InvalidRootPathAbs(t *testing.T) {
 	// This is system-dependent and may not always fail
 	longPath := strings.Repeat("a/", 5000) + "project"
 
-	registry, err := BuildModuleRegistry(longPath)
+	registry, err := BuildModuleRegistry(longPath, false)
 
 	// This may or may not error depending on the system
 	// We just verify the function handles it gracefully

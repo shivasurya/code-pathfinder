@@ -55,7 +55,7 @@ def test_stdlib():
 	// is tested indirectly through the builder.
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -101,7 +101,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -142,7 +142,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -189,7 +189,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph

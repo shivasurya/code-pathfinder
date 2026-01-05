@@ -42,8 +42,19 @@ var skipDirs = map[string]bool{
 }
 
 // shouldSkipFile checks if a Python file should be excluded from analysis.
-// Skips test files and other non-production code.
-func shouldSkipFile(filename string) bool {
+// Skips test files and other non-production code based on skipTests parameter.
+//
+// Parameters:
+//   - filename: the base name of the file (not full path)
+//   - skipTests: if true, skip test-related files
+//
+// Returns:
+//   - true if the file should be skipped
+func shouldSkipFile(filename string, skipTests bool) bool {
+	if !skipTests {
+		return false
+	}
+
 	// Skip test files by pattern
 	if strings.HasPrefix(filename, "test_") {
 		return true
@@ -79,6 +90,7 @@ func shouldSkipFile(filename string) bool {
 //
 // Parameters:
 //   - rootPath: absolute path to the project root directory
+//   - skipTests: if true, skip test files (test_*.py, *_test.py, conftest.py, etc.)
 //
 // Returns:
 //   - *core.ModuleRegistry: populated registry with all discovered modules
@@ -86,11 +98,12 @@ func shouldSkipFile(filename string) bool {
 //
 // Example:
 //
-//	registry, err := BuildModuleRegistry("/path/to/myapp")
+//	registry, err := BuildModuleRegistry("/path/to/myapp", true)
 //	// Discovers:
 //	//   /path/to/myapp/views.py → "myapp.views"
 //	//   /path/to/myapp/utils/helpers.py → "myapp.utils.helpers"
-func BuildModuleRegistry(rootPath string) (*core.ModuleRegistry, error) {
+//	//   (skips test_*.py files if skipTests=true)
+func BuildModuleRegistry(rootPath string, skipTests bool) (*core.ModuleRegistry, error) {
 	registry := core.NewModuleRegistry()
 
 	// Verify root path exists
@@ -125,8 +138,8 @@ func BuildModuleRegistry(rootPath string) (*core.ModuleRegistry, error) {
 			return nil
 		}
 
-		// Skip test files and other non-production code
-		if shouldSkipFile(info.Name()) {
+		// Skip test files and other non-production code (if enabled)
+		if shouldSkipFile(info.Name(), skipTests) {
 			return nil
 		}
 

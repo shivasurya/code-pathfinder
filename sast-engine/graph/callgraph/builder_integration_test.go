@@ -36,7 +36,7 @@ def vulnerable():
 
 	// Build full call graph and verify it has summaries
 	codeGraph := graph.Initialize(tmpDir)
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))

@@ -48,6 +48,7 @@ Examples:
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
 		outputFormat, _ := cmd.Flags().GetString("output")
 		outputFile, _ := cmd.Flags().GetString("output-file")
+		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -120,11 +121,14 @@ Examples:
 
 		// Step 2: Build module registry
 		logger.Progress("Building module registry...")
-		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, skipTests)
 		if err != nil {
 			logger.Warning("failed to build module registry: %v", err)
 			// Create empty registry as fallback
 			moduleRegistry = core.NewModuleRegistry()
+		}
+		if skipTests {
+			logger.Debug("Skipping test files (use --skip-tests=false to include)")
 		}
 
 		// Step 3: Build callgraph
@@ -490,6 +494,7 @@ func init() {
 	scanCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
 	scanCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
+	scanCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
 	scanCmd.MarkFlagRequired("rules")
 	scanCmd.MarkFlagRequired("project")
 }

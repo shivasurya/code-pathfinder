@@ -45,7 +45,7 @@ def main():
 	codeGraph := graph.Initialize(tmpDir)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Build call graph
@@ -113,7 +113,7 @@ def calculate():
 	// Parse and build call graph
 	codeGraph := graph.Initialize(tmpDir)
 
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
