@@ -2,11 +2,7 @@
 
 import pytest
 import sys
-import subprocess
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import patch, MagicMock, mock_open
 
 from codepathfinder.cli import (
     get_binary_path,

@@ -1,16 +1,13 @@
 """Tests for pathfinder.decorators module."""
 
-import sys
 import json
-import atexit
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from codepathfinder import rule, calls, variable
 from codepathfinder.decorators import (
     Rule,
     _enable_auto_execute,
     _register_rule,
     _rule_registry,
-    _auto_execute_enabled,
 )
 
 
