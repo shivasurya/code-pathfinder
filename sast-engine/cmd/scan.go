@@ -104,7 +104,7 @@ Examples:
 
 			// Load container rules from the same rules path (runtime generation)
 			logger.Progress("Loading container rules...")
-			containerRulesJSON, err := loader.LoadContainerRules()
+			containerRulesJSON, err := loader.LoadContainerRules(logger)
 			if err != nil {
 				logger.Warning("No container rules found: %v", err)
 			} else {
@@ -138,7 +138,7 @@ Examples:
 
 		// Step 4: Load Python DSL rules
 		logger.Progress("Loading rules from %s...", rulesPath)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(logger)
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}

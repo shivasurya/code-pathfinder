@@ -97,7 +97,7 @@ Examples:
 		// Load Python DSL rules
 		logger.Progress("Loading rules from %s...", rulesPath)
 		loader := dsl.NewRuleLoader(rulesPath)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(logger)
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}

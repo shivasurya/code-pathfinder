@@ -32,7 +32,7 @@ def detect_eval():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(nil)
 
 		require.NoError(t, err)
 		assert.Len(t, rules, 1)
@@ -53,7 +53,7 @@ if __name__ == "__main__":
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "file does not contain code analysis rules")
@@ -81,7 +81,7 @@ def test():
 		require.NoError(t, err)
 
 		loader := NewRuleLoader(tmpDir)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(nil)
 
 		require.NoError(t, err)
 		// Should only load the valid rule, not the app.py
@@ -97,7 +97,7 @@ this is not valid python`
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to execute Python rules")
@@ -111,7 +111,7 @@ print("not json")`
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse rule JSON IR")
@@ -119,7 +119,7 @@ print("not json")`
 
 	t.Run("handles non-existent file", func(t *testing.T) {
 		loader := NewRuleLoader("/nonexistent/file.py")
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 	})
@@ -295,7 +295,7 @@ def test_rule():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		jsonData, err := loader.LoadContainerRules()
+		jsonData, err := loader.LoadContainerRules(nil)
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, jsonData)
@@ -335,7 +335,7 @@ def rule2():
 		require.NoError(t, err)
 
 		loader := NewRuleLoader(tmpDir)
-		jsonData, err := loader.LoadContainerRules()
+		jsonData, err := loader.LoadContainerRules(nil)
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, jsonData)
@@ -343,7 +343,7 @@ def rule2():
 
 	t.Run("handles nonexistent path", func(t *testing.T) {
 		loader := NewRuleLoader("/nonexistent/path")
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to access rules path")
@@ -355,7 +355,7 @@ def rule2():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 	})
@@ -364,7 +364,7 @@ def rule2():
 		tmpDir := t.TempDir()
 
 		loader := NewRuleLoader(tmpDir)
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no container rules detected")
@@ -385,7 +385,7 @@ def detect_eval():
 		require.NoError(t, err)
 
 		loader := NewRuleLoader(tmpDir)
-		_, err = loader.LoadContainerRules()
+		_, err = loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no container rules detected")
@@ -404,7 +404,7 @@ def detect_eval():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no container rules detected")
@@ -423,7 +423,7 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		// Should error because it doesn't have @rule decorator
 		assert.Error(t, err)
