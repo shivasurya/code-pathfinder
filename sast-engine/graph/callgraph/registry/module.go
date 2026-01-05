@@ -9,7 +9,7 @@ import (
 )
 
 // skipDirs lists directory names that should be excluded during module registry building.
-// These are typically build artifacts, virtual environments, and version control directories.
+// These are typically build artifacts, virtual environments, test directories, and version control directories.
 var skipDirs = map[string]bool{
 	"__pycache__":   true,
 	"venv":          true,
@@ -29,6 +29,38 @@ var skipDirs = map[string]bool{
 	".mypy_cache":   true,
 	".coverage":     true,
 	"htmlcov":       true,
+	"tests":         true, // Skip test directories
+	"test":          true,
+	"fixtures":      true, // Test fixtures
+	"mocks":         true, // Mock objects
+	"migrations":    true, // Django migrations (auto-generated)
+	"vendor":        true, // Vendored dependencies
+	"third_party":   true, // Third-party code
+	"site-packages": true, // If embedded Python packages
+	"docs":          true, // Documentation
+	"examples":      true, // Example code
+}
+
+// shouldSkipFile checks if a Python file should be excluded from analysis.
+// Skips test files and other non-production code.
+func shouldSkipFile(filename string) bool {
+	// Skip test files by pattern
+	if strings.HasPrefix(filename, "test_") {
+		return true
+	}
+	if strings.HasSuffix(filename, "_test.py") {
+		return true
+	}
+	if filename == "conftest.py" {
+		return true
+	}
+	if filename == "setup.py" {
+		return true
+	}
+	if filename == "__main__.py" {
+		return true
+	}
+	return false
 }
 
 // BuildModuleRegistry walks a directory tree and builds a complete module registry.
@@ -90,6 +122,11 @@ func BuildModuleRegistry(rootPath string) (*core.ModuleRegistry, error) {
 
 		// Only process Python files
 		if !strings.HasSuffix(path, ".py") {
+			return nil
+		}
+
+		// Skip test files and other non-production code
+		if shouldSkipFile(info.Name()) {
 			return nil
 		}
 

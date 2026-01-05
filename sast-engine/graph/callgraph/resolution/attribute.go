@@ -312,7 +312,7 @@ func ResolveAttributePlaceholders(
 				modulePath := getModuleFromClassFQN(classFQN)
 				funcFQN := modulePath + "." + funcName
 
-				if returnType, exists := typeEngine.ReturnTypes[funcFQN]; exists && returnType != nil {
+				if returnType, exists := typeEngine.GetReturnType(funcFQN); exists && returnType != nil {
 					attr.Type.TypeFQN = returnType.TypeFQN
 					attr.Type.Confidence = returnType.Confidence * 0.8 // Decay confidence
 					attr.Type.Source = "function_call_attribute"

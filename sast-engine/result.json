@@ -1,0 +1,1272 @@
+{
+  "tool": {
+    "name": "Code Pathfinder",
+    "version": "1.1.4",
+    "url": "https://github.com/shivasurya/code-pathfinder"
+  },
+  "scan": {
+    "target": "/Users/shiva/src/shivasurya/code-pathfinder",
+    "timestamp": "2026-01-05T03:22:52Z",
+    "duration": 0,
+    "rules_executed": 24
+  },
+  "results": [
+    {
+      "rule_id": "DOCKER-BP-005",
+      "rule_name": "apt-get Without --no-install-recommends",
+      "message": "apt-get install without --no-install-recommends. This installs unnecessary packages, increasing image size and attack surface.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-AUD-001",
+      "rule_name": "Dockerfile Source Not Pinned",
+      "message": "FROM instruction without digest pinning. Consider using @sha256:... for immutable builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 2,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 5,
+          "lines": [
+            "# Use official Node.js slim image for smaller size and better security",
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-021",
+      "rule_name": "Missing -y flag for apt-get",
+      "message": "apt-get install without -y flag. Add -y or --yes for non-interactive builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-015",
+      "rule_name": "Missing Image Version",
+      "message": "FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible builds.",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 2,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 5,
+          "lines": [
+            "# Use official Node.js slim image for smaller size and better security",
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-COR-003",
+      "rule_name": "Multiple CMD Instructions",
+      "message": "Multiple CMD instructions detected. Only the last one takes effect.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 59,
+        "snippet": {
+          "start_line": 56,
+          "end_line": 62,
+          "lines": [
+            "    CMD secureflow --help || exit 1",
+            "",
+            "# Default command",
+            "CMD [\"/bin/bash\"]",
+            "",
+            "# Labels for metadata",
+            "LABEL maintainer=\"SecureFlow Team\""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-SEC-007",
+      "rule_name": "Sudo Usage in Dockerfile",
+      "message": "Dockerfile uses 'sudo' in RUN instructions. This is unnecessary during build (already root) and increases security risk if sudo remains in the final image. Use USER instruction for privilege changes instead.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {
+        "cwe": [
+          "CWE-250"
+        ]
+      }
+    },
+    {
+      "rule_id": "DOCKER-BP-030",
+      "rule_name": "Nonsensical Command",
+      "message": "RUN command uses 'cd' which doesn't persist. Use WORKDIR instead.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-023",
+      "rule_name": "Prefer apt-get over apt",
+      "message": "Use apt-get instead of apt for better script stability in Dockerfiles.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-016",
+      "rule_name": "Prefer JSON Notation for CMD/ENTRYPOINT",
+      "message": "Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 59,
+        "snippet": {
+          "start_line": 56,
+          "end_line": 62,
+          "lines": [
+            "    CMD secureflow --help || exit 1",
+            "",
+            "# Default command",
+            "CMD [\"/bin/bash\"]",
+            "",
+            "# Labels for metadata",
+            "LABEL maintainer=\"SecureFlow Team\""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-014",
+      "rule_name": "Remove apt Package Lists",
+      "message": "apt-get install without removing /var/lib/apt/lists/*. This wastes image space.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 5,
+        "snippet": {
+          "start_line": 2,
+          "end_line": 8,
+          "lines": [
+            "FROM node:18-slim",
+            "",
+            "# Install system dependencies needed for SecureFlow CLI",
+            "RUN apt-get update \u0026\u0026 apt-get install -y \\",
+            "    curl \\",
+            "    unzip \\",
+            "    jq \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-018",
+      "rule_name": "Use Absolute Path in WORKDIR",
+      "message": "WORKDIR should use absolute paths starting with /.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "extension/secureflow/packages/secureflow-cli/Dockerfile",
+        "line": 23,
+        "snippet": {
+          "start_line": 20,
+          "end_line": 26,
+          "lines": [
+            "    chown -R secureflow:secureflow /home/secureflow /app",
+            "",
+            "# Set working directory",
+            "WORKDIR /app",
+            "",
+            "# Copy SecureFlow CLI files (only the necessary ones)",
+            "COPY --chown=secureflow:secureflow package*.json ./"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-007",
+      "rule_name": "apk add Without --no-cache",
+      "message": "apk add without --no-cache. Package cache remains in image, increasing size by 2-5 MB.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 26,
+        "snippet": {
+          "start_line": 23,
+          "end_line": 29,
+          "lines": [
+            "WORKDIR /app",
+            "",
+            "# Install Python 3.14 and pip for DSL execution",
+            "RUN apk add --no-cache \\",
+            "    python3 \\",
+            "    py3-pip",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-AUD-001",
+      "rule_name": "Dockerfile Source Not Pinned",
+      "message": "FROM instruction without digest pinning. Consider using @sha256:... for immutable builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-022",
+      "rule_name": "Missing HEALTHCHECK Instruction",
+      "message": "No HEALTHCHECK instruction. Container health cannot be monitored by orchestrators, reducing reliability and observability.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-015",
+      "rule_name": "Missing Image Version",
+      "message": "FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible builds.",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-SEC-001",
+      "rule_name": "Container Running as Root - Missing USER",
+      "message": "Dockerfile does not specify USER instruction. Container will run as root by default, which increases the attack surface if the container is compromised.",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {
+        "cwe": [
+          "CWE-250"
+        ]
+      }
+    },
+    {
+      "rule_id": "DOCKER-COR-001",
+      "rule_name": "Multiple ENTRYPOINT Instructions",
+      "message": "Dockerfile has multiple ENTRYPOINT instructions. Only the last one takes effect, making earlier ones misleading.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 65,
+        "snippet": {
+          "start_line": 62,
+          "end_line": 65,
+          "lines": [
+            "",
+            "LABEL maintainer=\"shiva@shivasurya.me\"",
+            "",
+            "ENTRYPOINT [\"/usr/bin/entrypoint.sh\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-SEC-007",
+      "rule_name": "Sudo Usage in Dockerfile",
+      "message": "Dockerfile uses 'sudo' in RUN instructions. This is unnecessary during build (already root) and increases security risk if sudo remains in the final image. Use USER instruction for privilege changes instead.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 15,
+        "snippet": {
+          "start_line": 12,
+          "end_line": 18,
+          "lines": [
+            "",
+            "ARG PROJECT_VERSION",
+            "",
+            "RUN echo \"Building version ${PROJECT_VERSION} with commit ${PROJECT_COMMIT}\"",
+            "",
+            "RUN go mod download",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {
+        "cwe": [
+          "CWE-250"
+        ]
+      }
+    },
+    {
+      "rule_id": "DOCKER-BP-030",
+      "rule_name": "Nonsensical Command",
+      "message": "RUN command uses 'cd' which doesn't persist. Use WORKDIR instead.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 15,
+        "snippet": {
+          "start_line": 12,
+          "end_line": 18,
+          "lines": [
+            "",
+            "ARG PROJECT_VERSION",
+            "",
+            "RUN echo \"Building version ${PROJECT_VERSION} with commit ${PROJECT_COMMIT}\"",
+            "",
+            "RUN go mod download",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-008",
+      "rule_name": "pip install Without --no-cache-dir",
+      "message": "pip install without --no-cache-dir. Pip cache remains in image, adding 50-200 MB depending on dependencies.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 49,
+        "snippet": {
+          "start_line": 46,
+          "end_line": 52,
+          "lines": [
+            "    chmod 755 /tmp/nsjail_root",
+            "",
+            "# Install Python DSL library for rule execution",
+            "RUN pip install --no-cache-dir codepathfinder",
+            "",
+            "# Copy pathfinder binary from builder",
+            "COPY --from=builder /app/pathfinder /usr/bin/pathfinder"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-023",
+      "rule_name": "Prefer apt-get over apt",
+      "message": "Use apt-get instead of apt for better script stability in Dockerfiles.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 15,
+        "snippet": {
+          "start_line": 12,
+          "end_line": 18,
+          "lines": [
+            "",
+            "ARG PROJECT_VERSION",
+            "",
+            "RUN echo \"Building version ${PROJECT_VERSION} with commit ${PROJECT_COMMIT}\"",
+            "",
+            "RUN go mod download",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-016",
+      "rule_name": "Prefer JSON Notation for CMD/ENTRYPOINT",
+      "message": "Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 65,
+        "snippet": {
+          "start_line": 62,
+          "end_line": 65,
+          "lines": [
+            "",
+            "LABEL maintainer=\"shiva@shivasurya.me\"",
+            "",
+            "ENTRYPOINT [\"/usr/bin/entrypoint.sh\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-010",
+      "rule_name": "Missing pipefail in Shell Commands",
+      "message": "RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 33,
+        "snippet": {
+          "start_line": 30,
+          "end_line": 36,
+          "lines": [
+            "# Install nsjail for sandboxing",
+            "# Option 1: Try Alpine edge/community repo (primary approach)",
+            "# Option 2: Build from source (fallback if apk fails)",
+            "RUN echo \"@edge https://dl-cdn.alpinelinux.org/alpine/edge/community\" \u003e\u003e /etc/apk/repositories \u0026\u0026 \\",
+            "    apk add --no-cache nsjail@edge || \\",
+            "    (apk add --no-cache build-base protobuf-dev libnl3-dev git flex bison \u0026\u0026 \\",
+            "     git clone --depth 1 https://github.com/google/nsjail.git /tmp/nsjail \u0026\u0026 \\"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-018",
+      "rule_name": "Use Absolute Path in WORKDIR",
+      "message": "WORKDIR should use absolute paths starting with /.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 3,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 6,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            "",
+            "COPY sast-engine .",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-001",
+      "rule_name": "Base Image Uses :latest Tag",
+      "message": "Base image uses ':latest' tag or no tag (defaults to latest). This makes builds non-reproducible.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM cgr.dev/chainguard/go:latest AS builder",
+            "",
+            "WORKDIR /app",
+            ""
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-005",
+      "rule_name": "apt-get Without --no-install-recommends",
+      "message": "apt-get install without --no-install-recommends. This installs unnecessary packages, increasing image size and attack surface.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-006",
+      "rule_name": "Avoid apt-get upgrade",
+      "message": "Avoid apt-get upgrade in Dockerfiles. Use specific base image versions instead.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-AUD-001",
+      "rule_name": "Dockerfile Source Not Pinned",
+      "message": "FROM instruction without digest pinning. Consider using @sha256:... for immutable builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM ubuntu:latest",
+            "",
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-COR-002",
+      "rule_name": "Invalid Port Number",
+      "message": "EXPOSE instruction has invalid port number. Valid ports are 1-65535.",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 21,
+        "snippet": {
+          "start_line": 18,
+          "end_line": 23,
+          "lines": [
+            "# Last USER is root - should trigger DOCKER-SEC-009",
+            "USER root",
+            "",
+            "EXPOSE 80",
+            "",
+            "CMD [\"nginx\", \"-g\", \"daemon off;\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-021",
+      "rule_name": "Missing -y flag for apt-get",
+      "message": "apt-get install without -y flag. Add -y or --yes for non-interactive builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-022",
+      "rule_name": "Missing HEALTHCHECK Instruction",
+      "message": "No HEALTHCHECK instruction. Container health cannot be monitored by orchestrators, reducing reliability and observability.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM ubuntu:latest",
+            "",
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-015",
+      "rule_name": "Missing Image Version",
+      "message": "FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible builds.",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM ubuntu:latest",
+            "",
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-025",
+      "rule_name": "Missing -y flag for yum",
+      "message": "yum install without -y flag. Add -y for non-interactive builds.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 16,
+        "snippet": {
+          "start_line": 13,
+          "end_line": 19,
+          "lines": [
+            "RUN wget https://example.com/file.tar.gz | tar xz",
+            "",
+            "# Missing yum clean all",
+            "RUN yum install -y httpd",
+            "",
+            "# Last USER is root - should trigger DOCKER-SEC-009",
+            "USER root"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-012",
+      "rule_name": "Missing yum clean all",
+      "message": "RUN instruction uses 'yum install' without 'yum clean all'. This leaves package cache and increases image size.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 16,
+        "snippet": {
+          "start_line": 13,
+          "end_line": 19,
+          "lines": [
+            "RUN wget https://example.com/file.tar.gz | tar xz",
+            "",
+            "# Missing yum clean all",
+            "RUN yum install -y httpd",
+            "",
+            "# Last USER is root - should trigger DOCKER-SEC-009",
+            "USER root"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-COR-003",
+      "rule_name": "Multiple CMD Instructions",
+      "message": "Multiple CMD instructions detected. Only the last one takes effect.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 23,
+        "snippet": {
+          "start_line": 20,
+          "end_line": 23,
+          "lines": [
+            "",
+            "EXPOSE 80",
+            "",
+            "CMD [\"nginx\", \"-g\", \"daemon off;\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-SEC-007",
+      "rule_name": "Sudo Usage in Dockerfile",
+      "message": "Dockerfile uses 'sudo' in RUN instructions. This is unnecessary during build (already root) and increases security risk if sudo remains in the final image. Use USER instruction for privilege changes instead.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 10,
+        "snippet": {
+          "start_line": 7,
+          "end_line": 13,
+          "lines": [
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007",
+            "RUN sudo chown -R www-data:www-data /var/www",
+            "",
+            "# No pipefail - should trigger DOCKER-BP-010",
+            "RUN wget https://example.com/file.tar.gz | tar xz"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {
+        "cwe": [
+          "CWE-250"
+        ]
+      }
+    },
+    {
+      "rule_id": "DOCKER-BP-030",
+      "rule_name": "Nonsensical Command",
+      "message": "RUN command uses 'cd' which doesn't persist. Use WORKDIR instead.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-023",
+      "rule_name": "Prefer apt-get over apt",
+      "message": "Use apt-get instead of apt for better script stability in Dockerfiles.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-016",
+      "rule_name": "Prefer JSON Notation for CMD/ENTRYPOINT",
+      "message": "Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 23,
+        "snippet": {
+          "start_line": 20,
+          "end_line": 23,
+          "lines": [
+            "",
+            "EXPOSE 80",
+            "",
+            "CMD [\"nginx\", \"-g\", \"daemon off;\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-AUD-003",
+      "rule_name": "Privileged Port Exposed",
+      "message": "Exposing port below 1024 typically requires root privileges to bind. Consider using non-privileged ports (\u003e1024) with port mapping or granting CAP_NET_BIND_SERVICE capability.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 21,
+        "snippet": {
+          "start_line": 18,
+          "end_line": 23,
+          "lines": [
+            "# Last USER is root - should trigger DOCKER-SEC-009",
+            "USER root",
+            "",
+            "EXPOSE 80",
+            "",
+            "CMD [\"nginx\", \"-g\", \"daemon off;\"]"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-014",
+      "rule_name": "Remove apt Package Lists",
+      "message": "apt-get install without removing /var/lib/apt/lists/*. This wastes image space.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-010",
+      "rule_name": "Missing pipefail in Shell Commands",
+      "message": "RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 13,
+        "snippet": {
+          "start_line": 10,
+          "end_line": 16,
+          "lines": [
+            "RUN sudo chown -R www-data:www-data /var/www",
+            "",
+            "# No pipefail - should trigger DOCKER-BP-010",
+            "RUN wget https://example.com/file.tar.gz | tar xz",
+            "",
+            "# Missing yum clean all",
+            "RUN yum install -y httpd"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-017",
+      "rule_name": "Use WORKDIR Instead of cd",
+      "message": "Use WORKDIR instruction instead of 'cd' in RUN commands.",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 6,
+        "snippet": {
+          "start_line": 3,
+          "end_line": 9,
+          "lines": [
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001",
+            "",
+            "RUN apt-get update \u0026\u0026 apt-get upgrade -y \u0026\u0026 \\",
+            "    apt-get install -y nginx sudo",
+            "",
+            "# Using sudo - should trigger DOCKER-SEC-007"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    },
+    {
+      "rule_id": "DOCKER-BP-001",
+      "rule_name": "Base Image Uses :latest Tag",
+      "message": "Base image uses ':latest' tag or no tag (defaults to latest). This makes builds non-reproducible.",
+      "severity": "medium",
+      "confidence": "high",
+      "location": {
+        "file": "sast-engine/Dockerfile",
+        "line": 1,
+        "snippet": {
+          "start_line": 1,
+          "end_line": 4,
+          "lines": [
+            "FROM ubuntu:latest",
+            "",
+            "# Missing USER instruction - should trigger DOCKER-SEC-001",
+            "# Using :latest tag - should trigger DOCKER-BP-001"
+          ]
+        }
+      },
+      "detection": {
+        "type": "pattern",
+        "confidence_score": 1
+      },
+      "metadata": {}
+    }
+  ],
+  "summary": {
+    "total": 44,
+    "by_severity": {
+      "high": 5,
+      "low": 27,
+      "medium": 12
+    },
+    "by_detection_type": {
+      "pattern": 44
+    }
+  }
+}

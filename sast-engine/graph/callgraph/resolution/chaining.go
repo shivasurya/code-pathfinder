@@ -285,7 +285,7 @@ func resolveFirstChainStep(
 
 		// Look up return type
 		if typeEngine != nil {
-			if returnType, exists := typeEngine.ReturnTypes[funcFQN]; exists {
+			if returnType, exists := typeEngine.GetReturnType(funcFQN); exists {
 				// Skip unresolved placeholders - they won't help with chaining
 				if !strings.HasPrefix(returnType.TypeFQN, "call:") &&
 					!strings.HasPrefix(returnType.TypeFQN, "var:") {
@@ -300,7 +300,7 @@ func resolveFirstChainStep(
 				// Function exists, but no return type info
 				// Look up return type again (might be in registry)
 				if typeEngine != nil {
-					if returnType, exists := typeEngine.ReturnTypes[funcFQN]; exists {
+					if returnType, exists := typeEngine.GetReturnType(funcFQN); exists {
 						// Skip placeholders
 						if !strings.HasPrefix(returnType.TypeFQN, "call:") &&
 							!strings.HasPrefix(returnType.TypeFQN, "var:") {
@@ -391,7 +391,7 @@ func resolveChainMethod(
 			if _, exists := callGraph.Functions[pythonMethodFQN]; exists {
 				// Method exists - check for return type
 				if typeEngine != nil {
-					if returnType, exists := typeEngine.ReturnTypes[pythonMethodFQN]; exists {
+					if returnType, exists := typeEngine.GetReturnType(pythonMethodFQN); exists {
 						// If return type is unresolved (var:self, call:something), assume fluent interface
 						if strings.HasPrefix(returnType.TypeFQN, "var:") || strings.HasPrefix(returnType.TypeFQN, "call:") {
 							// Fluent interface pattern - method returns same type
@@ -416,7 +416,7 @@ func resolveChainMethod(
 
 		// Try return type lookup even if not in call graph
 		if typeEngine != nil {
-			if returnType, exists := typeEngine.ReturnTypes[pythonMethodFQN]; exists {
+			if returnType, exists := typeEngine.GetReturnType(pythonMethodFQN); exists {
 				// Check for unresolved placeholders
 				if strings.HasPrefix(returnType.TypeFQN, "var:") || strings.HasPrefix(returnType.TypeFQN, "call:") {
 					return &core.TypeInfo{
@@ -432,7 +432,7 @@ func resolveChainMethod(
 
 	// Try direct method FQN lookup (less common in Python)
 	if typeEngine != nil {
-		if returnType, exists := typeEngine.ReturnTypes[methodFQN]; exists {
+		if returnType, exists := typeEngine.GetReturnType(methodFQN); exists {
 			if strings.HasPrefix(returnType.TypeFQN, "var:") || strings.HasPrefix(returnType.TypeFQN, "call:") {
 				return &core.TypeInfo{
 					TypeFQN:    currentType.TypeFQN,
