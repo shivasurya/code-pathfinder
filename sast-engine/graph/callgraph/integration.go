@@ -53,7 +53,7 @@ type SecurityMatch struct {
 //   - error: if any step fails
 func InitializeCallGraph(codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) (*core.CallGraph, *core.ModuleRegistry, *patterns.PatternRegistry, error) {
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
+	moduleRegistry, err := registry.BuildModuleRegistry(projectPath, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}

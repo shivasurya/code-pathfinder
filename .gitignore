@@ -34,4 +34,13 @@ docs/public/rules/*.json
 node_modules
 __pycache__/
 compiled_rules.json
+
+# test coverage
+*.coverage
+.coverage
+coverage.out
+htmlcov/
+
+# output files
+result.json
 scan.json

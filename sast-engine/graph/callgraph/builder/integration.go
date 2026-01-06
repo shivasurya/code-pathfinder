@@ -29,7 +29,7 @@ import (
 func BuildCallGraphFromPath(codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) (*core.CallGraph, *core.ModuleRegistry, error) {
 	// Pass 1: Build module registry
 	startRegistry := time.Now()
-	moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
+	moduleRegistry, err := registry.BuildModuleRegistry(projectPath, false)
 	if err != nil {
 		return nil, nil, err
 	}

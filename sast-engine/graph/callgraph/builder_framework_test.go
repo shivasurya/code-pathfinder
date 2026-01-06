@@ -17,8 +17,8 @@ func TestFrameworkResolution(t *testing.T) {
 	// Create temporary test directory
 	tmpDir := t.TempDir()
 
-	// Create test files
-	testFile := filepath.Join(tmpDir, "test_frameworks.py")
+	// Create test files (avoid test_ prefix as it gets filtered by module registry)
+	testFile := filepath.Join(tmpDir, "frameworks.py")
 	testCode := `
 import django.db.models as models
 from rest_framework import serializers
@@ -55,7 +55,7 @@ def test_stdlib():
 	// is tested indirectly through the builder.
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -87,8 +87,8 @@ def validate(data):
 	err := os.WriteFile(utilsFile, []byte(utilsCode), 0644)
 	assert.NoError(t, err)
 
-	// Create test file that imports utils
-	testFile := filepath.Join(tmpDir, "test.py")
+	// Create file that imports utils
+	testFile := filepath.Join(tmpDir, "app.py")
 	testCode := `
 from utils import sanitize, validate
 
@@ -101,7 +101,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -130,8 +130,8 @@ def loads(data):
 	err := os.WriteFile(jsonFile, []byte(jsonCode), 0644)
 	assert.NoError(t, err)
 
-	// Create test file that imports local json
-	testFile := filepath.Join(tmpDir, "test.py")
+	// Create file that imports local json
+	testFile := filepath.Join(tmpDir, "process.py")
 	testCode := `
 from json import loads
 
@@ -142,7 +142,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph
@@ -172,8 +172,8 @@ def helper():
 	err := os.WriteFile(utilsFile, []byte(utilsCode), 0644)
 	assert.NoError(t, err)
 
-	// Create test file with mixed calls
-	testFile := filepath.Join(tmpDir, "test.py")
+	// Create file with mixed calls
+	testFile := filepath.Join(tmpDir, "handler.py")
 	testCode := `
 import json
 from utils import helper
@@ -189,7 +189,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	// Parse the code graph

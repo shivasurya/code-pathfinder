@@ -39,6 +39,7 @@ Examples:
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
+		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -79,10 +80,13 @@ Examples:
 
 		// Build module registry
 		logger.Progress("Building module registry...")
-		moduleRegistry, err := registry.BuildModuleRegistry(projectPath)
+		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, skipTests)
 		if err != nil {
 			logger.Warning("failed to build module registry: %v", err)
 			moduleRegistry = core.NewModuleRegistry()
+		}
+		if skipTests {
+			logger.Debug("Skipping test files (use --skip-tests=false to include)")
 		}
 
 		// Build callgraph
@@ -97,7 +101,7 @@ Examples:
 		// Load Python DSL rules
 		logger.Progress("Loading rules from %s...", rulesPath)
 		loader := dsl.NewRuleLoader(rulesPath)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(logger)
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
@@ -193,6 +197,7 @@ func init() {
 	ciCmd.Flags().BoolP("verbose", "v", false, "Show progress and statistics")
 	ciCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
+	ciCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

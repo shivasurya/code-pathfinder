@@ -10,11 +10,197 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestShouldSkipFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		filename  string
+		skipTests bool
+		expected  bool
+	}{
+		// Test files when skipTests=true
+		{
+			name:      "Skip test_ prefix when enabled",
+			filename:  "test_models.py",
+			skipTests: true,
+			expected:  true,
+		},
+		{
+			name:      "Skip _test suffix when enabled",
+			filename:  "models_test.py",
+			skipTests: true,
+			expected:  true,
+		},
+		{
+			name:      "Skip conftest.py when enabled",
+			filename:  "conftest.py",
+			skipTests: true,
+			expected:  true,
+		},
+		{
+			name:      "Skip setup.py when enabled",
+			filename:  "setup.py",
+			skipTests: true,
+			expected:  true,
+		},
+		{
+			name:      "Skip __main__.py when enabled",
+			filename:  "__main__.py",
+			skipTests: true,
+			expected:  true,
+		},
+		// Regular files when skipTests=true
+		{
+			name:      "Don't skip regular file",
+			filename:  "models.py",
+			skipTests: true,
+			expected:  false,
+		},
+		{
+			name:      "Don't skip __init__.py",
+			filename:  "__init__.py",
+			skipTests: true,
+			expected:  false,
+		},
+		// Test files when skipTests=false
+		{
+			name:      "Include test_ prefix when disabled",
+			filename:  "test_models.py",
+			skipTests: false,
+			expected:  false,
+		},
+		{
+			name:      "Include _test suffix when disabled",
+			filename:  "models_test.py",
+			skipTests: false,
+			expected:  false,
+		},
+		{
+			name:      "Include conftest.py when disabled",
+			filename:  "conftest.py",
+			skipTests: false,
+			expected:  false,
+		},
+		{
+			name:      "Include setup.py when disabled",
+			filename:  "setup.py",
+			skipTests: false,
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := shouldSkipFile(tt.filename, tt.skipTests)
+			assert.Equal(t, tt.expected, result, "shouldSkipFile(%q, %v) should return %v", tt.filename, tt.skipTests, tt.expected)
+		})
+	}
+}
+
+func TestBuildModuleRegistry_SkipTestsParameter(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create regular files
+	err := os.WriteFile(filepath.Join(tmpDir, "models.py"), []byte("# models"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tmpDir, "views.py"), []byte("# views"), 0644)
+	require.NoError(t, err)
+
+	// Create test files
+	err = os.WriteFile(filepath.Join(tmpDir, "test_models.py"), []byte("# test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tmpDir, "models_test.py"), []byte("# test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tmpDir, "conftest.py"), []byte("# conftest"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tmpDir, "setup.py"), []byte("# setup"), 0644)
+	require.NoError(t, err)
+
+	t.Run("skipTests=true excludes test files", func(t *testing.T) {
+		registry, err := BuildModuleRegistry(tmpDir, true)
+		require.NoError(t, err)
+
+		// Should only have regular files (2)
+		assert.Equal(t, 2, len(registry.Modules), "Should only have models.py and views.py")
+
+		// Verify regular files are included
+		_, ok := registry.GetModulePath("models")
+		assert.True(t, ok, "models.py should be included")
+		_, ok = registry.GetModulePath("views")
+		assert.True(t, ok, "views.py should be included")
+
+		// Verify test files are excluded
+		_, ok = registry.GetModulePath("test_models")
+		assert.False(t, ok, "test_models.py should be excluded")
+		_, ok = registry.GetModulePath("models_test")
+		assert.False(t, ok, "models_test.py should be excluded")
+		_, ok = registry.GetModulePath("conftest")
+		assert.False(t, ok, "conftest.py should be excluded")
+		_, ok = registry.GetModulePath("setup")
+		assert.False(t, ok, "setup.py should be excluded")
+	})
+
+	t.Run("skipTests=false includes test files", func(t *testing.T) {
+		registry, err := BuildModuleRegistry(tmpDir, false)
+		require.NoError(t, err)
+
+		// Should have all files (6)
+		assert.Equal(t, 6, len(registry.Modules), "Should have all 6 Python files")
+
+		// Verify all files are included
+		_, ok := registry.GetModulePath("models")
+		assert.True(t, ok, "models.py should be included")
+		_, ok = registry.GetModulePath("views")
+		assert.True(t, ok, "views.py should be included")
+		_, ok = registry.GetModulePath("test_models")
+		assert.True(t, ok, "test_models.py should be included")
+		_, ok = registry.GetModulePath("models_test")
+		assert.True(t, ok, "models_test.py should be included")
+		_, ok = registry.GetModulePath("conftest")
+		assert.True(t, ok, "conftest.py should be included")
+		_, ok = registry.GetModulePath("setup")
+		assert.True(t, ok, "setup.py should be included")
+	})
+}
+
+func TestBuildModuleRegistry_SkipTestDirectories(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create app file
+	err := os.WriteFile(filepath.Join(tmpDir, "app.py"), []byte("# app"), 0644)
+	require.NoError(t, err)
+
+	// Create test directories with files
+	testDirs := []string{"tests", "test", "fixtures", "mocks"}
+	for _, dirName := range testDirs {
+		testDir := filepath.Join(tmpDir, dirName)
+		err := os.Mkdir(testDir, 0755)
+		require.NoError(t, err)
+
+		// Add Python files in test directory
+		err = os.WriteFile(filepath.Join(testDir, "test_file.py"), []byte("# test"), 0644)
+		require.NoError(t, err)
+	}
+
+	// Build registry with skipTests=true (directories should be skipped via skipDirs map)
+	registry, err := BuildModuleRegistry(tmpDir, true)
+	require.NoError(t, err)
+
+	// Should only have app.py
+	assert.Equal(t, 1, len(registry.Modules), "Should only have app.py")
+
+	// Verify test directory files are not indexed
+	for _, dirName := range testDirs {
+		modulePath := dirName + ".test_file"
+		_, ok := registry.GetModulePath(modulePath)
+		assert.False(t, ok, "File in %s directory should be skipped", dirName)
+	}
+}
+
 func TestBuildModuleRegistry_SimpleProject(t *testing.T) {
 	// Use the simple_project test fixture
 	testRoot := filepath.Join("..", "..", "..", "test-fixtures", "python", "simple_project")
 
-	registry, err := BuildModuleRegistry(testRoot)
+	registry, err := BuildModuleRegistry(testRoot, false)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -48,7 +234,7 @@ func TestBuildModuleRegistry_SimpleProject(t *testing.T) {
 }
 
 func TestBuildModuleRegistry_NonExistentPath(t *testing.T) {
-	registry, err := BuildModuleRegistry("/nonexistent/path/to/project")
+	registry, err := BuildModuleRegistry("/nonexistent/path/to/project", false)
 
 	assert.Error(t, err)
 	assert.Nil(t, registry)
@@ -238,7 +424,7 @@ func TestBuildModuleRegistry_SkipsDirectories(t *testing.T) {
 	}
 
 	// Build registry
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should only have the app.py file
@@ -271,7 +457,7 @@ func TestBuildModuleRegistry_AmbiguousModules(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build registry
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Both helpers files should be in the short name index
@@ -291,7 +477,7 @@ func TestBuildModuleRegistry_AmbiguousModules(t *testing.T) {
 func TestBuildModuleRegistry_EmptyDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have no modules
@@ -307,7 +493,7 @@ func TestBuildModuleRegistry_OnlyNonPythonFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have no modules
@@ -325,7 +511,7 @@ func TestBuildModuleRegistry_MixedFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "utils.py"), []byte("# utils"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should only have Python files
@@ -350,7 +536,7 @@ func TestBuildModuleRegistry_DeepNesting(t *testing.T) {
 	err = os.WriteFile(filepath.Join(deepPath, "deep.py"), []byte("# deep"), 0644)
 	require.NoError(t, err)
 
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)
 
 	// Should have the deeply nested file
@@ -399,7 +585,7 @@ func TestBuildModuleRegistry_WalkError(t *testing.T) {
 	defer os.Chmod(restrictedDir, 0755) // Restore permissions for cleanup
 
 	// Build registry - should handle the error gracefully
-	registry, err := BuildModuleRegistry(tmpDir)
+	registry, err := BuildModuleRegistry(tmpDir, false)
 
 	// On some systems, filepath.Walk may skip unreadable directories without error
 	// So we accept both error and success cases
@@ -446,7 +632,7 @@ func TestBuildModuleRegistry_InvalidRootPathAbs(t *testing.T) {
 	// This is system-dependent and may not always fail
 	longPath := strings.Repeat("a/", 5000) + "project"
 
-	registry, err := BuildModuleRegistry(longPath)
+	registry, err := BuildModuleRegistry(longPath, false)
 
 	// This may or may not error depending on the system
 	// We just verify the function handles it gracefully

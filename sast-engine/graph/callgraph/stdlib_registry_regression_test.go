@@ -20,7 +20,7 @@ func TestStdlibRegressionSuite(t *testing.T) {
 
 	// Test 1: os.path.join pattern (should resolve)
 	t.Run("os_path_join_resolution", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_os.py")
+		testFile := filepath.Join(tmpDir, "file_ops.py")
 		code := `import os
 
 def get_config_path():
@@ -43,7 +43,7 @@ def get_config_path():
 
 	// Test 2: pathlib.Path pattern (should resolve)
 	t.Run("pathlib_path_resolution", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_pathlib.py")
+		testFile := filepath.Join(tmpDir, "dir_utils.py")
 		code := `from pathlib import Path
 
 def create_directory(name):
@@ -65,7 +65,7 @@ def create_directory(name):
 
 	// Test 3: json.loads/dumps (should resolve)
 	t.Run("json_module_resolution", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_json.py")
+		testFile := filepath.Join(tmpDir, "json_handler.py")
 		code := `import json
 
 def process_data(json_string):
@@ -87,7 +87,7 @@ def process_data(json_string):
 
 	// Test 4: sys.argv access (should resolve)
 	t.Run("sys_module_resolution", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_sys.py")
+		testFile := filepath.Join(tmpDir, "cli_args.py")
 		code := `import sys
 
 def get_args():
@@ -115,7 +115,7 @@ func TestStdlibResolutionThreshold(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a comprehensive test file with multiple stdlib calls
-	testFile := filepath.Join(tmpDir, "test_comprehensive.py")
+	testFile := filepath.Join(tmpDir, "comprehensive_stdlib.py")
 	code := `import os
 import sys
 import json
@@ -174,7 +174,7 @@ func TestStdlibEdgeCases(t *testing.T) {
 
 	// Edge case 1: Aliased imports
 	t.Run("aliased_import", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_alias.py")
+		testFile := filepath.Join(tmpDir, "alias_module.py")
 		code := `import os.path as osp
 
 def join_paths():
@@ -194,7 +194,7 @@ def join_paths():
 
 	// Edge case 2: From imports
 	t.Run("from_import", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_from.py")
+		testFile := filepath.Join(tmpDir, "from_imports.py")
 		code := `from os.path import join, exists
 
 def check_path(path):
@@ -213,7 +213,7 @@ def check_path(path):
 
 	// Edge case 3: Multiple stdlib modules in one file
 	t.Run("multiple_modules", func(t *testing.T) {
-		testFile := filepath.Join(tmpDir, "test_multi.py")
+		testFile := filepath.Join(tmpDir, "multi_module.py")
 		code := `import os
 import sys
 import json
@@ -244,7 +244,7 @@ func TestStdlibNoRegression(t *testing.T) {
 	// If this test fails, it means a regression was introduced
 
 	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test_baseline.py")
+	testFile := filepath.Join(tmpDir, "baseline.py")
 
 	// Known-good code that should resolve completely
 	code := `import os

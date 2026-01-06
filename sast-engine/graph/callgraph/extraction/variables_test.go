@@ -27,7 +27,7 @@ def test_function():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -75,7 +75,7 @@ def calculate():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -126,7 +126,7 @@ def process_data():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -176,7 +176,7 @@ def check_status():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -222,7 +222,7 @@ def process():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -259,7 +259,7 @@ def outer():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -296,7 +296,7 @@ def reassign():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -326,7 +326,7 @@ func TestExtractVariableAssignments_EmptyFile(t *testing.T) {
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -353,7 +353,7 @@ def empty_function():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -383,7 +383,7 @@ def test():
 	err := os.WriteFile(filePath, sourceCode, 0644)
 	assert.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
 	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
@@ -435,7 +435,7 @@ func TestInferTypeFromExpression(t *testing.T) {
 			err := os.WriteFile(filePath, sourceCode, 0644)
 			assert.NoError(t, err)
 
-			modRegistry, err := registry.BuildModuleRegistry(tmpDir)
+			modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 			assert.NoError(t, err)
 
 			typeEngine := resolution.NewTypeInferenceEngine(modRegistry)

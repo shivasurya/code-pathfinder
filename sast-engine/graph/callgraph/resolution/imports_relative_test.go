@@ -202,7 +202,7 @@ func TestExtractImports_WithTestFixture_RelativeImports(t *testing.T) {
 	absProjectRoot, err := filepath.Abs(projectRoot)
 	require.NoError(t, err)
 
-	modRegistry, err := registry.BuildModuleRegistry(absProjectRoot)
+	modRegistry, err := registry.BuildModuleRegistry(absProjectRoot, false)
 	require.NoError(t, err)
 
 	// Test with actual fixture file - construct from absolute project root

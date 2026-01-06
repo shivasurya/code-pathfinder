@@ -1,8 +1,13 @@
 package builder
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -11,6 +16,47 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
+
+// getOptimalWorkerCount determines the optimal number of parallel workers.
+// It balances performance with resource consumption to avoid overwhelming systems.
+//
+// Algorithm:
+//  1. Start with available CPU cores
+//  2. Leave 1-2 cores for OS/other processes
+//  3. Cap at 16 workers (diminishing returns + memory concerns)
+//  4. Minimum 2 workers (ensure some parallelism)
+//  5. Respect PATHFINDER_MAX_WORKERS env var if set
+//
+// Returns:
+//   - Number of workers to use (2-16)
+func getOptimalWorkerCount() int {
+	// Check for user override
+	if envWorkers := os.Getenv("PATHFINDER_MAX_WORKERS"); envWorkers != "" {
+		if count, err := strconv.Atoi(envWorkers); err == nil && count > 0 {
+			// Respect user setting but cap at 32 for safety
+			if count > 32 {
+				count = 32
+			}
+			return count
+		}
+	}
+
+	// Get available CPU cores
+	cpuCount := runtime.NumCPU()
+
+	// Conservative approach: use 75% of cores, leave some for OS
+	workers := int(float64(cpuCount) * 0.75)
+
+	// Apply bounds
+	if workers < 2 {
+		workers = 2 // Minimum parallelism
+	}
+	if workers > 16 {
+		workers = 16 // Cap at 16 (memory/connection limits)
+	}
+
+	return workers
+}
 
 // BuildCallGraph constructs the complete call graph for a Python project.
 // This is Pass 3 of the 3-pass algorithm:
@@ -96,143 +142,259 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
 
-	// Phase 2 Task 9: Extract return types from all functions (first pass)
+	// Phase 2 Task 9: Extract return types from all functions (first pass - PARALLELIZED)
+	logger.Progress("Extracting return types from %d modules (parallel)...", len(registry.Modules))
+
+	type returnJob struct {
+		modulePath string
+		filePath   string
+	}
+
+	returnJobs := make(chan returnJob, 100)
+	var returnMutex sync.Mutex
 	allReturnStatements := make([]*resolution.ReturnStatement, 0)
+	var processedFiles atomic.Int64
+	numWorkers := getOptimalWorkerCount()
+	var wg sync.WaitGroup
+
+	logger.Debug("Using %d parallel workers for callgraph construction", numWorkers)
+
+	// Start workers for return type extraction
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range returnJobs {
+				sourceCode, err := ReadFileBytes(job.filePath)
+				if err != nil {
+					continue
+				}
+
+				returns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins)
+				if err != nil {
+					continue
+				}
+
+				if len(returns) > 0 {
+					returnMutex.Lock()
+					allReturnStatements = append(allReturnStatements, returns...)
+					returnMutex.Unlock()
+				}
+
+				// Progress tracking
+				count := processedFiles.Add(1)
+				if count%1000 == 0 {
+					logger.Debug("Processed %d/%d files for return types", count, len(registry.Modules))
+				}
+			}
+		}()
+	}
+
+	// Queue all Python files
 	for modulePath, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
 		}
-
-		sourceCode, err := ReadFileBytes(filePath)
-		if err != nil {
-			continue
-		}
-
-		// Extract return types
-		returns, err := resolution.ExtractReturnTypes(filePath, sourceCode, modulePath, typeEngine.Builtins)
-		if err != nil {
-			continue
-		}
-
-		allReturnStatements = append(allReturnStatements, returns...)
+		returnJobs <- returnJob{modulePath, filePath}
 	}
+	close(returnJobs)
+	wg.Wait()
+
+	logger.Debug("Completed return type extraction: %d files processed", processedFiles.Load())
 
 	// Merge return types and add to engine
 	mergedReturns := resolution.MergeReturnTypes(allReturnStatements)
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
 
-	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass)
+	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass - PARALLELIZED)
+	logger.Progress("Extracting variable assignments (parallel)...")
+
+	varJobs := make(chan string, 100)
+	var varProcessed atomic.Int64
+	wg = sync.WaitGroup{}
+
+	// Start workers for variable assignment extraction
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for filePath := range varJobs {
+				sourceCode, err := ReadFileBytes(filePath)
+				if err != nil {
+					continue
+				}
+
+				// Extract variable assignments - typeEngine methods are mutex-protected internally
+				_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+
+				// Progress tracking
+				count := varProcessed.Add(1)
+				if count%1000 == 0 {
+					logger.Debug("Processed %d files for variable assignments", count)
+				}
+			}
+		}()
+	}
+
+	// Queue all Python files
 	for _, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
 		}
-
-		sourceCode, err := ReadFileBytes(filePath)
-		if err != nil {
-			continue
-		}
-
-		// Extract variable assignments for type inference
-		_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+		varJobs <- filePath
 	}
+	close(varJobs)
+	wg.Wait()
+
+	logger.Debug("Completed variable assignment extraction: %d files processed", varProcessed.Load())
 
 	// Phase 2 Task 8: Resolve call: placeholders with return types
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
-	// Phase 3 Task 12: Extract class attributes (third pass)
+	// Phase 3 Task 12: Extract class attributes (third pass - PARALLELIZED)
+	logger.Progress("Extracting class attributes (parallel)...")
+
+	attrJobs := make(chan returnJob, 100) // Reuse returnJob struct
+	var attrProcessed atomic.Int64
+	wg = sync.WaitGroup{}
+
+	// Start workers for class attribute extraction
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range attrJobs {
+				sourceCode, err := ReadFileBytes(job.filePath)
+				if err != nil {
+					continue
+				}
+
+				// Extract class attributes - AttributeRegistry methods are mutex-protected
+				_ = extraction.ExtractClassAttributes(job.filePath, sourceCode, job.modulePath, typeEngine, typeEngine.Attributes)
+
+				// Progress tracking
+				count := attrProcessed.Add(1)
+				if count%1000 == 0 {
+					logger.Debug("Processed %d files for class attributes", count)
+				}
+			}
+		}()
+	}
+
+	// Queue all Python files
 	for modulePath, filePath := range registry.Modules {
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
 		}
-
-		sourceCode, err := ReadFileBytes(filePath)
-		if err != nil {
-			continue
-		}
-
-		// Extract class attributes for self.attr tracking
-		_ = extraction.ExtractClassAttributes(filePath, sourceCode, modulePath, typeEngine, typeEngine.Attributes)
+		attrJobs <- returnJob{modulePath, filePath}
 	}
+	close(attrJobs)
+	wg.Wait()
+
+	logger.Debug("Completed class attribute extraction: %d files processed", attrProcessed.Load())
 
 	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
 	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
-	// Process each Python file in the project (fourth pass for call site resolution)
+	// Process each Python file in the project (fourth pass for call site resolution - PARALLELIZED)
+	logger.Progress("Resolving call sites (parallel)...")
+
+	callSiteJobs := make(chan returnJob, 100)
+	var callGraphMutex sync.Mutex // Protect callGraph modifications
+	var callSiteProcessed atomic.Int64
+	wg = sync.WaitGroup{}
+
+	// Start workers for call site resolution
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range callSiteJobs {
+				// Read source code for parsing
+				sourceCode, err := ReadFileBytes(job.filePath)
+				if err != nil {
+					continue
+				}
+
+				// Extract imports using cache (cache is thread-safe)
+				importMap, err := importCache.GetOrExtract(job.filePath, sourceCode, registry)
+				if err != nil {
+					continue
+				}
+
+				// Extract all call sites from this file
+				callSites, err := resolution.ExtractCallSites(job.filePath, sourceCode, importMap)
+				if err != nil {
+					continue
+				}
+
+				// Get all function definitions in this file
+				fileFunctions := getFunctionsInFile(codeGraph, job.filePath)
+
+				// Process each call site to resolve targets and build edges
+				for _, callSite := range callSites {
+					// Find the caller function containing this call site
+					callerFQN := findContainingFunction(callSite.Location, fileFunctions, job.modulePath)
+					if callerFQN == "" {
+						callerFQN = job.modulePath
+					}
+
+					// Resolve the call target to a fully qualified name
+					targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, job.modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
+
+					// Update call site with resolution information
+					callSite.TargetFQN = targetFQN
+					callSite.Resolved = resolved
+
+					// Phase 2 Task 10: Populate type inference metadata
+					if typeInfo != nil {
+						callSite.ResolvedViaTypeInference = true
+						callSite.InferredType = typeInfo.TypeFQN
+						callSite.TypeConfidence = typeInfo.Confidence
+						callSite.TypeSource = typeInfo.Source
+					}
+
+					// If resolution failed, categorize the failure reason
+					if !resolved {
+						callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+					}
+
+					// CRITICAL: Lock callGraph modifications (shared state)
+					callGraphMutex.Lock()
+					callGraph.AddCallSite(callerFQN, *callSite)
+					if resolved {
+						callGraph.AddEdge(callerFQN, targetFQN)
+					}
+					callGraphMutex.Unlock()
+				}
+
+				// Progress tracking
+				count := callSiteProcessed.Add(1)
+				if count%1000 == 0 {
+					logger.Debug("Processed %d files for call sites", count)
+				}
+			}
+		}()
+	}
+
+	// Queue all Python files
 	for modulePath, filePath := range registry.Modules {
-		// Skip non-Python files
 		if !strings.HasSuffix(filePath, ".py") {
 			continue
 		}
-
-		// Read source code for parsing
-		sourceCode, err := ReadFileBytes(filePath)
-		if err != nil {
-			// Skip files we can't read
-			continue
-		}
-
-		// Extract imports using cache (avoids re-parsing if already cached)
-		importMap, err := importCache.GetOrExtract(filePath, sourceCode, registry)
-		if err != nil {
-			// Skip files with import errors
-			continue
-		}
-
-		// Extract all call sites from this file
-		callSites, err := resolution.ExtractCallSites(filePath, sourceCode, importMap)
-		if err != nil {
-			// Skip files with call site extraction errors
-			continue
-		}
-
-		// Get all function definitions in this file
-		fileFunctions := getFunctionsInFile(codeGraph, filePath)
-
-		// Process each call site to resolve targets and build edges
-		for _, callSite := range callSites {
-			// Find the caller function containing this call site
-			callerFQN := findContainingFunction(callSite.Location, fileFunctions, modulePath)
-			if callerFQN == "" {
-				// Call at module level - use module name as caller
-				callerFQN = modulePath
-			}
-
-			// Resolve the call target to a fully qualified name
-			targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
-
-			// Update call site with resolution information
-			callSite.TargetFQN = targetFQN
-			callSite.Resolved = resolved
-
-			// Phase 2 Task 10: Populate type inference metadata
-			if typeInfo != nil {
-				callSite.ResolvedViaTypeInference = true
-				callSite.InferredType = typeInfo.TypeFQN
-				callSite.TypeConfidence = typeInfo.Confidence
-				callSite.TypeSource = typeInfo.Source
-			}
-
-			// If resolution failed, categorize the failure reason
-			if !resolved {
-				callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
-			}
-
-			// Add call site to graph (dereference pointer)
-			callGraph.AddCallSite(callerFQN, *callSite)
-
-			// Add edge if we successfully resolved the target
-			if resolved {
-				callGraph.AddEdge(callerFQN, targetFQN)
-			}
-		}
+		callSiteJobs <- returnJob{modulePath, filePath}
 	}
+	close(callSiteJobs)
+	wg.Wait()
+
+	logger.Debug("Completed call site resolution: %d files processed", callSiteProcessed.Load())
 
 	// Phase 3 Task 12: Print attribute failure analysis (debug mode only)
 	resolution.PrintAttributeFailureStats(logger)
 
 	// Pass 5: Generate taint summaries for all functions
-	logger.Progress("Pass 5: Generating taint summaries...")
+	logger.Progress("Generating taint summaries...")
 	GenerateTaintSummaries(callGraph, codeGraph, registry)
 	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
 

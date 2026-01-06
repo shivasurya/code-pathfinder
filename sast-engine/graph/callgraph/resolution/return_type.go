@@ -257,7 +257,11 @@ func MergeReturnTypes(statements []*ReturnStatement) map[string]*core.TypeInfo {
 }
 
 // AddReturnTypesToEngine populates TypeInferenceEngine with return types.
+// Thread-safe for concurrent writes.
 func (te *TypeInferenceEngine) AddReturnTypesToEngine(returnTypes map[string]*core.TypeInfo) {
+	te.typeMutex.Lock()
+	defer te.typeMutex.Unlock()
+
 	for funcFQN, typeInfo := range returnTypes {
 		te.ReturnTypes[funcFQN] = typeInfo
 	}

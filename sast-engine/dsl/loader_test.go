@@ -32,7 +32,7 @@ def detect_eval():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		rules, err := loader.LoadRules()
+		rules, err := loader.LoadRules(nil)
 
 		require.NoError(t, err)
 		assert.Len(t, rules, 1)
@@ -41,25 +41,77 @@ def detect_eval():
 		assert.Equal(t, "CWE-94", rules[0].Rule.CWE)
 	})
 
+	t.Run("rejects file without rule decorators", func(t *testing.T) {
+		// Normal Python file without @rule decorator
+		appContent := `def main():
+    print("Hello world")
+
+if __name__ == "__main__":
+    main()
+`
+		tmpFile := createTempPythonFile(t, appContent)
+		defer os.Remove(tmpFile)
+
+		loader := NewRuleLoader(tmpFile)
+		_, err := loader.LoadRules(nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "file does not contain code analysis rules")
+		assert.Contains(t, err.Error(), "no @rule decorator or codepathfinder imports found")
+	})
+
+	t.Run("skips files without rule decorators in directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create valid rule file
+		validRule := `from codepathfinder import rule, calls
+
+@rule(id="test-rule", severity="high", cwe="")
+def test():
+    return calls("eval")
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "valid_rule.py"), []byte(validRule), 0644)
+		require.NoError(t, err)
+
+		// Create normal app file (should be skipped)
+		appFile := `def main():
+    print("Hello")
+`
+		err = os.WriteFile(filepath.Join(tmpDir, "app.py"), []byte(appFile), 0644)
+		require.NoError(t, err)
+
+		loader := NewRuleLoader(tmpDir)
+		rules, err := loader.LoadRules(nil)
+
+		require.NoError(t, err)
+		// Should only load the valid rule, not the app.py
+		assert.Len(t, rules, 1)
+		assert.Equal(t, "test-rule", rules[0].Rule.ID)
+	})
+
 	t.Run("handles invalid Python syntax", func(t *testing.T) {
-		rulesContent := `this is not valid python`
+		// Include decorator so it passes early filtering
+		rulesContent := `from codepathfinder import rule
+this is not valid python`
 		tmpFile := createTempPythonFile(t, rulesContent)
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to execute Python rules")
 	})
 
 	t.Run("handles invalid JSON output", func(t *testing.T) {
-		rulesContent := `print("not json")`
+		// Include decorator so it passes early filtering
+		rulesContent := `from codepathfinder import rule
+print("not json")`
 		tmpFile := createTempPythonFile(t, rulesContent)
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse rule JSON IR")
@@ -67,7 +119,7 @@ def detect_eval():
 
 	t.Run("handles non-existent file", func(t *testing.T) {
 		loader := NewRuleLoader("/nonexistent/file.py")
-		_, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
 		assert.Error(t, err)
 	})
@@ -243,7 +295,7 @@ def test_rule():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		jsonData, err := loader.LoadContainerRules()
+		jsonData, err := loader.LoadContainerRules(nil)
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, jsonData)
@@ -283,7 +335,7 @@ def rule2():
 		require.NoError(t, err)
 
 		loader := NewRuleLoader(tmpDir)
-		jsonData, err := loader.LoadContainerRules()
+		jsonData, err := loader.LoadContainerRules(nil)
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, jsonData)
@@ -291,7 +343,7 @@ def rule2():
 
 	t.Run("handles nonexistent path", func(t *testing.T) {
 		loader := NewRuleLoader("/nonexistent/path")
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to access rules path")
@@ -303,15 +355,66 @@ def rule2():
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadContainerRules()
+		_, err := loader.LoadContainerRules(nil)
 
 		assert.Error(t, err)
+	})
+
+	t.Run("returns error for empty directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		loader := NewRuleLoader(tmpDir)
+		_, err := loader.LoadContainerRules(nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
+	})
+
+	t.Run("returns error for directory without container rule decorators", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create Python file without container rule decorators (code analysis rule)
+		rulesContent := `from codepathfinder import rule, calls
+
+@rule(id="test-eval", severity="high", cwe="CWE-94")
+def detect_eval():
+    """Test rule."""
+    return calls("eval")
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "code_rule.py"), []byte(rulesContent), 0644)
+		require.NoError(t, err)
+
+		loader := NewRuleLoader(tmpDir)
+		_, err = loader.LoadContainerRules(nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
+		assert.Contains(t, err.Error(), "no @dockerfile_rule or @compose_rule decorators found")
+	})
+
+	t.Run("returns error for file without container rule decorators", func(t *testing.T) {
+		rulesContent := `from codepathfinder import rule, calls
+
+@rule(id="test-eval", severity="high", cwe="CWE-94")
+def detect_eval():
+    """Test rule."""
+    return calls("eval")
+`
+		tmpFile := createTempPythonFile(t, rulesContent)
+		defer os.Remove(tmpFile)
+
+		loader := NewRuleLoader(tmpFile)
+		_, err := loader.LoadContainerRules(nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no container rules detected")
 	})
 }
 
 func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
-	t.Run("skips container rule format in LoadRules", func(t *testing.T) {
+	t.Run("rejects container rule format in LoadRules", func(t *testing.T) {
 		// Create a file that outputs container format (not code analysis format)
+		// This should be rejected by LoadRules since it doesn't have @rule decorator
 		rulesContent := `if __name__ == "__main__":
     import json
     print(json.dumps({"dockerfile": [], "compose": []}))
@@ -320,10 +423,11 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		rules, err := loader.LoadRules()
+		_, err := loader.LoadRules(nil)
 
-		require.NoError(t, err)
-		assert.Empty(t, rules) // Should return empty, not error
+		// Should error because it doesn't have @rule decorator
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "file does not contain code analysis rules")
 	})
 }
 

@@ -13,6 +13,14 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
+// Logger interface for verbose logging (avoids import cycle with output package).
+type Logger interface {
+	Debug(format string, args ...interface{})
+	Statistic(format string, args ...interface{})
+	IsDebug() bool
+	IsVerbose() bool
+}
+
 // RuleLoader loads Python DSL rules and executes them.
 type RuleLoader struct {
 	RulesPath string // Path to .py rules file or directory
@@ -73,25 +81,28 @@ func buildNsjailCommand(ctx context.Context, filePath string) *exec.Cmd {
 //  4. Capture JSON IR output from stdout
 //  5. Parse and consolidate JSON IR into RuleIR structs
 //  6. Return combined list of rules
-func (l *RuleLoader) LoadRules() ([]RuleIR, error) {
+func (l *RuleLoader) LoadRules(logger Logger) ([]RuleIR, error) {
 	// Check if path is file or directory
 	info, err := os.Stat(l.RulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access rules path: %w", err)
 	}
 
-	// If single file, load directly
+	// If single file, check for rule decorators first
 	if !info.IsDir() {
-		return l.loadRulesFromFile(l.RulesPath)
+		if !hasCodeAnalysisRuleDecorators(l.RulesPath) {
+			return nil, fmt.Errorf("file does not contain code analysis rules (no @rule decorator or codepathfinder imports found)")
+		}
+		return l.loadRulesFromFile(l.RulesPath, logger)
 	}
 
 	// If directory, find all .py files and load them
-	return l.loadRulesFromDirectory(l.RulesPath)
+	return l.loadRulesFromDirectory(l.RulesPath, logger)
 }
 
 // loadRulesFromFile loads rules from a single Python file.
 // Uses nsjail sandboxing if PATHFINDER_SANDBOX_ENABLED=true, otherwise runs Python directly.
-func (l *RuleLoader) loadRulesFromFile(filePath string) ([]RuleIR, error) {
+func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR, error) {
 	// Create context with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -130,11 +141,18 @@ func (l *RuleLoader) loadRulesFromFile(filePath string) ([]RuleIR, error) {
 		return nil, fmt.Errorf("failed to parse rule JSON IR from %s: %w", filePath, err)
 	}
 
+	// Log loaded rules in verbose mode
+	if logger != nil && logger.IsVerbose() {
+		for _, rule := range rules {
+			logger.Statistic("  - Loaded rule %s from %s", rule.Rule.ID, filePath)
+		}
+	}
+
 	return rules, nil
 }
 
 // loadRulesFromDirectory loads rules from all .py files in a directory.
-func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
+func (l *RuleLoader) loadRulesFromDirectory(dirPath string, logger Logger) ([]RuleIR, error) {
 	var allRules []RuleIR
 
 	// Walk directory and find all .py files
@@ -148,8 +166,13 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 			return nil
 		}
 
+		// Skip files without code analysis rule decorators (early filtering to avoid executing non-rule files)
+		if !hasCodeAnalysisRuleDecorators(path) {
+			return nil
+		}
+
 		// Load rules from this file
-		rules, err := l.loadRulesFromFile(path)
+		rules, err := l.loadRulesFromFile(path, logger)
 		if err != nil {
 			// Silently skip files that fail to load (may be container rules)
 			//nolint:nilerr // Intentionally skip files that aren't code analysis rules
@@ -168,13 +191,79 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string) ([]RuleIR, error) {
 	return allRules, nil
 }
 
+// hasCodeAnalysisRuleDecorators checks if a Python file contains code analysis rule decorators.
+// It scans for @rule decorator or codepathfinder imports.
+func hasCodeAnalysisRuleDecorators(filePath string) bool {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+
+	fileContent := string(content)
+	// Check for rule decorator or codepathfinder imports
+	return strings.Contains(fileContent, "@rule(") ||
+		strings.Contains(fileContent, "from codepathfinder import") ||
+		strings.Contains(fileContent, "import codepathfinder")
+}
+
+// hasContainerRuleDecorators checks if a Python file contains container rule decorators.
+// It scans for @dockerfile_rule or @compose_rule annotations.
+func hasContainerRuleDecorators(filePath string) bool {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+
+	// Check for container rule decorators
+	fileContent := string(content)
+	return strings.Contains(fileContent, "@dockerfile_rule") ||
+		strings.Contains(fileContent, "@compose_rule")
+}
+
+// hasAnyContainerRulesInPath checks if any Python files in the given path contain container rule decorators.
+func (l *RuleLoader) hasAnyContainerRulesInPath() bool {
+	info, err := os.Stat(l.RulesPath)
+	if err != nil {
+		return false
+	}
+
+	// If single file, check directly
+	if !info.IsDir() {
+		return hasContainerRuleDecorators(l.RulesPath)
+	}
+
+	// If directory, check all .py files
+	hasRules := false
+	filepath.Walk(l.RulesPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || hasRules {
+			//nolint:nilerr // Intentionally ignore errors during walk - just return false
+			return nil
+		}
+
+		// Check Python files only
+		if !info.IsDir() && filepath.Ext(path) == ".py" {
+			if hasContainerRuleDecorators(path) {
+				hasRules = true
+			}
+		}
+		return nil
+	})
+
+	return hasRules
+}
+
 // LoadContainerRules loads container rules (Dockerfile/Compose) from Python DSL files.
 // Returns JSON IR in format: {"dockerfile": [...], "compose": [...]}.
-func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
-	// Check if path is file or directory
+func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
+	// Check if path is file or directory (check existence first)
 	info, err := os.Stat(l.RulesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access rules path: %w", err)
+	}
+
+	// Early filtering: check if any files contain container rule decorators
+	if !l.hasAnyContainerRulesInPath() {
+		return nil, fmt.Errorf("no container rules detected (no @dockerfile_rule or @compose_rule decorators found)")
 	}
 
 	var containerRulesJSON struct {
@@ -184,7 +273,7 @@ func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
 
 	// If single file, load directly
 	if !info.IsDir() {
-		jsonIR, err := l.loadContainerRulesFromFile(l.RulesPath)
+		jsonIR, err := l.loadContainerRulesFromFile(l.RulesPath, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -210,8 +299,13 @@ func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
 				return nil
 			}
 
+			// Skip files without container rule decorators
+			if !hasContainerRuleDecorators(path) {
+				return nil
+			}
+
 			// Load container rules from this file
-			jsonIR, err := l.loadContainerRulesFromFile(path)
+			jsonIR, err := l.loadContainerRulesFromFile(path, logger)
 			if err != nil {
 				// Skip files that don't contain container rules (they might be code analysis rules)
 				//nolint:nilerr // Intentionally skip files that aren't container rules
@@ -239,13 +333,15 @@ func (l *RuleLoader) LoadContainerRules() ([]byte, error) {
 		}
 	}
 
+	// Log loaded container rules in verbose mode (removed - logging happens in loadContainerRulesFromFile with paths)
+
 	// Return combined JSON
 	return json.Marshal(containerRulesJSON)
 }
 
 // loadContainerRulesFromFile loads container rules from a single Python file or directory.
 // Creates a temporary Python script to import and compile all rules, then executes it.
-func (l *RuleLoader) loadContainerRulesFromFile(rulesPath string) ([]byte, error) {
+func (l *RuleLoader) loadContainerRulesFromFile(rulesPath string, logger Logger) ([]byte, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -314,10 +410,27 @@ print(json.dumps(json_ir))
 		return nil, fmt.Errorf("failed to compile container rules: %w", err)
 	}
 
-	// Validate it's valid JSON
-	var test interface{}
-	if err := json.Unmarshal(output, &test); err != nil {
+	// Validate it's valid JSON and log loaded rules in verbose mode
+	var containerRules struct {
+		Dockerfile []map[string]interface{} `json:"dockerfile"`
+		Compose    []map[string]interface{} `json:"compose"`
+	}
+	if err := json.Unmarshal(output, &containerRules); err != nil {
 		return nil, fmt.Errorf("invalid JSON output from container rules: %w", err)
+	}
+
+	// Log loaded rules in verbose mode
+	if logger != nil && logger.IsVerbose() {
+		for _, dockerfileRule := range containerRules.Dockerfile {
+			if id, ok := dockerfileRule["id"].(string); ok {
+				logger.Statistic("  - Loaded Dockerfile rule %s from %s", id, rulesPath)
+			}
+		}
+		for _, composeRule := range containerRules.Compose {
+			if id, ok := composeRule["id"].(string); ok {
+				logger.Statistic("  - Loaded docker-compose rule %s from %s", id, rulesPath)
+			}
+		}
 	}
 
 	return output, nil

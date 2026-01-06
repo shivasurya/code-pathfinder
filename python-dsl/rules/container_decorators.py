@@ -12,6 +12,7 @@ from dataclasses import dataclass
 @dataclass
 class RuleMetadata:
     """Metadata for a container security rule."""
+
     id: str
     name: str = ""
     severity: str = "MEDIUM"
@@ -24,6 +25,7 @@ class RuleMetadata:
 @dataclass
 class DockerfileRuleDefinition:
     """Complete definition of a Dockerfile rule."""
+
     metadata: RuleMetadata
     matcher: Dict[str, Any]
     rule_function: Callable
@@ -32,6 +34,7 @@ class DockerfileRuleDefinition:
 @dataclass
 class ComposeRuleDefinition:
     """Complete definition of a docker-compose rule."""
+
     metadata: RuleMetadata
     matcher: Dict[str, Any]
     rule_function: Callable
@@ -63,6 +66,7 @@ def _enable_auto_execute() -> None:
 
         # Compile rules to JSON IR format
         from . import container_ir
+
         compiled = container_ir.compile_all_rules()
 
         # Output to stdout for Go loader to capture
@@ -100,12 +104,13 @@ def dockerfile_rule(
         def container_runs_as_root():
             return missing(instruction="USER")
     """
+
     def decorator(func: Callable) -> Callable:
         # Get matcher from function
         matcher_result = func()
 
         # Convert to dict if it's a Matcher object
-        if hasattr(matcher_result, 'to_dict'):
+        if hasattr(matcher_result, "to_dict"):
             matcher_dict = matcher_result.to_dict()
         elif isinstance(matcher_result, dict):
             matcher_dict = matcher_result
@@ -115,7 +120,7 @@ def dockerfile_rule(
         # Create rule definition
         metadata = RuleMetadata(
             id=id,
-            name=name or func.__name__.replace('_', ' ').title(),
+            name=name or func.__name__.replace("_", " ").title(),
             severity=severity,
             category=category,
             cwe=cwe,
@@ -154,10 +159,11 @@ def compose_rule(
         def privileged_service():
             return service_has(key="privileged", equals=True)
     """
+
     def decorator(func: Callable) -> Callable:
         matcher_result = func()
 
-        if hasattr(matcher_result, 'to_dict'):
+        if hasattr(matcher_result, "to_dict"):
             matcher_dict = matcher_result.to_dict()
         elif isinstance(matcher_result, dict):
             matcher_dict = matcher_result
@@ -166,7 +172,7 @@ def compose_rule(
 
         metadata = RuleMetadata(
             id=id,
-            name=name or func.__name__.replace('_', ' ').title(),
+            name=name or func.__name__.replace("_", " ").title(),
             severity=severity,
             category=category,
             cwe=cwe,
