@@ -23,9 +23,9 @@ Use when: Starting analysis, understanding project size, or verifying the index 
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search for functions, classes, or methods by name. Supports partial matching.
+			Description: `Search for functions, classes, or methods by name. Supports partial matching. Results are paginated.
 
-Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login'), file path, line number, type, and metadata (return_type, parameters, decorators, superclass if available).
+Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login'), file path, line number, type, and metadata (return_type, parameters, decorators, superclass if available). Includes pagination info.
 
 Use when: Looking for a specific function, exploring what functions exist, or finding where something is defined.
 
@@ -36,16 +36,18 @@ Examples:
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
-					"name": {Type: "string", Description: "Symbol name to find. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"name":   {Type: "string", Description: "Symbol name to find. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"limit":  {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
+					"cursor": {Type: "string", Description: "Pagination cursor from previous response"},
 				},
 				Required: []string{"name"},
 			},
 		},
 		{
 			Name: "get_callers",
-			Description: `Find all functions that CALL a given function (reverse call graph / incoming edges). Answer: "Who uses this function?"
+			Description: `Find all functions that CALL a given function (reverse call graph / incoming edges). Answer: "Who uses this function?" Results are paginated.
 
-Returns: Target function info and list of callers with their FQN, file, line number, and the specific call site location.
+Returns: Target function info and list of callers with their FQN, file, line number, and the specific call site location. Includes pagination info.
 
 Use when: Understanding function usage, impact analysis before refactoring, finding entry points, or tracing how data flows INTO a function.
 
@@ -56,15 +58,17 @@ Examples:
 				Type: "object",
 				Properties: map[string]Property{
 					"function": {Type: "string", Description: "Function to find callers for. Use short name ('login') or FQN ('myapp.auth.login')"},
+					"limit":    {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
+					"cursor":   {Type: "string", Description: "Pagination cursor from previous response"},
 				},
 				Required: []string{"function"},
 			},
 		},
 		{
 			Name: "get_callees",
-			Description: `Find all functions CALLED BY a given function (forward call graph / outgoing edges). Answer: "What does this function depend on?"
+			Description: `Find all functions CALLED BY a given function (forward call graph / outgoing edges). Answer: "What does this function depend on?" Results are paginated.
 
-Returns: Source function info, list of callees with target name, call line, resolution status (resolved/unresolved), and type inference info if available.
+Returns: Source function info, list of callees with target name, call line, resolution status (resolved/unresolved), and type inference info if available. Includes pagination info.
 
 Use when: Understanding function dependencies, analyzing what a function does, tracing data flow FROM a function, or finding unresolved external calls.
 
@@ -75,6 +79,8 @@ Examples:
 				Type: "object",
 				Properties: map[string]Property{
 					"function": {Type: "string", Description: "Function to find callees for. Use short name ('process') or FQN ('myapp.payment.process')"},
+					"limit":    {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
+					"cursor":   {Type: "string", Description: "Pagination cursor from previous response"},
 				},
 				Required: []string{"function"},
 			},
@@ -128,14 +134,11 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 	case "get_index_info":
 		return s.toolGetIndexInfo()
 	case "find_symbol":
-		symbolName, _ := args["name"].(string)
-		return s.toolFindSymbol(symbolName)
+		return s.toolFindSymbol(args)
 	case "get_callers":
-		function, _ := args["function"].(string)
-		return s.toolGetCallers(function)
+		return s.toolGetCallers(args)
 	case "get_callees":
-		function, _ := args["function"].(string)
-		return s.toolGetCallees(function)
+		return s.toolGetCallees(args)
 	case "get_call_details":
 		caller, _ := args["caller"].(string)
 		callee, _ := args["callee"].(string)
@@ -171,13 +174,20 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 	return string(bytes), false
 }
 
-// toolFindSymbol finds symbols by name.
-func (s *Server) toolFindSymbol(name string) (string, bool) {
+// toolFindSymbol finds symbols by name with pagination support.
+func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
+	name, _ := args["name"].(string)
 	if name == "" {
 		return `{"error": "name parameter is required"}`, true
 	}
 
-	var matches []map[string]interface{}
+	// Extract pagination params.
+	pageParams, err := ExtractPaginationParams(args)
+	if err != nil {
+		return NewToolError(err.Message, err.Code, err.Data), true
+	}
+
+	var allMatches []map[string]interface{}
 
 	for fqn, node := range s.callGraph.Functions {
 		shortName := getShortName(fqn)
@@ -206,27 +216,37 @@ func (s *Server) toolFindSymbol(name string) (string, bool) {
 				match["superclass"] = node.SuperClass
 			}
 
-			matches = append(matches, match)
+			allMatches = append(allMatches, match)
 		}
 	}
 
-	if len(matches) == 0 {
+	if len(allMatches) == 0 {
 		return fmt.Sprintf(`{"error": "Symbol not found: %s", "suggestion": "Try a partial name or check spelling"}`, name), true
 	}
 
+	// Apply pagination.
+	matches, pageInfo := PaginateSlice(allMatches, pageParams)
+
 	result := map[string]interface{}{
-		"query":   name,
-		"matches": matches,
-		"total":   len(matches),
+		"query":      name,
+		"matches":    matches,
+		"pagination": pageInfo,
 	}
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false
 }
 
-// toolGetCallers finds all callers of a function.
-func (s *Server) toolGetCallers(function string) (string, bool) {
+// toolGetCallers finds all callers of a function with pagination support.
+func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
+	function, _ := args["function"].(string)
 	if function == "" {
 		return `{"error": "function parameter is required"}`, true
+	}
+
+	// Extract pagination params.
+	pageParams, err := ExtractPaginationParams(args)
+	if err != nil {
+		return NewToolError(err.Message, err.Code, err.Data), true
 	}
 
 	fqns := s.findMatchingFQNs(function)
@@ -241,7 +261,7 @@ func (s *Server) toolGetCallers(function string) (string, bool) {
 	// Get callers from reverse edges.
 	callerFQNs := s.callGraph.ReverseEdges[targetFQN]
 
-	callers := make([]map[string]interface{}, 0, len(callerFQNs))
+	allCallers := make([]map[string]interface{}, 0, len(callerFQNs))
 	for _, callerFQN := range callerFQNs {
 		callerNode := s.callGraph.Functions[callerFQN]
 		if callerNode == nil {
@@ -264,8 +284,11 @@ func (s *Server) toolGetCallers(function string) (string, bool) {
 			}
 		}
 
-		callers = append(callers, caller)
+		allCallers = append(allCallers, caller)
 	}
+
+	// Apply pagination.
+	callers, pageInfo := PaginateSlice(allCallers, pageParams)
 
 	result := map[string]interface{}{
 		"target": map[string]interface{}{
@@ -274,8 +297,8 @@ func (s *Server) toolGetCallers(function string) (string, bool) {
 			"file": targetNode.File,
 			"line": targetNode.LineNumber,
 		},
-		"callers":       callers,
-		"total_callers": len(callers),
+		"callers":    callers,
+		"pagination": pageInfo,
 	}
 
 	if len(fqns) > 1 {
@@ -287,9 +310,16 @@ func (s *Server) toolGetCallers(function string) (string, bool) {
 }
 
 // toolGetCallees finds all functions called by a function.
-func (s *Server) toolGetCallees(function string) (string, bool) {
+func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
+	function, _ := args["function"].(string)
 	if function == "" {
 		return `{"error": "function parameter is required"}`, true
+	}
+
+	// Extract pagination params.
+	pageParams, rpcErr := ExtractPaginationParams(args)
+	if rpcErr != nil {
+		return fmt.Sprintf(`{"error": "%s"}`, rpcErr.Message), true
 	}
 
 	fqns := s.findMatchingFQNs(function)
@@ -303,7 +333,7 @@ func (s *Server) toolGetCallees(function string) (string, bool) {
 	// Get call sites for this function.
 	callSites := s.callGraph.CallSites[sourceFQN]
 
-	callees := make([]map[string]interface{}, 0, len(callSites))
+	allCallees := make([]map[string]interface{}, 0, len(callSites))
 	resolvedCount := 0
 	unresolvedCount := 0
 
@@ -338,8 +368,11 @@ func (s *Server) toolGetCallees(function string) (string, bool) {
 			}
 		}
 
-		callees = append(callees, callee)
+		allCallees = append(allCallees, callee)
 	}
+
+	// Apply pagination.
+	callees, pageInfo := PaginateSlice(allCallees, pageParams)
 
 	result := map[string]interface{}{
 		"source": map[string]interface{}{
@@ -349,7 +382,7 @@ func (s *Server) toolGetCallees(function string) (string, bool) {
 			"line": sourceNode.LineNumber,
 		},
 		"callees":          callees,
-		"total_callees":    len(callees),
+		"pagination":       pageInfo,
 		"resolved_count":   resolvedCount,
 		"unresolved_count": unresolvedCount,
 	}
