@@ -36,19 +36,28 @@ Transport modes:
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Flags().StringP("project", "p", ".", "Project path to index")
-	serveCmd.Flags().String("python-version", "3.11", "Python version for stdlib resolution")
+	serveCmd.Flags().String("python-version", "", "Python version override (auto-detected from .python-version or pyproject.toml)")
 	serveCmd.Flags().Bool("http", false, "Use HTTP transport instead of stdio")
 	serveCmd.Flags().String("address", ":8080", "HTTP server address (only with --http)")
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {
 	projectPath, _ := cmd.Flags().GetString("project")
-	pythonVersion, _ := cmd.Flags().GetString("python-version")
+	pythonVersionOverride, _ := cmd.Flags().GetString("python-version")
 	useHTTP, _ := cmd.Flags().GetBool("http")
 	address, _ := cmd.Flags().GetString("address")
 
 	fmt.Fprintln(os.Stderr, "Building index...")
 	start := time.Now()
+
+	// Auto-detect Python version (same logic as BuildCallGraph).
+	pythonVersion := builder.DetectPythonVersion(projectPath)
+	if pythonVersionOverride != "" {
+		pythonVersion = pythonVersionOverride
+		fmt.Fprintf(os.Stderr, "Using Python version override: %s\n", pythonVersion)
+	} else {
+		fmt.Fprintf(os.Stderr, "Detected Python version: %s\n", pythonVersion)
+	}
 
 	// Create logger for build process (verbose to stderr)
 	logger := output.NewLogger(output.VerbosityVerbose)
