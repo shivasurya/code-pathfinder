@@ -511,3 +511,80 @@ func TestSendResponse(t *testing.T) {
 		server.sendResponse(resp)
 	})
 }
+
+// ============================================================================
+// Error Handling Tests (PR-02)
+// ============================================================================
+
+func TestHandleRequest_InvalidJSONRPCVersion(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "1.0", // Invalid version
+		ID:      1,
+		Method:  "ping",
+	}
+
+	resp := server.handleRequest(req)
+
+	assert.NotNil(t, resp)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, ErrCodeInvalidRequest, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "jsonrpc must be '2.0'")
+}
+
+func TestHandleRequest_MissingMethod(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "", // Missing method
+	}
+
+	resp := server.handleRequest(req)
+
+	assert.NotNil(t, resp)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, ErrCodeInvalidRequest, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "method is required")
+}
+
+func TestHandleToolsCall_MissingToolName(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params:  json.RawMessage(`{"name":"","arguments":{}}`),
+	}
+
+	resp := server.handleToolsCall(req)
+
+	assert.NotNil(t, resp)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, ErrCodeInvalidParams, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "tool name is required")
+}
+
+func TestHandleRequest_MethodNotFound_WithErrorData(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "unknown/method",
+	}
+
+	resp := server.handleRequest(req)
+
+	assert.NotNil(t, resp)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, ErrCodeMethodNotFound, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "unknown/method")
+
+	// Verify error has method in data.
+	data := resp.Error.Data.(map[string]string)
+	assert.Equal(t, "unknown/method", data["method"])
+}
