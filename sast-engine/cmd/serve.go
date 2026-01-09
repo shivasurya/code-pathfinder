@@ -90,6 +90,9 @@ func runServe(cmd *cobra.Command, _ []string) error {
 }
 
 func runHTTPServer(mcpServer *mcp.Server, address string) error {
+	// Set transport type for analytics.
+	mcpServer.SetTransport("http")
+
 	config := &mcp.HTTPConfig{
 		Address:         address,
 		ReadTimeout:     30 * time.Second,
