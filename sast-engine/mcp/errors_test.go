@@ -98,10 +98,15 @@ func TestSymbolNotFoundError_NoSuggestions(t *testing.T) {
 }
 
 func TestIndexNotReadyError(t *testing.T) {
-	err := IndexNotReadyError()
+	err := IndexNotReadyError("parsing", 0.5)
 
 	assert.Equal(t, ErrCodeIndexNotReady, err.Code)
-	assert.Equal(t, "Index not ready", err.Message)
+	assert.Contains(t, err.Message, "parsing")
+	assert.Contains(t, err.Message, "50%")
+
+	data := err.Data.(map[string]interface{})
+	assert.Equal(t, "parsing", data["phase"])
+	assert.Equal(t, 0.5, data["progress"])
 }
 
 func TestQueryTimeoutError(t *testing.T) {

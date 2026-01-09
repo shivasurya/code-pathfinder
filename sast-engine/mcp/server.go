@@ -21,6 +21,8 @@ type Server struct {
 	codeGraph      *graph.CodeGraph
 	indexedAt      time.Time
 	buildTime      time.Duration
+	statusTracker  *StatusTracker
+	degradation    *GracefulDegradation
 }
 
 // NewServer creates a new MCP server with the given index data.
@@ -32,6 +34,18 @@ func NewServer(
 	codeGraph *graph.CodeGraph,
 	buildTime time.Duration,
 ) *Server {
+	tracker := NewStatusTracker()
+
+	// Mark as ready since we're being created with complete data.
+	tracker.StartIndexing()
+	tracker.CompleteIndexing(&IndexingStats{
+		Functions:     len(callGraph.Functions),
+		CallEdges:     len(callGraph.Edges),
+		Modules:       len(moduleRegistry.Modules),
+		Files:         len(moduleRegistry.FileToModule),
+		BuildDuration: buildTime,
+	})
+
 	return &Server{
 		projectPath:    projectPath,
 		pythonVersion:  pythonVersion,
@@ -40,6 +54,8 @@ func NewServer(
 		codeGraph:      codeGraph,
 		indexedAt:      time.Now(),
 		buildTime:      buildTime,
+		statusTracker:  tracker,
+		degradation:    NewGracefulDegradation(tracker),
 	}
 }
 
@@ -118,6 +134,8 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 		response = s.handleToolsList(req)
 	case "tools/call":
 		response = s.handleToolsCall(req)
+	case "status":
+		response = s.handleStatus(req)
 	case "ping":
 		response = SuccessResponse(req.ID, map[string]string{"status": "ok"})
 	default:
@@ -186,5 +204,20 @@ func (s *Server) handleToolsCall(req *JSONRPCRequest) *JSONRPCResponse {
 		},
 		IsError: isError,
 	})
+}
+
+// handleStatus returns the current indexing status.
+func (s *Server) handleStatus(req *JSONRPCRequest) *JSONRPCResponse {
+	return SuccessResponse(req.ID, s.degradation.GetStatusJSON())
+}
+
+// GetStatusTracker returns the status tracker for external use.
+func (s *Server) GetStatusTracker() *StatusTracker {
+	return s.statusTracker
+}
+
+// IsReady returns true if the server is ready to handle tool requests.
+func (s *Server) IsReady() bool {
+	return s.statusTracker.IsReady()
 }
 
