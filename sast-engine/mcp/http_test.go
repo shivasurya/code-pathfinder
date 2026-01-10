@@ -465,3 +465,192 @@ func TestHTTPServer_NoOriginHeader(t *testing.T) {
 	// Should use "*" as fallback.
 	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
 }
+
+func TestHTTPServer_Start_AlreadyRunning(t *testing.T) {
+	mcpServer := createTestServer()
+	config := &HTTPConfig{Address: "127.0.0.1:0"}
+	httpServer := NewHTTPServer(mcpServer, config)
+
+	// Start async first.
+	err := httpServer.StartAsync()
+	require.NoError(t, err)
+	defer func() {
+		ctx := context.Background()
+		_ = httpServer.Shutdown(ctx)
+	}()
+
+	// Try to start synchronously - should fail.
+	err = httpServer.Start()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already running")
+}
+
+func TestHTTPServer_Start_Blocking(t *testing.T) {
+	mcpServer := createTestServer()
+	config := &HTTPConfig{Address: "127.0.0.1:0"}
+	httpServer := NewHTTPServer(mcpServer, config)
+
+	// Start in goroutine since it blocks.
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- httpServer.Start()
+	}()
+
+	// Give server time to start.
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify it's running.
+	assert.True(t, httpServer.IsRunning())
+
+	// Shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := httpServer.Shutdown(ctx)
+	require.NoError(t, err)
+
+	// Wait for Start() to return.
+	select {
+	case err := <-errCh:
+		// Server closed error is expected.
+		assert.Contains(t, err.Error(), "Server closed")
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for Start to return")
+	}
+}
+
+func TestSSEServer_ServeSSE(t *testing.T) {
+	mcpServer := createTestServer()
+	httpServer := NewHTTPServer(mcpServer, nil)
+	sseServer := NewSSEServer(httpServer)
+
+	// Create a request with a cancellable context.
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
+	req.Header.Set("Origin", "http://example.com")
+
+	rec := httptest.NewRecorder()
+
+	// Run ServeSSE in a goroutine since it blocks.
+	done := make(chan struct{})
+	go func() {
+		sseServer.ServeSSE(rec, req)
+		close(done)
+	}()
+
+	// Give it time to set headers and send connected event.
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel context to close connection.
+	cancel()
+
+	// Wait for ServeSSE to return.
+	select {
+	case <-done:
+		// Good, it returned.
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for ServeSSE to return")
+	}
+
+	// Verify SSE headers.
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	assert.Equal(t, "no-cache", rec.Header().Get("Cache-Control"))
+	assert.Equal(t, "keep-alive", rec.Header().Get("Connection"))
+
+	// Verify connected event was sent.
+	assert.Contains(t, rec.Body.String(), "event: connected")
+	assert.Contains(t, rec.Body.String(), "status")
+}
+
+// mockResponseWriter doesn't implement http.Flusher.
+type noFlushResponseWriter struct {
+	http.ResponseWriter
+}
+
+func TestSSEServer_ServeSSE_NoFlusher(t *testing.T) {
+	mcpServer := createTestServer()
+	httpServer := NewHTTPServer(mcpServer, nil)
+	sseServer := NewSSEServer(httpServer)
+
+	req := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+	// Use a writer that doesn't implement Flusher.
+	rec := httptest.NewRecorder()
+	noFlush := &noFlushResponseWriter{rec}
+
+	sseServer.ServeSSE(noFlush, req)
+
+	// Should return error response.
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "SSE not supported")
+}
+
+func TestHTTPServer_Shutdown_WithContext(t *testing.T) {
+	mcpServer := createTestServer()
+	config := &HTTPConfig{Address: "127.0.0.1:0"}
+	httpServer := NewHTTPServer(mcpServer, config)
+
+	err := httpServer.StartAsync()
+	require.NoError(t, err)
+
+	// Shutdown with cancelled context should still work.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	err = httpServer.Shutdown(ctx)
+	assert.NoError(t, err)
+	assert.False(t, httpServer.IsRunning())
+}
+
+func TestHTTPServer_Start_InvalidAddress(t *testing.T) {
+	mcpServer := createTestServer()
+	// Use an invalid address that should fail to listen.
+	config := &HTTPConfig{Address: "invalid:address:format:99999"}
+	httpServer := NewHTTPServer(mcpServer, config)
+
+	err := httpServer.Start()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to listen")
+	assert.False(t, httpServer.IsRunning())
+}
+
+func TestHTTPServer_StartAsync_InvalidAddress(t *testing.T) {
+	mcpServer := createTestServer()
+	// Use an invalid address that should fail to listen.
+	config := &HTTPConfig{Address: "invalid:address:format:99999"}
+	httpServer := NewHTTPServer(mcpServer, config)
+
+	err := httpServer.StartAsync()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to listen")
+	assert.False(t, httpServer.IsRunning())
+}
+
+// errorWriter always returns an error.
+type errorWriter struct{}
+
+func (e *errorWriter) Write(p []byte) (n int, err error) {
+	return 0, io.ErrClosedPipe
+}
+
+func TestStreamingHTTPHandler_HandleStream_WriteError(t *testing.T) {
+	mcpServer := createTestServer()
+	handler := NewStreamingHTTPHandler(mcpServer)
+
+	input := `{"jsonrpc":"2.0","id":1,"method":"ping"}` + "\n"
+	reader := strings.NewReader(input)
+
+	err := handler.HandleStream(reader, &errorWriter{})
+	assert.Error(t, err)
+}
+
+func TestStreamingHTTPHandler_HandleStream_WriteErrorOnParseError(t *testing.T) {
+	mcpServer := createTestServer()
+	handler := NewStreamingHTTPHandler(mcpServer)
+
+	// Invalid JSON to trigger parse error, which then tries to write.
+	input := "not valid json\n"
+	reader := strings.NewReader(input)
+
+	err := handler.HandleStream(reader, &errorWriter{})
+	assert.Error(t, err)
+}
