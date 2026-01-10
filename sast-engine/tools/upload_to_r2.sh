@@ -4,7 +4,7 @@ set -e
 # Upload Python stdlib registries to Cloudflare R2
 # Usage: ./upload_to_r2.sh [temp_dir]
 
-PYTHON_VERSIONS=("3.11" "3.12" "3.14")
+PYTHON_VERSIONS=("3.9" "3.10" "3.11" "3.12" "3.13" "3.14")
 TEMP_DIR="${1:-/tmp/cpf-stdlib-registries}"
 R2_BUCKET="code-pathfinder-assets"
 

@@ -1115,8 +1115,8 @@ func detectPythonVersionInternal(projectPath string) string {
 		return version
 	}
 
-	// 3. Default to 3.14
-	return "3.14"
+	// 3. Default to 3.11 (most widely used stable version)
+	return "3.11"
 }
 
 // Helper functions for DetectPythonVersion.
