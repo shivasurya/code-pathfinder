@@ -357,7 +357,15 @@ def generate_manifest(output_dir: Path, python_version: tuple, modules: List[str
 
 
 def get_all_stdlib_modules() -> List[str]:
-    """Get list of all public stdlib modules."""
+    """Get list of all public stdlib modules.
+
+    For Python 3.10+, uses sys.stdlib_module_names (PEP 585).
+    For Python 3.9, uses pkgutil and sysconfig to discover modules from:
+    - Built-in modules (C-level)
+    - Standard library path (pure Python modules)
+    - lib-dynload / DLLs (compiled extension modules)
+    - Platform-specific stdlib path
+    """
     # Python 3.10+ has sys.stdlib_module_names
     if hasattr(sys, "stdlib_module_names"):
         # Filter out private modules
@@ -376,14 +384,32 @@ def get_all_stdlib_modules() -> List[str]:
     stdlib_path = sysconfig.get_path('stdlib')
     if stdlib_path:
         # Discover modules in stdlib path
-        for importer, modname, ispkg in pkgutil.iter_modules([stdlib_path]):
-            stdlib_modules.add(modname)
+        try:
+            for importer, modname, ispkg in pkgutil.iter_modules([stdlib_path]):
+                stdlib_modules.add(modname)
+        except Exception as e:
+            print(f"Warning: Error discovering modules from {stdlib_path}: {e}", file=sys.stderr)
+
+        # Also check lib-dynload subdirectory for compiled extension modules (Unix/Linux)
+        # and DLLs directory (Windows)
+        import os
+        for dynload_dir_name in ['lib-dynload', 'DLLs']:
+            dynload_path = os.path.join(stdlib_path, dynload_dir_name)
+            if os.path.exists(dynload_path):
+                try:
+                    for importer, modname, ispkg in pkgutil.iter_modules([dynload_path]):
+                        stdlib_modules.add(modname)
+                except Exception as e:
+                    print(f"Warning: Error discovering modules from {dynload_path}: {e}", file=sys.stderr)
 
     # Get platstdlib path (platform-specific stdlib modules)
     platstdlib_path = sysconfig.get_path('platstdlib')
     if platstdlib_path and platstdlib_path != stdlib_path:
-        for importer, modname, ispkg in pkgutil.iter_modules([platstdlib_path]):
-            stdlib_modules.add(modname)
+        try:
+            for importer, modname, ispkg in pkgutil.iter_modules([platstdlib_path]):
+                stdlib_modules.add(modname)
+        except Exception as e:
+            print(f"Warning: Error discovering modules from {platstdlib_path}: {e}", file=sys.stderr)
 
     # Filter out private modules and return sorted list
     return sorted([m for m in stdlib_modules if not m.startswith("_")])
