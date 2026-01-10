@@ -6,6 +6,8 @@ This script introspects Python standard library modules and generates
 JSON registries containing functions, classes, constants, and attributes
 with type information for static analysis.
 
+Minimum Python version: 3.9
+
 Usage:
     # Generate ALL stdlib modules for Python 3.14
     python3.14 generate_stdlib_registry.py --all --output-dir ./registries/python3.14/stdlib/v1/
@@ -23,7 +25,9 @@ import importlib
 import inspect
 import json
 import os
+import pkgutil
 import sys
+import sysconfig
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -372,9 +376,6 @@ def get_all_stdlib_modules() -> List[str]:
         return sorted([m for m in sys.stdlib_module_names if not m.startswith("_")])
 
     # Fallback for Python 3.9: Use pkgutil to discover stdlib modules
-    import pkgutil
-    import sysconfig
-
     stdlib_modules = set()
 
     # Add built-in modules
@@ -392,7 +393,6 @@ def get_all_stdlib_modules() -> List[str]:
 
         # Also check lib-dynload subdirectory for compiled extension modules (Unix/Linux)
         # and DLLs directory (Windows)
-        import os
         for dynload_dir_name in ['lib-dynload', 'DLLs']:
             dynload_path = os.path.join(stdlib_path, dynload_dir_name)
             if os.path.exists(dynload_path):
@@ -450,9 +450,17 @@ def main():
 
     args = parser.parse_args()
 
+    # Check Python version
+    if sys.version_info < (3, 9):
+        print(f"Error: Python 3.9 or higher is required. Current version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", file=sys.stderr)
+        return 1
+
     # Determine which modules to generate
     if args.all:
         modules = get_all_stdlib_modules()
+        detection_method = "sys.stdlib_module_names" if hasattr(sys, "stdlib_module_names") else "pkgutil fallback"
+        if args.verbose:
+            print(f"Using {detection_method} to discover stdlib modules")
         print(f"Generating registries for ALL {len(modules)} stdlib modules...")
     elif args.modules:
         modules = [m.strip() for m in args.modules.split(",")]
@@ -524,8 +532,11 @@ def main():
 
     # Platform-specific modules that are expected to fail on certain platforms
     WINDOWS_ONLY_MODULES = {'msvcrt', 'nt', 'winreg', 'winsound', '_winapi', 'msilib'}
-    UNIX_SPECIFIC_MODULES = {'nis'}  # Network Information Service (may not be available on all systems)
-    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES | UNIX_SPECIFIC_MODULES
+    UNIX_SPECIFIC_MODULES = {'nis', 'grp', 'pwd', 'resource', 'syslog', 'termios', 'tty'}
+    MACOS_SPECIFIC_MODULES = {'_scproxy'}
+    # Modules that may not be available in all builds
+    OPTIONAL_MODULES = {'readline', 'dbm', 'gdbm', 'ossaudiodev', 'spwd'}
+    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES | UNIX_SPECIFIC_MODULES | MACOS_SPECIFIC_MODULES | OPTIONAL_MODULES
 
     # Check if any non-platform-specific modules failed
     unexpected_failures = [m for m in failed if m not in PLATFORM_SPECIFIC_MODULES]
