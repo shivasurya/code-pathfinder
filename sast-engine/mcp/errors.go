@@ -99,9 +99,15 @@ func SymbolNotFoundError(symbol string, suggestions []string) *RPCError {
 		fmt.Sprintf("Symbol not found: %s", symbol), data)
 }
 
-// IndexNotReadyError creates an index not ready error.
-func IndexNotReadyError() *RPCError {
-	return NewRPCError(ErrCodeIndexNotReady, nil)
+// IndexNotReadyError creates an index not ready error with optional progress info.
+func IndexNotReadyError(phase string, progress float64) *RPCError {
+	data := map[string]interface{}{
+		"phase":    phase,
+		"progress": progress,
+	}
+	return NewRPCErrorWithMessage(ErrCodeIndexNotReady,
+		fmt.Sprintf("Index not ready: %s (%.0f%% complete)", phase, progress*100),
+		data)
 }
 
 // QueryTimeoutError creates a query timeout error.

@@ -15,6 +15,15 @@ const (
 	QueryCommandJSON     = "executed_query_command_json_mode"
 	ErrorProcessingQuery = "error_processing_query"
 	QueryCommandStdin    = "executed_query_command_stdin_mode"
+
+	// MCP Server events.
+	MCPServerStarted   = "mcp_server_started"
+	MCPServerStopped   = "mcp_server_stopped"
+	MCPToolCall        = "mcp_tool_call"
+	MCPIndexingStarted = "mcp_indexing_started"
+	MCPIndexingComplete = "mcp_indexing_complete"
+	MCPIndexingFailed  = "mcp_indexing_failed"
+	MCPClientConnected = "mcp_client_connected"
 )
 
 var (
@@ -60,6 +69,12 @@ func LoadEnvFile() {
 }
 
 func ReportEvent(event string) {
+	ReportEventWithProperties(event, nil)
+}
+
+// ReportEventWithProperties sends an event with additional properties.
+// Properties should not contain any PII (no file paths, code, user info).
+func ReportEventWithProperties(event string, properties map[string]interface{}) {
 	if enableMetrics && PublicKey != "" {
 		client, err := posthog.NewWithConfig(
 			PublicKey,
@@ -71,11 +86,21 @@ func ReportEvent(event string) {
 			fmt.Println(err)
 			return
 		}
-		err = client.Enqueue(posthog.Capture{
+		defer client.Close()
+
+		capture := posthog.Capture{
 			DistinctId: os.Getenv("uuid"),
 			Event:      event,
-		})
-		defer client.Close()
+		}
+
+		if properties != nil {
+			capture.Properties = posthog.NewProperties()
+			for k, v := range properties {
+				capture.Properties.Set(k, v)
+			}
+		}
+
+		err = client.Enqueue(capture)
 		if err != nil {
 			fmt.Println(err)
 			return

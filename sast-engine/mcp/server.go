@@ -21,6 +21,9 @@ type Server struct {
 	codeGraph      *graph.CodeGraph
 	indexedAt      time.Time
 	buildTime      time.Duration
+	statusTracker  *StatusTracker
+	degradation    *GracefulDegradation
+	analytics      *Analytics
 }
 
 // NewServer creates a new MCP server with the given index data.
@@ -32,6 +35,23 @@ func NewServer(
 	codeGraph *graph.CodeGraph,
 	buildTime time.Duration,
 ) *Server {
+	tracker := NewStatusTracker()
+
+	// Mark as ready since we're being created with complete data.
+	tracker.StartIndexing()
+	stats := &IndexingStats{
+		Functions:     len(callGraph.Functions),
+		CallEdges:     len(callGraph.Edges),
+		Modules:       len(moduleRegistry.Modules),
+		Files:         len(moduleRegistry.FileToModule),
+		BuildDuration: buildTime,
+	}
+	tracker.CompleteIndexing(stats)
+
+	// Initialize analytics with stdio transport (default).
+	mcpAnalytics := NewAnalytics("stdio")
+	mcpAnalytics.ReportIndexingComplete(stats)
+
 	return &Server{
 		projectPath:    projectPath,
 		pythonVersion:  pythonVersion,
@@ -40,12 +60,24 @@ func NewServer(
 		codeGraph:      codeGraph,
 		indexedAt:      time.Now(),
 		buildTime:      buildTime,
+		statusTracker:  tracker,
+		degradation:    NewGracefulDegradation(tracker),
+		analytics:      mcpAnalytics,
 	}
+}
+
+// SetTransport updates the analytics transport type (e.g., "http").
+func (s *Server) SetTransport(transport string) {
+	s.analytics = NewAnalytics(transport)
 }
 
 // ServeStdio starts the MCP server on stdin/stdout.
 func (s *Server) ServeStdio() error {
 	reader := bufio.NewReader(os.Stdin)
+
+	// Report server started.
+	s.analytics.ReportServerStarted()
+	defer s.analytics.ReportServerStopped()
 
 	for {
 		// Read line from stdin.
@@ -118,6 +150,8 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 		response = s.handleToolsList(req)
 	case "tools/call":
 		response = s.handleToolsCall(req)
+	case "status":
+		response = s.handleStatus(req)
 	case "ping":
 		response = SuccessResponse(req.ID, map[string]string{"status": "ok"})
 	default:
@@ -138,6 +172,9 @@ func (s *Server) handleInitialize(req *JSONRPCRequest) *JSONRPCResponse {
 	if req.Params != nil {
 		_ = json.Unmarshal(req.Params, &params)
 		fmt.Fprintf(os.Stderr, "Client: %s %s\n", params.ClientInfo.Name, params.ClientInfo.Version)
+
+		// Report client connection (only name/version, no PII).
+		s.analytics.ReportClientConnected(params.ClientInfo.Name, params.ClientInfo.Version)
 	}
 
 	return SuccessResponse(req.ID, InitializeResult{
@@ -175,7 +212,10 @@ func (s *Server) handleToolsCall(req *JSONRPCRequest) *JSONRPCResponse {
 
 	fmt.Fprintf(os.Stderr, "Tool call: %s\n", params.Name)
 
+	// Track tool call metrics.
+	metrics := s.analytics.StartToolCall(params.Name)
 	result, isError := s.executeTool(params.Name, params.Arguments)
+	s.analytics.EndToolCall(metrics, !isError)
 
 	return SuccessResponse(req.ID, ToolResult{
 		Content: []ContentBlock{
@@ -186,5 +226,20 @@ func (s *Server) handleToolsCall(req *JSONRPCRequest) *JSONRPCResponse {
 		},
 		IsError: isError,
 	})
+}
+
+// handleStatus returns the current indexing status.
+func (s *Server) handleStatus(req *JSONRPCRequest) *JSONRPCResponse {
+	return SuccessResponse(req.ID, s.degradation.GetStatusJSON())
+}
+
+// GetStatusTracker returns the status tracker for external use.
+func (s *Server) GetStatusTracker() *StatusTracker {
+	return s.statusTracker
+}
+
+// IsReady returns true if the server is ready to handle tool requests.
+func (s *Server) IsReady() bool {
+	return s.statusTracker.IsReady()
 }
 
