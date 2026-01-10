@@ -38,7 +38,7 @@ func TestToolGetIndexInfo(t *testing.T) {
 func TestToolFindSymbol_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol("validate_user")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
@@ -49,7 +49,7 @@ func TestToolFindSymbol_Found(t *testing.T) {
 func TestToolFindSymbol_PartialMatch(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol("validate")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate"})
 
 	// Should find validate_user via partial match.
 	assert.False(t, isError)
@@ -59,7 +59,7 @@ func TestToolFindSymbol_PartialMatch(t *testing.T) {
 func TestToolFindSymbol_MultipleMatches(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol("log")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "log"})
 
 	// Should find both login and logout.
 	assert.False(t, isError)
@@ -70,7 +70,7 @@ func TestToolFindSymbol_MultipleMatches(t *testing.T) {
 func TestToolFindSymbol_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol("nonexistent_function_xyz")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "nonexistent_function_xyz"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "not found")
@@ -80,7 +80,7 @@ func TestToolFindSymbol_NotFound(t *testing.T) {
 func TestToolFindSymbol_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol("")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "required")
@@ -89,30 +89,30 @@ func TestToolFindSymbol_EmptyName(t *testing.T) {
 func TestToolGetCallers_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers("validate_user")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callers")
 	assert.Contains(t, result, "login")
 	assert.Contains(t, result, "target")
-	assert.Contains(t, result, "total_callers")
+	assert.Contains(t, result, "pagination")
 }
 
 func TestToolGetCallers_NoCallers(t *testing.T) {
 	server := createTestServer()
 
 	// login has no callers in our test data.
-	result, isError := server.toolGetCallers("login")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "login"})
 
 	assert.False(t, isError)
-	assert.Contains(t, result, "total_callers")
-	assert.Contains(t, result, `"total_callers": 0`)
+	assert.Contains(t, result, "pagination")
+	assert.Contains(t, result, `"total": 0`)
 }
 
 func TestToolGetCallers_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers("nonexistent_function")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "nonexistent_function"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "not found")
@@ -121,7 +121,7 @@ func TestToolGetCallers_NotFound(t *testing.T) {
 func TestToolGetCallers_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers("")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "required")
@@ -130,7 +130,7 @@ func TestToolGetCallers_EmptyName(t *testing.T) {
 func TestToolGetCallees_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees("login")
+	result, isError := server.toolGetCallees(map[string]interface{}{"function": "login"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callees")
@@ -143,16 +143,16 @@ func TestToolGetCallees_NoCallees(t *testing.T) {
 	server := createTestServer()
 
 	// validate_user has no callees in our test data.
-	result, isError := server.toolGetCallees("validate_user")
+	result, isError := server.toolGetCallees(map[string]interface{}{"function": "validate_user"})
 
 	assert.False(t, isError)
-	assert.Contains(t, result, "total_callees")
+	assert.Contains(t, result, "pagination")
 }
 
 func TestToolGetCallees_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees("nonexistent_function")
+	result, isError := server.toolGetCallees(map[string]interface{}{"function": "nonexistent_function"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "not found")
@@ -161,7 +161,7 @@ func TestToolGetCallees_NotFound(t *testing.T) {
 func TestToolGetCallees_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees("")
+	result, isError := server.toolGetCallees(map[string]interface{}{"function": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "required")
@@ -387,7 +387,7 @@ func TestGetToolDefinitions(t *testing.T) {
 func TestToolFindSymbol_WithAllFields(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolFindSymbol("validate_user")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
 
 	assert.False(t, isError)
 
@@ -447,7 +447,7 @@ func TestToolGetCallDetails_TypeInference(t *testing.T) {
 func TestToolGetCallees_WithUnresolvedCalls(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolGetCallees("login")
+	result, isError := server.toolGetCallees(map[string]interface{}{"function": "login"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callees")
@@ -516,12 +516,12 @@ func TestToolResolveImport_PartialContainsMatch(t *testing.T) {
 func TestToolGetCallers_WithMultipleCallSites(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolGetCallers("validate_user")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callers")
 	assert.Contains(t, result, "login")
-	assert.Contains(t, result, "total_callers")
+	assert.Contains(t, result, "pagination")
 }
 
 func TestToolGetCallers_MultipleMatches(t *testing.T) {
@@ -547,7 +547,7 @@ func TestToolGetCallers_MultipleMatches(t *testing.T) {
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
 	}, nil, time.Second)
 
-	result, isError := server.toolGetCallers("handler")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "handler"})
 
 	assert.False(t, isError)
 	// Should have a note about multiple matches.
@@ -569,19 +569,19 @@ func TestToolGetCallers_NilCallerNode(t *testing.T) {
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
 	}, nil, time.Second)
 
-	result, isError := server.toolGetCallers("func")
+	result, isError := server.toolGetCallers(map[string]interface{}{"function": "func"})
 
 	// Should still succeed but skip the nil caller.
 	assert.False(t, isError)
-	assert.Contains(t, result, "total_callers")
-	assert.Contains(t, result, `"total_callers": 0`)
+	assert.Contains(t, result, "pagination")
+	assert.Contains(t, result, `"total": 0`)
 }
 
 func TestToolFindSymbol_SubstringMatch(t *testing.T) {
 	server := createExtendedTestServer()
 
 	// "valid" should match "validate_user" via substring.
-	result, isError := server.toolFindSymbol("valid")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "valid"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
@@ -591,7 +591,7 @@ func TestToolFindSymbol_FQNSubstringMatch(t *testing.T) {
 	server := createExtendedTestServer()
 
 	// "myapp.auth" should match via FQN substring.
-	result, isError := server.toolFindSymbol("myapp.auth")
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "myapp.auth"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
