@@ -588,3 +588,83 @@ func TestHandleRequest_MethodNotFound_WithErrorData(t *testing.T) {
 	data := resp.Error.Data.(map[string]string)
 	assert.Equal(t, "unknown/method", data["method"])
 }
+
+// ============================================================================
+// Status and Analytics Tests (PR-05)
+// ============================================================================
+
+func TestSetTransport(t *testing.T) {
+	server := createTestServer()
+
+	// Default is stdio.
+	assert.NotNil(t, server.analytics)
+
+	// Set to HTTP transport.
+	server.SetTransport("http")
+
+	// Analytics instance should be updated.
+	assert.NotNil(t, server.analytics)
+}
+
+func TestHandleStatus(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "status",
+	}
+
+	resp := server.handleStatus(req)
+
+	assert.NotNil(t, resp)
+	assert.Nil(t, resp.Error)
+	assert.NotNil(t, resp.Result)
+}
+
+func TestHandleRequest_Status(t *testing.T) {
+	server := createTestServer()
+
+	req := &JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "status",
+	}
+
+	resp := server.handleRequest(req)
+
+	assert.NotNil(t, resp)
+	assert.Nil(t, resp.Error)
+}
+
+func TestGetStatusTracker(t *testing.T) {
+	server := createTestServer()
+
+	tracker := server.GetStatusTracker()
+
+	assert.NotNil(t, tracker)
+	assert.Equal(t, server.statusTracker, tracker)
+}
+
+func TestIsReady(t *testing.T) {
+	server := createTestServer()
+
+	// Server should be ready after NewServer is called with valid data.
+	assert.True(t, server.IsReady())
+}
+
+func TestIsReady_NotReady(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{},
+		FileToModule: map[string]string{},
+		ShortNames:   map[string][]string{},
+	}
+
+	server := NewServer("/test", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	// Manually set status tracker to indexing to simulate not-ready state.
+	server.statusTracker.StartIndexing()
+
+	assert.False(t, server.IsReady())
+}
