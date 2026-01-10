@@ -22,7 +22,7 @@ Examples:
         ... )
 """
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"
 
 from .matchers import calls, variable
 from .decorators import rule
