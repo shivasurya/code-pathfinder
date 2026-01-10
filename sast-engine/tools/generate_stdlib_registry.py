@@ -358,11 +358,35 @@ def generate_manifest(output_dir: Path, python_version: tuple, modules: List[str
 
 def get_all_stdlib_modules() -> List[str]:
     """Get list of all public stdlib modules."""
-    if not hasattr(sys, "stdlib_module_names"):
-        raise RuntimeError("sys.stdlib_module_names not available (Python 3.10+ required)")
+    # Python 3.10+ has sys.stdlib_module_names
+    if hasattr(sys, "stdlib_module_names"):
+        # Filter out private modules
+        return sorted([m for m in sys.stdlib_module_names if not m.startswith("_")])
 
-    # Filter out private modules
-    return sorted([m for m in sys.stdlib_module_names if not m.startswith("_")])
+    # Fallback for Python 3.9: Use pkgutil to discover stdlib modules
+    import pkgutil
+    import sysconfig
+
+    stdlib_modules = set()
+
+    # Add built-in modules
+    stdlib_modules.update(sys.builtin_module_names)
+
+    # Get stdlib path
+    stdlib_path = sysconfig.get_path('stdlib')
+    if stdlib_path:
+        # Discover modules in stdlib path
+        for importer, modname, ispkg in pkgutil.iter_modules([stdlib_path]):
+            stdlib_modules.add(modname)
+
+    # Get platstdlib path (platform-specific stdlib modules)
+    platstdlib_path = sysconfig.get_path('platstdlib')
+    if platstdlib_path and platstdlib_path != stdlib_path:
+        for importer, modname, ispkg in pkgutil.iter_modules([platstdlib_path]):
+            stdlib_modules.add(modname)
+
+    # Filter out private modules and return sorted list
+    return sorted([m for m in stdlib_modules if not m.startswith("_")])
 
 
 def main():
