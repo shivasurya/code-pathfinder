@@ -66,7 +66,7 @@ func (s *Server) ServeStdio() error {
 		// Parse JSON-RPC request.
 		var request JSONRPCRequest
 		if err := json.Unmarshal([]byte(line), &request); err != nil {
-			s.sendResponse(ErrorResponse(nil, -32700, "Parse error: "+err.Error()))
+			s.sendResponse(MakeErrorResponse(nil, ParseError(err.Error())))
 			continue
 		}
 
@@ -92,6 +92,16 @@ func (s *Server) sendResponse(resp *JSONRPCResponse) {
 func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 	startTime := time.Now()
 
+	// Validate JSON-RPC version.
+	if req.JSONRPC != "2.0" {
+		return MakeErrorResponse(req.ID, InvalidRequestError("jsonrpc must be '2.0'"))
+	}
+
+	// Validate method exists.
+	if req.Method == "" {
+		return MakeErrorResponse(req.ID, InvalidRequestError("method is required"))
+	}
+
 	var response *JSONRPCResponse
 
 	switch req.Method {
@@ -111,7 +121,7 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 	case "ping":
 		response = SuccessResponse(req.ID, map[string]string{"status": "ok"})
 	default:
-		response = ErrorResponse(req.ID, -32601, fmt.Sprintf("Method not found: %s", req.Method))
+		response = MakeErrorResponse(req.ID, MethodNotFoundError(req.Method))
 	}
 
 	// Log request timing.
@@ -156,7 +166,11 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) *JSONRPCResponse {
 func (s *Server) handleToolsCall(req *JSONRPCRequest) *JSONRPCResponse {
 	var params ToolCallParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return ErrorResponse(req.ID, -32602, "Invalid params: "+err.Error())
+		return MakeErrorResponse(req.ID, InvalidParamsError(err.Error()))
+	}
+
+	if params.Name == "" {
+		return MakeErrorResponse(req.ID, InvalidParamsError("tool name is required"))
 	}
 
 	fmt.Fprintf(os.Stderr, "Tool call: %s\n", params.Name)
