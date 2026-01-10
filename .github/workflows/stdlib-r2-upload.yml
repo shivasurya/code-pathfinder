@@ -20,6 +20,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -30,6 +40,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Setup Python 3.14
         uses: actions/setup-python@v5
         with:
@@ -38,8 +53,11 @@ jobs:
       - name: Verify Python installations
         run: |
           echo "Verifying Python installations..."
+          python3.9 --version
+          python3.10 --version
           python3.11 --version
           python3.12 --version
+          python3.13 --version
           python3.14 --version
 
       - name: Install AWS CLI
@@ -70,7 +88,7 @@ jobs:
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
           echo "Verifying uploaded files..."
-          for version in 3.11 3.12 3.14; do
+          for version in 3.9 3.10 3.11 3.12 3.13 3.14; do
             echo "Checking Python $version manifest..."
             aws s3 ls "s3://code-pathfinder-assets/registries/python${version}/stdlib/v1/manifest.json" \
               --endpoint-url "$R2_ENDPOINT" || echo "Warning: manifest.json not found for Python $version"
@@ -79,7 +97,7 @@ jobs:
       - name: Test public accessibility
         run: |
           echo "Testing public URLs..."
-          for version in 3.11 3.12 3.14; do
+          for version in 3.9 3.10 3.11 3.12 3.13 3.14; do
             URL="https://assets.codepathfinder.dev/registries/python${version}/stdlib/v1/manifest.json"
             echo "Testing: $URL"
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
@@ -97,8 +115,11 @@ jobs:
           echo "========================================="
           echo ""
           echo "Registries are now available at:"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.9/stdlib/v1/manifest.json"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.10/stdlib/v1/manifest.json"
           echo "  - https://assets.codepathfinder.dev/registries/python3.11/stdlib/v1/manifest.json"
           echo "  - https://assets.codepathfinder.dev/registries/python3.12/stdlib/v1/manifest.json"
+          echo "  - https://assets.codepathfinder.dev/registries/python3.13/stdlib/v1/manifest.json"
           echo "  - https://assets.codepathfinder.dev/registries/python3.14/stdlib/v1/manifest.json"
           echo ""
           echo "These will be used by code-pathfinder for Python stdlib type inference."
