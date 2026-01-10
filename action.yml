@@ -1,40 +1,90 @@
 # action.yml
-name: 'Code-Pathfinder OSS'
-description: 'Code-Pathfinder open-source alternative to CodeQL'
-author: 'Shivasurya shiva@shivasurya.me'
+name: 'Code-Pathfinder'
+description: 'Security scanning with Code-Pathfinder - an open-source CodeQL alternative'
+author: 'Shivasurya <shiva@shivasurya.me>'
 branding:
   icon: "shield"
   color: "blue"
+
 inputs:
-  command:
-    description: 'Command to run example: ci, query'
+  rules:
+    description: 'Path to Python DSL rules file or directory (required)'
     required: true
-    default: 'ci'
   project:
-    description: 'Source code to scan. eg: /path/to/project'
-    required: true
-    default: ${{ github.workspace }}
-  ruleset:
-    description: 'Predefined rules eg: cpf/java or rules directory'
+    description: 'Path to source code to scan'
     required: false
+    default: '.'
   output:
-    description: 'Output format eg: json'
+    description: 'Output format: sarif, json, csv, or text'
     required: false
-    default: 'json'
+    default: 'sarif'
   output-file:
-    description: 'Output file name eg: output.json'
+    description: 'Output file path (e.g., results.sarif)'
     required: false
-    default: 'output.json'
+    default: 'pathfinder-results.sarif'
+  fail-on:
+    description: 'Fail with exit code 1 if findings match severities (e.g., critical,high)'
+    required: false
+    default: ''
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  skip-tests:
+    description: 'Skip scanning test files'
+    required: false
+    default: 'true'
+
+outputs:
+  results-file:
+    description: 'Path to the output results file'
+    value: ${{ inputs.output-file }}
+  version:
+    description: 'Installed pathfinder version'
+    value: ${{ steps.install.outputs.version }}
+
 runs:
-  using: 'docker'
-  image: 'docker://shivasurya/code-pathfinder:stable-latest'
-  args:
-    - ${{ inputs.command }}
-    - --project
-    - ${{ inputs.project }}
-    - --ruleset
-    - ${{ inputs.ruleset }}
-    - --output
-    - ${{ inputs.output }}
-    - --output-file
-    - ${{ inputs.output-file }}
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Code-Pathfinder
+      id: install
+      shell: bash
+      run: |
+        pip install --quiet codepathfinder
+        VERSION=$(pathfinder version | head -1 | cut -d' ' -f2)
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Code-Pathfinder ${VERSION} installed successfully"
+
+    - name: Run Security Scan
+      shell: bash
+      run: |
+        # Build command arguments
+        ARGS="scan --rules ${{ inputs.rules }} --project ${{ inputs.project }}"
+        ARGS="${ARGS} --output ${{ inputs.output }}"
+        ARGS="${ARGS} --output-file ${{ inputs.output-file }}"
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          ARGS="${ARGS} --verbose"
+        fi
+
+        if [ -n "${{ inputs.fail-on }}" ]; then
+          ARGS="${ARGS} --fail-on ${{ inputs.fail-on }}"
+        fi
+
+        if [ "${{ inputs.skip-tests }}" = "true" ]; then
+          ARGS="${ARGS} --skip-tests"
+        else
+          ARGS="${ARGS} --skip-tests=false"
+        fi
+
+        echo "Running: pathfinder ${ARGS}"
+        pathfinder ${ARGS}

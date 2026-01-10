@@ -148,6 +148,49 @@ pathfinder scan --rules rules/ --project . --output json | jq .
 pathfinder scan --rules rules/ --project . --fail-on=critical,high
 ```
 
+## GitHub Action
+
+Add security scanning to your CI/CD pipeline in just a few lines:
+
+```yaml
+# .github/workflows/security-scan.yml
+name: Security Scan
+
+on: [push, pull_request]
+
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Code-Pathfinder
+        uses: shivasurya/code-pathfinder@main
+        with:
+          rules: python-dsl/examples/owasp_top10.py
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: pathfinder-results.sarif
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `rules` | Path to Python DSL rules file or directory (required) | - |
+| `project` | Path to source code to scan | `.` |
+| `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
+| `output-file` | Output file path | `pathfinder-results.sarif` |
+| `fail-on` | Fail on severities (e.g., `critical,high`) | - |
+| `verbose` | Enable verbose output | `false` |
+
 ## Acknowledgements
 Code Pathfinder uses tree-sitter for all language parsers.
 

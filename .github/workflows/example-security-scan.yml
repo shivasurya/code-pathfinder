@@ -1,0 +1,35 @@
+# Example workflow showing how to use Code-Pathfinder GitHub Action
+# Copy this to your repository at .github/workflows/security-scan.yml
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Required for uploading SARIF results to GitHub Code Scanning
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Simple 5-line usage with OWASP rules
+      - name: Run Code-Pathfinder Security Scan
+        uses: shivasurya/code-pathfinder@main
+        with:
+          rules: python-dsl/examples/owasp_top10.py
+          project: .
+
+      # Upload results to GitHub Code Scanning
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: pathfinder-results.sarif
