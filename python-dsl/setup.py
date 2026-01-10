@@ -18,7 +18,7 @@ readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
 setup(
     name="codepathfinder",
     version=version.get("__version__", "1.0.0"),
-    description="Python DSL for code-pathfinder security pattern definitions",
+    description="Python SDK for code-pathfinder static analysis for modern security teams",
     long_description=readme,
     long_description_content_type="text/markdown",
     author="code-pathfinder contributors",

@@ -50,17 +50,6 @@ task bumpVersion {
         def newVersion = "${major}.${minor}.${patch}"
         versionFile.text = newVersion
         println "Version bumped to ${newVersion}"
-
-        // Update package.json
-        def packageJsonFile = file("../package.json")
-        if (packageJsonFile.exists()) {
-            def packageJson = new groovy.json.JsonSlurper().parse(packageJsonFile)
-            packageJson.version = newVersion
-            packageJsonFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(packageJson))
-            println "Updated package.json version to ${newVersion}"
-        } else {
-            println "package.json not found in root directory"
-        }
     }
 }
 
