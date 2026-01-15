@@ -1,0 +1,21 @@
+{
+  "category": "docker-compose",
+  "language": "Docker Compose",
+  "description": "Security and configuration rules for Docker Compose",
+  "bundles": {
+    "security": {
+      "name": "Docker Compose Security",
+      "description": "Security issues in Docker Compose configurations",
+      "severity_filter": ["CRITICAL", "HIGH"],
+      "recommended": true,
+      "tags": ["security", "compose", "orchestration"]
+    },
+    "networking": {
+      "name": "Docker Compose Networking",
+      "description": "Network configuration and connectivity issues",
+      "severity_filter": ["MEDIUM", "LOW"],
+      "recommended": false,
+      "tags": ["networking", "configuration"]
+    }
+  }
+}
