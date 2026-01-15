@@ -44,3 +44,4 @@ htmlcov/
 # output files
 result.json
 scan.json
+dist/
