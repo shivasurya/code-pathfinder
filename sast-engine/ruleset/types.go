@@ -8,6 +8,12 @@ type RulesetSpec struct {
 	Bundle   string // "security"
 }
 
+// RuleSpec represents a parsed individual rule specification.
+type RuleSpec struct {
+	Language string // "docker"
+	RuleID   string // "DOCKER-BP-007"
+}
+
 // Manifest represents the global or category manifest.
 //
 //nolint:tagliatelle // JSON uses snake_case to match external manifest format from R2

@@ -32,14 +32,23 @@ Examples:
   # Scan with a directory of rules
   pathfinder scan --rules rules/ --project /path/to/project
 
-  # Scan with custom rules and output to JSON file
-  pathfinder scan --rules my_rules.py --project . --output json --output-file results.json
+  # Scan with a remote ruleset bundle
+  pathfinder scan --ruleset docker/security --project /path/to/project
 
-  # Scan with SARIF output for CI/CD integration
-  pathfinder scan --rules rules/ --project . --output sarif --output-file results.sarif
+  # Scan with an individual rule by ID
+  pathfinder scan --ruleset docker/DOCKER-BP-007 --project /path/to/project
 
-  # Scan and print JSON to stdout (for piping)
-  pathfinder scan --rules rules/ --project . --output json | jq .`,
+  # Scan with multiple individual rules
+  pathfinder scan --ruleset docker/DOCKER-BP-007 --ruleset docker/DOCKER-SEC-001 --project .
+
+  # Mix bundles, individual rules, and local rules
+  pathfinder scan --rules rules/ --ruleset docker/security --ruleset python/PYTHON-SEC-042 --project .
+
+  # Output to JSON file
+  pathfinder scan --ruleset docker/security --project . --output json --output-file results.json
+
+  # SARIF output for CI/CD integration
+  pathfinder scan --ruleset docker/security --project . --output sarif --output-file results.sarif`,
 	// Note: The main RunE logic is covered by integration tests in exit_code_integration_test.go
 	// Unit testing cobra commands requires complex mocking of file systems, graph building, etc.
 	// Integration tests provide better coverage for the full execution path.
@@ -508,7 +517,33 @@ func printDetections(rule dsl.RuleIR, detections []dsl.DataflowDetection) {
 	}
 }
 
-// prepareRules downloads remote rulesets and merges with local rules if needed.
+// findRulesDirectory locates the rules directory for resolving rule IDs.
+// Looks in current directory, parent directories, and common locations.
+func findRulesDirectory() string {
+	// Check common locations
+	candidates := []string{
+		"rules",           // Current directory
+		"../rules",        // Parent directory
+		"../../rules",     // Grandparent
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "code-pathfinder", "rules"),
+		"/usr/local/share/code-pathfinder/rules",
+		"/opt/code-pathfinder/rules",
+	}
+
+	for _, dir := range candidates {
+		if absDir, err := filepath.Abs(dir); err == nil {
+			if stat, err := os.Stat(absDir); err == nil && stat.IsDir() {
+				return absDir
+			}
+		}
+	}
+
+	// Fallback to current directory + rules
+	pwd, _ := os.Getwd()
+	return filepath.Join(pwd, "rules")
+}
+
+// prepareRules downloads remote rulesets, resolves rule IDs, and merges with local rules if needed.
 // Returns: (finalRulesPath, tempDirToCleanup, error).
 func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, logger *output.Logger) (string, string, error) {
 	// Case 1: Only local rules - use directly
@@ -516,51 +551,112 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 		return localRulesPath, "", nil
 	}
 
-	// Initialize downloader for remote rulesets
-	config := &ruleset.DownloadConfig{
-		BaseURL:       "https://assets.codepathfinder.dev/rules",
-		CacheDir:      getCacheDir(),
-		CacheTTL:      24 * time.Hour,
-		ManifestTTL:   1 * time.Hour,
-		HTTPTimeout:   30 * time.Second,
-		RetryAttempts: 3,
-	}
+	// Separate ruleset specs into bundles and individual rule IDs
+	var bundleSpecs []string
+	var ruleIDSpecs []string
 
-	downloader, err := ruleset.NewDownloader(config)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create downloader: %w", err)
-	}
-
-	// Download all remote rulesets
-	downloadedPaths := make([]string, 0, len(rulesetSpecs))
 	for _, spec := range rulesetSpecs {
-		if refresh {
-			logger.Progress("Refreshing ruleset cache for %s...", spec)
-			if err := downloader.RefreshCache(spec); err != nil {
-				logger.Warning("Failed to invalidate cache for %s: %v", spec, err)
-			}
+		parts := strings.Split(spec, "/")
+		if len(parts) == 2 && ruleset.IsRuleID(parts[1]) {
+			// This is a rule ID (e.g., docker/DOCKER-BP-007)
+			ruleIDSpecs = append(ruleIDSpecs, spec)
+		} else {
+			// This is a bundle (e.g., docker/security)
+			bundleSpecs = append(bundleSpecs, spec)
+		}
+	}
+
+	// Download remote bundles
+	var downloadedPaths []string
+	if len(bundleSpecs) > 0 {
+		config := &ruleset.DownloadConfig{
+			BaseURL:       "https://assets.codepathfinder.dev/rules",
+			CacheDir:      getCacheDir(),
+			CacheTTL:      24 * time.Hour,
+			ManifestTTL:   1 * time.Hour,
+			HTTPTimeout:   30 * time.Second,
+			RetryAttempts: 3,
 		}
 
-		path, err := downloader.Download(spec)
+		downloader, err := ruleset.NewDownloader(config)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to download ruleset %s: %w", spec, err)
+			return "", "", fmt.Errorf("failed to create downloader: %w", err)
 		}
-		downloadedPaths = append(downloadedPaths, path)
+
+		downloadedPaths = make([]string, 0, len(bundleSpecs))
+		for _, spec := range bundleSpecs {
+			if refresh {
+				logger.Progress("Refreshing ruleset cache for %s...", spec)
+				if err := downloader.RefreshCache(spec); err != nil {
+					logger.Warning("Failed to invalidate cache for %s: %v", spec, err)
+				}
+			}
+
+			path, err := downloader.Download(spec)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to download ruleset %s: %w", spec, err)
+			}
+			downloadedPaths = append(downloadedPaths, path)
+			logger.Progress("Downloaded ruleset: %s", spec)
+		}
 	}
 
-	// Case 2: Only remote rulesets, single ruleset - use directly
-	if localRulesPath == "" && len(downloadedPaths) == 1 {
-		return downloadedPaths[0], "", nil
+	// Resolve individual rule IDs to file paths
+	var resolvedRulePaths []string
+	if len(ruleIDSpecs) > 0 {
+		rulesBaseDir := findRulesDirectory()
+		finder := ruleset.NewRuleFinder(rulesBaseDir)
+
+		for _, spec := range ruleIDSpecs {
+			ruleSpec, err := ruleset.ParseRuleSpec(spec)
+			if err != nil {
+				return "", "", fmt.Errorf("invalid rule spec %s: %w", spec, err)
+			}
+
+			if err := ruleSpec.Validate(); err != nil {
+				return "", "", fmt.Errorf("invalid rule spec %s: %w", spec, err)
+			}
+
+			filePath, err := finder.FindRuleFile(ruleSpec)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to find rule %s: %w", spec, err)
+			}
+
+			resolvedRulePaths = append(resolvedRulePaths, filePath)
+			logger.Progress("Resolved rule %s → %s", spec, filepath.Base(filePath))
+		}
 	}
 
-	// Case 3: Multiple sources (local + remote, or multiple remote)
-	// Create temporary directory to merge all rules
+	// Calculate total sources
+	totalSources := len(downloadedPaths) + len(resolvedRulePaths) + boolToInt(localRulesPath != "")
+
+	// Case 2: Single source - use directly
+	if totalSources == 1 {
+		if localRulesPath != "" {
+			return localRulesPath, "", nil
+		}
+		if len(downloadedPaths) == 1 {
+			return downloadedPaths[0], "", nil
+		}
+		// Single resolved rule file - create temp dir with just that file
+		tempDir, err := os.MkdirTemp("", "pathfinder-rules-*")
+		if err != nil {
+			return "", "", fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		if err := copyFile(resolvedRulePaths[0], filepath.Join(tempDir, filepath.Base(resolvedRulePaths[0]))); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy rule file: %w", err)
+		}
+		return tempDir, tempDir, nil
+	}
+
+	// Case 3: Multiple sources - need to merge
 	tempDir, err := os.MkdirTemp("", "pathfinder-rules-*")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	logger.Progress("Merging %d rule source(s)...", len(downloadedPaths)+boolToInt(localRulesPath != ""))
+	logger.Progress("Merging %d rule source(s)...", totalSources)
 
 	// Copy local rules if provided
 	if localRulesPath != "" {
@@ -570,7 +666,7 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 		}
 	}
 
-	// Copy all downloaded rulesets
+	// Copy downloaded bundles
 	for i, path := range downloadedPaths {
 		destName := fmt.Sprintf("remote-%d", i)
 		if err := copyRules(path, tempDir, destName); err != nil {
@@ -579,7 +675,22 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 		}
 	}
 
-	logger.Progress("Rules merged into temporary directory")
+	// Copy individual resolved rule files
+	for i, filePath := range resolvedRulePaths {
+		destName := fmt.Sprintf("rule-%d", i)
+		destPath := filepath.Join(tempDir, destName)
+		if err := os.MkdirAll(destPath, 0755); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to create directory: %w", err)
+		}
+		destFile := filepath.Join(destPath, filepath.Base(filePath))
+		if err := copyFile(filePath, destFile); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy rule file %s: %w", filePath, err)
+		}
+	}
+
+	logger.Progress("Merged %d rule source(s)", totalSources)
 	return tempDir, tempDir, nil
 }
 
@@ -666,7 +777,7 @@ func getCacheDir() string {
 func init() {
 	rootCmd.AddCommand(scanCmd)
 	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
-	scanCmd.Flags().StringArray("ruleset", []string{}, "Remote ruleset spec (e.g., docker/security). Can be specified multiple times.")
+	scanCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
 	scanCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	scanCmd.Flags().StringP("output", "o", "text", "Output format: text, json, sarif, or csv (default: text)")
