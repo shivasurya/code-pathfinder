@@ -1,23 +1,43 @@
 """
 DOCKER-BP-012: Missing yum clean all
 
-Best Practice: Clean package manager cache
+Security Impact: LOW
+Best Practice Violation
 
 DESCRIPTION:
-Detects yum install commands without subsequent 'yum clean all'.
-Package manager caches unnecessarily increase image size.
+Detects 'yum install' commands without subsequent 'yum clean all'.
+Package manager caches unnecessarily increase image size by storing package metadata
+and repository information that is not needed at runtime.
 
-EXAMPLE:
+WHY THIS IS PROBLEMATIC:
+1. Increased Image Size: Package caches can add hundreds of MBs
+2. Wasted Storage: Cache files are not used after build
+3. Slower Deployments: Larger images take longer to transfer
+4. Higher Costs: More storage and bandwidth usage
+
+VULNERABLE EXAMPLE:
 ```dockerfile
-# Bad - leaves cache
-RUN yum install -y nginx
+FROM centos:8
 
-# Good - cleans cache
+# Bad: Leaves yum cache, increases image size
+RUN yum install -y nginx
+```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM centos:8
+
+# Good: Cleans cache in same layer
 RUN yum install -y nginx && yum clean all
 ```
 
 REMEDIATION:
-Always run 'yum clean all' after 'yum install' in the same RUN instruction.
+Always run 'yum clean all' after 'yum install' in the same RUN instruction to
+remove package cache and reduce final image size.
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3038
 """
 
 from rules.container_decorators import dockerfile_rule

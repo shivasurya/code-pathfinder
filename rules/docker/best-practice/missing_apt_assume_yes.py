@@ -1,4 +1,39 @@
-"""DOCKER-BP-021: Missing -y flag for apt-get"""
+"""
+DOCKER-BP-021: Missing -y flag for apt-get
+
+This rule detects apt-get install commands without the -y flag, which can cause
+builds to fail in automated environments where user interaction is not possible.
+
+VULNERABLE EXAMPLE:
+```dockerfile
+FROM ubuntu:22.04
+
+# Bad: Missing -y flag
+# Build will hang waiting for user confirmation
+RUN apt-get update
+RUN apt-get install nginx curl
+
+# This will fail in CI/CD pipelines
+```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM ubuntu:22.04
+
+# Good: Using -y flag for non-interactive installation
+RUN apt-get update && \
+    apt-get install -y nginx curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Alternative: Using --yes flag
+RUN apt-get update && \
+    apt-get install --yes \
+        nginx \
+        curl \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+```
+"""
 
 from rules.container_decorators import dockerfile_rule
 from rules.container_matchers import instruction

@@ -1,19 +1,43 @@
 """
 DOCKER-BP-013: Missing dnf clean all
 
-Best Practice: Clean package manager cache
+Security Impact: LOW
+Best Practice Violation
 
 DESCRIPTION:
-Detects dnf install commands without subsequent 'dnf clean all'.
-Package manager caches unnecessarily increase image size.
+Detects 'dnf install' commands without subsequent 'dnf clean all'.
+Package manager caches unnecessarily increase image size by storing package metadata
+and repository information that is not needed at runtime.
 
-REMEDIATION:
-Always run 'dnf clean all' after 'dnf install' in the same RUN instruction.
+WHY THIS IS PROBLEMATIC:
+1. Increased Image Size: Package caches can add hundreds of MBs
+2. Wasted Storage: Cache files are not used after build
+3. Slower Deployments: Larger images take longer to transfer
+4. Higher Costs: More storage and bandwidth usage
 
-EXAMPLE:
+VULNERABLE EXAMPLE:
 ```dockerfile
+FROM fedora:38
+
+# Bad: Leaves dnf cache, increases image size
+RUN dnf install -y nginx
+```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM fedora:38
+
+# Good: Cleans cache in same layer
 RUN dnf install -y nginx && dnf clean all
 ```
+
+REMEDIATION:
+Always run 'dnf clean all' after 'dnf install' in the same RUN instruction to
+remove package cache and reduce final image size.
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3038
 """
 
 from rules.container_decorators import dockerfile_rule

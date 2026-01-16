@@ -1,21 +1,51 @@
 """
 DOCKER-BP-017: Use WORKDIR Instead of cd
 
-Best Practice: Use WORKDIR for changing directories
+Security Impact: LOW
+Best Practice Violation
 
 DESCRIPTION:
-Using 'cd' in RUN commands is error-prone and doesn't persist.
-WORKDIR is explicit and affects all subsequent instructions.
+Detects use of 'cd' command in RUN instructions when WORKDIR is not used.
+Using 'cd' in RUN commands is error-prone, less clear, and doesn't persist
+across instructions. WORKDIR is the proper way to set working directory.
 
-EXAMPLE:
+WHY THIS IS PROBLEMATIC:
+1. Doesn't Persist: cd only affects current RUN command
+2. Error Prone: Easy to forget cd in subsequent commands
+3. Less Readable: Makes Dockerfile harder to understand
+4. Fragile: Breaks if directory structure changes
+5. Chaining Required: Must use && to chain commands
+
+VULNERABLE EXAMPLE:
 ```dockerfile
-# Bad - cd doesn't persist
-RUN cd /app && npm install
+FROM node:18
 
-# Good - WORKDIR persists
-WORKDIR /app
-RUN npm install
+COPY . .
+
+# Bad: cd doesn't persist, must chain all commands
+RUN cd /app && npm install
+RUN cd /app && npm build  # Must repeat cd
 ```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM node:18
+
+# Good: WORKDIR persists across all subsequent instructions
+WORKDIR /app
+COPY . .
+RUN npm install
+RUN npm build  # Already in /app directory
+```
+
+REMEDIATION:
+Replace 'cd' commands with WORKDIR instruction. WORKDIR creates the directory
+if it doesn't exist and sets it as the working directory for all subsequent
+instructions (RUN, CMD, ENTRYPOINT, COPY, ADD).
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3003
 """
 
 from rules.container_decorators import dockerfile_rule

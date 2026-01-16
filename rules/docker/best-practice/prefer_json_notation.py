@@ -1,22 +1,48 @@
 """
 DOCKER-BP-016: Prefer JSON Notation for CMD/ENTRYPOINT
 
-Best Practice: Use exec form over shell form
+Security Impact: LOW
+Best Practice Violation
 
 DESCRIPTION:
-Shell form wraps commands in /bin/sh -c, which:
-- Doesn't pass signals correctly
-- Creates an extra shell process
-- Makes PID 1 the shell instead of your app
+Detects CMD or ENTRYPOINT using shell form instead of exec form (JSON array).
+Shell form wraps commands in /bin/sh -c, which creates issues with signal handling,
+process management, and adds an unnecessary shell layer.
 
-EXAMPLE:
+WHY THIS IS PROBLEMATIC:
+1. Signal Handling: Shell doesn't forward signals (SIGTERM, SIGINT) correctly
+2. PID 1 Issues: Shell becomes PID 1 instead of your application
+3. Zombie Processes: Shell may not reap child processes properly
+4. Extra Process: Unnecessary shell layer wastes resources
+5. Graceful Shutdown: Container may not stop cleanly
+
+VULNERABLE EXAMPLE:
 ```dockerfile
-# Shell form - not recommended
-CMD nginx -g "daemon off;"
+FROM nginx:alpine
 
-# Exec form (JSON) - recommended
-CMD ["nginx", "-g", "daemon off;"]
+# Bad: Shell form - signals not handled correctly
+CMD nginx -g "daemon off;"
+ENTRYPOINT /app/start.sh
 ```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM nginx:alpine
+
+# Good: Exec form (JSON) - proper signal handling
+CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/app/start.sh"]
+```
+
+REMEDIATION:
+Convert CMD and ENTRYPOINT instructions to exec form using JSON array syntax:
+- Shell form: CMD command arg1 arg2
+- Exec form: CMD ["command", "arg1", "arg2"]
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3025
+- Docker ENTRYPOINT documentation
 """
 
 from rules.container_decorators import dockerfile_rule

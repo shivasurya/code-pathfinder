@@ -1,4 +1,45 @@
-"""DOCKER-BP-023: Prefer apt-get over apt"""
+"""
+DOCKER-BP-023: Prefer apt-get over apt
+
+Security Impact: LOW
+Best Practice Violation
+
+DESCRIPTION:
+Detects use of 'apt' command instead of 'apt-get' in Dockerfiles.
+The 'apt' command is designed for interactive use and has an unstable CLI interface
+that may change between versions, making builds less reproducible.
+
+WHY THIS IS PROBLEMATIC:
+1. Unstable Interface: apt output and behavior can change between versions
+2. Non-Reproducible Builds: Different apt versions may behave differently
+3. Script Instability: apt is not designed for scripting
+4. Better Alternatives: apt-get has stable, well-documented interface
+
+VULNERABLE EXAMPLE:
+```dockerfile
+FROM ubuntu:22.04
+
+# Bad: apt is for interactive use, unstable in scripts
+RUN apt update && apt install -y nginx
+```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM ubuntu:22.04
+
+# Good: apt-get has stable CLI for scripting
+RUN apt-get update && apt-get install -y nginx
+```
+
+REMEDIATION:
+Replace 'apt' with 'apt-get' in all Dockerfile RUN commands for better stability
+and reproducibility.
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3027
+- Debian apt vs apt-get documentation
+"""
 
 from rules.container_decorators import dockerfile_rule
 from rules.container_matchers import instruction

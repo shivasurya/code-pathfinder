@@ -62,41 +62,21 @@ $ docker run -p 80:80 nginx
 - If app is compromised, attacker has root inside container
 - Easier to escalate to host if combined with other vulnerabilities
 
-VULNERABLE PATTERNS:
-
-**Example 1: Web Server on Port 80**
+VULNERABLE EXAMPLE:
 ```dockerfile
 FROM ubuntu:22.04
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends nginx
+    apt-get install -y --no-install-recommends nginx && \
+    rm -rf /var/lib/apt/lists/*
 
-# Requires root to bind
+# Bad: Requires root to bind
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
-**Example 2: Database on Default Port**
-```dockerfile
-FROM postgres:15
-
-# PostgreSQL default port 5432 is not privileged (>1024)
-# But if using port 543 (privileged):
-EXPOSE 543
-```
-
-**Example 3: Multiple Privileged Ports**
-```dockerfile
-FROM myapp:latest
-
-# HTTP + HTTPS both privileged
-EXPOSE 80 443
-
-CMD ["myapp"]
-```
-
-SECURE ALTERNATIVES:
+SECURE EXAMPLE:
 
 **Solution 1: Use Non-Privileged Ports**
 ```dockerfile

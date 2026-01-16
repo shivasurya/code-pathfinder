@@ -1,19 +1,46 @@
 """
 DOCKER-BP-018: Use Absolute Path in WORKDIR
 
-Best Practice: WORKDIR should use absolute paths
+Security Impact: LOW
+Best Practice Violation
 
 DESCRIPTION:
-Relative paths in WORKDIR can be confusing and error-prone.
+Detects WORKDIR instructions using relative paths instead of absolute paths.
+Relative paths can lead to confusion about the actual working directory and
+make Dockerfiles harder to understand and maintain.
 
-EXAMPLE:
+WHY THIS IS PROBLEMATIC:
+1. Ambiguous Location: Unclear where directory is relative to
+2. Error Prone: Easy to lose track of current directory
+3. Less Readable: Makes Dockerfile harder to understand
+4. Debugging Difficulty: Hard to troubleshoot path issues
+5. Stacking Behavior: Multiple relative WORKDIRs stack unpredictably
+
+VULNERABLE EXAMPLE:
 ```dockerfile
-# Bad - relative path
-WORKDIR app
+FROM node:18
 
-# Good - absolute path
-WORKDIR /app
+# Bad: Relative path - where is this relative to?
+WORKDIR app
+WORKDIR src  # Now at some-unknown-path/app/src
 ```
+
+SECURE EXAMPLE:
+```dockerfile
+FROM node:18
+
+# Good: Absolute path - clear and unambiguous
+WORKDIR /app
+WORKDIR /app/src  # Clear full path
+```
+
+REMEDIATION:
+Always use absolute paths (starting with /) in WORKDIR instructions.
+This makes the working directory explicit and prevents confusion.
+
+REFERENCES:
+- Docker Best Practices
+- hadolint DL3000
 """
 
 from rules.container_decorators import dockerfile_rule
