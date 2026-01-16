@@ -127,6 +127,7 @@ from rules.container_matchers import service_has
     severity="HIGH",
     cwe="CWE-284",
     category="security",
+    tags="docker-compose,compose,seccomp,security,syscall,kernel,confinement,isolation,attack-surface",
     message="Service disables seccomp profile. Container can use all system calls, increasing attack surface."
 )
 def seccomp_disabled():

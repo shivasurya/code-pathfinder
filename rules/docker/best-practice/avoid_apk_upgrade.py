@@ -35,7 +35,9 @@ from rules.container_matchers import instruction
     id="DOCKER-BP-028",
     name="Avoid apk upgrade",
     severity="MEDIUM",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apk,package-manager,alpine,upgrade,reproducibility,best-practice,anti-pattern",
     message="Avoid 'apk upgrade' in Dockerfiles. Use specific base image versions instead for reproducible builds."
 )
 def avoid_apk_upgrade():

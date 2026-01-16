@@ -55,7 +55,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-024",
     name="Install Only One of wget or curl",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,wget,curl,download,tools,optimization,image-size,redundancy,best-practice",
     message="Installing both wget and curl wastes space. Choose one tool for downloads."
 )
 def use_either_wget_or_curl():

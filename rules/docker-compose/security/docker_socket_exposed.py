@@ -362,6 +362,7 @@ from rules.container_matchers import service_has
     severity="CRITICAL",
     cwe="CWE-250",
     category="security",
+    tags="docker-compose,compose,docker-socket,volume,security,privilege-escalation,container-escape,daemon,critical,host-access",
     message="Service mounts Docker socket. The owner of this socket is root. Giving container access to it is equivalent to giving unrestricted root access to host."
 )
 def docker_socket_exposed():

@@ -96,6 +96,7 @@ from rules.container_matchers import missing
     severity="HIGH",
     cwe="CWE-250",
     category="security",
+    tags="docker,dockerfile,container,security,privilege-escalation,root,user,best-practice,hardening,principle-of-least-privilege",
     message="Dockerfile does not specify USER instruction. Container will run as root by default, which increases the attack surface if the container is compromised."
 )
 def missing_user_instruction():

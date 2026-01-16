@@ -354,7 +354,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-007",
     name="apk add Without --no-cache",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apk,package-manager,alpine,cache,optimization,image-size,best-practice,linux",
     message="apk add without --no-cache. Package cache remains in image, increasing size by 2-5 MB."
 )
 def apk_without_no_cache():

@@ -397,7 +397,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-008",
     name="pip install Without --no-cache-dir",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,pip,python,package-manager,cache,optimization,image-size,best-practice",
     message="pip install without --no-cache-dir. Pip cache remains in image, adding 50-200 MB depending on dependencies."
 )
 def pip_without_no_cache():

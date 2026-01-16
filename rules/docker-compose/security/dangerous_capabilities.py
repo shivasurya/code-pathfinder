@@ -126,6 +126,7 @@ from rules.container_matchers import service_has
     severity="HIGH",
     cwe="CWE-250",
     category="security",
+    tags="docker-compose,compose,capabilities,cap-add,security,privilege-escalation,container-escape,linux,kernel",
     message="Service adds dangerous capability. These capabilities can be used for container escape or privilege escalation."
 )
 def dangerous_capabilities():

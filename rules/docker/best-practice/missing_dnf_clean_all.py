@@ -49,7 +49,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-013",
     name="Missing dnf clean all",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,dnf,package-manager,fedora,rhel,cache,cleanup,image-size,optimization,best-practice",
     message="RUN uses 'dnf install' without 'dnf clean all'. This increases image size."
 )
 def missing_dnf_clean_all():

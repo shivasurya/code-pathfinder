@@ -54,7 +54,9 @@ from rules.container_combinators import any_of
     id="DOCKER-BP-016",
     name="Prefer JSON Notation for CMD/ENTRYPOINT",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,cmd,entrypoint,exec-form,json,signal-handling,best-practice,process-management,pid1",
     message="Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling."
 )
 def prefer_json_notation():

@@ -61,7 +61,9 @@ from rules.container_combinators import any_of
     id="DOCKER-BP-030",
     name="Nonsensical Command",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,cd,workdir,directory,shell,best-practice,anti-pattern,confusing",
     message="RUN command uses 'cd' which doesn't persist. Use WORKDIR instead."
 )
 def nonsensical_command():

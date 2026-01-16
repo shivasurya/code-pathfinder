@@ -29,7 +29,9 @@ from rules.container_combinators import any_of
     id="DOCKER-COR-002",
     name="Invalid Port Number",
     severity="HIGH",
+    cwe="CWE-20",
     category="correctness",
+    tags="docker,dockerfile,port,expose,validation,input-validation,correctness,networking,configuration",
     message="EXPOSE instruction has invalid port number. Valid ports are 1-65535."
 )
 def invalid_port():

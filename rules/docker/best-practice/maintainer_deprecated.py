@@ -235,7 +235,9 @@ from rules.container_matchers import instruction
     id="DOCKER-BP-003",
     name="Deprecated MAINTAINER Instruction",
     severity="INFO",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,maintainer,label,deprecated,metadata,best-practice,oci,standards,legacy",
     message="MAINTAINER instruction is deprecated. Use LABEL org.opencontainers.image.authors instead."
 )
 def maintainer_deprecated():

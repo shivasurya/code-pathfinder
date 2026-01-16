@@ -159,6 +159,7 @@ from rules.container_matchers import instruction
     severity="CRITICAL",
     cwe="CWE-538",
     category="security",
+    tags="docker,dockerfile,secrets,credentials,security,arg,build-arg,password,token,api-key,sensitive-data,information-disclosure",
     message="Build argument name suggests it contains a secret. ARG values are visible in image history via 'docker history'."
 )
 def secret_in_build_arg():

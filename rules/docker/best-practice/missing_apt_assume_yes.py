@@ -44,7 +44,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-021",
     name="Missing -y flag for apt-get",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apt-get,package-manager,automation,ci-cd,build,ubuntu,debian,best-practice,non-interactive",
     message="apt-get install without -y flag. Add -y or --yes for non-interactive builds."
 )
 def missing_apt_assume_yes():

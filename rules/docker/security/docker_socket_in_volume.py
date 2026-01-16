@@ -179,6 +179,7 @@ from rules.container_combinators import any_of
     severity="CRITICAL",
     cwe="CWE-250",
     category="security",
+    tags="docker,dockerfile,docker-socket,volume,security,privilege-escalation,container-escape,daemon,host-access,critical",
     message="Dockerfile mounts Docker socket. This gives the container full control over the host Docker daemon, equivalent to root access."
 )
 def docker_socket_in_volume():

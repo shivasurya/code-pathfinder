@@ -50,7 +50,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-014",
     name="Remove apt Package Lists",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apt-get,package-manager,ubuntu,debian,cache,cleanup,image-size,optimization,best-practice",
     message="apt-get install without removing /var/lib/apt/lists/*. This wastes image space."
 )
 def remove_package_lists():

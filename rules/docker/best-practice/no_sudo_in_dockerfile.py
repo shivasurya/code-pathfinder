@@ -119,6 +119,7 @@ from rules.container_combinators import any_of
     severity="MEDIUM",
     cwe="CWE-250",
     category="security",
+    tags="docker,dockerfile,sudo,security,privilege-escalation,anti-pattern,best-practice,user,root,unnecessary",
     message="Dockerfile uses 'sudo' in RUN instructions. This is unnecessary during "
             "build (already root) and increases security risk if sudo remains in the "
             "final image. Use USER instruction for privilege changes instead."

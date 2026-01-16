@@ -18,6 +18,8 @@ class RuleMetadata:
     severity: str = "MEDIUM"
     category: str = "security"
     cwe: str = ""
+    cve: str = ""
+    tags: str = ""
     message: str = ""
     file_pattern: str = ""
 
@@ -94,13 +96,16 @@ def dockerfile_rule(
     severity: str = "MEDIUM",
     category: str = "security",
     cwe: str = "",
+    cve: str = "",
+    tags: str = "",
     message: str = "",
 ) -> Callable:
     """
     Decorator for Dockerfile security rules.
 
     Example:
-        @dockerfile_rule(id="DOCKER-001", severity="HIGH", cwe="CWE-250")
+        @dockerfile_rule(id="DOCKER-001", severity="HIGH", cwe="CWE-250",
+                        tags="security,docker,privilege-escalation")
         def container_runs_as_root():
             return missing(instruction="USER")
     """
@@ -124,6 +129,8 @@ def dockerfile_rule(
             severity=severity,
             category=category,
             cwe=cwe,
+            cve=cve,
+            tags=tags,
             message=message or f"Security issue detected by {id}",
             file_pattern="Dockerfile*",
         )
@@ -149,13 +156,16 @@ def compose_rule(
     severity: str = "MEDIUM",
     category: str = "security",
     cwe: str = "",
+    cve: str = "",
+    tags: str = "",
     message: str = "",
 ) -> Callable:
     """
     Decorator for docker-compose security rules.
 
     Example:
-        @compose_rule(id="COMPOSE-001", severity="HIGH", cwe="CWE-250")
+        @compose_rule(id="COMPOSE-001", severity="HIGH", cwe="CWE-250",
+                     tags="security,docker-compose,privilege-escalation")
         def privileged_service():
             return service_has(key="privileged", equals=True)
     """
@@ -176,6 +186,8 @@ def compose_rule(
             severity=severity,
             category=category,
             cwe=cwe,
+            cve=cve,
+            tags=tags,
             message=message or f"Security issue detected by {id}",
             file_pattern="**/docker-compose*.yml",
         )

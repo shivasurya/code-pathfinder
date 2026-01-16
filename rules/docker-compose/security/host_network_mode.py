@@ -111,6 +111,7 @@ from rules.container_matchers import service_has
     severity="HIGH",
     cwe="CWE-250",
     category="security",
+    tags="docker-compose,compose,network,host-network,security,isolation,networking,namespace,privilege-escalation",
     message="Service uses host network mode. Container shares host network stack, bypassing network isolation."
 )
 def host_network_mode():

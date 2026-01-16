@@ -140,6 +140,7 @@ from rules.container_matchers import service_missing
     severity="MEDIUM",
     cwe="CWE-732",
     category="security",
+    tags="docker-compose,compose,no-new-privileges,security,setuid,privilege-escalation,hardening,capabilities",
     message="Service does not have 'no-new-privileges:true' in security_opt. This allows "
             "processes to gain additional privileges via setuid/setgid binaries, which can be "
             "exploited for privilege escalation attacks."

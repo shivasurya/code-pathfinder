@@ -271,7 +271,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-005",
     name="apt-get Without --no-install-recommends",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apt-get,package-manager,ubuntu,debian,optimization,image-size,best-practice,bloat,attack-surface",
     message="apt-get install without --no-install-recommends. This installs unnecessary packages, increasing image size and attack surface."
 )
 def apt_without_no_recommends():

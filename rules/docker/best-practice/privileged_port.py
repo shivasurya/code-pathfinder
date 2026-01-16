@@ -392,7 +392,9 @@ from rules.container_matchers import instruction
     id="DOCKER-AUD-003",
     name="Privileged Port Exposed",
     severity="MEDIUM",
+    cwe="CWE-250",
     category="audit",
+    tags="docker,dockerfile,port,expose,privileged,root,security,unix,networking,capabilities,best-practice",
     message="Exposing port below 1024 typically requires root privileges to bind. Consider using non-privileged ports (>1024) with port mapping or granting CAP_NET_BIND_SERVICE capability."
 )
 def privileged_port():

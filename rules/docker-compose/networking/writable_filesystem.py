@@ -114,6 +114,7 @@ from rules.container_matchers import service_missing
     severity="LOW",
     cwe="CWE-732",
     category="security",
+    tags="docker-compose,compose,filesystem,read-only,security,immutability,malware-prevention,hardening,best-practice",
     message="Service has writable root filesystem. Consider making it read-only for better security."
 )
 def writable_filesystem():

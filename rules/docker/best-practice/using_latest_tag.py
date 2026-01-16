@@ -208,7 +208,9 @@ from rules.container_matchers import instruction
     id="DOCKER-BP-001",
     name="Base Image Uses :latest Tag",
     severity="MEDIUM",
+    cwe="CWE-1188",
     category="best-practice",
+    tags="docker,dockerfile,from,image,tag,version,latest,reproducibility,best-practice,supply-chain,immutability",
     message="Base image uses ':latest' tag or no tag (defaults to latest). This makes builds non-reproducible."
 )
 def using_latest_tag():

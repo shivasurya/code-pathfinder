@@ -124,6 +124,7 @@ from rules.container_matchers import service_has
     severity="HIGH",
     cwe="CWE-250",
     category="security",
+    tags="docker-compose,compose,pid,host-pid,security,isolation,namespace,process,information-disclosure",
     message="Service uses host PID namespace. Container can see and potentially signal host processes."
 )
 def host_pid_mode():

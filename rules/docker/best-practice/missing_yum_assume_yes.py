@@ -33,7 +33,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-025",
     name="Missing -y flag for yum",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,yum,package-manager,centos,rhel,automation,ci-cd,build,best-practice,non-interactive",
     message="yum install without -y flag. Add -y for non-interactive builds."
 )
 def missing_yum_assume_yes():

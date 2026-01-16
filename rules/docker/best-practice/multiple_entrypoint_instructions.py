@@ -62,7 +62,9 @@ from rules.container_matchers import instruction
     id="DOCKER-COR-001",
     name="Multiple ENTRYPOINT Instructions",
     severity="MEDIUM",
+    cwe="CWE-710",
     category="correctness",
+    tags="docker,dockerfile,entrypoint,correctness,configuration,maintainability,confusing,anti-pattern",
     message="Dockerfile has multiple ENTRYPOINT instructions. Only the last one takes effect, making earlier ones misleading."
 )
 def multiple_entrypoint_instructions():

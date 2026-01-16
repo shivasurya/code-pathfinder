@@ -107,6 +107,7 @@ from rules.container_matchers import service_has
     severity="MEDIUM",
     cwe="CWE-250",
     category="security",
+    tags="docker-compose,compose,ipc,host-ipc,security,isolation,namespace,shared-memory,information-disclosure",
     message="Service uses host IPC namespace. Container shares inter-process communication with host."
 )
 def host_ipc_mode():

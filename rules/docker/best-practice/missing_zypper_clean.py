@@ -49,7 +49,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-020",
     name="Missing zypper clean",
     severity="LOW",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,zypper,package-manager,opensuse,suse,cache,cleanup,image-size,optimization,best-practice",
     message="RUN uses 'zypper install' without 'zypper clean'. This increases image size."
 )
 def missing_zypper_clean():

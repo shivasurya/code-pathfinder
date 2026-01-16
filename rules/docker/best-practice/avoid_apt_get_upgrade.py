@@ -50,8 +50,9 @@ from rules.container_combinators import any_of
     id="DOCKER-BP-006",
     name="Avoid apt-get upgrade",
     severity="MEDIUM",
-    cwe="",
+    cwe="CWE-710",
     category="best-practice",
+    tags="docker,dockerfile,apt-get,upgrade,package-manager,ubuntu,debian,reproducibility,best-practice,anti-pattern,build",
     message="Avoid apt-get upgrade in Dockerfiles. Use specific base image versions instead."
 )
 def avoid_apt_get_upgrade():

@@ -32,7 +32,9 @@ from rules.container_combinators import all_of
     id="DOCKER-BP-010",
     name="Missing pipefail in Shell Commands",
     severity="MEDIUM",
+    cwe="CWE-703",
     category="best-practice",
+    tags="docker,dockerfile,shell,bash,pipefail,error-handling,best-practice,reliability,build,pipes",
     message="RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands."
 )
 def set_pipefail():

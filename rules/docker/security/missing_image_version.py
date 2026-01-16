@@ -33,7 +33,9 @@ from rules.container_combinators import any_of
     id="DOCKER-BP-015",
     name="Missing Image Version",
     severity="HIGH",
+    cwe="CWE-1188",
     category="best-practice",
+    tags="docker,dockerfile,from,image,tag,version,latest,reproducibility,best-practice,supply-chain,dependency-management",
     message="FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible builds."
 )
 def missing_image_version():
