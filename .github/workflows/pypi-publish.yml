@@ -69,14 +69,14 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/v}
           else
             # Fallback for pull_request
-            VERSION=$(python -c "import sys; sys.path.insert(0, 'python-dsl'); from codepathfinder import __version__; print(__version__)")
+            VERSION=$(python -c "import sys; sys.path.insert(0, 'python-sdk'); from codepathfinder import __version__; print(__version__)")
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
       - name: Create bin directory
         shell: bash
-        run: mkdir -p python-dsl/codepathfinder/bin
+        run: mkdir -p python-sdk/codepathfinder/bin
 
       - name: Download binary (Unix)
         if: runner.os != 'Windows'
@@ -86,9 +86,9 @@ jobs:
           SUFFIX=${{ matrix.binary_suffix }}
           URL="https://github.com/shivasurya/code-pathfinder/releases/download/v${VERSION}/pathfinder-${SUFFIX}.tar.gz"
           echo "Downloading from: $URL"
-          curl -L "$URL" | tar xz -C python-dsl/codepathfinder/bin/
-          chmod +x python-dsl/codepathfinder/bin/pathfinder
-          ls -la python-dsl/codepathfinder/bin/
+          curl -L "$URL" | tar xz -C python-sdk/codepathfinder/bin/
+          chmod +x python-sdk/codepathfinder/bin/pathfinder
+          ls -la python-sdk/codepathfinder/bin/
 
       - name: Download binary (Windows)
         if: runner.os == 'Windows'
@@ -98,8 +98,8 @@ jobs:
           $URL = "https://github.com/shivasurya/code-pathfinder/releases/download/v$VERSION/pathfinder-windows-amd64.zip"
           Write-Host "Downloading from: $URL"
           Invoke-WebRequest -Uri $URL -OutFile pathfinder.zip
-          Expand-Archive -Path pathfinder.zip -DestinationPath python-dsl/codepathfinder/bin/
-          Get-ChildItem python-dsl/codepathfinder/bin/
+          Expand-Archive -Path pathfinder.zip -DestinationPath python-sdk/codepathfinder/bin/
+          Get-ChildItem python-sdk/codepathfinder/bin/
 
       - name: Install build tools
         run: pip install build wheel setuptools
@@ -107,13 +107,13 @@ jobs:
       - name: Build wheel
         shell: bash
         run: |
-          cd python-dsl
+          cd python-sdk
           python -m build --wheel
 
       - name: Rename wheel with platform tag
         shell: bash
         run: |
-          cd python-dsl/dist
+          cd python-sdk/dist
           for f in *.whl; do
             # Replace 'any' with platform-specific tag
             newname=$(echo "$f" | sed "s/-py3-none-any/-py3-none-${{ matrix.platform }}/")
@@ -128,7 +128,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.platform }}
-          path: python-dsl/dist/*.whl
+          path: python-sdk/dist/*.whl
           retention-days: 7
 
       - name: Test wheel installation
@@ -136,7 +136,7 @@ jobs:
         shell: bash
         run: |
           echo "=== Testing wheel installation ==="
-          cd python-dsl/dist
+          cd python-sdk/dist
           WHEEL=$(ls *.whl)
           echo "Installing: $WHEEL"
           pip install "$WHEEL"
@@ -153,12 +153,12 @@ jobs:
           echo "Running pathfinder --version..."
           pathfinder --version || echo "Version command failed"
 
-      - name: Test Python DSL import and version
+      - name: Test Python SDK import and version
         if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
         shell: bash
         run: |
-          echo "=== Testing Python DSL ==="
-          python -c "from codepathfinder import __version__, rule, calls, flows; print('[OK] DSL Import OK'); print(f'[OK] Python DSL Version: {__version__}'); print('[OK] Available: rule, calls, flows')"
+          echo "=== Testing Python SDK ==="
+          python -c "from codepathfinder import __version__, rule, calls, flows; print('[OK] SDK Import OK'); print(f'[OK] Python SDK Version: {__version__}'); print('[OK] Available: rule, calls, flows')"
 
       - name: Test binary execution
         if: github.event.inputs.skip_tests != 'true' && matrix.platform != 'manylinux_2_17_aarch64'
@@ -192,14 +192,14 @@ jobs:
 
       - name: Build sdist (no binary - will download on install)
         run: |
-          cd python-dsl
+          cd python-sdk
           python -m build --sdist
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
           name: sdist
-          path: python-dsl/dist/*.tar.gz
+          path: python-sdk/dist/*.tar.gz
           retention-days: 7
 
   publish:
