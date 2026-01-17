@@ -56,7 +56,7 @@ jobs:
         with:
           sarif_file: docker-results.sarif
 
-  # Example 3: Scan with local rules file
+  # Example 3: Scan with specific Python rule
   custom-rules-scan:
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +65,7 @@ jobs:
       - name: Run Custom Rules Scan
         uses: ./
         with:
-          rules: python-sdk/examples/owasp_top10.py
+          ruleset: python/deserialization
           project: .
           verbose: true
           output-file: custom-results.sarif
