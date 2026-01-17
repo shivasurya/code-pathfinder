@@ -1,5 +1,9 @@
 # Example workflow showing how to use Code-Pathfinder GitHub Action
 # Copy this to your repository at .github/workflows/security-scan.yml
+#
+# NOTE: This workflow uses './' to test the action from the current branch.
+# In your own repository, replace './' with 'shivasurya/code-pathfinder@v1.2.0'
+# or 'shivasurya/code-pathfinder@main' for the latest version.
 
 name: Security Scan
 
@@ -22,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Python Security Scan
-        uses: shivasurya/code-pathfinder@main
+        uses: ./
         with:
           ruleset: python/deserialization, python/django, python/flask
           project: .
@@ -41,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Docker Security Scan
-        uses: shivasurya/code-pathfinder@main
+        uses: ./
         with:
           ruleset: docker/security, docker/best-practice
           project: .
@@ -60,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Custom Rules Scan
-        uses: shivasurya/code-pathfinder@main
+        uses: ./
         with:
           rules: python-sdk/examples/owasp_top10.py
           project: .
