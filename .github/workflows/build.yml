@@ -63,14 +63,9 @@ jobs:
           from codepathfinder import calls, flows, rule
           from codepathfinder.presets import PropagationPresets
 
-          @rule(
-              id="TEST-001",
-              name="Test Rule",
-              severity="low",
-              category="test",
-              message="Test detection"
-          )
+          @rule(id="TEST-001", severity="low")
           def test_rule():
+              """Test detection for integration tests"""
               return flows(
                   from_sources=[calls("request.get_data"), calls("*.get_data")],
                   to_sinks=[calls("pickle.loads"), calls("*.loads")],
@@ -83,14 +78,9 @@ jobs:
           from codepathfinder import calls, flows, rule
           from codepathfinder.presets import PropagationPresets
 
-          @rule(
-              id="TEST-CRIT-001",
-              name="Critical Test Rule",
-              severity="critical",
-              category="test",
-              message="Critical test detection"
-          )
+          @rule(id="TEST-CRIT-001", severity="critical", cwe="CWE-502")
           def critical_test_rule():
+              """Critical test detection for integration tests"""
               return flows(
                   from_sources=[calls("request.get_data"), calls("*.get_data")],
                   to_sinks=[calls("pickle.loads"), calls("*.loads")],
@@ -103,14 +93,9 @@ jobs:
           from codepathfinder import calls, flows, rule
           from codepathfinder.presets import PropagationPresets
 
-          @rule(
-              id="TEST-HIGH-001",
-              name="High Test Rule",
-              severity="high",
-              category="test",
-              message="High test detection"
-          )
+          @rule(id="TEST-HIGH-001", severity="high")
           def high_test_rule():
+              """High test detection for integration tests"""
               return flows(
                   from_sources=[calls("request.get_data"), calls("*.get_data")],
                   to_sinks=[calls("pickle.loads"), calls("*.loads")],
@@ -123,14 +108,9 @@ jobs:
           from codepathfinder import calls, flows, rule
           from codepathfinder.presets import PropagationPresets
 
-          @rule(
-              id="TEST-LOW-001",
-              name="Low Test Rule",
-              severity="low",
-              category="test",
-              message="Low test detection"
-          )
+          @rule(id="TEST-LOW-001", severity="low")
           def low_test_rule():
+              """Low test detection for integration tests"""
               return flows(
                   from_sources=[calls("request.get_data"), calls("*.get_data")],
                   to_sinks=[calls("pickle.loads"), calls("*.loads")],
