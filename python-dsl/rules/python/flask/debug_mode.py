@@ -364,15 +364,11 @@ def detect_flask_debug_mode():
 
     Matches:
     - app.run(debug=True)
-    - app.run(debug=True, ...)
     - *.run(debug=True)
 
     Example vulnerable code:
         app = Flask(__name__)
         app.run(debug=True)  # Detected!
     """
-    return Or(
-        calls("app.run", match_name={"debug": True}),
-        calls("*.run", match_name={"debug": True}),
-        calls("run", match_name={"debug": True}),
-    )
+    # Use wildcard pattern to match any object's run method with debug=True
+    return calls("*.run", match_name={"debug": True})
