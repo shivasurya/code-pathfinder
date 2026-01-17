@@ -6,9 +6,11 @@ on:
       - main
       - master
   pull_request:
+    types: [opened, synchronize, reopened]
     paths:
       - 'sast-engine/**'
-      - 'pathfinder-rules/**'
+      - 'python-sdk/**'
+      - '.github/workflows/**'
 
 jobs:
   build:
