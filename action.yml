@@ -82,18 +82,43 @@ runs:
     - name: Run Security Scan
       shell: bash
       run: |
+        set -euo pipefail
+
+        # Input validation to prevent command injection
+        # Check for dangerous shell metacharacters that could enable command injection
+        validate_no_injection() {
+          local input="$1"
+          local field_name="$2"
+          # Block shell command separators and substitution operators
+          if [[ "$input" =~ [\;\|\&\$\`] ]] || [[ "$input" =~ $'\n' ]]; then
+            echo "Error: Potentially dangerous characters detected in $field_name input"
+            echo "Blocked characters: ; | & \$ \` (newline)"
+            echo "These characters could be used for command injection"
+            exit 1
+          fi
+        }
+
         # Validate that at least one rule source is provided
         if [ -z "${{ inputs.rules }}" ] && [ -z "${{ inputs.ruleset }}" ]; then
           echo "Error: Either 'rules' or 'ruleset' input must be specified"
           exit 1
         fi
 
-        # Build command arguments
-        ARGS="scan --project ${{ inputs.project }}"
+        # Validate all user-provided inputs
+        [ -n "${{ inputs.project }}" ] && validate_no_injection "${{ inputs.project }}" "project"
+        [ -n "${{ inputs.rules }}" ] && validate_no_injection "${{ inputs.rules }}" "rules"
+        [ -n "${{ inputs.ruleset }}" ] && validate_no_injection "${{ inputs.ruleset }}" "ruleset"
+        [ -n "${{ inputs.output }}" ] && validate_no_injection "${{ inputs.output }}" "output"
+        [ -n "${{ inputs.output-file }}" ] && validate_no_injection "${{ inputs.output-file }}" "output-file"
+        [ -n "${{ inputs.fail-on }}" ] && validate_no_injection "${{ inputs.fail-on }}" "fail-on"
+
+        # Build command arguments using array to prevent injection
+        ARGS=(scan)
+        ARGS+=(--project "${{ inputs.project }}")
 
         # Add rules or ruleset
         if [ -n "${{ inputs.rules }}" ]; then
-          ARGS="${ARGS} --rules ${{ inputs.rules }}"
+          ARGS+=(--rules "${{ inputs.rules }}")
         fi
 
         if [ -n "${{ inputs.ruleset }}" ]; then
@@ -102,38 +127,38 @@ runs:
           for ruleset in "${RULESETS[@]}"; do
             # Trim whitespace
             ruleset=$(echo "$ruleset" | xargs)
-            ARGS="${ARGS} --ruleset ${ruleset}"
+            ARGS+=(--ruleset "$ruleset")
           done
         fi
 
-        ARGS="${ARGS} --output ${{ inputs.output }}"
-        ARGS="${ARGS} --output-file ${{ inputs.output-file }}"
+        ARGS+=(--output "${{ inputs.output }}")
+        ARGS+=(--output-file "${{ inputs.output-file }}")
 
         if [ "${{ inputs.verbose }}" = "true" ]; then
-          ARGS="${ARGS} --verbose"
+          ARGS+=(--verbose)
         fi
 
         if [ -n "${{ inputs.fail-on }}" ]; then
-          ARGS="${ARGS} --fail-on ${{ inputs.fail-on }}"
+          ARGS+=(--fail-on "${{ inputs.fail-on }}")
         fi
 
         if [ "${{ inputs.skip-tests }}" = "true" ]; then
-          ARGS="${ARGS} --skip-tests"
+          ARGS+=(--skip-tests)
         else
-          ARGS="${ARGS} --skip-tests=false"
+          ARGS+=(--skip-tests=false)
         fi
 
         if [ "${{ inputs.refresh-rules }}" = "true" ]; then
-          ARGS="${ARGS} --refresh-rules"
+          ARGS+=(--refresh-rules)
         fi
 
         if [ "${{ inputs.debug }}" = "true" ]; then
-          ARGS="${ARGS} --debug"
+          ARGS+=(--debug)
         fi
 
         if [ "${{ inputs.disable-metrics }}" = "true" ]; then
-          ARGS="${ARGS} --disable-metrics"
+          ARGS+=(--disable-metrics)
         fi
 
-        echo "Running: pathfinder ${ARGS}"
-        pathfinder ${ARGS}
+        echo "Running: pathfinder ${ARGS[*]}"
+        pathfinder "${ARGS[@]}"
