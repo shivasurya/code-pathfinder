@@ -1,4 +1,4 @@
-"""Setup script for codepathfinder Python DSL."""
+"""Setup script for codepathfinder Python SDK."""
 
 from setuptools import setup, find_packages
 from pathlib import Path

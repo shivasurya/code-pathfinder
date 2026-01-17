@@ -98,19 +98,19 @@ task createTag(dependsOn: tagExists) {
     }
 }
 
-// Python DSL tasks
+// Python SDK tasks
 task testPython(type: Exec) {
-    workingDir '../python-dsl'
+    workingDir '../python-sdk'
     commandLine 'pytest', '--cov=codepathfinder', '--cov-report=term-missing', '--cov-fail-under=95'
 }
 
 task lintPython(type: Exec) {
-    workingDir '../python-dsl'
+    workingDir '../python-sdk'
     commandLine 'sh', '-c', 'black --check codepathfinder/ tests/ && ruff check codepathfinder/ tests/ && mypy codepathfinder/'
 }
 
 task buildPython(type: Exec, dependsOn: ['testPython', 'lintPython']) {
-    workingDir '../python-dsl'
+    workingDir '../python-sdk'
     commandLine 'python', 'setup.py', 'sdist', 'bdist_wheel'
 }
 
