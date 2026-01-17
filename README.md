@@ -203,13 +203,16 @@ jobs:
 | Input | Description | Default |
 |-------|-------------|---------|
 | `rules` | Path to Python SDK rules file or directory | - |
-| `ruleset` | Remote ruleset(s) to use (e.g., `python/deserialization, docker/security`) | - |
+| `ruleset` | Remote ruleset(s) to use (e.g., `python/deserialization, docker/security`). Supports bundles or individual rule IDs. | - |
 | `project` | Path to source code to scan | `.` |
 | `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
 | `output-file` | Output file path | `pathfinder-results.sarif` |
 | `fail-on` | Fail on severities (e.g., `critical,high`) | - |
-| `verbose` | Enable verbose output | `false` |
-| `skip-tests` | Skip scanning test files | `true` |
+| `verbose` | Enable verbose output with progress and statistics | `false` |
+| `debug` | Enable debug diagnostics with timestamps | `false` |
+| `skip-tests` | Skip scanning test files (test_*.py, *_test.py, etc.) | `true` |
+| `refresh-rules` | Force refresh of cached rulesets (bypasses cache) | `false` |
+| `disable-metrics` | Disable anonymous usage metrics collection | `false` |
 | `python-version` | Python version to use | `3.12` |
 
 **Note:** Either `rules` or `ruleset` must be specified.

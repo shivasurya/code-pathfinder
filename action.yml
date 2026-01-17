@@ -41,6 +41,18 @@ inputs:
     description: 'Skip scanning test files'
     required: false
     default: 'true'
+  refresh-rules:
+    description: 'Force refresh of cached rulesets (bypasses cache)'
+    required: false
+    default: 'false'
+  debug:
+    description: 'Enable debug diagnostics with timestamps'
+    required: false
+    default: 'false'
+  disable-metrics:
+    description: 'Disable anonymous usage metrics collection'
+    required: false
+    default: 'false'
 
 outputs:
   results-file:
@@ -109,6 +121,18 @@ runs:
           ARGS="${ARGS} --skip-tests"
         else
           ARGS="${ARGS} --skip-tests=false"
+        fi
+
+        if [ "${{ inputs.refresh-rules }}" = "true" ]; then
+          ARGS="${ARGS} --refresh-rules"
+        fi
+
+        if [ "${{ inputs.debug }}" = "true" ]; then
+          ARGS="${ARGS} --debug"
+        fi
+
+        if [ "${{ inputs.disable-metrics }}" = "true" ]; then
+          ARGS="${ARGS} --disable-metrics"
         fi
 
         echo "Running: pathfinder ${ARGS}"
