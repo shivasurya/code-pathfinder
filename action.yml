@@ -8,8 +8,11 @@ branding:
 
 inputs:
   rules:
-    description: 'Path to Python DSL rules file or directory (required)'
-    required: true
+    description: 'Path to Python SDK rules file or directory'
+    required: false
+  ruleset:
+    description: 'Remote ruleset(s) to use (e.g., python/deserialization, docker/security). Can specify multiple comma-separated.'
+    required: false
   project:
     description: 'Path to source code to scan'
     required: false
@@ -67,8 +70,30 @@ runs:
     - name: Run Security Scan
       shell: bash
       run: |
+        # Validate that at least one rule source is provided
+        if [ -z "${{ inputs.rules }}" ] && [ -z "${{ inputs.ruleset }}" ]; then
+          echo "Error: Either 'rules' or 'ruleset' input must be specified"
+          exit 1
+        fi
+
         # Build command arguments
-        ARGS="scan --rules ${{ inputs.rules }} --project ${{ inputs.project }}"
+        ARGS="scan --project ${{ inputs.project }}"
+
+        # Add rules or ruleset
+        if [ -n "${{ inputs.rules }}" ]; then
+          ARGS="${ARGS} --rules ${{ inputs.rules }}"
+        fi
+
+        if [ -n "${{ inputs.ruleset }}" ]; then
+          # Split comma-separated rulesets and add each one
+          IFS=',' read -ra RULESETS <<< "${{ inputs.ruleset }}"
+          for ruleset in "${RULESETS[@]}"; do
+            # Trim whitespace
+            ruleset=$(echo "$ruleset" | xargs)
+            ARGS="${ARGS} --ruleset ${ruleset}"
+          done
+        fi
+
         ARGS="${ARGS} --output ${{ inputs.output }}"
         ARGS="${ARGS} --output-file ${{ inputs.output-file }}"
 

@@ -168,10 +168,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Code-Pathfinder
+      # Scan with remote Python rulesets
+      - name: Run Python Security Scan
         uses: shivasurya/code-pathfinder@main
         with:
-          rules: python-dsl/examples/owasp_top10.py
+          ruleset: python/deserialization, python/django, python/flask
+          fail-on: critical,high
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -180,16 +182,49 @@ jobs:
           sarif_file: pathfinder-results.sarif
 ```
 
+**Scan Dockerfiles:**
+```yaml
+      - name: Run Docker Security Scan
+        uses: shivasurya/code-pathfinder@main
+        with:
+          ruleset: docker/security, docker/best-practice
+```
+
+**Use local rules:**
+```yaml
+      - name: Run Custom Rules
+        uses: shivasurya/code-pathfinder@main
+        with:
+          rules: python-sdk/examples/owasp_top10.py
+```
+
 ### Action Inputs
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `rules` | Path to Python DSL rules file or directory (required) | - |
+| `rules` | Path to Python SDK rules file or directory | - |
+| `ruleset` | Remote ruleset(s) to use (e.g., `python/deserialization, docker/security`) | - |
 | `project` | Path to source code to scan | `.` |
 | `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
 | `output-file` | Output file path | `pathfinder-results.sarif` |
 | `fail-on` | Fail on severities (e.g., `critical,high`) | - |
 | `verbose` | Enable verbose output | `false` |
+| `skip-tests` | Skip scanning test files | `true` |
+| `python-version` | Python version to use | `3.12` |
+
+**Note:** Either `rules` or `ruleset` must be specified.
+
+### Available Remote Rulesets
+
+**Python:**
+- `python/deserialization` - Unsafe pickle.loads RCE detection
+- `python/django` - Django SQL injection patterns
+- `python/flask` - Flask security misconfigurations
+
+**Docker:**
+- `docker/security` - Critical and high-severity security issues
+- `docker/best-practice` - Dockerfile optimization and best practices
+- `docker/performance` - Performance optimization for container images
 
 ## Acknowledgements
 Code Pathfinder uses tree-sitter for all language parsers.

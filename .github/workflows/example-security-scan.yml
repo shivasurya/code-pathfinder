@@ -15,21 +15,60 @@ permissions:
   contents: read
 
 jobs:
-  scan:
+  # Example 1: Scan with remote Python rulesets
+  python-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Simple 5-line usage with OWASP rules
-      - name: Run Code-Pathfinder Security Scan
+      - name: Run Python Security Scan
         uses: shivasurya/code-pathfinder@main
         with:
-          rules: python-dsl/examples/owasp_top10.py
+          ruleset: python/deserialization, python/django, python/flask
           project: .
+          fail-on: critical,high
 
-      # Upload results to GitHub Code Scanning
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: pathfinder-results.sarif
+
+  # Example 2: Scan with remote Docker rulesets
+  docker-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Docker Security Scan
+        uses: shivasurya/code-pathfinder@main
+        with:
+          ruleset: docker/security, docker/best-practice
+          project: .
+          output-file: docker-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: docker-results.sarif
+
+  # Example 3: Scan with local rules file
+  custom-rules-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Custom Rules Scan
+        uses: shivasurya/code-pathfinder@main
+        with:
+          rules: python-sdk/examples/owasp_top10.py
+          project: .
+          verbose: true
+          output-file: custom-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: custom-results.sarif
