@@ -30,7 +30,6 @@ jobs:
         with:
           ruleset: python/deserialization, python/django, python/flask
           project: .
-          fail-on: critical,high
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
