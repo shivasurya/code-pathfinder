@@ -150,7 +150,9 @@ pathfinder scan --rules rules/ --project . --fail-on=critical,high
 
 ## GitHub Action
 
-Add security scanning to your CI/CD pipeline in just a few lines:
+Add security scanning to your CI/CD pipeline in just a few lines.
+
+**Best Practice:** Pin to a specific version (e.g., `@v1.2.0`) for stability and reproducibility. Using `@main` will always pull the latest changes, which may introduce breaking changes.
 
 ```yaml
 # .github/workflows/security-scan.yml
@@ -170,7 +172,7 @@ jobs:
 
       # Scan with remote Python rulesets
       - name: Run Python Security Scan
-        uses: shivasurya/code-pathfinder@main
+        uses: shivasurya/code-pathfinder@v1.2.0
         with:
           ruleset: python/deserialization, python/django, python/flask
           fail-on: critical,high
@@ -185,7 +187,7 @@ jobs:
 **Scan Dockerfiles:**
 ```yaml
       - name: Run Docker Security Scan
-        uses: shivasurya/code-pathfinder@main
+        uses: shivasurya/code-pathfinder@v1.2.0
         with:
           ruleset: docker/security, docker/best-practice
 ```
@@ -193,7 +195,7 @@ jobs:
 **Use local rules:**
 ```yaml
       - name: Run Custom Rules
-        uses: shivasurya/code-pathfinder@main
+        uses: shivasurya/code-pathfinder@v1.2.0
         with:
           rules: python-sdk/examples/owasp_top10.py
 ```
