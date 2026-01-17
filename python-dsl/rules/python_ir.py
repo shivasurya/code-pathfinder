@@ -10,25 +10,29 @@ from .python_decorators import get_python_rules
 
 def compile_python_rules() -> List[Dict[str, Any]]:
     """
-    Compile all Python rules to JSON IR.
+    Compile all Python rules to JSON IR format expected by Go executor.
 
-    Returns list of rule definitions ready for Go executor.
+    Returns list of rule definitions with structure:
+    [
+        {
+            "rule": {"id": "...", "name": "...", ...},
+            "matcher": {...}
+        }
+    ]
     """
     rules = get_python_rules()
     compiled = []
 
     for rule in rules:
         ir = {
-            "id": rule.metadata.id,
-            "name": rule.metadata.name,
-            "severity": rule.metadata.severity,
-            "category": rule.metadata.category,
-            "cwe": rule.metadata.cwe,
-            "cve": rule.metadata.cve,
-            "tags": rule.metadata.tags,
-            "message": rule.metadata.message,
-            "owasp": rule.metadata.owasp,
-            "rule_type": "python",
+            "rule": {
+                "id": rule.metadata.id,
+                "name": rule.metadata.name,
+                "severity": rule.metadata.severity.lower(),  # Normalize to lowercase
+                "cwe": rule.metadata.cwe,
+                "owasp": rule.metadata.owasp,
+                "description": rule.metadata.message or f"Security issue detected by {rule.metadata.id}",
+            },
             "matcher": rule.matcher,
         }
         compiled.append(ir)
@@ -36,15 +40,15 @@ def compile_python_rules() -> List[Dict[str, Any]]:
     return compiled
 
 
-def compile_all_rules() -> Dict[str, List[Dict[str, Any]]]:
+def compile_all_rules() -> List[Dict[str, Any]]:
     """
-    Compile all Python rules to JSON IR.
+    Compile all Python rules to JSON IR array format.
 
-    Returns dict with 'python' rule list.
+    Returns array of rules (not dict) for code analysis rules.
+    Container rules use dict format {"dockerfile": [...], "compose": [...]},
+    but code analysis rules use array format [...].
     """
-    return {
-        "python": compile_python_rules(),
-    }
+    return compile_python_rules()
 
 
 def compile_to_json(pretty: bool = True) -> str:
