@@ -34,11 +34,26 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check R2 endpoint
-    if [ -z "$R2_ENDPOINT" ]; then
-        echo -e "${YELLOW}⚠️  R2_ENDPOINT not set, using default${NC}"
-        R2_ENDPOINT="https://your-account-id.r2.cloudflarestorage.com"
+    # Check R2 account ID
+    if [ -z "$R2_ACCOUNT_ID" ]; then
+        echo -e "${RED}❌ R2_ACCOUNT_ID not set${NC}"
+        echo "Required: R2_ACCOUNT_ID (Cloudflare R2 Account ID)"
+        echo ""
+        echo "This script uses the same R2 credentials as stdlib uploads."
+        echo "The R2_ACCOUNT_ID secret should already be configured in GitHub Actions."
+        exit 1
     fi
+
+    # Validate R2 account ID format (alphanumeric)
+    if [[ ! "$R2_ACCOUNT_ID" =~ ^[a-z0-9]+$ ]]; then
+        echo -e "${RED}❌ Invalid R2_ACCOUNT_ID format${NC}"
+        echo "Expected: alphanumeric string (e.g., abc123def456)"
+        echo "Got: $R2_ACCOUNT_ID"
+        exit 1
+    fi
+
+    # Construct R2 endpoint from account ID (same as stdlib workflow)
+    R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
     # Check dist directory
     if [ ! -d "$DIST_DIR" ]; then
@@ -57,8 +72,8 @@ upload_file() {
     local content_type="$3"
     local cache_control="$4"
 
-    echo "  📤 Uploading: $file_path"
-    echo "     → s3://$BUCKET/$s3_key"
+    local filename=$(basename "$file_path")
+    echo "  📤 Uploading: $filename"
 
     aws s3 cp "$file_path" "s3://$BUCKET/$s3_key" \
         --endpoint-url "$R2_ENDPOINT" \
@@ -148,7 +163,6 @@ main() {
 
     echo "📂 Distribution directory: $DIST_DIR"
     echo "🪣  R2 Bucket: $BUCKET"
-    echo "🔗 R2 Endpoint: $R2_ENDPOINT"
     echo ""
 
     # Count files (trim whitespace from wc output)

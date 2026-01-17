@@ -1,5 +1,12 @@
 name: Deploy Rules to R2
 
+# Required Secrets (same as stdlib-r2-upload.yml):
+#   - R2_ACCOUNT_ID: Cloudflare R2 Account ID
+#   - R2_ACCESS_KEY_ID: Cloudflare R2 Access Key ID
+#   - R2_SECRET_ACCESS_KEY: Cloudflare R2 Secret Access Key
+#
+# These secrets are already configured for stdlib uploads and will be reused.
+
 on:
   push:
     branches:
@@ -10,6 +17,14 @@ on:
       - 'tools/process_rules_for_r2.py'
       - 'tools/upload_rules_to_r2.sh'
   workflow_dispatch:  # Allow manual trigger
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
 
 jobs:
   process-and-upload:
@@ -36,10 +51,12 @@ jobs:
 
       - name: Upload to R2
         env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
+          # Construct R2 endpoint from account ID (same as stdlib workflow)
+          export R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           # Install AWS CLI if not present
           if ! command -v aws &> /dev/null; then
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
