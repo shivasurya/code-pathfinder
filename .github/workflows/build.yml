@@ -35,7 +35,113 @@ jobs:
           cd sast-engine
           go mod download
 
-      - name: Test
+      - name: Build binary for integration tests
+        run: |
+          cd sast-engine
+          go build -o build/go/pathfinder .
+
+      - name: Create test fixtures
+        run: |
+          mkdir -p sast-engine/test/fixtures/{clean_project,vulnerable_project,rules}
+          # Clean project (no vulnerabilities)
+          cat > sast-engine/test/fixtures/clean_project/safe.py <<'EOF'
+          def safe_function():
+              return "Hello World"
+          EOF
+          # Vulnerable project (for testing detections)
+          cat > sast-engine/test/fixtures/vulnerable_project/vuln.py <<'EOF'
+          from flask import request
+          import pickle
+
+          def unsafe_deserialize():
+              data = request.get_data()
+              obj = pickle.loads(data)
+              return obj
+          EOF
+          # Simple rule (low severity, always matches)
+          cat > sast-engine/test/fixtures/rules/simple.py <<'EOF'
+          from codepathfinder import calls, flows, rule
+          from codepathfinder.presets import PropagationPresets
+
+          @rule(
+              id="TEST-001",
+              name="Test Rule",
+              severity="low",
+              category="test",
+              message="Test detection"
+          )
+          def test_rule():
+              return flows(
+                  from_sources=[calls("request.get_data"), calls("*.get_data")],
+                  to_sinks=[calls("pickle.loads"), calls("*.loads")],
+                  propagates_through=PropagationPresets.standard(),
+                  scope="local"
+              )
+          EOF
+          # Critical severity rule
+          cat > sast-engine/test/fixtures/rules/critical.py <<'EOF'
+          from codepathfinder import calls, flows, rule
+          from codepathfinder.presets import PropagationPresets
+
+          @rule(
+              id="TEST-CRIT-001",
+              name="Critical Test Rule",
+              severity="critical",
+              category="test",
+              message="Critical test detection"
+          )
+          def critical_test_rule():
+              return flows(
+                  from_sources=[calls("request.get_data"), calls("*.get_data")],
+                  to_sinks=[calls("pickle.loads"), calls("*.loads")],
+                  propagates_through=PropagationPresets.standard(),
+                  scope="local"
+              )
+          EOF
+          # High severity rule
+          cat > sast-engine/test/fixtures/rules/high.py <<'EOF'
+          from codepathfinder import calls, flows, rule
+          from codepathfinder.presets import PropagationPresets
+
+          @rule(
+              id="TEST-HIGH-001",
+              name="High Test Rule",
+              severity="high",
+              category="test",
+              message="High test detection"
+          )
+          def high_test_rule():
+              return flows(
+                  from_sources=[calls("request.get_data"), calls("*.get_data")],
+                  to_sinks=[calls("pickle.loads"), calls("*.loads")],
+                  propagates_through=PropagationPresets.standard(),
+                  scope="local"
+              )
+          EOF
+          # Low severity rule
+          cat > sast-engine/test/fixtures/rules/low.py <<'EOF'
+          from codepathfinder import calls, flows, rule
+          from codepathfinder.presets import PropagationPresets
+
+          @rule(
+              id="TEST-LOW-001",
+              name="Low Test Rule",
+              severity="low",
+              category="test",
+              message="Low test detection"
+          )
+          def low_test_rule():
+              return flows(
+                  from_sources=[calls("request.get_data"), calls("*.get_data")],
+                  to_sinks=[calls("pickle.loads"), calls("*.loads")],
+                  propagates_through=PropagationPresets.standard(),
+                  scope="local"
+              )
+          EOF
+
+      - name: Test (unit + integration)
+        env:
+          INTEGRATION: "1"
         run: |
           cd sast-engine
           go test -p 2 -v ./... -coverprofile=coverage.out -covermode=atomic
