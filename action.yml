@@ -1,40 +1,164 @@
 # action.yml
-name: 'Code-Pathfinder OSS'
-description: 'Code-Pathfinder open-source alternative to CodeQL'
-author: 'Shivasurya shiva@shivasurya.me'
+name: 'Code-Pathfinder'
+description: 'Security scanning with Code-Pathfinder - an open-source CodeQL alternative'
+author: 'Shivasurya <shiva@shivasurya.me>'
 branding:
   icon: "shield"
   color: "blue"
+
 inputs:
-  command:
-    description: 'Command to run example: ci, query'
-    required: true
-    default: 'ci'
-  project:
-    description: 'Source code to scan. eg: /path/to/project'
-    required: true
-    default: ${{ github.workspace }}
+  rules:
+    description: 'Path to Python SDK rules file or directory'
+    required: false
   ruleset:
-    description: 'Predefined rules eg: cpf/java or rules directory'
+    description: 'Remote ruleset(s) to use (e.g., python/deserialization, docker/security). Can specify multiple comma-separated.'
     required: false
+  project:
+    description: 'Path to source code to scan'
+    required: false
+    default: '.'
   output:
-    description: 'Output format eg: json'
+    description: 'Output format: sarif, json, csv, or text'
     required: false
-    default: 'json'
+    default: 'sarif'
   output-file:
-    description: 'Output file name eg: output.json'
+    description: 'Output file path (e.g., results.sarif)'
     required: false
-    default: 'output.json'
+    default: 'pathfinder-results.sarif'
+  fail-on:
+    description: 'Fail with exit code 1 if findings match severities (e.g., critical,high)'
+    required: false
+    default: ''
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  skip-tests:
+    description: 'Skip scanning test files'
+    required: false
+    default: 'true'
+  refresh-rules:
+    description: 'Force refresh of cached rulesets (bypasses cache)'
+    required: false
+    default: 'false'
+  debug:
+    description: 'Enable debug diagnostics with timestamps'
+    required: false
+    default: 'false'
+  disable-metrics:
+    description: 'Disable anonymous usage metrics collection'
+    required: false
+    default: 'false'
+
+outputs:
+  results-file:
+    description: 'Path to the output results file'
+    value: ${{ inputs.output-file }}
+  version:
+    description: 'Installed pathfinder version'
+    value: ${{ steps.install.outputs.version }}
+
 runs:
-  using: 'docker'
-  image: 'docker://shivasurya/code-pathfinder:stable-latest'
-  args:
-    - ${{ inputs.command }}
-    - --project
-    - ${{ inputs.project }}
-    - --ruleset
-    - ${{ inputs.ruleset }}
-    - --output
-    - ${{ inputs.output }}
-    - --output-file
-    - ${{ inputs.output-file }}
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Code-Pathfinder
+      id: install
+      shell: bash
+      run: |
+        pip install --quiet codepathfinder
+        VERSION=$(pathfinder version | head -1 | cut -d' ' -f2)
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Code-Pathfinder ${VERSION} installed successfully"
+
+    - name: Run Security Scan
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # Input validation to prevent command injection
+        # Check for dangerous shell metacharacters that could enable command injection
+        validate_no_injection() {
+          local input="$1"
+          local field_name="$2"
+          # Block shell command separators and substitution operators
+          if [[ "$input" =~ [\;\|\&\$\`] ]] || [[ "$input" =~ $'\n' ]]; then
+            echo "Error: Potentially dangerous characters detected in $field_name input"
+            echo "Blocked characters: ; | & \$ \` (newline)"
+            echo "These characters could be used for command injection"
+            exit 1
+          fi
+        }
+
+        # Validate that at least one rule source is provided
+        if [ -z "${{ inputs.rules }}" ] && [ -z "${{ inputs.ruleset }}" ]; then
+          echo "Error: Either 'rules' or 'ruleset' input must be specified"
+          exit 1
+        fi
+
+        # Validate all user-provided inputs
+        [ -n "${{ inputs.project }}" ] && validate_no_injection "${{ inputs.project }}" "project"
+        [ -n "${{ inputs.rules }}" ] && validate_no_injection "${{ inputs.rules }}" "rules"
+        [ -n "${{ inputs.ruleset }}" ] && validate_no_injection "${{ inputs.ruleset }}" "ruleset"
+        [ -n "${{ inputs.output }}" ] && validate_no_injection "${{ inputs.output }}" "output"
+        [ -n "${{ inputs.output-file }}" ] && validate_no_injection "${{ inputs.output-file }}" "output-file"
+        [ -n "${{ inputs.fail-on }}" ] && validate_no_injection "${{ inputs.fail-on }}" "fail-on"
+
+        # Build command arguments using array to prevent injection
+        ARGS=(scan)
+        ARGS+=(--project "${{ inputs.project }}")
+
+        # Add rules or ruleset
+        if [ -n "${{ inputs.rules }}" ]; then
+          ARGS+=(--rules "${{ inputs.rules }}")
+        fi
+
+        if [ -n "${{ inputs.ruleset }}" ]; then
+          # Split comma-separated rulesets and add each one
+          IFS=',' read -ra RULESETS <<< "${{ inputs.ruleset }}"
+          for ruleset in "${RULESETS[@]}"; do
+            # Trim whitespace
+            ruleset=$(echo "$ruleset" | xargs)
+            ARGS+=(--ruleset "$ruleset")
+          done
+        fi
+
+        ARGS+=(--output "${{ inputs.output }}")
+        ARGS+=(--output-file "${{ inputs.output-file }}")
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          ARGS+=(--verbose)
+        fi
+
+        if [ -n "${{ inputs.fail-on }}" ]; then
+          ARGS+=(--fail-on "${{ inputs.fail-on }}")
+        fi
+
+        if [ "${{ inputs.skip-tests }}" = "true" ]; then
+          ARGS+=(--skip-tests)
+        else
+          ARGS+=(--skip-tests=false)
+        fi
+
+        if [ "${{ inputs.refresh-rules }}" = "true" ]; then
+          ARGS+=(--refresh-rules)
+        fi
+
+        if [ "${{ inputs.debug }}" = "true" ]; then
+          ARGS+=(--debug)
+        fi
+
+        if [ "${{ inputs.disable-metrics }}" = "true" ]; then
+          ARGS+=(--disable-metrics)
+        fi
+
+        echo "Running: pathfinder ${ARGS[*]}"
+        pathfinder "${ARGS[@]}"

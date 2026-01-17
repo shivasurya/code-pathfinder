@@ -1,0 +1,45 @@
+# Example workflow showing how to use Code-Pathfinder GitHub Action
+# Copy this to your repository at .github/workflows/security-scan.yml
+#
+# NOTE: This workflow uses './' to test the action from the current branch.
+# In your own repository, replace './' with 'shivasurya/code-pathfinder@v1.2.0'
+# or 'shivasurya/code-pathfinder@main' for the latest version.
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Required for uploading SARIF results to GitHub Code Scanning
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  # Scan with multiple remote rulesets (Python + Docker)
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run Security Scan
+        uses: ./
+        with:
+          # Multiple rulesets can be specified as comma-separated list
+          ruleset: >-
+            python/deserialization,
+            python/django,
+            python/flask,
+            docker/security,
+            docker/best-practice
+          project: .
+          verbose: true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: pathfinder-results.sarif

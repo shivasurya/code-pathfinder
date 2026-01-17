@@ -5,6 +5,23 @@ All notable changes to the codepathfinder Python DSL will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-01-10
+
+### Changed
+- **GitHub Action rewritten as composite action** using pip installation
+  - Replaced Docker-based action with faster composite action
+  - Uses `pip install codepathfinder` for automatic binary installation
+  - Fixed incorrect `--ruleset` flag to proper `--rules` flag
+  - Uses `scan` command instead of deprecated `ci` command interface
+  - Added support for `fail-on`, `verbose`, `skip-tests` options
+  - Added `python-version` input for flexibility
+  - Outputs `results-file` and `version` for downstream steps
+
+### Added
+- Example workflow at `.github/workflows/example-security-scan.yml`
+- GitHub Action documentation in main README.md
+- Action outputs: `results-file`, `version`
+
 ## [1.1.0] - 2025-11-27
 
 ### Added
@@ -73,5 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inline examples and docstrings
 - OWASP Top 10 example patterns
 
+[1.1.7]: https://github.com/shivasurya/code-pathfinder/compare/v1.1.0...v1.1.7
 [1.1.0]: https://github.com/shivasurya/code-pathfinder/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/shivasurya/code-pathfinder/releases/tag/v1.0.0

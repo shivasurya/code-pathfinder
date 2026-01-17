@@ -148,6 +148,89 @@ pathfinder scan --rules rules/ --project . --output json | jq .
 pathfinder scan --rules rules/ --project . --fail-on=critical,high
 ```
 
+## GitHub Action
+
+Add security scanning to your CI/CD pipeline in just a few lines.
+
+**Best Practice:** Pin to a specific version (e.g., `@v1.2.0`) for stability and reproducibility. Using `@main` will always pull the latest changes, which may introduce breaking changes.
+
+```yaml
+# .github/workflows/security-scan.yml
+name: Security Scan
+
+on: [push, pull_request]
+
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Scan with remote Python rulesets
+      - name: Run Python Security Scan
+        uses: shivasurya/code-pathfinder@v1.2.0
+        with:
+          ruleset: python/deserialization, python/django, python/flask
+          fail-on: critical,high
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: pathfinder-results.sarif
+```
+
+**Scan Dockerfiles:**
+```yaml
+      - name: Run Docker Security Scan
+        uses: shivasurya/code-pathfinder@v1.2.0
+        with:
+          ruleset: docker/security, docker/best-practice
+```
+
+**Use local rules:**
+```yaml
+      - name: Run Custom Rules
+        uses: shivasurya/code-pathfinder@v1.2.0
+        with:
+          rules: python-sdk/examples/owasp_top10.py
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `rules` | Path to Python SDK rules file or directory | - |
+| `ruleset` | Remote ruleset(s) to use (e.g., `python/deserialization, docker/security`). Supports bundles or individual rule IDs. | - |
+| `project` | Path to source code to scan | `.` |
+| `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
+| `output-file` | Output file path | `pathfinder-results.sarif` |
+| `fail-on` | Fail on severities (e.g., `critical,high`) | - |
+| `verbose` | Enable verbose output with progress and statistics | `false` |
+| `debug` | Enable debug diagnostics with timestamps | `false` |
+| `skip-tests` | Skip scanning test files (test_*.py, *_test.py, etc.) | `true` |
+| `refresh-rules` | Force refresh of cached rulesets (bypasses cache) | `false` |
+| `disable-metrics` | Disable anonymous usage metrics collection | `false` |
+| `python-version` | Python version to use | `3.12` |
+
+**Note:** Either `rules` or `ruleset` must be specified.
+
+### Available Remote Rulesets
+
+**Python:**
+- `python/deserialization` - Unsafe pickle.loads RCE detection
+- `python/django` - Django SQL injection patterns
+- `python/flask` - Flask security misconfigurations
+
+**Docker:**
+- `docker/security` - Critical and high-severity security issues
+- `docker/best-practice` - Dockerfile optimization and best practices
+- `docker/performance` - Performance optimization for container images
+
 ## Acknowledgements
 Code Pathfinder uses tree-sitter for all language parsers.
 
