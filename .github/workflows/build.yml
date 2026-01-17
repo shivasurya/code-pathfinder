@@ -27,7 +27,7 @@ jobs:
           python-version: '3.14'
 
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install codepathfinder Python package from local
         run: |
@@ -64,7 +64,7 @@ jobs:
       run:
         working-directory: sast-engine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.3'
