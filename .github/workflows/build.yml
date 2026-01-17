@@ -6,9 +6,11 @@ on:
       - main
       - master
   pull_request:
+    types: [opened, synchronize, reopened]
     paths:
       - 'sast-engine/**'
-      - 'pathfinder-rules/**'
+      - 'python-sdk/**'
+      - '.github/workflows/**'
 
 jobs:
   build:
@@ -28,14 +30,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install codepathfinder Python package from local
-        run: pip install -e ./python-dsl
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e ./python-sdk
+          python3 -c "import codepathfinder; print(f'✓ codepathfinder {codepathfinder.__version__} installed at {codepathfinder.__file__}')"
 
       - name: Get dependencies
         run: |
           cd sast-engine
           go mod download
 
-      - name: Test
+      - name: Build binary for integration tests
+        run: |
+          cd sast-engine
+          go build -o build/go/pathfinder .
+
+      - name: Test (unit + integration)
+        env:
+          INTEGRATION: "1"
         run: |
           cd sast-engine
           go test -p 2 -v ./... -coverprofile=coverage.out -covermode=atomic

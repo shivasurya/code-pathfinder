@@ -1,0 +1,28 @@
+{
+  "category": "docker",
+  "language": "Dockerfile",
+  "description": "Security and best practice rules for Dockerfiles",
+  "bundles": {
+    "security": {
+      "name": "Docker Security Rules",
+      "description": "Critical and high-severity security vulnerabilities",
+      "severity_filter": ["CRITICAL", "HIGH"],
+      "recommended": true,
+      "tags": ["security", "cwe", "production-ready"]
+    },
+    "best-practice": {
+      "name": "Docker Best Practices",
+      "description": "Dockerfile optimization and best practices",
+      "severity_filter": ["MEDIUM", "LOW", "INFO"],
+      "recommended": true,
+      "tags": ["best-practice", "optimization"]
+    },
+    "performance": {
+      "name": "Docker Performance",
+      "description": "Performance optimization for container images",
+      "severity_filter": ["MEDIUM", "LOW"],
+      "recommended": false,
+      "tags": ["performance", "build-time"]
+    }
+  }
+}

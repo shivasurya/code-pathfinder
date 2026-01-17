@@ -1,0 +1,28 @@
+{
+  "category": "python",
+  "language": "Python",
+  "description": "Security rules for Python applications including Django, Flask, and common vulnerabilities",
+  "bundles": {
+    "deserialization": {
+      "name": "Python Deserialization Security",
+      "description": "Unsafe deserialization vulnerabilities (PYTHON-DESER-001: pickle.loads RCE)",
+      "severity_filter": ["CRITICAL"],
+      "recommended": true,
+      "tags": ["security", "deserialization", "rce", "cwe-502", "owasp-a08"]
+    },
+    "django": {
+      "name": "Django Security Rules",
+      "description": "Django framework security (PYTHON-DJANGO-001: SQL injection in cursor.execute)",
+      "severity_filter": ["CRITICAL"],
+      "recommended": true,
+      "tags": ["security", "django", "sql-injection", "framework", "cwe-89", "owasp-a03"]
+    },
+    "flask": {
+      "name": "Flask Security Rules",
+      "description": "Flask framework security (PYTHON-FLASK-001: Debug mode enabled)",
+      "severity_filter": ["HIGH"],
+      "recommended": true,
+      "tags": ["security", "flask", "debug-mode", "framework", "cwe-489", "owasp-a05"]
+    }
+  }
+}

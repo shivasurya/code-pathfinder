@@ -1,0 +1,93 @@
+name: Deploy Rules to R2
+
+# Required Secrets (same as stdlib-r2-upload.yml):
+#   - R2_ACCOUNT_ID: Cloudflare R2 Account ID
+#   - R2_ACCESS_KEY_ID: Cloudflare R2 Access Key ID
+#   - R2_SECRET_ACCESS_KEY: Cloudflare R2 Secret Access Key
+#
+# These secrets are already configured for stdlib uploads and will be reused.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rules/**/*.py'
+      - 'rules/**/manifest.json'
+      - 'tools/process_rules_for_r2.py'
+      - 'tools/upload_rules_to_r2.sh'
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+jobs:
+  process-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Process rules
+        run: |
+          python3 tools/process_rules_for_r2.py \
+            --rules-dir ./rules \
+            --output-dir ./dist/rules \
+            --base-url https://assets.codepathfinder.dev/rules
+
+          echo "📊 Processing summary:"
+          find dist/rules -type f -name "*.zip" -exec ls -lh {} \;
+
+      - name: Upload to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          # Construct R2 endpoint from account ID (same as stdlib workflow)
+          export R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install
+          fi
+
+          # Run upload script (non-interactive in CI)
+          export UPLOAD_CONFIRMED=yes
+          bash tools/upload_rules_to_r2.sh ./dist/rules
+
+      - name: Upload artifacts (for debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: processed-rules
+          path: dist/rules/
+          retention-days: 7
+
+      - name: Trigger website deploy
+        if: success()
+        # This step will be implemented in PR-07
+        run: |
+          echo "Website deploy hook will be added in PR-07"
+          # curl -X POST ${{ secrets.VERCEL_DEPLOY_HOOK }}
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "### ✅ Rules deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Bundles uploaded:**" >> $GITHUB_STEP_SUMMARY
+          find dist/rules -name "*.zip" -exec basename {} \; | sort >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Manifest URL:** https://assets.codepathfinder.dev/rules/manifest.json" >> $GITHUB_STEP_SUMMARY

@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
@@ -14,6 +16,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/docker"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
+	"github.com/shivasurya/code-pathfinder/sast-engine/ruleset"
 	"github.com/spf13/cobra"
 )
 
@@ -29,19 +32,30 @@ Examples:
   # Scan with a directory of rules
   pathfinder scan --rules rules/ --project /path/to/project
 
-  # Scan with custom rules and output to JSON file
-  pathfinder scan --rules my_rules.py --project . --output json --output-file results.json
+  # Scan with a remote ruleset bundle
+  pathfinder scan --ruleset docker/security --project /path/to/project
 
-  # Scan with SARIF output for CI/CD integration
-  pathfinder scan --rules rules/ --project . --output sarif --output-file results.sarif
+  # Scan with an individual rule by ID
+  pathfinder scan --ruleset docker/DOCKER-BP-007 --project /path/to/project
 
-  # Scan and print JSON to stdout (for piping)
-  pathfinder scan --rules rules/ --project . --output json | jq .`,
+  # Scan with multiple individual rules
+  pathfinder scan --ruleset docker/DOCKER-BP-007 --ruleset docker/DOCKER-SEC-001 --project .
+
+  # Mix bundles, individual rules, and local rules
+  pathfinder scan --rules rules/ --ruleset docker/security --ruleset python/PYTHON-SEC-042 --project .
+
+  # Output to JSON file
+  pathfinder scan --ruleset docker/security --project . --output json --output-file results.json
+
+  # SARIF output for CI/CD integration
+  pathfinder scan --ruleset docker/security --project . --output sarif --output-file results.sarif`,
 	// Note: The main RunE logic is covered by integration tests in exit_code_integration_test.go
 	// Unit testing cobra commands requires complex mocking of file systems, graph building, etc.
 	// Integration tests provide better coverage for the full execution path.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rulesPath, _ := cmd.Flags().GetString("rules")
+		rulesetSpecs, _ := cmd.Flags().GetStringArray("ruleset")
+		refreshRules, _ := cmd.Flags().GetBool("refresh-rules")
 		projectPath, _ := cmd.Flags().GetString("project")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
@@ -49,6 +63,15 @@ Examples:
 		outputFormat, _ := cmd.Flags().GetString("output")
 		outputFile, _ := cmd.Flags().GetString("output-file")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+
+		// Validate that at least one rule source is provided
+		if len(rulesetSpecs) == 0 && rulesPath == "" {
+			return fmt.Errorf("either --rules or --ruleset flag is required")
+		}
+
+		if projectPath == "" {
+			return fmt.Errorf("--project flag is required")
+		}
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -67,13 +90,22 @@ Examples:
 			}
 		}
 
-		if rulesPath == "" {
-			return fmt.Errorf("--rules flag is required")
+		// Handle remote ruleset downloads and merge with local rules
+		finalRulesPath, tempDir, err := prepareRules(rulesPath, rulesetSpecs, refreshRules, logger)
+		if err != nil {
+			return fmt.Errorf("failed to prepare rules: %w", err)
+		}
+		// Clean up temporary directory if created
+		if tempDir != "" {
+			defer func() {
+				if err := os.RemoveAll(tempDir); err != nil {
+					logger.Warning("Failed to clean up temporary directory: %v", err)
+				}
+			}()
 		}
 
-		if projectPath == "" {
-			return fmt.Errorf("--project flag is required")
-		}
+		// Use the prepared rules path for scanning
+		rulesPath = finalRulesPath
 
 		if outputFormat != "" && outputFormat != "text" && outputFormat != "json" && outputFormat != "sarif" && outputFormat != "csv" {
 			return fmt.Errorf("--output must be 'text', 'json', 'sarif', or 'csv'")
@@ -485,9 +517,268 @@ func printDetections(rule dsl.RuleIR, detections []dsl.DataflowDetection) {
 	}
 }
 
+// findRulesDirectory locates the rules directory for resolving rule IDs.
+// Looks in current directory, parent directories, and common locations.
+func findRulesDirectory() string {
+	// Check common locations
+	candidates := []string{
+		"rules",           // Current directory
+		"../rules",        // Parent directory
+		"../../rules",     // Grandparent
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "code-pathfinder", "rules"),
+		"/usr/local/share/code-pathfinder/rules",
+		"/opt/code-pathfinder/rules",
+	}
+
+	for _, dir := range candidates {
+		if absDir, err := filepath.Abs(dir); err == nil {
+			if stat, err := os.Stat(absDir); err == nil && stat.IsDir() {
+				return absDir
+			}
+		}
+	}
+
+	// Fallback to current directory + rules
+	pwd, _ := os.Getwd()
+	return filepath.Join(pwd, "rules")
+}
+
+// prepareRules downloads remote rulesets, resolves rule IDs, and merges with local rules if needed.
+// Returns: (finalRulesPath, tempDirToCleanup, error).
+func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, logger *output.Logger) (string, string, error) {
+	// Case 1: Only local rules - use directly
+	if len(rulesetSpecs) == 0 {
+		return localRulesPath, "", nil
+	}
+
+	// Separate ruleset specs into bundles and individual rule IDs
+	var bundleSpecs []string
+	var ruleIDSpecs []string
+
+	for _, spec := range rulesetSpecs {
+		parts := strings.Split(spec, "/")
+		if len(parts) == 2 && ruleset.IsRuleID(parts[1]) {
+			// This is a rule ID (e.g., docker/DOCKER-BP-007)
+			ruleIDSpecs = append(ruleIDSpecs, spec)
+		} else {
+			// This is a bundle (e.g., docker/security)
+			bundleSpecs = append(bundleSpecs, spec)
+		}
+	}
+
+	// Download remote bundles
+	var downloadedPaths []string
+	if len(bundleSpecs) > 0 {
+		config := &ruleset.DownloadConfig{
+			BaseURL:       "https://assets.codepathfinder.dev/rules",
+			CacheDir:      getCacheDir(),
+			CacheTTL:      24 * time.Hour,
+			ManifestTTL:   1 * time.Hour,
+			HTTPTimeout:   30 * time.Second,
+			RetryAttempts: 3,
+		}
+
+		downloader, err := ruleset.NewDownloader(config)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to create downloader: %w", err)
+		}
+
+		downloadedPaths = make([]string, 0, len(bundleSpecs))
+		for _, spec := range bundleSpecs {
+			if refresh {
+				logger.Progress("Refreshing ruleset cache for %s...", spec)
+				if err := downloader.RefreshCache(spec); err != nil {
+					logger.Warning("Failed to invalidate cache for %s: %v", spec, err)
+				}
+			}
+
+			path, err := downloader.Download(spec)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to download ruleset %s: %w", spec, err)
+			}
+			downloadedPaths = append(downloadedPaths, path)
+			logger.Progress("Downloaded ruleset: %s", spec)
+		}
+	}
+
+	// Resolve individual rule IDs to file paths
+	var resolvedRulePaths []string
+	if len(ruleIDSpecs) > 0 {
+		rulesBaseDir := findRulesDirectory()
+		finder := ruleset.NewRuleFinder(rulesBaseDir)
+
+		for _, spec := range ruleIDSpecs {
+			ruleSpec, err := ruleset.ParseRuleSpec(spec)
+			if err != nil {
+				return "", "", fmt.Errorf("invalid rule spec %s: %w", spec, err)
+			}
+
+			if err := ruleSpec.Validate(); err != nil {
+				return "", "", fmt.Errorf("invalid rule spec %s: %w", spec, err)
+			}
+
+			filePath, err := finder.FindRuleFile(ruleSpec)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to find rule %s: %w", spec, err)
+			}
+
+			resolvedRulePaths = append(resolvedRulePaths, filePath)
+			logger.Progress("Resolved rule %s → %s", spec, filepath.Base(filePath))
+		}
+	}
+
+	// Calculate total sources
+	totalSources := len(downloadedPaths) + len(resolvedRulePaths) + boolToInt(localRulesPath != "")
+
+	// Case 2: Single source - use directly
+	if totalSources == 1 {
+		if localRulesPath != "" {
+			return localRulesPath, "", nil
+		}
+		if len(downloadedPaths) == 1 {
+			return downloadedPaths[0], "", nil
+		}
+		// Single resolved rule file - create temp dir with just that file
+		tempDir, err := os.MkdirTemp("", "pathfinder-rules-*")
+		if err != nil {
+			return "", "", fmt.Errorf("failed to create temp directory: %w", err)
+		}
+		if err := copyFile(resolvedRulePaths[0], filepath.Join(tempDir, filepath.Base(resolvedRulePaths[0]))); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy rule file: %w", err)
+		}
+		return tempDir, tempDir, nil
+	}
+
+	// Case 3: Multiple sources - need to merge
+	tempDir, err := os.MkdirTemp("", "pathfinder-rules-*")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	logger.Progress("Merging %d rule source(s)...", totalSources)
+
+	// Copy local rules if provided
+	if localRulesPath != "" {
+		if err := copyRules(localRulesPath, tempDir, "local"); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy local rules: %w", err)
+		}
+	}
+
+	// Copy downloaded bundles
+	for i, path := range downloadedPaths {
+		destName := fmt.Sprintf("remote-%d", i)
+		if err := copyRules(path, tempDir, destName); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy remote ruleset: %w", err)
+		}
+	}
+
+	// Copy individual resolved rule files
+	for i, filePath := range resolvedRulePaths {
+		destName := fmt.Sprintf("rule-%d", i)
+		destPath := filepath.Join(tempDir, destName)
+		if err := os.MkdirAll(destPath, 0755); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to create directory: %w", err)
+		}
+		destFile := filepath.Join(destPath, filepath.Base(filePath))
+		if err := copyFile(filePath, destFile); err != nil {
+			os.RemoveAll(tempDir)
+			return "", "", fmt.Errorf("failed to copy rule file %s: %w", filePath, err)
+		}
+	}
+
+	logger.Progress("Merged %d rule source(s)", totalSources)
+	return tempDir, tempDir, nil
+}
+
+// copyRules copies Python rule files from src to dest/subdir.
+func copyRules(src, dest, subdir string) error {
+	destDir := filepath.Join(dest, subdir)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return err
+	}
+
+	// Check if src is a file or directory
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("failed to stat source: %w", err)
+	}
+
+	if srcInfo.IsDir() {
+		// Copy all .py files from directory
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return fmt.Errorf("failed to read directory: %w", err)
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".py") {
+				continue
+			}
+
+			srcFile := filepath.Join(src, entry.Name())
+			destFile := filepath.Join(destDir, entry.Name())
+			if err := copyFile(srcFile, destFile); err != nil {
+				return fmt.Errorf("failed to copy %s: %w", entry.Name(), err)
+			}
+		}
+	} else {
+		// Single file - copy directly
+		destFile := filepath.Join(destDir, filepath.Base(src))
+		if err := copyFile(src, destFile); err != nil {
+			return fmt.Errorf("failed to copy file: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// copyFile copies a single file from src to dest.
+func copyFile(src, dest string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	return destFile.Close()
+}
+
+// boolToInt converts bool to int (0 or 1).
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// getCacheDir returns platform-specific cache directory.
+func getCacheDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir()
+	}
+	return filepath.Join(cacheDir, "code-pathfinder", "rules")
+}
+
 func init() {
 	rootCmd.AddCommand(scanCmd)
-	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
+	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
+	scanCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
+	scanCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
 	scanCmd.Flags().StringP("output", "o", "text", "Output format: text, json, sarif, or csv (default: text)")
 	scanCmd.Flags().StringP("output-file", "f", "", "Write output to file instead of stdout")
@@ -495,6 +786,5 @@ func init() {
 	scanCmd.Flags().Bool("debug", false, "Show debug diagnostics with timestamps")
 	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	scanCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
-	scanCmd.MarkFlagRequired("rules")
 	scanCmd.MarkFlagRequired("project")
 }
