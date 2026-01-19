@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -67,4 +68,16 @@ func (m *Manifest) GetBundle(bundleName string) (*Bundle, error) {
 		return nil, fmt.Errorf("bundle not found: %s", bundleName)
 	}
 	return bundle, nil
+}
+
+// GetAllBundleNames returns a sorted list of all bundle names in this category.
+// Used for expanding "category/all" specs to all available bundles.
+func (m *Manifest) GetAllBundleNames() []string {
+	names := make([]string, 0, len(m.Bundles))
+	for name := range m.Bundles {
+		names = append(names, name)
+	}
+	// Sort for consistent ordering across runs
+	sort.Strings(names)
+	return names
 }

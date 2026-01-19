@@ -561,9 +561,19 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 			// This is a rule ID (e.g., docker/DOCKER-BP-007)
 			ruleIDSpecs = append(ruleIDSpecs, spec)
 		} else {
-			// This is a bundle (e.g., docker/security)
+			// This is a bundle (e.g., docker/security) or category expansion (e.g., docker/all)
 			bundleSpecs = append(bundleSpecs, spec)
 		}
+	}
+
+	// Expand "category/all" specs to individual bundle specs
+	if len(bundleSpecs) > 0 {
+		manifestLoader := ruleset.NewManifestLoader("https://assets.codepathfinder.dev/rules", getCacheDir())
+		expanded, err := expandBundleSpecs(bundleSpecs, manifestLoader, logger)
+		if err != nil {
+			return "", "", err
+		}
+		bundleSpecs = expanded
 	}
 
 	// Download remote bundles
@@ -734,6 +744,46 @@ func copyRules(src, dest, subdir string) error {
 	}
 
 	return nil
+}
+
+// expandBundleSpecs expands "category/all" specs into individual bundle specs.
+// This function is extracted for testability with mock manifest providers.
+func expandBundleSpecs(bundleSpecs []string, manifestProvider ruleset.ManifestProvider, logger *output.Logger) ([]string, error) {
+	expandedBundleSpecs := make([]string, 0, len(bundleSpecs))
+
+	for _, spec := range bundleSpecs {
+		parsed, err := ruleset.ParseSpec(spec)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ruleset spec %s: %w", spec, err)
+		}
+
+		// Check if this is a category expansion (bundle == "*")
+		if parsed.Bundle == "*" {
+			// Load category manifest to get all bundle names
+			manifest, err := manifestProvider.LoadCategoryManifest(parsed.Category)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load manifest for category %s: %w", parsed.Category, err)
+			}
+
+			// Expand to all bundles in category
+			bundleNames := manifest.GetAllBundleNames()
+			if len(bundleNames) == 0 {
+				logger.Warning("Category %s has no bundles", parsed.Category)
+				continue
+			}
+
+			logger.Progress("Expanding %s/all to %d bundles: %v", parsed.Category, len(bundleNames), bundleNames)
+
+			for _, bundleName := range bundleNames {
+				expandedBundleSpecs = append(expandedBundleSpecs, fmt.Sprintf("%s/%s", parsed.Category, bundleName))
+			}
+		} else {
+			// Regular bundle spec, keep as-is
+			expandedBundleSpecs = append(expandedBundleSpecs, spec)
+		}
+	}
+
+	return expandedBundleSpecs, nil
 }
 
 // copyFile copies a single file from src to dest.
