@@ -10,16 +10,29 @@ import (
 // Examples: DOCKER-BP-007, PYTHON-SEC-001, COMPOSE-SEC-008.
 var ruleIDPattern = regexp.MustCompile(`^[A-Z]+(-[A-Z]+)?-\d+$`)
 
-// ParseSpec parses "docker/security" into RulesetSpec.
+// ParseSpec parses "docker/security" or "docker/all" into RulesetSpec.
+// The "all" keyword is special and expands to all bundles in the category.
 func ParseSpec(spec string) (*RulesetSpec, error) {
 	parts := strings.Split(spec, "/")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid ruleset spec: %s (expected format: category/bundle)", spec)
 	}
 
+	category := parts[0]
+	bundle := parts[1]
+
+	// Check if bundle is "all" - special keyword for category expansion
+	// We use "*" as internal marker for expansion logic
+	if bundle == "all" {
+		return &RulesetSpec{
+			Category: category,
+			Bundle:   "*",
+		}, nil
+	}
+
 	return &RulesetSpec{
-		Category: parts[0],
-		Bundle:   parts[1],
+		Category: category,
+		Bundle:   bundle,
 	}, nil
 }
 

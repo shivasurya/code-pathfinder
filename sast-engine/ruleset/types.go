@@ -73,3 +73,9 @@ type DownloadConfig struct {
 	HTTPTimeout   time.Duration
 	RetryAttempts int
 }
+
+// ManifestProvider defines the interface for loading manifests.
+// This interface enables testing with mock implementations.
+type ManifestProvider interface {
+	LoadCategoryManifest(category string) (*Manifest, error)
+}

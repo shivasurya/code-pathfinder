@@ -111,3 +111,57 @@ func TestManifestGetBundle(t *testing.T) {
 		t.Errorf("expected error for non-existent bundle, got nil")
 	}
 }
+
+func TestManifestGetAllBundleNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest *Manifest
+		want     []string
+	}{
+		{
+			name: "multiple bundles",
+			manifest: &Manifest{
+				Bundles: map[string]*Bundle{
+					"security":      {Name: "Security Rules"},
+					"best-practice": {Name: "Best Practices"},
+					"performance":   {Name: "Performance Rules"},
+				},
+			},
+			want: []string{"best-practice", "performance", "security"},
+		},
+		{
+			name: "single bundle",
+			manifest: &Manifest{
+				Bundles: map[string]*Bundle{
+					"security": {Name: "Security Rules"},
+				},
+			},
+			want: []string{"security"},
+		},
+		{
+			name: "empty bundles",
+			manifest: &Manifest{
+				Bundles: map[string]*Bundle{},
+			},
+			want: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.manifest.GetAllBundleNames()
+
+			if len(got) != len(tt.want) {
+				t.Errorf("expected %d bundles, got %d", len(tt.want), len(got))
+				return
+			}
+
+			// Check each expected bundle name
+			for i, name := range tt.want {
+				if got[i] != name {
+					t.Errorf("expected bundle[%d] = %s, got %s", i, name, got[i])
+				}
+			}
+		})
+	}
+}

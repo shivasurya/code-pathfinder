@@ -34,6 +34,24 @@ func TestParseSpec(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:  "valid category expansion - docker/all",
+			input: "docker/all",
+			want: &RulesetSpec{
+				Category: "docker",
+				Bundle:   "*",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "valid category expansion - python/all",
+			input: "python/all",
+			want: &RulesetSpec{
+				Category: "python",
+				Bundle:   "*",
+			},
+			wantErr: false,
+		},
+		{
 			name:    "invalid - no slash",
 			input:   "dockersecurity",
 			want:    nil,

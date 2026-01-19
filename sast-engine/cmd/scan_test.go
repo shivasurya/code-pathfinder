@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
+	"github.com/shivasurya/code-pathfinder/sast-engine/ruleset"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -405,5 +408,197 @@ line 7`
 		snippet := generateCodeSnippet("/nonexistent/file.txt", 1, 2)
 
 		assert.Equal(t, 0, len(snippet.Lines))
+	})
+}
+
+// mockManifestProvider is a mock implementation of ruleset.ManifestProvider for testing.
+type mockManifestProvider struct {
+	manifests map[string]*ruleset.Manifest
+	errors    map[string]error
+}
+
+func newMockManifestProvider() *mockManifestProvider {
+	return &mockManifestProvider{
+		manifests: make(map[string]*ruleset.Manifest),
+		errors:    make(map[string]error),
+	}
+}
+
+func (m *mockManifestProvider) LoadCategoryManifest(category string) (*ruleset.Manifest, error) {
+	if err, exists := m.errors[category]; exists {
+		return nil, err
+	}
+	if manifest, exists := m.manifests[category]; exists {
+		return manifest, nil
+	}
+	return nil, fmt.Errorf("category not found: %s", category)
+}
+
+func (m *mockManifestProvider) addManifest(category string, bundleNames []string) {
+	manifest := &ruleset.Manifest{
+		Category: category,
+		Bundles:  make(map[string]*ruleset.Bundle),
+	}
+	for _, name := range bundleNames {
+		manifest.Bundles[name] = &ruleset.Bundle{Name: name}
+	}
+	m.manifests[category] = manifest
+}
+
+func (m *mockManifestProvider) addError(category string, err error) {
+	m.errors[category] = err
+}
+
+func TestExpandBundleSpecs(t *testing.T) {
+	t.Run("expands docker/all to multiple bundles", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{"security", "best-practice", "performance"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(expanded))
+		assert.Contains(t, expanded, "docker/best-practice")
+		assert.Contains(t, expanded, "docker/performance")
+		assert.Contains(t, expanded, "docker/security")
+	})
+
+	t.Run("expands python/all to multiple bundles", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("python", []string{"deserialization", "django", "flask"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"python/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(expanded))
+		assert.Contains(t, expanded, "python/deserialization")
+		assert.Contains(t, expanded, "python/django")
+		assert.Contains(t, expanded, "python/flask")
+	})
+
+	t.Run("keeps regular bundle specs unchanged", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/security", "python/django"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(expanded))
+		assert.Equal(t, "docker/security", expanded[0])
+		assert.Equal(t, "python/django", expanded[1])
+	})
+
+	t.Run("mixes category expansion with regular specs", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{"security", "best-practice"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/all", "python/django"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(expanded))
+		assert.Contains(t, expanded, "docker/best-practice")
+		assert.Contains(t, expanded, "docker/security")
+		assert.Contains(t, expanded, "python/django")
+	})
+
+	t.Run("handles category with single bundle", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{"security"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(expanded))
+		assert.Equal(t, "docker/security", expanded[0])
+	})
+
+	t.Run("handles category with no bundles", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{}) // Empty bundles
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(expanded))
+	})
+
+	t.Run("returns error when category manifest fails to load", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addError("nonexistent", fmt.Errorf("HTTP 404: not found"))
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"nonexistent/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.Error(t, err)
+		assert.Nil(t, expanded)
+		assert.Contains(t, err.Error(), "failed to load manifest for category nonexistent")
+	})
+
+	t.Run("returns error for invalid spec format", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"invalid-spec-no-slash"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.Error(t, err)
+		assert.Nil(t, expanded)
+		assert.Contains(t, err.Error(), "invalid ruleset spec")
+	})
+
+	t.Run("handles multiple category expansions", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{"security", "best-practice"})
+		mock.addManifest("python", []string{"django", "flask"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"docker/all", "python/all"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 4, len(expanded))
+		assert.Contains(t, expanded, "docker/best-practice")
+		assert.Contains(t, expanded, "docker/security")
+		assert.Contains(t, expanded, "python/django")
+		assert.Contains(t, expanded, "python/flask")
+	})
+
+	t.Run("handles empty input specs", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(expanded))
+	})
+
+	t.Run("preserves order for mixed specs", func(t *testing.T) {
+		mock := newMockManifestProvider()
+		mock.addManifest("docker", []string{"security"})
+		logger := output.NewLogger(output.VerbosityDefault)
+
+		specs := []string{"python/django", "docker/all", "java/security"}
+		expanded, err := expandBundleSpecs(specs, mock, logger)
+
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(expanded))
+		// Order should be: python/django, docker/security (expanded), java/security
+		assert.Equal(t, "python/django", expanded[0])
+		assert.Equal(t, "docker/security", expanded[1])
+		assert.Equal(t, "java/security", expanded[2])
 	})
 }
