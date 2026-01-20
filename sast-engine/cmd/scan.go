@@ -130,8 +130,9 @@ Examples:
 		loader := dsl.NewRuleLoader(rulesPath)
 
 		// Step 1: Build code graph (AST)
-		logger.Progress("Building code graph from %s...", projectPath)
+		logger.StartProgress("Building code graph", -1)
 		codeGraph := graph.Initialize(projectPath)
+		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
 			return fmt.Errorf("no source files found in project")
 		}
@@ -160,8 +161,9 @@ Examples:
 		}
 
 		// Step 2: Build module registry
-		logger.Progress("Building module registry...")
+		logger.StartProgress("Building module registry", -1)
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, skipTests)
+		logger.FinishProgress()
 		if err != nil {
 			logger.Warning("failed to build module registry: %v", err)
 			// Create empty registry as fallback
@@ -172,8 +174,9 @@ Examples:
 		}
 
 		// Step 3: Build callgraph
-		logger.Progress("Building callgraph...")
+		logger.StartProgress("Building callgraph", -1)
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
+		logger.FinishProgress()
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
@@ -181,8 +184,9 @@ Examples:
 			len(cg.Functions), countTotalCallSites(cg))
 
 		// Step 4: Load Python DSL rules
-		logger.Progress("Loading rules from %s...", rulesPath)
+		logger.StartProgress("Loading rules", -1)
 		rules, err := loader.LoadRules(logger)
+		logger.FinishProgress()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
@@ -201,11 +205,13 @@ Examples:
 		// Execute all rules and collect enriched detections
 		var allEnriched []*dsl.EnrichedDetection
 		var scanErrors bool
+		logger.StartProgress("Executing rules", len(rules))
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
 				logger.Warning("Error executing rule %s: %v", rule.Rule.ID, err)
 				scanErrors = true
+				logger.UpdateProgress(1)
 				continue
 			}
 
@@ -213,7 +219,9 @@ Examples:
 				enriched, _ := enricher.EnrichAll(detections, rule)
 				allEnriched = append(allEnriched, enriched...)
 			}
+			logger.UpdateProgress(1)
 		}
+		logger.FinishProgress()
 
 		// Merge container detections with code analysis detections
 		allEnriched = append(allEnriched, containerDetections...)

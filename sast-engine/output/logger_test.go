@@ -330,3 +330,137 @@ func TestNewLoggerWithWriter_TTYDetection(t *testing.T) {
 		})
 	}
 }
+
+func TestLoggerStartProgress_NonTTY(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityVerbose, &buf)
+
+	// Non-TTY logger should fallback to Progress() message
+	err := l.StartProgress("Test operation", 10)
+	if err != nil {
+		t.Errorf("StartProgress returned error: %v", err)
+	}
+
+	// Should have printed a progress message
+	if !strings.Contains(buf.String(), "Test operation") {
+		t.Errorf("Expected progress message, got: %s", buf.String())
+	}
+}
+
+func TestLoggerStartProgress_Indeterminate(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Test indeterminate progress (total = -1)
+	err := l.StartProgress("Building", -1)
+	if err != nil {
+		t.Errorf("StartProgress returned error: %v", err)
+	}
+
+	// Should handle finish without error
+	err = l.FinishProgress()
+	if err != nil {
+		t.Errorf("FinishProgress returned error: %v", err)
+	}
+}
+
+func TestLoggerStartProgress_Determinate(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Test determinate progress (total > 0)
+	err := l.StartProgress("Processing", 100)
+	if err != nil {
+		t.Errorf("StartProgress returned error: %v", err)
+	}
+
+	// Update progress
+	err = l.UpdateProgress(50)
+	if err != nil {
+		t.Errorf("UpdateProgress returned error: %v", err)
+	}
+
+	// Finish progress
+	err = l.FinishProgress()
+	if err != nil {
+		t.Errorf("FinishProgress returned error: %v", err)
+	}
+}
+
+func TestLoggerUpdateProgress_WithoutStart(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Updating without starting should not error
+	err := l.UpdateProgress(10)
+	if err != nil {
+		t.Errorf("UpdateProgress without start returned error: %v", err)
+	}
+}
+
+func TestLoggerFinishProgress_WithoutStart(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Finishing without starting should not error
+	err := l.FinishProgress()
+	if err != nil {
+		t.Errorf("FinishProgress without start returned error: %v", err)
+	}
+}
+
+func TestLoggerSetProgressDescription(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Start progress
+	_ = l.StartProgress("Initial", 10)
+
+	// Set new description (should not panic)
+	l.SetProgressDescription("Updated")
+
+	// Cleanup
+	_ = l.FinishProgress()
+}
+
+func TestLoggerIsProgressEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		isTTY    bool
+		expected bool
+	}{
+		{"TTY enabled", true, false},  // bytes.Buffer is not TTY
+		{"Non-TTY disabled", false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+			got := l.IsProgressEnabled()
+			if got != tt.expected {
+				t.Errorf("IsProgressEnabled() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLoggerProgressBar_MultipleOperations(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	// Start first operation
+	_ = l.StartProgress("Operation 1", -1)
+	_ = l.FinishProgress()
+
+	// Start second operation (should clear first)
+	_ = l.StartProgress("Operation 2", 10)
+	_ = l.UpdateProgress(5)
+	_ = l.FinishProgress()
+
+	// Progress bar should be nil after finish
+	if l.progressBar != nil {
+		t.Error("Progress bar should be nil after FinishProgress")
+	}
+}

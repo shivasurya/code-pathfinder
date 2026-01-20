@@ -79,16 +79,18 @@ Examples:
 		}
 
 		// Build code graph (AST)
-		logger.Progress("Building code graph from %s...", projectPath)
+		logger.StartProgress("Building code graph", -1)
 		codeGraph := graph.Initialize(projectPath)
+		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
 			return fmt.Errorf("no source files found in project")
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Build module registry
-		logger.Progress("Building module registry...")
+		logger.StartProgress("Building module registry", -1)
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, skipTests)
+		logger.FinishProgress()
 		if err != nil {
 			logger.Warning("failed to build module registry: %v", err)
 			moduleRegistry = core.NewModuleRegistry()
@@ -98,8 +100,9 @@ Examples:
 		}
 
 		// Build callgraph
-		logger.Progress("Building callgraph...")
+		logger.StartProgress("Building callgraph", -1)
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
+		logger.FinishProgress()
 		if err != nil {
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
@@ -107,9 +110,10 @@ Examples:
 			len(cg.Functions), countTotalCallSites(cg))
 
 		// Load Python DSL rules
-		logger.Progress("Loading rules from %s...", rulesPath)
+		logger.StartProgress("Loading rules", -1)
 		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules(logger)
+		logger.FinishProgress()
 		if err != nil {
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
@@ -130,6 +134,7 @@ Examples:
 		var scanErrors []string
 		hadErrors := false
 
+		logger.StartProgress("Executing rules", len(rules))
 		for _, rule := range rules {
 			detections, err := loader.ExecuteRule(&rule, cg)
 			if err != nil {
@@ -137,6 +142,7 @@ Examples:
 				logger.Warning("%s", errMsg)
 				scanErrors = append(scanErrors, errMsg)
 				hadErrors = true
+				logger.UpdateProgress(1)
 				continue
 			}
 
@@ -145,7 +151,9 @@ Examples:
 				enriched, _ := enricher.EnrichAll(detections, rule)
 				allEnriched = append(allEnriched, enriched...)
 			}
+			logger.UpdateProgress(1)
 		}
+		logger.FinishProgress()
 
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
