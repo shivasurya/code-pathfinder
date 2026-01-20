@@ -27,7 +27,7 @@ def bar():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 
 		assert.NoError(t, err)
@@ -42,7 +42,7 @@ def bar():
 	t.Run("handles empty project", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, moduleRegistry, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 
 		assert.NoError(t, err)
@@ -52,7 +52,7 @@ def bar():
 	})
 
 	t.Run("handles invalid project path", func(t *testing.T) {
-		codeGraph := graph.Initialize("/nonexistent/path")
+		codeGraph := graph.Initialize("/nonexistent/path", nil)
 		_, _, _, err := InitializeCallGraph(codeGraph, "/nonexistent/path", output.NewLogger(output.VerbosityDefault))
 
 		// Should return error for invalid path
@@ -72,7 +72,7 @@ def vulnerable():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -110,7 +110,7 @@ def safe_function():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -122,7 +122,7 @@ def safe_function():
 	t.Run("handles empty call graph", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -142,7 +142,7 @@ def process():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, patternRegistry, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 

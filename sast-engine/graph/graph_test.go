@@ -502,7 +502,7 @@ func TestInitialize(t *testing.T) {
 		}
 	}
 
-	graph := Initialize(tempDir)
+	graph := Initialize(tempDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize returned nil graph")
@@ -530,7 +530,7 @@ func TestInitializeEmptyDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	graph := Initialize(tempDir)
+	graph := Initialize(tempDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize returned nil graph for empty directory")
@@ -547,7 +547,7 @@ func TestInitializeEmptyDirectory(t *testing.T) {
 
 func TestInitializeNonExistentDirectory(t *testing.T) {
 	nonExistentDir := "/path/to/non/existent/directory"
-	graph := Initialize(nonExistentDir)
+	graph := Initialize(nonExistentDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize returned nil graph for non-existent directory")
@@ -587,7 +587,7 @@ func TestInitializeWithNonJavaFiles(t *testing.T) {
 		}
 	}
 
-	graph := Initialize(tempDir)
+	graph := Initialize(tempDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize returned nil graph")
@@ -624,7 +624,7 @@ func TestInitializeWithLargeNumberOfFiles(t *testing.T) {
 		}
 	}
 
-	graph := Initialize(tempDir)
+	graph := Initialize(tempDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize returned nil graph")

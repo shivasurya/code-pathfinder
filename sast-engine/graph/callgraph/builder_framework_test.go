@@ -59,7 +59,7 @@ def test_stdlib():
 	assert.NoError(t, err)
 
 	// Parse the code graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph which internally uses resolveCallTarget
 	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
@@ -105,7 +105,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Parse the code graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph which internally uses resolveCallTarget
 	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
@@ -146,7 +146,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Parse the code graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph which internally uses resolveCallTarget
 	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
@@ -193,7 +193,7 @@ def process():
 	assert.NoError(t, err)
 
 	// Parse the code graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph which internally uses resolveCallTarget
 	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))

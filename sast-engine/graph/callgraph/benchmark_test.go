@@ -238,7 +238,7 @@ func BenchmarkInitializeCallGraph_Small(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Include full pipeline: graph initialization + call graph initialization
-		codeGraph := graph.Initialize(smallProjectPath)
+		codeGraph := graph.Initialize(smallProjectPath, nil)
 		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			b.Fatalf("Failed to initialize call graph: %v", err)
@@ -265,7 +265,7 @@ func BenchmarkInitializeCallGraph_Medium(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		codeGraph := graph.Initialize(mediumProjectPath)
+		codeGraph := graph.Initialize(mediumProjectPath, nil)
 		callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath, output.NewLogger(output.VerbosityDefault))
 		if err != nil {
 			b.Fatalf("Failed to initialize call graph: %v", err)
@@ -287,7 +287,7 @@ func BenchmarkInitializeCallGraph_Medium(b *testing.B) {
 // This benchmark tests the pattern matching engine against a small call graph.
 func BenchmarkPatternMatching_Small(b *testing.B) {
 	// Pre-build call graph and pattern registry
-	codeGraph := graph.Initialize(smallProjectPath)
+	codeGraph := graph.Initialize(smallProjectPath, nil)
 	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, smallProjectPath, output.NewLogger(output.VerbosityDefault))
 	if err != nil {
 		b.Fatalf("Failed to initialize call graph: %v", err)
@@ -310,7 +310,7 @@ func BenchmarkPatternMatching_Small(b *testing.B) {
 // This benchmark validates that pattern matching scales to label-studio's call graph.
 func BenchmarkPatternMatching_Medium(b *testing.B) {
 	// Pre-build call graph and pattern registry
-	codeGraph := graph.Initialize(mediumProjectPath)
+	codeGraph := graph.Initialize(mediumProjectPath, nil)
 	callGraph, registry, patternRegistry, err := InitializeCallGraph(codeGraph, mediumProjectPath, output.NewLogger(output.VerbosityDefault))
 	if err != nil {
 		b.Fatalf("Failed to initialize call graph: %v", err)

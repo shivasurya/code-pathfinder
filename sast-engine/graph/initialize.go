@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,8 +12,17 @@ import (
 	"github.com/smacker/go-tree-sitter/python"
 )
 
+// ProgressCallbacks contains optional callbacks for tracking initialization progress.
+type ProgressCallbacks struct {
+	// OnStart is called once before processing begins, with the total number of files.
+	OnStart func(totalFiles int)
+	// OnProgress is called after each file is processed (successfully or with error).
+	OnProgress func()
+}
+
 // Initialize initializes the code graph by parsing all source files in a directory.
-func Initialize(directory string) *CodeGraph {
+// If callbacks are provided, they will be called to report progress.
+func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 	codeGraph := NewCodeGraph()
 	start := time.Now()
 
@@ -26,15 +34,18 @@ func Initialize(directory string) *CodeGraph {
 	}
 
 	totalFiles := len(files)
+
+	// Notify start of processing
+	if callbacks != nil && callbacks.OnStart != nil {
+		callbacks.OnStart(totalFiles)
+	}
 	numWorkers := 5
 	fileChan := make(chan string, totalFiles)
 	resultChan := make(chan *CodeGraph, totalFiles)
-	statusChan := make(chan string, numWorkers)
-	progressChan := make(chan int, totalFiles)
 	var wg sync.WaitGroup
 
 	// Worker function
-	worker := func(workerID int) {
+	worker := func() {
 		parser := sitter.NewParser()
 		defer parser.Close()
 
@@ -50,25 +61,31 @@ func Initialize(directory string) *CodeGraph {
 
 			if isDockerfile {
 				// Handle Dockerfile parsing
-				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Parsing Dockerfile %s\033[0m", workerID, fileName)
 				if err := parseDockerfile(file, localGraph); err != nil {
 					Log("Error parsing Dockerfile:", err)
+					if callbacks != nil && callbacks.OnProgress != nil {
+						callbacks.OnProgress()
+					}
 					continue
 				}
-				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing Dockerfile %s\033[0m", workerID, fileName)
 				resultChan <- localGraph
-				progressChan <- 1
+				if callbacks != nil && callbacks.OnProgress != nil {
+					callbacks.OnProgress()
+				}
 				continue
 			} else if isDockerCompose {
 				// Handle docker-compose.yml parsing
-				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Parsing docker-compose %s\033[0m", workerID, fileName)
 				if err := parseDockerCompose(file, localGraph); err != nil {
 					Log("Error parsing docker-compose:", err)
+					if callbacks != nil && callbacks.OnProgress != nil {
+						callbacks.OnProgress()
+					}
 					continue
 				}
-				statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing docker-compose %s\033[0m", workerID, fileName)
 				resultChan <- localGraph
-				progressChan <- 1
+				if callbacks != nil && callbacks.OnProgress != nil {
+					callbacks.OnProgress()
+				}
 				continue
 			}
 
@@ -79,32 +96,43 @@ func Initialize(directory string) *CodeGraph {
 			case ".py":
 				parser.SetLanguage(python.GetLanguage())
 			default:
+				// NOTE: This case is currently unreachable because getFiles() only returns
+				// .java, .py, Dockerfile*, and docker-compose* files. This exists as defensive
+				// programming in case getFiles() is modified to include additional file types.
 				Log("Unsupported file type:", file)
+				if callbacks != nil && callbacks.OnProgress != nil {
+					callbacks.OnProgress()
+				}
 				continue
 			}
 
-			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Reading and parsing code %s\033[0m", workerID, fileName)
 			sourceCode, err := readFile(file)
 			if err != nil {
 				Log("File not found:", err)
+				if callbacks != nil && callbacks.OnProgress != nil {
+					callbacks.OnProgress()
+				}
 				continue
 			}
 
 			tree, err := parser.ParseCtx(context.TODO(), nil, sourceCode)
 			if err != nil {
 				Log("Error parsing file:", err)
+				if callbacks != nil && callbacks.OnProgress != nil {
+					callbacks.OnProgress()
+				}
 				continue
 			}
 			//nolint:all
 			defer tree.Close()
 
 			rootNode := tree.RootNode()
-			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Building graph and traversing code %s\033[0m", workerID, fileName)
 			buildGraphFromAST(rootNode, sourceCode, localGraph, nil, file)
-			statusChan <- fmt.Sprintf("\033[32mWorker %d ....... Done processing file %s\033[0m", workerID, fileName)
 
 			resultChan <- localGraph
-			progressChan <- 1
+			if callbacks != nil && callbacks.OnProgress != nil {
+				callbacks.OnProgress()
+			}
 		}
 		wg.Done()
 	}
@@ -112,7 +140,7 @@ func Initialize(directory string) *CodeGraph {
 	// Start workers
 	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		go worker(i + 1)
+		go worker()
 	}
 
 	// Send files to workers
@@ -121,41 +149,10 @@ func Initialize(directory string) *CodeGraph {
 	}
 	close(fileChan)
 
-	// Status updater
-	go func() {
-		statusLines := make([]string, numWorkers)
-		progress := 0
-		for {
-			select {
-			case status, ok := <-statusChan:
-				if !ok {
-					return
-				}
-				workerID := int(status[12] - '0')
-				statusLines[workerID-1] = status
-			case _, ok := <-progressChan:
-				if !ok {
-					return
-				}
-				progress++
-			}
-			// Only print progress in verbose mode to avoid polluting structured output
-			if verboseFlag {
-				fmt.Print("\033[H\033[J") // Clear the screen
-			}
-			for _, line := range statusLines {
-				Log(line)
-			}
-			Fmt("Progress: %d%%\n", (progress*100)/totalFiles)
-		}
-	}()
-
 	// Wait for all workers to finish
 	go func() {
 		wg.Wait()
 		close(resultChan)
-		close(statusChan)
-		close(progressChan)
 	}()
 
 	// Collect results

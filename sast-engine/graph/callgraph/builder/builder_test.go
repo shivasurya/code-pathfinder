@@ -29,7 +29,7 @@ def main():
 	require.NoError(t, err)
 
 	// Parse project
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build module registry
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
@@ -69,7 +69,7 @@ class MyClass:
 	require.NoError(t, err)
 
 	// Parse project
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build module registry
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
@@ -107,7 +107,7 @@ def func2():
 	require.NoError(t, err)
 
 	// Parse file
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Get functions in file
 	functions := GetFunctionsInFile(codeGraph, testFile)
@@ -131,7 +131,7 @@ def outer_function():
 	require.NoError(t, err)
 
 	// Parse file
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Get functions
 	functions := GetFunctionsInFile(codeGraph, testFile)
@@ -166,7 +166,7 @@ def my_function():
 	require.NoError(t, err)
 
 	// Parse file
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	functions := GetFunctionsInFile(codeGraph, testFile)
 
@@ -250,7 +250,7 @@ def caller():
 	require.NoError(t, err)
 
 	// Parse and build call graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)

@@ -387,7 +387,7 @@ services:
 	require.NoError(t, err)
 
 	// Initialize CodeGraph
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	// Verify both files were parsed
 	assert.GreaterOrEqual(t, len(graph.Nodes), 3, "Should have nodes from both Dockerfile and docker-compose")
