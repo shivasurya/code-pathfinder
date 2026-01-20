@@ -45,7 +45,7 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 	var wg sync.WaitGroup
 
 	// Worker function
-	worker := func(workerID int) {
+	worker := func() {
 		parser := sitter.NewParser()
 		defer parser.Close()
 
@@ -140,7 +140,7 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 	// Start workers
 	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		go worker(i + 1)
+		go worker()
 	}
 
 	// Send files to workers
