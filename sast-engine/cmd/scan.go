@@ -153,9 +153,7 @@ Examples:
 			// Load container rules from the same rules path (runtime generation)
 			logger.Progress("Loading container rules...")
 			containerRulesJSON, err := loader.LoadContainerRules(logger)
-			if err != nil {
-				logger.Warning("No container rules found: %v", err)
-			} else {
+			if err == nil {
 				logger.Progress("Executing container rules...")
 				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
 				if len(containerDetections) > 0 {
