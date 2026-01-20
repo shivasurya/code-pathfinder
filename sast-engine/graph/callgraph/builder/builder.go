@@ -143,7 +143,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	indexFunctions(codeGraph, callGraph, registry)
 
 	// Phase 2 Task 9: Extract return types from all functions (first pass - PARALLELIZED)
-	logger.Progress("Extracting return types from %d modules (parallel)...", len(registry.Modules))
+	logger.Debug("Extracting return types from %d modules (parallel)...", len(registry.Modules))
 
 	type returnJob struct {
 		modulePath string
@@ -207,7 +207,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
 
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass - PARALLELIZED)
-	logger.Progress("Extracting variable assignments (parallel)...")
+	logger.Debug("Extracting variable assignments (parallel)...")
 
 	varJobs := make(chan string, 100)
 	var varProcessed atomic.Int64
@@ -253,7 +253,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
 	// Phase 3 Task 12: Extract class attributes (third pass - PARALLELIZED)
-	logger.Progress("Extracting class attributes (parallel)...")
+	logger.Debug("Extracting class attributes (parallel)...")
 
 	attrJobs := make(chan returnJob, 100) // Reuse returnJob struct
 	var attrProcessed atomic.Int64
@@ -298,7 +298,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
 	// Process each Python file in the project (fourth pass for call site resolution - PARALLELIZED)
-	logger.Progress("Resolving call sites (parallel)...")
+	logger.Debug("Resolving call sites (parallel)...")
 
 	callSiteJobs := make(chan returnJob, 100)
 	var callGraphMutex sync.Mutex // Protect callGraph modifications
@@ -394,7 +394,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	resolution.PrintAttributeFailureStats(logger)
 
 	// Pass 5: Generate taint summaries for all functions
-	logger.Progress("Generating taint summaries...")
+	logger.Debug("Generating taint summaries...")
 	GenerateTaintSummaries(callGraph, codeGraph, registry)
 	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
 
