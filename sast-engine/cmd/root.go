@@ -30,4 +30,5 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().Bool("disable-metrics", false, "Disable metrics collection")
 	rootCmd.PersistentFlags().Bool("verbose", false, "Verbose output")
+	rootCmd.PersistentFlags().Bool("no-banner", false, "Disable startup banner")
 }
