@@ -5,39 +5,47 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 // Logger provides structured logging with verbosity control.
 type Logger struct {
-	verbosity VerbosityLevel
-	writer    io.Writer
-	startTime time.Time
-	timings   map[string]time.Duration
-	isTTY     bool
+	verbosity    VerbosityLevel
+	writer       io.Writer
+	startTime    time.Time
+	timings      map[string]time.Duration
+	isTTY        bool
+	progressBar  *progressbar.ProgressBar
+	showProgress bool
 }
 
 // NewLogger creates a logger with the specified verbosity.
 // Output goes to stderr to keep stdout clean for results.
 func NewLogger(verbosity VerbosityLevel) *Logger {
 	writer := os.Stderr
+	isTTY := IsTTY(writer)
 	return &Logger{
-		verbosity: verbosity,
-		writer:    writer,
-		startTime: time.Now(),
-		timings:   make(map[string]time.Duration),
-		isTTY:     IsTTY(writer),
+		verbosity:    verbosity,
+		writer:       writer,
+		startTime:    time.Now(),
+		timings:      make(map[string]time.Duration),
+		isTTY:        isTTY,
+		showProgress: isTTY,
 	}
 }
 
 // NewLoggerWithWriter creates a logger with custom output writer.
 // Primarily used for testing.
 func NewLoggerWithWriter(verbosity VerbosityLevel, w io.Writer) *Logger {
+	isTTY := IsTTY(w)
 	return &Logger{
-		verbosity: verbosity,
-		writer:    w,
-		startTime: time.Now(),
-		timings:   make(map[string]time.Duration),
-		isTTY:     IsTTY(w),
+		verbosity:    verbosity,
+		writer:       w,
+		startTime:    time.Now(),
+		timings:      make(map[string]time.Duration),
+		isTTY:        isTTY,
+		showProgress: isTTY,
 	}
 }
 
@@ -141,4 +149,83 @@ func (l *Logger) IsTTY() bool {
 // GetWriter returns the logger's output writer.
 func (l *Logger) GetWriter() io.Writer {
 	return l.writer
+}
+
+// StartProgress creates and displays a progress bar.
+// For indeterminate operations (total = -1), shows a spinner.
+// For determinate operations (total > 0), shows percentage progress.
+func (l *Logger) StartProgress(description string, total int) error {
+	if !l.showProgress || !l.isTTY {
+		// In non-TTY mode, just print the description
+		l.Progress("%s...", description)
+		return nil
+	}
+
+	// Clear any existing progress bar
+	if l.progressBar != nil {
+		_ = l.progressBar.Finish()
+	}
+
+	if total < 0 {
+		// Indeterminate progress (spinner)
+		l.progressBar = progressbar.NewOptions(-1,
+			progressbar.OptionSetDescription(description),
+			progressbar.OptionSetWriter(l.writer),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionThrottle(65*time.Millisecond),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Fprintf(l.writer, "\n")
+			}),
+		)
+	} else {
+		// Determinate progress (percentage bar)
+		l.progressBar = progressbar.NewOptions(total,
+			progressbar.OptionSetDescription(description),
+			progressbar.OptionSetWriter(l.writer),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionThrottle(65*time.Millisecond),
+			progressbar.OptionShowCount(),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Fprintf(l.writer, "\n")
+			}),
+			progressbar.OptionSetRenderBlankState(true),
+		)
+	}
+
+	return nil
+}
+
+// UpdateProgress increments the progress bar by delta.
+func (l *Logger) UpdateProgress(delta int) error {
+	if !l.showProgress || !l.isTTY || l.progressBar == nil {
+		return nil
+	}
+
+	return l.progressBar.Add(delta)
+}
+
+// FinishProgress completes and clears the progress bar.
+func (l *Logger) FinishProgress() error {
+	if !l.showProgress || !l.isTTY || l.progressBar == nil {
+		return nil
+	}
+
+	err := l.progressBar.Finish()
+	l.progressBar = nil
+	return err
+}
+
+// SetProgressDescription updates the progress bar description.
+func (l *Logger) SetProgressDescription(description string) {
+	if !l.showProgress || !l.isTTY || l.progressBar == nil {
+		return
+	}
+
+	l.progressBar.Describe(description)
+}
+
+// IsProgressEnabled returns true if progress bars are enabled.
+func (l *Logger) IsProgressEnabled() bool {
+	return l.showProgress && l.isTTY
 }
