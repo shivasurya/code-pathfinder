@@ -32,7 +32,7 @@ improvements to the resolution logic.`,
 		}
 
 		fmt.Println("Building code graph...")
-		codeGraph := graph.Initialize(projectInput)
+		codeGraph := graph.Initialize(projectInput, nil)
 
 		fmt.Println("Building call graph...")
 		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, output.NewLogger(output.VerbosityDefault))

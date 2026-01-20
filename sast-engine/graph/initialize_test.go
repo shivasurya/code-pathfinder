@@ -14,7 +14,7 @@ func TestInitializeWithEmptyDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph")
@@ -44,7 +44,7 @@ public class HelloWorld {
 		t.Fatalf("Failed to write Java file: %v", err)
 	}
 
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph")
@@ -87,7 +87,7 @@ class Greeter:
 		t.Fatalf("Failed to write Python file: %v", err)
 	}
 
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph")
@@ -142,7 +142,7 @@ func TestInitializeWithMixedFiles(t *testing.T) {
 		t.Fatalf("Failed to write txt file: %v", err)
 	}
 
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph")
@@ -171,7 +171,7 @@ func TestInitializeWithMixedFiles(t *testing.T) {
 }
 
 func TestInitializeWithNonExistentDirectory(t *testing.T) {
-	graph := Initialize("/path/that/does/not/exist")
+	graph := Initialize("/path/that/does/not/exist", nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph even for non-existent directory")
@@ -201,7 +201,7 @@ func TestInitializeWithNestedDirectories(t *testing.T) {
 		t.Fatalf("Failed to write Java file: %v", err)
 	}
 
-	graph := Initialize(tmpDir)
+	graph := Initialize(tmpDir, nil)
 
 	if graph == nil {
 		t.Fatal("Initialize should return a non-nil graph")
@@ -220,5 +220,110 @@ func TestInitializeWithNestedDirectories(t *testing.T) {
 	}
 	if !hasNestedClass {
 		t.Error("Expected to find Nested class from subdirectory")
+	}
+}
+
+func TestInitializeWithProgressCallbacks(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_progress_callbacks")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create multiple Java files
+	for i := 1; i <= 3; i++ {
+		javaCode := `public class TestClass` + string(rune('0'+i)) + ` { }`
+		javaFile := filepath.Join(tmpDir, "Test"+string(rune('0'+i))+".java")
+		if err := os.WriteFile(javaFile, []byte(javaCode), 0644); err != nil {
+			t.Fatalf("Failed to write Java file: %v", err)
+		}
+	}
+
+	// Track callback invocations
+	var startCalled bool
+	var startTotal int
+	var progressCalls int
+
+	callbacks := &ProgressCallbacks{
+		OnStart: func(totalFiles int) {
+			startCalled = true
+			startTotal = totalFiles
+		},
+		OnProgress: func() {
+			progressCalls++
+		},
+	}
+
+	graph := Initialize(tmpDir, callbacks)
+
+	if graph == nil {
+		t.Fatal("Initialize should return a non-nil graph")
+	}
+
+	if !startCalled {
+		t.Error("OnStart callback was not called")
+	}
+
+	if startTotal != 3 {
+		t.Errorf("OnStart received total=%d, expected 3", startTotal)
+	}
+
+	if progressCalls != 3 {
+		t.Errorf("OnProgress called %d times, expected 3", progressCalls)
+	}
+}
+
+func TestInitializeWithNilCallbacks(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_nil_callbacks")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a Java file
+	javaCode := `public class Test { }`
+	javaFile := filepath.Join(tmpDir, "Test.java")
+	if err := os.WriteFile(javaFile, []byte(javaCode), 0644); err != nil {
+		t.Fatalf("Failed to write Java file: %v", err)
+	}
+
+	// Should not panic with nil callbacks
+	graph := Initialize(tmpDir, nil)
+
+	if graph == nil {
+		t.Fatal("Initialize should return a non-nil graph")
+	}
+}
+
+func TestInitializeWithPartialCallbacks(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_partial_callbacks")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a Java file
+	javaCode := `public class Test { }`
+	javaFile := filepath.Join(tmpDir, "Test.java")
+	if err := os.WriteFile(javaFile, []byte(javaCode), 0644); err != nil {
+		t.Fatalf("Failed to write Java file: %v", err)
+	}
+
+	// Test with only OnStart
+	callbacks1 := &ProgressCallbacks{
+		OnStart: func(totalFiles int) {},
+	}
+	graph1 := Initialize(tmpDir, callbacks1)
+	if graph1 == nil {
+		t.Fatal("Initialize should handle callbacks with only OnStart")
+	}
+
+	// Test with only OnProgress
+	callbacks2 := &ProgressCallbacks{
+		OnProgress: func() {},
+	}
+	graph2 := Initialize(tmpDir, callbacks2)
+	if graph2 == nil {
+		t.Fatal("Initialize should handle callbacks with only OnProgress")
 	}
 }

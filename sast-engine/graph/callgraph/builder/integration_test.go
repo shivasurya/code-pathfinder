@@ -31,7 +31,7 @@ if __name__ == "__main__":
 	require.NoError(t, err)
 
 	// Parse the project to get code graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 	assert.NotNil(t, codeGraph)
 
 	// Build call graph from path
@@ -52,7 +52,7 @@ func TestBuildCallGraphFromPath_EmptyProject(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Parse the empty project
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph should succeed but be empty
 	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
@@ -86,7 +86,7 @@ def main():
 	require.NoError(t, err)
 
 	// Parse the project
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build call graph
 	callGraph, moduleRegistry, err := BuildCallGraphFromPath(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))

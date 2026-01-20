@@ -42,7 +42,7 @@ def main():
 	require.NoError(t, err)
 
 	// Parse the project
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	// Build module registry
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
@@ -111,7 +111,7 @@ def calculate():
 	require.NoError(t, err)
 
 	// Parse and build call graph
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	require.NoError(t, err)

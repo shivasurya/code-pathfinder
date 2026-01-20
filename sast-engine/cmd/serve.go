@@ -63,7 +63,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	logger := output.NewLogger(output.VerbosityVerbose)
 
 	// 1. Initialize code graph (AST parsing)
-	codeGraph := graph.Initialize(projectPath)
+	codeGraph := graph.Initialize(projectPath, nil)
 	if codeGraph == nil {
 		return fmt.Errorf("failed to initialize code graph")
 	}

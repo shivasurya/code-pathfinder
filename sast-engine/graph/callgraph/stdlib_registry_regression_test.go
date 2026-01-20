@@ -31,7 +31,7 @@ def get_config_path():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -54,7 +54,7 @@ def create_directory(name):
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -76,7 +76,7 @@ def process_data(json_string):
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -99,7 +99,7 @@ def get_version():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -147,7 +147,7 @@ def main():
 	err := os.WriteFile(testFile, []byte(code), 0644)
 	require.NoError(t, err)
 
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 
@@ -183,7 +183,7 @@ def join_paths():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -203,7 +203,7 @@ def check_path(path):
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -226,7 +226,7 @@ def process():
 		err := os.WriteFile(testFile, []byte(code), 0644)
 		require.NoError(t, err)
 
-		codeGraph := graph.Initialize(tmpDir)
+		codeGraph := graph.Initialize(tmpDir, nil)
 		callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 		require.NoError(t, err)
 
@@ -258,7 +258,7 @@ def file_exists(path):
 	err := os.WriteFile(testFile, []byte(code), 0644)
 	require.NoError(t, err)
 
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 	callGraph, _, _, err := InitializeCallGraph(codeGraph, tmpDir, output.NewLogger(output.VerbosityDefault))
 	require.NoError(t, err)
 

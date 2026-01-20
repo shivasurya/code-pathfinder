@@ -130,8 +130,14 @@ Examples:
 		loader := dsl.NewRuleLoader(rulesPath)
 
 		// Step 1: Build code graph (AST)
-		logger.StartProgress("Building code graph", -1)
-		codeGraph := graph.Initialize(projectPath)
+		codeGraph := graph.Initialize(projectPath, &graph.ProgressCallbacks{
+			OnStart: func(totalFiles int) {
+				logger.StartProgress("Building code graph", totalFiles)
+			},
+			OnProgress: func() {
+				logger.UpdateProgress(1)
+			},
+		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
 			return fmt.Errorf("no source files found in project")

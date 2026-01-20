@@ -35,7 +35,7 @@ def vulnerable():
 	assert.NoError(t, err)
 
 	// Build full call graph and verify it has summaries
-	codeGraph := graph.Initialize(tmpDir)
+	codeGraph := graph.Initialize(tmpDir, nil)
 	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
 	assert.NoError(t, err)
 
