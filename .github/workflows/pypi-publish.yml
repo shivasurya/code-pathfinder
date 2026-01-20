@@ -1,9 +1,8 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -57,19 +56,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Get version from tag
+      - name: Get version from release or input
         id: version
         shell: bash
         run: |
           if [[ "${{ github.event.inputs.version }}" != "" ]]; then
             # Manual workflow_dispatch with version input
             VERSION="${{ github.event.inputs.version }}"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # Tag push
-            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event.release.tag_name }}" != "" ]]; then
+            # Release published event - strip 'v' prefix if present
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION=${VERSION#v}
           else
-            # Fallback for pull_request
-            VERSION=$(python -c "import sys; sys.path.insert(0, 'python-sdk'); from codepathfinder import __version__; print(__version__)")
+            echo "Error: No version source found. This workflow should be triggered by release publish or manual dispatch."
+            exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
