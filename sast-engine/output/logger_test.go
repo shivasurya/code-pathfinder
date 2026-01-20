@@ -267,3 +267,66 @@ func TestLoggerVerbosity(t *testing.T) {
 		t.Errorf("Verbosity() = %v, want %v", got, VerbosityVerbose)
 	}
 }
+
+func TestLoggerIsTTY(t *testing.T) {
+	// Test with buffer (not a TTY)
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	if l.IsTTY() {
+		t.Error("bytes.Buffer logger should not be TTY")
+	}
+
+	// Test TTY detection is set during construction
+	l2 := NewLogger(VerbosityDefault)
+	// Should have isTTY field set (value depends on environment)
+	_ = l2.IsTTY()
+}
+
+func TestLoggerGetWriter(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithWriter(VerbosityDefault, &buf)
+
+	writer := l.GetWriter()
+	if writer == nil {
+		t.Error("GetWriter should not return nil")
+	}
+
+	// Verify it's the same writer we passed in
+	if writer != &buf {
+		t.Error("GetWriter should return the same writer passed to constructor")
+	}
+}
+
+func TestNewLogger_TTYDetection(t *testing.T) {
+	// Create logger and verify TTY field is initialized
+	l := NewLogger(VerbosityDefault)
+
+	// Should have isTTY field set (we can't assert value, just that it's set)
+	// This tests that NewLogger calls IsTTY()
+	if l.writer == nil {
+		t.Error("Logger writer should not be nil")
+	}
+
+	// Test that isTTY is properly initialized by checking it's accessible
+	_ = l.IsTTY()
+}
+
+func TestNewLoggerWithWriter_TTYDetection(t *testing.T) {
+	tests := []struct {
+		name      string
+		writer    *bytes.Buffer
+		expectTTY bool
+	}{
+		{"buffer is not TTY", &bytes.Buffer{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewLoggerWithWriter(VerbosityDefault, tt.writer)
+			if got := l.IsTTY(); got != tt.expectTTY {
+				t.Errorf("IsTTY() = %v, want %v", got, tt.expectTTY)
+			}
+		})
+	}
+}

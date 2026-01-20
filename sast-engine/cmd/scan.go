@@ -82,6 +82,14 @@ Examples:
 		}
 		logger := output.NewLogger(verbosity)
 
+		// Display banner if appropriate
+		noBanner, _ := cmd.Flags().GetBool("no-banner")
+		if output.ShouldShowBanner(logger.IsTTY(), noBanner) {
+			output.PrintBanner(logger.GetWriter(), Version, output.DefaultBannerOptions())
+		} else if logger.IsTTY() && !noBanner {
+			fmt.Fprintln(logger.GetWriter(), output.GetCompactBanner(Version))
+		}
+
 		// Parse and validate --fail-on severities
 		failOn := output.ParseFailOn(failOnStr)
 		if len(failOn) > 0 {

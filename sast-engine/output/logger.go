@@ -13,16 +13,19 @@ type Logger struct {
 	writer    io.Writer
 	startTime time.Time
 	timings   map[string]time.Duration
+	isTTY     bool
 }
 
 // NewLogger creates a logger with the specified verbosity.
 // Output goes to stderr to keep stdout clean for results.
 func NewLogger(verbosity VerbosityLevel) *Logger {
+	writer := os.Stderr
 	return &Logger{
 		verbosity: verbosity,
-		writer:    os.Stderr,
+		writer:    writer,
 		startTime: time.Now(),
 		timings:   make(map[string]time.Duration),
+		isTTY:     IsTTY(writer),
 	}
 }
 
@@ -34,6 +37,7 @@ func NewLoggerWithWriter(verbosity VerbosityLevel, w io.Writer) *Logger {
 		writer:    w,
 		startTime: time.Now(),
 		timings:   make(map[string]time.Duration),
+		isTTY:     IsTTY(w),
 	}
 }
 
@@ -127,4 +131,14 @@ func (l *Logger) IsVerbose() bool {
 // IsDebug returns true if debug mode is enabled.
 func (l *Logger) IsDebug() bool {
 	return l.verbosity >= VerbosityDebug
+}
+
+// IsTTY returns true if the logger's output is connected to a terminal.
+func (l *Logger) IsTTY() bool {
+	return l.isTTY
+}
+
+// GetWriter returns the logger's output writer.
+func (l *Logger) GetWriter() io.Writer {
+	return l.writer
 }
