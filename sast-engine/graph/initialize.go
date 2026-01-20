@@ -96,6 +96,9 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 			case ".py":
 				parser.SetLanguage(python.GetLanguage())
 			default:
+				// NOTE: This case is currently unreachable because getFiles() only returns
+				// .java, .py, Dockerfile*, and docker-compose* files. This exists as defensive
+				// programming in case getFiles() is modified to include additional file types.
 				Log("Unsupported file type:", file)
 				if callbacks != nil && callbacks.OnProgress != nil {
 					callbacks.OnProgress()
