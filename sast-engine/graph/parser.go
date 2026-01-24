@@ -16,7 +16,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "class_definition":
 		if isPythonSourceFile {
-			parsePythonClassDefinition(node, sourceCode, graph, file)
+			currentContext = parsePythonClassDefinition(node, sourceCode, graph, file)
 		}
 
 	case "call":
@@ -43,7 +43,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "assignment":
 		if isPythonSourceFile {
-			parsePythonAssignment(node, sourceCode, graph, file)
+			parsePythonAssignment(node, sourceCode, graph, file, currentContext)
 		}
 
 	// Java-specific node types

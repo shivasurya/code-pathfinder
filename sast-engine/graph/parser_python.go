@@ -2,12 +2,84 @@ package graph
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 
 	pythonlang "github.com/shivasurya/code-pathfinder/sast-engine/graph/python"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
+// extractDecorators extracts decorators from a decorated_definition node.
+// Returns a list of decorator names (e.g., ["property", "staticmethod"]).
+func extractDecorators(node *sitter.Node, sourceCode []byte) []string {
+	var decorators []string
+
+	// Check if this is a decorated_definition.
+	if node.Type() != "decorated_definition" {
+		return decorators
+	}
+
+	// Iterate through children to find decorator nodes.
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == "decorator" {
+			decoratorText := child.Content(sourceCode)
+			// Remove @ symbol and extract name.
+			decoratorText = strings.TrimPrefix(decoratorText, "@")
+			// Handle decorators with arguments like @decorator(args).
+			if idx := strings.Index(decoratorText, "("); idx != -1 {
+				decoratorText = decoratorText[:idx]
+			}
+			decoratorText = strings.TrimSpace(decoratorText)
+			decorators = append(decorators, decoratorText)
+		}
+	}
+
+	return decorators
+}
+
+// hasDecorator checks if a list of decorators contains a specific decorator.
+func hasDecorator(decorators []string, name string) bool {
+	for _, d := range decorators {
+		if d == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isConstantName checks if a variable name follows Python constant naming convention.
+// Constants are typically all uppercase with underscores (e.g., MAX_SIZE, API_KEY).
+func isConstantName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	// Must contain at least one letter.
+	hasLetter := false
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			hasLetter = true
+			if unicode.IsLower(r) {
+				// Contains lowercase letter - not a constant.
+				return false
+			}
+		} else if r != '_' && !unicode.IsDigit(r) {
+			// Contains non-alphanumeric characters (except underscore).
+			return false
+		}
+	}
+
+	return hasLetter
+}
+
+// isConstructor checks if a function is a Python constructor (__init__).
+func isConstructor(functionName string) bool {
+	return functionName == "__init__"
+}
+
 // parsePythonFunctionDefinition parses Python function definitions.
+// Handles decorators to distinguish between regular functions, properties, and constructors.
 func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) *Node {
 	// Extract function name and parameters
 	functionName := ""
@@ -28,10 +100,30 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		}
 	}
 
+	// Determine node type based on function characteristics.
+	nodeType := "function_definition"
+
+	// Check if this is a constructor.
+	if isConstructor(functionName) {
+		nodeType = "constructor"
+	}
+
+	// Check for decorators (parent might be decorated_definition).
+	var decorators []string
+	if node.Parent() != nil && node.Parent().Type() == "decorated_definition" {
+		decorators = extractDecorators(node.Parent(), sourceCode)
+
+		// If function has @property, @classmethod, or @staticmethod decorators,
+		// mark it as property type for symbol indexing.
+		if hasDecorator(decorators, "property") {
+			nodeType = "property"
+		}
+	}
+
 	methodID := GenerateMethodID("function:"+functionName, parameters, file)
 	functionNode := &Node{
 		ID:                   methodID,
-		Type:                 "function_definition",
+		Type:                 nodeType,
 		Name:                 functionName,
 		SourceLocation:       &SourceLocation{
 			File:      file,
@@ -40,6 +132,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		},
 		LineNumber:           node.StartPoint().Row + 1,
 		MethodArgumentsValue: parameters,
+		Annotation:           decorators,
 		File:                 file,
 		isPythonSourceFile:   true,
 	}
@@ -48,7 +141,8 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 }
 
 // parsePythonClassDefinition parses Python class definitions.
-func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+// Returns the class node to be used as context for nested definitions.
+func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) *Node {
 	// Extract class name and bases
 	className := ""
 	superClasses := []string{}
@@ -83,6 +177,7 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 		isPythonSourceFile: true,
 	}
 	graph.AddNode(classNode)
+	return classNode
 }
 
 // parsePythonCall parses Python function calls.
@@ -244,7 +339,8 @@ func parsePythonYieldExpression(node *sitter.Node, sourceCode []byte, graph *Cod
 }
 
 // parsePythonAssignment parses Python variable assignments.
-func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+// Distinguishes between local variables, module-level variables, and constants.
+func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) {
 	// Python variable assignments
 	variableName := ""
 	variableValue := ""
@@ -259,9 +355,28 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 		variableValue = rightNode.Content(sourceCode)
 	}
 
+	// Determine variable type and scope.
+	nodeType := "variable_assignment"
+	scope := "local"
+
+	// Check if this is a module-level variable (no current context).
+	if currentContext == nil {
+		scope = "module"
+		nodeType = "module_variable"
+
+		// Check if it's a constant (uppercase naming convention).
+		if isConstantName(variableName) {
+			nodeType = "constant"
+		}
+	} else if currentContext.Type == "class_definition" {
+		// Assignment inside a class but outside any method is a class-level variable.
+		scope = "class"
+		nodeType = "class_field"
+	}
+
 	variableNode := &Node{
 		ID:                 GenerateMethodID(variableName, []string{}, file),
-		Type:               "variable_assignment",
+		Type:               nodeType,
 		Name:               variableName,
 		SourceLocation:     &SourceLocation{
 			File:      file,
@@ -270,7 +385,7 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 		},
 		LineNumber:         node.StartPoint().Row + 1,
 		VariableValue:      variableValue,
-		Scope:              "local",
+		Scope:              scope,
 		File:               file,
 		isPythonSourceFile: true,
 	}
