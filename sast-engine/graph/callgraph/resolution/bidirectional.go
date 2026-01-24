@@ -36,10 +36,11 @@ func NewBidirectionalInferencer(
 		builtinRegistry: builtinReg,
 	}
 
-	// Register default strategies (PR-03)
-	bi.RegisterStrategy(strategies.NewSelfReferenceStrategy())
-	bi.RegisterStrategy(strategies.NewInstanceCallStrategy())
-	bi.RegisterStrategy(strategies.NewAttributeAccessStrategy())
+	// Register default strategies (PR-03, PR-04)
+	bi.RegisterStrategy(strategies.NewSelfReferenceStrategy())    // Priority: 90
+	bi.RegisterStrategy(strategies.NewChainStrategy())             // Priority: 85 (PR-04)
+	bi.RegisterStrategy(strategies.NewInstanceCallStrategy())      // Priority: 80
+	bi.RegisterStrategy(strategies.NewAttributeAccessStrategy())   // Priority: 70
 
 	return bi
 }
