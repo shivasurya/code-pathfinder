@@ -1237,3 +1237,315 @@ class Order:
 		t.Errorf("Expected 3 unique save method IDs, got %d", len(saveMethodIDs))
 	}
 }
+
+// TestResolveTransitiveEnumInheritance tests that classes inheriting from
+// custom enum base classes are properly detected as enums.
+func TestResolveTransitiveEnumInheritance(t *testing.T) {
+	code := `
+from enum import Enum
+
+class CustomEnum(Enum):
+    """Custom enum base class."""
+    pass
+
+class Operator(CustomEnum):
+    """Operator enum - inherits from CustomEnum."""
+    ADD = "add"
+    SUBTRACT = "subtract"
+
+class Type(CustomEnum):
+    """Type enum - inherits from CustomEnum."""
+    INTEGER = "int"
+    STRING = "str"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Before resolving transitive inheritance.
+	customEnumNode := findNodeByNameAndType(graph, "CustomEnum", "enum")
+	operatorNode := findNodeByNameAndType(graph, "Operator", "class_definition")
+	typeNode := findNodeByNameAndType(graph, "Type", "class_definition")
+
+	if customEnumNode == nil {
+		t.Errorf("CustomEnum should be detected as enum (direct inheritance)")
+	}
+	if operatorNode == nil {
+		t.Errorf("Operator should initially be class_definition before resolving")
+	}
+	if typeNode == nil {
+		t.Errorf("Type should initially be class_definition before resolving")
+	}
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// After resolving transitive inheritance.
+	operatorNodeAfter := findNodeByNameAndType(graph, "Operator", "enum")
+	typeNodeAfter := findNodeByNameAndType(graph, "Type", "enum")
+
+	if operatorNodeAfter == nil {
+		t.Errorf("Operator should be detected as enum after resolving transitive inheritance")
+	}
+	if typeNodeAfter == nil {
+		t.Errorf("Type should be detected as enum after resolving transitive inheritance")
+	}
+
+	// Verify CustomEnum is still an enum.
+	customEnumNodeAfter := findNodeByNameAndType(graph, "CustomEnum", "enum")
+	if customEnumNodeAfter == nil {
+		t.Errorf("CustomEnum should still be enum after resolving")
+	}
+}
+
+// TestResolveTransitiveInterfaceInheritance tests that classes inheriting from
+// custom interface base classes are properly detected as interfaces.
+func TestResolveTransitiveInterfaceInheritance(t *testing.T) {
+	code := `
+from typing import Protocol
+
+class BaseProtocol(Protocol):
+    """Base protocol."""
+    pass
+
+class ExtendedProtocol(BaseProtocol):
+    """Extended protocol - inherits from BaseProtocol."""
+    def method(self) -> None:
+        pass
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// Verify both are detected as interfaces.
+	baseProtocol := findNodeByNameAndType(graph, "BaseProtocol", "interface")
+	extendedProtocol := findNodeByNameAndType(graph, "ExtendedProtocol", "interface")
+
+	if baseProtocol == nil {
+		t.Errorf("BaseProtocol should be detected as interface")
+	}
+	if extendedProtocol == nil {
+		t.Errorf("ExtendedProtocol should be detected as interface after resolving transitive inheritance")
+	}
+}
+
+// TestResolveTransitiveDataclassInheritance tests that classes inheriting from
+// dataclass base classes are properly detected as dataclasses.
+func TestResolveTransitiveDataclassInheritance(t *testing.T) {
+	code := `
+from dataclasses import dataclass
+
+@dataclass
+class BaseConfig:
+    """Base configuration dataclass."""
+    debug: bool = False
+
+class AppConfig(BaseConfig):
+    """App configuration - inherits from BaseConfig."""
+    timeout: int = 30
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// Verify both are detected as dataclasses.
+	baseConfig := findNodeByNameAndType(graph, "BaseConfig", "dataclass")
+	appConfig := findNodeByNameAndType(graph, "AppConfig", "dataclass")
+
+	if baseConfig == nil {
+		t.Errorf("BaseConfig should be detected as dataclass")
+	}
+	if appConfig == nil {
+		t.Errorf("AppConfig should be detected as dataclass after resolving transitive inheritance")
+	}
+}
+
+// TestResolveTransitiveMultiLevelInheritance tests that multi-level inheritance works.
+func TestResolveTransitiveMultiLevelInheritance(t *testing.T) {
+	code := `
+from enum import Enum
+
+class CustomEnum(Enum):
+    """Level 1 - Direct enum."""
+    pass
+
+class MiddleEnum(CustomEnum):
+    """Level 2 - Inherits from CustomEnum."""
+    pass
+
+class LeafEnum(MiddleEnum):
+    """Level 3 - Inherits from MiddleEnum."""
+    VALUE = 1
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// Verify all three are detected as enums.
+	customEnum := findNodeByNameAndType(graph, "CustomEnum", "enum")
+	middleEnum := findNodeByNameAndType(graph, "MiddleEnum", "enum")
+	leafEnum := findNodeByNameAndType(graph, "LeafEnum", "enum")
+
+	if customEnum == nil {
+		t.Errorf("CustomEnum should be detected as enum")
+	}
+	if middleEnum == nil {
+		t.Errorf("MiddleEnum should be detected as enum after resolving transitive inheritance")
+	}
+	if leafEnum == nil {
+		t.Errorf("LeafEnum should be detected as enum after resolving 3-level transitive inheritance")
+	}
+}
+
+// TestResolveTransitiveInheritanceLabelStudioCase tests the exact case from label-studio.
+func TestResolveTransitiveInheritanceLabelStudioCase(t *testing.T) {
+	code := `
+from enum import Enum
+
+class ConjunctionEnum(Enum):
+    """Direct enum - should be detected."""
+    AND = "and"
+    OR = "or"
+
+class CustomEnum(Enum):
+    """Custom enum base class."""
+    pass
+
+class Operator(CustomEnum):
+    """Operator enum - inherits from CustomEnum."""
+    EQUAL = "equal"
+    NOT_EQUAL = "not_equal"
+
+class Type(CustomEnum):
+    """Type enum - inherits from CustomEnum."""
+    STRING = "string"
+    NUMBER = "number"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Before resolving, count enums.
+	enumCountBefore := 0
+	for _, node := range graph.Nodes {
+		if node.Type == "enum" {
+			enumCountBefore++
+		}
+	}
+
+	// Should have 2 direct enums (ConjunctionEnum, CustomEnum).
+	if enumCountBefore != 2 {
+		t.Errorf("Expected 2 enums before resolving, got %d", enumCountBefore)
+	}
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// After resolving, count enums.
+	enumCountAfter := 0
+	enumNames := []string{}
+	for _, node := range graph.Nodes {
+		if node.Type == "enum" {
+			enumCountAfter++
+			enumNames = append(enumNames, node.Name)
+		}
+	}
+
+	// Should have 4 enums (ConjunctionEnum, CustomEnum, Operator, Type).
+	if enumCountAfter != 4 {
+		t.Errorf("Expected 4 enums after resolving, got %d: %v", enumCountAfter, enumNames)
+	}
+
+	// Verify specific enums.
+	if findNodeByNameAndType(graph, "ConjunctionEnum", "enum") == nil {
+		t.Errorf("ConjunctionEnum should be enum")
+	}
+	if findNodeByNameAndType(graph, "CustomEnum", "enum") == nil {
+		t.Errorf("CustomEnum should be enum")
+	}
+	if findNodeByNameAndType(graph, "Operator", "enum") == nil {
+		t.Errorf("Operator should be enum after resolving")
+	}
+	if findNodeByNameAndType(graph, "Type", "enum") == nil {
+		t.Errorf("Type should be enum after resolving")
+	}
+}
+
+// TestResolveTransitiveInheritanceNoChange tests that regular classes are not affected.
+func TestResolveTransitiveInheritanceNoChange(t *testing.T) {
+	code := `
+class BaseClass:
+    """Regular base class."""
+    pass
+
+class DerivedClass(BaseClass):
+    """Regular derived class."""
+    pass
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Resolve transitive inheritance.
+	ResolveTransitiveInheritance(graph)
+
+	// Verify both are still class_definition.
+	baseClass := findNodeByNameAndType(graph, "BaseClass", "class_definition")
+	derivedClass := findNodeByNameAndType(graph, "DerivedClass", "class_definition")
+
+	if baseClass == nil {
+		t.Errorf("BaseClass should remain as class_definition")
+	}
+	if derivedClass == nil {
+		t.Errorf("DerivedClass should remain as class_definition")
+	}
+}
+
+// Helper function to find a node by name and type.
+func findNodeByNameAndType(graph *CodeGraph, name string, nodeType string) *Node {
+	for _, node := range graph.Nodes {
+		if node.Name == name && node.Type == nodeType {
+			return node
+		}
+	}
+	return nil
+}

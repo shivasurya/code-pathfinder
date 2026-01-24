@@ -484,3 +484,112 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 	}
 	graph.AddNode(variableNode)
 }
+
+// ResolveTransitiveInheritance resolves transitive inheritance for Python classes.
+// This fixes the issue where classes inheriting from custom enum/interface/dataclass
+// base classes are not properly detected.
+//
+// Example:
+//   class CustomEnum(Enum):  # Detected as enum (direct inheritance)
+//       pass
+//
+//   class Operator(CustomEnum):  # NOT detected without this fix (transitive)
+//       pass
+//
+// After this function, Operator will also be marked as "enum".
+func ResolveTransitiveInheritance(codeGraph *CodeGraph) {
+	// Build a map of class name → class node for quick lookup.
+	classMap := make(map[string]*Node)
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "class_definition" || node.Type == "interface" ||
+			node.Type == "enum" || node.Type == "dataclass" {
+			classMap[node.Name] = node
+		}
+	}
+
+	// Track which classes have been processed to avoid infinite loops.
+	processed := make(map[string]bool)
+
+	// Helper function to check if a class transitively inherits from a specific type.
+	var inheritsFrom func(className string, targetType string) bool
+	inheritsFrom = func(className string, targetType string) bool {
+		// Prevent infinite recursion.
+		if processed[className] {
+			return false
+		}
+		processed[className] = true
+		defer func() { processed[className] = false }()
+
+		// Look up the class.
+		classNode, exists := classMap[className]
+		if !exists {
+			return false
+		}
+
+		// If this class is already the target type, return true.
+		if classNode.Type == targetType {
+			return true
+		}
+
+		// Check all base classes.
+		for _, baseClass := range classNode.Interface {
+			// Extract just the class name (handle qualified names like typing.Protocol).
+			parts := strings.Split(baseClass, ".")
+			baseName := parts[len(parts)-1]
+
+			// Recursively check if the base class is or inherits from the target type.
+			if inheritsFrom(baseName, targetType) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	// Update class types based on transitive inheritance.
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "class_definition" {
+			continue
+		}
+
+		// Check if this class transitively inherits from enum.
+		processed = make(map[string]bool) // Reset for each check.
+		for _, baseClass := range node.Interface {
+			parts := strings.Split(baseClass, ".")
+			baseName := parts[len(parts)-1]
+
+			if inheritsFrom(baseName, "enum") {
+				node.Type = "enum"
+				break
+			}
+		}
+
+		// Check if this class transitively inherits from interface.
+		if node.Type == "class_definition" {
+			processed = make(map[string]bool)
+			for _, baseClass := range node.Interface {
+				parts := strings.Split(baseClass, ".")
+				baseName := parts[len(parts)-1]
+
+				if inheritsFrom(baseName, "interface") {
+					node.Type = "interface"
+					break
+				}
+			}
+		}
+
+		// Check if this class transitively inherits from dataclass.
+		if node.Type == "class_definition" {
+			processed = make(map[string]bool)
+			for _, baseClass := range node.Interface {
+				parts := strings.Split(baseClass, ".")
+				baseName := parts[len(parts)-1]
+
+				if inheritsFrom(baseName, "dataclass") {
+					node.Type = "dataclass"
+					break
+				}
+			}
+		}
+	}
+}
