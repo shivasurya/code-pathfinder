@@ -28,13 +28,20 @@ func NewBidirectionalInferencer(
 	builtinReg strategies.BuiltinRegistryInterface,
 	cacheCapacity int,
 ) *BidirectionalInferencer {
-	return &BidirectionalInferencer{
+	bi := &BidirectionalInferencer{
 		strategies:      strategies.NewStrategyRegistry(),
 		cache:           NewTypeCache(cacheCapacity),
 		attrRegistry:    attrReg,
 		moduleRegistry:  modReg,
 		builtinRegistry: builtinReg,
 	}
+
+	// Register default strategies (PR-03)
+	bi.RegisterStrategy(strategies.NewSelfReferenceStrategy())
+	bi.RegisterStrategy(strategies.NewInstanceCallStrategy())
+	bi.RegisterStrategy(strategies.NewAttributeAccessStrategy())
+
+	return bi
 }
 
 // RegisterStrategy adds a strategy to the inferencer.
