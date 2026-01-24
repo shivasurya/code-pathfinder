@@ -1540,6 +1540,307 @@ class DerivedClass(BaseClass):
 	}
 }
 
+// TestClassLevelConstants tests that class-level constants are properly detected.
+func TestClassLevelConstants(t *testing.T) {
+	code := `
+class WebhookAction:
+    """Webhook action constants."""
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    TASK_CREATED = "task_created"
+
+    def get_action(self):
+        return self.PROJECT_CREATED
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count class-level constants.
+	constantCount := 0
+	constantNames := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Type == "constant" && node.Scope == "class" {
+			constantCount++
+			constantNames = append(constantNames, node.Name)
+		}
+	}
+
+	// Should have 3 class-level constants.
+	if constantCount != 3 {
+		t.Errorf("Expected 3 class-level constants, got %d: %v", constantCount, constantNames)
+	}
+
+	// Verify specific constants.
+	expectedConstants := []string{"PROJECT_CREATED", "PROJECT_UPDATED", "TASK_CREATED"}
+	for _, expected := range expectedConstants {
+		found := false
+		for _, name := range constantNames {
+			if name == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected class-level constant %s not found", expected)
+		}
+	}
+}
+
+// TestEnumClassConstants tests that enum class value assignments are detected as constants.
+func TestEnumClassConstants(t *testing.T) {
+	code := `
+from enum import Enum
+
+class ConjunctionEnum(Enum):
+    OR = 'or'
+    AND = 'and'
+
+class Column(Enum):
+    ID = 'id'
+    INNER_ID = 'inner_id'
+    DATA = 'data'
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count constants inside enum classes.
+	constantCount := 0
+	constantsByClass := make(map[string][]string)
+
+	for _, node := range graph.Nodes {
+		if node.Type == "constant" && node.Scope == "class" {
+			constantCount++
+			// Group by file location to approximate class membership.
+			constantsByClass["all"] = append(constantsByClass["all"], node.Name)
+		}
+	}
+
+	// Should have 5 enum value constants (OR, AND, ID, INNER_ID, DATA).
+	if constantCount != 5 {
+		t.Errorf("Expected 5 enum value constants, got %d: %v", constantCount, constantsByClass["all"])
+	}
+
+	// Verify specific constants.
+	expectedConstants := []string{"OR", "AND", "ID", "INNER_ID", "DATA"}
+	for _, expected := range expectedConstants {
+		found := false
+		for _, name := range constantsByClass["all"] {
+			if name == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected enum constant %s not found", expected)
+		}
+	}
+}
+
+// TestClassFieldVsConstantDistinction tests that class fields and constants are properly distinguished.
+func TestClassFieldVsConstantDistinction(t *testing.T) {
+	code := `
+class Project:
+    """Project model."""
+    # Class-level constants (UPPERCASE)
+    SEQUENCE = "project_sequence"
+    MAX_TASKS = 1000
+
+    # Class-level fields (lowercase/mixed case)
+    default_timeout = 30
+    _internal_cache = {}
+
+    def __init__(self):
+        self.name = "test"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count constants vs fields.
+	constantCount := 0
+	fieldCount := 0
+	constantNames := []string{}
+	fieldNames := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "class" {
+			if node.Type == "constant" {
+				constantCount++
+				constantNames = append(constantNames, node.Name)
+			} else if node.Type == "class_field" {
+				fieldCount++
+				fieldNames = append(fieldNames, node.Name)
+			}
+		}
+	}
+
+	// Should have 2 constants (SEQUENCE, MAX_TASKS).
+	if constantCount != 2 {
+		t.Errorf("Expected 2 class constants, got %d: %v", constantCount, constantNames)
+	}
+
+	// Should have 2 fields (default_timeout, _internal_cache).
+	if fieldCount != 2 {
+		t.Errorf("Expected 2 class fields, got %d: %v", fieldCount, fieldNames)
+	}
+
+	// Verify specific constants.
+	if !containsString(constantNames, "SEQUENCE") {
+		t.Errorf("Expected constant SEQUENCE not found")
+	}
+	if !containsString(constantNames, "MAX_TASKS") {
+		t.Errorf("Expected constant MAX_TASKS not found")
+	}
+
+	// Verify specific fields.
+	if !containsString(fieldNames, "default_timeout") {
+		t.Errorf("Expected field default_timeout not found")
+	}
+	if !containsString(fieldNames, "_internal_cache") {
+		t.Errorf("Expected field _internal_cache not found")
+	}
+}
+
+// TestLabelStudioClassConstants tests real examples from label-studio codebase.
+func TestLabelStudioClassConstants(t *testing.T) {
+	code := `
+class ProjectManager:
+    """Project manager with counter fields."""
+    COUNTER_FIELDS = ['num_tasks', 'num_annotations']
+    CACHE_TIMEOUT = 300
+
+class SkillNames:
+    """ML skill name constants."""
+    TEXT_CLASSIFICATION = "text_classification"
+    NAMED_ENTITY_RECOGNITION = "ner"
+    IMAGE_SEGMENTATION = "image_segmentation"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count class-level constants.
+	constantCount := 0
+	constantNames := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Type == "constant" && node.Scope == "class" {
+			constantCount++
+			constantNames = append(constantNames, node.Name)
+		}
+	}
+
+	// Should have 5 class-level constants.
+	if constantCount != 5 {
+		t.Errorf("Expected 5 class-level constants, got %d: %v", constantCount, constantNames)
+	}
+
+	// Verify specific constants from both classes.
+	expectedConstants := []string{
+		"COUNTER_FIELDS", "CACHE_TIMEOUT",
+		"TEXT_CLASSIFICATION", "NAMED_ENTITY_RECOGNITION", "IMAGE_SEGMENTATION",
+	}
+	for _, expected := range expectedConstants {
+		if !containsString(constantNames, expected) {
+			t.Errorf("Expected class constant %s not found in %v", expected, constantNames)
+		}
+	}
+}
+
+// TestModuleVsClassConstants tests that module and class constants are both detected and distinguished.
+func TestModuleVsClassConstants(t *testing.T) {
+	code := `
+# Module-level constants
+API_VERSION = "v1"
+MAX_RETRIES = 3
+
+class Settings:
+    """Settings class with constants."""
+    # Class-level constants
+    DEBUG = True
+    PORT = 8080
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count constants by scope.
+	moduleConstants := 0
+	classConstants := 0
+	moduleNames := []string{}
+	classNames := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Type == "constant" {
+			if node.Scope == "module" {
+				moduleConstants++
+				moduleNames = append(moduleNames, node.Name)
+			} else if node.Scope == "class" {
+				classConstants++
+				classNames = append(classNames, node.Name)
+			}
+		}
+	}
+
+	// Should have 2 module constants.
+	if moduleConstants != 2 {
+		t.Errorf("Expected 2 module constants, got %d: %v", moduleConstants, moduleNames)
+	}
+
+	// Should have 2 class constants.
+	if classConstants != 2 {
+		t.Errorf("Expected 2 class constants, got %d: %v", classConstants, classNames)
+	}
+
+	// Verify module constants.
+	if !containsString(moduleNames, "API_VERSION") || !containsString(moduleNames, "MAX_RETRIES") {
+		t.Errorf("Module constants incorrect: %v", moduleNames)
+	}
+
+	// Verify class constants.
+	if !containsString(classNames, "DEBUG") || !containsString(classNames, "PORT") {
+		t.Errorf("Class constants incorrect: %v", classNames)
+	}
+}
+
+// Helper function to check if a slice contains a string.
+func containsString(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 // Helper function to find a node by name and type.
 func findNodeByNameAndType(graph *CodeGraph, name string, nodeType string) *Node {
 	for _, node := range graph.Nodes {

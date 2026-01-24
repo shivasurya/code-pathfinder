@@ -460,10 +460,17 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 		if isConstantName(variableName) {
 			nodeType = "constant"
 		}
-	} else if currentContext.Type == "class_definition" {
-		// Assignment inside a class but outside any method is a class-level variable.
+	} else if currentContext.Type == "class_definition" || currentContext.Type == "enum" ||
+		currentContext.Type == "interface" || currentContext.Type == "dataclass" {
+		// Assignment inside a class (including enum/interface/dataclass) but outside any method
+		// is a class-level variable.
 		scope = "class"
 		nodeType = "class_field"
+
+		// Check if it's a class-level constant (uppercase naming convention).
+		if isConstantName(variableName) {
+			nodeType = "constant"
+		}
 	}
 
 	varLineNumber := node.StartPoint().Row + 1

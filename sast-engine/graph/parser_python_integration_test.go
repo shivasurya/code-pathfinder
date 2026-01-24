@@ -47,8 +47,8 @@ func TestPythonSymbolTypes_Integration(t *testing.T) {
 
 		// Variable types
 		"module_variable": {2, "Module-level lowercase variables"},
-		"constant":        {3, "Module-level UPPERCASE constants"},
-		"class_field":     {2, "Class-level attributes"},
+		"constant":        {4, "UPPERCASE constants (module + class level)"},
+		"class_field":     {1, "Class-level lowercase attributes"},
 	}
 
 	// Verify each expected type
@@ -109,9 +109,9 @@ func TestPythonSymbolTypes_Integration(t *testing.T) {
 		assert.Contains(t, typeNames["special_method"], "__call__", "__call__ should be a special_method")
 		assert.Contains(t, typeNames["special_method"], "__repr__", "__repr__ should be a special_method")
 
-		// Check class fields
+		// Check class fields vs constants
 		assert.Contains(t, typeNames["class_field"], "class_variable", "class_variable should be a class_field")
-		assert.Contains(t, typeNames["class_field"], "MAX_SIZE", "MAX_SIZE should be a class_field")
+		assert.Contains(t, typeNames["constant"], "MAX_SIZE", "MAX_SIZE should be a constant (class-level UPPERCASE)")
 	})
 
 	// Verify method vs function_definition distinction
