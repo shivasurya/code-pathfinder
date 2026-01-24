@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,12 +28,32 @@ func TestToolGetIndexInfo(t *testing.T) {
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	// Verify stats structure.
+	// Verify stats structure (enhanced with Phase 3).
 	stats, ok := parsed["stats"].(map[string]interface{})
 	assert.True(t, ok)
-	assert.Contains(t, stats, "functions")
+	assert.Contains(t, stats, "total_symbols")
 	assert.Contains(t, stats, "call_edges")
 	assert.Contains(t, stats, "modules")
+	assert.Contains(t, stats, "files")
+	assert.Contains(t, stats, "class_fields")
+
+	// Verify new enhanced fields.
+	assert.Contains(t, parsed, "symbols_by_type")
+	assert.Contains(t, parsed, "symbols_by_lsp_kind")
+	assert.Contains(t, parsed, "top_modules")
+	assert.Contains(t, parsed, "health")
+
+	// Verify symbols_by_type has data.
+	symbolsByType, ok := parsed["symbols_by_type"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.NotEmpty(t, symbolsByType)
+
+	// Verify symbols_by_lsp_kind has data.
+	symbolsByLSPKind, ok := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.NotEmpty(t, symbolsByLSPKind)
+
+	t.Logf("Enhanced Index Info:\n%s", result)
 }
 
 func TestToolFindSymbol_Found(t *testing.T) {
@@ -1219,4 +1240,110 @@ func TestToolFindSymbol_MethodWithSymbolKind(t *testing.T) {
 		"Method should have symbol_kind = SymbolKindMethod (6)")
 	assert.Equal(t, "Method", match["symbol_kind_name"])
 	assert.Equal(t, "method", match["type"])
+}
+// TestToolGetIndexInfo_Enhanced demonstrates the enhanced index info with all symbol types.
+func TestToolGetIndexInfo_Enhanced(t *testing.T) {
+	// Create a comprehensive test server with all 12 symbol types.
+	callGraph := core.NewCallGraph()
+
+	// Add various symbol types.
+	symbolTypes := []struct {
+		name string
+		typ  string
+	}{
+		{"login", "function_definition"},
+		{"logout", "function_definition"},
+		{"get_profile", "method"},
+		{"validate_email", "method"},
+		{"process_payment", "method"},
+		{"__init__", "constructor"},
+		{"name", "property"},
+		{"email", "property"},
+		{"__str__", "special_method"},
+		{"__add__", "special_method"},
+		{"User", "class_definition"},
+		{"Product", "class_definition"},
+		{"IDrawable", "interface"},
+		{"IStorage", "interface"},
+		{"Color", "enum"},
+		{"Priority", "enum"},
+		{"Point", "dataclass"},
+		{"Rectangle", "dataclass"},
+	}
+
+	for i, s := range symbolTypes {
+		node := &graph.Node{
+			Name:       s.name,
+			Type:       s.typ,
+			File:       fmt.Sprintf("/test/file%d.py", i%3),
+			LineNumber: uint32(10 + i),
+		}
+		callGraph.Functions[fmt.Sprintf("myapp.module%d.%s", i%5, s.name)] = node
+	}
+
+	// Add module variables and constants (these would be in separate index).
+	// For this test, we'll just show the function-based symbols.
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.module0"] = "/test/module0.py"
+	moduleRegistry.Modules["myapp.module1"] = "/test/module1.py"
+	moduleRegistry.Modules["myapp.module2"] = "/test/module2.py"
+	moduleRegistry.Modules["myapp.module3"] = "/test/module3.py"
+	moduleRegistry.Modules["myapp.module4"] = "/test/module4.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolGetIndexInfo()
+
+	assert.False(t, isError)
+
+	// Parse and display the comprehensive result.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	// Print the result for demonstration.
+	prettyJSON, _ := json.MarshalIndent(parsed, "", "  ")
+	t.Logf("\n\n=== ENHANCED INDEX INFO EXAMPLE ===\n%s\n", string(prettyJSON))
+
+	// Verify all sections are present.
+	assert.Contains(t, parsed, "stats")
+	assert.Contains(t, parsed, "symbols_by_type")
+	assert.Contains(t, parsed, "symbols_by_lsp_kind")
+	assert.Contains(t, parsed, "top_modules")
+	assert.Contains(t, parsed, "health")
+
+	// Verify symbols_by_type has all the types we added.
+	symbolsByType := parsed["symbols_by_type"].(map[string]interface{})
+	assert.Contains(t, symbolsByType, "function_definition")
+	assert.Contains(t, symbolsByType, "method")
+	assert.Contains(t, symbolsByType, "constructor")
+	assert.Contains(t, symbolsByType, "property")
+	assert.Contains(t, symbolsByType, "special_method")
+	assert.Contains(t, symbolsByType, "class_definition")
+	assert.Contains(t, symbolsByType, "interface")
+	assert.Contains(t, symbolsByType, "enum")
+	assert.Contains(t, symbolsByType, "dataclass")
+
+	// Verify LSP kind breakdown.
+	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	assert.Contains(t, symbolsByLSPKind, "Function")
+	assert.Contains(t, symbolsByLSPKind, "Method")
+	assert.Contains(t, symbolsByLSPKind, "Constructor")
+	assert.Contains(t, symbolsByLSPKind, "Property")
+	assert.Contains(t, symbolsByLSPKind, "Operator")
+	assert.Contains(t, symbolsByLSPKind, "Class")
+	assert.Contains(t, symbolsByLSPKind, "Interface")
+	assert.Contains(t, symbolsByLSPKind, "Enum")
+	assert.Contains(t, symbolsByLSPKind, "Struct")
+
+	t.Logf("\n=== Symbol Type Breakdown ===")
+	for typ, count := range symbolsByType {
+		t.Logf("  %s: %v", typ, count)
+	}
+
+	t.Logf("\n=== LSP Symbol Kind Breakdown ===")
+	for kind, count := range symbolsByLSPKind {
+		t.Logf("  %s: %v", kind, count)
+	}
 }

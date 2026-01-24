@@ -93,11 +93,17 @@ func (s *Server) getToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name: "get_index_info",
-			Description: `Get statistics about the indexed Python codebase. Use this FIRST to understand the project scope before making other queries.
+			Description: `Get comprehensive statistics about the indexed Python codebase. Use this FIRST to understand the project scope before making other queries.
 
-Returns: project_path, python_version, indexed_at timestamp, build_time, and stats (functions count, call_edges count, modules count, files count, taint_summaries count).
+Returns:
+- Project info: project_path, python_version, indexed_at, build_time_seconds
+- Overall stats: total_symbols, call_edges, modules, files, taint_summaries, class_fields
+- symbols_by_type: Breakdown by all 12 Python types (function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field)
+- symbols_by_lsp_kind: Breakdown by LSP Symbol Kind (Function, Method, Constructor, Property, Operator, Class, Interface, Enum, Struct, Variable, Constant, Field)
+- top_modules: Top 10 modules by function count
+- health: Index health indicators (average functions per module, etc.)
 
-Use when: Starting analysis, understanding project size, or verifying the index is built correctly.`,
+Use when: Starting analysis, understanding project size and structure, verifying index quality, or exploring symbol distribution.`,
 			InputSchema: InputSchema{
 				Type:       "object",
 				Properties: map[string]Property{},
@@ -285,23 +291,129 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 // Tool Implementations
 // ============================================================================
 
-// toolGetIndexInfo returns index statistics.
+// toolGetIndexInfo returns comprehensive index statistics including symbol type breakdown.
 func (s *Server) toolGetIndexInfo() (string, bool) {
+	// Count symbols by type and LSP kind.
+	symbolsByType := make(map[string]int)
+	symbolsByLSPKind := make(map[string]int)
+
+	for _, node := range s.callGraph.Functions {
+		symbolsByType[node.Type]++
+
+		// Get LSP kind for this symbol.
+		_, kindName := getSymbolKind(node.Type)
+		symbolsByLSPKind[kindName]++
+	}
+
+	// Count class attributes if available.
+	classFieldsCount := 0
+	if s.callGraph.Attributes != nil {
+		if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
+			for _, classAttrs := range attrRegistry.Classes {
+				classFieldsCount += len(classAttrs.Attributes)
+			}
+		}
+	}
+
+	// Calculate module statistics.
+	moduleStats := make([]map[string]interface{}, 0)
+	totalFunctionsInModules := 0
+
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, moduleFQN+".") {
+				functionsCount++
+			}
+		}
+		totalFunctionsInModules += functionsCount
+
+		moduleStats = append(moduleStats, map[string]interface{}{
+			"module_fqn":      moduleFQN,
+			"file_path":       filePath,
+			"functions_count": functionsCount,
+		})
+	}
+
+	// Build comprehensive result.
 	result := map[string]interface{}{
 		"project_path":       s.projectPath,
 		"python_version":     s.pythonVersion,
 		"indexed_at":         s.indexedAt.Format("2006-01-02T15:04:05Z07:00"),
 		"build_time_seconds": s.buildTime.Seconds(),
-		"stats": map[string]int{
-			"functions":       len(s.callGraph.Functions),
+
+		// Overall statistics.
+		"stats": map[string]interface{}{
+			"total_symbols":   len(s.callGraph.Functions),
 			"call_edges":      len(s.callGraph.Edges),
 			"modules":         len(s.moduleRegistry.Modules),
 			"files":           len(s.moduleRegistry.FileToModule),
 			"taint_summaries": len(s.callGraph.Summaries),
+			"class_fields":    classFieldsCount,
+		},
+
+		// Symbol breakdown by Python type (12 types).
+		"symbols_by_type": symbolsByType,
+
+		// Symbol breakdown by LSP Symbol Kind (human-readable).
+		"symbols_by_lsp_kind": symbolsByLSPKind,
+
+		// Module statistics (top 10 by function count).
+		"top_modules": getTopModules(moduleStats, 10),
+
+		// Index health indicators.
+		"health": map[string]interface{}{
+			"indexed_symbols":          len(s.callGraph.Functions),
+			"symbols_with_call_edges":  len(s.callGraph.Edges),
+			"modules_indexed":          len(s.moduleRegistry.Modules),
+			"average_functions_per_module": float64(totalFunctionsInModules) / float64(max(len(s.moduleRegistry.Modules), 1)),
 		},
 	}
+
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false
+}
+
+// getTopModules returns the top N modules by function count.
+func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string]interface{} {
+	// Sort by functions_count descending.
+	type moduleStat struct {
+		data           map[string]interface{}
+		functionsCount int
+	}
+
+	stats := make([]moduleStat, len(moduleStats))
+	for i, m := range moduleStats {
+		stats[i] = moduleStat{
+			data:           m,
+			functionsCount: m["functions_count"].(int),
+		}
+	}
+
+	// Simple bubble sort for top N (good enough for small N).
+	for i := 0; i < len(stats) && i < limit; i++ {
+		for j := i + 1; j < len(stats); j++ {
+			if stats[j].functionsCount > stats[i].functionsCount {
+				stats[i], stats[j] = stats[j], stats[i]
+			}
+		}
+	}
+
+	// Return top N.
+	result := make([]map[string]interface{}, 0, limit)
+	for i := 0; i < len(stats) && i < limit; i++ {
+		result = append(result, stats[i].data)
+	}
+
+	return result
+}
+
+// max returns the maximum of two integers.
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // toolFindSymbol finds symbols by name with pagination support.
