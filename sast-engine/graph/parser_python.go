@@ -432,16 +432,23 @@ func parsePythonYieldExpression(node *sitter.Node, sourceCode []byte, graph *Cod
 
 // parsePythonAssignment parses Python variable assignments.
 // Distinguishes between local variables, module-level variables, and constants.
+// Only processes simple identifier assignments, skipping subscript and attribute assignments.
 func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) {
-	// Python variable assignments
-	variableName := ""
-	variableValue := ""
-
 	leftNode := node.ChildByFieldName("left")
-	if leftNode != nil {
-		variableName = leftNode.Content(sourceCode)
+	if leftNode == nil {
+		return
 	}
 
+	// Only process simple identifier assignments (e.g., "x = 1", "CONSTANT = 'value'").
+	// Skip subscript assignments (e.g., "dict['key'] = value", "DATABASES_ALL['default'] = {}").
+	// Skip attribute assignments (e.g., "obj.field = value", "settings.DATA_MANAGER = {}").
+	if leftNode.Type() == "subscript" || leftNode.Type() == "attribute" {
+		return
+	}
+
+	variableName := leftNode.Content(sourceCode)
+
+	variableValue := ""
 	rightNode := node.ChildByFieldName("right")
 	if rightNode != nil {
 		variableValue = rightNode.Content(sourceCode)

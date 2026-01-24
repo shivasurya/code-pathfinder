@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -1839,6 +1840,320 @@ func containsString(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// TestSubscriptAssignmentNotIndexed tests that subscript assignments are not indexed as module variables.
+func TestSubscriptAssignmentNotIndexed(t *testing.T) {
+	code := `
+# Simple variable assignments (should be indexed)
+DATABASES_ALL = {}
+STORAGES = {}
+config_dict = {}
+
+# Subscript assignments (should NOT be indexed as variables)
+DATABASES_ALL['default'] = {'ENGINE': 'django.db.backends.postgresql'}
+STORAGES['default']['BACKEND'] = 'django.core.files.storage.FileSystemStorage'
+config_dict['key'] = 'value'
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count module-level variables and constants
+	moduleVars := []string{}
+	constants := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "module" {
+			if node.Type == "module_variable" {
+				moduleVars = append(moduleVars, node.Name)
+			} else if node.Type == "constant" {
+				constants = append(constants, node.Name)
+			}
+		}
+	}
+
+	// Should have 1 module variable (config_dict)
+	if len(moduleVars) != 1 {
+		t.Errorf("Expected 1 module_variable, got %d: %v", len(moduleVars), moduleVars)
+	}
+	if !containsString(moduleVars, "config_dict") {
+		t.Errorf("Expected config_dict in module variables, got: %v", moduleVars)
+	}
+
+	// Should have 2 constants (DATABASES_ALL, STORAGES)
+	if len(constants) != 2 {
+		t.Errorf("Expected 2 constants, got %d: %v", len(constants), constants)
+	}
+	if !containsString(constants, "DATABASES_ALL") {
+		t.Errorf("Expected DATABASES_ALL in constants, got: %v", constants)
+	}
+	if !containsString(constants, "STORAGES") {
+		t.Errorf("Expected STORAGES in constants, got: %v", constants)
+	}
+
+	// Should NOT have subscript assignments as variables
+	allNames := make([]string, 0, len(moduleVars)+len(constants))
+	allNames = append(allNames, moduleVars...)
+	allNames = append(allNames, constants...)
+	for _, name := range allNames {
+		if strings.Contains(name, "[") || strings.Contains(name, "'") {
+			t.Errorf("Found subscript assignment indexed as variable: %s", name)
+		}
+	}
+}
+
+// TestAttributeAssignmentNotIndexed tests that attribute assignments are not indexed as module variables.
+func TestAttributeAssignmentNotIndexed(t *testing.T) {
+	code := `
+# Simple variable assignment (should be indexed)
+settings = object()
+
+# Attribute assignments (should NOT be indexed as variables)
+settings.DATA_MANAGER = {}
+settings.FEATURE_FLAGS = True
+obj.field = "value"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count module-level variables
+	moduleVars := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "module" && node.Type == "module_variable" {
+			moduleVars = append(moduleVars, node.Name)
+		}
+	}
+
+	// Should have 1 module variable (settings)
+	if len(moduleVars) != 1 {
+		t.Errorf("Expected 1 module_variable, got %d: %v", len(moduleVars), moduleVars)
+	}
+	if !containsString(moduleVars, "settings") {
+		t.Errorf("Expected settings in module variables, got: %v", moduleVars)
+	}
+
+	// Should NOT have attribute assignments as variables
+	for _, name := range moduleVars {
+		if strings.Contains(name, ".") {
+			t.Errorf("Found attribute assignment indexed as variable: %s", name)
+		}
+	}
+}
+
+// TestLabelStudioSubscriptCases tests real cases from label-studio codebase.
+func TestLabelStudioSubscriptCases(t *testing.T) {
+	code := `
+# From core/settings/base.py
+DATABASES_ALL = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+    }
+}
+
+# Subscript assignment (should NOT be indexed)
+DATABASES_ALL['default'] = {
+    'ENGINE': 'django.db.backends.postgresql',
+}
+
+# From core/feature_flags/base.py
+store_kwargs = {}
+
+# Subscript assignment (should NOT be indexed)
+store_kwargs['redis_opts'] = {'host': 'localhost'}
+
+# From core/settings/base.py
+LOGGING = {'handlers': {}}
+
+# Nested subscript assignments (should NOT be indexed)
+LOGGING['handlers']['google_cloud_logging'] = {}
+LOGGING['root']['level'] = 'INFO'
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count module-level variables and constants
+	moduleVars := []string{}
+	constants := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "module" {
+			if node.Type == "module_variable" {
+				moduleVars = append(moduleVars, node.Name)
+			} else if node.Type == "constant" {
+				constants = append(constants, node.Name)
+			}
+		}
+	}
+
+	// Should have 1 module variable (store_kwargs)
+	if len(moduleVars) != 1 {
+		t.Errorf("Expected 1 module_variable, got %d: %v", len(moduleVars), moduleVars)
+	}
+
+	// Should have 3 constants (DATABASES_ALL, LOGGING, STORAGES not in this test)
+	if len(constants) != 2 {
+		t.Errorf("Expected 2 constants, got %d: %v", len(constants), constants)
+	}
+
+	// Total module-level should be 3 (not 8 if subscripts were counted)
+	totalModuleLevel := len(moduleVars) + len(constants)
+	if totalModuleLevel != 3 {
+		t.Errorf("Expected 3 total module-level declarations, got %d", totalModuleLevel)
+	}
+
+	// Verify no subscript syntax in variable names
+	allNames := make([]string, 0, len(moduleVars)+len(constants))
+	allNames = append(allNames, moduleVars...)
+	allNames = append(allNames, constants...)
+	for _, name := range allNames {
+		if strings.Contains(name, "[") || strings.Contains(name, "]") || strings.Contains(name, "'") {
+			t.Errorf("Subscript assignment incorrectly indexed as variable: %s", name)
+		}
+	}
+}
+
+// TestLabelStudioAttributeCases tests real attribute assignment cases from label-studio.
+func TestLabelStudioAttributeCases(t *testing.T) {
+	code := `
+# From manage.py
+from django.core.management.commands import runserver
+
+# Attribute assignment (should NOT be indexed)
+runserver.default_port = "8080"
+
+# From data_manager/managers.py
+import settings
+
+# Attribute assignment (should NOT be indexed)
+settings.DATA_MANAGER_ANNOTATIONS_MAP = {}
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count module-level variables
+	moduleVars := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "module" && node.Type == "module_variable" {
+			moduleVars = append(moduleVars, node.Name)
+		}
+	}
+
+	// Should have 0 module variables (all are attribute assignments)
+	if len(moduleVars) != 0 {
+		t.Errorf("Expected 0 module_variables, got %d: %v", len(moduleVars), moduleVars)
+	}
+
+	// Verify no dotted names
+	for _, name := range moduleVars {
+		if strings.Contains(name, ".") {
+			t.Errorf("Attribute assignment incorrectly indexed as variable: %s", name)
+		}
+	}
+}
+
+// TestMixedAssignmentTypes tests combination of identifier, subscript, and attribute assignments.
+func TestMixedAssignmentTypes(t *testing.T) {
+	code := `
+# Simple identifiers (should be indexed)
+simple_var = 123
+SIMPLE_CONST = "value"
+
+# Subscript assignments (should NOT be indexed)
+data = {}
+data['key'] = 'value'
+
+# Attribute assignments (should NOT be indexed)
+obj = object()
+obj.field = "value"
+
+# More simple identifiers (should be indexed)
+another_var = 456
+ANOTHER_CONST = "constant"
+`
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	tree, _ := parser.ParseCtx(context.TODO(), nil, []byte(code))
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count module-level variables and constants
+	moduleVars := []string{}
+	constants := []string{}
+
+	for _, node := range graph.Nodes {
+		if node.Scope == "module" {
+			if node.Type == "module_variable" {
+				moduleVars = append(moduleVars, node.Name)
+			} else if node.Type == "constant" {
+				constants = append(constants, node.Name)
+			}
+		}
+	}
+
+	// Should have 3 module variables (simple_var, another_var, data, obj)
+	if len(moduleVars) != 4 {
+		t.Errorf("Expected 4 module_variables, got %d: %v", len(moduleVars), moduleVars)
+	}
+
+	// Should have 2 constants (SIMPLE_CONST, ANOTHER_CONST)
+	if len(constants) != 2 {
+		t.Errorf("Expected 2 constants, got %d: %v", len(constants), constants)
+	}
+
+	// Verify expected variables
+	expectedVars := []string{"simple_var", "another_var", "data", "obj"}
+	for _, expected := range expectedVars {
+		if !containsString(moduleVars, expected) {
+			t.Errorf("Expected %s in module variables, got: %v", expected, moduleVars)
+		}
+	}
+
+	// Verify expected constants
+	expectedConsts := []string{"SIMPLE_CONST", "ANOTHER_CONST"}
+	for _, expected := range expectedConsts {
+		if !containsString(constants, expected) {
+			t.Errorf("Expected %s in constants, got: %v", expected, constants)
+		}
+	}
+
+	// Verify no subscript or attribute syntax
+	allNames := make([]string, 0, len(moduleVars)+len(constants))
+	allNames = append(allNames, moduleVars...)
+	allNames = append(allNames, constants...)
+	for _, name := range allNames {
+		if strings.Contains(name, "[") || strings.Contains(name, ".") {
+			t.Errorf("Non-identifier assignment incorrectly indexed: %s", name)
+		}
+	}
 }
 
 // Helper function to find a node by name and type.
