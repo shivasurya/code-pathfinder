@@ -7,6 +7,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,6 +163,106 @@ func createExtendedTestServer() *Server {
 			"utils":  {"/path/to/myapp/utils.py", "/path/to/other/utils.py"}, // Ambiguous
 			"models": {"/path/to/myapp/models.py"},
 		},
+	}
+
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+}
+
+// createTestServerWithAttributes creates a Server with AttributeRegistry for testing attribute search.
+func createTestServerWithAttributes() *Server {
+	callGraph := core.NewCallGraph()
+
+	// Add test function and class nodes.
+	callGraph.Functions["myapp.models.User"] = &graph.Node{
+		ID:         "class1",
+		Type:       "class_declaration",
+		Name:       "User",
+		File:       "/path/to/myapp/models.py",
+		LineNumber: 10,
+	}
+
+	callGraph.Functions["myapp.auth.validate_user"] = &graph.Node{
+		ID:         "func1",
+		Type:       "function_definition",
+		Name:       "validate_user",
+		File:       "/path/to/myapp/auth.py",
+		LineNumber: 45,
+		ReturnType: "User",
+	}
+
+	// Create and populate AttributeRegistry.
+	attrRegistry := registry.NewAttributeRegistry()
+
+	// Add User class with email and username attributes.
+	userAttrs := &core.ClassAttributes{
+		ClassFQN:   "myapp.models.User",
+		Attributes: make(map[string]*core.ClassAttribute),
+		Methods:    []string{"__init__", "save"},
+	}
+
+	userAttrs.Attributes["email"] = &core.ClassAttribute{
+		Name: "email",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.str",
+			Confidence: 0.9,
+			Source:     "annotation",
+		},
+		AssignedIn: "__init__",
+		Location: &graph.SourceLocation{
+			File:      "/path/to/myapp/models.py",
+			StartByte: 100,
+			EndByte:   120,
+		},
+		Confidence: 0.9,
+	}
+
+	userAttrs.Attributes["username"] = &core.ClassAttribute{
+		Name: "username",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.str",
+			Confidence: 0.85,
+			Source:     "assignment",
+		},
+		AssignedIn: "__init__",
+		Location: &graph.SourceLocation{
+			File:      "/path/to/myapp/models.py",
+			StartByte: 150,
+			EndByte:   170,
+		},
+		Confidence: 0.85,
+	}
+
+	// Attribute with no type information.
+	userAttrs.Attributes["id"] = &core.ClassAttribute{
+		Name:       "id",
+		Type:       nil, // No type info
+		AssignedIn: "__init__",
+		Location:   nil, // No location info
+		Confidence: 0.0,
+	}
+
+	// Attribute with empty TypeFQN.
+	userAttrs.Attributes["created_at"] = &core.ClassAttribute{
+		Name: "created_at",
+		Type: &core.TypeInfo{
+			TypeFQN:    "", // Empty type
+			Confidence: 0.0,
+			Source:     "unknown",
+		},
+		AssignedIn: "",
+		Location:   nil,
+		Confidence: 0.0,
+	}
+
+	attrRegistry.AddClassAttributes(userAttrs)
+
+	// Store AttributeRegistry in callGraph.
+	callGraph.Attributes = attrRegistry
+
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{"myapp.auth": "/path/to/myapp/auth.py", "myapp.models": "/path/to/myapp/models.py"},
+		FileToModule: map[string]string{"/path/to/myapp/auth.py": "myapp.auth", "/path/to/myapp/models.py": "myapp.models"},
+		ShortNames:   map[string][]string{"auth": {"/path/to/myapp/auth.py"}, "models": {"/path/to/myapp/models.py"}},
 	}
 
 	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)

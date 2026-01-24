@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 )
 
 // getToolDefinitions returns the complete tool schemas.
@@ -23,11 +25,11 @@ Use when: Starting analysis, understanding project size, or verifying the index 
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search for functions, classes, or methods by name. Supports partial matching. Results are paginated.
+			Description: `Search for functions, classes, methods, or class attributes by name. Supports partial matching. Results are paginated.
 
-Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login'), file path, line number, type, and metadata (return_type, parameters, decorators, superclass if available). Includes pagination info.
+Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login' or 'myapp.User.email'), file path, line number, type, and metadata. For functions/methods: return_type, parameters, decorators, superclass. For class fields: inferred_type, confidence, assigned_in. Includes pagination info.
 
-Use when: Looking for a specific function, exploring what functions exist, or finding where something is defined.
+Use when: Looking for a specific function, class, or attribute; exploring what symbols exist; or finding where something is defined.
 
 Examples:
 - find_symbol("login") - finds all functions containing 'login'
@@ -175,6 +177,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 }
 
 // toolFindSymbol finds symbols by name with pagination support.
+// Searches both functions/methods/classes AND class attributes/fields.
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	name, _ := args["name"].(string)
 	if name == "" {
@@ -189,6 +192,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	var allMatches []map[string]interface{}
 
+	// Search functions, methods, and classes.
 	for fqn, node := range s.callGraph.Functions {
 		shortName := getShortName(fqn)
 		if shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name) {
@@ -217,6 +221,48 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			}
 
 			allMatches = append(allMatches, match)
+		}
+	}
+
+	// Search class attributes if AttributeRegistry is available.
+	if s.callGraph.Attributes != nil {
+		if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
+			for classFQN, classAttrs := range attrRegistry.Classes {
+				for attrName, attr := range classAttrs.Attributes {
+					// Match attribute name (simple or qualified).
+					attributeFQN := classFQN + "." + attrName
+					if attrName == name || strings.Contains(attrName, name) ||
+					   strings.HasSuffix(attributeFQN, "."+name) ||
+					   strings.Contains(attributeFQN, name) {
+						match := map[string]interface{}{
+							"fqn":   attributeFQN,
+							"type":  "class_field",
+							"class": classFQN,
+							"name":  attrName,
+						}
+
+						// Add location if available.
+						if attr.Location != nil {
+							match["file"] = attr.Location.File
+							// Note: SourceLocation uses byte offsets, not line numbers.
+							// Could convert but would require reading file - skip for now.
+						}
+
+						// Add type information if available.
+						if attr.Type != nil && attr.Type.TypeFQN != "" {
+							match["inferred_type"] = attr.Type.TypeFQN
+							match["confidence"] = attr.Confidence
+						}
+
+						// Add assignment location.
+						if attr.AssignedIn != "" {
+							match["assigned_in"] = attr.AssignedIn
+						}
+
+						allMatches = append(allMatches, match)
+					}
+				}
+			}
 		}
 	}
 

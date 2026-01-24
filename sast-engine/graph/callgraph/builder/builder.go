@@ -398,6 +398,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	GenerateTaintSummaries(callGraph, codeGraph, registry)
 	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
 
+	// Store attribute registry for symbol search and type inference
+	callGraph.Attributes = typeEngine.Attributes
+
 	return callGraph, nil
 }
 

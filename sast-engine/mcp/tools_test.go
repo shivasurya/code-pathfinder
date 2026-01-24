@@ -86,6 +86,138 @@ func TestToolFindSymbol_EmptyName(t *testing.T) {
 	assert.Contains(t, result, "required")
 }
 
+// TestToolFindSymbol_AttributeFound tests finding a class attribute by exact name.
+func TestToolFindSymbol_AttributeFound(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "email")
+	assert.Contains(t, result, "class_field")
+	assert.Contains(t, result, "myapp.models.User.email")
+	assert.Contains(t, result, "builtins.str")
+}
+
+// TestToolFindSymbol_AttributePartialMatch tests finding attributes via partial name matching.
+func TestToolFindSymbol_AttributePartialMatch(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "name"})
+
+	// Should find username attribute via partial match.
+	assert.False(t, isError)
+	assert.Contains(t, result, "username")
+	assert.Contains(t, result, "myapp.models.User.username")
+}
+
+// TestToolFindSymbol_AttributeWithConfidence tests that confidence scores are included.
+func TestToolFindSymbol_AttributeWithConfidence(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+
+	assert.False(t, isError)
+	// Verify confidence is included in output.
+	assert.Contains(t, result, "confidence")
+	assert.Contains(t, result, "0.9")
+}
+
+// TestToolFindSymbol_AttributeAndFunction tests finding both attributes and functions.
+func TestToolFindSymbol_AttributeAndFunction(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "User"})
+
+	assert.False(t, isError)
+	// Should find both class User and possibly attributes containing "User".
+	assert.Contains(t, result, "User")
+}
+
+// TestToolFindSymbol_NoAttributeRegistry tests behavior when no attributes are indexed.
+func TestToolFindSymbol_NoAttributeRegistry(t *testing.T) {
+	server := createTestServer() // No attributes registry.
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+
+	// Should still find functions.
+	assert.False(t, isError)
+	assert.Contains(t, result, "validate_user")
+}
+
+// TestToolFindSymbol_NilAttributes tests handling when Attributes field is nil.
+func TestToolFindSymbol_NilAttributes(t *testing.T) {
+	server := createTestServer()
+	server.callGraph.Attributes = nil // Explicitly set to nil.
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+
+	// Should still work for functions.
+	assert.False(t, isError)
+	assert.Contains(t, result, "validate_user")
+}
+
+// TestToolFindSymbol_WrongTypeAttributes tests handling when Attributes is wrong type.
+func TestToolFindSymbol_WrongTypeAttributes(t *testing.T) {
+	server := createTestServer()
+	server.callGraph.Attributes = "not a registry" // Wrong type.
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+
+	// Should still work for functions without crashing.
+	assert.False(t, isError)
+	assert.Contains(t, result, "validate_user")
+}
+
+// TestToolFindSymbol_AttributeNoType tests attributes without type information.
+func TestToolFindSymbol_AttributeNoType(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "id"})
+
+	// Should find attribute even without type info.
+	assert.False(t, isError)
+	assert.Contains(t, result, "id")
+	assert.Contains(t, result, "myapp.models.User.id")
+	// Should not crash when Type is nil.
+}
+
+// TestToolFindSymbol_AttributeEmptyType tests attributes with empty TypeFQN.
+func TestToolFindSymbol_AttributeEmptyType(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "created_at"})
+
+	// Should find attribute even with empty type.
+	assert.False(t, isError)
+	assert.Contains(t, result, "created_at")
+	assert.Contains(t, result, "myapp.models.User.created_at")
+}
+
+// TestToolFindSymbol_AttributeNoLocation tests attributes without location information.
+func TestToolFindSymbol_AttributeNoLocation(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "id"})
+
+	// Should find attribute even without location.
+	assert.False(t, isError)
+	assert.Contains(t, result, "id")
+	// Location field should not cause crash when nil.
+}
+
+// TestToolFindSymbol_AttributeNoAssignedIn tests attributes without AssignedIn information.
+func TestToolFindSymbol_AttributeNoAssignedIn(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "created_at"})
+
+	// Should find attribute even without AssignedIn.
+	assert.False(t, isError)
+	assert.Contains(t, result, "created_at")
+	// Should not include assigned_in field when empty.
+}
+
 func TestToolGetCallers_Found(t *testing.T) {
 	server := createTestServer()
 
