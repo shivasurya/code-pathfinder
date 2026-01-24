@@ -64,7 +64,7 @@ func TestParsePythonFunctionDefinition(t *testing.T) {
 				t.Fatal("No function_definition node found")
 			}
 
-			node := parsePythonFunctionDefinition(funcNode, []byte(tt.code), graph, "test.py")
+			node := parsePythonFunctionDefinition(funcNode, []byte(tt.code), graph, "test.py", nil)
 
 			if node.Name != tt.expectedName {
 				t.Errorf("Expected name %s, got %s", tt.expectedName, node.Name)
@@ -470,7 +470,7 @@ class User:
 		t.Fatal("No __init__ method found")
 	}
 
-	node := parsePythonFunctionDefinition(initNode, []byte(code), graph, "test.py")
+	node := parsePythonFunctionDefinition(initNode, []byte(code), graph, "test.py", nil)
 
 	if node.Type != "constructor" {
 		t.Errorf("Expected type 'constructor', got %s", node.Type)
@@ -509,7 +509,7 @@ class User:
 		t.Fatal("No decorated function found")
 	}
 
-	node := parsePythonFunctionDefinition(funcNode, []byte(code), graph, "test.py")
+	node := parsePythonFunctionDefinition(funcNode, []byte(code), graph, "test.py", nil)
 
 	if node.Type != "property" {
 		t.Errorf("Expected type 'property', got %s", node.Type)
@@ -872,7 +872,7 @@ class User:
 		t.Fatal("No __str__ method found")
 	}
 
-	node := parsePythonFunctionDefinition(strNode, []byte(code), graph, "test.py")
+	node := parsePythonFunctionDefinition(strNode, []byte(code), graph, "test.py", nil)
 
 	if node.Type != "special_method" {
 		t.Errorf("Expected type 'special_method', got %s", node.Type)

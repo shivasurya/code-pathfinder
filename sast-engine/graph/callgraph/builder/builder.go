@@ -418,8 +418,12 @@ func IndexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 // indexFunctions is the internal implementation of IndexFunctions.
 func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
 	for _, node := range codeGraph.Nodes {
-		// Only index function/method definitions
-		if node.Type != "method_declaration" && node.Type != "function_definition" {
+		// Only index function/method definitions (Java and Python types)
+		// Java: method_declaration
+		// Python: function_definition, method, constructor, property, special_method
+		if node.Type != "method_declaration" && node.Type != "function_definition" &&
+			node.Type != "method" && node.Type != "constructor" &&
+			node.Type != "property" && node.Type != "special_method" {
 			continue
 		}
 
@@ -453,7 +457,9 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 
 	for _, node := range codeGraph.Nodes {
 		if node.File == filePath &&
-			(node.Type == "method_declaration" || node.Type == "function_definition") {
+			(node.Type == "method_declaration" || node.Type == "function_definition" ||
+				node.Type == "method" || node.Type == "constructor" ||
+				node.Type == "property" || node.Type == "special_method") {
 			functions = append(functions, node)
 		}
 	}

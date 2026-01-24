@@ -82,10 +82,12 @@ class MyClass:
 	// Verify functions were indexed
 	assert.NotEmpty(t, callGraph.Functions)
 
-	// Count functions/methods
+	// Count functions/methods (including new Python symbol types)
 	functionCount := 0
 	for _, node := range callGraph.Functions {
-		if node.Type == "function_definition" || node.Type == "method_declaration" {
+		if node.Type == "function_definition" || node.Type == "method_declaration" ||
+			node.Type == "method" || node.Type == "constructor" ||
+			node.Type == "property" || node.Type == "special_method" {
 			functionCount++
 		}
 	}

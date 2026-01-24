@@ -11,7 +11,7 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// Python-specific node types
 	case "function_definition":
 		if isPythonSourceFile {
-			currentContext = parsePythonFunctionDefinition(node, sourceCode, graph, file)
+			currentContext = parsePythonFunctionDefinition(node, sourceCode, graph, file, currentContext)
 		}
 
 	case "class_definition":

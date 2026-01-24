@@ -130,8 +130,9 @@ func isDataclass(decorators []string) bool {
 }
 
 // parsePythonFunctionDefinition parses Python function definitions.
-// Handles decorators to distinguish between regular functions, properties, and constructors.
-func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) *Node {
+// Handles decorators to distinguish between regular functions, methods, properties, and constructors.
+// Distinguishes methods (functions inside classes) from module-level functions.
+func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) *Node {
 	// Extract function name and parameters
 	functionName := ""
 	parameters := []string{}
@@ -154,12 +155,23 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	// Determine node type based on function characteristics.
 	nodeType := "function_definition"
 
-	// Check if this is a constructor.
-	if isConstructor(functionName) {
+	// Check if function is inside a class (method vs function).
+	isInsideClass := currentContext != nil && (
+		currentContext.Type == "class_definition" ||
+		currentContext.Type == "interface" ||
+		currentContext.Type == "enum" ||
+		currentContext.Type == "dataclass")
+
+	// Determine function type based on characteristics (priority order).
+	switch {
+	case isConstructor(functionName):
 		nodeType = "constructor"
-	} else if isSpecialMethod(functionName) {
+	case isSpecialMethod(functionName):
 		// Special methods like __str__, __add__, __call__.
 		nodeType = "special_method"
+	case isInsideClass:
+		// Regular function inside a class is a method.
+		nodeType = "method"
 	}
 
 	// Check for decorators (parent might be decorated_definition).
