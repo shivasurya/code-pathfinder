@@ -397,7 +397,7 @@ func TestHandleToolsCall_FindSymbol_NotFound(t *testing.T) {
 	result, ok := resp.Result.(ToolResult)
 	require.True(t, ok)
 	assert.True(t, result.IsError)
-	assert.Contains(t, result.Content[0].Text, "not found")
+	assert.Contains(t, result.Content[0].Text, "No symbols found")
 }
 
 func TestHandleToolsCall_GetCallers(t *testing.T) {

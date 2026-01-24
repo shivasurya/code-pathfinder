@@ -111,9 +111,9 @@ Use when: Starting analysis, understanding project size and structure, verifying
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search for Python symbols by name across 12 symbol types. Supports partial matching. Results are paginated.
+			Description: `Search and filter Python symbols by name and/or type across 12 symbol types. Supports partial matching. Results are paginated.
 
-Symbol Types Searched:
+Symbol Types Available:
 - Functions: function_definition, method, constructor, property, special_method
 - Classes: class_definition, interface (Protocol/ABC), enum, dataclass
 - Variables: module_variable, constant (UPPERCASE), class_field
@@ -123,20 +123,26 @@ For functions/methods: return_type, parameters, decorators. For classes: supercl
 
 LSP Symbol Kinds: Function(12), Method(6), Constructor(9), Property(7), Operator(25), Class(5), Interface(11), Enum(10), Struct(23), Variable(13), Constant(14), Field(8).
 
-Use when: Looking for any symbol by name; exploring codebase structure; finding definitions; analyzing symbol types.
+Filtering: At least ONE of name/type/types must be provided. Filters can be combined (e.g., name="get" + type="method").
+
+Use when: Looking for symbols by name; filtering by type; exploring codebase structure; finding definitions; analyzing symbol types.
 
 Examples:
-- find_symbol("login") - finds all symbols named login (could be function, method, class, etc.)
-- find_symbol("User") - finds User class and related methods
-- find_symbol("__init__") - finds all constructors`,
+- find_symbol(name="login") - finds all symbols named login
+- find_symbol(type="method") - lists all methods
+- find_symbol(types=["interface","enum"]) - lists all interfaces and enums
+- find_symbol(name="get", type="method") - finds methods named "get"
+- find_symbol(name="User", type="class_definition") - finds User class only`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
-					"name":   {Type: "string", Description: "Symbol name to find. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"name":   {Type: "string", Description: "Symbol name to find. Optional. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"type":   {Type: "string", Description: "Filter by single symbol type. Optional. One of: function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field"},
+					"types":  {Type: "array", Description: "Filter by multiple symbol types. Optional. Array of type strings. Alternative to 'type' parameter"},
 					"limit":  {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
 					"cursor": {Type: "string", Description: "Pagination cursor from previous response"},
 				},
-				Required: []string{"name"},
+				Required: []string{},
 			},
 		},
 		{
@@ -366,7 +372,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 			"indexed_symbols":          len(s.callGraph.Functions),
 			"symbols_with_call_edges":  len(s.callGraph.Edges),
 			"modules_indexed":          len(s.moduleRegistry.Modules),
-			"average_functions_per_module": float64(totalFunctionsInModules) / float64(max(len(s.moduleRegistry.Modules), 1)),
+			"average_functions_per_module": float64(totalFunctionsInModules) / float64(maxInt(len(s.moduleRegistry.Modules), 1)),
 		},
 	}
 
@@ -409,7 +415,7 @@ func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string
 }
 
 // max returns the maximum of two integers.
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}
@@ -421,8 +427,59 @@ func max(a, b int) int {
 // special methods, classes, interfaces, enums, dataclasses, module variables, constants, and class fields.
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	name, _ := args["name"].(string)
-	if name == "" {
-		return `{"error": "name parameter is required"}`, true
+	singleType, _ := args["type"].(string)
+
+	// Handle types parameter (array).
+	var typeFilter []string
+	if typesParam, ok := args["types"].([]interface{}); ok {
+		for _, t := range typesParam {
+			if typeStr, ok := t.(string); ok {
+				typeFilter = append(typeFilter, typeStr)
+			}
+		}
+	}
+
+	// Validation: at least one filter must be provided.
+	if name == "" && singleType == "" && len(typeFilter) == 0 {
+		return `{"error": "At least one filter required: provide 'name', 'type', or 'types' parameter"}`, true
+	}
+
+	// Validate type/types conflict.
+	if singleType != "" && len(typeFilter) > 0 {
+		return `{"error": "Cannot specify both 'type' and 'types' parameters. Use one or the other"}`, true
+	}
+
+	// Convert singleType to typeFilter array for unified processing.
+	if singleType != "" {
+		typeFilter = []string{singleType}
+	}
+
+	// Validate type names.
+	validTypes := map[string]bool{
+		"function_definition": true,
+		"method":              true,
+		"constructor":         true,
+		"property":            true,
+		"special_method":      true,
+		"class_definition":    true,
+		"interface":           true,
+		"enum":                true,
+		"dataclass":           true,
+		"module_variable":     true,
+		"constant":            true,
+		"class_field":         true,
+	}
+
+	for _, t := range typeFilter {
+		if !validTypes[t] {
+			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field"]}`, t), true
+		}
+	}
+
+	// Build type filter map for O(1) lookup.
+	typeFilterMap := make(map[string]bool)
+	for _, t := range typeFilter {
+		typeFilterMap[t] = true
 	}
 
 	// Extract pagination params.
@@ -435,8 +492,19 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	// Search functions, methods, constructors, properties, special methods, and classes.
 	for fqn, node := range s.callGraph.Functions {
-		shortName := getShortName(fqn)
-		if shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name) {
+		// Apply type filter if specified.
+		if len(typeFilterMap) > 0 && !typeFilterMap[node.Type] {
+			continue
+		}
+
+		// Apply name filter if specified.
+		nameMatches := name == ""
+		if name != "" {
+			shortName := getShortName(fqn)
+			nameMatches = shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name)
+		}
+
+		if nameMatches {
 			// Get LSP symbol kind.
 			symbolKind, symbolKindName := getSymbolKind(node.Type)
 
@@ -475,45 +543,56 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	// Search class attributes if AttributeRegistry is available.
 	if s.callGraph.Attributes != nil {
-		if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
-			for classFQN, classAttrs := range attrRegistry.Classes {
-				for attrName, attr := range classAttrs.Attributes {
-					// Match attribute name (simple or qualified).
-					attributeFQN := classFQN + "." + attrName
-					if attrName == name || strings.Contains(attrName, name) ||
-					   strings.HasSuffix(attributeFQN, "."+name) ||
-					   strings.Contains(attributeFQN, name) {
-						// Get LSP symbol kind for class_field.
-						symbolKind, symbolKindName := getSymbolKind("class_field")
+		// Only search class fields if type filter allows it.
+		searchClassFields := len(typeFilterMap) == 0 || typeFilterMap["class_field"]
 
-						match := map[string]interface{}{
-							"fqn":              attributeFQN,
-							"type":             "class_field",
-							"symbol_kind":      symbolKind,
-							"symbol_kind_name": symbolKindName,
-							"class":            classFQN,
-							"name":             attrName,
+		if searchClassFields {
+			if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
+				for classFQN, classAttrs := range attrRegistry.Classes {
+					for attrName, attr := range classAttrs.Attributes {
+						// Apply name filter if specified.
+						nameMatches := name == ""
+						if name != "" {
+							attributeFQN := classFQN + "." + attrName
+							nameMatches = attrName == name || strings.Contains(attrName, name) ||
+								strings.HasSuffix(attributeFQN, "."+name) ||
+								strings.Contains(attributeFQN, name)
 						}
 
-						// Add location if available.
-						if attr.Location != nil {
-							match["file"] = attr.Location.File
-							// Note: SourceLocation uses byte offsets, not line numbers.
-							// Could convert but would require reading file - skip for now.
-						}
+						if nameMatches {
+							// Get LSP symbol kind for class_field.
+							symbolKind, symbolKindName := getSymbolKind("class_field")
 
-						// Add type information if available.
-						if attr.Type != nil && attr.Type.TypeFQN != "" {
-							match["inferred_type"] = attr.Type.TypeFQN
-							match["confidence"] = attr.Confidence
-						}
+							attributeFQN := classFQN + "." + attrName
+							match := map[string]interface{}{
+								"fqn":              attributeFQN,
+								"type":             "class_field",
+								"symbol_kind":      symbolKind,
+								"symbol_kind_name": symbolKindName,
+								"class":            classFQN,
+								"name":             attrName,
+							}
 
-						// Add assignment location.
-						if attr.AssignedIn != "" {
-							match["assigned_in"] = attr.AssignedIn
-						}
+							// Add location if available.
+							if attr.Location != nil {
+								match["file"] = attr.Location.File
+								// Note: SourceLocation uses byte offsets, not line numbers.
+								// Could convert but would require reading file - skip for now.
+							}
 
-						allMatches = append(allMatches, match)
+							// Add type information if available.
+							if attr.Type != nil && attr.Type.TypeFQN != "" {
+								match["inferred_type"] = attr.Type.TypeFQN
+								match["confidence"] = attr.Confidence
+							}
+
+							// Add assignment location.
+							if attr.AssignedIn != "" {
+								match["assigned_in"] = attr.AssignedIn
+							}
+
+							allMatches = append(allMatches, match)
+						}
 					}
 				}
 			}
@@ -521,16 +600,38 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	}
 
 	if len(allMatches) == 0 {
-		return fmt.Sprintf(`{"error": "Symbol not found: %s", "suggestion": "Try a partial name or check spelling"}`, name), true
+		// Build helpful error message.
+		filters := []string{}
+		if name != "" {
+			filters = append(filters, fmt.Sprintf("name=%s", name))
+		}
+		if len(typeFilter) > 0 {
+			filters = append(filters, fmt.Sprintf("types=%v", typeFilter))
+		}
+		filterStr := strings.Join(filters, ", ")
+		return fmt.Sprintf(`{"error": "No symbols found", "filters": "%s", "suggestion": "Try different filters or partial name matching"}`, filterStr), true
 	}
 
 	// Apply pagination.
 	matches, pageInfo := PaginateSlice(allMatches, pageParams)
 
+	// Build filters_applied info for response.
+	filtersApplied := map[string]interface{}{}
+	if name != "" {
+		filtersApplied["name"] = name
+	}
+	if len(typeFilter) > 0 {
+		if len(typeFilter) == 1 {
+			filtersApplied["type"] = typeFilter[0]
+		} else {
+			filtersApplied["types"] = typeFilter
+		}
+	}
+
 	result := map[string]interface{}{
-		"query":      name,
-		"matches":    matches,
-		"pagination": pageInfo,
+		"filters_applied": filtersApplied,
+		"matches":         matches,
+		"pagination":      pageInfo,
 	}
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false

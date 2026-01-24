@@ -94,7 +94,7 @@ func TestToolFindSymbol_NotFound(t *testing.T) {
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "nonexistent_function_xyz"})
 
 	assert.True(t, isError)
-	assert.Contains(t, result, "not found")
+	assert.Contains(t, result, "No symbols found")
 	assert.Contains(t, result, "suggestion")
 }
 
@@ -104,7 +104,7 @@ func TestToolFindSymbol_EmptyName(t *testing.T) {
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": ""})
 
 	assert.True(t, isError)
-	assert.Contains(t, result, "required")
+	assert.Contains(t, result, "At least one filter required")
 }
 
 // TestToolFindSymbol_AttributeFound tests finding a class attribute by exact name.
@@ -1346,4 +1346,537 @@ func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	for kind, count := range symbolsByLSPKind {
 		t.Logf("  %s: %v", kind, count)
 	}
+}
+
+// ========== Type Filtering Tests ==========
+
+// createMultiTypeTestServer creates a server with multiple symbol types for type filtering tests.
+func createMultiTypeTestServer() *Server {
+	callGraph := core.NewCallGraph()
+
+	// Add function_definition.
+	callGraph.Functions["myapp.utils.login"] = &graph.Node{
+		ID:         "1",
+		Type:       "function_definition",
+		Name:       "login",
+		File:       "/path/to/utils.py",
+		LineNumber: 10,
+	}
+
+	callGraph.Functions["myapp.utils.logout"] = &graph.Node{
+		ID:         "2",
+		Type:       "function_definition",
+		Name:       "logout",
+		File:       "/path/to/utils.py",
+		LineNumber: 20,
+	}
+
+	// Add method.
+	callGraph.Functions["myapp.models.User.get_profile"] = &graph.Node{
+		ID:         "3",
+		Type:       "method",
+		Name:       "get_profile",
+		File:       "/path/to/models.py",
+		LineNumber: 30,
+	}
+
+	callGraph.Functions["myapp.models.User.save"] = &graph.Node{
+		ID:         "4",
+		Type:       "method",
+		Name:       "save",
+		File:       "/path/to/models.py",
+		LineNumber: 40,
+	}
+
+	// Add constructor.
+	callGraph.Functions["myapp.models.User.__init__"] = &graph.Node{
+		ID:         "5",
+		Type:       "constructor",
+		Name:       "__init__",
+		File:       "/path/to/models.py",
+		LineNumber: 5,
+	}
+
+	// Add property.
+	callGraph.Functions["myapp.models.User.email"] = &graph.Node{
+		ID:         "6",
+		Type:       "property",
+		Name:       "email",
+		File:       "/path/to/models.py",
+		LineNumber: 50,
+	}
+
+	// Add special_method.
+	callGraph.Functions["myapp.models.User.__str__"] = &graph.Node{
+		ID:         "7",
+		Type:       "special_method",
+		Name:       "__str__",
+		File:       "/path/to/models.py",
+		LineNumber: 60,
+	}
+
+	// Add class_definition.
+	callGraph.Functions["myapp.models.User"] = &graph.Node{
+		ID:         "8",
+		Type:       "class_definition",
+		Name:       "User",
+		File:       "/path/to/models.py",
+		LineNumber: 1,
+	}
+
+	callGraph.Functions["myapp.models.Product"] = &graph.Node{
+		ID:         "9",
+		Type:       "class_definition",
+		Name:       "Product",
+		File:       "/path/to/models.py",
+		LineNumber: 100,
+	}
+
+	// Add interface.
+	callGraph.Functions["myapp.interfaces.IDrawable"] = &graph.Node{
+		ID:         "10",
+		Type:       "interface",
+		Name:       "IDrawable",
+		File:       "/path/to/interfaces.py",
+		LineNumber: 10,
+	}
+
+	// Add enum.
+	callGraph.Functions["myapp.enums.Color"] = &graph.Node{
+		ID:         "11",
+		Type:       "enum",
+		Name:       "Color",
+		File:       "/path/to/enums.py",
+		LineNumber: 5,
+	}
+
+	// Add dataclass.
+	callGraph.Functions["myapp.models.Point"] = &graph.Node{
+		ID:         "12",
+		Type:       "dataclass",
+		Name:       "Point",
+		File:       "/path/to/models.py",
+		LineNumber: 200,
+	}
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.utils"] = "/path/to/utils.py"
+	moduleRegistry.Modules["myapp.models"] = "/path/to/models.py"
+
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+}
+
+// Test: No filters provided (should error).
+func TestToolFindSymbol_NoFilters(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "At least one filter required")
+}
+
+// Test: Filter by single type.
+func TestToolFindSymbol_FilterBySingleType(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "method"})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "get_profile")
+	assert.Contains(t, result, "save")
+	assert.NotContains(t, result, "login") // Should not include function_definition
+
+	// Verify only methods are returned.
+	var parsedResult map[string]interface{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	matches := parsedResult["matches"].([]interface{})
+	for _, match := range matches {
+		m := match.(map[string]interface{})
+		assert.Equal(t, "method", m["type"])
+	}
+
+	// Verify filters_applied.
+	assert.Contains(t, result, "filters_applied")
+	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	assert.Equal(t, "method", filtersApplied["type"])
+}
+
+// Test: Filter by multiple types.
+func TestToolFindSymbol_FilterByMultipleTypes(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"types": []interface{}{"interface", "enum"},
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "IDrawable")
+	assert.Contains(t, result, "Color")
+	assert.NotContains(t, result, "login")
+	assert.NotContains(t, result, "User")
+
+	// Verify filters_applied.
+	assert.Contains(t, result, "filters_applied")
+	assert.Contains(t, result, "types")
+}
+
+// Test: Combine name + type filters.
+func TestToolFindSymbol_CombineNameAndType(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	// Search for anything named "User" but only class_definition type.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "User",
+		"type": "class_definition",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "myapp.models.User")
+	assert.Contains(t, result, `"type": "class_definition"`)
+	// Should NOT include User.__init__ (constructor) or User.get_profile (method).
+	assert.NotContains(t, result, "__init__")
+	assert.NotContains(t, result, "get_profile")
+}
+
+// Test: Combine name + types filters.
+func TestToolFindSymbol_CombineNameAndTypes(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	// Search for anything with "User" in name, but only methods or constructors.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name":  "User",
+		"types": []interface{}{"method", "constructor"},
+	})
+
+	assert.False(t, isError)
+	// Should include User.__init__ and User.get_profile, User.save.
+	assert.Contains(t, result, "__init__")
+	assert.Contains(t, result, "get_profile")
+	assert.Contains(t, result, "save")
+	// Should NOT include class User itself.
+	parsedResult := map[string]interface{}{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	matches := parsedResult["matches"].([]interface{})
+	for _, match := range matches {
+		m := match.(map[string]interface{})
+		typ := m["type"].(string)
+		assert.NotEqual(t, "class_definition", typ)
+	}
+}
+
+// Test: Both type and types provided (should error).
+func TestToolFindSymbol_BothTypeAndTypes(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type":  "method",
+		"types": []interface{}{"function_definition"},
+	})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "Cannot specify both")
+}
+
+// Test: Invalid type name (should error).
+func TestToolFindSymbol_InvalidType(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "invalid_type_xyz",
+	})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "Invalid symbol type")
+	assert.Contains(t, result, "invalid_type_xyz")
+	assert.Contains(t, result, "valid_types")
+}
+
+// Test: Invalid type in types array (should error).
+func TestToolFindSymbol_InvalidTypeInArray(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"types": []interface{}{"method", "bad_type"},
+	})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "Invalid symbol type")
+	assert.Contains(t, result, "bad_type")
+}
+
+// Test: No results with type filter.
+func TestToolFindSymbol_NoResultsWithTypeFilter(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	// Search for module_variable (not in test data).
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "module_variable",
+	})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "No symbols found")
+	assert.Contains(t, result, "module_variable")
+}
+
+// Test: No results with combined filters.
+func TestToolFindSymbol_NoResultsCombinedFilters(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	// Search for "login" but with type "method" (login is a function_definition).
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "login",
+		"type": "method",
+	})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "No symbols found")
+}
+
+// Test: Filter by constructor type.
+func TestToolFindSymbol_FilterByConstructor(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "constructor",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "__init__")
+	assert.Contains(t, result, `"type": "constructor"`)
+	assert.NotContains(t, result, "get_profile")
+}
+
+// Test: Filter by property type.
+func TestToolFindSymbol_FilterByProperty(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "property",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "email")
+	assert.Contains(t, result, `"type": "property"`)
+}
+
+// Test: Filter by special_method type.
+func TestToolFindSymbol_FilterBySpecialMethod(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "special_method",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "__str__")
+	assert.Contains(t, result, `"type": "special_method"`)
+}
+
+// Test: Filter by class_definition type.
+func TestToolFindSymbol_FilterByClassDefinition(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "class_definition",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "User")
+	assert.Contains(t, result, "Product")
+	assert.Contains(t, result, `"type": "class_definition"`)
+	assert.NotContains(t, result, "get_profile") // Should not include methods
+}
+
+// Test: Filter by interface type.
+func TestToolFindSymbol_FilterByInterface(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "interface",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "IDrawable")
+	assert.Contains(t, result, `"type": "interface"`)
+}
+
+// Test: Filter by enum type.
+func TestToolFindSymbol_FilterByEnum(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "enum",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "Color")
+	assert.Contains(t, result, `"type": "enum"`)
+}
+
+// Test: Filter by dataclass type.
+func TestToolFindSymbol_FilterByDataclass(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "dataclass",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "Point")
+	assert.Contains(t, result, `"type": "dataclass"`)
+}
+
+// Test: Filter by function_definition type.
+func TestToolFindSymbol_FilterByFunctionDefinition(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "function_definition",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "login")
+	assert.Contains(t, result, "logout")
+	assert.Contains(t, result, `"type": "function_definition"`)
+	assert.NotContains(t, result, "get_profile") // Should not include methods
+}
+
+// Test: Filter class_field with type filter.
+func TestToolFindSymbol_FilterClassFieldWithType(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "class_field",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, `"type": "class_field"`)
+}
+
+// Test: Filter excludes class_field when filtering for other types.
+func TestToolFindSymbol_ExcludeClassFieldWhenFiltering(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	// Filter by method type only - should not include class fields.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "method",
+	})
+
+	// Should not error (may or may not find methods in this server).
+	// The key is that class_field should not be included.
+	if !isError {
+		assert.NotContains(t, result, `"type": "class_field"`)
+	}
+}
+
+// Test: Verify filters_applied in response for name only.
+func TestToolFindSymbol_FiltersAppliedNameOnly(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "User",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "filters_applied")
+
+	// Parse JSON to verify filters_applied structure.
+	var parsedResult map[string]interface{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+
+	// Should have name but not type or types.
+	assert.Equal(t, "User", filtersApplied["name"])
+	_, hasType := filtersApplied["type"]
+	assert.False(t, hasType, "filters_applied should not contain 'type' when not provided")
+	_, hasTypes := filtersApplied["types"]
+	assert.False(t, hasTypes, "filters_applied should not contain 'types' when not provided")
+}
+
+// Test: Verify filters_applied in response for type only.
+func TestToolFindSymbol_FiltersAppliedTypeOnly(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "method",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "filters_applied")
+	assert.Contains(t, result, `"type": "method"`)
+
+	// Parse JSON to verify name is not in filters_applied.
+	var parsedResult map[string]interface{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	_, hasName := filtersApplied["name"]
+	assert.False(t, hasName, "filters_applied should not contain 'name' when not provided")
+}
+
+// Test: Verify filters_applied in response for multiple types.
+func TestToolFindSymbol_FiltersAppliedMultipleTypes(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"types": []interface{}{"method", "function_definition"},
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "filters_applied")
+	assert.Contains(t, result, `"types"`)
+
+	// Verify 'types' is an array in filters_applied (not 'type' as string).
+	var parsedResult map[string]interface{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	types, hasTypes := filtersApplied["types"]
+	assert.True(t, hasTypes, "filters_applied should contain 'types'")
+	typesArray, ok := types.([]interface{})
+	assert.True(t, ok, "types should be an array")
+	assert.Equal(t, 2, len(typesArray))
+}
+
+// Test: Verify filters_applied in response for combined name + type.
+func TestToolFindSymbol_FiltersAppliedCombined(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, _ := server.toolFindSymbol(map[string]interface{}{
+		"name": "User",
+		"type": "method",
+	})
+
+	// May or may not find results, but should have filters_applied.
+	assert.Contains(t, result, "filters_applied")
+	assert.Contains(t, result, `"name": "User"`)
+	assert.Contains(t, result, `"type": "method"`)
+}
+
+// Test: Pagination works with type filters.
+func TestToolFindSymbol_PaginationWithTypeFilter(t *testing.T) {
+	server := createMultiTypeTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type":  "function_definition",
+		"limit": 1,
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "pagination")
+
+	// Parse to verify pagination info.
+	var parsedResult map[string]interface{}
+	json.Unmarshal([]byte(result), &parsedResult)
+	matches := parsedResult["matches"].([]interface{})
+	assert.LessOrEqual(t, len(matches), 1, "Should respect limit")
+	pagination := parsedResult["pagination"].(map[string]interface{})
+	assert.NotNil(t, pagination)
+}
+
+// Test: maxInt helper function.
+func TestMaxInt(t *testing.T) {
+	assert.Equal(t, 5, maxInt(5, 3))
+	assert.Equal(t, 10, maxInt(7, 10))
+	assert.Equal(t, 0, maxInt(0, 0))
+	assert.Equal(t, 1, maxInt(-5, 1))
 }
