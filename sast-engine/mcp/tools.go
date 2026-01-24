@@ -8,6 +8,86 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 )
 
+// LSP Symbol Kind constants (Language Server Protocol specification).
+// Maps Python symbol types to standardized LSP SymbolKind integers.
+// Reference: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
+const (
+	SymbolKindFile        = 1  // File
+	SymbolKindModule      = 2  // Module
+	SymbolKindNamespace   = 3  // Namespace (not used in Python)
+	SymbolKindPackage     = 4  // Package
+	SymbolKindClass       = 5  // Class
+	SymbolKindMethod      = 6  // Method
+	SymbolKindProperty    = 7  // Property
+	SymbolKindField       = 8  // Field
+	SymbolKindConstructor = 9  // Constructor
+	SymbolKindEnum        = 10 // Enum
+	SymbolKindInterface   = 11 // Interface
+	SymbolKindFunction    = 12 // Function
+	SymbolKindVariable    = 13 // Variable
+	SymbolKindConstant    = 14 // Constant
+	SymbolKindString      = 15 // String (not used for symbols)
+	SymbolKindNumber      = 16 // Number (not used for symbols)
+	SymbolKindBoolean     = 17 // Boolean (not used for symbols)
+	SymbolKindArray       = 18 // Array (not used for symbols)
+	SymbolKindObject      = 19 // Object (not used for symbols)
+	SymbolKindKey         = 20 // Key (not used for symbols)
+	SymbolKindNull        = 21 // Null (not used for symbols)
+	SymbolKindEnumMember  = 22 // EnumMember
+	SymbolKindStruct      = 23 // Struct (dataclass)
+	SymbolKindEvent       = 24 // Event (not used in Python)
+	SymbolKindOperator    = 25 // Operator (special methods)
+	SymbolKindTypeParam   = 26 // TypeParameter
+)
+
+// getSymbolKind maps Python symbol types to LSP SymbolKind integers and names.
+// Returns (kind int, kindName string) for the given symbol type.
+func getSymbolKind(symbolType string) (int, string) {
+	switch symbolType {
+	// Function types
+	case "function_definition":
+		return SymbolKindFunction, "Function"
+	case "method":
+		return SymbolKindMethod, "Method"
+	case "constructor":
+		return SymbolKindConstructor, "Constructor"
+	case "property":
+		return SymbolKindProperty, "Property"
+	case "special_method":
+		return SymbolKindOperator, "Operator"
+
+	// Class types
+	case "class_definition":
+		return SymbolKindClass, "Class"
+	case "interface":
+		return SymbolKindInterface, "Interface"
+	case "enum":
+		return SymbolKindEnum, "Enum"
+	case "dataclass":
+		return SymbolKindStruct, "Struct"
+
+	// Variable types
+	case "module_variable":
+		return SymbolKindVariable, "Variable"
+	case "constant":
+		return SymbolKindConstant, "Constant"
+	case "class_field":
+		return SymbolKindField, "Field"
+
+	// Java types (for compatibility)
+	case "method_declaration":
+		return SymbolKindMethod, "Method"
+	case "class_declaration":
+		return SymbolKindClass, "Class"
+	case "variable_declaration":
+		return SymbolKindVariable, "Variable"
+
+	// Unknown/default
+	default:
+		return SymbolKindVariable, "Unknown"
+	}
+}
+
 // getToolDefinitions returns the complete tool schemas.
 func (s *Server) getToolDefinitions() []Tool {
 	return []Tool{
@@ -25,16 +105,24 @@ Use when: Starting analysis, understanding project size, or verifying the index 
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search for functions, classes, methods, or class attributes by name. Supports partial matching. Results are paginated.
+			Description: `Search for Python symbols by name across 12 symbol types. Supports partial matching. Results are paginated.
 
-Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login' or 'myapp.User.email'), file path, line number, type, and metadata. For functions/methods: return_type, parameters, decorators, superclass. For class fields: inferred_type, confidence, assigned_in. Includes pagination info.
+Symbol Types Searched:
+- Functions: function_definition, method, constructor, property, special_method
+- Classes: class_definition, interface (Protocol/ABC), enum, dataclass
+- Variables: module_variable, constant (UPPERCASE), class_field
 
-Use when: Looking for a specific function, class, or attribute; exploring what symbols exist; or finding where something is defined.
+Returns: For ALL symbols: fqn, file, line, type, symbol_kind (LSP integer), symbol_kind_name (human-readable).
+For functions/methods: return_type, parameters, decorators. For classes: superclass, interfaces. For fields: inferred_type, confidence, assigned_in.
+
+LSP Symbol Kinds: Function(12), Method(6), Constructor(9), Property(7), Operator(25), Class(5), Interface(11), Enum(10), Struct(23), Variable(13), Constant(14), Field(8).
+
+Use when: Looking for any symbol by name; exploring codebase structure; finding definitions; analyzing symbol types.
 
 Examples:
-- find_symbol("login") - finds all functions containing 'login'
-- find_symbol("authenticate_user") - finds exact function
-- find_symbol("myapp.auth") - finds all symbols in auth module`,
+- find_symbol("login") - finds all symbols named login (could be function, method, class, etc.)
+- find_symbol("User") - finds User class and related methods
+- find_symbol("__init__") - finds all constructors`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
@@ -43,6 +131,41 @@ Examples:
 					"cursor": {Type: "string", Description: "Pagination cursor from previous response"},
 				},
 				Required: []string{"name"},
+			},
+		},
+		{
+			Name: "find_module",
+			Description: `Search for Python modules by name. Returns module information including file path and symbol counts.
+
+Returns: module_fqn, file_path, functions_count (number of functions/methods in the module), and match_type (exact/partial).
+
+Use when: Finding module locations, understanding module structure, or navigating between modules.
+
+Examples:
+- find_module("myapp.auth") - find the auth module
+- find_module("utils") - find all modules named utils
+- find_module("models.user") - find user module in models package`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"name": {Type: "string", Description: "Module name to find. Can be FQN ('myapp.auth') or short name ('auth')"},
+				},
+				Required: []string{"name"},
+			},
+		},
+		{
+			Name: "list_modules",
+			Description: `List all Python modules in the indexed project. Returns comprehensive module information.
+
+Returns: Array of modules with module_fqn, file_path, and functions_count for each. Includes total_modules count.
+
+Use when: Exploring project structure, getting an overview of all modules, or discovering what modules exist.
+
+Examples:
+- list_modules() - get all modules in the project`,
+			InputSchema: InputSchema{
+				Type:       "object",
+				Properties: map[string]Property{},
 			},
 		},
 		{
@@ -137,6 +260,11 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 		return s.toolGetIndexInfo()
 	case "find_symbol":
 		return s.toolFindSymbol(args)
+	case "find_module":
+		moduleName, _ := args["name"].(string)
+		return s.toolFindModule(moduleName)
+	case "list_modules":
+		return s.toolListModules()
 	case "get_callers":
 		return s.toolGetCallers(args)
 	case "get_callees":
@@ -177,7 +305,8 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 }
 
 // toolFindSymbol finds symbols by name with pagination support.
-// Searches both functions/methods/classes AND class attributes/fields.
+// Searches all 12 Python symbol types: functions, methods, constructors, properties,
+// special methods, classes, interfaces, enums, dataclasses, module variables, constants, and class fields.
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	name, _ := args["name"].(string)
 	if name == "" {
@@ -192,15 +321,20 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	var allMatches []map[string]interface{}
 
-	// Search functions, methods, and classes.
+	// Search functions, methods, constructors, properties, special methods, and classes.
 	for fqn, node := range s.callGraph.Functions {
 		shortName := getShortName(fqn)
 		if shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name) {
+			// Get LSP symbol kind.
+			symbolKind, symbolKindName := getSymbolKind(node.Type)
+
 			match := map[string]interface{}{
-				"fqn":  fqn,
-				"file": node.File,
-				"line": node.LineNumber,
-				"type": node.Type,
+				"fqn":              fqn,
+				"file":             node.File,
+				"line":             node.LineNumber,
+				"type":             node.Type,
+				"symbol_kind":      symbolKind,
+				"symbol_kind_name": symbolKindName,
 			}
 
 			// Add optional fields if available.
@@ -219,6 +353,9 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			if node.SuperClass != "" {
 				match["superclass"] = node.SuperClass
 			}
+			if len(node.Interface) > 0 {
+				match["interfaces"] = node.Interface
+			}
 
 			allMatches = append(allMatches, match)
 		}
@@ -234,11 +371,16 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 					if attrName == name || strings.Contains(attrName, name) ||
 					   strings.HasSuffix(attributeFQN, "."+name) ||
 					   strings.Contains(attributeFQN, name) {
+						// Get LSP symbol kind for class_field.
+						symbolKind, symbolKindName := getSymbolKind("class_field")
+
 						match := map[string]interface{}{
-							"fqn":   attributeFQN,
-							"type":  "class_field",
-							"class": classFQN,
-							"name":  attrName,
+							"fqn":              attributeFQN,
+							"type":             "class_field",
+							"symbol_kind":      symbolKind,
+							"symbol_kind_name": symbolKindName,
+							"class":            classFQN,
+							"name":             attrName,
 						}
 
 						// Add location if available.
@@ -277,6 +419,101 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		"query":      name,
 		"matches":    matches,
 		"pagination": pageInfo,
+	}
+	bytes, _ := json.MarshalIndent(result, "", "  ")
+	return string(bytes), false
+}
+
+// toolFindModule searches for Python modules by name.
+func (s *Server) toolFindModule(name string) (string, bool) {
+	if name == "" {
+		return `{"error": "name parameter is required"}`, true
+	}
+
+	// Try exact match first.
+	if filePath, ok := s.moduleRegistry.Modules[name]; ok {
+		// Count functions in this module.
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, name+".") {
+				functionsCount++
+			}
+		}
+
+		result := map[string]interface{}{
+			"module_fqn":      name,
+			"file_path":       filePath,
+			"match_type":      "exact",
+			"functions_count": functionsCount,
+		}
+		bytes, _ := json.MarshalIndent(result, "", "  ")
+		return string(bytes), false
+	}
+
+	// Try partial match.
+	var matches []map[string]interface{}
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		if strings.Contains(moduleFQN, name) {
+			// Count functions in this module.
+			functionsCount := 0
+			for fqn := range s.callGraph.Functions {
+				if strings.HasPrefix(fqn, moduleFQN+".") {
+					functionsCount++
+				}
+			}
+
+			matches = append(matches, map[string]interface{}{
+				"module_fqn":      moduleFQN,
+				"file_path":       filePath,
+				"match_type":      "partial",
+				"functions_count": functionsCount,
+			})
+		}
+	}
+
+	if len(matches) == 0 {
+		return fmt.Sprintf(`{"error": "Module not found: %s", "suggestion": "Check module name or try a partial match"}`, name), true
+	}
+
+	if len(matches) == 1 {
+		// Single match.
+		bytes, _ := json.MarshalIndent(matches[0], "", "  ")
+		return string(bytes), false
+	}
+
+	// Multiple matches.
+	result := map[string]interface{}{
+		"query":         name,
+		"matches":       matches,
+		"matches_count": len(matches),
+	}
+	bytes, _ := json.MarshalIndent(result, "", "  ")
+	return string(bytes), false
+}
+
+// toolListModules lists all modules in the project.
+func (s *Server) toolListModules() (string, bool) {
+	modules := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
+
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		// Count functions in this module.
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, moduleFQN+".") {
+				functionsCount++
+			}
+		}
+
+		modules = append(modules, map[string]interface{}{
+			"module_fqn":      moduleFQN,
+			"file_path":       filePath,
+			"functions_count": functionsCount,
+		})
+	}
+
+	result := map[string]interface{}{
+		"modules":       modules,
+		"total_modules": len(modules),
 	}
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false

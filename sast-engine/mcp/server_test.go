@@ -331,7 +331,7 @@ func TestHandleToolsList(t *testing.T) {
 
 	result, ok := resp.Result.(ToolsListResult)
 	require.True(t, ok)
-	assert.Equal(t, 6, len(result.Tools)) // Exactly 6 tools from PoC
+	assert.Equal(t, 8, len(result.Tools)) // Phase 3B: 8 tools (added find_module, list_modules)
 }
 
 func TestHandleToolsCall_GetIndexInfo(t *testing.T) {

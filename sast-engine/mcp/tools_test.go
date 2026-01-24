@@ -488,7 +488,7 @@ func TestGetToolDefinitions(t *testing.T) {
 
 	tools := server.getToolDefinitions()
 
-	assert.Len(t, tools, 6)
+	assert.Len(t, tools, 8) // Updated for Phase 3B: added find_module and list_modules
 
 	// Verify each tool has required fields.
 	for _, tool := range tools {
@@ -727,4 +727,496 @@ func TestToolFindSymbol_FQNSubstringMatch(t *testing.T) {
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
+}
+// ============================================================================
+// Phase 3B Tests: LSP Symbol Kind Mapping + Module Search
+// ============================================================================
+
+// TestGetSymbolKind tests mapping of all 12 Python symbol types to LSP kinds.
+func TestGetSymbolKind(t *testing.T) {
+	tests := []struct {
+		symbolType       string
+		expectedKind     int
+		expectedKindName string
+	}{
+		// Function types
+		{"function_definition", SymbolKindFunction, "Function"},
+		{"method", SymbolKindMethod, "Method"},
+		{"constructor", SymbolKindConstructor, "Constructor"},
+		{"property", SymbolKindProperty, "Property"},
+		{"special_method", SymbolKindOperator, "Operator"},
+
+		// Class types
+		{"class_definition", SymbolKindClass, "Class"},
+		{"interface", SymbolKindInterface, "Interface"},
+		{"enum", SymbolKindEnum, "Enum"},
+		{"dataclass", SymbolKindStruct, "Struct"},
+
+		// Variable types
+		{"module_variable", SymbolKindVariable, "Variable"},
+		{"constant", SymbolKindConstant, "Constant"},
+		{"class_field", SymbolKindField, "Field"},
+
+		// Java types (for compatibility)
+		{"method_declaration", SymbolKindMethod, "Method"},
+		{"class_declaration", SymbolKindClass, "Class"},
+		{"variable_declaration", SymbolKindVariable, "Variable"},
+
+		// Unknown type
+		{"unknown_type", SymbolKindVariable, "Unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.symbolType, func(t *testing.T) {
+			kind, kindName := getSymbolKind(tt.symbolType)
+			assert.Equal(t, tt.expectedKind, kind,
+				"Symbol type '%s' should map to LSP kind %d", tt.symbolType, tt.expectedKind)
+			assert.Equal(t, tt.expectedKindName, kindName,
+				"Symbol type '%s' should have kind name '%s'", tt.symbolType, tt.expectedKindName)
+		})
+	}
+}
+
+// TestToolFindSymbol_SymbolKindFields verifies that symbol_kind and symbol_kind_name
+// are ALWAYS present in find_symbol results.
+func TestToolFindSymbol_SymbolKindFields(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+
+	assert.False(t, isError)
+
+	// Parse JSON response.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	// Get matches array.
+	matches, ok := parsed["matches"].([]interface{})
+	assert.True(t, ok, "Should have matches array")
+	assert.Greater(t, len(matches), 0, "Should have at least one match")
+
+	// Verify each match has symbol_kind and symbol_kind_name.
+	for i, matchInterface := range matches {
+		match, ok := matchInterface.(map[string]interface{})
+		assert.True(t, ok, "Match %d should be an object", i)
+
+		// Verify symbol_kind (integer).
+		symbolKind, hasKind := match["symbol_kind"]
+		assert.True(t, hasKind, "Match %d should have symbol_kind field", i)
+		assert.IsType(t, float64(0), symbolKind, "Match %d symbol_kind should be a number", i)
+
+		// Verify symbol_kind_name (string).
+		symbolKindName, hasKindName := match["symbol_kind_name"]
+		assert.True(t, hasKindName, "Match %d should have symbol_kind_name field", i)
+		assert.IsType(t, "", symbolKindName, "Match %d symbol_kind_name should be a string", i)
+
+		// Verify symbol_kind is a valid LSP kind (1-26).
+		kindValue := symbolKind.(float64)
+		assert.GreaterOrEqual(t, kindValue, float64(1), "Match %d symbol_kind should be >= 1", i)
+		assert.LessOrEqual(t, kindValue, float64(26), "Match %d symbol_kind should be <= 26", i)
+
+		t.Logf("Match %d: type=%s, symbol_kind=%v, symbol_kind_name=%s",
+			i, match["type"], symbolKind, symbolKindName)
+	}
+}
+
+// TestToolFindSymbol_ClassFieldSymbolKind verifies class fields have correct symbol kind.
+func TestToolFindSymbol_ClassFieldSymbolKind(t *testing.T) {
+	server := createTestServerWithAttributes()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+
+	assert.False(t, isError)
+
+	// Parse JSON response.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	// Get matches array.
+	matches, ok := parsed["matches"].([]interface{})
+	assert.True(t, ok)
+	assert.Greater(t, len(matches), 0)
+
+	// Find the class_field match.
+	var fieldMatch map[string]interface{}
+	for _, matchInterface := range matches {
+		match := matchInterface.(map[string]interface{})
+		if match["type"] == "class_field" {
+			fieldMatch = match
+			break
+		}
+	}
+
+	assert.NotNil(t, fieldMatch, "Should find class_field match")
+
+	// Verify symbol kind for class_field.
+	assert.Equal(t, float64(SymbolKindField), fieldMatch["symbol_kind"],
+		"class_field should have symbol_kind = SymbolKindField (8)")
+	assert.Equal(t, "Field", fieldMatch["symbol_kind_name"],
+		"class_field should have symbol_kind_name = Field")
+
+	// Verify it includes standard fields.
+	assert.Equal(t, "class_field", fieldMatch["type"])
+	assert.Contains(t, fieldMatch["fqn"], "email")
+}
+
+// TestToolFindModule_ExactMatch tests finding a module by exact FQN.
+func TestToolFindModule_ExactMatch(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolFindModule("myapp.auth")
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "myapp.auth")
+	assert.Contains(t, result, "match_type")
+	assert.Contains(t, result, "exact")
+	assert.Contains(t, result, "functions_count")
+
+	// Parse JSON to verify structure.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "myapp.auth", parsed["module_fqn"])
+	assert.Equal(t, "exact", parsed["match_type"])
+	assert.Contains(t, parsed, "file_path")
+	assert.Contains(t, parsed, "functions_count")
+}
+
+// TestToolFindModule_PartialMatch tests finding modules by partial name.
+func TestToolFindModule_PartialMatch(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolFindModule("auth")
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "auth")
+
+	// Parse JSON to verify structure.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	// Should have matches array for partial matches.
+	if matches, ok := parsed["matches"].([]interface{}); ok {
+		assert.Greater(t, len(matches), 0, "Should have at least one match")
+		firstMatch := matches[0].(map[string]interface{})
+		assert.Contains(t, firstMatch["module_fqn"], "auth")
+		assert.Equal(t, "partial", firstMatch["match_type"])
+	} else {
+		// Or single exact/short match.
+		assert.Contains(t, parsed, "module_fqn")
+		assert.Contains(t, parsed["module_fqn"], "auth")
+	}
+}
+
+// TestToolFindModule_NotFound tests module not found error.
+func TestToolFindModule_NotFound(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolFindModule("nonexistent_module_xyz")
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "not found")
+	assert.Contains(t, result, "suggestion")
+}
+
+// TestToolFindModule_EmptyName tests empty module name error.
+func TestToolFindModule_EmptyName(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolFindModule("")
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "required")
+}
+
+// TestToolListModules tests listing all modules.
+func TestToolListModules(t *testing.T) {
+	server := createTestServer()
+
+	result, isError := server.toolListModules()
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "modules")
+	assert.Contains(t, result, "total_modules")
+
+	// Parse JSON to verify structure.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	// Verify modules array.
+	modules, ok := parsed["modules"].([]interface{})
+	assert.True(t, ok, "Should have modules array")
+	assert.Greater(t, len(modules), 0, "Should have at least one module")
+
+	// Verify total_modules count.
+	totalModules, ok := parsed["total_modules"].(float64)
+	assert.True(t, ok, "Should have total_modules count")
+	assert.Equal(t, float64(len(modules)), totalModules, "total_modules should match array length")
+
+	// Verify each module has required fields.
+	for i, moduleInterface := range modules {
+		module, ok := moduleInterface.(map[string]interface{})
+		assert.True(t, ok, "Module %d should be an object", i)
+
+		assert.Contains(t, module, "module_fqn", "Module %d should have module_fqn", i)
+		assert.Contains(t, module, "file_path", "Module %d should have file_path", i)
+		assert.Contains(t, module, "functions_count", "Module %d should have functions_count", i)
+
+		// Verify functions_count is a number.
+		assert.IsType(t, float64(0), module["functions_count"],
+			"Module %d functions_count should be a number", i)
+
+		t.Logf("Module %d: fqn=%s, functions=%v",
+			i, module["module_fqn"], module["functions_count"])
+	}
+}
+
+// TestToolFindSymbol_InterfaceWithSymbolKind tests interface symbol kind.
+func TestToolFindSymbol_InterfaceWithSymbolKind(t *testing.T) {
+	// Create a test server with an interface class.
+	callGraph := core.NewCallGraph()
+
+	interfaceNode := &graph.Node{
+		Name:       "IDrawable",
+		Type:       "interface",
+		File:       "/test/interfaces.py",
+		LineNumber: 10,
+		Interface:  []string{"Protocol"},
+	}
+	callGraph.Functions["myapp.interfaces.IDrawable"] = interfaceNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.interfaces"] = "/test/interfaces.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "IDrawable"})
+
+	assert.False(t, isError)
+
+	// Parse JSON.
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Greater(t, len(matches), 0)
+
+	match := matches[0].(map[string]interface{})
+
+	// Verify interface has correct symbol kind.
+	assert.Equal(t, float64(SymbolKindInterface), match["symbol_kind"],
+		"Interface should have symbol_kind = SymbolKindInterface (11)")
+	assert.Equal(t, "Interface", match["symbol_kind_name"])
+
+	// Verify interfaces field is present.
+	assert.Contains(t, match, "interfaces")
+	interfaces := match["interfaces"].([]interface{})
+	assert.Equal(t, "Protocol", interfaces[0])
+}
+
+// TestToolFindSymbol_EnumWithSymbolKind tests enum symbol kind.
+func TestToolFindSymbol_EnumWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	enumNode := &graph.Node{
+		Name:       "Color",
+		Type:       "enum",
+		File:       "/test/enums.py",
+		LineNumber: 5,
+		Interface:  []string{"Enum"},
+	}
+	callGraph.Functions["myapp.enums.Color"] = enumNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.enums"] = "/test/enums.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Color"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+
+	assert.Equal(t, float64(SymbolKindEnum), match["symbol_kind"],
+		"Enum should have symbol_kind = SymbolKindEnum (10)")
+	assert.Equal(t, "Enum", match["symbol_kind_name"])
+}
+
+// TestToolFindSymbol_DataclassWithSymbolKind tests dataclass symbol kind.
+func TestToolFindSymbol_DataclassWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	dataclassNode := &graph.Node{
+		Name:       "Point",
+		Type:       "dataclass",
+		File:       "/test/models.py",
+		LineNumber: 8,
+		Annotation: []string{"dataclass"},
+	}
+	callGraph.Functions["myapp.models.Point"] = dataclassNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Point"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+
+	assert.Equal(t, float64(SymbolKindStruct), match["symbol_kind"],
+		"Dataclass should have symbol_kind = SymbolKindStruct (23)")
+	assert.Equal(t, "Struct", match["symbol_kind_name"])
+	assert.Contains(t, match, "decorators")
+}
+
+// TestToolFindSymbol_ConstructorWithSymbolKind tests constructor symbol kind.
+func TestToolFindSymbol_ConstructorWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	constructorNode := &graph.Node{
+		Name:       "__init__",
+		Type:       "constructor",
+		File:       "/test/user.py",
+		LineNumber: 15,
+	}
+	callGraph.Functions["myapp.models.User.__init__"] = constructorNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__init__"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+
+	assert.Equal(t, float64(SymbolKindConstructor), match["symbol_kind"],
+		"Constructor should have symbol_kind = SymbolKindConstructor (9)")
+	assert.Equal(t, "Constructor", match["symbol_kind_name"])
+}
+
+// TestToolFindSymbol_PropertyWithSymbolKind tests property symbol kind.
+func TestToolFindSymbol_PropertyWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	propertyNode := &graph.Node{
+		Name:       "name",
+		Type:       "property",
+		File:       "/test/user.py",
+		LineNumber: 20,
+		Annotation: []string{"property"},
+	}
+	callGraph.Functions["myapp.models.User.name"] = propertyNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "name"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	matches := parsed["matches"].([]interface{})
+	// Find the property match (there might be other "name" matches).
+	var propertyMatch map[string]interface{}
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		if match["type"] == "property" {
+			propertyMatch = match
+			break
+		}
+	}
+
+	assert.NotNil(t, propertyMatch, "Should find property match")
+	assert.Equal(t, float64(SymbolKindProperty), propertyMatch["symbol_kind"],
+		"Property should have symbol_kind = SymbolKindProperty (7)")
+	assert.Equal(t, "Property", propertyMatch["symbol_kind_name"])
+}
+
+// TestToolFindSymbol_SpecialMethodWithSymbolKind tests special method symbol kind.
+func TestToolFindSymbol_SpecialMethodWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	specialMethodNode := &graph.Node{
+		Name:       "__str__",
+		Type:       "special_method",
+		File:       "/test/user.py",
+		LineNumber: 25,
+	}
+	callGraph.Functions["myapp.models.User.__str__"] = specialMethodNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__str__"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+
+	assert.Equal(t, float64(SymbolKindOperator), match["symbol_kind"],
+		"Special method should have symbol_kind = SymbolKindOperator (25)")
+	assert.Equal(t, "Operator", match["symbol_kind_name"])
+}
+
+// TestToolFindSymbol_MethodWithSymbolKind tests method symbol kind.
+func TestToolFindSymbol_MethodWithSymbolKind(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	methodNode := &graph.Node{
+		Name:       "get_profile",
+		Type:       "method",
+		File:       "/test/user.py",
+		LineNumber: 30,
+	}
+	callGraph.Functions["myapp.models.User.get_profile"] = methodNode
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "get_profile"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+
+	assert.Equal(t, float64(SymbolKindMethod), match["symbol_kind"],
+		"Method should have symbol_kind = SymbolKindMethod (6)")
+	assert.Equal(t, "Method", match["symbol_kind_name"])
+	assert.Equal(t, "method", match["type"])
 }
