@@ -18,8 +18,14 @@ import (
 var verboseFlag bool
 
 // GenerateMethodID generates a unique SHA256 hash ID for a method.
-func GenerateMethodID(methodName string, parameters []string, sourceFile string) string {
-	hashInput := fmt.Sprintf("%s-%s-%s", methodName, parameters, sourceFile)
+func GenerateMethodID(methodName string, parameters []string, sourceFile string, lineNumber ...uint32) string {
+	// Include line number in hash to ensure uniqueness for methods/constructors
+	// with same name/params in same file (e.g., multiple __init__ in one file).
+	lineStr := ""
+	if len(lineNumber) > 0 {
+		lineStr = fmt.Sprintf(":%d", lineNumber[0])
+	}
+	hashInput := fmt.Sprintf("%s-%s-%s%s", methodName, parameters, sourceFile, lineStr)
 	hash := sha256.Sum256([]byte(hashInput))
 	return hex.EncodeToString(hash[:])
 }

@@ -1110,3 +1110,130 @@ func TestParsePythonClassDefinition_ReturnsNode(t *testing.T) {
 	}
 }
 
+
+// TestMultipleConstructorsInSameFile verifies that multiple __init__ methods
+// in the same file are all indexed (regression test for constructor bug where
+// only one constructor per file was being captured).
+func TestMultipleConstructorsInSameFile(t *testing.T) {
+	code := `
+class FirstClass:
+    def __init__(self):
+        self.name = "first"
+
+class SecondClass:
+    def __init__(self, value):
+        self.value = value
+
+class ThirdClass:
+    def __init__(self):
+        pass
+
+class FourthClass:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count constructors in the graph.
+	constructorCount := 0
+	constructorIDs := make(map[string]bool)
+	lineNumbers := make(map[uint32]bool)
+
+	for _, node := range graph.Nodes {
+		if node.Type == "constructor" {
+			constructorCount++
+
+			// Check for duplicate IDs (would indicate overwriting).
+			if constructorIDs[node.ID] {
+				t.Errorf("Duplicate constructor ID found: %s", node.ID)
+			}
+			constructorIDs[node.ID] = true
+
+			// Track line numbers.
+			lineNumbers[node.LineNumber] = true
+		}
+	}
+
+	// Verify all 4 constructors were indexed.
+	if constructorCount != 4 {
+		t.Errorf("Expected 4 constructors, got %d", constructorCount)
+	}
+
+	// Verify all have unique IDs.
+	if len(constructorIDs) != 4 {
+		t.Errorf("Expected 4 unique constructor IDs, got %d", len(constructorIDs))
+	}
+
+	// Verify all have different line numbers.
+	if len(lineNumbers) != 4 {
+		t.Errorf("Expected 4 different line numbers, got %d", len(lineNumbers))
+	}
+}
+
+// TestMultipleMethodsWithSameName verifies that methods with the same name
+// in different classes are all indexed separately.
+func TestMultipleMethodsWithSameName(t *testing.T) {
+	code := `
+class User:
+    def save(self):
+        pass
+
+class Product:
+    def save(self):
+        pass
+
+class Order:
+    def save(self):
+        pass
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Count methods named "save".
+	saveMethodCount := 0
+	saveMethodIDs := make(map[string]bool)
+
+	for _, node := range graph.Nodes {
+		if node.Type == "method" && node.Name == "save" {
+			saveMethodCount++
+
+			// Check for duplicate IDs.
+			if saveMethodIDs[node.ID] {
+				t.Errorf("Duplicate ID for save method: %s", node.ID)
+			}
+			saveMethodIDs[node.ID] = true
+		}
+	}
+
+	// Verify all 3 save methods were indexed.
+	if saveMethodCount != 3 {
+		t.Errorf("Expected 3 'save' methods, got %d", saveMethodCount)
+	}
+
+	// Verify all have unique IDs.
+	if len(saveMethodIDs) != 3 {
+		t.Errorf("Expected 3 unique save method IDs, got %d", len(saveMethodIDs))
+	}
+}

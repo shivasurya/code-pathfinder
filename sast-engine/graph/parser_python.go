@@ -185,7 +185,8 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		}
 	}
 
-	methodID := GenerateMethodID("function:"+functionName, parameters, file)
+	lineNumber := node.StartPoint().Row + 1
+	methodID := GenerateMethodID("function:"+functionName, parameters, file, lineNumber)
 	functionNode := &Node{
 		ID:                   methodID,
 		Type:                 nodeType,
@@ -195,7 +196,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
 		},
-		LineNumber:           node.StartPoint().Row + 1,
+		LineNumber:           lineNumber,
 		MethodArgumentsValue: parameters,
 		Annotation:           decorators,
 		File:                 file,
@@ -250,8 +251,9 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 		}
 	}
 
+	classLineNumber := node.StartPoint().Row + 1
 	classNode := &Node{
-		ID:                 GenerateMethodID("class:"+className, []string{}, file),
+		ID:                 GenerateMethodID("class:"+className, []string{}, file, classLineNumber),
 		Type:               classType,
 		Name:               className,
 		SourceLocation:     &SourceLocation{
@@ -259,7 +261,7 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
 		},
-		LineNumber:         node.StartPoint().Row + 1,
+		LineNumber:         classLineNumber,
 		Interface:          superClasses,
 		Annotation:         decorators,
 		File:               file,
@@ -288,7 +290,8 @@ func parsePythonCall(node *sitter.Node, sourceCode []byte, graph *CodeGraph, cur
 		}
 	}
 
-	callID := GenerateMethodID(callName, arguments, file)
+	callLineNumber := node.StartPoint().Row + 1
+	callID := GenerateMethodID(callName, arguments, file, callLineNumber)
 	callNode := &Node{
 		ID:                   callID,
 		Type:                 "call",
@@ -299,7 +302,7 @@ func parsePythonCall(node *sitter.Node, sourceCode []byte, graph *CodeGraph, cur
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
 		},
-		LineNumber:           node.StartPoint().Row + 1,
+		LineNumber:           callLineNumber,
 		MethodArgumentsValue: arguments,
 		File:                 file,
 		isPythonSourceFile:   true,
@@ -463,8 +466,9 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 		nodeType = "class_field"
 	}
 
+	varLineNumber := node.StartPoint().Row + 1
 	variableNode := &Node{
-		ID:                 GenerateMethodID(variableName, []string{}, file),
+		ID:                 GenerateMethodID(variableName, []string{}, file, varLineNumber),
 		Type:               nodeType,
 		Name:               variableName,
 		SourceLocation:     &SourceLocation{
@@ -472,7 +476,7 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
 		},
-		LineNumber:         node.StartPoint().Row + 1,
+		LineNumber:         varLineNumber,
 		VariableValue:      variableValue,
 		Scope:              scope,
 		File:               file,
