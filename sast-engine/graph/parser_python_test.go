@@ -714,6 +714,360 @@ def process():
 	}
 }
 
+func TestIsSpecialMethod(t *testing.T) {
+	tests := []struct {
+		name     string
+		funcName string
+		expected bool
+	}{
+		// Valid special methods.
+		{"__str__", "__str__", true},
+		{"__add__", "__add__", true},
+		{"__call__", "__call__", true},
+		{"__getitem__", "__getitem__", true},
+		{"__setitem__", "__setitem__", true},
+		{"__len__", "__len__", true},
+		{"__repr__", "__repr__", true},
+		{"__eq__", "__eq__", true},
+
+		// Invalid - not special methods.
+		{"Regular method", "get_value", false},
+		{"Private method", "_private", false},
+		{"Dunder prefix only", "__init", false},
+		{"Dunder suffix only", "init__", false},
+		{"Single underscore", "_", false},
+		{"Double underscore only", "__", false},
+		{"Triple underscore", "___", false},
+		{"Empty string", "", false},
+		{"__init__ is constructor", "__init__", true}, // Still matches pattern.
+		{"Too short", "____", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isSpecialMethod(tt.funcName)
+			if result != tt.expected {
+				t.Errorf("isSpecialMethod(%q) = %v, expected %v", tt.funcName, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsInterface(t *testing.T) {
+	tests := []struct {
+		name         string
+		superClasses []string
+		expected     bool
+	}{
+		{"Protocol direct", []string{"Protocol"}, true},
+		{"typing.Protocol qualified", []string{"typing.Protocol"}, true},
+		{"ABC direct", []string{"ABC"}, true},
+		{"abc.ABC qualified", []string{"abc.ABC"}, true},
+		{"Multiple with Protocol", []string{"BaseClass", "Protocol"}, true},
+		{"Multiple with ABC", []string{"BaseClass", "ABC"}, true},
+		{"Custom.Protocol", []string{"mymodule.Protocol"}, true},
+		{"Regular class", []string{"BaseClass"}, false},
+		{"Empty superclass", []string{}, false},
+		{"Nil superclass", nil, false},
+		{"Protocol in name but not suffix", []string{"ProtocolBase"}, false},
+		{"ABC in name but not suffix", []string{"ABCMeta"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isInterface(tt.superClasses)
+			if result != tt.expected {
+				t.Errorf("isInterface(%v) = %v, expected %v", tt.superClasses, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsEnum(t *testing.T) {
+	tests := []struct {
+		name         string
+		superClasses []string
+		expected     bool
+	}{
+		{"Enum direct", []string{"Enum"}, true},
+		{"enum.Enum qualified", []string{"enum.Enum"}, true},
+		{"IntEnum", []string{"IntEnum"}, true},
+		{"enum.IntEnum", []string{"enum.IntEnum"}, true},
+		{"Flag", []string{"Flag"}, true},
+		{"enum.Flag", []string{"enum.Flag"}, true},
+		{"IntFlag", []string{"IntFlag"}, true},
+		{"enum.IntFlag", []string{"enum.IntFlag"}, true},
+		{"Multiple with Enum", []string{"Mixin", "Enum"}, true},
+		{"Regular class", []string{"BaseClass"}, false},
+		{"Empty superclass", []string{}, false},
+		{"Nil superclass", nil, false},
+		{"Enum in name but not suffix", []string{"EnumBase"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isEnum(tt.superClasses)
+			if result != tt.expected {
+				t.Errorf("isEnum(%v) = %v, expected %v", tt.superClasses, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsDataclass(t *testing.T) {
+	tests := []struct {
+		name       string
+		decorators []string
+		expected   bool
+	}{
+		{"dataclass decorator", []string{"dataclass"}, true},
+		{"dataclasses.dataclass qualified", []string{"dataclasses.dataclass"}, true},
+		{"Multiple with dataclass", []string{"frozen", "dataclass"}, true},
+		{"Custom.dataclass", []string{"mymodule.dataclass"}, true},
+		{"No decorators", []string{}, false},
+		{"Nil decorators", nil, false},
+		{"Other decorators", []string{"property", "cache"}, false},
+		{"dataclass in name but not suffix", []string{"dataclass_utils"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isDataclass(tt.decorators)
+			if result != tt.expected {
+				t.Errorf("isDataclass(%v) = %v, expected %v", tt.decorators, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParsePythonFunctionDefinition_SpecialMethod(t *testing.T) {
+	code := `
+class User:
+    def __str__(self):
+        return f"User: {self.name}"
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	// Find __str__ method.
+	strNode := findNodeByCondition(root, func(n *sitter.Node) bool {
+		if n.Type() == "function_definition" {
+			nameNode := n.ChildByFieldName("name")
+			return nameNode != nil && nameNode.Content([]byte(code)) == "__str__"
+		}
+		return false
+	})
+
+	if strNode == nil {
+		t.Fatal("No __str__ method found")
+	}
+
+	node := parsePythonFunctionDefinition(strNode, []byte(code), graph, "test.py")
+
+	if node.Type != "special_method" {
+		t.Errorf("Expected type 'special_method', got %s", node.Type)
+	}
+	if node.Name != "__str__" {
+		t.Errorf("Expected name '__str__', got %s", node.Name)
+	}
+}
+
+func TestParsePythonClassDefinition_Interface(t *testing.T) {
+	code := `
+from typing import Protocol
+
+class Drawable(Protocol):
+    def draw(self):
+        pass
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	classNode := findNodeByType(root, "class_definition")
+	if classNode == nil {
+		t.Fatal("No class_definition node found")
+	}
+
+	node := parsePythonClassDefinition(classNode, []byte(code), graph, "test.py")
+
+	if node.Type != "interface" {
+		t.Errorf("Expected type 'interface', got %s", node.Type)
+	}
+	if node.Name != "Drawable" {
+		t.Errorf("Expected name 'Drawable', got %s", node.Name)
+	}
+	if len(node.Interface) == 0 || node.Interface[0] != "Protocol" {
+		t.Errorf("Expected superclass 'Protocol', got %v", node.Interface)
+	}
+}
+
+func TestParsePythonClassDefinition_Enum(t *testing.T) {
+	code := `
+from enum import Enum
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	classNode := findNodeByType(root, "class_definition")
+	if classNode == nil {
+		t.Fatal("No class_definition node found")
+	}
+
+	node := parsePythonClassDefinition(classNode, []byte(code), graph, "test.py")
+
+	if node.Type != "enum" {
+		t.Errorf("Expected type 'enum', got %s", node.Type)
+	}
+	if node.Name != "Color" {
+		t.Errorf("Expected name 'Color', got %s", node.Name)
+	}
+}
+
+func TestParsePythonClassDefinition_Dataclass(t *testing.T) {
+	code := `
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: int
+    y: int
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	// Find decorated class.
+	classNode := findNodeByCondition(root, func(n *sitter.Node) bool {
+		return n.Type() == "class_definition" && n.Parent() != nil && n.Parent().Type() == "decorated_definition"
+	})
+
+	if classNode == nil {
+		t.Fatal("No decorated class found")
+	}
+
+	node := parsePythonClassDefinition(classNode, []byte(code), graph, "test.py")
+
+	if node.Type != "dataclass" {
+		t.Errorf("Expected type 'dataclass', got %s", node.Type)
+	}
+	if node.Name != "Point" {
+		t.Errorf("Expected name 'Point', got %s", node.Name)
+	}
+	if len(node.Annotation) == 0 || node.Annotation[0] != "dataclass" {
+		t.Errorf("Expected decorator 'dataclass', got %v", node.Annotation)
+	}
+}
+
+func TestParsePythonClassDefinition_Regular(t *testing.T) {
+	// Ensure regular classes without special inheritance still work.
+	code := `
+class RegularClass:
+    def method(self):
+        pass
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	classNode := findNodeByType(root, "class_definition")
+	if classNode == nil {
+		t.Fatal("No class_definition node found")
+	}
+
+	node := parsePythonClassDefinition(classNode, []byte(code), graph, "test.py")
+
+	if node.Type != "class_definition" {
+		t.Errorf("Expected type 'class_definition', got %s", node.Type)
+	}
+	if node.Name != "RegularClass" {
+		t.Errorf("Expected name 'RegularClass', got %s", node.Name)
+	}
+}
+
+func TestParsePythonClassDefinition_ABC(t *testing.T) {
+	code := `
+from abc import ABC
+
+class AbstractBase(ABC):
+    pass
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	root := tree.RootNode()
+
+	classNode := findNodeByType(root, "class_definition")
+	if classNode == nil {
+		t.Fatal("No class_definition node found")
+	}
+
+	node := parsePythonClassDefinition(classNode, []byte(code), graph, "test.py")
+
+	if node.Type != "interface" {
+		t.Errorf("Expected type 'interface' for ABC, got %s", node.Type)
+	}
+}
+
 func TestParsePythonClassDefinition_ReturnsNode(t *testing.T) {
 	code := "class TestClass:\n    pass"
 

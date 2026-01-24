@@ -78,6 +78,57 @@ func isConstructor(functionName string) bool {
 	return functionName == "__init__"
 }
 
+// isSpecialMethod checks if a function is a Python special/magic method.
+// Special methods are surrounded by double underscores (e.g., __str__, __add__).
+func isSpecialMethod(functionName string) bool {
+	if len(functionName) < 5 {
+		// Minimum length for __x__ is 5 characters.
+		return false
+	}
+	return strings.HasPrefix(functionName, "__") && strings.HasSuffix(functionName, "__")
+}
+
+// isInterface checks if a class is a Python interface (Protocol or ABC).
+// Checks if any base class is "Protocol", "ABC", or ends with those names.
+func isInterface(superClasses []string) bool {
+	for _, base := range superClasses {
+		// Direct inheritance from Protocol or ABC.
+		if base == "Protocol" || base == "ABC" {
+			return true
+		}
+		// Qualified names like typing.Protocol or abc.ABC.
+		if strings.HasSuffix(base, ".Protocol") || strings.HasSuffix(base, ".ABC") {
+			return true
+		}
+	}
+	return false
+}
+
+// isEnum checks if a class is a Python Enum.
+// Checks if any base class is "Enum" or qualified like enum.Enum.
+func isEnum(superClasses []string) bool {
+	for _, base := range superClasses {
+		if base == "Enum" || base == "IntEnum" || base == "Flag" || base == "IntFlag" {
+			return true
+		}
+		if strings.HasSuffix(base, ".Enum") || strings.HasSuffix(base, ".IntEnum") ||
+			strings.HasSuffix(base, ".Flag") || strings.HasSuffix(base, ".IntFlag") {
+			return true
+		}
+	}
+	return false
+}
+
+// isDataclass checks if a class has the @dataclass decorator.
+func isDataclass(decorators []string) bool {
+	for _, d := range decorators {
+		if d == "dataclass" || strings.HasSuffix(d, ".dataclass") {
+			return true
+		}
+	}
+	return false
+}
+
 // parsePythonFunctionDefinition parses Python function definitions.
 // Handles decorators to distinguish between regular functions, properties, and constructors.
 func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) *Node {
@@ -106,6 +157,9 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	// Check if this is a constructor.
 	if isConstructor(functionName) {
 		nodeType = "constructor"
+	} else if isSpecialMethod(functionName) {
+		// Special methods like __str__, __add__, __call__.
+		nodeType = "special_method"
 	}
 
 	// Check for decorators (parent might be decorated_definition).
@@ -113,8 +167,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	if node.Parent() != nil && node.Parent().Type() == "decorated_definition" {
 		decorators = extractDecorators(node.Parent(), sourceCode)
 
-		// If function has @property, @classmethod, or @staticmethod decorators,
-		// mark it as property type for symbol indexing.
+		// If function has @property decorator, mark it as property type.
 		if hasDecorator(decorators, "property") {
 			nodeType = "property"
 		}
@@ -142,6 +195,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 
 // parsePythonClassDefinition parses Python class definitions.
 // Returns the class node to be used as context for nested definitions.
+// Detects interfaces (Protocol/ABC), enums, and dataclasses.
 func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) *Node {
 	// Extract class name and bases
 	className := ""
@@ -162,9 +216,31 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 		}
 	}
 
+	// Determine class type based on inheritance and decorators.
+	classType := "class_definition"
+
+	// Check for interface (Protocol or ABC).
+	if isInterface(superClasses) {
+		classType = "interface"
+	} else if isEnum(superClasses) {
+		// Check for enum.
+		classType = "enum"
+	}
+
+	// Check for decorators (parent might be decorated_definition).
+	var decorators []string
+	if node.Parent() != nil && node.Parent().Type() == "decorated_definition" {
+		decorators = extractDecorators(node.Parent(), sourceCode)
+
+		// Check if this is a dataclass.
+		if isDataclass(decorators) {
+			classType = "dataclass"
+		}
+	}
+
 	classNode := &Node{
 		ID:                 GenerateMethodID("class:"+className, []string{}, file),
-		Type:               "class_definition",
+		Type:               classType,
 		Name:               className,
 		SourceLocation:     &SourceLocation{
 			File:      file,
@@ -173,6 +249,7 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 		},
 		LineNumber:         node.StartPoint().Row + 1,
 		Interface:          superClasses,
+		Annotation:         decorators,
 		File:               file,
 		isPythonSourceFile: true,
 	}
