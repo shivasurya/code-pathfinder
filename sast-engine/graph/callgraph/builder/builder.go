@@ -491,13 +491,33 @@ func findContainingClass(node *graph.Node, classContext map[string]string) strin
 
 	// Check if this node is within any class's byte range
 	for key, className := range classContext {
-		var file string
-		var classStart, classEnd uint32
-		fmt.Sscanf(key, "%[^:]:%d:%d", &file, &classStart, &classEnd)
+		// Parse key format: "/path/to/file.py:startByte:endByte"
+		// Use strings.LastIndex to find the last two colons (for byte ranges)
+		lastColon := strings.LastIndex(key, ":")
+		if lastColon == -1 {
+			continue
+		}
+		secondLastColon := strings.LastIndex(key[:lastColon], ":")
+		if secondLastColon == -1 {
+			continue
+		}
 
+		// Extract components
+		file := key[:secondLastColon]
+		classStartStr := key[secondLastColon+1 : lastColon]
+		classEndStr := key[lastColon+1:]
+
+		// Parse byte positions
+		classStart, err1 := strconv.ParseUint(classStartStr, 10, 32)
+		classEnd, err2 := strconv.ParseUint(classEndStr, 10, 32)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+
+		// Check if node is within this class's byte range
 		if file == node.File &&
-			node.SourceLocation.StartByte >= classStart &&
-			node.SourceLocation.EndByte <= classEnd {
+			node.SourceLocation.StartByte >= uint32(classStart) &&
+			node.SourceLocation.EndByte <= uint32(classEnd) {
 			return className
 		}
 	}
