@@ -1880,3 +1880,428 @@ func TestMaxInt(t *testing.T) {
 	assert.Equal(t, 0, maxInt(0, 0))
 	assert.Equal(t, 1, maxInt(-5, 1))
 }
+
+// ============================================================================
+// Tests for Searching codeGraph.Nodes (Missing Types Fix)
+// ============================================================================
+
+// TestToolFindSymbol_SearchCodeGraphNodes tests finding symbols from codeGraph.Nodes.
+// This tests the fix for 6 missing types that were not searchable before.
+func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
+	// Create server with codeGraph containing the 6 missing types.
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	// Add class_definition to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "DatabaseConnection",
+		File:       "/test/db.py",
+		LineNumber: 10,
+	})
+	
+	// Add interface to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "iface1",
+		Type:       "interface",
+		Name:       "IRepository",
+		File:       "/test/interfaces.py",
+		LineNumber: 5,
+		Interface:  []string{"Protocol"},
+	})
+	
+	// Add enum to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "enum1",
+		Type:       "enum",
+		Name:       "StatusCode",
+		File:       "/test/enums.py",
+		LineNumber: 3,
+		Interface:  []string{"Enum"},
+	})
+	
+	// Add dataclass to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "dc1",
+		Type:       "dataclass",
+		Name:       "Configuration",
+		File:       "/test/config.py",
+		LineNumber: 8,
+		Annotation: []string{"dataclass"},
+	})
+	
+	// Add module_variable to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "var1",
+		Type:       "module_variable",
+		Name:       "logger",
+		File:       "/test/utils.py",
+		LineNumber: 1,
+	})
+	
+	// Add constant to codeGraph.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Type:       "constant",
+		Name:       "MAX_RETRIES",
+		File:       "/test/config.py",
+		LineNumber: 2,
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.db"] = "/test/db.py"
+	moduleRegistry.Modules["myapp.interfaces"] = "/test/interfaces.py"
+	moduleRegistry.Modules["myapp.enums"] = "/test/enums.py"
+	moduleRegistry.Modules["myapp.config"] = "/test/config.py"
+	moduleRegistry.Modules["myapp.utils"] = "/test/utils.py"
+	moduleRegistry.FileToModule["/test/db.py"] = "myapp.db"
+	moduleRegistry.FileToModule["/test/interfaces.py"] = "myapp.interfaces"
+	moduleRegistry.FileToModule["/test/enums.py"] = "myapp.enums"
+	moduleRegistry.FileToModule["/test/config.py"] = "myapp.config"
+	moduleRegistry.FileToModule["/test/utils.py"] = "myapp.utils"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	// Test 1: Search for class_definition.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "class_definition",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "DatabaseConnection")
+	assert.Contains(t, result, "myapp.db.DatabaseConnection")
+	
+	// Test 2: Search for interface.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "interface",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "IRepository")
+	assert.Contains(t, result, "myapp.interfaces.IRepository")
+	
+	// Test 3: Search for enum.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "enum",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "StatusCode")
+	assert.Contains(t, result, "myapp.enums.StatusCode")
+	
+	// Test 4: Search for dataclass.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "dataclass",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "Configuration")
+	assert.Contains(t, result, "myapp.config.Configuration")
+	
+	// Test 5: Search for module_variable.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "module_variable",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "logger")
+	assert.Contains(t, result, "myapp.utils.logger")
+	
+	// Test 6: Search for constant.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "constant",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "MAX_RETRIES")
+	assert.Contains(t, result, "myapp.config.MAX_RETRIES")
+}
+
+// TestToolFindSymbol_CodeGraphNodesByName tests searching codeGraph nodes by name.
+func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "User",
+		File:       "/test/models.py",
+		LineNumber: 10,
+	})
+	
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Type:       "constant",
+		Name:       "DEBUG_MODE",
+		File:       "/test/settings.py",
+		LineNumber: 5,
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
+	moduleRegistry.Modules["myapp.settings"] = "/test/settings.py"
+	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
+	moduleRegistry.FileToModule["/test/settings.py"] = "myapp.settings"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	// Search by name (should find in codeGraph).
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "User",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "User")
+	assert.Contains(t, result, "class_definition")
+	
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"name": "DEBUG_MODE",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "DEBUG_MODE")
+	assert.Contains(t, result, "constant")
+}
+
+// TestToolFindSymbol_CodeGraphNodesWithOptionalFields tests optional fields in codeGraph nodes.
+func TestToolFindSymbol_CodeGraphNodesWithOptionalFields(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	// Add class with superclass and decorators.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "AdminUser",
+		File:       "/test/models.py",
+		LineNumber: 20,
+		SuperClass: "BaseUser",
+		Interface:  []string{"Serializable", "Auditable"},
+		Annotation: []string{"register_model"},
+		Modifier:   "public",
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
+	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "AdminUser",
+	})
+	
+	assert.False(t, isError)
+	assert.Contains(t, result, "AdminUser")
+	assert.Contains(t, result, "superclass")
+	assert.Contains(t, result, "BaseUser")
+	assert.Contains(t, result, "interfaces")
+	assert.Contains(t, result, "Serializable")
+	assert.Contains(t, result, "decorators")
+	assert.Contains(t, result, "register_model")
+	assert.Contains(t, result, "modifier")
+	assert.Contains(t, result, "public")
+}
+
+// TestToolFindSymbol_CombineCallGraphAndCodeGraph tests that search includes both sources.
+func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	// Add method to callGraph.Functions.
+	callGraph.Functions["myapp.models.User.save"] = &graph.Node{
+		ID:         "method1",
+		Type:       "method",
+		Name:       "save",
+		File:       "/test/models.py",
+		LineNumber: 30,
+	}
+	
+	// Add class to codeGraph.Nodes.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "User",
+		File:       "/test/models.py",
+		LineNumber: 10,
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
+	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	// Search for "User" - should find both class and method.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "User",
+	})
+	
+	assert.False(t, isError)
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+	
+	matches := parsed["matches"].([]interface{})
+	assert.GreaterOrEqual(t, len(matches), 2, "Should find both class and method")
+	
+	// Verify we have both types.
+	types := make(map[string]bool)
+	for _, match := range matches {
+		m := match.(map[string]interface{})
+		types[m["type"].(string)] = true
+	}
+	
+	assert.True(t, types["class_definition"] || types["method"], "Should find User class or method")
+}
+
+// TestToolFindSymbol_CodeGraphNoModule tests handling of nodes without module mapping.
+func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	// Add node but don't add file to module registry.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "OrphanClass",
+		File:       "/test/orphan.py",
+		LineNumber: 10,
+	})
+	
+	// Add another node with proper mapping.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class2",
+		Type:       "class_definition",
+		Name:       "ProperClass",
+		File:       "/test/proper.py",
+		LineNumber: 10,
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.proper"] = "/test/proper.py"
+	moduleRegistry.FileToModule["/test/proper.py"] = "myapp.proper"
+	// Note: orphan.py is NOT in the registry.
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "class_definition",
+	})
+	
+	// Should find ProperClass but skip OrphanClass.
+	assert.False(t, isError)
+	assert.Contains(t, result, "ProperClass")
+	assert.NotContains(t, result, "OrphanClass")
+}
+
+// TestToolFindSymbol_CodeGraphNilCodeGraph tests handling when codeGraph is nil.
+func TestToolFindSymbol_CodeGraphNilCodeGraph(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	
+	// Add something to callGraph.Functions.
+	callGraph.Functions["myapp.utils.helper"] = &graph.Node{
+		ID:         "func1",
+		Type:       "function_definition",
+		Name:       "helper",
+		File:       "/test/utils.py",
+		LineNumber: 5,
+	}
+	
+	moduleRegistry := core.NewModuleRegistry()
+	
+	// Create server with nil codeGraph.
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	
+	// Should still work for callGraph.Functions.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "helper",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "helper")
+	
+	// Should not crash when searching for class_definition with nil codeGraph.
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "class_definition",
+	})
+	assert.True(t, isError)
+	assert.Contains(t, result, "No symbols found")
+}
+
+// TestToolFindSymbol_CodeGraphPartialNameMatch tests partial name matching in codeGraph.
+func TestToolFindSymbol_CodeGraphPartialNameMatch(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Type:       "class_definition",
+		Name:       "DatabaseConnectionPool",
+		File:       "/test/db.py",
+		LineNumber: 10,
+	})
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.db"] = "/test/db.py"
+	moduleRegistry.FileToModule["/test/db.py"] = "myapp.db"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	// Partial match "Connection" should find "DatabaseConnectionPool".
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "Connection",
+	})
+	
+	assert.False(t, isError)
+	assert.Contains(t, result, "DatabaseConnectionPool")
+}
+
+// TestToolFindSymbol_CodeGraphSymbolKinds tests LSP symbol kinds for codeGraph types.
+func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	
+	types := []struct {
+		typ          string
+		name         string
+		expectedKind int
+		expectedName string
+	}{
+		{"class_definition", "MyClass", SymbolKindClass, "Class"},
+		{"interface", "IDrawable", SymbolKindInterface, "Interface"},
+		{"enum", "Color", SymbolKindEnum, "Enum"},
+		{"dataclass", "Point", SymbolKindStruct, "Struct"},
+		{"module_variable", "logger", SymbolKindVariable, "Variable"},
+		{"constant", "MAX_SIZE", SymbolKindConstant, "Constant"},
+	}
+	
+	for i, tt := range types {
+		codeGraph.AddNode(&graph.Node{
+			ID:         fmt.Sprintf("node%d", i),
+			Type:       tt.typ,
+			Name:       tt.name,
+			File:       "/test/file.py",
+			LineNumber: uint32(10 + i),
+		})
+	}
+	
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["myapp.test"] = "/test/file.py"
+	moduleRegistry.FileToModule["/test/file.py"] = "myapp.test"
+	
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	
+	for _, tt := range types {
+		t.Run(tt.typ, func(t *testing.T) {
+			result, isError := server.toolFindSymbol(map[string]interface{}{
+				"name": tt.name,
+			})
+			
+			assert.False(t, isError)
+			
+			var parsed map[string]interface{}
+			json.Unmarshal([]byte(result), &parsed)
+			matches := parsed["matches"].([]interface{})
+			assert.Greater(t, len(matches), 0)
+			
+			match := matches[0].(map[string]interface{})
+			assert.Equal(t, float64(tt.expectedKind), match["symbol_kind"],
+				"Type %s should have symbol_kind %d", tt.typ, tt.expectedKind)
+			assert.Equal(t, tt.expectedName, match["symbol_kind_name"],
+				"Type %s should have symbol_kind_name %s", tt.typ, tt.expectedName)
+		})
+	}
+}

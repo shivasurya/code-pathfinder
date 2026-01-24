@@ -599,6 +599,87 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		}
 	}
 
+	// Search codeGraph.Nodes for class definitions and variables.
+	// These types are stored in the raw AST graph, not in callGraph.Functions.
+	missingTypes := map[string]bool{
+		"class_definition": true,
+		"interface":        true,
+		"enum":             true,
+		"dataclass":        true,
+		"module_variable":  true,
+		"constant":         true,
+	}
+
+	// Only search if we're looking for these types or no type filter specified.
+	searchCodeGraph := len(typeFilterMap) == 0
+	for t := range typeFilterMap {
+		if missingTypes[t] {
+			searchCodeGraph = true
+			break
+		}
+	}
+
+	if searchCodeGraph && s.codeGraph != nil {
+		for _, node := range s.codeGraph.Nodes {
+			// Skip if not one of the missing types.
+			if !missingTypes[node.Type] {
+				continue
+			}
+
+			// Apply type filter if specified.
+			if len(typeFilterMap) > 0 && !typeFilterMap[node.Type] {
+				continue
+			}
+
+			// Build FQN for this node.
+			// Classes: module.ClassName
+			// Variables: module.VARIABLE_NAME
+			modulePath, ok := s.moduleRegistry.FileToModule[node.File]
+			if !ok {
+				continue
+			}
+
+			fqn := modulePath + "." + node.Name
+
+			// Apply name filter if specified.
+			nameMatches := name == ""
+			if name != "" {
+				shortName := node.Name
+				nameMatches = shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name)
+			}
+
+			if nameMatches {
+				// Get LSP symbol kind.
+				symbolKind, symbolKindName := getSymbolKind(node.Type)
+
+				match := map[string]interface{}{
+					"fqn":              fqn,
+					"file":             node.File,
+					"line":             node.LineNumber,
+					"type":             node.Type,
+					"symbol_kind":      symbolKind,
+					"symbol_kind_name": symbolKindName,
+				}
+
+				// Add optional fields if available.
+				if len(node.Annotation) > 0 {
+					match["decorators"] = node.Annotation
+				}
+				if node.SuperClass != "" {
+					match["superclass"] = node.SuperClass
+				}
+				if len(node.Interface) > 0 {
+					match["interfaces"] = node.Interface
+				}
+				if node.Modifier != "" {
+					match["modifier"] = node.Modifier
+				}
+
+				allMatches = append(allMatches, match)
+			}
+		}
+	}
+
 	if len(allMatches) == 0 {
 		// Build helpful error message.
 		filters := []string{}
