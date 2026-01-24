@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -417,6 +418,9 @@ func IndexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 
 // indexFunctions is the internal implementation of IndexFunctions.
 func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
+	// First pass: Build class context map (file+line → class name)
+	classContext := buildClassContext(codeGraph)
+
 	for _, node := range codeGraph.Nodes {
 		// Only index function/method definitions (Java and Python types)
 		// Java: method_declaration
@@ -433,10 +437,72 @@ func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 			continue
 		}
 
-		// Build fully qualified name: module.function
-		fqn := modulePath + "." + node.Name
+		// Build fully qualified name with class context if applicable
+		fqn := buildFQN(modulePath, node, classContext)
 		callGraph.Functions[fqn] = node
 	}
+}
+
+// buildClassContext creates a map of file locations to class names.
+// This allows us to determine which class a method belongs to based on its location.
+func buildClassContext(codeGraph *graph.CodeGraph) map[string]string {
+	classCtx := make(map[string]string)
+
+	// Find all class definitions
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "class_definition" || node.Type == "interface" ||
+			node.Type == "enum" || node.Type == "dataclass" {
+			// For each class, we need to know its byte range
+			// Methods/constructors within this range belong to this class
+			if node.SourceLocation != nil {
+				// Store class name by file + start/end bytes
+				key := fmt.Sprintf("%s:%d:%d", node.File, node.SourceLocation.StartByte, node.SourceLocation.EndByte)
+				classCtx[key] = node.Name
+			}
+		}
+	}
+
+	return classCtx
+}
+
+// buildFQN constructs the fully qualified name for a function/method node.
+// For methods: module.ClassName.methodName
+// For functions: module.functionName.
+func buildFQN(modulePath string, node *graph.Node, classContext map[string]string) string {
+	// For methods/constructors/properties, try to find the containing class
+	if node.Type == "method" || node.Type == "constructor" ||
+		node.Type == "property" || node.Type == "special_method" {
+		// Find which class this method belongs to
+		className := findContainingClass(node, classContext)
+		if className != "" {
+			return fmt.Sprintf("%s.%s.%s", modulePath, className, node.Name)
+		}
+	}
+
+	// For top-level functions or if class not found, use simple FQN
+	return modulePath + "." + node.Name
+}
+
+// findContainingClass determines which class a node belongs to based on its location.
+func findContainingClass(node *graph.Node, classContext map[string]string) string {
+	if node.SourceLocation == nil {
+		return ""
+	}
+
+	// Check if this node is within any class's byte range
+	for key, className := range classContext {
+		var file string
+		var classStart, classEnd uint32
+		fmt.Sscanf(key, "%[^:]:%d:%d", &file, &classStart, &classEnd)
+
+		if file == node.File &&
+			node.SourceLocation.StartByte >= classStart &&
+			node.SourceLocation.EndByte <= classEnd {
+			return className
+		}
+	}
+
+	return ""
 }
 
 // GetFunctionsInFile returns all function definitions in a specific file.
