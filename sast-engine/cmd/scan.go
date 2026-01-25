@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -53,6 +54,7 @@ Examples:
 	// Unit testing cobra commands requires complex mocking of file systems, graph building, etc.
 	// Integration tests provide better coverage for the full execution path.
 	RunE: func(cmd *cobra.Command, args []string) error {
+		startTime := time.Now()
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		rulesetSpecs, _ := cmd.Flags().GetStringArray("ruleset")
 		refreshRules, _ := cmd.Flags().GetBool("refresh-rules")
@@ -64,12 +66,29 @@ Examples:
 		outputFile, _ := cmd.Flags().GetString("output-file")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 
+		// Track scan started event (no PII, just metadata)
+		analytics.ReportEventWithProperties(analytics.ScanStarted, map[string]interface{}{
+			"output_format":     outputFormat,
+			"has_local_rules":   rulesPath != "",
+			"has_remote_rules":  len(rulesetSpecs) > 0,
+			"remote_rule_count": len(rulesetSpecs),
+			"skip_tests":        skipTests,
+		})
+
 		// Validate that at least one rule source is provided
 		if len(rulesetSpecs) == 0 && rulesPath == "" {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "validation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("either --rules or --ruleset flag is required")
 		}
 
 		if projectPath == "" {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "validation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("--project flag is required")
 		}
 
@@ -101,6 +120,10 @@ Examples:
 		// Handle remote ruleset downloads and merge with local rules
 		finalRulesPath, tempDir, err := prepareRules(rulesPath, rulesetSpecs, refreshRules, logger)
 		if err != nil {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "rule_preparation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("failed to prepare rules: %w", err)
 		}
 		// Clean up temporary directory if created
@@ -140,6 +163,10 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "empty_project",
+				"phase":      "graph_building",
+			})
 			return fmt.Errorf("no source files found in project")
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
@@ -182,6 +209,10 @@ Examples:
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		logger.FinishProgress()
 		if err != nil {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "callgraph_build",
+				"phase":      "graph_building",
+			})
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
 		logger.Statistic("Callgraph built: %d functions, %d call sites",
@@ -192,6 +223,10 @@ Examples:
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "rule_loading",
+				"phase":      "rule_loading",
+			})
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
 		logger.Statistic("Loaded %d rules", len(rules))
@@ -318,6 +353,26 @@ Examples:
 
 		// Determine exit code based on findings and --fail-on flag
 		exitCode := output.DetermineExitCode(allEnriched, failOn, scanErrors)
+
+		// Track scan completion with results (no PII, just counts and metadata)
+		severityBreakdown := make(map[string]int)
+		for _, det := range allEnriched {
+			severityBreakdown[det.Rule.Severity]++
+		}
+
+		analytics.ReportEventWithProperties(analytics.ScanCompleted, map[string]interface{}{
+			"duration_ms":       time.Since(startTime).Milliseconds(),
+			"rules_count":       len(uniqueRules),
+			"findings_count":    len(allEnriched),
+			"severity_critical": severityBreakdown["critical"],
+			"severity_high":     severityBreakdown["high"],
+			"severity_medium":   severityBreakdown["medium"],
+			"severity_low":      severityBreakdown["low"],
+			"output_format":     outputFormat,
+			"exit_code":         int(exitCode),
+			"had_errors":        scanErrors,
+		})
+
 		if exitCode != output.ExitCodeSuccess {
 			os.Exit(int(exitCode))
 		}
