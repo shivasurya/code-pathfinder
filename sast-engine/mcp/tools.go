@@ -124,22 +124,26 @@ For functions/methods: return_type, parameters, decorators. For classes: supercl
 
 LSP Symbol Kinds: Function(12), Method(6), Constructor(9), Property(7), Operator(25), Class(5), Interface(11), Enum(10), Struct(23), Variable(13), Constant(14), Field(8).
 
-Filtering: At least ONE of name/type/types must be provided. Filters can be combined (e.g., name="get" + type="method").
+Filtering: At least ONE of name/type/types/module must be provided. Filters can be combined (e.g., name="get" + type="method" + module="core.utils").
 
-Use when: Looking for symbols by name; filtering by type; exploring codebase structure; finding definitions; analyzing symbol types.
+Use when: Looking for symbols by name; filtering by type; exploring codebase structure; finding definitions; analyzing symbol types; drilling down into specific modules.
 
 Examples:
 - find_symbol(name="login") - finds all symbols named login
 - find_symbol(type="method") - lists all methods
 - find_symbol(types=["interface","enum"]) - lists all interfaces and enums
 - find_symbol(name="get", type="method") - finds methods named "get"
-- find_symbol(name="User", type="class_definition") - finds User class only`,
+- find_symbol(name="User", type="class_definition") - finds User class only
+- find_symbol(module="core.settings") - finds all symbols in core.settings module
+- find_symbol(type="constant", module="core.settings.base") - finds constants in specific module
+- find_symbol(module="data_manager", type="method") - finds all methods in data_manager package`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
 					"name":   {Type: "string", Description: "Symbol name to find. Optional. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
 					"type":   {Type: "string", Description: "Filter by single symbol type. Optional. One of: function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field"},
 					"types":  {Type: "array", Description: "Filter by multiple symbol types. Optional. Array of type strings. Alternative to 'type' parameter"},
+					"module": {Type: "string", Description: "Filter by module. Optional. Matches symbols whose FQN starts with the module path (e.g., 'core.settings', 'data_manager.models'). Works with all symbol types"},
 					"limit":  {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
 					"cursor": {Type: "string", Description: "Pagination cursor from previous response"},
 				},
@@ -429,6 +433,7 @@ func maxInt(a, b int) int {
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	name, _ := args["name"].(string)
 	singleType, _ := args["type"].(string)
+	moduleFilter, _ := args["module"].(string)
 
 	// Handle types parameter (array).
 	var typeFilter []string
@@ -441,8 +446,8 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	}
 
 	// Validation: at least one filter must be provided.
-	if name == "" && singleType == "" && len(typeFilter) == 0 {
-		return `{"error": "At least one filter required: provide 'name', 'type', or 'types' parameter"}`, true
+	if name == "" && singleType == "" && len(typeFilter) == 0 && moduleFilter == "" {
+		return `{"error": "At least one filter required: provide 'name', 'type', 'types', or 'module' parameter"}`, true
 	}
 
 	// Validate type/types conflict.
@@ -495,6 +500,11 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	for fqn, node := range s.callGraph.Functions {
 		// Apply type filter if specified.
 		if len(typeFilterMap) > 0 && !typeFilterMap[node.Type] {
+			continue
+		}
+
+		// Apply module filter if specified.
+		if !matchesModuleFilter(fqn, moduleFilter) {
 			continue
 		}
 
@@ -551,10 +561,16 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
 				for classFQN, classAttrs := range attrRegistry.Classes {
 					for attrName, attr := range classAttrs.Attributes {
+						attributeFQN := classFQN + "." + attrName
+
+						// Apply module filter if specified.
+						if !matchesModuleFilter(attributeFQN, moduleFilter) {
+							continue
+						}
+
 						// Apply name filter if specified.
 						nameMatches := name == ""
 						if name != "" {
-							attributeFQN := classFQN + "." + attrName
 							nameMatches = attrName == name || strings.Contains(attrName, name) ||
 								strings.HasSuffix(attributeFQN, "."+name) ||
 								strings.Contains(attributeFQN, name)
@@ -563,8 +579,6 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 						if nameMatches {
 							// Get LSP symbol kind for class_field.
 							symbolKind, symbolKindName := getSymbolKind("class_field")
-
-							attributeFQN := classFQN + "." + attrName
 							match := map[string]interface{}{
 								"fqn":              attributeFQN,
 								"type":             "class_field",
@@ -648,6 +662,11 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			// Use helper function to build class-qualified FQN for class-level symbols.
 			fqn := buildNodeFQN(modulePath, node, classContext)
 
+			// Apply module filter if specified.
+			if !matchesModuleFilter(fqn, moduleFilter) {
+				continue
+			}
+
 			// Apply name filter if specified.
 			nameMatches := name == ""
 			if name != "" {
@@ -696,6 +715,9 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		if len(typeFilter) > 0 {
 			filters = append(filters, fmt.Sprintf("types=%v", typeFilter))
 		}
+		if moduleFilter != "" {
+			filters = append(filters, fmt.Sprintf("module=%s", moduleFilter))
+		}
 		filterStr := strings.Join(filters, ", ")
 		return fmt.Sprintf(`{"error": "No symbols found", "filters": "%s", "suggestion": "Try different filters or partial name matching"}`, filterStr), true
 	}
@@ -714,6 +736,9 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		} else {
 			filtersApplied["types"] = typeFilter
 		}
+	}
+	if moduleFilter != "" {
+		filtersApplied["module"] = moduleFilter
 	}
 
 	result := map[string]interface{}{
@@ -1228,6 +1253,24 @@ func findContainingClass(node *graph.Node, classContext map[string]string) strin
 	}
 
 	return bestMatch
+}
+
+// matchesModuleFilter checks if an FQN matches the module filter.
+// Returns true if no filter specified, or if FQN starts with the module path.
+func matchesModuleFilter(fqn string, moduleFilter string) bool {
+	if moduleFilter == "" {
+		return true
+	}
+
+	// Exact match: module filter is the entire FQN.
+	if fqn == moduleFilter {
+		return true
+	}
+
+	// Prefix match: FQN starts with "moduleFilter."
+	// This ensures "core.settings" matches "core.settings.base.DEBUG"
+	// but NOT "core.settings_backup.X"
+	return strings.HasPrefix(fqn, moduleFilter+".")
 }
 
 // buildNodeFQN constructs the fully qualified name for a node.

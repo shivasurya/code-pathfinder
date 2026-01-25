@@ -2643,3 +2643,395 @@ func TestBuildNodeFQN(t *testing.T) {
 		})
 	}
 }
+
+// TestToolFindSymbol_ModuleFilter tests filtering symbols by module.
+func TestToolFindSymbol_ModuleFilter(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Add functions from different modules
+	callGraph.Functions["core.utils.get_logger"] = &graph.Node{
+		Type:       "function_definition",
+		File:       "/test/core/utils.py",
+		LineNumber: 10,
+	}
+
+	callGraph.Functions["data_manager.models.Task.save"] = &graph.Node{
+		Type:       "method",
+		File:       "/test/data_manager/models.py",
+		LineNumber: 50,
+	}
+
+	callGraph.Functions["users.auth.login"] = &graph.Node{
+		Type:       "function_definition",
+		File:       "/test/users/auth.py",
+		LineNumber: 20,
+	}
+
+	// Add constants from different modules
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Name:       "DEBUG",
+		Type:       "constant",
+		File:       "/test/core/settings.py",
+		LineNumber: 5,
+		Scope:      "module",
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const2",
+		Name:       "MAX_SIZE",
+		Type:       "constant",
+		File:       "/test/data_manager/config.py",
+		LineNumber: 15,
+		Scope:      "module",
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/core/utils.py"] = "core.utils"
+	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
+	moduleRegistry.FileToModule["/test/data_manager/models.py"] = "data_manager.models"
+	moduleRegistry.FileToModule["/test/data_manager/config.py"] = "data_manager.config"
+	moduleRegistry.FileToModule["/test/users/auth.py"] = "users.auth"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test 1: Filter by core module
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"module": "core",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "core.utils.get_logger")
+	assert.Contains(t, result, "core.settings.DEBUG")
+	assert.NotContains(t, result, "data_manager")
+	assert.NotContains(t, result, "users")
+
+	// Test 2: Filter by data_manager module
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"module": "data_manager",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "data_manager.models.Task.save")
+	assert.Contains(t, result, "data_manager.config.MAX_SIZE")
+	assert.NotContains(t, result, "core")
+	assert.NotContains(t, result, "users")
+
+	// Test 3: Filter by specific sub-module
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"module": "core.utils",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "core.utils.get_logger")
+	assert.NotContains(t, result, "core.settings.DEBUG")
+	assert.NotContains(t, result, "data_manager")
+}
+
+// TestToolFindSymbol_ModuleAndTypeFilter tests combining module and type filters.
+func TestToolFindSymbol_ModuleAndTypeFilter(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Add various symbols to core module
+	callGraph.Functions["core.utils.get_logger"] = &graph.Node{
+		Type:       "function_definition",
+		File:       "/test/core/utils.py",
+		LineNumber: 10,
+	}
+
+	callGraph.Functions["core.models.User.save"] = &graph.Node{
+		Type:       "method",
+		File:       "/test/core/models.py",
+		LineNumber: 50,
+	}
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Name:       "DEBUG",
+		Type:       "constant",
+		File:       "/test/core/settings.py",
+		LineNumber: 5,
+		Scope:      "module",
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Name:       "Config",
+		Type:       "class_definition",
+		File:       "/test/core/config.py",
+		LineNumber: 20,
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/core/utils.py"] = "core.utils"
+	moduleRegistry.FileToModule["/test/core/models.py"] = "core.models"
+	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
+	moduleRegistry.FileToModule["/test/core/config.py"] = "core.config"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test 1: Module + type filter (constants only in core)
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"module": "core",
+		"type":   "constant",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "core.settings.DEBUG")
+	assert.NotContains(t, result, "get_logger")     // function, not constant
+	assert.NotContains(t, result, "User.save")      // method, not constant
+	assert.NotContains(t, result, "Config")         // class, not constant
+
+	// Test 2: Module + type filter (methods only in core)
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"module": "core",
+		"type":   "method",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "core.models.User.save")
+	assert.NotContains(t, result, "get_logger")
+	assert.NotContains(t, result, "DEBUG")
+
+	// Test 3: Module + type filter (classes only)
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"module": "core",
+		"type":   "class_definition",
+	})
+	assert.False(t, isError)
+	assert.Contains(t, result, "core.config.Config")
+	assert.NotContains(t, result, "get_logger")
+	assert.NotContains(t, result, "User.save")
+	assert.NotContains(t, result, "DEBUG")
+}
+
+// TestToolFindSymbol_ModuleNameAndTypeFilter tests combining all three filters.
+func TestToolFindSymbol_ModuleNameAndTypeFilter(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Add multiple constants with similar names in different modules
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Name:       "DEBUG",
+		Type:       "constant",
+		File:       "/test/core/settings.py",
+		LineNumber: 5,
+		Scope:      "module",
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const2",
+		Name:       "DEBUG_MODE",
+		Type:       "constant",
+		File:       "/test/core/config.py",
+		LineNumber: 10,
+		Scope:      "module",
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const3",
+		Name:       "DEBUG",
+		Type:       "constant",
+		File:       "/test/data_manager/settings.py",
+		LineNumber: 8,
+		Scope:      "module",
+	})
+
+	// Add a class named DEBUG (different type)
+	codeGraph.AddNode(&graph.Node{
+		ID:         "class1",
+		Name:       "DEBUG",
+		Type:       "class_definition",
+		File:       "/test/core/utils.py",
+		LineNumber: 20,
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
+	moduleRegistry.FileToModule["/test/core/config.py"] = "core.config"
+	moduleRegistry.FileToModule["/test/core/utils.py"] = "core.utils"
+	moduleRegistry.FileToModule["/test/data_manager/settings.py"] = "data_manager.settings"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test: name + module + type filter
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name":   "DEBUG",
+		"module": "core",
+		"type":   "constant",
+	})
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	// Name filter uses partial matching, so it finds both DEBUG and DEBUG_MODE
+	assert.GreaterOrEqual(t, len(matches), 1, "Should find at least one DEBUG constant in core module")
+
+	// Verify that core.settings.DEBUG is in the results
+	foundDEBUG := false
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		if match["fqn"] == "core.settings.DEBUG" {
+			foundDEBUG = true
+			assert.Equal(t, "constant", match["type"])
+			break
+		}
+	}
+	assert.True(t, foundDEBUG, "Should find core.settings.DEBUG")
+}
+
+// TestToolFindSymbol_ModuleNoResults tests module filter with no matches.
+func TestToolFindSymbol_ModuleNoResults(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Name:       "DEBUG",
+		Type:       "constant",
+		File:       "/test/core/settings.py",
+		LineNumber: 5,
+		Scope:      "module",
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test: Filter by non-existent module
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"module": "nonexistent",
+	})
+	assert.True(t, isError)
+	assert.Contains(t, result, "No symbols found")
+	assert.Contains(t, result, "module=nonexistent")
+}
+
+// TestToolFindSymbol_ModuleFilterWithClassConstants tests module filter on class constants.
+func TestToolFindSymbol_ModuleFilterWithClassConstants(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Add class definition
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class1",
+		Name: "Column",
+		Type: "class_definition",
+		File: "/test/data_manager/prepare_params.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 100,
+			EndByte:   500,
+		},
+		LineNumber: 10,
+	})
+
+	// Add class-level constant
+	codeGraph.AddNode(&graph.Node{
+		ID:   "const1",
+		Name: "ID",
+		Type: "constant",
+		File: "/test/data_manager/prepare_params.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 200,
+			EndByte:   220,
+		},
+		Scope:      "class",
+		LineNumber: 15,
+	})
+
+	// Add constant from different module
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const2",
+		Name:       "MAX_SIZE",
+		Type:       "constant",
+		File:       "/test/core/config.py",
+		LineNumber: 5,
+		Scope:      "module",
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/data_manager/prepare_params.py"] = "data_manager.prepare_params"
+	moduleRegistry.FileToModule["/test/core/config.py"] = "core.config"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test: Filter by data_manager module
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"module": "data_manager",
+		"type":   "constant",
+	})
+	assert.False(t, isError)
+
+	// Should find class constant with class-qualified FQN
+	assert.Contains(t, result, "data_manager.prepare_params.Column.ID")
+	assert.NotContains(t, result, "core.config.MAX_SIZE")
+}
+
+// TestMatchesModuleFilter tests the module filter helper function.
+func TestMatchesModuleFilter(t *testing.T) {
+	tests := []struct {
+		name         string
+		fqn          string
+		moduleFilter string
+		expected     bool
+	}{
+		{
+			name:         "No filter - always matches",
+			fqn:          "core.utils.get_logger",
+			moduleFilter: "",
+			expected:     true,
+		},
+		{
+			name:         "Exact match",
+			fqn:          "core.utils",
+			moduleFilter: "core.utils",
+			expected:     true,
+		},
+		{
+			name:         "Prefix match - top level",
+			fqn:          "core.utils.get_logger",
+			moduleFilter: "core",
+			expected:     true,
+		},
+		{
+			name:         "Prefix match - sub-module",
+			fqn:          "core.settings.base.DEBUG",
+			moduleFilter: "core.settings",
+			expected:     true,
+		},
+		{
+			name:         "Prefix match - specific module",
+			fqn:          "core.settings.base.DEBUG",
+			moduleFilter: "core.settings.base",
+			expected:     true,
+		},
+		{
+			name:         "No match - different module",
+			fqn:          "core.utils.get_logger",
+			moduleFilter: "data_manager",
+			expected:     false,
+		},
+		{
+			name:         "No match - similar prefix but not same",
+			fqn:          "core.settings_backup.DEBUG",
+			moduleFilter: "core.settings",
+			expected:     false,
+		},
+		{
+			name:         "No match - FQN is shorter than filter",
+			fqn:          "core",
+			moduleFilter: "core.settings",
+			expected:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesModuleFilter(tt.fqn, tt.moduleFilter)
+			assert.Equal(t, tt.expected, result,
+				"FQN '%s' with filter '%s' should be %v", tt.fqn, tt.moduleFilter, tt.expected)
+		})
+	}
+}
