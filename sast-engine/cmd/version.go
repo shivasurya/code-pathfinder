@@ -12,17 +12,13 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version and commit information",
 	Run: func(cmd *cobra.Command, _ []string) {
-		// Display banner
+		// Display banner unless --no-banner is set
 		noBanner, _ := cmd.Parent().PersistentFlags().GetBool("no-banner")
-		logger := output.NewLogger(output.VerbosityDefault)
-		if output.ShouldShowBanner(logger.IsTTY(), noBanner) {
-			output.PrintBanner(logger.GetWriter(), Version, output.DefaultBannerOptions())
-		} else if logger.IsTTY() && !noBanner {
-			fmt.Fprintln(os.Stderr, output.GetCompactBanner(Version))
-			fmt.Fprintln(os.Stderr)
+		if !noBanner {
+			output.PrintBanner(os.Stderr, Version, output.DefaultBannerOptions())
 		}
 
-		// Version is a debug command - no analytics tracking
+		// Version info
 		fmt.Printf("Version: %s\n", Version)
 		fmt.Printf("Git Commit: %s\n", GitCommit)
 	},
