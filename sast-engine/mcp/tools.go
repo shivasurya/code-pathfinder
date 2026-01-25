@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 )
 
@@ -620,6 +621,10 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	}
 
 	if searchCodeGraph && s.codeGraph != nil {
+		// Build class context for determining which class constants/fields belong to.
+		// This ensures class-level constants get proper FQNs: module.ClassName.CONSTANT_NAME
+		classContext := buildClassContext(s.codeGraph)
+
 		for _, node := range s.codeGraph.Nodes {
 			// Skip if not one of the missing types.
 			if !missingTypes[node.Type] {
@@ -633,13 +638,15 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 			// Build FQN for this node.
 			// Classes: module.ClassName
-			// Variables: module.VARIABLE_NAME
+			// Module-level variables/constants: module.VARIABLE_NAME
+			// Class-level constants/fields: module.ClassName.CONSTANT_NAME
 			modulePath, ok := s.moduleRegistry.FileToModule[node.File]
 			if !ok {
 				continue
 			}
 
-			fqn := modulePath + "." + node.Name
+			// Use helper function to build class-qualified FQN for class-level symbols.
+			fqn := buildNodeFQN(modulePath, node, classContext)
 
 			// Apply name filter if specified.
 			nameMatches := name == ""
@@ -1142,4 +1149,99 @@ func getShortName(fqn string) string {
 		return fqn
 	}
 	return parts[len(parts)-1]
+}
+
+// buildClassContext creates a map of file locations to class names.
+// This allows us to determine which class a constant/field belongs to based on its location.
+// Returns a map with keys in format "file:startByte:endByte" → className.
+func buildClassContext(codeGraph *graph.CodeGraph) map[string]string {
+	classCtx := make(map[string]string)
+
+	// Find all class definitions (including enums, interfaces, dataclasses).
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "class_definition" || node.Type == "interface" ||
+			node.Type == "enum" || node.Type == "dataclass" {
+			// For each class, store its byte range.
+			// Class-level constants/fields within this range belong to this class.
+			if node.SourceLocation != nil {
+				// Store class name by file + start/end bytes.
+				key := fmt.Sprintf("%s:%d:%d", node.File, node.SourceLocation.StartByte, node.SourceLocation.EndByte)
+				classCtx[key] = node.Name
+			}
+		}
+	}
+
+	return classCtx
+}
+
+// findContainingClass determines which class a node belongs to based on its byte location.
+// Returns the class name if found, or empty string if the node is at module level.
+func findContainingClass(node *graph.Node, classContext map[string]string) string {
+	if node.SourceLocation == nil {
+		return ""
+	}
+
+	// Find the smallest (most specific) class that contains this node.
+	// This handles nested classes correctly (returns innermost class).
+	var bestMatch string
+	var bestRange uint32 = ^uint32(0) // Max uint32
+
+	for key, className := range classContext {
+		// Parse key format: "/path/to/file.py:startByte:endByte"
+		// Use strings.LastIndex to find the last two colons (for byte ranges).
+		lastColon := strings.LastIndex(key, ":")
+		if lastColon == -1 {
+			continue
+		}
+		secondLastColon := strings.LastIndex(key[:lastColon], ":")
+		if secondLastColon == -1 {
+			continue
+		}
+
+		// Extract components.
+		file := key[:secondLastColon]
+		classStartStr := key[secondLastColon+1 : lastColon]
+		classEndStr := key[lastColon+1:]
+
+		// Parse byte positions.
+		var classStart, classEnd uint32
+		if _, err := fmt.Sscanf(classStartStr, "%d", &classStart); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(classEndStr, "%d", &classEnd); err != nil {
+			continue
+		}
+
+		// Check if node is within this class's byte range.
+		if file == node.File &&
+			node.SourceLocation.StartByte >= classStart &&
+			node.SourceLocation.EndByte <= classEnd {
+			// Calculate class range size.
+			classRange := classEnd - classStart
+
+			// Keep the smallest containing class (most specific).
+			if classRange < bestRange {
+				bestMatch = className
+				bestRange = classRange
+			}
+		}
+	}
+
+	return bestMatch
+}
+
+// buildNodeFQN constructs the fully qualified name for a node.
+// For class-level symbols: module.ClassName.symbolName.
+// For module-level symbols: module.symbolName.
+func buildNodeFQN(modulePath string, node *graph.Node, classContext map[string]string) string {
+	// For class-level constants and fields, find the containing class.
+	if node.Scope == "class" {
+		className := findContainingClass(node, classContext)
+		if className != "" {
+			return fmt.Sprintf("%s.%s.%s", modulePath, className, node.Name)
+		}
+	}
+
+	// For module-level or if class not found, use simple FQN.
+	return modulePath + "." + node.Name
 }

@@ -2305,3 +2305,341 @@ func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
 		})
 	}
 }
+
+// TestToolFindSymbol_ClassConstantFQN tests that class-level constants
+// get class-qualified FQNs to prevent collisions.
+func TestToolFindSymbol_ClassConstantFQN(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Module-level constant
+	codeGraph.AddNode(&graph.Node{
+		ID:   "const1",
+		Name: "MODULE_CONST",
+		Type: "constant",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 10,
+			EndByte:   30,
+		},
+		Scope:      "module",
+		LineNumber: 5,
+	})
+
+	// Class definition
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class1",
+		Name: "MyClass",
+		Type: "class_definition",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 50,
+			EndByte:   200,
+		},
+		LineNumber: 10,
+	})
+
+	// Class-level constant inside MyClass
+	codeGraph.AddNode(&graph.Node{
+		ID:   "const2",
+		Name: "CLASS_CONST",
+		Type: "constant",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 100,
+			EndByte:   120,
+		},
+		Scope:      "class",
+		LineNumber: 12,
+	})
+
+	// Another class definition
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class2",
+		Name: "OtherClass",
+		Type: "class_definition",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 250,
+			EndByte:   400,
+		},
+		LineNumber: 20,
+	})
+
+	// Same name constant in different class (collision test)
+	codeGraph.AddNode(&graph.Node{
+		ID:   "const3",
+		Name: "SAME_NAME",
+		Type: "constant",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 300,
+			EndByte:   320,
+		},
+		Scope:      "class",
+		LineNumber: 22,
+	})
+
+	// Same name constant in first class
+	codeGraph.AddNode(&graph.Node{
+		ID:   "const4",
+		Name: "SAME_NAME",
+		Type: "constant",
+		File: "/test/module.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 150,
+			EndByte:   170,
+		},
+		Scope:      "class",
+		LineNumber: 15,
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.FileToModule["/test/module.py"] = "module"
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+
+	// Test 1: Module-level constant should have simple FQN
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "MODULE_CONST",
+	})
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1)
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "module.MODULE_CONST", match["fqn"])
+
+	// Test 2: Class-level constant should have class-qualified FQN
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"name": "CLASS_CONST",
+	})
+	assert.False(t, isError)
+
+	err = json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+	matches = parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1)
+	match = matches[0].(map[string]interface{})
+	assert.Equal(t, "module.MyClass.CLASS_CONST", match["fqn"])
+
+	// Test 3: Same-named constants in different classes should have distinct FQNs
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"name": "SAME_NAME",
+	})
+	assert.False(t, isError)
+
+	err = json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+	matches = parsed["matches"].([]interface{})
+	assert.Len(t, matches, 2, "Should find both SAME_NAME constants")
+
+	// Verify distinct FQNs
+	fqns := make(map[string]bool)
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		fqn := match["fqn"].(string)
+		fqns[fqn] = true
+	}
+	assert.Len(t, fqns, 2, "Should have 2 distinct FQNs")
+	assert.True(t, fqns["module.MyClass.SAME_NAME"], "Should have MyClass.SAME_NAME")
+	assert.True(t, fqns["module.OtherClass.SAME_NAME"], "Should have OtherClass.SAME_NAME")
+}
+
+// TestBuildClassContext tests the buildClassContext helper function.
+func TestBuildClassContext(t *testing.T) {
+	codeGraph := graph.NewCodeGraph()
+
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class1",
+		Name: "ClassA",
+		Type: "class_definition",
+		File: "/test/file.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 100,
+			EndByte:   200,
+		},
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class2",
+		Name: "ClassB",
+		Type: "interface",
+		File: "/test/file.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 300,
+			EndByte:   400,
+		},
+	})
+
+	codeGraph.AddNode(&graph.Node{
+		ID:   "class3",
+		Name: "EnumC",
+		Type: "enum",
+		File: "/test/file.py",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 500,
+			EndByte:   600,
+		},
+	})
+
+	// Node without SourceLocation (should be skipped)
+	codeGraph.AddNode(&graph.Node{
+		ID:             "class4",
+		Name:           "NoLocation",
+		Type:           "class_definition",
+		File:           "/test/file.py",
+		SourceLocation: nil,
+	})
+
+	classContext := buildClassContext(codeGraph)
+
+	// Should have 3 entries (class, interface, enum)
+	assert.Len(t, classContext, 3)
+
+	// Check class entries
+	assert.Equal(t, "ClassA", classContext["/test/file.py:100:200"])
+	assert.Equal(t, "ClassB", classContext["/test/file.py:300:400"])
+	assert.Equal(t, "EnumC", classContext["/test/file.py:500:600"])
+}
+
+// TestFindContainingClass tests the findContainingClass helper function.
+func TestFindContainingClass(t *testing.T) {
+	classContext := map[string]string{
+		"/test/file.py:100:200": "OuterClass",
+		"/test/file.py:150:180": "InnerClass", // Nested inside OuterClass
+	}
+
+	tests := []struct {
+		name          string
+		node          *graph.Node
+		expectedClass string
+	}{
+		{
+			name: "Node inside OuterClass",
+			node: &graph.Node{
+				File: "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 120,
+					EndByte:   140,
+				},
+			},
+			expectedClass: "OuterClass",
+		},
+		{
+			name: "Node inside InnerClass",
+			node: &graph.Node{
+				File: "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 160,
+					EndByte:   170,
+				},
+			},
+			expectedClass: "InnerClass",
+		},
+		{
+			name: "Node outside all classes",
+			node: &graph.Node{
+				File: "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 50,
+					EndByte:   60,
+				},
+			},
+			expectedClass: "",
+		},
+		{
+			name: "Node with nil SourceLocation",
+			node: &graph.Node{
+				File:           "/test/file.py",
+				SourceLocation: nil,
+			},
+			expectedClass: "",
+		},
+		{
+			name: "Node in different file",
+			node: &graph.Node{
+				File: "/test/other.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 120,
+					EndByte:   140,
+				},
+			},
+			expectedClass: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findContainingClass(tt.node, classContext)
+			assert.Equal(t, tt.expectedClass, result)
+		})
+	}
+}
+
+// TestBuildNodeFQN tests the buildNodeFQN helper function.
+func TestBuildNodeFQN(t *testing.T) {
+	classContext := map[string]string{
+		"/test/file.py:100:200": "MyClass",
+	}
+
+	tests := []struct {
+		name        string
+		modulePath  string
+		node        *graph.Node
+		expectedFQN string
+	}{
+		{
+			name:       "Module-scoped constant",
+			modulePath: "mymodule",
+			node: &graph.Node{
+				Name:  "MODULE_CONST",
+				Scope: "module",
+				File:  "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 50,
+					EndByte:   70,
+				},
+			},
+			expectedFQN: "mymodule.MODULE_CONST",
+		},
+		{
+			name:       "Class-scoped constant",
+			modulePath: "mymodule",
+			node: &graph.Node{
+				Name:  "CLASS_CONST",
+				Scope: "class",
+				File:  "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 120,
+					EndByte:   140,
+				},
+			},
+			expectedFQN: "mymodule.MyClass.CLASS_CONST",
+		},
+		{
+			name:       "Class-scoped but no containing class found",
+			modulePath: "mymodule",
+			node: &graph.Node{
+				Name:  "ORPHAN_CONST",
+				Scope: "class",
+				File:  "/test/file.py",
+				SourceLocation: &graph.SourceLocation{
+					StartByte: 500,
+					EndByte:   520,
+				},
+			},
+			expectedFQN: "mymodule.ORPHAN_CONST",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildNodeFQN(tt.modulePath, tt.node, classContext)
+			assert.Equal(t, tt.expectedFQN, result)
+		})
+	}
+}
