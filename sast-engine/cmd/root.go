@@ -6,7 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var verboseFlag bool
+var (
+	verboseFlag bool
+	Version     = "1.2.2"
+	GitCommit   = "HEAD"
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "pathfinder",
@@ -17,6 +21,7 @@ var rootCmd = &cobra.Command{
 		verboseFlag, _ = cmd.Flags().GetBool("verbose")             //nolint:all
 		analytics.LoadEnvFile()
 		analytics.Init(disableMetrics)
+		analytics.SetVersion(Version)
 		if verboseFlag {
 			graph.EnableVerboseLogging()
 		}

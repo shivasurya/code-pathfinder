@@ -13,32 +13,37 @@ import (
 
 const (
 	// Scan command events - production command tracking.
-	ScanStarted   = "scan_started"
-	ScanCompleted = "scan_completed"
-	ScanFailed    = "scan_failed"
+	ScanStarted   = "pathfinder:scan_started"
+	ScanCompleted = "pathfinder:scan_completed"
+	ScanFailed    = "pathfinder:scan_failed"
 
 	// CI command events - production command tracking.
-	CIStarted   = "ci_started"
-	CICompleted = "ci_completed"
-	CIFailed    = "ci_failed"
+	CIStarted   = "pathfinder:ci_started"
+	CICompleted = "pathfinder:ci_completed"
+	CIFailed    = "pathfinder:ci_failed"
 
 	// MCP Server events - production command tracking.
-	MCPServerStarted    = "mcp_server_started"
-	MCPServerStopped    = "mcp_server_stopped"
-	MCPToolCall         = "mcp_tool_call"
-	MCPIndexingStarted  = "mcp_indexing_started"
-	MCPIndexingComplete = "mcp_indexing_complete"
-	MCPIndexingFailed   = "mcp_indexing_failed"
-	MCPClientConnected  = "mcp_client_connected"
+	MCPServerStarted    = "pathfinder:mcp_server_started"
+	MCPServerStopped    = "pathfinder:mcp_server_stopped"
+	MCPToolCall         = "pathfinder:mcp_tool_call"
+	MCPIndexingStarted  = "pathfinder:mcp_indexing_started"
+	MCPIndexingComplete = "pathfinder:mcp_indexing_complete"
+	MCPIndexingFailed   = "pathfinder:mcp_indexing_failed"
+	MCPClientConnected  = "pathfinder:mcp_client_connected"
 )
 
 var (
 	PublicKey     string
 	enableMetrics bool
+	appVersion    string
 )
 
 func Init(disableMetrics bool) {
 	enableMetrics = !disableMetrics
+}
+
+func SetVersion(version string) {
+	appVersion = version
 }
 
 func createEnvFile() {
@@ -109,6 +114,9 @@ func ReportEventWithProperties(event string, properties map[string]interface{}) 
 		captureProperties.Set("os", runtime.GOOS)
 		captureProperties.Set("arch", runtime.GOARCH)
 		captureProperties.Set("go_version", runtime.Version())
+		if appVersion != "" {
+			captureProperties.Set("pathfinder_version", appVersion)
+		}
 
 		// Merge user-provided properties
 		if properties != nil {

@@ -6,11 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	Version   = "1.2.2"
-	GitCommit = "HEAD"
-)
-
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version and commit information",
