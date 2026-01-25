@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
@@ -33,6 +35,7 @@ Examples:
   # Generate CSV report
   pathfinder ci --rules rules/owasp_top10.py --project . --output csv > results.csv`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		startTime := time.Now()
 		rulesPath, _ := cmd.Flags().GetString("rules")
 		projectPath, _ := cmd.Flags().GetString("project")
 		outputFormat, _ := cmd.Flags().GetString("output")
@@ -40,6 +43,12 @@ Examples:
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+
+		// Track CI started event (no PII, just metadata)
+		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
+			"output_format": outputFormat,
+			"skip_tests":    skipTests,
+		})
 
 		// Setup logger with appropriate verbosity
 		verbosity := output.VerbosityDefault
@@ -67,14 +76,26 @@ Examples:
 		}
 
 		if rulesPath == "" {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "validation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("--rules flag is required")
 		}
 
 		if projectPath == "" {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "validation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("--project flag is required")
 		}
 
 		if outputFormat != "sarif" && outputFormat != "json" && outputFormat != "csv" {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "validation",
+				"phase":      "initialization",
+			})
 			return fmt.Errorf("--output must be 'sarif', 'json', or 'csv'")
 		}
 
@@ -89,6 +110,10 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "empty_project",
+				"phase":      "graph_building",
+			})
 			return fmt.Errorf("no source files found in project")
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
@@ -110,6 +135,10 @@ Examples:
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		logger.FinishProgress()
 		if err != nil {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "callgraph_build",
+				"phase":      "graph_building",
+			})
 			return fmt.Errorf("failed to build callgraph: %w", err)
 		}
 		logger.Statistic("Callgraph built: %d functions, %d call sites",
@@ -121,6 +150,10 @@ Examples:
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "rule_loading",
+				"phase":      "rule_loading",
+			})
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
 		logger.Statistic("Loaded %d rules", len(rules))
@@ -198,6 +231,26 @@ Examples:
 
 		// Determine exit code based on findings and --fail-on flag
 		exitCode := output.DetermineExitCode(allEnriched, failOn, hadErrors)
+
+		// Track CI completion with results (no PII, just counts and metadata)
+		severityBreakdown := make(map[string]int)
+		for _, det := range allEnriched {
+			severityBreakdown[det.Rule.Severity]++
+		}
+
+		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]interface{}{
+			"duration_ms":       time.Since(startTime).Milliseconds(),
+			"rules_count":       len(rules),
+			"findings_count":    len(allEnriched),
+			"severity_critical": severityBreakdown["critical"],
+			"severity_high":     severityBreakdown["high"],
+			"severity_medium":   severityBreakdown["medium"],
+			"severity_low":      severityBreakdown["low"],
+			"output_format":     outputFormat,
+			"exit_code":         int(exitCode),
+			"had_errors":        hadErrors,
+		})
+
 		if exitCode != output.ExitCodeSuccess {
 			osExit(int(exitCode))
 		}

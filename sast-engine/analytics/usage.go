@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -11,28 +12,38 @@ import (
 )
 
 const (
-	VersionCommand       = "executed_version_command"
-	QueryCommandJSON     = "executed_query_command_json_mode"
-	ErrorProcessingQuery = "error_processing_query"
-	QueryCommandStdin    = "executed_query_command_stdin_mode"
+	// Scan command events - production command tracking.
+	ScanStarted   = "pathfinder:scan_started"
+	ScanCompleted = "pathfinder:scan_completed"
+	ScanFailed    = "pathfinder:scan_failed"
 
-	// MCP Server events.
-	MCPServerStarted   = "mcp_server_started"
-	MCPServerStopped   = "mcp_server_stopped"
-	MCPToolCall        = "mcp_tool_call"
-	MCPIndexingStarted = "mcp_indexing_started"
-	MCPIndexingComplete = "mcp_indexing_complete"
-	MCPIndexingFailed  = "mcp_indexing_failed"
-	MCPClientConnected = "mcp_client_connected"
+	// CI command events - production command tracking.
+	CIStarted   = "pathfinder:ci_started"
+	CICompleted = "pathfinder:ci_completed"
+	CIFailed    = "pathfinder:ci_failed"
+
+	// MCP Server events - production command tracking.
+	MCPServerStarted    = "pathfinder:mcp_server_started"
+	MCPServerStopped    = "pathfinder:mcp_server_stopped"
+	MCPToolCall         = "pathfinder:mcp_tool_call"
+	MCPIndexingStarted  = "pathfinder:mcp_indexing_started"
+	MCPIndexingComplete = "pathfinder:mcp_indexing_complete"
+	MCPIndexingFailed   = "pathfinder:mcp_indexing_failed"
+	MCPClientConnected  = "pathfinder:mcp_client_connected"
 )
 
 var (
 	PublicKey     string
 	enableMetrics bool
+	appVersion    string
 )
 
 func Init(disableMetrics bool) {
 	enableMetrics = !disableMetrics
+}
+
+func SetVersion(version string) {
+	appVersion = version
 }
 
 func createEnvFile() {
@@ -76,10 +87,13 @@ func ReportEvent(event string) {
 // Properties should not contain any PII (no file paths, code, user info).
 func ReportEventWithProperties(event string, properties map[string]interface{}) {
 	if enableMetrics && PublicKey != "" {
+		// Enable GeoIP resolution by setting DisableGeoIP to false (pointer to bool)
+		disableGeoIP := false
 		client, err := posthog.NewWithConfig(
 			PublicKey,
 			posthog.Config{
-				Endpoint: "https://us.i.posthog.com",
+				Endpoint:     "https://us.i.posthog.com",
+				DisableGeoIP: &disableGeoIP, // Enable GeoIP resolution for location analytics
 			},
 		)
 		if err != nil {
@@ -93,12 +107,25 @@ func ReportEventWithProperties(event string, properties map[string]interface{}) 
 			Event:      event,
 		}
 
+		// Create properties with automatic platform metadata
+		captureProperties := posthog.NewProperties()
+
+		// Add runtime metadata automatically
+		captureProperties.Set("os", runtime.GOOS)
+		captureProperties.Set("arch", runtime.GOARCH)
+		captureProperties.Set("go_version", runtime.Version())
+		if appVersion != "" {
+			captureProperties.Set("pathfinder_version", appVersion)
+		}
+
+		// Merge user-provided properties
 		if properties != nil {
-			capture.Properties = posthog.NewProperties()
 			for k, v := range properties {
-				capture.Properties.Set(k, v)
+				captureProperties.Set(k, v)
 			}
 		}
+
+		capture.Properties = captureProperties
 
 		err = client.Enqueue(capture)
 		if err != nil {

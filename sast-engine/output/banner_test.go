@@ -23,13 +23,18 @@ func TestPrintBanner_FullBanner(t *testing.T) {
 		t.Errorf("Expected ASCII art for 'Pathfinder', got: %s", output)
 	}
 
+	// Verify tagline is present
+	if !strings.Contains(output, "AI-Native Static Code Analysis") {
+		t.Errorf("Expected tagline, got: %s", output)
+	}
+
 	// Verify version is present
-	if !strings.Contains(output, "Code Pathfinder v0.0.25") {
+	if !strings.Contains(output, "Version: 0.0.25") {
 		t.Errorf("Expected version string, got: %s", output)
 	}
 
 	// Verify license is present
-	if !strings.Contains(output, "AGPL-3.0 License") {
+	if !strings.Contains(output, "License: AGPL-3.0") {
 		t.Errorf("Expected license string, got: %s", output)
 	}
 
@@ -54,6 +59,10 @@ func TestPrintBanner_NoBanner(t *testing.T) {
 	// Should show compact version without ASCII art
 	if !strings.Contains(output, "Code Pathfinder v0.0.25") {
 		t.Errorf("Expected version string, got: %s", output)
+	}
+
+	if !strings.Contains(output, "AI-Native Static Code Analysis") {
+		t.Errorf("Expected tagline, got: %s", output)
 	}
 
 	if !strings.Contains(output, "AGPL-3.0") {
@@ -158,17 +167,17 @@ func TestGetCompactBanner(t *testing.T) {
 		{
 			"normal version",
 			"0.0.25",
-			"Code Pathfinder v0.0.25 | AGPL-3.0 | https://codepathfinder.dev",
+			"Code Pathfinder v0.0.25 | AI-Native Static Code Analysis | https://codepathfinder.dev",
 		},
 		{
 			"empty version",
 			"",
-			"Code Pathfinder v | AGPL-3.0 | https://codepathfinder.dev",
+			"Code Pathfinder v | AI-Native Static Code Analysis | https://codepathfinder.dev",
 		},
 		{
 			"dev version",
 			"dev",
-			"Code Pathfinder vdev | AGPL-3.0 | https://codepathfinder.dev",
+			"Code Pathfinder vdev | AI-Native Static Code Analysis | https://codepathfinder.dev",
 		},
 	}
 

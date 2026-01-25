@@ -34,10 +34,15 @@ func PrintBanner(w io.Writer, version string, opts BannerOptions) {
 		if opts.ShowVersion {
 			fmt.Fprintf(w, "Code Pathfinder v%s\n", version)
 		}
+		if opts.ShowVersion || opts.ShowLicense {
+			fmt.Fprintln(w, "AI-Native Static Code Analysis | Graph-First Engine | Privacy-First")
+		}
 		if opts.ShowLicense {
 			fmt.Fprintf(w, "AGPL-3.0 License | https://codepathfinder.dev\n")
 		}
-		fmt.Fprintln(w)
+		if opts.ShowVersion || opts.ShowLicense {
+			fmt.Fprintln(w)
+		}
 		return
 	}
 
@@ -45,14 +50,20 @@ func PrintBanner(w io.Writer, version string, opts BannerOptions) {
 	asciiArt := GetASCIILogo()
 	fmt.Fprintln(w, asciiArt)
 
+	// Tagline
+	fmt.Fprintln(w, "AI-Native Static Code Analysis | Graph-First Engine | Privacy-First")
+	fmt.Fprintln(w)
+
 	// Version and license info
 	if opts.ShowVersion {
-		fmt.Fprintf(w, "Code Pathfinder v%s\n", version)
+		fmt.Fprintf(w, "Version: %s | ", version)
 	}
 
 	if opts.ShowLicense {
-		fmt.Fprintln(w, "AGPL-3.0 License | https://codepathfinder.dev")
+		fmt.Fprint(w, "License: AGPL-3.0 | ")
 	}
+
+	fmt.Fprintln(w, "https://codepathfinder.dev")
 
 	// Empty line separator
 	fmt.Fprintln(w)
@@ -67,7 +78,7 @@ func GetASCIILogo() string {
 
 // GetCompactBanner returns a single-line banner for non-TTY output.
 func GetCompactBanner(version string) string {
-	return fmt.Sprintf("Code Pathfinder v%s | AGPL-3.0 | https://codepathfinder.dev", version)
+	return fmt.Sprintf("Code Pathfinder v%s | AI-Native Static Code Analysis | https://codepathfinder.dev", version)
 }
 
 // ShouldShowBanner determines if banner should be displayed.
