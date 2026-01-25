@@ -165,6 +165,11 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 		}
 	}
 
+	// Resolve transitive inheritance for Python classes.
+	// This ensures that classes inheriting from custom enum/interface/dataclass
+	// base classes are properly detected as enums/interfaces/dataclasses.
+	ResolveTransitiveInheritance(codeGraph)
+
 	end := time.Now()
 	elapsed := end.Sub(start)
 	Log("Elapsed time: ", elapsed)

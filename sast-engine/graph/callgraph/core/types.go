@@ -81,6 +81,11 @@ type CallGraph struct {
 	// Key: function FQN
 	// Value: TaintSummary with taint flow information
 	Summaries map[string]*TaintSummary
+
+	// Attribute registry for class attributes and instance variables
+	// Populated during call graph construction (Phase 3: Extract Class Attributes)
+	// Enables symbol search to find class fields and properties
+	Attributes interface{} // *registry.AttributeRegistry (interface{} to avoid import cycle)
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.

@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/model"
@@ -360,12 +359,13 @@ func parseJavaObjectCreation(node *sitter.Node, sourceCode []byte, graph *CodeGr
 		}
 	}
 
+	objLineNumber := node.StartPoint().Row + 1
 	objectNode := &Node{
-		ID:                GenerateMethodID(className, []string{strconv.Itoa(int(node.StartPoint().Row + 1))}, file),
+		ID:                GenerateMethodID(className, []string{}, file, objLineNumber),
 		Type:              "ClassInstanceExpr",
 		Name:              className,
 		SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
-		LineNumber:        node.StartPoint().Row + 1,
+		LineNumber:        objLineNumber,
 		File:              file,
 		isJavaSourceFile:  true,
 		ClassInstanceExpr: &classInstanceExpression,

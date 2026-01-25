@@ -4,18 +4,107 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 )
+
+// LSP Symbol Kind constants (Language Server Protocol specification).
+// Maps Python symbol types to standardized LSP SymbolKind integers.
+// Reference: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
+const (
+	SymbolKindFile        = 1  // File
+	SymbolKindModule      = 2  // Module
+	SymbolKindNamespace   = 3  // Namespace (not used in Python)
+	SymbolKindPackage     = 4  // Package
+	SymbolKindClass       = 5  // Class
+	SymbolKindMethod      = 6  // Method
+	SymbolKindProperty    = 7  // Property
+	SymbolKindField       = 8  // Field
+	SymbolKindConstructor = 9  // Constructor
+	SymbolKindEnum        = 10 // Enum
+	SymbolKindInterface   = 11 // Interface
+	SymbolKindFunction    = 12 // Function
+	SymbolKindVariable    = 13 // Variable
+	SymbolKindConstant    = 14 // Constant
+	SymbolKindString      = 15 // String (not used for symbols)
+	SymbolKindNumber      = 16 // Number (not used for symbols)
+	SymbolKindBoolean     = 17 // Boolean (not used for symbols)
+	SymbolKindArray       = 18 // Array (not used for symbols)
+	SymbolKindObject      = 19 // Object (not used for symbols)
+	SymbolKindKey         = 20 // Key (not used for symbols)
+	SymbolKindNull        = 21 // Null (not used for symbols)
+	SymbolKindEnumMember  = 22 // EnumMember
+	SymbolKindStruct      = 23 // Struct (dataclass)
+	SymbolKindEvent       = 24 // Event (not used in Python)
+	SymbolKindOperator    = 25 // Operator (special methods)
+	SymbolKindTypeParam   = 26 // TypeParameter
+)
+
+// getSymbolKind maps Python symbol types to LSP SymbolKind integers and names.
+// Returns (kind int, kindName string) for the given symbol type.
+func getSymbolKind(symbolType string) (int, string) {
+	switch symbolType {
+	// Function types
+	case "function_definition":
+		return SymbolKindFunction, "Function"
+	case "method":
+		return SymbolKindMethod, "Method"
+	case "constructor":
+		return SymbolKindConstructor, "Constructor"
+	case "property":
+		return SymbolKindProperty, "Property"
+	case "special_method":
+		return SymbolKindOperator, "Operator"
+
+	// Class types
+	case "class_definition":
+		return SymbolKindClass, "Class"
+	case "interface":
+		return SymbolKindInterface, "Interface"
+	case "enum":
+		return SymbolKindEnum, "Enum"
+	case "dataclass":
+		return SymbolKindStruct, "Struct"
+
+	// Variable types
+	case "module_variable":
+		return SymbolKindVariable, "Variable"
+	case "constant":
+		return SymbolKindConstant, "Constant"
+	case "class_field":
+		return SymbolKindField, "Field"
+
+	// Java types (for compatibility)
+	case "method_declaration":
+		return SymbolKindMethod, "Method"
+	case "class_declaration":
+		return SymbolKindClass, "Class"
+	case "variable_declaration":
+		return SymbolKindVariable, "Variable"
+
+	// Unknown/default
+	default:
+		return SymbolKindVariable, "Unknown"
+	}
+}
 
 // getToolDefinitions returns the complete tool schemas.
 func (s *Server) getToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name: "get_index_info",
-			Description: `Get statistics about the indexed Python codebase. Use this FIRST to understand the project scope before making other queries.
+			Description: `Get comprehensive statistics about the indexed Python codebase. Use this FIRST to understand the project scope before making other queries.
 
-Returns: project_path, python_version, indexed_at timestamp, build_time, and stats (functions count, call_edges count, modules count, files count, taint_summaries count).
+Returns:
+- Project info: project_path, python_version, indexed_at, build_time_seconds
+- Overall stats: total_symbols, call_edges, modules, files, taint_summaries, class_fields
+- symbols_by_type: Breakdown by all 12 Python types (function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field)
+- symbols_by_lsp_kind: Breakdown by LSP Symbol Kind (Function, Method, Constructor, Property, Operator, Class, Interface, Enum, Struct, Variable, Constant, Field)
+- top_modules: Top 10 modules by function count
+- health: Index health indicators (average functions per module, etc.)
 
-Use when: Starting analysis, understanding project size, or verifying the index is built correctly.`,
+Use when: Starting analysis, understanding project size and structure, verifying index quality, or exploring symbol distribution.`,
 			InputSchema: InputSchema{
 				Type:       "object",
 				Properties: map[string]Property{},
@@ -23,24 +112,77 @@ Use when: Starting analysis, understanding project size, or verifying the index 
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search for functions, classes, or methods by name. Supports partial matching. Results are paginated.
+			Description: `Search and filter Python symbols by name and/or type across 12 symbol types. Supports partial matching. Results are paginated.
 
-Returns: List of matches with FQN (fully qualified name like 'myapp.auth.login'), file path, line number, type, and metadata (return_type, parameters, decorators, superclass if available). Includes pagination info.
+Symbol Types Available:
+- Functions: function_definition, method, constructor, property, special_method
+- Classes: class_definition, interface (Protocol/ABC), enum, dataclass
+- Variables: module_variable, constant (UPPERCASE), class_field
 
-Use when: Looking for a specific function, exploring what functions exist, or finding where something is defined.
+Returns: For ALL symbols: fqn, file, line, type, symbol_kind (LSP integer), symbol_kind_name (human-readable).
+For functions/methods: return_type, parameters, decorators. For classes: superclass, interfaces. For fields: inferred_type, confidence, assigned_in.
+
+LSP Symbol Kinds: Function(12), Method(6), Constructor(9), Property(7), Operator(25), Class(5), Interface(11), Enum(10), Struct(23), Variable(13), Constant(14), Field(8).
+
+Filtering: At least ONE of name/type/types/module must be provided. Filters can be combined (e.g., name="get" + type="method" + module="core.utils").
+
+Use when: Looking for symbols by name; filtering by type; exploring codebase structure; finding definitions; analyzing symbol types; drilling down into specific modules.
 
 Examples:
-- find_symbol("login") - finds all functions containing 'login'
-- find_symbol("authenticate_user") - finds exact function
-- find_symbol("myapp.auth") - finds all symbols in auth module`,
+- find_symbol(name="login") - finds all symbols named login
+- find_symbol(type="method") - lists all methods
+- find_symbol(types=["interface","enum"]) - lists all interfaces and enums
+- find_symbol(name="get", type="method") - finds methods named "get"
+- find_symbol(name="User", type="class_definition") - finds User class only
+- find_symbol(module="core.settings") - finds all symbols in core.settings module
+- find_symbol(type="constant", module="core.settings.base") - finds constants in specific module
+- find_symbol(module="data_manager", type="method") - finds all methods in data_manager package`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
-					"name":   {Type: "string", Description: "Symbol name to find. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"name":   {Type: "string", Description: "Symbol name to find. Optional. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
+					"type":   {Type: "string", Description: "Filter by single symbol type. Optional. One of: function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field"},
+					"types":  {Type: "array", Description: "Filter by multiple symbol types. Optional. Array of type strings. Alternative to 'type' parameter"},
+					"module": {Type: "string", Description: "Filter by module. Optional. Matches symbols whose FQN starts with the module path (e.g., 'core.settings', 'data_manager.models'). Works with all symbol types"},
 					"limit":  {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
 					"cursor": {Type: "string", Description: "Pagination cursor from previous response"},
 				},
+				Required: []string{},
+			},
+		},
+		{
+			Name: "find_module",
+			Description: `Search for Python modules by name. Returns module information including file path and symbol counts.
+
+Returns: module_fqn, file_path, functions_count (number of functions/methods in the module), and match_type (exact/partial).
+
+Use when: Finding module locations, understanding module structure, or navigating between modules.
+
+Examples:
+- find_module("myapp.auth") - find the auth module
+- find_module("utils") - find all modules named utils
+- find_module("models.user") - find user module in models package`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"name": {Type: "string", Description: "Module name to find. Can be FQN ('myapp.auth') or short name ('auth')"},
+				},
 				Required: []string{"name"},
+			},
+		},
+		{
+			Name: "list_modules",
+			Description: `List all Python modules in the indexed project. Returns comprehensive module information.
+
+Returns: Array of modules with module_fqn, file_path, and functions_count for each. Includes total_modules count.
+
+Use when: Exploring project structure, getting an overview of all modules, or discovering what modules exist.
+
+Examples:
+- list_modules() - get all modules in the project`,
+			InputSchema: InputSchema{
+				Type:       "object",
+				Properties: map[string]Property{},
 			},
 		},
 		{
@@ -135,6 +277,11 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 		return s.toolGetIndexInfo()
 	case "find_symbol":
 		return s.toolFindSymbol(args)
+	case "find_module":
+		moduleName, _ := args["name"].(string)
+		return s.toolFindModule(moduleName)
+	case "list_modules":
+		return s.toolListModules()
 	case "get_callers":
 		return s.toolGetCallers(args)
 	case "get_callees":
@@ -155,30 +302,190 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 // Tool Implementations
 // ============================================================================
 
-// toolGetIndexInfo returns index statistics.
+// toolGetIndexInfo returns comprehensive index statistics including symbol type breakdown.
 func (s *Server) toolGetIndexInfo() (string, bool) {
+	// Count symbols by type and LSP kind.
+	symbolsByType := make(map[string]int)
+	symbolsByLSPKind := make(map[string]int)
+
+	for _, node := range s.callGraph.Functions {
+		symbolsByType[node.Type]++
+
+		// Get LSP kind for this symbol.
+		_, kindName := getSymbolKind(node.Type)
+		symbolsByLSPKind[kindName]++
+	}
+
+	// Count class attributes if available.
+	classFieldsCount := 0
+	if s.callGraph.Attributes != nil {
+		if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
+			for _, classAttrs := range attrRegistry.Classes {
+				classFieldsCount += len(classAttrs.Attributes)
+			}
+		}
+	}
+
+	// Calculate module statistics.
+	moduleStats := make([]map[string]interface{}, 0)
+	totalFunctionsInModules := 0
+
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, moduleFQN+".") {
+				functionsCount++
+			}
+		}
+		totalFunctionsInModules += functionsCount
+
+		moduleStats = append(moduleStats, map[string]interface{}{
+			"module_fqn":      moduleFQN,
+			"file_path":       filePath,
+			"functions_count": functionsCount,
+		})
+	}
+
+	// Build comprehensive result.
 	result := map[string]interface{}{
 		"project_path":       s.projectPath,
 		"python_version":     s.pythonVersion,
 		"indexed_at":         s.indexedAt.Format("2006-01-02T15:04:05Z07:00"),
 		"build_time_seconds": s.buildTime.Seconds(),
-		"stats": map[string]int{
-			"functions":       len(s.callGraph.Functions),
+
+		// Overall statistics.
+		"stats": map[string]interface{}{
+			"total_symbols":   len(s.callGraph.Functions),
 			"call_edges":      len(s.callGraph.Edges),
 			"modules":         len(s.moduleRegistry.Modules),
 			"files":           len(s.moduleRegistry.FileToModule),
 			"taint_summaries": len(s.callGraph.Summaries),
+			"class_fields":    classFieldsCount,
+		},
+
+		// Symbol breakdown by Python type (12 types).
+		"symbols_by_type": symbolsByType,
+
+		// Symbol breakdown by LSP Symbol Kind (human-readable).
+		"symbols_by_lsp_kind": symbolsByLSPKind,
+
+		// Module statistics (top 10 by function count).
+		"top_modules": getTopModules(moduleStats, 10),
+
+		// Index health indicators.
+		"health": map[string]interface{}{
+			"indexed_symbols":          len(s.callGraph.Functions),
+			"symbols_with_call_edges":  len(s.callGraph.Edges),
+			"modules_indexed":          len(s.moduleRegistry.Modules),
+			"average_functions_per_module": float64(totalFunctionsInModules) / float64(maxInt(len(s.moduleRegistry.Modules), 1)),
 		},
 	}
+
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false
 }
 
+// getTopModules returns the top N modules by function count.
+func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string]interface{} {
+	// Sort by functions_count descending.
+	type moduleStat struct {
+		data           map[string]interface{}
+		functionsCount int
+	}
+
+	stats := make([]moduleStat, len(moduleStats))
+	for i, m := range moduleStats {
+		stats[i] = moduleStat{
+			data:           m,
+			functionsCount: m["functions_count"].(int),
+		}
+	}
+
+	// Simple bubble sort for top N (good enough for small N).
+	for i := 0; i < len(stats) && i < limit; i++ {
+		for j := i + 1; j < len(stats); j++ {
+			if stats[j].functionsCount > stats[i].functionsCount {
+				stats[i], stats[j] = stats[j], stats[i]
+			}
+		}
+	}
+
+	// Return top N.
+	result := make([]map[string]interface{}, 0, limit)
+	for i := 0; i < len(stats) && i < limit; i++ {
+		result = append(result, stats[i].data)
+	}
+
+	return result
+}
+
+// max returns the maximum of two integers.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // toolFindSymbol finds symbols by name with pagination support.
+// Searches all 12 Python symbol types: functions, methods, constructors, properties,
+// special methods, classes, interfaces, enums, dataclasses, module variables, constants, and class fields.
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	name, _ := args["name"].(string)
-	if name == "" {
-		return `{"error": "name parameter is required"}`, true
+	singleType, _ := args["type"].(string)
+	moduleFilter, _ := args["module"].(string)
+
+	// Handle types parameter (array).
+	var typeFilter []string
+	if typesParam, ok := args["types"].([]interface{}); ok {
+		for _, t := range typesParam {
+			if typeStr, ok := t.(string); ok {
+				typeFilter = append(typeFilter, typeStr)
+			}
+		}
+	}
+
+	// Validation: at least one filter must be provided.
+	if name == "" && singleType == "" && len(typeFilter) == 0 && moduleFilter == "" {
+		return `{"error": "At least one filter required: provide 'name', 'type', 'types', or 'module' parameter"}`, true
+	}
+
+	// Validate type/types conflict.
+	if singleType != "" && len(typeFilter) > 0 {
+		return `{"error": "Cannot specify both 'type' and 'types' parameters. Use one or the other"}`, true
+	}
+
+	// Convert singleType to typeFilter array for unified processing.
+	if singleType != "" {
+		typeFilter = []string{singleType}
+	}
+
+	// Validate type names.
+	validTypes := map[string]bool{
+		"function_definition": true,
+		"method":              true,
+		"constructor":         true,
+		"property":            true,
+		"special_method":      true,
+		"class_definition":    true,
+		"interface":           true,
+		"enum":                true,
+		"dataclass":           true,
+		"module_variable":     true,
+		"constant":            true,
+		"class_field":         true,
+	}
+
+	for _, t := range typeFilter {
+		if !validTypes[t] {
+			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field"]}`, t), true
+		}
+	}
+
+	// Build type filter map for O(1) lookup.
+	typeFilterMap := make(map[string]bool)
+	for _, t := range typeFilter {
+		typeFilterMap[t] = true
 	}
 
 	// Extract pagination params.
@@ -189,14 +496,36 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	var allMatches []map[string]interface{}
 
+	// Search functions, methods, constructors, properties, special methods, and classes.
 	for fqn, node := range s.callGraph.Functions {
-		shortName := getShortName(fqn)
-		if shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name) {
+		// Apply type filter if specified.
+		if len(typeFilterMap) > 0 && !typeFilterMap[node.Type] {
+			continue
+		}
+
+		// Apply module filter if specified.
+		if !matchesModuleFilter(fqn, moduleFilter) {
+			continue
+		}
+
+		// Apply name filter if specified.
+		nameMatches := name == ""
+		if name != "" {
+			shortName := getShortName(fqn)
+			nameMatches = shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name)
+		}
+
+		if nameMatches {
+			// Get LSP symbol kind.
+			symbolKind, symbolKindName := getSymbolKind(node.Type)
+
 			match := map[string]interface{}{
-				"fqn":  fqn,
-				"file": node.File,
-				"line": node.LineNumber,
-				"type": node.Type,
+				"fqn":              fqn,
+				"file":             node.File,
+				"line":             node.LineNumber,
+				"type":             node.Type,
+				"symbol_kind":      symbolKind,
+				"symbol_kind_name": symbolKindName,
 			}
 
 			// Add optional fields if available.
@@ -215,22 +544,302 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			if node.SuperClass != "" {
 				match["superclass"] = node.SuperClass
 			}
+			if len(node.Interface) > 0 {
+				match["interfaces"] = node.Interface
+			}
 
 			allMatches = append(allMatches, match)
 		}
 	}
 
+	// Search class attributes if AttributeRegistry is available.
+	if s.callGraph.Attributes != nil {
+		// Only search class fields if type filter allows it.
+		searchClassFields := len(typeFilterMap) == 0 || typeFilterMap["class_field"]
+
+		if searchClassFields {
+			if attrRegistry, ok := s.callGraph.Attributes.(*registry.AttributeRegistry); ok {
+				for classFQN, classAttrs := range attrRegistry.Classes {
+					for attrName, attr := range classAttrs.Attributes {
+						attributeFQN := classFQN + "." + attrName
+
+						// Apply module filter if specified.
+						if !matchesModuleFilter(attributeFQN, moduleFilter) {
+							continue
+						}
+
+						// Apply name filter if specified.
+						nameMatches := name == ""
+						if name != "" {
+							nameMatches = attrName == name || strings.Contains(attrName, name) ||
+								strings.HasSuffix(attributeFQN, "."+name) ||
+								strings.Contains(attributeFQN, name)
+						}
+
+						if nameMatches {
+							// Get LSP symbol kind for class_field.
+							symbolKind, symbolKindName := getSymbolKind("class_field")
+							match := map[string]interface{}{
+								"fqn":              attributeFQN,
+								"type":             "class_field",
+								"symbol_kind":      symbolKind,
+								"symbol_kind_name": symbolKindName,
+								"class":            classFQN,
+								"name":             attrName,
+							}
+
+							// Add location if available.
+							if attr.Location != nil {
+								match["file"] = attr.Location.File
+								// Note: SourceLocation uses byte offsets, not line numbers.
+								// Could convert but would require reading file - skip for now.
+							}
+
+							// Add type information if available.
+							if attr.Type != nil && attr.Type.TypeFQN != "" {
+								match["inferred_type"] = attr.Type.TypeFQN
+								match["confidence"] = attr.Confidence
+							}
+
+							// Add assignment location.
+							if attr.AssignedIn != "" {
+								match["assigned_in"] = attr.AssignedIn
+							}
+
+							allMatches = append(allMatches, match)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Search codeGraph.Nodes for class definitions and variables.
+	// These types are stored in the raw AST graph, not in callGraph.Functions.
+	missingTypes := map[string]bool{
+		"class_definition": true,
+		"interface":        true,
+		"enum":             true,
+		"dataclass":        true,
+		"module_variable":  true,
+		"constant":         true,
+	}
+
+	// Only search if we're looking for these types or no type filter specified.
+	searchCodeGraph := len(typeFilterMap) == 0
+	for t := range typeFilterMap {
+		if missingTypes[t] {
+			searchCodeGraph = true
+			break
+		}
+	}
+
+	if searchCodeGraph && s.codeGraph != nil {
+		// Build class context for determining which class constants/fields belong to.
+		// This ensures class-level constants get proper FQNs: module.ClassName.CONSTANT_NAME
+		classContext := buildClassContext(s.codeGraph)
+
+		for _, node := range s.codeGraph.Nodes {
+			// Skip if not one of the missing types.
+			if !missingTypes[node.Type] {
+				continue
+			}
+
+			// Apply type filter if specified.
+			if len(typeFilterMap) > 0 && !typeFilterMap[node.Type] {
+				continue
+			}
+
+			// Build FQN for this node.
+			// Classes: module.ClassName
+			// Module-level variables/constants: module.VARIABLE_NAME
+			// Class-level constants/fields: module.ClassName.CONSTANT_NAME
+			modulePath, ok := s.moduleRegistry.FileToModule[node.File]
+			if !ok {
+				continue
+			}
+
+			// Use helper function to build class-qualified FQN for class-level symbols.
+			fqn := buildNodeFQN(modulePath, node, classContext)
+
+			// Apply module filter if specified.
+			if !matchesModuleFilter(fqn, moduleFilter) {
+				continue
+			}
+
+			// Apply name filter if specified.
+			nameMatches := name == ""
+			if name != "" {
+				shortName := node.Name
+				nameMatches = shortName == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name)
+			}
+
+			if nameMatches {
+				// Get LSP symbol kind.
+				symbolKind, symbolKindName := getSymbolKind(node.Type)
+
+				match := map[string]interface{}{
+					"fqn":              fqn,
+					"file":             node.File,
+					"line":             node.LineNumber,
+					"type":             node.Type,
+					"symbol_kind":      symbolKind,
+					"symbol_kind_name": symbolKindName,
+				}
+
+				// Add optional fields if available.
+				if len(node.Annotation) > 0 {
+					match["decorators"] = node.Annotation
+				}
+				if node.SuperClass != "" {
+					match["superclass"] = node.SuperClass
+				}
+				if len(node.Interface) > 0 {
+					match["interfaces"] = node.Interface
+				}
+				if node.Modifier != "" {
+					match["modifier"] = node.Modifier
+				}
+
+				allMatches = append(allMatches, match)
+			}
+		}
+	}
+
 	if len(allMatches) == 0 {
-		return fmt.Sprintf(`{"error": "Symbol not found: %s", "suggestion": "Try a partial name or check spelling"}`, name), true
+		// Build helpful error message.
+		filters := []string{}
+		if name != "" {
+			filters = append(filters, fmt.Sprintf("name=%s", name))
+		}
+		if len(typeFilter) > 0 {
+			filters = append(filters, fmt.Sprintf("types=%v", typeFilter))
+		}
+		if moduleFilter != "" {
+			filters = append(filters, fmt.Sprintf("module=%s", moduleFilter))
+		}
+		filterStr := strings.Join(filters, ", ")
+		return fmt.Sprintf(`{"error": "No symbols found", "filters": "%s", "suggestion": "Try different filters or partial name matching"}`, filterStr), true
 	}
 
 	// Apply pagination.
 	matches, pageInfo := PaginateSlice(allMatches, pageParams)
 
+	// Build filters_applied info for response.
+	filtersApplied := map[string]interface{}{}
+	if name != "" {
+		filtersApplied["name"] = name
+	}
+	if len(typeFilter) > 0 {
+		if len(typeFilter) == 1 {
+			filtersApplied["type"] = typeFilter[0]
+		} else {
+			filtersApplied["types"] = typeFilter
+		}
+	}
+	if moduleFilter != "" {
+		filtersApplied["module"] = moduleFilter
+	}
+
 	result := map[string]interface{}{
-		"query":      name,
-		"matches":    matches,
-		"pagination": pageInfo,
+		"filters_applied": filtersApplied,
+		"matches":         matches,
+		"pagination":      pageInfo,
+	}
+	bytes, _ := json.MarshalIndent(result, "", "  ")
+	return string(bytes), false
+}
+
+// toolFindModule searches for Python modules by name.
+func (s *Server) toolFindModule(name string) (string, bool) {
+	if name == "" {
+		return `{"error": "name parameter is required"}`, true
+	}
+
+	// Try exact match first.
+	if filePath, ok := s.moduleRegistry.Modules[name]; ok {
+		// Count functions in this module.
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, name+".") {
+				functionsCount++
+			}
+		}
+
+		result := map[string]interface{}{
+			"module_fqn":      name,
+			"file_path":       filePath,
+			"match_type":      "exact",
+			"functions_count": functionsCount,
+		}
+		bytes, _ := json.MarshalIndent(result, "", "  ")
+		return string(bytes), false
+	}
+
+	// Try partial match.
+	var matches []map[string]interface{}
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		if strings.Contains(moduleFQN, name) {
+			// Count functions in this module.
+			functionsCount := 0
+			for fqn := range s.callGraph.Functions {
+				if strings.HasPrefix(fqn, moduleFQN+".") {
+					functionsCount++
+				}
+			}
+
+			matches = append(matches, map[string]interface{}{
+				"module_fqn":      moduleFQN,
+				"file_path":       filePath,
+				"match_type":      "partial",
+				"functions_count": functionsCount,
+			})
+		}
+	}
+
+	if len(matches) == 0 {
+		return fmt.Sprintf(`{"error": "Module not found: %s", "suggestion": "Check module name or try a partial match"}`, name), true
+	}
+
+	if len(matches) == 1 {
+		// Single match.
+		bytes, _ := json.MarshalIndent(matches[0], "", "  ")
+		return string(bytes), false
+	}
+
+	// Multiple matches.
+	result := map[string]interface{}{
+		"query":         name,
+		"matches":       matches,
+		"matches_count": len(matches),
+	}
+	bytes, _ := json.MarshalIndent(result, "", "  ")
+	return string(bytes), false
+}
+
+// toolListModules lists all modules in the project.
+func (s *Server) toolListModules() (string, bool) {
+	modules := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
+
+	for moduleFQN, filePath := range s.moduleRegistry.Modules {
+		// Count functions in this module.
+		functionsCount := 0
+		for fqn := range s.callGraph.Functions {
+			if strings.HasPrefix(fqn, moduleFQN+".") {
+				functionsCount++
+			}
+		}
+
+		modules = append(modules, map[string]interface{}{
+			"module_fqn":      moduleFQN,
+			"file_path":       filePath,
+			"functions_count": functionsCount,
+		})
+	}
+
+	result := map[string]interface{}{
+		"modules":       modules,
+		"total_modules": len(modules),
 	}
 	bytes, _ := json.MarshalIndent(result, "", "  ")
 	return string(bytes), false
@@ -565,4 +1174,117 @@ func getShortName(fqn string) string {
 		return fqn
 	}
 	return parts[len(parts)-1]
+}
+
+// buildClassContext creates a map of file locations to class names.
+// This allows us to determine which class a constant/field belongs to based on its location.
+// Returns a map with keys in format "file:startByte:endByte" → className.
+func buildClassContext(codeGraph *graph.CodeGraph) map[string]string {
+	classCtx := make(map[string]string)
+
+	// Find all class definitions (including enums, interfaces, dataclasses).
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "class_definition" || node.Type == "interface" ||
+			node.Type == "enum" || node.Type == "dataclass" {
+			// For each class, store its byte range.
+			// Class-level constants/fields within this range belong to this class.
+			if node.SourceLocation != nil {
+				// Store class name by file + start/end bytes.
+				key := fmt.Sprintf("%s:%d:%d", node.File, node.SourceLocation.StartByte, node.SourceLocation.EndByte)
+				classCtx[key] = node.Name
+			}
+		}
+	}
+
+	return classCtx
+}
+
+// findContainingClass determines which class a node belongs to based on its byte location.
+// Returns the class name if found, or empty string if the node is at module level.
+func findContainingClass(node *graph.Node, classContext map[string]string) string {
+	if node.SourceLocation == nil {
+		return ""
+	}
+
+	// Find the smallest (most specific) class that contains this node.
+	// This handles nested classes correctly (returns innermost class).
+	var bestMatch string
+	var bestRange uint32 = ^uint32(0) // Max uint32
+
+	for key, className := range classContext {
+		// Parse key format: "/path/to/file.py:startByte:endByte"
+		// Use strings.LastIndex to find the last two colons (for byte ranges).
+		lastColon := strings.LastIndex(key, ":")
+		if lastColon == -1 {
+			continue
+		}
+		secondLastColon := strings.LastIndex(key[:lastColon], ":")
+		if secondLastColon == -1 {
+			continue
+		}
+
+		// Extract components.
+		file := key[:secondLastColon]
+		classStartStr := key[secondLastColon+1 : lastColon]
+		classEndStr := key[lastColon+1:]
+
+		// Parse byte positions.
+		var classStart, classEnd uint32
+		if _, err := fmt.Sscanf(classStartStr, "%d", &classStart); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(classEndStr, "%d", &classEnd); err != nil {
+			continue
+		}
+
+		// Check if node is within this class's byte range.
+		if file == node.File &&
+			node.SourceLocation.StartByte >= classStart &&
+			node.SourceLocation.EndByte <= classEnd {
+			// Calculate class range size.
+			classRange := classEnd - classStart
+
+			// Keep the smallest containing class (most specific).
+			if classRange < bestRange {
+				bestMatch = className
+				bestRange = classRange
+			}
+		}
+	}
+
+	return bestMatch
+}
+
+// matchesModuleFilter checks if an FQN matches the module filter.
+// Returns true if no filter specified, or if FQN starts with the module path.
+func matchesModuleFilter(fqn string, moduleFilter string) bool {
+	if moduleFilter == "" {
+		return true
+	}
+
+	// Exact match: module filter is the entire FQN.
+	if fqn == moduleFilter {
+		return true
+	}
+
+	// Prefix match: FQN starts with "moduleFilter."
+	// This ensures "core.settings" matches "core.settings.base.DEBUG"
+	// but NOT "core.settings_backup.X"
+	return strings.HasPrefix(fqn, moduleFilter+".")
+}
+
+// buildNodeFQN constructs the fully qualified name for a node.
+// For class-level symbols: module.ClassName.symbolName.
+// For module-level symbols: module.symbolName.
+func buildNodeFQN(modulePath string, node *graph.Node, classContext map[string]string) string {
+	// For class-level constants and fields, find the containing class.
+	if node.Scope == "class" {
+		className := findContainingClass(node, classContext)
+		if className != "" {
+			return fmt.Sprintf("%s.%s.%s", modulePath, className, node.Name)
+		}
+	}
+
+	// For module-level or if class not found, use simple FQN.
+	return modulePath + "." + node.Name
 }

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -398,6 +399,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	GenerateTaintSummaries(callGraph, codeGraph, registry)
 	logger.Statistic("Generated taint summaries for %d functions", len(callGraph.Summaries))
 
+	// Store attribute registry for symbol search and type inference
+	callGraph.Attributes = typeEngine.Attributes
+
 	return callGraph, nil
 }
 
@@ -414,9 +418,16 @@ func IndexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 
 // indexFunctions is the internal implementation of IndexFunctions.
 func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.ModuleRegistry) {
+	// First pass: Build class context map (file+line → class name)
+	classContext := buildClassContext(codeGraph)
+
 	for _, node := range codeGraph.Nodes {
-		// Only index function/method definitions
-		if node.Type != "method_declaration" && node.Type != "function_definition" {
+		// Only index function/method definitions (Java and Python types)
+		// Java: method_declaration
+		// Python: function_definition, method, constructor, property, special_method
+		if node.Type != "method_declaration" && node.Type != "function_definition" &&
+			node.Type != "method" && node.Type != "constructor" &&
+			node.Type != "property" && node.Type != "special_method" {
 			continue
 		}
 
@@ -426,10 +437,92 @@ func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 			continue
 		}
 
-		// Build fully qualified name: module.function
-		fqn := modulePath + "." + node.Name
+		// Build fully qualified name with class context if applicable
+		fqn := buildFQN(modulePath, node, classContext)
 		callGraph.Functions[fqn] = node
 	}
+}
+
+// buildClassContext creates a map of file locations to class names.
+// This allows us to determine which class a method belongs to based on its location.
+func buildClassContext(codeGraph *graph.CodeGraph) map[string]string {
+	classCtx := make(map[string]string)
+
+	// Find all class definitions
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "class_definition" || node.Type == "interface" ||
+			node.Type == "enum" || node.Type == "dataclass" {
+			// For each class, we need to know its byte range
+			// Methods/constructors within this range belong to this class
+			if node.SourceLocation != nil {
+				// Store class name by file + start/end bytes
+				key := fmt.Sprintf("%s:%d:%d", node.File, node.SourceLocation.StartByte, node.SourceLocation.EndByte)
+				classCtx[key] = node.Name
+			}
+		}
+	}
+
+	return classCtx
+}
+
+// buildFQN constructs the fully qualified name for a function/method node.
+// For methods: module.ClassName.methodName
+// For functions: module.functionName.
+func buildFQN(modulePath string, node *graph.Node, classContext map[string]string) string {
+	// For methods/constructors/properties, try to find the containing class
+	if node.Type == "method" || node.Type == "constructor" ||
+		node.Type == "property" || node.Type == "special_method" {
+		// Find which class this method belongs to
+		className := findContainingClass(node, classContext)
+		if className != "" {
+			return fmt.Sprintf("%s.%s.%s", modulePath, className, node.Name)
+		}
+	}
+
+	// For top-level functions or if class not found, use simple FQN
+	return modulePath + "." + node.Name
+}
+
+// findContainingClass determines which class a node belongs to based on its location.
+func findContainingClass(node *graph.Node, classContext map[string]string) string {
+	if node.SourceLocation == nil {
+		return ""
+	}
+
+	// Check if this node is within any class's byte range
+	for key, className := range classContext {
+		// Parse key format: "/path/to/file.py:startByte:endByte"
+		// Use strings.LastIndex to find the last two colons (for byte ranges)
+		lastColon := strings.LastIndex(key, ":")
+		if lastColon == -1 {
+			continue
+		}
+		secondLastColon := strings.LastIndex(key[:lastColon], ":")
+		if secondLastColon == -1 {
+			continue
+		}
+
+		// Extract components
+		file := key[:secondLastColon]
+		classStartStr := key[secondLastColon+1 : lastColon]
+		classEndStr := key[lastColon+1:]
+
+		// Parse byte positions
+		classStart, err1 := strconv.ParseUint(classStartStr, 10, 32)
+		classEnd, err2 := strconv.ParseUint(classEndStr, 10, 32)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+
+		// Check if node is within this class's byte range
+		if file == node.File &&
+			node.SourceLocation.StartByte >= uint32(classStart) &&
+			node.SourceLocation.EndByte <= uint32(classEnd) {
+			return className
+		}
+	}
+
+	return ""
 }
 
 // GetFunctionsInFile returns all function definitions in a specific file.
@@ -450,7 +543,9 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 
 	for _, node := range codeGraph.Nodes {
 		if node.File == filePath &&
-			(node.Type == "method_declaration" || node.Type == "function_definition") {
+			(node.Type == "method_declaration" || node.Type == "function_definition" ||
+				node.Type == "method" || node.Type == "constructor" ||
+				node.Type == "property" || node.Type == "special_method") {
 			functions = append(functions, node)
 		}
 	}
