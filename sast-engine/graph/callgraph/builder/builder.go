@@ -808,15 +808,50 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		// Attribute resolution attempted but failed - fall through
 	}
 
-	// Handle self.method() calls - resolve to current module
+	// Phase 2: Handle self.method() calls - resolve to current class method
 	if strings.HasPrefix(target, "self.") {
 		methodName := strings.TrimPrefix(target, "self.")
-		// Resolve to module.method
+
+		// Phase 2: Extract class name from callerFQN for class-qualified lookup
+		// callerFQN format: "module.ClassName.methodName" for methods
+		//                   "module.functionName" for module-level functions
+		parts := strings.Split(callerFQN, ".")
+
+		// If callerFQN has 3+ parts, it's a class method
+		// parts = ["module", "ClassName", "methodName"] or more for nested modules
+		if len(parts) >= 3 {
+			// Extract class name (second-to-last part)
+			// For "module.ClassName.methodName" → className = "ClassName"
+			// For "app.models.User.save" → className = "User"
+			className := parts[len(parts)-2]
+
+			// Build class-qualified FQN: module.ClassName.methodName
+			classQualifiedFQN := currentModule + "." + className + "." + methodName
+
+			// Try class-qualified lookup first
+			if validateFQN(classQualifiedFQN, registry) {
+				return classQualifiedFQN, true, nil
+			}
+
+			// Check if target exists in Functions map (more reliable than validateFQN)
+			if callGraph != nil && callGraph.Functions[classQualifiedFQN] != nil {
+				return classQualifiedFQN, true, nil
+			}
+		}
+
+		// Fall back to module-level method (backward compatibility)
+		// This handles cases where method might be at module level or
+		// when class extraction fails
 		moduleFQN := currentModule + "." + methodName
-		// Validate exists
 		if validateFQN(moduleFQN, registry) {
 			return moduleFQN, true, nil
 		}
+
+		// Check Functions map for module-level
+		if callGraph != nil && callGraph.Functions[moduleFQN] != nil {
+			return moduleFQN, true, nil
+		}
+
 		// Return unresolved but with module prefix
 		return moduleFQN, false, nil
 	}

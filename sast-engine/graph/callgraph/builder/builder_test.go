@@ -327,6 +327,213 @@ def helper():
 	assert.Equal(t, "test.process", containingFQN, "Should return module-level FQN without class")
 }
 
+// TestResolveCallTarget_SelfMethod verifies Phase 2: self.method() resolution
+// with class-qualified FQN extraction from callerFQN.
+func TestResolveCallTarget_SelfMethod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testFile := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(testFile, []byte(`
+class User:
+    def save(self):
+        self.validate()  # Should resolve to User.validate
+        return True
+
+    def validate(self):
+        self.check_email()  # Should resolve to User.check_email
+        pass
+
+    def check_email(self):
+        pass
+`), 0644)
+	require.NoError(t, err)
+
+	// Parse and build call graph
+	codeGraph := graph.Initialize(tmpDir, nil)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	require.NoError(t, err)
+
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
+	require.NoError(t, err)
+
+	// Verify User.save has callees
+	saveFQN := "test.User.save"
+	saveCallees, ok := callGraph.Edges[saveFQN]
+	assert.True(t, ok, "User.save should have edges in call graph")
+	assert.NotEmpty(t, saveCallees, "User.save should call other methods")
+
+	// Verify self.validate() resolved to User.validate
+	validateFQN := "test.User.validate"
+	assert.Contains(t, saveCallees, validateFQN, "User.save should call User.validate")
+
+	// Verify User.validate has callees
+	validateCallees, ok := callGraph.Edges[validateFQN]
+	assert.True(t, ok, "User.validate should have edges")
+	assert.NotEmpty(t, validateCallees, "User.validate should call other methods")
+
+	// Verify self.check_email() resolved to User.check_email
+	checkEmailFQN := "test.User.check_email"
+	assert.Contains(t, validateCallees, checkEmailFQN, "User.validate should call User.check_email")
+}
+
+// TestResolveCallTarget_SelfMethodChain verifies that self.method() calls
+// in a chain of methods all resolve correctly.
+func TestResolveCallTarget_SelfMethodChain(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testFile := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(testFile, []byte(`
+class Processor:
+    def process(self):
+        self.stage1()
+        return True
+
+    def stage1(self):
+        self.stage2()
+
+    def stage2(self):
+        self.stage3()
+
+    def stage3(self):
+        pass
+`), 0644)
+	require.NoError(t, err)
+
+	// Parse and build call graph
+	codeGraph := graph.Initialize(tmpDir, nil)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	require.NoError(t, err)
+
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
+	require.NoError(t, err)
+
+	// Verify the call chain: process → stage1 → stage2 → stage3
+	processFQN := "test.Processor.process"
+	stage1FQN := "test.Processor.stage1"
+	stage2FQN := "test.Processor.stage2"
+	stage3FQN := "test.Processor.stage3"
+
+	// Check process calls stage1
+	processCallees := callGraph.Edges[processFQN]
+	assert.Contains(t, processCallees, stage1FQN, "process should call stage1")
+
+	// Check stage1 calls stage2
+	stage1Callees := callGraph.Edges[stage1FQN]
+	assert.Contains(t, stage1Callees, stage2FQN, "stage1 should call stage2")
+
+	// Check stage2 calls stage3
+	stage2Callees := callGraph.Edges[stage2FQN]
+	assert.Contains(t, stage2Callees, stage3FQN, "stage2 should call stage3")
+
+	// Verify reverse edges (callers)
+	stage1Callers := callGraph.ReverseEdges[stage1FQN]
+	assert.Contains(t, stage1Callers, processFQN, "stage1 should be called by process")
+
+	stage2Callers := callGraph.ReverseEdges[stage2FQN]
+	assert.Contains(t, stage2Callers, stage1FQN, "stage2 should be called by stage1")
+
+	stage3Callers := callGraph.ReverseEdges[stage3FQN]
+	assert.Contains(t, stage3Callers, stage2FQN, "stage3 should be called by stage2")
+}
+
+// TestResolveCallTarget_ModuleFunctionBackwardCompat ensures module-level
+// functions still work correctly (backward compatibility for Phase 2).
+func TestResolveCallTarget_ModuleFunctionBackwardCompat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testFile := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(testFile, []byte(`
+def process():
+    validate()
+    helper()
+    return True
+
+def validate():
+    helper()
+
+def helper():
+    pass
+`), 0644)
+	require.NoError(t, err)
+
+	// Parse and build call graph
+	codeGraph := graph.Initialize(tmpDir, nil)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	require.NoError(t, err)
+
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
+	require.NoError(t, err)
+
+	// Verify module-level function calls still work
+	processFQN := "test.process"
+	validateFQN := "test.validate"
+	helperFQN := "test.helper"
+
+	// Check process calls validate and helper
+	processCallees := callGraph.Edges[processFQN]
+	assert.Contains(t, processCallees, validateFQN, "process should call validate")
+	assert.Contains(t, processCallees, helperFQN, "process should call helper")
+
+	// Check validate calls helper
+	validateCallees := callGraph.Edges[validateFQN]
+	assert.Contains(t, validateCallees, helperFQN, "validate should call helper")
+
+	// Verify reverse edges
+	helperCallers := callGraph.ReverseEdges[helperFQN]
+	assert.Contains(t, helperCallers, processFQN, "helper should be called by process")
+	assert.Contains(t, helperCallers, validateFQN, "helper should be called by validate")
+}
+
+// TestResolveCallTarget_MultipleClasses verifies self.method() resolution
+// works correctly when multiple classes are in the same file.
+func TestResolveCallTarget_MultipleClasses(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testFile := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(testFile, []byte(`
+class User:
+    def save(self):
+        self.validate()
+
+    def validate(self):
+        pass
+
+class Product:
+    def save(self):
+        self.validate()
+
+    def validate(self):
+        pass
+`), 0644)
+	require.NoError(t, err)
+
+	// Parse and build call graph
+	codeGraph := graph.Initialize(tmpDir, nil)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	require.NoError(t, err)
+
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
+	require.NoError(t, err)
+
+	// Verify User.save calls User.validate (not Product.validate)
+	userSaveFQN := "test.User.save"
+	userValidateFQN := "test.User.validate"
+	userSaveCallees := callGraph.Edges[userSaveFQN]
+	assert.Contains(t, userSaveCallees, userValidateFQN, "User.save should call User.validate")
+
+	// Verify Product.save calls Product.validate (not User.validate)
+	productSaveFQN := "test.Product.save"
+	productValidateFQN := "test.Product.validate"
+	productSaveCallees := callGraph.Edges[productSaveFQN]
+	assert.Contains(t, productSaveCallees, productValidateFQN, "Product.save should call Product.validate")
+
+	// Verify User.validate is not called by Product.save
+	assert.NotContains(t, productSaveCallees, userValidateFQN, "Product.save should not call User.validate")
+
+	// Verify Product.validate is not called by User.save
+	assert.NotContains(t, userSaveCallees, productValidateFQN, "User.save should not call Product.validate")
+}
+
 func TestValidateFQN(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 
