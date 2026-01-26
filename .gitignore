@@ -2,6 +2,7 @@ example-java-project/
 sourcecode-parser/pathfinder
 .idea/
 .gradle/
+.claude/
 build/
 extension/secureflow/dist/
 
@@ -33,12 +34,21 @@ docs/public/rules/*.json
 
 node_modules
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 compiled_rules.json
 
 # test coverage
 *.coverage
 .coverage
 coverage.out
+coverage.html
+coverage_*.out
 htmlcov/
 
 # output files

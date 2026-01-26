@@ -5,6 +5,7 @@ build/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.iml
 
 # OS
@@ -18,3 +19,5 @@ build/
 registries/
 *.test
 coverage.out
+coverage.html
+coverage_*.out
