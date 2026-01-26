@@ -9,17 +9,17 @@
 
 # SecureFlow AI
 
-[SecureFlow AI](https://codepathfinder.dev/secureflow-ai) is your AI security copilot for smarter, safer code, right in your editor. This VS Code extension helps you identify potential security vulnerabilities in your code directly within your development workflow.
+[SecureFlow AI](https://codepathfinder.dev/secureflow-ai) is a VS Code extension that runs AI-powered security analysis on your code. It finds potential vulnerabilities without leaving your editor.
 
 ## Features
 
-- **Profile-Based Scanning**: Automatically detect your project stack and run targeted security analysis
-- **Multi-Provider Support**: Choose from Anthropic Claude, OpenAI, Google Gemini, or OpenRouter for 200+ models
-- **Modern UI**: Beautiful Svelte-based interface with intuitive navigation and real-time updates
-- **Comprehensive Reports**: View detailed vulnerability reports with severity ratings, file locations, and actionable recommendations
-- **Quick Analysis**: Run security analysis on git changes or full workspace scans
+- **Profile-Based Scanning**: Detects your project stack and runs targeted security analysis
+- **Multi-Provider Support**: Works with Anthropic Claude, OpenAI, Google Gemini, or OpenRouter (200+ models)
+- **Svelte UI**: Interface with intuitive navigation and real-time updates
+- **Detailed Reports**: Vulnerability reports include severity ratings, file locations, and recommendations
+- **Quick Analysis**: Run security scans on git changes or full workspace
 - **Scan History**: Track all security scans with auto-incrementing scan numbers and profile linkage
-- **In-Editor Experience**: All analysis happens right in your VS Code editor with no context switching
+- **In-Editor**: All analysis runs in VS Code with no context switching
 
 ## Getting Started
 
@@ -37,9 +37,9 @@ Configure your AI provider in VS Code settings:
 - `secureflow.APIKey`: Your API key for the selected provider
 
 **Supported Providers:**
-- **Anthropic Claude**: Industry-leading security analysis with Claude Sonnet 4.5 (recommended)
-- **OpenAI**: Access GPT-4o, o1, and other OpenAI models
-- **Google Gemini**: Use Gemini 2.5 Pro or Flash models
+- **Anthropic Claude**: Claude Sonnet 4.5 (recommended)
+- **OpenAI**: GPT-4o, o1, and other OpenAI models
+- **Google Gemini**: Gemini 2.5 Pro or Flash models
 - **OpenRouter**: Access 200+ models from multiple providers through a single API
 
 **Getting API Keys:**
@@ -63,7 +63,7 @@ Configure your AI provider in VS Code settings:
 **View Results:**
 - Navigate to the Results tab to see all scan history
 - Click on any scan to view detailed vulnerability findings
-- Review severity levels: Critical 🔴, High 🟠, Medium 🟡, Low 🔵, Info ℹ️
+- Review severity levels: Critical, High, Medium, Low, Info
 
 ## License Notice
 

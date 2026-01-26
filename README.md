@@ -16,41 +16,56 @@
 
 # [Code Pathfinder](https://codepathfinder.dev)
 
-With AI tools generating thousands of lines of code in seconds, the bottleneck has shifted from writing code to reviewing and securing it at scale. Traditional static analysis tools struggle with modern AI-generated codebases that mix languages, frameworks, and infrastructure-as-code in the same repository.
+AI-Native static code analysis for modern security teams.
 
-Code Pathfinder flips this model. Instead of brittle regex or AST pattern matching per language, it indexes your entire codebase as structured, queryable data (AST, CFG, DFG). Write language-agnostic queries that trace data flows across Python, [Dockerfiles](https://codepathfinder.dev/registry), and [docker-compose](https://codepathfinder.dev/blog/announcing-docker-compose-security-rules) in a single rule—critical for CVE detection and vulnerability research when you need to understand how dependencies are used, what privileges they run with, and what attack surface they expose.
+Code Pathfinder is an open-source security scanner that builds a queryable graph of your codebase. It parses code into Abstract Syntax Trees (AST), builds Control Flow Graphs (CFG) to track execution paths, and constructs Data Flow Graphs (DFG) to trace how data moves through your application. Instead of regex pattern matching per language, it indexes the entire codebase as structured data and lets you write queries that trace data flows across Python, [Dockerfiles](https://codepathfinder.dev/registry), and [docker-compose](https://codepathfinder.dev/blog/announcing-docker-compose-security-rules) files in a single rule.
 
-## What it is
+**Use it for:**
+- **CVE detection and vulnerability research**: Understand how dependencies are used, what privileges they run with, and what attack surface they expose
+- **[MCP server](https://codepathfinder.dev/mcp) for AI coding assistants**: Provides code intelligence to Claude, GPT, and other AI assistants - more context than LSP, focused on security and data flow
+- **In-editor security checks**: Catch vulnerable patterns as you write code in VS Code
+- **CI/CD pipelines**: Automated security scanning with SARIF output for GitHub Advanced Security, DefectDojo integration
+- **Custom security rules**: Write project-specific rules in Python to detect patterns that matter to your team
 
-- **[Open-source SAST](https://codepathfinder.dev)** that combines structural analysis (call graphs, dataflow, taint tracking) with AI to [understand real exploit paths](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking), not just regex hits.
-- **AI-powered vulnerability hunting** via [SecureFlow](https://codepathfinder.dev/secureflow-ai), which layers 10+ models (Claude, GPT, Gemini, Grok, Ollama, etc.) on top of deterministic analysis for [context-aware triage](https://codepathfinder.dev/blog/introducing-secureflow-cli-to-hunt-vuln).
-- **Developer-first workflow** with [IDE integration](https://codepathfinder.dev/docs/quickstart), CLI, and CI support so security checks land where code is written and reviewed.
+## What it does
 
-## Why it's different
+- **Structural analysis**: Builds call graphs, dataflow graphs, and taint tracking to [find exploit paths](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking) through your code, not just pattern matches.
+- **AI-powered triage**: [SecureFlow](https://codepathfinder.dev/secureflow-ai) runs LLMs (Claude, GPT, Gemini, Grok, Ollama, etc.) on top of the structural analysis for [context-aware validation](https://codepathfinder.dev/blog/introducing-secureflow-cli-to-hunt-vuln).
+- **IDE and CLI**: Works in [VS Code](https://codepathfinder.dev/docs/quickstart), from the command line, and in CI/CD pipelines.
 
-- **Graph-first engine**: builds a rich representation of [functions, endpoints, DB calls, and dataflows](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking) to cut false positives and surface real source‑to‑sink issues.
-- **LLM as validator, not oracle**: uses models to [explain, prioritize, and validate findings](https://github.blog/ai-and-ml/llms/how-ai-enhances-static-application-security-testing-sast/) after structural analysis, keeping behavior predictable and reproducible.
-- **Privacy‑first, BYOK**: your code stays local; you [bring your own keys](https://codepathfinder.dev/secureflow-ai) and talk directly to providers with no vendor-side code ingestion.
+## How it's different
 
-## Where it fits in your stack
+- **Call graphs and dataflow**: Indexes [functions, endpoints, DB calls, and dataflows](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking) to trace source-to-sink vulnerabilities instead of matching syntax patterns.
+- **LLMs validate, don't detect**: The structural analysis finds potential issues; [LLMs explain and prioritize](https://github.blog/ai-and-ml/llms/how-ai-enhances-static-application-security-testing-sast/) them. This keeps results reproducible.
+- **Your code stays local**: You [bring your own API keys](https://codepathfinder.dev/secureflow-ai) and talk directly to providers. No vendor-side code ingestion.
 
-- **Local & IDE**: SecureFlow VS Code extension ([VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow)) for real‑time security feedback as you type.
-- **CLI & agents**: [SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli) runs agentic loops over your repo (profile, read, trace, validate) to hunt vulnerabilities with the same ergonomics as modern AI coding tools.
-- **Pipelines & reporting**: integrates into CI/CD and exports to formats and systems like SARIF, [GitHub Advanced Security](https://github.com/shivasurya/code-pathfinder), and DefectDojo so findings flow into existing governance.
+## Where to use it
 
-## Project components
+- **AI coding assistants**: Run as an [MCP server](https://codepathfinder.dev/mcp) to give Claude Code, Cline, or other AI assistants deep code intelligence (call graphs, data flows, security patterns) beyond what LSP provides
+- **In-editor**: SecureFlow VS Code extension ([VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow)) runs security checks as you type and catches vulnerable patterns before commit
+- **Command line**: [SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli) runs agentic loops over your repo to profile, read, trace, and validate vulnerabilities
+- **CI/CD pipelines**: Exports to SARIF for [GitHub Advanced Security](https://github.com/shivasurya/code-pathfinder), integrates with DefectDojo, and supports custom rules for automated security gates
 
-- **[Code Pathfinder CLI](https://codepathfinder.dev/blog/codeql-oss-alternative)** – structural security scanner and query engine for code graphs, better than grep/AST‑only search for paths and patterns.
-- **[SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli)** – AI‑powered vulnerability hunter that uses agent loops and 10+ models for deep, context‑aware scans across real projects.
-- **SecureFlow VS Code extension** ([VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow)) – in‑editor experience for running scans, reviewing traces, and getting AI‑validated security insights without leaving your workspace.
-- **[Custom Rules](https://codepathfinder.dev/docs/rules)** – write your own security rules using the PathFinder query language to detect project-specific vulnerabilities and patterns.
+## Tools and workflows
+
+**[Code Pathfinder CLI](https://codepathfinder.dev/blog/codeql-oss-alternative)**
+The core scanner and query engine. Run it three ways: `scan` mode for security analysis with custom rules, `serve` mode as an [MCP server](https://codepathfinder.dev/mcp) for AI coding assistants (Claude Code, Cline), or `ci` mode in GitHub Actions and CI/CD pipelines. Indexes your codebase into call graphs and data flows, then runs Python-based security rules to find source-to-sink vulnerabilities.
+
+**[SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli)**
+AI-powered vulnerability scanner that runs multi-turn analysis loops. First profiles your project to detect the stack (Django, Flask, FastAPI, etc.), then iteratively requests relevant files, traces data flows, and uses LLMs (Claude, GPT, Gemini, Grok, Ollama) to identify and explain security issues. Exports findings to JSON, SARIF, or DefectDojo format.
+
+**SecureFlow VS Code extension** ([Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow))
+In-editor security analysis. Right-click to scan files or profiles, review findings in a sidebar with severity levels, file locations, and fix recommendations. Uses the same AI models as SecureFlow CLI. Catches SQL injection, XSS, deserialization bugs, and other OWASP Top 10 issues as you code.
+
+**[Custom Rules](https://codepathfinder.dev/docs/rules)**
+Write security rules in Python using the PathFinder SDK. Query the code graph with `find_symbol()`, trace calls with `get_callees()` and `get_callers()`, check for vulnerable patterns. Rules run during `scan` or `ci` commands. See [rule registry](https://codepathfinder.dev/registry) for 50+ examples (SQL injection, RCE, privilege escalation, container misconfigurations).
 
 ## Supported Languages
 
-- **[Python](https://codepathfinder.dev/registry/python)** – Full support for security analysis and vulnerability detection
-- **[Docker](https://codepathfinder.dev/registry/docker)** – Dockerfile security scanning
-- **[Docker Compose](https://codepathfinder.dev/registry/docker-compose)** – Configuration analysis and security checks
-- **Go** – Coming soon
+- **[Python](https://codepathfinder.dev/registry/python)**: Full support for security analysis and vulnerability detection
+- **[Docker](https://codepathfinder.dev/registry/docker)**: Dockerfile security scanning
+- **[Docker Compose](https://codepathfinder.dev/registry/docker-compose)**: Configuration analysis and security checks
+- **Go**: Coming soon
 
 ## Installation
 
@@ -64,7 +79,7 @@ brew install shivasurya/tap/pathfinder
 
 ### pip
 
-Install via pip to get **both** the CLI binary and Python DSL for writing security rules.
+Install via pip to get both the CLI binary and Python SDK for writing security rules.
 
 ```bash
 pip install codepathfinder
@@ -76,8 +91,8 @@ pip install codepathfinder
 # Test CLI binary
 pathfinder --version
 
-# Test Python DSL
-python -c "from codepathfinder import rule, calls; print('DSL OK')"
+# Test Python SDK
+python -c "from codepathfinder import rule, calls; print('SDK OK')"
 ```
 
 **Supported platforms:** Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), Windows (x64)
@@ -150,9 +165,9 @@ pathfinder scan --rules rules/ --project . --fail-on=critical,high
 
 ## GitHub Action
 
-Add security scanning to your CI/CD pipeline in just a few lines.
+Add security scanning to your CI/CD pipeline.
 
-**Best Practice:** Pin to a specific version (e.g., `@v1.2.0`) for stability and reproducibility. Using `@main` will always pull the latest changes, which may introduce breaking changes.
+**Best Practice:** Pin to a specific version (e.g., `@v1.2.0`) instead of `@main` to avoid breaking changes.
 
 ```yaml
 # .github/workflows/security-scan.yml
