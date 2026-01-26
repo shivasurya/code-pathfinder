@@ -1,12 +1,12 @@
-# Code-Pathfinder Python DSL
+# Code Pathfinder Python SDK
 
-Python DSL for defining security patterns in Code Pathfinder - an open-source security suite combining structural code analysis with AI-powered vulnerability detection.
+Write security rules in Python for Code Pathfinder, an open-source security scanner that combines structural code analysis with AI-powered vulnerability detection.
 
-**Project Goals:**
-- Real-time IDE integration bringing security insights directly into your editor
-- AI-assisted analysis leveraging LLMs to understand context and identify vulnerabilities
-- Unified workflow coverage from local development to CI/CD pipelines
-- Flexible reporting supporting DefectDojo, GitHub Advanced Security, SARIF, and other platforms
+**What you can do:**
+- Write custom security rules using Python instead of regex or YAML
+- Trace data flows from sources (user input) to sinks (SQL, eval, file operations)
+- Run rules in VS Code, CLI, or CI/CD pipelines
+- Export findings to DefectDojo, GitHub Advanced Security, SARIF, JSON, or CSV
 
 **Documentation**: https://codepathfinder.dev/
 
@@ -16,7 +16,7 @@ Python DSL for defining security patterns in Code Pathfinder - an open-source se
 pip install codepathfinder
 ```
 
-This installs **both** the Python DSL and the `pathfinder` CLI binary for your platform.
+This installs both the Python SDK and the `pathfinder` CLI binary for your platform.
 
 ### Verify Installation
 
@@ -24,8 +24,8 @@ This installs **both** the Python DSL and the `pathfinder` CLI binary for your p
 # Test CLI binary
 pathfinder --version
 
-# Test Python DSL
-python -c "from codepathfinder import rule, calls; print('DSL OK')"
+# Test Python SDK
+python -c "from codepathfinder import rule, calls; print('SDK OK')"
 ```
 
 ### Supported Platforms

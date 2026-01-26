@@ -8,20 +8,20 @@
 
 # SecureFlow CLI
 
-🛡️ **AI-Powered Security Analysis for Your Codebase**
+AI-powered security analysis for your codebase from the command line.
 
-SecureFlow CLI is a powerful command-line tool that performs comprehensive security analysis of your projects using advanced AI models. It intelligently analyzes your code structure, identifies vulnerabilities, and provides actionable security insights with a beautiful TUI interface.
+SecureFlow CLI runs security analysis on your projects using AI models. It analyzes code structure, identifies vulnerabilities, and provides actionable security insights with a TUI interface.
 
-## ✨ Features
+## Features
 
-- 🤖 **AI-Powered Analysis** - Supports 13+ AI models including Claude, GPT, and Gemini
-- 🔍 **Intelligent File Discovery** - Smart project analysis with iterative file request system
-- 🎯 **Comprehensive Scanning** - Full project security analysis with context-aware insights
-- 📊 **Multiple Output Formats** - Text, JSON, and DefectDojo integration
-- 🏗️ **Project Profiling** - Technology stack detection and application type identification
-- 🎨 **Beautiful TUI** - Claude-style terminal interface with colored output and progress indicators
+- **13+ AI models** - Supports Claude, GPT, Gemini, Grok, and Ollama models
+- **Smart file discovery** - Iterative file request system that reads only what's needed
+- **Full project scanning** - Context-aware security analysis
+- **Multiple output formats** - Text, JSON, and DefectDojo integration
+- **Project profiling** - Detects technology stack and application type
+- **TUI interface** - Claude-style terminal output with colored progress indicators
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Installation
 
@@ -68,11 +68,11 @@ secureflow scan ./my-project --model claude-sonnet-4-5-20250929
 secureflow profile ./my-project
 ```
 
-## 📋 Commands
+## Commands
 
 ### `scan` - Security Analysis
 
-Performs comprehensive AI-powered security analysis of your project.
+Runs AI-powered security analysis on your project.
 
 ```bash
 secureflow scan [path] [options]
@@ -123,7 +123,7 @@ secureflow config --show          # Show masked configuration
 secureflow config --show --raw    # Show raw configuration (use with caution)
 ```
 
-## 🔧 Configuration
+## Configuration
 
 SecureFlow CLI stores configuration in a local config file. The location is shown when running `secureflow config --show`.
 
@@ -146,7 +146,7 @@ SecureFlow CLI stores configuration in a local config file. The location is show
 - **Grok (xAI)**: [console.x.ai](https://console.x.ai)
 - **OpenRouter**: [openrouter.ai](https://openrouter.ai/settings/keys)
 
-## 🎯 Usage Examples
+## Usage Examples
 
 ### Basic Security Scan
 ```bash
@@ -189,9 +189,9 @@ secureflow scan \
   --output weekly-findings.json
 ```
 
-## 🏗️ How It Works
+## How It Works
 
-SecureFlow CLI uses an innovative **LLM File Request System** that works like tool calling:
+SecureFlow CLI uses an LLM file request system that works like tool calling:
 
 1. **Project Discovery** - Analyzes project structure and identifies key files
 2. **Iterative Analysis** - AI makes targeted file requests using XML-like syntax:
@@ -199,28 +199,28 @@ SecureFlow CLI uses an innovative **LLM File Request System** that works like to
    <file_request path="./src/auth.js" reason="Analyze authentication logic" />
    <list_file_request path="./src/components" reason="Explore component structure" />
    ```
-3. **Security Analysis** - Performs up to 3 iterations of analysis with context building
-4. **Report Generation** - Outputs comprehensive security findings with severity levels
+3. **Security Analysis** - Runs up to 3 iterations of analysis with context building
+4. **Report Generation** - Outputs security findings with severity levels
 
 **Security Features:**
-- ✅ Hidden file filtering (ignores `.git`, `.DS_Store`, etc.)
-- ✅ Symlink protection against directory traversal
-- ✅ Project scope validation
-- ✅ File size limits (large files truncated)
-- ✅ Comprehensive request logging
+- Hidden file filtering (ignores `.git`, `.DS_Store`, etc.)
+- Symlink protection against directory traversal
+- Project scope validation
+- File size limits (large files truncated)
+- Request logging
 
-## 🎨 Output Formats
+## Output Formats
 
 ### Text Format (Default)
-Beautiful colored terminal output with:
-- 🔴 Critical vulnerabilities
-- 🟠 High severity issues  
-- 🟡 Medium severity warnings
-- 🔵 Low severity notes
-- ℹ️ Informational findings
+Colored terminal output with severity indicators:
+- Critical vulnerabilities
+- High severity issues
+- Medium severity warnings
+- Low severity notes
+- Informational findings
 
 ### JSON Format
-Structured output perfect for CI/CD integration:
+Structured output for CI/CD integration:
 ```json
 {
   "summary": {
@@ -243,6 +243,6 @@ Direct integration with DefectDojo security platforms:
 
 ---
 
-**Need Help?** 
+**Need Help?**
 - Run `secureflow --help` for command overview
 - Open an issue or discussion on [GitHub](https://github.com/shivasurya/code-pathfinder/issues)
