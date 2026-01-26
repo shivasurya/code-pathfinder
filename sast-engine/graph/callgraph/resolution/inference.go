@@ -132,11 +132,31 @@ func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 				// Build FQN for the function call
 				var funcFQN string
 
-				// Check if funcName already contains dots (e.g., "logging.getLogger", "MySerializer")
+				// Check if funcName contains dots (could be module.function OR receiver.method)
 				if strings.Contains(funcName, ".") {
-					// Already qualified (e.g., imported module.function)
-					// Try as-is first
-					funcFQN = funcName
+					// Split to check if it's an instance method call (receiver.method)
+					// vs. a module function call (module.function)
+					parts := strings.SplitN(funcName, ".", 2)
+					receiver := parts[0]
+					methodName := parts[1]
+
+					// Check if receiver is a variable in current scope (instance method)
+					if receiverBinding, exists := scope.Variables[receiver]; exists {
+						// This is an instance method call: obj.method()
+						if receiverBinding.Type != nil && !strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
+							// Receiver has a concrete type - build class-qualified FQN
+							// Example: receiver="manager" with type="main.UserManager", method="create_user"
+							// Result: "main.UserManager.create_user"
+							funcFQN = receiverBinding.Type.TypeFQN + "." + methodName
+						} else {
+							// Receiver type is unresolved placeholder - skip for now
+							// This variable will be resolved in a future iteration
+							continue
+						}
+					} else {
+						// Not a variable - assume it's a module path (e.g., "logging.getLogger")
+						funcFQN = funcName
+					}
 				} else {
 					// Simple name - need to qualify with current scope
 					lastDotIndex := strings.LastIndex(scope.FunctionFQN, ".")

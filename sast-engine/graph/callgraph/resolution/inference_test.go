@@ -656,3 +656,294 @@ func TestTypeInferenceEngine_UpdateVariableBindings_NilType(t *testing.T) {
 	nullvarBinding := engine.GetScope("myapp.test").Variables["nullvar"]
 	assert.Nil(t, nullvarBinding.Type)
 }
+
+// TestTypeInferenceEngine_UpdateVariableBindings_InstanceMethod tests instance method call resolution.
+// This tests the fix for receiver.method() patterns where receiver is a variable with a concrete type.
+func TestTypeInferenceEngine_UpdateVariableBindings_InstanceMethod(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return type for UserManager.create_user method
+	engine.ReturnTypes["myapp.models.UserManager.create_user"] = &core.TypeInfo{
+		TypeFQN:    "myapp.models.User",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	// Create scope with:
+	// 1. manager variable with concrete type (UserManager)
+	// 2. user variable with placeholder "call:manager.create_user"
+	scope := NewFunctionScope("myapp.controllers.signup")
+
+	// manager = UserManager() - already resolved
+	scope.Variables["manager"] = &VariableBinding{
+		VarName: "manager",
+		Type: &core.TypeInfo{
+			TypeFQN:    "myapp.models.UserManager",
+			Confidence: 0.8,
+			Source:     "class_instantiation",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	// user = manager.create_user() - placeholder
+	scope.Variables["user"] = &VariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:manager.create_user",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify user was resolved
+	userBinding := engine.GetScope("myapp.controllers.signup").Variables["user"]
+	assert.Equal(t, "myapp.models.User", userBinding.Type.TypeFQN)
+	assert.Equal(t, "function_call_propagation", userBinding.Type.Source)
+	assert.Equal(t, "myapp.models.UserManager.create_user", userBinding.AssignedFrom)
+
+	// Verify manager was NOT changed (not a placeholder)
+	managerBinding := engine.GetScope("myapp.controllers.signup").Variables["manager"]
+	assert.Equal(t, "myapp.models.UserManager", managerBinding.Type.TypeFQN)
+	assert.Equal(t, "class_instantiation", managerBinding.Type.Source)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_ChainedInstanceMethods tests chained instance methods.
+// Tests: user = User(); profile = user.get_profile(); name = profile.get_name().
+func TestTypeInferenceEngine_UpdateVariableBindings_ChainedInstanceMethods(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return types
+	engine.ReturnTypes["myapp.models.User.get_profile"] = &core.TypeInfo{
+		TypeFQN:    "myapp.models.Profile",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+	engine.ReturnTypes["myapp.models.Profile.get_name"] = &core.TypeInfo{
+		TypeFQN:    "builtins.str",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	// Create scope with chain
+	scope := NewFunctionScope("myapp.test.test_chain")
+
+	// user = User() - concrete type
+	scope.Variables["user"] = &VariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "myapp.models.User",
+			Confidence: 0.9,
+			Source:     "class_instantiation",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	// profile = user.get_profile() - placeholder
+	scope.Variables["profile"] = &VariableBinding{
+		VarName: "profile",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:user.get_profile",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	// name = profile.get_name() - placeholder (will be resolved in second pass)
+	scope.Variables["name"] = &VariableBinding{
+		VarName: "name",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:profile.get_name",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 15, Column: 5},
+	}
+
+	engine.AddScope(scope)
+
+	// Run update - may need multiple passes depending on iteration order
+	// Go map iteration is randomized, so profile may be resolved before or after name is processed
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify profile was resolved
+	profileBinding := engine.GetScope("myapp.test.test_chain").Variables["profile"]
+	assert.Equal(t, "myapp.models.Profile", profileBinding.Type.TypeFQN)
+	assert.Equal(t, "myapp.models.User.get_profile", profileBinding.AssignedFrom)
+
+	// name may or may not be resolved in first pass (depends on iteration order)
+	// Run second pass to ensure all transitive dependencies are resolved
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// After second pass, name should definitely be resolved
+	nameBinding := engine.GetScope("myapp.test.test_chain").Variables["name"]
+	assert.Equal(t, "builtins.str", nameBinding.Type.TypeFQN)
+	assert.Equal(t, "myapp.models.Profile.get_name", nameBinding.AssignedFrom)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_InstanceMethodVsModuleFunction tests distinguishing
+// between instance.method() and module.function() patterns.
+func TestTypeInferenceEngine_UpdateVariableBindings_InstanceMethodVsModuleFunction(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return types for both patterns
+	engine.ReturnTypes["myapp.models.User.save"] = &core.TypeInfo{
+		TypeFQN:    "builtins.bool",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+	engine.ReturnTypes["logging.getLogger"] = &core.TypeInfo{
+		TypeFQN:    "logging.Logger",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	scope := NewFunctionScope("myapp.test")
+
+	// user variable with concrete type
+	scope.Variables["user"] = &VariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "myapp.models.User",
+			Confidence: 0.9,
+			Source:     "class_instantiation",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	// result = user.save() - instance method (user is a variable)
+	scope.Variables["result"] = &VariableBinding{
+		VarName: "result",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:user.save",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	// logger = logging.getLogger() - module function (logging is NOT a variable)
+	scope.Variables["logger"] = &VariableBinding{
+		VarName: "logger",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:logging.getLogger",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 15, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify result resolved via instance method path
+	resultBinding := engine.GetScope("myapp.test").Variables["result"]
+	assert.Equal(t, "builtins.bool", resultBinding.Type.TypeFQN)
+	assert.Equal(t, "myapp.models.User.save", resultBinding.AssignedFrom)
+
+	// Verify logger resolved via module function path
+	loggerBinding := engine.GetScope("myapp.test").Variables["logger"]
+	assert.Equal(t, "logging.Logger", loggerBinding.Type.TypeFQN)
+	assert.Equal(t, "logging.getLogger", loggerBinding.AssignedFrom)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_UnresolvedReceiverType tests when receiver type is unresolved.
+// When receiver has placeholder type, the call should be skipped (not resolved).
+func TestTypeInferenceEngine_UpdateVariableBindings_UnresolvedReceiverType(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return type for method
+	engine.ReturnTypes["myapp.models.User.get_profile"] = &core.TypeInfo{
+		TypeFQN:    "myapp.models.Profile",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	scope := NewFunctionScope("myapp.test")
+
+	// user variable with UNRESOLVED type (still a placeholder)
+	scope.Variables["user"] = &VariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:get_user",  // Still a placeholder!
+			Confidence: 0.5,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	// profile = user.get_profile() - placeholder depending on unresolved receiver
+	scope.Variables["profile"] = &VariableBinding{
+		VarName: "profile",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:user.get_profile",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify profile was NOT resolved (receiver type is unresolved)
+	profileBinding := engine.GetScope("myapp.test").Variables["profile"]
+	assert.Equal(t, "call:user.get_profile", profileBinding.Type.TypeFQN)
+	assert.Equal(t, "assignment", profileBinding.Type.Source)
+}
+
+// TestTypeInferenceEngine_UpdateVariableBindings_NestedMethod tests deeply nested method calls.
+// Tests: a.b.c.method() pattern (multiple dots).
+func TestTypeInferenceEngine_UpdateVariableBindings_NestedMethod(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up return type - note: we use SplitN(funcName, ".", 2)
+	// So "a.b.c.method" becomes receiver="a", method="b.c.method"
+	// This will look up a's type and append ".b.c.method"
+	engine.ReturnTypes["myapp.models.Container.b.c.method"] = &core.TypeInfo{
+		TypeFQN:    "builtins.str",
+		Confidence: 1.0,
+		Source:     "return_literal",
+	}
+
+	scope := NewFunctionScope("myapp.test")
+
+	// a variable with concrete type
+	scope.Variables["a"] = &VariableBinding{
+		VarName: "a",
+		Type: &core.TypeInfo{
+			TypeFQN:    "myapp.models.Container",
+			Confidence: 0.9,
+			Source:     "class_instantiation",
+		},
+		Location: Location{File: "/test/file.py", Line: 5, Column: 5},
+	}
+
+	// result = a.b.c.method() - nested attribute access
+	scope.Variables["result"] = &VariableBinding{
+		VarName: "result",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:a.b.c.method",
+			Confidence: 0.8,
+			Source:     "assignment",
+		},
+		Location: Location{File: "/test/file.py", Line: 10, Column: 5},
+	}
+
+	engine.AddScope(scope)
+	engine.UpdateVariableBindingsWithFunctionReturns()
+
+	// Verify result was resolved
+	resultBinding := engine.GetScope("myapp.test").Variables["result"]
+	assert.Equal(t, "builtins.str", resultBinding.Type.TypeFQN)
+	assert.Equal(t, "myapp.models.Container.b.c.method", resultBinding.AssignedFrom)
+}

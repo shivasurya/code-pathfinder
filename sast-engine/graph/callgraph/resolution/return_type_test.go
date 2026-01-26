@@ -1,8 +1,11 @@
 package resolution
 
 import (
+	"context"
 	"testing"
 
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/python"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/stretchr/testify/assert"
@@ -297,4 +300,196 @@ def func():
 	assert.Equal(t, "test.py", returns[0].Location.File)
 	assert.Equal(t, uint32(3), returns[0].Location.Line) // Line 3 (1-indexed)
 	assert.Greater(t, returns[0].Location.Column, uint32(0))
+}
+
+func TestExtractReturnTypes_ClassMethods(t *testing.T) {
+	sourceCode := []byte(`
+class UserManager:
+    def create_user(self, name):
+        return User(name)
+
+    def get_admin(self):
+        return "admin"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	require.NoError(t, err)
+	assert.Len(t, returns, 2)
+
+	types := make(map[string]*core.TypeInfo)
+	for _, ret := range returns {
+		types[ret.FunctionFQN] = ret.ReturnType
+	}
+
+	// Methods should have class-qualified FQNs
+	assert.Contains(t, types, "test.UserManager.create_user")
+	assert.Contains(t, types, "test.UserManager.get_admin")
+
+	// Verify return types
+	assert.Equal(t, "test.User", types["test.UserManager.create_user"].TypeFQN)
+	assert.Equal(t, "builtins.str", types["test.UserManager.get_admin"].TypeFQN)
+}
+
+func TestExtractReturnTypes_NestedClasses(t *testing.T) {
+	sourceCode := []byte(`
+class Outer:
+    class Inner:
+        def inner_method(self):
+            return 42
+
+    def outer_method(self):
+        return "outer"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	require.NoError(t, err)
+	assert.Len(t, returns, 2)
+
+	types := make(map[string]*core.TypeInfo)
+	for _, ret := range returns {
+		types[ret.FunctionFQN] = ret.ReturnType
+	}
+
+	// Nested class method should have fully qualified FQN
+	assert.Contains(t, types, "test.Outer.Inner.inner_method")
+	assert.Equal(t, "builtins.int", types["test.Outer.Inner.inner_method"].TypeFQN)
+
+	// Outer class method
+	assert.Contains(t, types, "test.Outer.outer_method")
+	assert.Equal(t, "builtins.str", types["test.Outer.outer_method"].TypeFQN)
+}
+
+func TestExtractReturnTypes_ModuleLevelAndClassMethod(t *testing.T) {
+	sourceCode := []byte(`
+def module_func():
+    return "module"
+
+class MyClass:
+    def class_method(self):
+        return "class"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	require.NoError(t, err)
+	assert.Len(t, returns, 2)
+
+	types := make(map[string]*core.TypeInfo)
+	for _, ret := range returns {
+		types[ret.FunctionFQN] = ret.ReturnType
+	}
+
+	// Module-level function should NOT have class prefix
+	assert.Contains(t, types, "test.module_func")
+	assert.Equal(t, "builtins.str", types["test.module_func"].TypeFQN)
+
+	// Class method SHOULD have class prefix
+	assert.Contains(t, types, "test.MyClass.class_method")
+	assert.Equal(t, "builtins.str", types["test.MyClass.class_method"].TypeFQN)
+}
+
+func TestExtractClassNameFromNode(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{
+			name: "simple class",
+			code: `class User:
+    pass`,
+			expected: "User",
+		},
+		{
+			name: "class with inheritance",
+			code: `class Manager(BaseManager):
+    pass`,
+			expected: "Manager",
+		},
+		{
+			name: "class with multiple bases",
+			code: `class Handler(BaseHandler, Mixin):
+    pass`,
+			expected: "Handler",
+		},
+	}
+
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceCode := []byte(tt.code)
+			tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+			require.NoError(t, err)
+			defer tree.Close()
+
+			// Find the class_definition node
+			var classNode *sitter.Node
+			var findClass func(*sitter.Node)
+			findClass = func(node *sitter.Node) {
+				if node == nil {
+					return
+				}
+				if node.Type() == "class_definition" {
+					classNode = node
+					return
+				}
+				for i := 0; i < int(node.ChildCount()); i++ {
+					findClass(node.Child(i))
+				}
+			}
+			findClass(tree.RootNode())
+
+			require.NotNil(t, classNode, "Should find class_definition node")
+
+			// Test the extractClassNameFromNode function
+			className := extractClassNameFromNode(classNode, sourceCode)
+			assert.Equal(t, tt.expected, className)
+		})
+	}
+}
+
+func TestExtractReturnTypes_EmptyClass(t *testing.T) {
+	sourceCode := []byte(`
+class EmptyClass:
+    pass
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	require.NoError(t, err)
+	assert.Empty(t, returns, "Empty class with no methods should not generate return types")
+}
+
+func TestExtractReturnTypes_ClassWithMultipleMethods(t *testing.T) {
+	sourceCode := []byte(`
+class Calculator:
+    def add(self, a, b):
+        return 42
+
+    def multiply(self, a, b):
+        return "result"
+
+    def get_result(self):
+        return [1, 2, 3]
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	require.NoError(t, err)
+	assert.Len(t, returns, 3)
+
+	// All methods should have class-qualified FQNs
+	fqns := make([]string, 0, len(returns))
+	for _, ret := range returns {
+		fqns = append(fqns, ret.FunctionFQN)
+	}
+
+	assert.Contains(t, fqns, "test.Calculator.add")
+	assert.Contains(t, fqns, "test.Calculator.multiply")
+	assert.Contains(t, fqns, "test.Calculator.get_result")
 }

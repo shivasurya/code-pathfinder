@@ -27,60 +27,72 @@ golangci-lint run
 
 ### Running the Binary
 ```bash
-# Interactive query mode
-./build/go/pathfinder query --project <path> --stdin
+# MCP server mode (for AI coding assistants)
+./build/go/pathfinder serve --project <path>
+./build/go/pathfinder serve --http --address :8080 --project <path>
 
-# CI mode (loads rules from remote/local)
-./build/go/pathfinder ci --project <path> --ruleset cpf/java --output sarif
-
-# Scan mode
+# Scan mode (using Python DSL rules)
 ./build/go/pathfinder scan --project <path> --ruleset <path_to_rules>
 
-# With pagination
-./build/go/pathfinder query --project <path> --page 1 --size 10
+# CI mode (loads rules from remote/local, outputs SARIF/JSON/CSV)
+./build/go/pathfinder ci --project <path> --ruleset cpf/java --output sarif
+
+# Resolution diagnostics
+./build/go/pathfinder resolution-report --project <path>
+
+# Taint analysis diagnostics
+./build/go/pathfinder diagnose --project <path>
 ```
 
 ### Running a Single Test
 ```bash
-go test -v -run TestPaginationSorting ./cmd/
+go test -v -run TestBuildCallGraph ./graph/callgraph/builder/
+go test -v -run TestTypeInference ./graph/callgraph/resolution/
 ```
 
 ## High-Level Architecture
 
-Code Pathfinder is a multi-stage security analysis pipeline:
+Code Pathfinder is a multi-stage analysis pipeline:
 
 ```
-Source Files (.java, .py)
+Source Files (.py, .java, Dockerfile, docker-compose.yml)
     ↓
-Tree-Sitter AST Parsing (5 parallel workers)
+Tree-Sitter AST Parsing (parallel workers)
     ↓
-Code Graph (Nodes + Edges)
+Code Graph (Functions, Classes, Call Edges)
     ↓
-Query Language (ANTLR parser)
+Type Inference Engine (bidirectional, return types, variable assignments)
     ↓
-Query Engine (expr-lang evaluation)
+Call Graph Builder (5-pass algorithm)
     ↓
-Output Formats (JSON, SARIF, Table)
+MCP Server / Python DSL Rules
+    ↓
+Output Formats (JSON, SARIF, CSV, Text)
 ```
 
 ### Core Packages
 
 **sast-engine/graph/** - Code graph construction and management
-- `initialize.go`: Multi-threaded file parsing with 5 workers
+- `initialize.go`: Multi-threaded file parsing with parallel workers
 - `parser.go`: AST traversal orchestrator (language-agnostic entry point)
 - `parser_java.go`: Java-specific node parsing
 - `parser_python.go`: Python-specific node parsing
-- `query.go`: Query execution engine with Cartesian product optimization
 - `utils.go`: SHA256-based ID generation, file operations
 
-**sast-engine/antlr/** - Query language parsing
-- `Query.g4`: ANTLR grammar for PathFinder query language
-- `listener_impl.go`: Semantic analysis of parsed queries
+**sast-engine/graph/callgraph/** - Call graph and type inference
+- `builder/builder.go`: 5-pass call graph construction algorithm
+- `resolution/inference.go`: Type inference engine with bidirectional inference
+- `resolution/return_type.go`: Return type extraction from AST
+- `extraction/variables.go`: Variable assignment type tracking
+- `registry/attribute.go`: Class attribute registry
+- `registry/builtin.go`: Python builtin types registry
 
 **sast-engine/cmd/** - CLI interface
-- `query.go`: Interactive/batch query execution with pagination
-- `ci.go`: CI/CD integration with rule loading from codepathfinder.dev
+- `serve.go`: MCP server for AI coding assistants
 - `scan.go`: Scan project against local ruleset
+- `ci.go`: CI/CD integration with rule loading from codepathfinder.dev
+- `resolution_report.go`: Call resolution diagnostics
+- `diagnose.go`: Taint analysis diagnostics
 
 **sast-engine/model/** - AST data models
 - `stmt.go`: Statement models (if/while/for/blocks)
@@ -222,72 +234,54 @@ This project **requires CGO** due to `go-tree-sitter` C bindings. Build fails wi
 - Variable assignments (no type information)
 - Simplified compared to Java (no invocation linking yet)
 
-## Query Language
+## Python DSL Rules (v1.0.0+)
 
-### Syntax
-```
-FROM <entity_type> AS <alias> [, <entity_type> AS <alias>]
-[WHERE <expression>]
-SELECT <output_fields>
-```
+Code Pathfinder uses **Python DSL** for writing security rules. Rules are Python functions that query the call graph using the MCP interface.
 
-### Entity Types
-- `method_declaration` - Java methods, Python functions
-- `class_declaration` - Java/Python classes
-- `variable_declaration` - Java fields, Python variables
-- `method_invocation` - Java method calls
-- `*_expression` - Binary operations (add_expression, eq_expression, etc.)
-- `*_statement` - Control flow (if_statement, while_statement, etc.)
+### Example Rule
+```python
+from pathfinder import Rule, Severity
 
-### Entity Environment Methods
+@Rule(
+    id="CUSTOM-001",
+    name="Detect SQL Injection Risk",
+    severity=Severity.HIGH,
+    description="Methods that process payments should not directly execute SQL queries"
+)
+def detect_sql_injection(graph):
+    """Find payment methods calling SQL execution."""
+    payment_methods = graph.find_symbol(name="processPayment", type="method")
 
-Each entity type exposes specific methods in WHERE/SELECT clauses:
-
-**method_declaration**:
-- `getName()`, `getVisibility()`, `getReturnType()`
-- `getArgumentTypes()`, `getArgumentName()`
-- `getDoc()`, `getAnnotation()`, `hasAccess()`
-
-**class_declaration**:
-- `getName()`, `getSuperClass()`, `getInterface()`
-- `getVisibility()`, `getDoc()`
-
-**variable_declaration**:
-- `getName()`, `getVisibility()`
-- `getVariableDataType()`, `getVariableValue()`
-
-**method_invocation**:
-- `getName()`, `getAccessFromClass()`, `getAccessFromMethod()`
-
-### Query Execution Flow
-```
-Query String
-    ↓
-ANTLR Parse → Query AST
-    ↓
-Generate Cartesian Product of Entity Types
-    ↓
-Build Environment Map (pooled)
-    ↓
-Compile Expression (expr-lang)
-    ↓
-Filter Entities (evaluate each combination)
-    ↓
-Sort Results (File → LineNumber → ID)
-    ↓
-Apply Pagination (if --page/--size specified)
-    ↓
-Format Output (json/table/sarif)
+    for method in payment_methods:
+        callees = graph.get_callees(function=method.fqn)
+        for callee in callees:
+            if "executeQuery" in callee.target_fqn or "execute" in callee.target_fqn:
+                yield {
+                    "file": method.file,
+                    "line": callee.call_line,
+                    "message": f"SQL execution in payment method: {method.fqn}"
+                }
 ```
 
-### Example Query
-```
-FROM method_declaration AS md, method_invocation AS mi
-WHERE md.getName() == "processPayment" && mi.getName() == "executeQuery"
-SELECT md, mi, "SQL injection risk in payment processing"
-```
+### Available MCP Tools in Rules
+- `find_symbol(name, type)` - Find symbols by name and type
+- `get_callees(function)` - Get functions called by a function
+- `get_callers(function)` - Get functions that call a function
+- `get_call_details(caller, callee)` - Get specific call site details
+- `find_module(name)` - Find modules by name
+- `list_modules()` - List all modules
 
-This finds methods named `processPayment` that invoke methods named `executeQuery`, potentially indicating SQL injection vulnerabilities.
+### Running Rules
+```bash
+# Single rule file
+pathfinder scan --rules rules/my_rule.py --project /path/to/project
+
+# Directory of rules
+pathfinder scan --rules rules/ --project /path/to/project
+
+# Remote ruleset bundle
+pathfinder scan --ruleset docker/security --project /path/to/project
+```
 
 ## Testing Patterns
 
@@ -312,10 +306,11 @@ for _, tt := range tests {
 ```
 
 ### Test Organization
-- `graph/query_test.go` - Query execution tests
-- `graph/initialize_test.go` - Graph initialization tests
-- `antlr/listener_impl_test.go` - Query parsing tests
-- `cmd/query_test.go` - CLI and pagination tests
+- `graph/callgraph/builder/builder_test.go` - Call graph builder tests
+- `graph/callgraph/resolution/*_test.go` - Type inference and resolution tests
+- `cmd/scan_test.go` - Scan command tests
+- `cmd/ci_test.go` - CI command tests
+- `cmd/resolution_report_test.go` - Resolution diagnostics tests
 
 ### Type Matching in Tests
 When creating test nodes, ensure types match the Node struct:
@@ -377,12 +372,11 @@ result := run.CreateResultForRule(ruleID)
 
 SARIF output integrates with GitHub Code Scanning, VSCode, and other security platforms.
 
-### Pagination Determinism
-Results are sorted **before** pagination to ensure consistency across runs:
+### Result Determinism
+Results are sorted to ensure consistency across runs:
 ```go
-// In cmd/query.go
-sort.SliceStable(pairs, func(i, j int) bool {
-    // Sort by File → LineNumber → ID
+// Sort by File → LineNumber → ID
+sort.SliceStable(results, func(i, j int) bool {
     if nodeI.File != nodeJ.File {
         return nodeI.File < nodeJ.File
     }
@@ -419,22 +413,22 @@ The npm package downloads pre-built binaries from GitHub releases:
 
 Releases must include binaries for linux-amd64, darwin-amd64, darwin-arm64, and windows-amd64.
 
-## Query Performance Considerations
+## Performance Considerations
 
 ### Memory Usage
-- Small codebase (<1k methods): ~100 MB
-- Large codebase (27k methods): ~2.18 GB with lazy loading
-- Pagination does NOT reduce memory (sorting requires all results in memory)
-- Pagination reduces output size (37 MB → 4.7 KB for page size 10)
+- Small codebase (<1k functions): ~100 MB
+- Large codebase (27k functions): ~2.18 GB with lazy loading
+- MCP server keeps index in memory for fast queries
+- Call graph includes functions, edges, and type information
 
-### Execution Time
-- Graph building: ~5 seconds for 27k methods (5 workers)
-- Query execution: <1 second for simple queries
-- Multi-entity queries: O(n²) for 2 entities, can be slow for large graphs
+### Indexing Time
+- Graph building: ~5 seconds for 27k functions (parallel workers)
+- Return type extraction: Parallel across all files
+- Variable assignment extraction: Parallel across all files
+- Class attribute extraction: Parallel across all files
 
 ### Optimization Tips
-1. Use specific entity types in FROM clause (not wildcards)
-2. Add WHERE conditions that filter early
-3. Avoid multi-entity queries on unrelated types
-4. Use pagination for large result sets (output size, not memory)
-5. Run with `--verbose` to debug slow queries
+1. Use `--verbose` flag to see indexing statistics
+2. Large projects benefit from more CPU cores (PATHFINDER_MAX_WORKERS env var)
+3. MCP queries are fast (index pre-built)
+4. Python DSL rules run sequentially - keep rules focused

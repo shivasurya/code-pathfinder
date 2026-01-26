@@ -53,8 +53,24 @@ func traverseForReturns(
 		return
 	}
 
-	// Track when we enter a function
+	// Track when we enter a class or function
 	newFunction := currentFunction
+
+	// Track class definitions to build class-qualified FQNs for methods
+	if node.Type() == "class_definition" {
+		className := extractClassNameFromNode(node, sourceCode)
+		if className != "" {
+			if currentFunction == "" {
+				// Top-level class
+				newFunction = modulePath + "." + className
+			} else {
+				// Nested class
+				newFunction = currentFunction + "." + className
+			}
+		}
+	}
+
+	// Track function definitions (both module-level and methods)
 	if node.Type() == "function_definition" {
 		funcName := extractFunctionNameFromNode(node, sourceCode)
 		if funcName != "" {
@@ -62,7 +78,7 @@ func traverseForReturns(
 				// Module-level function
 				newFunction = modulePath + "." + funcName
 			} else {
-				// Nested function
+				// Method inside a class or nested function
 				newFunction = currentFunction + "." + funcName
 			}
 		}
@@ -397,6 +413,22 @@ func extractFunctionNameFromNode(node *sitter.Node, sourceCode []byte) string {
 	}
 
 	// Find the identifier node (function name)
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == "identifier" {
+			return child.Content(sourceCode)
+		}
+	}
+
+	return ""
+}
+
+func extractClassNameFromNode(node *sitter.Node, sourceCode []byte) string {
+	if node.Type() != "class_definition" {
+		return ""
+	}
+
+	// Find the identifier node (class name)
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		if child.Type() == "identifier" {
