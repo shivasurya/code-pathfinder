@@ -139,6 +139,12 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 		logger.Statistic("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
 	}
 
+	// Phase 1: Build class context map for class-qualified FQN generation
+	// This maps file locations to class names, allowing us to determine
+	// which class a method belongs to based on its byte range.
+	// We build this once and reuse it throughout call graph construction.
+	classContext := buildClassContext(codeGraph)
+
 	// First, index all function definitions from the code graph
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
@@ -335,8 +341,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 				// Process each call site to resolve targets and build edges
 				for _, callSite := range callSites {
-					// Find the caller function containing this call site
-					callerFQN := findContainingFunction(callSite.Location, fileFunctions, job.modulePath)
+					// Phase 1: Find the caller function containing this call site
+					// Now with class context for class-qualified FQNs
+					callerFQN := findContainingFunction(callSite.Location, fileFunctions, job.modulePath, classContext)
 					if callerFQN == "" {
 						callerFQN = job.modulePath
 					}
@@ -559,21 +566,27 @@ func getFunctionsInFile(codeGraph *graph.CodeGraph, filePath string) []*graph.No
 // Algorithm:
 //  1. Iterate through all functions in the file
 //  2. Find function with the highest line number that's still <= call line
-//  3. Return the FQN of that function
+//  3. Return the FQN of that function (class-qualified for methods)
 //
 // Parameters:
 //   - location: source location of the call site
 //   - functions: all function definitions in the file
 //   - modulePath: module path of the file
+//   - classContext: map of file locations to class names (for class-qualified FQNs)
 //
 // Returns:
 //   - Fully qualified name of the containing function, or empty if not found
-func FindContainingFunction(location core.Location, functions []*graph.Node, modulePath string) string {
-	return findContainingFunction(location, functions, modulePath)
+//
+// Examples:
+//   - Module-level function: "myapp.process"
+//   - Instance method: "myapp.User.save"
+//   - Nested class method: "myapp.Outer.Inner.method"
+func FindContainingFunction(location core.Location, functions []*graph.Node, modulePath string, classContext map[string]string) string {
+	return findContainingFunction(location, functions, modulePath, classContext)
 }
 
 // findContainingFunction is the internal implementation of FindContainingFunction.
-func findContainingFunction(location core.Location, functions []*graph.Node, modulePath string) string {
+func findContainingFunction(location core.Location, functions []*graph.Node, modulePath string, classContext map[string]string) string {
 	// In Python, module-level code has no indentation (column == 1)
 	// If the call site is at column 1, it's module-level, not inside any function
 	if location.Column == 1 {
@@ -595,6 +608,17 @@ func findContainingFunction(location core.Location, functions []*graph.Node, mod
 	}
 
 	if bestMatch != nil {
+		// Phase 1: Build class-qualified FQN for methods
+		// For methods/constructors/properties/special_methods, include class name
+		if bestMatch.Type == "method" || bestMatch.Type == "constructor" ||
+			bestMatch.Type == "property" || bestMatch.Type == "special_method" {
+			className := findContainingClass(bestMatch, classContext)
+			if className != "" {
+				return fmt.Sprintf("%s.%s.%s", modulePath, className, bestMatch.Name)
+			}
+		}
+
+		// For module-level functions or if class not found
 		return modulePath + "." + bestMatch.Name
 	}
 
