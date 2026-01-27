@@ -2156,6 +2156,173 @@ ANOTHER_CONST = "constant"
 	}
 }
 
+// TestNestedFunctionIndexing tests that nested functions are indexed with parent-qualified FQNs.
+// This prevents ID collisions when multiple nested functions have the same name.
+func TestNestedFunctionIndexing(t *testing.T) {
+	sourceCode := []byte(`
+def outer_function():
+    """Outer function containing nested functions."""
+    def inner_function():
+        """Inner function inside outer."""
+        def deeply_nested():
+            """Deeply nested function."""
+            return 42
+        return deeply_nested()
+    return inner_function()
+
+def decorator_factory(action):
+    """Decorator factory with nested functions."""
+    def decorator(func):
+        """Decorator function."""
+        def wrapper(*args, **kwargs):
+            """Wrapper function."""
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def another_decorator_factory(action):
+    """Another decorator factory with same nested function names."""
+    def decorator(func):
+        """Another decorator function."""
+        def wrapper(*args, **kwargs):
+            """Another wrapper function."""
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+`)
+
+	graph := NewCodeGraph()
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	defer tree.Close()
+
+	buildGraphFromAST(tree.RootNode(), sourceCode, graph, nil, "test.py")
+
+	// Expected functions with qualified names
+	expectedFunctions := map[string]int{
+		// Top-level functions
+		"outer_function":            1,
+		"decorator_factory":         1,
+		"another_decorator_factory": 1,
+
+		// Nested functions with parent qualification
+		"outer_function.inner_function":                         1,
+		"outer_function.inner_function.deeply_nested":           1,
+		"decorator_factory.decorator":                           1,
+		"decorator_factory.decorator.wrapper":                   1,
+		"another_decorator_factory.decorator":                   1,
+		"another_decorator_factory.decorator.wrapper":           1,
+	}
+
+	// Count functions by name
+	functionCounts := make(map[string]int)
+	for _, node := range graph.Nodes {
+		if node.Type == "function_definition" {
+			functionCounts[node.Name]++
+		}
+	}
+
+	// Verify all expected functions are present
+	for expectedName, expectedCount := range expectedFunctions {
+		actualCount, found := functionCounts[expectedName]
+		if !found {
+			t.Errorf("Expected function %q not found in graph", expectedName)
+		} else if actualCount != expectedCount {
+			t.Errorf("Function %q count mismatch: expected %d, got %d", expectedName, expectedCount, actualCount)
+		}
+	}
+
+	// Verify no unqualified nested functions (collision check)
+	for functionName := range functionCounts {
+		// These should NOT exist as bare names (should be qualified)
+		if functionName == "inner_function" {
+			t.Errorf("Nested function 'inner_function' should be qualified as 'outer_function.inner_function'")
+		}
+		if functionName == "deeply_nested" {
+			t.Errorf("Nested function 'deeply_nested' should be qualified as 'outer_function.inner_function.deeply_nested'")
+		}
+		if functionName == "decorator" {
+			t.Errorf("Nested function 'decorator' should be qualified with parent name")
+		}
+		if functionName == "wrapper" {
+			t.Errorf("Nested function 'wrapper' should be qualified with parent name")
+		}
+	}
+
+	// Verify total function count
+	totalFunctions := 0
+	for _, count := range functionCounts {
+		totalFunctions += count
+	}
+	expectedTotal := 9
+	if totalFunctions != expectedTotal {
+		t.Errorf("Total function count mismatch: expected %d, got %d", expectedTotal, totalFunctions)
+		t.Logf("Indexed functions: %v", functionCounts)
+	}
+}
+
+// TestNestedFunctionIDUniqueness tests that nested functions with the same name
+// in different parent functions generate unique IDs.
+func TestNestedFunctionIDUniqueness(t *testing.T) {
+	sourceCode := []byte(`
+def parent_a():
+    def child():
+        pass
+
+def parent_b():
+    def child():
+        pass
+`)
+
+	graph := NewCodeGraph()
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	defer tree.Close()
+
+	buildGraphFromAST(tree.RootNode(), sourceCode, graph, nil, "test.py")
+
+	// Find both child functions
+	var childA, childB *Node
+	for _, node := range graph.Nodes {
+		if node.Name == "parent_a.child" {
+			childA = node
+		}
+		if node.Name == "parent_b.child" {
+			childB = node
+		}
+	}
+
+	// Both should exist
+	if childA == nil {
+		t.Error("parent_a.child not found in graph")
+	}
+	if childB == nil {
+		t.Error("parent_b.child not found in graph")
+	}
+
+	// IDs should be different
+	if childA != nil && childB != nil {
+		if childA.ID == childB.ID {
+			t.Errorf("Nested functions with same name should have unique IDs, but both have ID: %s", childA.ID)
+		}
+		if childA.Name == childB.Name {
+			t.Errorf("Nested functions should have parent-qualified names, but both have name: %s", childA.Name)
+		}
+	}
+}
+
 // Helper function to find a node by name and type.
 func findNodeByNameAndType(graph *CodeGraph, name string, nodeType string) *Node {
 	for _, node := range graph.Nodes {

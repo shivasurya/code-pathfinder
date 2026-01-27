@@ -162,6 +162,21 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		currentContext.Type == "enum" ||
 		currentContext.Type == "dataclass")
 
+	// Check if function is nested inside another function.
+	isNestedFunction := currentContext != nil && (
+		currentContext.Type == "function_definition" ||
+		currentContext.Type == "method" ||
+		currentContext.Type == "property" ||
+		currentContext.Type == "constructor" ||
+		currentContext.Type == "special_method")
+
+	// Build qualified function name for nested functions.
+	// Nested functions should have FQNs like parent.child.grandchild.
+	qualifiedFunctionName := functionName
+	if isNestedFunction && currentContext.Name != "" {
+		qualifiedFunctionName = currentContext.Name + "." + functionName
+	}
+
 	// Determine function type based on characteristics (priority order).
 	switch {
 	case isConstructor(functionName):
@@ -186,11 +201,11 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	}
 
 	lineNumber := node.StartPoint().Row + 1
-	methodID := GenerateMethodID("function:"+functionName, parameters, file, lineNumber)
+	methodID := GenerateMethodID("function:"+qualifiedFunctionName, parameters, file, lineNumber)
 	functionNode := &Node{
 		ID:                   methodID,
 		Type:                 nodeType,
-		Name:                 functionName,
+		Name:                 qualifiedFunctionName,
 		SourceLocation:       &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
