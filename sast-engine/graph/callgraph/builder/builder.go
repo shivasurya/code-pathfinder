@@ -244,7 +244,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 				}
 
 				// Extract variable assignments - typeEngine methods are mutex-protected internally
-				_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins, importMap)
+				// Pass codeGraph to enable class-qualified FQN building (matching Pass 1 behavior)
+				_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins, importMap, codeGraph)
 
 				// Progress tracking
 				count := varProcessed.Add(1)
