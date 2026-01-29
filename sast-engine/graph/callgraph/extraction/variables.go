@@ -7,7 +7,6 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
-	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
@@ -32,10 +31,13 @@ import (
 //   - registry: module registry for resolving module paths
 //   - builtinRegistry: builtin types registry for literal inference
 //   - importMap: import mappings for resolving class instantiations from imports
-//   - codeGraph: code graph for class context (to build class-qualified FQNs)
 //
 // Returns:
 //   - error: if parsing fails
+//
+// Note: Class context is tracked during AST traversal by detecting class_definition nodes.
+// This enables building class-qualified FQNs (module.ClassName.methodName) that match
+// the FQNs created during function indexing (Pass 1).
 func ExtractVariableAssignments(
 	filePath string,
 	sourceCode []byte,
@@ -43,7 +45,6 @@ func ExtractVariableAssignments(
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
 	importMap *core.ImportMap,
-	codeGraph *graph.CodeGraph,
 ) error {
 	// Parse with tree-sitter
 	parser := sitter.NewParser()
@@ -63,11 +64,8 @@ func ExtractVariableAssignments(
 		return nil
 	}
 
-	// Build class context for this file to enable class-qualified FQNs
-	// This ensures variables in methods are stored with the correct scope FQN
-	classContext := buildClassContextForFile(filePath, codeGraph)
-
 	// Traverse AST to find assignments
+	// Class context is tracked during traversal by detecting class_definition nodes
 	traverseForAssignments(
 		tree.RootNode(),
 		sourceCode,
@@ -79,7 +77,6 @@ func ExtractVariableAssignments(
 		registry,
 		builtinRegistry,
 		importMap,
-		classContext,
 	)
 
 	return nil
@@ -97,7 +94,6 @@ func ExtractVariableAssignments(
 //   - typeEngine: type inference engine
 //   - builtinRegistry: builtin types registry
 //   - importMap: import mappings for resolving class instantiations
-//   - classContext: map of node locations to class names for building class-qualified FQNs
 func traverseForAssignments(
 	node *sitter.Node,
 	sourceCode []byte,
@@ -109,7 +105,6 @@ func traverseForAssignments(
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
 	importMap *core.ImportMap,
-	classContext map[string]string,
 ) {
 	if node == nil {
 		return
@@ -130,13 +125,14 @@ func traverseForAssignments(
 		functionName := extractFunctionName(node, sourceCode)
 		if functionName != "" {
 			// Build class-qualified FQN for methods (matching Pass 1 behavior)
-			if currentClass != "" {
+			switch {
+			case currentClass != "":
 				// This is a method inside a class
 				currentFunction = fmt.Sprintf("%s.%s.%s", modulePath, currentClass, functionName)
-			} else if currentFunction == "" {
+			case currentFunction == "":
 				// Module-level function
 				currentFunction = modulePath + "." + functionName
-			} else {
+			default:
 				// Nested function
 				currentFunction = currentFunction + "." + functionName
 			}
@@ -177,7 +173,6 @@ func traverseForAssignments(
 			registry,
 			builtinRegistry,
 			importMap,
-			classContext,
 		)
 	}
 }
@@ -468,32 +463,3 @@ func extractCalleeName(node *sitter.Node, sourceCode []byte) string {
 	return ""
 }
 
-// buildClassContextForFile builds a map of AST node locations to class names for a specific file.
-// This is used to determine which class a function/method belongs to during variable extraction.
-// Returns: map where key = node location, value = class name
-func buildClassContextForFile(filePath string, codeGraph *graph.CodeGraph) map[string]string {
-	if codeGraph == nil {
-		return make(map[string]string)
-	}
-
-	classCtx := make(map[string]string)
-
-	// Find all class definitions in this file
-	for _, node := range codeGraph.Nodes {
-		if node.File != filePath {
-			continue
-		}
-
-		if node.Type == "class_definition" || node.Type == "interface" ||
-			node.Type == "enum" || node.Type == "dataclass" {
-			if node.SourceLocation != nil {
-				// Store class name by start/end byte range
-				// Format: "startByte:endByte" -> "ClassName"
-				key := fmt.Sprintf("%d:%d", node.SourceLocation.StartByte, node.SourceLocation.EndByte)
-				classCtx[key] = node.Name
-			}
-		}
-	}
-
-	return classCtx
-}
