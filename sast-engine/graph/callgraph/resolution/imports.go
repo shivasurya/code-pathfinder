@@ -175,6 +175,8 @@ func processImportFromStatement(node *sitter.Node, sourceCode []byte, importMap 
 		moduleNameNode := node.ChildByFieldName("module_name")
 		if moduleNameNode != nil {
 			moduleName = moduleNameNode.Content(sourceCode)
+			// Normalize project-internal imports to include project root
+			moduleName = normalizeProjectImport(moduleName, filePath, registry)
 		} else {
 			return
 		}
@@ -295,4 +297,67 @@ func resolveRelativeImport(filePath string, dotCount int, moduleSuffix string, r
 	}
 
 	return baseModule
+}
+
+// normalizeProjectImport normalizes project-internal imports to include the project root.
+//
+// Python imports can be:
+//  1. Third-party imports (django.db.models) - already absolute, no normalization needed
+//  2. Project-internal imports (data_manager.utils) - relative to project root, needs normalization
+//
+// This function distinguishes between these cases by:
+//  1. Checking if moduleName already exists in the registry (already absolute)
+//  2. If not, extracting the project root from the current file's module path
+//  3. Checking if projectRoot + "." + moduleName exists in the registry
+//  4. If found, returning the normalized path; otherwise, returning original (third-party)
+//
+// Parameters:
+//   - moduleName: the module name extracted from the import statement (e.g., "data_manager.prepare_params")
+//   - filePath: absolute path to the file containing the import
+//   - registry: module registry for resolving module paths
+//
+// Returns:
+//   - Normalized module path with project root prepended if it's project-internal
+//
+// Examples:
+//   File: label_studio/data_manager/functions.py (module: label_studio.data_manager.functions)
+//   - normalizeProjectImport("data_manager.prepare_params", ..., registry)
+//     → "label_studio.data_manager.prepare_params" (project-internal)
+//   - normalizeProjectImport("django.db.models", ..., registry)
+//     → "django.db.models" (third-party, unchanged)
+//   - normalizeProjectImport("rest_framework.views", ..., registry)
+//     → "rest_framework.views" (third-party, unchanged)
+func normalizeProjectImport(moduleName string, filePath string, registry *core.ModuleRegistry) string {
+	// If moduleName is empty, return as-is
+	if moduleName == "" {
+		return moduleName
+	}
+
+	// Check if this module already exists in the registry (already absolute)
+	if _, exists := registry.Modules[moduleName]; exists {
+		return moduleName
+	}
+
+	// Get the current file's module path from the registry
+	currentModule, found := registry.FileToModule[filePath]
+	if !found {
+		// If file not in registry, can't normalize - return as-is
+		return moduleName
+	}
+
+	// Extract the project root (first component of current module path)
+	// For "label_studio.data_manager.functions", project root is "label_studio"
+	// Note: strings.Split always returns at least one element, even for empty strings
+	parts := strings.Split(currentModule, ".")
+	projectRoot := parts[0]
+
+	// Try prepending project root to see if it's a project-internal import
+	normalizedPath := projectRoot + "." + moduleName
+	if _, exists := registry.Modules[normalizedPath]; exists {
+		return normalizedPath
+	}
+
+	// Not found in registry even with project root - must be third-party
+	// Return original module name
+	return moduleName
 }

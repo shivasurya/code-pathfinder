@@ -387,3 +387,181 @@ import json    as    js
 	assert.True(t, ok)
 	assert.Equal(t, "json", fqn)
 }
+
+func TestExtractImports_ProjectInternalImports(t *testing.T) {
+	// Test that project-internal imports are normalized to include project root
+	//
+	// Scenario: A Python project "label_studio" with this structure:
+	//   label_studio/
+	//     data_manager/
+	//       functions.py     ← file being parsed
+	//       prepare_params.py
+	//
+	// In functions.py:
+	//   from data_manager.prepare_params import PrepareParams
+	//
+	// Expected behavior:
+	//   - Import should be normalized to "label_studio.data_manager.prepare_params.PrepareParams"
+	//   - This enables cross-file resolution to work correctly
+
+	// Set up a module registry that simulates the label_studio project structure
+	registry := core.NewModuleRegistry()
+
+	// Register the file being parsed
+	filePath := "/project/label_studio/data_manager/functions.py"
+	modulePath := "label_studio.data_manager.functions"
+	registry.AddModule(modulePath, filePath)
+
+	// Register the module being imported (this is what normalizeProjectImport will check)
+	prepareParamsFile := "/project/label_studio/data_manager/prepare_params.py"
+	prepareParamsModule := "label_studio.data_manager.prepare_params"
+	registry.AddModule(prepareParamsModule, prepareParamsFile)
+
+	// Source code with project-internal import
+	sourceCode := []byte(`
+from data_manager.prepare_params import PrepareParams
+`)
+
+	importMap, err := ExtractImports(filePath, sourceCode, registry)
+
+	require.NoError(t, err)
+	require.NotNil(t, importMap)
+
+	// Verify that PrepareParams is normalized to include project root
+	fqn, ok := importMap.Resolve("PrepareParams")
+	assert.True(t, ok, "PrepareParams import should be found")
+	assert.Equal(t, "label_studio.data_manager.prepare_params.PrepareParams", fqn,
+		"Project-internal import should be normalized to include project root (label_studio)")
+}
+
+func TestExtractImports_MixedProjectAndThirdParty(t *testing.T) {
+	// Test that project-internal imports are normalized while third-party imports are left as-is
+	//
+	// Scenario: File imports both project-internal and third-party modules
+	//
+	// Expected behavior:
+	//   - Project-internal: data_manager.X → label_studio.data_manager.X
+	//   - Third-party: django.db.models → django.db.models (unchanged)
+
+	registry := core.NewModuleRegistry()
+
+	// Register the file being parsed
+	filePath := "/project/label_studio/data_manager/functions.py"
+	modulePath := "label_studio.data_manager.functions"
+	registry.AddModule(modulePath, filePath)
+
+	// Register project-internal modules
+	registry.AddModule("label_studio.data_manager.prepare_params", "/project/label_studio/data_manager/prepare_params.py")
+	registry.AddModule("label_studio.core.utils", "/project/label_studio/core/utils.py")
+
+	// Note: We intentionally do NOT register django or rest_framework modules
+	// to simulate third-party dependencies
+
+	sourceCode := []byte(`
+from django.db import models
+from data_manager.prepare_params import PrepareParams
+from rest_framework.views import APIView
+from core.utils import sanitize
+`)
+
+	importMap, err := ExtractImports(filePath, sourceCode, registry)
+
+	require.NoError(t, err)
+	require.NotNil(t, importMap)
+
+	// Third-party imports should remain unchanged (not in registry)
+	fqn, ok := importMap.Resolve("models")
+	assert.True(t, ok)
+	assert.Equal(t, "django.db.models", fqn, "Third-party import should not be modified")
+
+	fqn, ok = importMap.Resolve("APIView")
+	assert.True(t, ok)
+	assert.Equal(t, "rest_framework.views.APIView", fqn, "Third-party import should not be modified")
+
+	// Project-internal imports should be normalized
+	fqn, ok = importMap.Resolve("PrepareParams")
+	assert.True(t, ok)
+	assert.Equal(t, "label_studio.data_manager.prepare_params.PrepareParams", fqn,
+		"Project-internal import should include project root")
+
+	fqn, ok = importMap.Resolve("sanitize")
+	assert.True(t, ok)
+	assert.Equal(t, "label_studio.core.utils.sanitize", fqn,
+		"Project-internal import should include project root")
+}
+
+func TestNormalizeProjectImport_ProjectInternal(t *testing.T) {
+	// Unit test for normalizeProjectImport function - project-internal case
+	registry := core.NewModuleRegistry()
+
+	filePath := "/project/myapp/submodule/file.py"
+	modulePath := "myapp.submodule.file"
+	registry.AddModule(modulePath, filePath)
+
+	// Register the module being imported
+	registry.AddModule("myapp.utils.helper", "/project/myapp/utils/helper.py")
+
+	// Test normalizing a project-internal import
+	result := normalizeProjectImport("utils.helper", filePath, registry)
+	assert.Equal(t, "myapp.utils.helper", result,
+		"Project-internal import should be normalized with project root")
+}
+
+func TestNormalizeProjectImport_ThirdParty(t *testing.T) {
+	// Unit test for normalizeProjectImport function - third-party case
+	registry := core.NewModuleRegistry()
+
+	filePath := "/project/myapp/submodule/file.py"
+	modulePath := "myapp.submodule.file"
+	registry.AddModule(modulePath, filePath)
+
+	// Test normalizing a third-party import (not in registry)
+	result := normalizeProjectImport("django.db.models", filePath, registry)
+	assert.Equal(t, "django.db.models", result,
+		"Third-party import should remain unchanged")
+
+	result = normalizeProjectImport("rest_framework.views", filePath, registry)
+	assert.Equal(t, "rest_framework.views", result,
+		"Third-party import should remain unchanged")
+}
+
+func TestNormalizeProjectImport_AlreadyAbsolute(t *testing.T) {
+	// Unit test for normalizeProjectImport function - already absolute path case
+	registry := core.NewModuleRegistry()
+
+	filePath := "/project/myapp/submodule/file.py"
+	modulePath := "myapp.submodule.file"
+	registry.AddModule(modulePath, filePath)
+
+	// Register a module with full path
+	registry.AddModule("myapp.utils.helper", "/project/myapp/utils/helper.py")
+
+	// Test with already absolute import (full FQN already in registry)
+	result := normalizeProjectImport("myapp.utils.helper", filePath, registry)
+	assert.Equal(t, "myapp.utils.helper", result,
+		"Already absolute import should remain unchanged")
+}
+
+func TestNormalizeProjectImport_FileNotInRegistry(t *testing.T) {
+	// Unit test for normalizeProjectImport function - file not in registry
+	registry := core.NewModuleRegistry()
+
+	// Test with file not in registry - should return original
+	result := normalizeProjectImport("some.module", "/unknown/file.py", registry)
+	assert.Equal(t, "some.module", result,
+		"Import from unregistered file should remain unchanged")
+}
+
+func TestNormalizeProjectImport_EmptyModuleName(t *testing.T) {
+	// Unit test for normalizeProjectImport function - empty module name
+	registry := core.NewModuleRegistry()
+
+	filePath := "/project/myapp/file.py"
+	modulePath := "myapp.file"
+	registry.AddModule(modulePath, filePath)
+
+	// Test with empty module name - should return empty
+	result := normalizeProjectImport("", filePath, registry)
+	assert.Equal(t, "", result,
+		"Empty module name should return empty string")
+}
