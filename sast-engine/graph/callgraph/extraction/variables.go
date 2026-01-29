@@ -29,6 +29,7 @@ import (
 //   - typeEngine: type inference engine to populate
 //   - registry: module registry for resolving module paths
 //   - builtinRegistry: builtin types registry for literal inference
+//   - importMap: import mappings for resolving class instantiations from imports
 //
 // Returns:
 //   - error: if parsing fails
@@ -38,6 +39,7 @@ func ExtractVariableAssignments(
 	typeEngine *resolution.TypeInferenceEngine,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) error {
 	// Parse with tree-sitter
 	parser := sitter.NewParser()
@@ -67,6 +69,7 @@ func ExtractVariableAssignments(
 		typeEngine,
 		registry,
 		builtinRegistry,
+		importMap,
 	)
 
 	return nil
@@ -82,6 +85,7 @@ func ExtractVariableAssignments(
 //   - currentFunction: current function FQN (empty if module-level)
 //   - typeEngine: type inference engine
 //   - builtinRegistry: builtin types registry
+//   - importMap: import mappings for resolving class instantiations
 func traverseForAssignments(
 	node *sitter.Node,
 	sourceCode []byte,
@@ -91,6 +95,7 @@ func traverseForAssignments(
 	typeEngine *resolution.TypeInferenceEngine,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) {
 	if node == nil {
 		return
@@ -128,6 +133,7 @@ func traverseForAssignments(
 			typeEngine,
 			registry,
 			builtinRegistry,
+			importMap,
 		)
 	}
 
@@ -143,6 +149,7 @@ func traverseForAssignments(
 			typeEngine,
 			registry,
 			builtinRegistry,
+			importMap,
 		)
 	}
 }
@@ -162,6 +169,7 @@ func traverseForAssignments(
 //   - currentFunction: current function FQN (empty if module-level)
 //   - typeEngine: type inference engine
 //   - builtinRegistry: builtin types registry
+//   - importMap: import mappings for resolving class instantiations
 func processAssignment(
 	node *sitter.Node,
 	sourceCode []byte,
@@ -171,6 +179,7 @@ func processAssignment(
 	typeEngine *resolution.TypeInferenceEngine,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) {
 	// Assignment node structure:
 	//   assignment
@@ -208,7 +217,7 @@ func processAssignment(
 	}
 
 	// Infer type from right side
-	typeInfo := inferTypeFromExpression(rightNode, sourceCode, filePath, modulePath, registry, builtinRegistry)
+	typeInfo := inferTypeFromExpression(rightNode, sourceCode, filePath, modulePath, registry, builtinRegistry, importMap)
 	if typeInfo == nil {
 		return
 	}
@@ -261,6 +270,7 @@ func processAssignment(
 //   - modulePath: module FQN
 //   - registry: module registry for class resolution
 //   - builtinRegistry: builtin types registry
+//   - importMap: import mappings for resolving class instantiations from imports
 //
 // Returns:
 //   - TypeInfo if type can be inferred, nil otherwise
@@ -271,6 +281,7 @@ func inferTypeFromExpression(
 	modulePath string,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) *core.TypeInfo {
 	if node == nil {
 		return nil
@@ -282,7 +293,18 @@ func inferTypeFromExpression(
 	if nodeType == "call" {
 		// First, try to resolve as class instantiation (e.g., User(), HttpResponse())
 		// This handles PascalCase patterns immediately without creating placeholders
-		importMap := core.NewImportMap(filePath)
+		//
+		// CROSS-FILE IMPORT RESOLUTION:
+		// Use the provided importMap (from file's actual imports) to resolve class names
+		// from other modules. This enables patterns like:
+		//   from module_a import Calculator
+		//   calc = Calculator()  # ← resolves to module_a.Calculator (not local)
+		//   result = calc.add()  # ← resolves to module_a.Calculator.add
+		//
+		// Edge cases handled:
+		// - Inline object creation: Calculator().add(1, 2)
+		// - Multi-line chained calls: Calculator()\n    .add(1, 2)\n    .get_result()
+		// - Null/empty importMap (tests): Falls back to heuristic resolution
 		classType := resolution.ResolveClassInstantiation(node, sourceCode, modulePath, importMap, registry)
 		if classType != nil {
 			return classType

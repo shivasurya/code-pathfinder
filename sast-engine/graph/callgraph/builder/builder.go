@@ -177,7 +177,13 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					continue
 				}
 
-				returns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins)
+				// Extract imports using cache (needed for class instantiation resolution)
+				importMap, err := importCache.GetOrExtract(job.filePath, sourceCode, registry)
+				if err != nil {
+					continue
+				}
+
+				returns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins, importMap)
 				if err != nil {
 					continue
 				}
@@ -231,8 +237,14 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					continue
 				}
 
+				// Extract imports using cache (needed for class instantiation resolution)
+				importMap, err := importCache.GetOrExtract(filePath, sourceCode, registry)
+				if err != nil {
+					continue
+				}
+
 				// Extract variable assignments - typeEngine methods are mutex-protected internally
-				_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins)
+				_ = extraction.ExtractVariableAssignments(filePath, sourceCode, typeEngine, registry, typeEngine.Builtins, importMap)
 
 				// Progress tracking
 				count := varProcessed.Add(1)

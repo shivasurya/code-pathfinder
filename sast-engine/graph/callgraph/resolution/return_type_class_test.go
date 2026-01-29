@@ -115,7 +115,7 @@ def build_server():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 3)
 
@@ -143,7 +143,7 @@ def maybe_user(flag):
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 

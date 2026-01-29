@@ -31,7 +31,7 @@ def get_none():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 5)
 
@@ -59,7 +59,7 @@ def empty_func():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Empty(t, returns, "Functions with no explicit return should not generate return types")
 }
@@ -74,7 +74,7 @@ def maybe_string(flag):
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2, "Should capture both return statements")
 
@@ -93,7 +93,7 @@ def outer():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -117,7 +117,7 @@ def get_value():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -144,7 +144,7 @@ def process():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
 
@@ -171,7 +171,7 @@ def get_tuple():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 
 	assert.Len(t, returns, 5)
@@ -293,7 +293,7 @@ def func():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
 
@@ -313,7 +313,7 @@ class UserManager:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -343,7 +343,7 @@ class Outer:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -372,7 +372,7 @@ class MyClass:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -460,7 +460,7 @@ class EmptyClass:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Empty(t, returns, "Empty class with no methods should not generate return types")
 }
@@ -479,7 +479,7 @@ class Calculator:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry)
+	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 3)
 

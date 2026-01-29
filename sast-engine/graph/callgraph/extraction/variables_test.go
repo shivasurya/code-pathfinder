@@ -34,7 +34,7 @@ def test_function():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify
@@ -82,7 +82,7 @@ def calculate():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify
@@ -133,7 +133,7 @@ def process_data():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify
@@ -183,7 +183,7 @@ def check_status():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify
@@ -229,7 +229,7 @@ def process():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify
@@ -266,7 +266,7 @@ def outer():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify outer function scope
@@ -303,7 +303,7 @@ def reassign():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify - should have the last assignment
@@ -333,7 +333,7 @@ func TestExtractVariableAssignments_EmptyFile(t *testing.T) {
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments - should not error
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// No scopes should be created
@@ -360,7 +360,7 @@ def empty_function():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Scope should exist but be empty
@@ -390,7 +390,7 @@ def test():
 	typeEngine.Builtins = registry.NewBuiltinRegistry()
 
 	// Extract assignments
-	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins)
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
 	// Verify locations
@@ -441,7 +441,7 @@ func TestInferTypeFromExpression(t *testing.T) {
 			typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
 			typeEngine.Builtins = builtinRegistry
 
-			err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, builtinRegistry)
+			err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, builtinRegistry, nil)
 			assert.NoError(t, err)
 
 			scope := typeEngine.GetScope("test.test")
