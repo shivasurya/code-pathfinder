@@ -217,7 +217,7 @@ func processAssignment(
 	}
 
 	// Infer type from right side
-	typeInfo := inferTypeFromExpression(rightNode, sourceCode, filePath, modulePath, registry, builtinRegistry, importMap)
+	typeInfo := inferTypeFromExpression(rightNode, sourceCode, modulePath, registry, builtinRegistry, importMap)
 	if typeInfo == nil {
 		return
 	}
@@ -266,7 +266,6 @@ func processAssignment(
 // Parameters:
 //   - node: expression AST node
 //   - sourceCode: source code bytes
-//   - filePath: file path for context
 //   - modulePath: module FQN
 //   - registry: module registry for class resolution
 //   - builtinRegistry: builtin types registry
@@ -277,7 +276,6 @@ func processAssignment(
 func inferTypeFromExpression(
 	node *sitter.Node,
 	sourceCode []byte,
-	filePath string,
 	modulePath string,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
