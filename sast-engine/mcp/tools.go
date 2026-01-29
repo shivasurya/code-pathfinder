@@ -191,11 +191,31 @@ Examples:
 
 Returns: Target function info and list of callers with their FQN, file, line number, and the specific call site location. Includes pagination info.
 
+IMPORTANT - Function Parameter Requirements:
+- Must be a FUNCTION or METHOD name, NOT a module path
+- Use find_symbol first to get the exact FQN of functions
+- Short names work ("sanitize_input") if unique in the codebase
+- Full FQNs are preferred ("myapp.utils.sanitize_input") to avoid ambiguity
+- Method names should include class ("MyClass.save" or "myapp.models.MyClass.save")
+- Test files are NOT indexed - only production code is queryable
+
+What WORKS:
+✓ "myapp.auth.login" - function FQN
+✓ "User.save" - method with class name
+✓ "sanitize_input" - short function name (if unique)
+✓ "myapp.models.Project.get_all_tasks" - full method FQN
+
+What DOESN'T work:
+✗ "myapp.auth" - this is a module, not a function
+✗ "test_login" - test files are not indexed
+✗ Module-level code without a function wrapper
+
 Use when: Understanding function usage, impact analysis before refactoring, finding entry points, or tracing how data flows INTO a function.
 
 Examples:
 - get_callers("sanitize_input") - who calls the sanitize function?
-- get_callers("database.execute") - what code runs database queries?`,
+- get_callers("myapp.auth.login") - who calls the login function?
+- get_callers("User.save") - who calls the User.save method?`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
@@ -212,11 +232,38 @@ Examples:
 
 Returns: Source function info, list of callees with target name, call line, resolution status (resolved/unresolved), and type inference info if available. Includes pagination info.
 
-Use when: Understanding function dependencies, analyzing what a function does, tracing data flow FROM a function, or finding unresolved external calls.
+IMPORTANT - Function Parameter Requirements:
+- Must be a FUNCTION or METHOD name, NOT a module path
+- Use find_symbol first to get the exact FQN of the function you want to analyze
+- Short names work ("process_payment") if the function name is unique
+- Full FQNs are preferred ("myapp.payment.process_payment") to avoid ambiguity
+- Method names should include class ("Payment.process" or "myapp.models.Payment.process")
+- Test files are NOT indexed - only production code is queryable
+
+What WORKS:
+✓ "myapp.payment.process_payment" - function FQN
+✓ "Payment.process" - method with class name
+✓ "process_payment" - short function name (if unique in codebase)
+✓ "myapp.models.Task.update_status" - full method FQN
+
+What DOESN'T work:
+✗ "myapp.payment" - this is a module, not a function
+✗ "test_process_payment" - test files are not indexed
+✗ Module-level code that isn't wrapped in a function
+
+Type Inference in Results:
+- Callees resolved via cross-file import resolution include "type_inference" metadata
+- Shows inferred_type (e.g., "django.db.models.JSONField") for method calls on imported classes
+- Confidence score (0.0-1.0) indicates resolution certainty
+- High confidence (>0.9) means the call was resolved using import analysis
+
+Use when: Understanding function dependencies, analyzing what a function does, tracing data flow FROM a function, finding unresolved external calls, or analyzing cross-file method calls.
 
 Examples:
 - get_callees("process_payment") - what functions does payment processing call?
-- get_callees("handle_request") - what are the dependencies of the request handler?`,
+- get_callees("myapp.payment.process_payment") - dependencies with full FQN
+- get_callees("User.save") - what does the User.save method call?
+- get_callees("myapp.tasks.models.Annotation.save") - analyze cross-file method calls`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{

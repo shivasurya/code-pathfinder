@@ -23,6 +23,7 @@ func ExtractReturnTypes(
 	sourceCode []byte,
 	modulePath string,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) ([]*ReturnStatement, error) {
 	parser := sitter.NewParser()
 	parser.SetLanguage(python.GetLanguage())
@@ -35,7 +36,7 @@ func ExtractReturnTypes(
 	defer tree.Close()
 
 	var returns []*ReturnStatement
-	traverseForReturns(tree.RootNode(), sourceCode, filePath, modulePath, "", &returns, builtinRegistry)
+	traverseForReturns(tree.RootNode(), sourceCode, filePath, modulePath, "", &returns, builtinRegistry, importMap)
 
 	return returns, nil
 }
@@ -48,6 +49,7 @@ func traverseForReturns(
 	currentFunction string,
 	returns *[]*ReturnStatement,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) {
 	if node == nil {
 		return
@@ -98,7 +100,7 @@ func traverseForReturns(
 		}
 
 		if valueNode != nil {
-			returnType := inferReturnType(valueNode, sourceCode, modulePath, builtinRegistry)
+			returnType := inferReturnType(valueNode, sourceCode, modulePath, builtinRegistry, importMap)
 			if returnType != nil {
 				stmt := &ReturnStatement{
 					FunctionFQN: newFunction,
@@ -116,7 +118,7 @@ func traverseForReturns(
 
 	// Recurse with updated function context
 	for i := 0; i < int(node.ChildCount()); i++ {
-		traverseForReturns(node.Child(i), sourceCode, filePath, modulePath, newFunction, returns, builtinRegistry)
+		traverseForReturns(node.Child(i), sourceCode, filePath, modulePath, newFunction, returns, builtinRegistry, importMap)
 	}
 }
 
@@ -125,6 +127,7 @@ func inferReturnType(
 	sourceCode []byte,
 	modulePath string,
 	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
 ) *core.TypeInfo {
 	if node == nil {
 		return nil
@@ -198,7 +201,19 @@ func inferReturnType(
 
 	case "call":
 		// Try class instantiation first (Task 7)
-		classType := ResolveClassInstantiation(node, sourceCode, modulePath, nil, nil)
+		//
+		// CROSS-FILE IMPORT RESOLUTION:
+		// Use provided importMap to resolve class instantiations from imports in return statements.
+		// This enables patterns like:
+		//   from models import User
+		//   def create_user():
+		//       return User()  # ← resolves to models.User (not local)
+		//
+		// Edge cases handled:
+		// - Inline object creation in returns: return Calculator().get_result()
+		// - Multi-line returns with chained calls
+		// - Null/empty importMap (tests): Falls back to heuristic resolution
+		classType := ResolveClassInstantiation(node, sourceCode, modulePath, importMap, nil)
 		if classType != nil {
 			return classType
 		}
