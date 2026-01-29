@@ -453,3 +453,4 @@ func TestInferTypeFromExpression(t *testing.T) {
 		})
 	}
 }
+

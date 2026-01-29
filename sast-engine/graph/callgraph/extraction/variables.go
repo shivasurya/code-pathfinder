@@ -2,6 +2,7 @@ package extraction
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -33,6 +34,10 @@ import (
 //
 // Returns:
 //   - error: if parsing fails
+//
+// Note: Class context is tracked during AST traversal by detecting class_definition nodes.
+// This enables building class-qualified FQNs (module.ClassName.methodName) that match
+// the FQNs created during function indexing (Pass 1).
 func ExtractVariableAssignments(
 	filePath string,
 	sourceCode []byte,
@@ -60,11 +65,13 @@ func ExtractVariableAssignments(
 	}
 
 	// Traverse AST to find assignments
+	// Class context is tracked during traversal by detecting class_definition nodes
 	traverseForAssignments(
 		tree.RootNode(),
 		sourceCode,
 		filePath,
 		modulePath,
+		"",
 		"",
 		typeEngine,
 		registry,
@@ -83,6 +90,7 @@ func ExtractVariableAssignments(
 //   - filePath: file path for locations
 //   - modulePath: module FQN
 //   - currentFunction: current function FQN (empty if module-level)
+//   - currentClass: current class name (empty if not in a class)
 //   - typeEngine: type inference engine
 //   - builtinRegistry: builtin types registry
 //   - importMap: import mappings for resolving class instantiations
@@ -92,6 +100,7 @@ func traverseForAssignments(
 	filePath string,
 	modulePath string,
 	currentFunction string,
+	currentClass string,
 	typeEngine *resolution.TypeInferenceEngine,
 	registry *core.ModuleRegistry,
 	builtinRegistry *registry.BuiltinRegistry,
@@ -103,14 +112,27 @@ func traverseForAssignments(
 
 	nodeType := node.Type()
 
+	// Update context when entering a class definition
+	if nodeType == "class_definition" {
+		className := extractClassName(node, sourceCode)
+		if className != "" {
+			currentClass = className
+		}
+	}
+
 	// Update context when entering function/method
 	if nodeType == "function_definition" {
 		functionName := extractFunctionName(node, sourceCode)
 		if functionName != "" {
-			if currentFunction == "" {
+			// Build class-qualified FQN for methods (matching Pass 1 behavior)
+			switch {
+			case currentClass != "":
+				// This is a method inside a class
+				currentFunction = fmt.Sprintf("%s.%s.%s", modulePath, currentClass, functionName)
+			case currentFunction == "":
 				// Module-level function
 				currentFunction = modulePath + "." + functionName
-			} else {
+			default:
 				// Nested function
 				currentFunction = currentFunction + "." + functionName
 			}
@@ -146,6 +168,7 @@ func traverseForAssignments(
 			filePath,
 			modulePath,
 			currentFunction,
+			currentClass,
 			typeEngine,
 			registry,
 			builtinRegistry,
@@ -439,3 +462,4 @@ func extractCalleeName(node *sitter.Node, sourceCode []byte) string {
 
 	return ""
 }
+
