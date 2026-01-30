@@ -947,3 +947,74 @@ func TestTypeInferenceEngine_UpdateVariableBindings_NestedMethod(t *testing.T) {
 	assert.Equal(t, "builtins.str", resultBinding.Type.TypeFQN)
 	assert.Equal(t, "myapp.models.Container.b.c.method", resultBinding.AssignedFrom)
 }
+
+// TestAddImportMap_GetImportMap tests ImportMap storage and retrieval (P0 fix).
+func TestAddImportMap_GetImportMap(t *testing.T) {
+	moduleRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(moduleRegistry)
+
+	// Create test ImportMaps
+	importMap1 := core.NewImportMap("/test/file1.py")
+	importMap1.AddImport("UserController", "controller.UserController")
+	importMap1.AddImport("PaymentService", "payment.PaymentService")
+
+	importMap2 := core.NewImportMap("/test/file2.py")
+	importMap2.AddImport("DataAdapter", "adapters.DataAdapter")
+
+	// Test adding ImportMaps
+	engine.AddImportMap("/test/file1.py", importMap1)
+	engine.AddImportMap("/test/file2.py", importMap2)
+
+	// Test retrieving ImportMaps
+	retrieved1 := engine.GetImportMap("/test/file1.py")
+	assert.NotNil(t, retrieved1)
+	assert.Equal(t, importMap1, retrieved1)
+
+	retrieved2 := engine.GetImportMap("/test/file2.py")
+	assert.NotNil(t, retrieved2)
+	assert.Equal(t, importMap2, retrieved2)
+
+	// Test retrieving non-existent ImportMap
+	retrieved3 := engine.GetImportMap("/test/nonexistent.py")
+	assert.Nil(t, retrieved3)
+
+	// Test adding nil ImportMap (should be ignored)
+	engine.AddImportMap("/test/file3.py", nil)
+	retrieved4 := engine.GetImportMap("/test/file3.py")
+	assert.Nil(t, retrieved4)
+
+	// Test adding ImportMap with empty path (should be ignored)
+	engine.AddImportMap("", importMap1)
+	retrieved5 := engine.GetImportMap("")
+	assert.Nil(t, retrieved5)
+}
+
+// TestAddImportMap_ThreadSafety tests concurrent access to ImportMaps.
+func TestAddImportMap_ThreadSafety(t *testing.T) {
+	moduleRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(moduleRegistry)
+
+	// Add ImportMaps concurrently
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func(idx int) {
+			filePath := "/test/file" + string(rune(idx+'0')) + ".py"
+			importMap := core.NewImportMap(filePath)
+			importMap.AddImport("TestClass", "module.TestClass")
+			engine.AddImportMap(filePath, importMap)
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Verify all ImportMaps were added
+	for i := 0; i < 10; i++ {
+		filePath := "/test/file" + string(rune(i+'0')) + ".py"
+		importMap := engine.GetImportMap(filePath)
+		assert.NotNil(t, importMap, "ImportMap for %s should exist", filePath)
+	}
+}

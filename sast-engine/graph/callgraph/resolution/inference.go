@@ -19,8 +19,10 @@ type TypeInferenceEngine struct {
 	Attributes     *registry.AttributeRegistry  // Class attributes registry (Phase 3 Task 12)
 	StdlibRegistry *core.StdlibRegistry         // Python stdlib registry (PR #2)
 	StdlibRemote   interface{}                  // Remote loader for lazy module loading (PR #3)
+	ImportMaps     map[string]*core.ImportMap   // File path -> ImportMap (P0 fix: for attribute placeholder resolution)
 	scopeMutex     sync.RWMutex                 // Protects Scopes map for concurrent access
 	typeMutex      sync.RWMutex                 // Protects ReturnTypes map for concurrent access
+	importMutex    sync.RWMutex                 // Protects ImportMaps for concurrent access
 }
 
 // StdlibRegistryRemote will be defined in registry package.
@@ -39,6 +41,7 @@ func NewTypeInferenceEngine(registry *core.ModuleRegistry) *TypeInferenceEngine 
 	return &TypeInferenceEngine{
 		Scopes:      make(map[string]*FunctionScope),
 		ReturnTypes: make(map[string]*core.TypeInfo),
+		ImportMaps:  make(map[string]*core.ImportMap),
 		Registry:    registry,
 	}
 }
@@ -68,6 +71,34 @@ func (te *TypeInferenceEngine) AddScope(scope *FunctionScope) {
 		defer te.scopeMutex.Unlock()
 		te.Scopes[scope.FunctionFQN] = scope
 	}
+}
+
+// AddImportMap stores an ImportMap for a file.
+// Thread-safe for concurrent writes.
+//
+// Parameters:
+//   - filePath: absolute path to the file
+//   - importMap: the ImportMap for that file
+func (te *TypeInferenceEngine) AddImportMap(filePath string, importMap *core.ImportMap) {
+	if importMap != nil && filePath != "" {
+		te.importMutex.Lock()
+		defer te.importMutex.Unlock()
+		te.ImportMaps[filePath] = importMap
+	}
+}
+
+// GetImportMap retrieves an ImportMap for a file.
+// Thread-safe for concurrent reads.
+//
+// Parameters:
+//   - filePath: absolute path to the file
+//
+// Returns:
+//   - ImportMap if found, nil otherwise
+func (te *TypeInferenceEngine) GetImportMap(filePath string) *core.ImportMap {
+	te.importMutex.RLock()
+	defer te.importMutex.RUnlock()
+	return te.ImportMaps[filePath]
 }
 
 // GetReturnType retrieves a function's return type.
