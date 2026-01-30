@@ -142,7 +142,7 @@ func ResolveSelfAttributeCall(
 	}
 
 	// Handle custom class types (user-defined classes).
-	// The attribute type is already resolved (e.g., "controller.UserController")
+	// The attribute type is already resolved (e.g., "module.Controller")
 	// from variable extraction. Now we need to resolve the method call on that type.
 	methodFQN := attributeTypeFQN + "." + methodName
 

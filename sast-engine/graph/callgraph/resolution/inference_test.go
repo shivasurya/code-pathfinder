@@ -955,7 +955,7 @@ func TestAddImportMap_GetImportMap(t *testing.T) {
 
 	// Create test ImportMaps
 	importMap1 := core.NewImportMap("/test/file1.py")
-	importMap1.AddImport("UserController", "controller.UserController")
+	importMap1.AddImport("Controller", "controller.Controller")
 	importMap1.AddImport("PaymentService", "payment.PaymentService")
 
 	importMap2 := core.NewImportMap("/test/file2.py")

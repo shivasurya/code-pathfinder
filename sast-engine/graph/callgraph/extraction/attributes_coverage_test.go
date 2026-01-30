@@ -790,23 +790,23 @@ func TestStripTypeHintWrappers(t *testing.T) {
 		},
 		{
 			name:     "Union with None first",
-			input:    "Union[None, UserController]",
-			expected: "UserController",
+			input:    "Union[None, Handler]",
+			expected: "Handler",
 		},
 		{
 			name:     "Union with None last",
-			input:    "Union[SSOController, None]",
-			expected: "SSOController",
+			input:    "Union[Service, None]",
+			expected: "Service",
 		},
 		{
 			name:     "Pipe syntax - class first",
-			input:    "InvitationController | None",
-			expected: "InvitationController",
+			input:    "Manager | None",
+			expected: "Manager",
 		},
 		{
 			name:     "Pipe syntax - None first",
-			input:    "None | TwoFactorMFAController",
-			expected: "TwoFactorMFAController",
+			input:    "None | Processor",
+			expected: "Processor",
 		},
 		{
 			name:     "Plain class name - no wrapper",
@@ -815,13 +815,13 @@ func TestStripTypeHintWrappers(t *testing.T) {
 		},
 		{
 			name:     "Optional with spaces",
-			input:    "Optional[ UserController ]",
-			expected: "UserController",
+			input:    "Optional[ Handler ]",
+			expected: "Handler",
 		},
 		{
 			name:     "Union with spaces",
-			input:    "Union[ SSOController , None ]",
-			expected: "SSOController",
+			input:    "Union[ Service , None ]",
+			expected: "Service",
 		},
 		{
 			name:     "Pipe with spaces",

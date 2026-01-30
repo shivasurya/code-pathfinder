@@ -1091,14 +1091,14 @@ func TestFailureStats_SampleLimit(t *testing.T) {
 //
 // Scenario:
 //
-//	class UserService:
+//	class Service:
 //	    def __init__(self):
-//	        self.controller = UserController()  # controller is instance variable
+//	        self.controller = Controller()  # controller is instance variable
 //
-//	    def register_user(self, name):
-//	        return self.controller.create_user(name)  # call on instance variable
+//	    def process_action(self, name):
+//	        return self.controller.execute(name)  # call on instance variable
 //
-// Expected: self.controller.create_user should resolve to controller.UserController.create_user.
+// Expected: self.controller.execute should resolve to controller.Controller.execute.
 func TestResolveSelfAttributeCall_CustomClass(t *testing.T) {
 	// Reset failure stats
 	attributeFailureStats = &FailureStats{
@@ -1119,8 +1119,8 @@ func TestResolveSelfAttributeCall_CustomClass(t *testing.T) {
 	}{
 		{
 			name:      "custom class method call - method exists",
-			target:    "self.controller.create_user",
-			callerFQN: "service.UserService.register_user",
+			target:    "self.controller.execute",
+			callerFQN: "service.Service.process_action",
 			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
 				moduleRegistry := core.NewModuleRegistry()
 				typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -1128,39 +1128,39 @@ func TestResolveSelfAttributeCall_CustomClass(t *testing.T) {
 				builtins := registry.NewBuiltinRegistry()
 				callGraph := core.NewCallGraph()
 
-				// Setup: UserService class with controller attribute
-				typeEngine.Attributes.AddAttribute("service.UserService", &core.ClassAttribute{
+				// Setup: Service class with controller attribute
+				typeEngine.Attributes.AddAttribute("service.Service", &core.ClassAttribute{
 					Name: "controller",
 					Type: &core.TypeInfo{
-						TypeFQN:    "controller.UserController",
+						TypeFQN:    "controller.Controller",
 						Confidence: 1.0,
 						Source:     "class_instantiation",
 					},
 					Confidence: 1.0,
 				})
 
-				// Add register_user method to UserService
-				classAttrs := typeEngine.Attributes.GetClassAttributes("service.UserService")
-				classAttrs.Methods = append(classAttrs.Methods, "service.UserService.register_user")
+				// Add process_action method to Service
+				classAttrs := typeEngine.Attributes.GetClassAttributes("service.Service")
+				classAttrs.Methods = append(classAttrs.Methods, "service.Service.process_action")
 
-				// Add create_user method to UserController in call graph
-				callGraph.Functions["controller.UserController.create_user"] = &graph.Node{
+				// Add execute method to Controller in call graph
+				callGraph.Functions["controller.Controller.execute"] = &graph.Node{
 					ID:   "func-create-user",
-					Name: "create_user",
+					Name: "execute",
 					Type: "method",
 				}
 
 				return typeEngine, builtins, callGraph
 			},
 			expectedResolved: true,
-			expectedFQN:      "controller.UserController.create_user",
-			expectedType:     "controller.UserController",
+			expectedFQN:      "controller.Controller.execute",
+			expectedType:     "controller.Controller",
 			expectedSource:   "self_attribute_custom_class",
 		},
 		{
 			name:      "custom class method call - method does not exist",
 			target:    "self.controller.nonexistent_method",
-			callerFQN: "service.UserService.register_user",
+			callerFQN: "service.Service.process_action",
 			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
 				moduleRegistry := core.NewModuleRegistry()
 				typeEngine := NewTypeInferenceEngine(moduleRegistry)
@@ -1168,20 +1168,20 @@ func TestResolveSelfAttributeCall_CustomClass(t *testing.T) {
 				builtins := registry.NewBuiltinRegistry()
 				callGraph := core.NewCallGraph()
 
-				// Setup: UserService class with controller attribute
-				typeEngine.Attributes.AddAttribute("service.UserService", &core.ClassAttribute{
+				// Setup: Service class with controller attribute
+				typeEngine.Attributes.AddAttribute("service.Service", &core.ClassAttribute{
 					Name: "controller",
 					Type: &core.TypeInfo{
-						TypeFQN:    "controller.UserController",
+						TypeFQN:    "controller.Controller",
 						Confidence: 1.0,
 						Source:     "class_instantiation",
 					},
 					Confidence: 1.0,
 				})
 
-				// Add register_user method to UserService
-				classAttrs := typeEngine.Attributes.GetClassAttributes("service.UserService")
-				classAttrs.Methods = append(classAttrs.Methods, "service.UserService.register_user")
+				// Add process_action method to Service
+				classAttrs := typeEngine.Attributes.GetClassAttributes("service.Service")
+				classAttrs.Methods = append(classAttrs.Methods, "service.Service.process_action")
 
 				// Note: nonexistent_method is NOT in call graph
 

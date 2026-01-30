@@ -537,7 +537,7 @@ func inferFromConstructorParam(
 		}
 		// Handle both typed_parameter and typed_default_parameter
 		// typed_default_parameter is used when parameter has both type annotation AND default value
-		// e.g., controller: Optional[ManagedSSOController] = None
+		// e.g., controller: Optional[Controller] = None
 		if param.Type() != "typed_parameter" && param.Type() != "typed_default_parameter" {
 			continue
 		}
@@ -612,10 +612,10 @@ func inferFromAttributeCopy(node *sitter.Node, _ []byte, _ *resolution.TypeInfer
 // for ImportMap lookup to work correctly.
 //
 // Examples:
-//   - "Optional[UserController]" → "UserController"
-//   - "Union[SSOController, None]" → "SSOController"
-//   - "ManagedSSOController | None" → "ManagedSSOController"
-//   - "ManagedSSOController" → "ManagedSSOController"
+//   - "Optional[Controller]" → "Controller"
+//   - "Union[Handler, None]" → "Handler"
+//   - "Controller | None" → "Controller"
+//   - "Controller" → "Controller"
 func stripTypeHintWrappers(typeName string) string {
 	typeName = strings.TrimSpace(typeName)
 
