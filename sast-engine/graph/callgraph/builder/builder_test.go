@@ -743,6 +743,8 @@ func TestValidateFQN(t *testing.T) {
 		{"Invalid module FQN", "unknownmodule.func", false},
 		{"Empty FQN", "", false},
 		{"Valid module name without dot", "mymodule", true},
+		{"Valid class method FQN (grandparent module)", "mymodule.ClassName.method", true},
+		{"Invalid class method FQN (grandparent not in registry)", "unknownmodule.ClassName.method", false},
 	}
 
 	for _, tt := range tests {
