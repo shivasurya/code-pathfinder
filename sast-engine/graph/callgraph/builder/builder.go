@@ -1234,13 +1234,24 @@ func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
 		return true
 	}
 
-	// Check if parent module exists (for functions)
+	// Check if parent module exists (for module-level functions/classes)
 	// "myapp.utils.sanitize" → check if "myapp.utils" exists
 	lastDot := strings.LastIndex(fqn, ".")
 	if lastDot > 0 {
 		parentModule := fqn[:lastDot]
 		if _, ok := registry.Modules[parentModule]; ok {
 			return true
+		}
+
+		// For class methods (module.ClassName.method_name), parent is ClassName
+		// which won't be in registry. Check grandparent (module level).
+		// "adapter.UserAdapter.to_domain_model" → check if "adapter" exists
+		secondLastDot := strings.LastIndex(parentModule, ".")
+		if secondLastDot > 0 {
+			grandparentModule := parentModule[:secondLastDot]
+			if _, ok := registry.Modules[grandparentModule]; ok {
+				return true
+			}
 		}
 	}
 
