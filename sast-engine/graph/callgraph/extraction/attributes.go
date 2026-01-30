@@ -3,6 +3,7 @@ package extraction
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
@@ -317,18 +318,20 @@ func inferAttributeType(
 		return typeInfo
 	}
 
-	// Strategy 2: Class instantiation (confidence: 0.9)
+	// Strategy 2: Constructor parameters (confidence: 0.95) - Run before class instantiation
+	// This strategy handles typed parameters like "controller: Optional[Controller] = None"
+	if typeInfo := inferFromConstructorParam(assignment, methodNode, sourceCode, typeEngine); typeInfo != nil {
+		return typeInfo
+	}
+
+	// Strategy 3: Class instantiation (confidence: 0.9)
+	// Fallback for untyped parameters like "controller=None" with "controller or Controller()"
 	if typeInfo := inferFromClassInstantiation(rightNode, sourceCode, typeEngine); typeInfo != nil {
 		return typeInfo
 	}
 
-	// Strategy 3: Function call returns (confidence: 0.8)
+	// Strategy 4: Function call returns (confidence: 0.8)
 	if typeInfo := inferFromFunctionCall(rightNode, sourceCode, typeEngine); typeInfo != nil {
-		return typeInfo
-	}
-
-	// Strategy 4: Constructor parameters (confidence: 0.95)
-	if typeInfo := inferFromConstructorParam(assignment, methodNode, sourceCode, typeEngine); typeInfo != nil {
 		return typeInfo
 	}
 
@@ -338,7 +341,7 @@ func inferAttributeType(
 	}
 
 	// Strategy 6: Type annotations (confidence: 1.0)
-	// TODO: Implement annotation extraction from typed_parameter nodes
+	// Note: This is now handled by Strategy 2 (Constructor parameters)
 
 	// Unknown type
 	return nil
@@ -409,7 +412,40 @@ func inferFromLiteral(node *sitter.Node, _ []byte) *core.TypeInfo {
 }
 
 // Strategy 2: Infer type from class instantiation.
-func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, _ *resolution.TypeInferenceEngine) *core.TypeInfo {
+func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngine *resolution.TypeInferenceEngine) *core.TypeInfo {
+	// Handle boolean operators: extract class from right side of "or"
+	// e.g., "controller or Controller()" → extract "Controller()"
+	if node.Type() == "boolean_operator" {
+		// Find the operator and operands
+		var leftNode, rightNode *sitter.Node
+		var foundOr bool
+
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if child == nil {
+				continue
+			}
+
+			switch child.Type() {
+			case "or":
+				foundOr = true
+			case "identifier", "call", "attribute", "boolean_operator":
+				if leftNode == nil {
+					leftNode = child
+				} else if rightNode == nil {
+					rightNode = child
+				}
+			}
+		}
+
+		// For "or" operator, prefer right side (concrete value over None/falsy)
+		if foundOr && rightNode != nil {
+			return inferFromClassInstantiation(rightNode, sourceCode, typeEngine)
+		}
+
+		return nil
+	}
+
 	if node.Type() != "call" {
 		return nil
 	}
@@ -481,12 +517,11 @@ func inferFromConstructorParam(
 		return nil
 	}
 
-	// Check if right side is an identifier
-	if assignment.RightSide.Type() != "identifier" {
+	// Extract parameter name from RHS (handles both simple identifier and boolean operators)
+	paramName := extractParamNameFromRHS(assignment.RightSide, sourceCode)
+	if paramName == "" {
 		return nil
 	}
-
-	paramName := assignment.RightSide.Content(sourceCode)
 
 	// Get function parameters
 	params := methodNode.ChildByFieldName("parameters")
@@ -497,12 +532,26 @@ func inferFromConstructorParam(
 	// Find matching parameter with type annotation
 	for i := 0; i < int(params.ChildCount()); i++ {
 		param := params.Child(i)
-		if param == nil || param.Type() != "typed_parameter" {
+		if param == nil {
+			continue
+		}
+		// Handle both typed_parameter and typed_default_parameter
+		// typed_default_parameter is used when parameter has both type annotation AND default value
+		// e.g., controller: Optional[ManagedSSOController] = None
+		if param.Type() != "typed_parameter" && param.Type() != "typed_default_parameter" {
 			continue
 		}
 
 		// Get parameter name
+		// Note: typed_parameter uses field name, but typed_default_parameter uses positional access
 		identNode := param.ChildByFieldName("identifier")
+		if identNode == nil && param.ChildCount() > 0 {
+			// For typed_default_parameter, identifier is first child
+			firstChild := param.Child(0)
+			if firstChild != nil && firstChild.Type() == "identifier" {
+				identNode = firstChild
+			}
+		}
 		if identNode == nil {
 			continue
 		}
@@ -515,9 +564,21 @@ func inferFromConstructorParam(
 			}
 
 			typeName := typeNode.Content(sourceCode)
+
+			// Strip type hint wrappers (Optional[], Union[], etc.) to get the actual class name
+			strippedTypeName := stripTypeHintWrappers(typeName)
+
+			// Adjust confidence based on assignment pattern
+			// Simple identifier (self.x = param): 0.95
+			// Boolean operator (self.x = param or Class()): 0.92
+			confidence := float32(0.95)
+			if assignment.RightSide.Type() == "boolean_operator" {
+				confidence = 0.92
+			}
+
 			return &core.TypeInfo{
-				TypeFQN:    "param:" + typeName, // Placeholder, will be resolved
-				Confidence: 0.95,
+				TypeFQN:    "param:" + strippedTypeName, // Placeholder, will be resolved
+				Confidence: confidence,
 				Source:     "constructor_param",
 			}
 		}
@@ -537,4 +598,143 @@ func inferFromAttributeCopy(node *sitter.Node, _ []byte, _ *resolution.TypeInfer
 	// which creates circular dependency (need attributes to infer attributes)
 	// This is a future enhancement
 	return nil
+}
+
+// stripTypeHintWrappers removes Python type hint wrappers to extract the core class name.
+//
+// Handles common patterns:
+//   - Optional[ClassName] → ClassName
+//   - Union[ClassName, None] → ClassName
+//   - ClassName | None → ClassName
+//   - ClassName → ClassName (no change)
+//
+// This enables type annotations like "Optional[Controller]" to resolve to "Controller"
+// for ImportMap lookup to work correctly.
+//
+// Examples:
+//   - "Optional[UserController]" → "UserController"
+//   - "Union[SSOController, None]" → "SSOController"
+//   - "ManagedSSOController | None" → "ManagedSSOController"
+//   - "ManagedSSOController" → "ManagedSSOController"
+func stripTypeHintWrappers(typeName string) string {
+	typeName = strings.TrimSpace(typeName)
+
+	// Handle Optional[ClassName] → extract ClassName
+	if strings.HasPrefix(typeName, "Optional[") && strings.HasSuffix(typeName, "]") {
+		inner := typeName[len("Optional[") : len(typeName)-1]
+		return strings.TrimSpace(inner)
+	}
+
+	// Handle Union[ClassName, None] or Union[None, ClassName] → extract ClassName
+	if strings.HasPrefix(typeName, "Union[") && strings.HasSuffix(typeName, "]") {
+		inner := typeName[len("Union[") : len(typeName)-1]
+		parts := strings.Split(inner, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "None" && part != "" {
+				return part
+			}
+		}
+	}
+
+	// Handle ClassName | None or None | ClassName → extract ClassName
+	if strings.Contains(typeName, "|") {
+		parts := strings.Split(typeName, "|")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "None" && part != "" {
+				return part
+			}
+		}
+	}
+
+	// No wrapper, return as-is
+	return typeName
+}
+
+// extractParamNameFromRHS extracts parameter name from RHS expression, handling:
+// - Simple identifier: "controller"
+// - Boolean operator: "controller or Controller()"
+//
+// This supports conditional assignment patterns used in dependency injection:
+//
+//	def __init__(self, controller: Controller | None = None):
+//	    self.controller = controller or Controller()
+//
+// Returns the parameter name if found, empty string otherwise.
+func extractParamNameFromRHS(node *sitter.Node, sourceCode []byte) string {
+	switch node.Type() {
+	case "identifier":
+		return node.Content(sourceCode)
+
+	case "boolean_operator":
+		return extractParamFromBooleanOp(node, sourceCode)
+
+	default:
+		return ""
+	}
+}
+
+// extractParamFromBooleanOp handles boolean operator patterns (or, and).
+//
+// Supported patterns:
+//   - "param or Class()": Extract "param" if right is instantiation
+//   - "param and handler": Extract "param" from left operand
+//   - "a or b or Class()": Extract leftmost identifier "a"
+//
+// Returns parameter name if pattern matches, empty string otherwise.
+func extractParamFromBooleanOp(node *sitter.Node, sourceCode []byte) string {
+	// Find operator ("or" or "and") and operands
+	var operator string
+	var leftNode, rightNode *sitter.Node
+
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child == nil {
+			continue
+		}
+
+		switch child.Type() {
+		case "or", "and":
+			operator = child.Type()
+		case "identifier", "call", "attribute", "boolean_operator":
+			if leftNode == nil {
+				leftNode = child
+			} else if rightNode == nil {
+				rightNode = child
+			}
+		}
+	}
+
+	if leftNode == nil || operator == "" {
+		return ""
+	}
+
+	// For "or": param or Class()
+	if operator == "or" {
+		// Left should be identifier (param name)
+		if leftNode.Type() == "identifier" {
+			paramName := leftNode.Content(sourceCode)
+
+			// Validate right is instantiation (call node)
+			if rightNode != nil && rightNode.Type() == "call" {
+				return paramName
+			}
+
+			// Handle nested: param or other or Class()
+			// Still return leftmost param name
+			if rightNode != nil && rightNode.Type() == "boolean_operator" {
+				return paramName
+			}
+		}
+	}
+
+	// For "and": param and param.method()
+	if operator == "and" {
+		if leftNode.Type() == "identifier" {
+			return leftNode.Content(sourceCode)
+		}
+	}
+
+	return ""
 }
