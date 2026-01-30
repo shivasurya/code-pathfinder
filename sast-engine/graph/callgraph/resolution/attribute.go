@@ -141,13 +141,33 @@ func ResolveSelfAttributeCall(
 		return "", false, nil
 	}
 
-	// TODO: Handle custom class types (class:User → myapp.User)
-	// This requires resolving placeholders and class method lookup
+	// Handle custom class types (user-defined classes).
+	// The attribute type is already resolved (e.g., "controller.UserController")
+	// from variable extraction. Now we need to resolve the method call on that type.
+	methodFQN := attributeTypeFQN + "." + methodName
+
+	// Check if method exists in CallGraph.Functions map.
+	if callGraph != nil {
+		if node := callGraph.Functions[methodFQN]; node != nil {
+			// Verify it's actually a callable (method, function, constructor, etc.).
+			if node.Type == "method" || node.Type == "function_definition" ||
+				node.Type == "constructor" || node.Type == "property" ||
+				node.Type == "special_method" {
+				return methodFQN, true, &core.TypeInfo{
+					TypeFQN:    attributeTypeFQN,
+					Confidence: float32(attr.Confidence),
+					Source:     "self_attribute_custom_class",
+				}
+			}
+		}
+	}
+
+	// Method not found in call graph - collect stats and return unresolved.
 	attributeFailureStats.CustomClassUnsupported++
 	if len(attributeFailureStats.CustomClassSamples) < 20 {
 		attributeFailureStats.CustomClassSamples = append(
 			attributeFailureStats.CustomClassSamples,
-			fmt.Sprintf("%s (type: %s)", target, attributeTypeFQN))
+			fmt.Sprintf("%s (type: %s, method not found: %s)", target, attributeTypeFQN, methodFQN))
 	}
 	return "", false, nil
 }
@@ -300,7 +320,7 @@ func ResolveAttributePlaceholders(
 			case strings.HasPrefix(originalType, "class:"):
 				// class:User → try to resolve to full FQN
 				className := strings.TrimPrefix(originalType, "class:")
-				resolvedFQN := resolveClassName(className, classFQN, moduleRegistry, codeGraph)
+				resolvedFQN := resolveClassName(className, classFQN, moduleRegistry, codeGraph, classAttrs.FilePath, typeEngine)
 				if resolvedFQN != "" {
 					attr.Type.TypeFQN = resolvedFQN
 					attr.Type.Confidence = 0.9 // High confidence for resolved classes
@@ -320,7 +340,7 @@ func ResolveAttributePlaceholders(
 			case strings.HasPrefix(originalType, "param:"):
 				// param:User → resolve type annotation
 				typeName := strings.TrimPrefix(originalType, "param:")
-				resolvedFQN := resolveClassName(typeName, classFQN, moduleRegistry, codeGraph)
+				resolvedFQN := resolveClassName(typeName, classFQN, moduleRegistry, codeGraph, classAttrs.FilePath, typeEngine)
 				if resolvedFQN != "" {
 					attr.Type.TypeFQN = resolvedFQN
 					attr.Type.Confidence = 0.95 // Very high confidence for annotations
@@ -333,18 +353,31 @@ func ResolveAttributePlaceholders(
 	}
 }
 
-// resolveClassName resolves a class name to its fully qualified name
-// Uses module registry and code graph to find the class definition.
+// resolveClassName resolves a class name to its fully qualified name.
+// Uses module registry, code graph, and ImportMap to find the class definition.
+//
+// P0 Fix: Now uses ImportMap (if available) to resolve imported class names correctly.
 func resolveClassName(
 	className string,
 	contextClassFQN string,
 	moduleRegistry *core.ModuleRegistry,
 	codeGraph *graph.CodeGraph,
+	filePath string,
+	typeEngine *TypeInferenceEngine,
 ) string {
+	// P0 Fix: Try ImportMap first (most accurate for imported classes)
+	if filePath != "" && typeEngine != nil {
+		if importMap := typeEngine.GetImportMap(filePath); importMap != nil {
+			if resolvedFQN, ok := importMap.Resolve(className); ok {
+				return resolvedFQN
+			}
+		}
+	}
+
 	// Get the module of the context class
 	modulePath := getModuleFromClassFQN(contextClassFQN)
 
-	// Try same module first
+	// Try same module next
 	candidateFQN := modulePath + "." + className
 	if classExists(candidateFQN, codeGraph) {
 		return candidateFQN
@@ -353,8 +386,8 @@ func resolveClassName(
 	// Try short name lookup in module registry
 	if paths, ok := moduleRegistry.ShortNames[className]; ok && len(paths) > 0 {
 		// Use first match (could be improved with import analysis)
-		filePath := paths[0]
-		if modulePath, ok := moduleRegistry.FileToModule[filePath]; ok {
+		filePathMatch := paths[0]
+		if modulePath, ok := moduleRegistry.FileToModule[filePathMatch]; ok {
 			return modulePath + "." + className
 		}
 	}

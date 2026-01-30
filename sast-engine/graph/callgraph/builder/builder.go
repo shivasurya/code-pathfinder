@@ -183,6 +183,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					continue
 				}
 
+				// Store ImportMap for later use in attribute placeholder resolution (P0 fix)
+				typeEngine.AddImportMap(job.filePath, importMap)
+
 				returns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins, importMap)
 				if err != nil {
 					continue
@@ -242,6 +245,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 				if err != nil {
 					continue
 				}
+
+				// Store ImportMap for later use in attribute placeholder resolution (P0 fix)
+				typeEngine.AddImportMap(filePath, importMap)
 
 				// Extract variable assignments - typeEngine methods are mutex-protected internally
 				// Class context is tracked during AST traversal to build class-qualified FQNs (matching Pass 1)
@@ -342,6 +348,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 				if err != nil {
 					continue
 				}
+
+				// Store ImportMap for later use in attribute placeholder resolution (P0 fix)
+				typeEngine.AddImportMap(job.filePath, importMap)
 
 				// Extract all call sites from this file
 				callSites, err := resolution.ExtractCallSites(job.filePath, sourceCode, importMap)
