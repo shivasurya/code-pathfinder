@@ -412,6 +412,8 @@ func inferFromLiteral(node *sitter.Node, _ []byte) *core.TypeInfo {
 }
 
 // Strategy 2: Infer type from class instantiation.
+//
+//nolint:unparam // typeEngine kept for strategy interface consistency and recursive call
 func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngine *resolution.TypeInferenceEngine) *core.TypeInfo {
 	// Handle boolean operators: extract class from right side of "or"
 	// e.g., "controller or Controller()" → extract "Controller()"
