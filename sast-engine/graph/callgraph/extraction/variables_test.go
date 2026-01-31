@@ -3,6 +3,7 @@ package extraction
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
@@ -452,5 +453,122 @@ func TestInferTypeFromExpression(t *testing.T) {
 			assert.Equal(t, tt.expectedType, xBinding.Type.TypeFQN)
 		})
 	}
+}
+
+// TestExtractVariableAssignments_BooleanOperator tests local variable type inference from boolean operators.
+// Validates that local variable assignments using boolean operators (or, and) correctly
+// infer types from operands with appropriate confidence penalties.
+//
+// Example tested:
+//   - config or Settings() → infer Settings (confidence: 0.76)
+//
+// This complements the class attribute boolean operator support (attributes.go) by
+// handling local variables in regular functions.
+func TestExtractVariableAssignments_BooleanOperator(t *testing.T) {
+	tests := []struct {
+		name         string
+		sourceCode   string
+		varName      string
+		expectedType string
+		expectedConf float32
+	}{
+		{
+			name: "or with class instantiation",
+			sourceCode: `
+def process(config):
+    settings = config or Settings()
+    return settings
+`,
+			varName:      "settings",
+			expectedType: "test.Settings", // Resolved via import map
+			expectedConf: 0.76,           // 0.8 (base for class) * 0.95 (boolean penalty)
+		},
+		{
+			name: "or with list literal",
+			sourceCode: `
+def get_items(items):
+    result = items or []
+    return result
+`,
+			varName:      "result",
+			expectedType: "builtins.list",
+			expectedConf: 0.95, // 1.0 (base) * 0.95 (penalty)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			tmpDir := t.TempDir()
+			filePath := filepath.Join(tmpDir, "test.py")
+			err := os.WriteFile(filePath, []byte(tt.sourceCode), 0644)
+			assert.NoError(t, err)
+
+			modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+			assert.NoError(t, err)
+
+			typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+			typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+			// Extract assignments
+			err = ExtractVariableAssignments(filePath, []byte(tt.sourceCode), typeEngine, modRegistry, typeEngine.Builtins, nil)
+			assert.NoError(t, err)
+
+			// Determine function name from source code
+			var funcName string
+			switch {
+			case strings.Contains(tt.sourceCode, "def process"):
+				funcName = "test.process"
+			case strings.Contains(tt.sourceCode, "def get_items"):
+				funcName = "test.get_items"
+			default:
+				t.Fatalf("Unknown function in source code")
+			}
+
+			// Verify
+			scope := typeEngine.GetScope(funcName)
+			assert.NotNil(t, scope, "Scope should exist for function %s", funcName)
+
+			binding := scope.Variables[tt.varName]
+			assert.NotNil(t, binding, "Variable %s should be bound", tt.varName)
+			assert.Equal(t, tt.expectedType, binding.Type.TypeFQN, "Type FQN mismatch for %s", tt.varName)
+			assert.InDelta(t, tt.expectedConf, binding.Type.Confidence, 0.01, "Confidence mismatch for %s", tt.varName)
+
+			// Verify source includes "boolean_or_" or "boolean_and_" prefix
+			assert.True(t,
+				strings.HasPrefix(binding.Type.Source, "boolean_or_") ||
+					strings.HasPrefix(binding.Type.Source, "boolean_and_"),
+				"Source should have boolean prefix, got: %s", binding.Type.Source)
+		})
+	}
+}
+
+// TestInferFromBooleanOp_EdgeCases tests edge cases for inferFromBooleanOp.
+// Ensures boolean operator type inference handles various operand combinations.
+func TestInferFromBooleanOp_EdgeCases(t *testing.T) {
+	code := `
+def test():
+    x = "left" or "right"
+`
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, []byte(code), 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, []byte(code), typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.test")
+	assert.NotNil(t, scope, "Scope should exist")
+
+	binding := scope.Variables["x"]
+	assert.NotNil(t, binding, "Variable x should be bound")
+	assert.Equal(t, "builtins.str", binding.Type.TypeFQN, "Should infer string type from right operand")
 }
 

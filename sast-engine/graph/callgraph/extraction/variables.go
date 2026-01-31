@@ -348,6 +348,12 @@ func inferTypeFromExpression(
 		}
 	}
 
+	// Handle boolean operators (or, and)
+	// Supports conditional patterns: x = param or Class()
+	if nodeType == "boolean_operator" {
+		return inferFromBooleanOp(node, sourceCode, modulePath, registry, builtinRegistry, importMap)
+	}
+
 	// Handle literals
 	switch nodeType {
 	case "string", "concatenated_string":
@@ -410,6 +416,97 @@ func inferTypeFromExpression(
 	// This handles edge cases where tree-sitter node types don't match exactly
 	literal := node.Content(sourceCode)
 	return builtinRegistry.InferLiteralType(literal)
+}
+
+// inferFromBooleanOp infers type from boolean operator expressions.
+//
+// Handles conditional patterns for local variables:
+//   - x or Y(): Prefer right operand (concrete value over None/falsy)
+//   - x and Y(): Prefer left operand
+//   - x or y or Z(): Recursively process nested operators
+//
+// Examples:
+//   - config or Settings() → type: Settings (confidence: 0.855)
+//   - x or None → type: NoneType (confidence: 0.95)
+//   - enabled and "active" → type: str (confidence: 0.93)
+//
+// Parameters:
+//   - node: boolean_operator AST node
+//   - sourceCode: source code bytes
+//   - modulePath: module FQN for class resolution
+//   - registry: module registry
+//   - builtinRegistry: builtin types registry
+//   - importMap: import mappings
+//
+// Returns:
+//   - TypeInfo with inferred type and adjusted confidence, or nil if cannot infer
+func inferFromBooleanOp(
+	node *sitter.Node,
+	sourceCode []byte,
+	modulePath string,
+	registry *core.ModuleRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
+) *core.TypeInfo {
+	// Find operator and operands by traversing children
+	var operator string
+	var leftNode, rightNode *sitter.Node
+
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child == nil {
+			continue
+		}
+
+		switch child.Type() {
+		case "or", "and":
+			operator = child.Type()
+		default:
+			// Capture first two non-operator nodes as operands
+			if leftNode == nil {
+				leftNode = child
+			} else if rightNode == nil {
+				rightNode = child
+			}
+		}
+	}
+
+	if leftNode == nil || operator == "" {
+		return nil
+	}
+
+	// For "or": prefer right operand (concrete value over None/falsy)
+	// Example: config or Settings() → infer Settings
+	if operator == "or" && rightNode != nil {
+		rightType := inferTypeFromExpression(rightNode, sourceCode, modulePath, registry, builtinRegistry, importMap)
+		if rightType != nil && rightType.TypeFQN != "builtins.NoneType" {
+			// Apply confidence penalty for conditional pattern
+			rightType.Confidence *= 0.95
+			rightType.Source = "boolean_or_" + rightType.Source
+			return rightType
+		}
+
+		// Fallback to left operand if right is None or cannot be inferred
+		leftType := inferTypeFromExpression(leftNode, sourceCode, modulePath, registry, builtinRegistry, importMap)
+		if leftType != nil {
+			leftType.Confidence *= 0.90
+			leftType.Source = "boolean_or_" + leftType.Source
+			return leftType
+		}
+	}
+
+	// For "and": prefer left operand
+	// Example: enabled and "active" → infer from "active"
+	if operator == "and" {
+		leftType := inferTypeFromExpression(leftNode, sourceCode, modulePath, registry, builtinRegistry, importMap)
+		if leftType != nil {
+			leftType.Confidence *= 0.93
+			leftType.Source = "boolean_and_" + leftType.Source
+			return leftType
+		}
+	}
+
+	return nil
 }
 
 // extractFunctionName extracts the function name from a function_definition node.
