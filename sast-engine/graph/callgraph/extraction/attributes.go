@@ -11,6 +11,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution/strategies"
 )
 
 // ExtractClassAttributes extracts all class attributes from a Python file
@@ -221,6 +222,7 @@ func extractAttributeAssignments(
 				sourceCode,
 				typeEngine,
 				methodNode,
+				filePath,
 			)
 
 			if typeInfo != nil {
@@ -310,6 +312,7 @@ func inferAttributeType(
 	sourceCode []byte,
 	typeEngine *resolution.TypeInferenceEngine,
 	methodNode *sitter.Node,
+	filePath string,
 ) *core.TypeInfo {
 	rightNode := assignment.RightSide
 
@@ -327,6 +330,12 @@ func inferAttributeType(
 	// Strategy 3: Class instantiation (confidence: 0.9)
 	// Fallback for untyped parameters like "controller=None" with "controller or Controller()"
 	if typeInfo := inferFromClassInstantiation(rightNode, sourceCode, typeEngine); typeInfo != nil {
+		return typeInfo
+	}
+
+	// Strategy 3b: Inline instantiation with chaining (confidence: 0.85)
+	// Handles Controller().configure() or Builder().set_x().set_y() patterns
+	if typeInfo := inferFromInlineInstantiation(rightNode, sourceCode, typeEngine, filePath); typeInfo != nil {
 		return typeInfo
 	}
 
@@ -475,7 +484,125 @@ func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngin
 	return nil
 }
 
-// Strategy 3: Infer type from function call returns.
+// moduleRegistryAdapter adapts core.ModuleRegistry to strategies.ModuleRegistryInterface.
+// Needed because GetModulePath signatures differ:
+// - core.ModuleRegistry.GetModulePath(string) (string, bool)
+// - strategies.ModuleRegistryInterface.GetModulePath(string) string
+type moduleRegistryAdapter struct {
+	registry *core.ModuleRegistry
+}
+
+func (a *moduleRegistryAdapter) GetModulePath(filePath string) string {
+	// Use FileToModule map to convert file path to module path
+	// Note: ModuleRegistry.GetModulePath() does the opposite (module -> file)
+	if a.registry.FileToModule != nil {
+		if modulePath, ok := a.registry.FileToModule[filePath]; ok {
+			return modulePath
+		}
+	}
+	return ""
+}
+
+func (a *moduleRegistryAdapter) ResolveImport(importPath string, fromFile string) (string, bool) {
+	// ModuleRegistry doesn't have ResolveImport method, return not found
+	// ChainStrategy will still work without import resolution
+	return "", false
+}
+
+// Strategy 3b: Infer type from inline instantiation with chaining.
+// Handles patterns like Controller().configure() or Builder().set_x().set_y()
+// Uses ChainStrategy to resolve the chain and extract the base class type.
+// Confidence: 0.85 (heuristic-based fluent interface detection)
+func inferFromInlineInstantiation(
+	node *sitter.Node,
+	sourceCode []byte,
+	typeEngine *resolution.TypeInferenceEngine,
+	filePath string,
+) *core.TypeInfo {
+	// Defensive checks: ensure registries are available
+	if typeEngine == nil || typeEngine.Attributes == nil || typeEngine.Registry == nil {
+		return nil
+	}
+
+	// Create inference context for ChainStrategy
+	// Note: BuiltinRegistry is set to nil because registry.BuiltinRegistry
+	// doesn't implement GetMethodReturnType method required by the interface.
+	// ModuleRegistry uses an adapter to match the interface signature.
+	ctx := &strategies.InferenceContext{
+		SourceCode:      sourceCode,
+		FilePath:        filePath,
+		Store:           resolution.NewTypeStore(),
+		AttrRegistry:    typeEngine.Attributes,
+		ModuleRegistry:  &moduleRegistryAdapter{registry: typeEngine.Registry},
+		BuiltinRegistry: nil, // Interface mismatch: missing GetMethodReturnType
+	}
+
+	// Use ChainStrategy to resolve inline instantiation patterns
+	chainStrat := strategies.NewChainStrategy()
+	if !chainStrat.CanHandle(node, ctx) {
+		return nil
+	}
+
+	// Synthesize the type through the chain
+	resolvedType, confidence := chainStrat.Synthesize(node, ctx)
+
+	// Extract concrete type FQN
+	if concrete, ok := core.ExtractConcreteType(resolvedType); ok {
+		typeFQN := concrete.FQN()
+
+		// If the FQN is just a class name without module prefix (e.g., "Controller"),
+		// try to resolve it to the full FQN by searching the AttributeRegistry.
+		// This handles cross-file class references where ChainStrategy returns the
+		// short name because it doesn't have import resolution.
+		if !strings.Contains(typeFQN, ".") && typeEngine.Attributes != nil {
+			if fullFQN := resolveClassShortName(typeFQN, typeEngine.Attributes); fullFQN != "" {
+				typeFQN = fullFQN
+			}
+		}
+
+		return &core.TypeInfo{
+			TypeFQN:    typeFQN,
+			Confidence: float32(confidence),
+			Source:     "inline_instantiation",
+		}
+	}
+
+	return nil
+}
+
+// resolveClassShortName attempts to resolve a short class name (e.g., "Controller")
+// to its full FQN by searching the AttributeRegistry for matching classes.
+// Returns the full FQN if found, empty string otherwise.
+func resolveClassShortName(shortName string, attrRegistry *registry.AttributeRegistry) string {
+	if attrRegistry == nil {
+		return ""
+	}
+
+	// Get all registered classes and search for ones matching the short name
+	// We look for FQNs that end with ".<shortName>" (e.g., "controller.Controller")
+	var matches []string
+	suffix := "." + shortName
+
+	// Iterate through all classes in the registry
+	// Note: AttributeRegistry doesn't expose a list of all classes directly,
+	// so we need to use the internal Classes map
+	for classFQN := range attrRegistry.Classes {
+		if strings.HasSuffix(classFQN, suffix) {
+			matches = append(matches, classFQN)
+		}
+	}
+
+	// If we found exactly one match, return it
+	if len(matches) == 1 {
+		return matches[0]
+	}
+
+	// If multiple matches, we can't disambiguate without import information
+	// Return empty string to keep the short name
+	return ""
+}
+
+// Strategy 4: Infer type from function call returns.
 func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, _ *resolution.TypeInferenceEngine) *core.TypeInfo {
 	if node.Type() != "call" {
 		return nil
