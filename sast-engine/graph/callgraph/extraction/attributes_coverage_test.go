@@ -967,9 +967,7 @@ class App:
 `,
 			expectedType:       "Controller",
 			expectedConfidence: 0.49, // ChainStrategy fluent heuristic
-			setupRegistry: func() *registry.AttributeRegistry {
-				return registry.NewAttributeRegistry()
-			},
+			setupRegistry:      registry.NewAttributeRegistry,
 		},
 		{
 			name: "inline instantiation with resolution",
@@ -1006,9 +1004,7 @@ class App:
 `,
 			expectedType:       "Builder",
 			expectedConfidence: 0.343, // Lower confidence for deep chain
-			setupRegistry: func() *registry.AttributeRegistry {
-				return registry.NewAttributeRegistry()
-			},
+			setupRegistry:      registry.NewAttributeRegistry,
 		},
 	}
 

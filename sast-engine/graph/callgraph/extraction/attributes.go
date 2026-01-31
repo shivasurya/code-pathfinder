@@ -487,7 +487,7 @@ func inferFromClassInstantiation(node *sitter.Node, sourceCode []byte, typeEngin
 // moduleRegistryAdapter adapts core.ModuleRegistry to strategies.ModuleRegistryInterface.
 // Needed because GetModulePath signatures differ:
 // - core.ModuleRegistry.GetModulePath(string) (string, bool)
-// - strategies.ModuleRegistryInterface.GetModulePath(string) string
+// - strategies.ModuleRegistryInterface.GetModulePath(string) string.
 type moduleRegistryAdapter struct {
 	registry *core.ModuleRegistry
 }
@@ -512,7 +512,7 @@ func (a *moduleRegistryAdapter) ResolveImport(importPath string, fromFile string
 // Strategy 3b: Infer type from inline instantiation with chaining.
 // Handles patterns like Controller().configure() or Builder().set_x().set_y()
 // Uses ChainStrategy to resolve the chain and extract the base class type.
-// Confidence: 0.85 (heuristic-based fluent interface detection)
+// Confidence: 0.85 (heuristic-based fluent interface detection).
 func inferFromInlineInstantiation(
 	node *sitter.Node,
 	sourceCode []byte,
