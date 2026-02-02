@@ -90,8 +90,10 @@ func (l *RuleLoader) LoadRules(logger Logger) ([]RuleIR, error) {
 
 	// If single file, check for rule decorators first
 	if !info.IsDir() {
+		// Skip files without code analysis rules (consistent with directory behavior)
+		// This allows pure container rule files to be used with --rules flag
 		if !hasCodeAnalysisRuleDecorators(l.RulesPath) {
-			return nil, fmt.Errorf("file does not contain code analysis rules (no @rule decorator or codepathfinder imports found)")
+			return []RuleIR{}, nil
 		}
 		return l.loadRulesFromFile(l.RulesPath, logger)
 	}

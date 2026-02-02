@@ -41,8 +41,9 @@ def detect_eval():
 		assert.Equal(t, "CWE-94", rules[0].Rule.CWE)
 	})
 
-	t.Run("rejects file without rule decorators", func(t *testing.T) {
+	t.Run("returns empty list for file without rule decorators", func(t *testing.T) {
 		// Normal Python file without @rule decorator
+		// After fix: should return empty list instead of error (consistent with directory behavior)
 		appContent := `def main():
     print("Hello world")
 
@@ -53,11 +54,37 @@ if __name__ == "__main__":
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules(nil)
+		rules, err := loader.LoadRules(nil)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "file does not contain code analysis rules")
-		assert.Contains(t, err.Error(), "no @rule decorator or codepathfinder imports found")
+		require.NoError(t, err)
+		assert.Empty(t, rules, "should return empty list for file without code analysis rules")
+	})
+
+	t.Run("returns empty list for container rule file without code analysis rules", func(t *testing.T) {
+		// Container rule file with @dockerfile_rule but no @rule decorator
+		// This tests the fix: single container rule files should return empty list, not error
+		containerRuleContent := `from rules.container_decorators import dockerfile_rule
+from rules.container_matchers import instruction
+
+@dockerfile_rule(
+    id="TEST-DOCKER-001",
+    name="Test Container Rule",
+    severity="HIGH",
+    cwe="CWE-250",
+    category="security",
+    message="Test container rule"
+)
+def test_container_rule():
+    return instruction(type="USER")
+`
+		tmpFile := createTempPythonFile(t, containerRuleContent)
+		defer os.Remove(tmpFile)
+
+		loader := NewRuleLoader(tmpFile)
+		rules, err := loader.LoadRules(nil)
+
+		require.NoError(t, err)
+		assert.Empty(t, rules, "should return empty list for container rule file (handled by LoadContainerRules)")
 	})
 
 	t.Run("skips files without rule decorators in directory", func(t *testing.T) {
@@ -87,6 +114,38 @@ def test():
 		// Should only load the valid rule, not the app.py
 		assert.Len(t, rules, 1)
 		assert.Equal(t, "test-rule", rules[0].Rule.ID)
+	})
+
+	t.Run("loads code analysis rules and skips container rules in directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create code analysis rule file
+		codeRule := `from codepathfinder import rule, calls
+
+@rule(id="code-rule", severity="high", cwe="")
+def test_code():
+    return calls("eval")
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "code_rule.py"), []byte(codeRule), 0644)
+		require.NoError(t, err)
+
+		// Create container rule file (should be skipped by LoadRules)
+		containerRule := `from rules.container_decorators import dockerfile_rule
+
+@dockerfile_rule(id="container-rule", name="Container", severity="HIGH", cwe="", category="security", message="msg")
+def test_container():
+    return missing(instruction="USER")
+`
+		err = os.WriteFile(filepath.Join(tmpDir, "container_rule.py"), []byte(containerRule), 0644)
+		require.NoError(t, err)
+
+		loader := NewRuleLoader(tmpDir)
+		rules, err := loader.LoadRules(nil)
+
+		require.NoError(t, err)
+		// Should only load the code analysis rule, skip container rule
+		assert.Len(t, rules, 1)
+		assert.Equal(t, "code-rule", rules[0].Rule.ID)
 	})
 
 	t.Run("handles invalid Python syntax", func(t *testing.T) {
@@ -412,9 +471,9 @@ def detect_eval():
 }
 
 func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
-	t.Run("rejects container rule format in LoadRules", func(t *testing.T) {
+	t.Run("returns empty list for container format in LoadRules", func(t *testing.T) {
 		// Create a file that outputs container format (not code analysis format)
-		// This should be rejected by LoadRules since it doesn't have @rule decorator
+		// After fix: should return empty list since it doesn't have @rule decorator
 		rulesContent := `if __name__ == "__main__":
     import json
     print(json.dumps({"dockerfile": [], "compose": []}))
@@ -423,11 +482,11 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 		defer os.Remove(tmpFile)
 
 		loader := NewRuleLoader(tmpFile)
-		_, err := loader.LoadRules(nil)
+		rules, err := loader.LoadRules(nil)
 
-		// Should error because it doesn't have @rule decorator
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "file does not contain code analysis rules")
+		// Should return empty list (consistent with directory behavior)
+		require.NoError(t, err)
+		assert.Empty(t, rules, "container format file should return empty list from LoadRules")
 	})
 }
 
