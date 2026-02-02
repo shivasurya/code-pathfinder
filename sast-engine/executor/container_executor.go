@@ -69,9 +69,8 @@ func (e *ContainerRuleExecutor) ExecuteDockerfile(
 	matches := make([]RuleMatch, 0)
 
 	for _, rule := range e.dockerfileRules {
-		if match := e.evaluateDockerfileRule(rule, dockerfile); match != nil {
-			matches = append(matches, *match)
-		}
+		ruleMatches := e.evaluateDockerfileRule(rule, dockerfile)
+		matches = append(matches, ruleMatches...)
 	}
 
 	return matches
@@ -97,7 +96,7 @@ func (e *ContainerRuleExecutor) ExecuteCompose(
 func (e *ContainerRuleExecutor) evaluateDockerfileRule(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	matcherType, ok := rule.Matcher["type"].(string)
 	if !ok {
 		return nil
@@ -122,14 +121,14 @@ func (e *ContainerRuleExecutor) evaluateDockerfileRule(
 func (e *ContainerRuleExecutor) evaluateMissingInstruction(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	instType, ok := rule.Matcher["instruction"].(string)
 	if !ok {
 		return nil
 	}
 
 	if !dockerfile.HasInstruction(instType) {
-		return &RuleMatch{
+		return []RuleMatch{{
 			RuleID:     rule.ID,
 			RuleName:   rule.Name,
 			Severity:   rule.Severity,
@@ -137,7 +136,7 @@ func (e *ContainerRuleExecutor) evaluateMissingInstruction(
 			Message:    rule.Message,
 			FilePath:   dockerfile.FilePath,
 			LineNumber: 1, // File-level issue
-		}
+		}}
 	}
 
 	return nil
@@ -146,17 +145,18 @@ func (e *ContainerRuleExecutor) evaluateMissingInstruction(
 func (e *ContainerRuleExecutor) evaluateInstruction(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	instType, ok := rule.Matcher["instruction"].(string)
 	if !ok {
 		return nil
 	}
 
 	nodes := dockerfile.GetInstructions(instType)
+	matches := make([]RuleMatch, 0)
 
 	for _, node := range nodes {
 		if e.matchesInstructionCriteria(rule.Matcher, node) {
-			return &RuleMatch{
+			matches = append(matches, RuleMatch{
 				RuleID:     rule.ID,
 				RuleName:   rule.Name,
 				Severity:   rule.Severity,
@@ -164,11 +164,11 @@ func (e *ContainerRuleExecutor) evaluateInstruction(
 				Message:    rule.Message,
 				FilePath:   dockerfile.FilePath,
 				LineNumber: node.LineNumber,
-			}
+			})
 		}
 	}
 
-	return nil
+	return matches
 }
 
 func (e *ContainerRuleExecutor) matchesInstructionCriteria(
@@ -219,6 +219,20 @@ func (e *ContainerRuleExecutor) matchesInstructionCriteria(
 		hasMatch := false
 		for _, port := range node.Ports {
 			if port < int(portLT) {
+				hasMatch = true
+				break
+			}
+		}
+		if !hasMatch {
+			return false
+		}
+	}
+
+	// Check port_greater_than
+	if portGT, ok := matcher["port_greater_than"].(float64); ok {
+		hasMatch := false
+		for _, port := range node.Ports {
+			if port > int(portGT) {
 				hasMatch = true
 				break
 			}
@@ -396,14 +410,14 @@ func (e *ContainerRuleExecutor) evaluateServiceMissing(
 func (e *ContainerRuleExecutor) evaluateAllOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	conditions, ok := rule.Matcher["conditions"].([]interface{})
 	if !ok {
 		return nil
 	}
 
 	// Track first match to get line number
-	var firstMatch *RuleMatch
+	var firstMatches []RuleMatch
 
 	// All conditions must match
 	for _, cond := range conditions {
@@ -421,32 +435,33 @@ func (e *ContainerRuleExecutor) evaluateAllOf(
 			Matcher:  condMap,
 		}
 
-		match := e.evaluateDockerfileRule(tempRule, dockerfile)
-		if match == nil {
+		matches := e.evaluateDockerfileRule(tempRule, dockerfile)
+		if len(matches) == 0 {
 			// One condition didn't match, so all_of fails
 			return nil
 		}
 
-		// Capture first match to get line number and file path
-		if firstMatch == nil {
-			firstMatch = match
+		// Capture first condition's matches to get line numbers
+		if len(firstMatches) == 0 {
+			firstMatches = matches
 		}
 	}
 
-	// All conditions matched, return first match with proper line number
-	return firstMatch
+	// All conditions matched, return first condition's matches
+	return firstMatches
 }
 
 func (e *ContainerRuleExecutor) evaluateAnyOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	conditions, ok := rule.Matcher["conditions"].([]interface{})
 	if !ok {
 		return nil
 	}
 
-	// Any condition can match
+	// Collect matches from all conditions
+	allMatches := make([]RuleMatch, 0)
 	for _, cond := range conditions {
 		condMap, ok := cond.(map[string]interface{})
 		if !ok {
@@ -462,24 +477,24 @@ func (e *ContainerRuleExecutor) evaluateAnyOf(
 			Matcher:  condMap,
 		}
 
-		if match := e.evaluateDockerfileRule(tempRule, dockerfile); match != nil {
-			return match
-		}
+		matches := e.evaluateDockerfileRule(tempRule, dockerfile)
+		allMatches = append(allMatches, matches...)
 	}
 
-	return nil
+	return allMatches
 }
 
 func (e *ContainerRuleExecutor) evaluateNoneOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
-) *RuleMatch {
+) []RuleMatch {
 	conditions, ok := rule.Matcher["conditions"].([]interface{})
 	if !ok {
 		return nil
 	}
 
-	// No conditions should match
+	// Collect all violations (matches that should NOT have happened)
+	violations := make([]RuleMatch, 0)
 	for _, cond := range conditions {
 		condMap, ok := cond.(map[string]interface{})
 		if !ok {
@@ -495,10 +510,10 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 			Matcher:  condMap,
 		}
 
-		if match := e.evaluateDockerfileRule(tempRule, dockerfile); match != nil {
-			// One condition matched, so none_of triggers
-			// Use the line number from the match that violated the rule
-			return &RuleMatch{
+		matches := e.evaluateDockerfileRule(tempRule, dockerfile)
+		// Each match is a violation of the none_of condition
+		for _, match := range matches {
+			violations = append(violations, RuleMatch{
 				RuleID:     rule.ID,
 				RuleName:   rule.Name,
 				Severity:   rule.Severity,
@@ -506,9 +521,9 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 				Message:    rule.Message,
 				FilePath:   dockerfile.FilePath,
 				LineNumber: match.LineNumber,
-			}
+			})
 		}
 	}
 
-	return nil
+	return violations
 }
