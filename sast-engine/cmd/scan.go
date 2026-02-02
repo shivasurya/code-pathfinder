@@ -188,6 +188,9 @@ Examples:
 				} else {
 					logger.Progress("No container issues detected")
 				}
+			} else {
+				// Container rule loading failed - log for debugging
+				logger.Debug("Container rule loading failed: %v", err)
 			}
 		}
 
@@ -230,6 +233,15 @@ Examples:
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
 		logger.Statistic("Loaded %d rules", len(rules))
+
+		// Validate that at least one type of rule was loaded
+		if len(rules) == 0 && len(containerDetections) == 0 {
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+				"error_type": "no_rules",
+				"phase":      "rule_loading",
+			})
+			return fmt.Errorf("no rules loaded: file contains neither code analysis rules (@rule) nor container rules (@dockerfile_rule/@compose_rule)")
+		}
 
 		// Step 5: Execute rules against callgraph
 		logger.Progress("Running security scan...")
