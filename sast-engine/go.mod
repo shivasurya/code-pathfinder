@@ -1,6 +1,6 @@
 module github.com/shivasurya/code-pathfinder/sast-engine
 
-go 1.25.3
+go 1.25.6
 
 require github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 
@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/posthog/posthog-go v1.9.1
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 )
 
 require (
