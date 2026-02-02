@@ -1350,3 +1350,113 @@ func TestRuleMatch_JSONSerialization(t *testing.T) {
 	assert.Equal(t, match.RuleID, decoded.RuleID)
 	assert.Equal(t, match.ServiceName, decoded.ServiceName)
 }
+
+func TestContainerRuleExecutor_MultiplePortViolations(t *testing.T) {
+	// Test that multiple invalid ports are reported as separate findings
+	executor := &ContainerRuleExecutor{}
+
+	// Create rule with any_of combinator to catch both port < 1 and port > 65535
+	rule := CompiledRule{
+		ID:       "DOCKER-COR-002",
+		Name:     "Invalid Port Number",
+		Severity: "HIGH",
+		CWE:      "CWE-20",
+		Message:  "Invalid port number",
+		Matcher: map[string]interface{}{
+			"type": "any_of",
+			"conditions": []interface{}{
+				map[string]interface{}{
+					"type":           "instruction",
+					"instruction":    "EXPOSE",
+					"port_less_than": float64(1),
+				},
+				map[string]interface{}{
+					"type":              "instruction",
+					"instruction":       "EXPOSE",
+					"port_greater_than": float64(65535),
+				},
+			},
+		},
+	}
+
+	// Create Dockerfile with multiple invalid ports
+	dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+	dockerfile.AddInstruction(&docker.DockerfileNode{
+		InstructionType: "EXPOSE",
+		Ports:           []int{0},
+		LineNumber:      2,
+	})
+	dockerfile.AddInstruction(&docker.DockerfileNode{
+		InstructionType: "EXPOSE",
+		Ports:           []int{70000},
+		LineNumber:      3,
+	})
+
+	executor.dockerfileRules = []CompiledRule{rule}
+	matches := executor.ExecuteDockerfile(dockerfile)
+
+	// Should report both violations
+	require.Len(t, matches, 2, "Expected 2 violations for 2 invalid ports")
+	assert.Equal(t, 2, matches[0].LineNumber, "First match should be line 2")
+	assert.Equal(t, 3, matches[1].LineNumber, "Second match should be line 3")
+	assert.Equal(t, "DOCKER-COR-002", matches[0].RuleID)
+	assert.Equal(t, "DOCKER-COR-002", matches[1].RuleID)
+}
+
+func TestContainerRuleExecutor_PortGreaterThan(t *testing.T) {
+	// Test that port_greater_than matcher works correctly
+	executor := &ContainerRuleExecutor{}
+
+	rule := CompiledRule{
+		ID:   "TEST-PORT-GT",
+		Name: "Port too high",
+		Matcher: map[string]interface{}{
+			"type":              "instruction",
+			"instruction":       "EXPOSE",
+			"port_greater_than": float64(65535),
+		},
+	}
+
+	t.Run("matches port greater than 65535", func(t *testing.T) {
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "EXPOSE",
+			Ports:           []int{70000},
+			LineNumber:      5,
+		})
+
+		executor.dockerfileRules = []CompiledRule{rule}
+		matches := executor.ExecuteDockerfile(dockerfile)
+
+		require.Len(t, matches, 1)
+		assert.Equal(t, 5, matches[0].LineNumber)
+	})
+
+	t.Run("does not match port equal to 65535", func(t *testing.T) {
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "EXPOSE",
+			Ports:           []int{65535},
+			LineNumber:      5,
+		})
+
+		executor.dockerfileRules = []CompiledRule{rule}
+		matches := executor.ExecuteDockerfile(dockerfile)
+
+		require.Len(t, matches, 0)
+	})
+
+	t.Run("does not match valid port", func(t *testing.T) {
+		dockerfile := docker.NewDockerfileGraph("test.Dockerfile")
+		dockerfile.AddInstruction(&docker.DockerfileNode{
+			InstructionType: "EXPOSE",
+			Ports:           []int{8080},
+			LineNumber:      5,
+		})
+
+		executor.dockerfileRules = []CompiledRule{rule}
+		matches := executor.ExecuteDockerfile(dockerfile)
+
+		require.Len(t, matches, 0)
+	})
+}
