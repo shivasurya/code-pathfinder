@@ -3,6 +3,7 @@ package resolution
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -337,4 +338,101 @@ func TestExtractCalleeName_Attribute(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, callSites, 1)
 	assert.Equal(t, "obj.method", callSites[0].Target)
+}
+
+func TestExtractCalleeName_InlineInstantiation(t *testing.T) {
+	// Bug fix: Class(args).method() should extract "Class.method", not "Class(args).method"
+	sourceCode := []byte(`
+def process():
+    MyService(logger=logger).run()
+    OrderService(db=db, cache=cache).create_order()
+    Builder().build()
+`)
+
+	importMap := core.NewImportMap("/test/file.py")
+	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(callSites), 3)
+
+	// Find the inline instantiation calls
+	targets := make([]string, 0, len(callSites))
+	for _, cs := range callSites {
+		targets = append(targets, cs.Target)
+	}
+
+	// Should extract "MyService.run", not "MyService(logger=logger).run"
+	assert.Contains(t, targets, "MyService.run")
+
+	// Should extract "OrderService.create_order", not "OrderService(db=db, cache=cache).create_order"
+	assert.Contains(t, targets, "OrderService.create_order")
+
+	// Should extract "Builder.build", not "Builder().build"
+	assert.Contains(t, targets, "Builder.build")
+
+	// Ensure we don't have the buggy versions with arguments
+	for _, target := range targets {
+		assert.NotContains(t, target, "(", "Target should not contain parentheses or arguments: %s", target)
+	}
+}
+
+func TestExtractCalleeName_NestedInlineInstantiation(t *testing.T) {
+	// Nested case: obj.Factory().create()
+	sourceCode := []byte(`
+def process():
+    obj.ServiceFactory().create()
+    self.ControllerFactory().get_controller()
+`)
+
+	importMap := core.NewImportMap("/test/file.py")
+	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(callSites), 2)
+
+	targets := make([]string, 0, len(callSites))
+	for _, cs := range callSites {
+		targets = append(targets, cs.Target)
+	}
+
+	// Should extract "obj.ServiceFactory.create"
+	assert.Contains(t, targets, "obj.ServiceFactory.create")
+
+	// Should extract "self.ControllerFactory.get_controller"
+	assert.Contains(t, targets, "self.ControllerFactory.get_controller")
+
+	// Ensure no arguments in target names
+	for _, target := range targets {
+		assert.NotContains(t, target, "(", "Target should not contain parentheses: %s", target)
+	}
+}
+
+func TestExtractCalleeName_ChainedMethods(t *testing.T) {
+	// Builder pattern: Builder().set_x(1).set_y(2).build()
+	sourceCode := []byte(`
+def process():
+    result = Builder().set_x(1).set_y(2).build()
+`)
+
+	importMap := core.NewImportMap("/test/file.py")
+	callSites, err := ExtractCallSites("/test/file.py", sourceCode, importMap)
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(callSites), 1)
+
+	targets := make([]string, 0, len(callSites))
+	for _, cs := range callSites {
+		targets = append(targets, cs.Target)
+	}
+
+	// Should contain at least one of the chained method calls
+	// Starting with "Builder.set_x" not "Builder().set_x"
+	hasBuilderCall := false
+	for _, target := range targets {
+		if strings.Contains(target, "Builder") && !strings.Contains(target, "()") {
+			hasBuilderCall = true
+			break
+		}
+	}
+	assert.True(t, hasBuilderCall, "Should have at least one Builder method call without ()")
 }
