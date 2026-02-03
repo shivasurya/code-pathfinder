@@ -211,8 +211,15 @@ func extractCalleeName(node *sitter.Node, sourceCode []byte) string {
 		}
 
 	case "call":
-		// Chained call: foo()() or obj.method()()
-		// For now, just extract the outer call's function
+		// Chained call: Class()() or obj.method()()
+		// Extract the function being called, not the entire call expression with arguments
+		// This prevents FQN pollution like "module.Class(args).method" instead of "module.Class.method"
+		functionNode := node.ChildByFieldName("function")
+		if functionNode != nil {
+			// Recursively extract the function name (could be nested: obj.Class())
+			return extractCalleeName(functionNode, sourceCode)
+		}
+		// Fallback if no function field found
 		return node.Content(sourceCode)
 	}
 
