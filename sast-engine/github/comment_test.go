@@ -1,0 +1,329 @@
+package github
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// --- CommentManager tests ---
+
+func TestPostOrUpdate_CreatesNew(t *testing.T) {
+	var createdBody string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/comments"):
+			// ListComments returns empty — no existing summary comment.
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]*Comment{})
+
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/comments"):
+			var req createCommentRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			createdBody = req.Body
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(Comment{ID: 1, Body: req.Body})
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	client := newTestClient(t, handler)
+	cm := NewCommentManager(client, 42)
+
+	err := cm.PostOrUpdate(context.Background(), "## Scan Results")
+	require.NoError(t, err)
+	assert.Contains(t, createdBody, summaryMarker)
+	assert.Contains(t, createdBody, "## Scan Results")
+}
+
+func TestPostOrUpdate_UpdatesExisting(t *testing.T) {
+	var updatedBody string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/comments"):
+			// ListComments returns a comment with the marker.
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]*Comment{
+				{ID: 10, Body: "unrelated comment"},
+				{ID: 77, Body: summaryMarker + "\nold results"},
+			})
+
+		case r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "/comments/77"):
+			var req updateCommentRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			updatedBody = req.Body
+			json.NewEncoder(w).Encode(Comment{ID: 77, Body: req.Body})
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	client := newTestClient(t, handler)
+	cm := NewCommentManager(client, 42)
+
+	err := cm.PostOrUpdate(context.Background(), "## Updated Results")
+	require.NoError(t, err)
+	assert.Contains(t, updatedBody, summaryMarker)
+	assert.Contains(t, updatedBody, "## Updated Results")
+}
+
+func TestPostOrUpdate_ListError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(apiError{Message: "Bad credentials"})
+	})
+
+	client := newTestClient(t, handler)
+	cm := NewCommentManager(client, 42)
+
+	err := cm.PostOrUpdate(context.Background(), "body")
+	assert.ErrorContains(t, err, "find existing comment")
+}
+
+func TestPostOrUpdate_CreateError(t *testing.T) {
+	callCount := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]*Comment{})
+			return
+		}
+		// POST fails.
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(apiError{Message: "forbidden"})
+	})
+
+	client := newTestClient(t, handler)
+	cm := NewCommentManager(client, 42)
+
+	err := cm.PostOrUpdate(context.Background(), "body")
+	assert.ErrorContains(t, err, "create summary comment")
+}
+
+func TestPostOrUpdate_UpdateError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]*Comment{
+				{ID: 5, Body: summaryMarker + "\nold"},
+			})
+			return
+		}
+		// PATCH fails.
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(apiError{Message: "server error"})
+	})
+
+	client := newTestClient(t, handler)
+	cm := NewCommentManager(client, 42)
+
+	err := cm.PostOrUpdate(context.Background(), "body")
+	assert.ErrorContains(t, err, "update summary comment")
+}
+
+// --- FormatSummaryComment tests ---
+
+func TestFormatSummaryComment_NoFindings(t *testing.T) {
+	result := FormatSummaryComment(nil, ScanMetrics{FilesScanned: 5, RulesExecuted: 10})
+
+	assert.Contains(t, result, "## Code Pathfinder Security Scan")
+	assert.Contains(t, result, "Security-Pass-success")
+	assert.Contains(t, result, "**No security issues detected.**")
+	assert.Contains(t, result, "| Files Scanned | 5 |")
+	assert.Contains(t, result, "| Rules | 10 |")
+	assert.Contains(t, result, "Code Pathfinder")
+	// Should not contain findings table.
+	assert.NotContains(t, result, "### Findings")
+}
+
+func TestFormatSummaryComment_WithFindings(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "app/views.py", Line: 47},
+			Rule: dsl.RuleMetadata{
+				ID: "CMD-001", Name: "Command Injection", Severity: "critical",
+				CWE: []string{"CWE-78"}, Description: "User input flows to subprocess.",
+			},
+		},
+		{
+			Location: dsl.LocationInfo{RelPath: "app/auth.py", Line: 23},
+			Rule: dsl.RuleMetadata{
+				ID: "SQL-001", Name: "SQL Injection", Severity: "high",
+				CWE: []string{"CWE-89"},
+			},
+		},
+		{
+			Location: dsl.LocationInfo{RelPath: "app/utils.py", Line: 100},
+			Rule: dsl.RuleMetadata{
+				ID: "PATH-001", Name: "Path Traversal", Severity: "medium",
+			},
+		},
+	}
+	metrics := ScanMetrics{FilesScanned: 6, RulesExecuted: 23}
+
+	result := FormatSummaryComment(findings, metrics)
+
+	// Status badge.
+	assert.Contains(t, result, "Security-Issues_Found-critical")
+	// Severity badges.
+	assert.Contains(t, result, "Critical-1-critical")
+	assert.Contains(t, result, "High-1-orange")
+	assert.Contains(t, result, "Medium-1-yellow")
+	// Findings table.
+	assert.Contains(t, result, "### Findings")
+	assert.Contains(t, result, "| `app/views.py` | 47 | Command Injection |")
+	assert.Contains(t, result, "| `app/auth.py` | 23 | SQL Injection |")
+	assert.Contains(t, result, "| `app/utils.py` | 100 | Path Traversal |")
+	// Details section.
+	assert.Contains(t, result, "<details>")
+	assert.Contains(t, result, "Command Injection")
+	assert.Contains(t, result, "CWE-78")
+	assert.Contains(t, result, "User input flows to subprocess.")
+	// Critical warning.
+	assert.Contains(t, result, "1 critical issue(s)")
+	// Metrics.
+	assert.Contains(t, result, "| Files Scanned | 6 |")
+	assert.Contains(t, result, "| Rules | 23 |")
+}
+
+func TestFormatSummaryComment_LowOnlyFindings(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "a.py", Line: 1},
+			Rule:     dsl.RuleMetadata{Name: "Minor Issue", Severity: "low"},
+		},
+	}
+
+	result := FormatSummaryComment(findings, ScanMetrics{})
+
+	// Issues found badge (not pass).
+	assert.Contains(t, result, "Issues_Found")
+	// No critical warning.
+	assert.NotContains(t, result, "critical issue(s)")
+	// Still has findings table.
+	assert.Contains(t, result, "### Findings")
+}
+
+func TestFormatSummaryComment_ZeroBadgesGreen(t *testing.T) {
+	result := FormatSummaryComment(nil, ScanMetrics{})
+
+	assert.Contains(t, result, "Critical-0-success")
+	assert.Contains(t, result, "High-0-success")
+	assert.Contains(t, result, "Medium-0-success")
+}
+
+// --- Helper function tests ---
+
+func TestCountBySeverity(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{Rule: dsl.RuleMetadata{Severity: "critical"}},
+		{Rule: dsl.RuleMetadata{Severity: "critical"}},
+		{Rule: dsl.RuleMetadata{Severity: "high"}},
+		{Rule: dsl.RuleMetadata{Severity: "medium"}},
+		{Rule: dsl.RuleMetadata{Severity: "low"}},
+		{Rule: dsl.RuleMetadata{Severity: "low"}},
+		{Rule: dsl.RuleMetadata{Severity: "unknown"}}, // Ignored.
+	}
+
+	c := countBySeverity(findings)
+	assert.Equal(t, 2, c.Critical)
+	assert.Equal(t, 1, c.High)
+	assert.Equal(t, 1, c.Medium)
+	assert.Equal(t, 2, c.Low)
+}
+
+func TestCountBySeverity_Empty(t *testing.T) {
+	c := countBySeverity(nil)
+	assert.Equal(t, 0, c.Critical)
+	assert.Equal(t, 0, c.High)
+	assert.Equal(t, 0, c.Medium)
+	assert.Equal(t, 0, c.Low)
+}
+
+func TestSeverityEmoji(t *testing.T) {
+	assert.NotEmpty(t, severityEmoji("critical"))
+	assert.NotEmpty(t, severityEmoji("high"))
+	assert.NotEmpty(t, severityEmoji("medium"))
+	assert.NotEmpty(t, severityEmoji("low"))
+	assert.Empty(t, severityEmoji("unknown"))
+}
+
+func TestSeverityLabel(t *testing.T) {
+	assert.Contains(t, severityLabel("critical"), "**Critical**")
+	assert.Contains(t, severityLabel("high"), "High")
+	assert.Contains(t, severityLabel("medium"), "Medium")
+	assert.Contains(t, severityLabel("low"), "Low")
+	assert.Equal(t, "other", severityLabel("other"))
+}
+
+func TestStatusBadge(t *testing.T) {
+	badge := statusBadge("Pass", "success")
+	assert.Contains(t, badge, "Security-Pass-success")
+	assert.Contains(t, badge, "shields.io")
+
+	badge = statusBadge("Issues Found", "critical")
+	assert.Contains(t, badge, "Security-Issues_Found-critical")
+}
+
+func TestSeverityBadge(t *testing.T) {
+	assert.Contains(t, severityBadge("Critical", 3), "Critical-3-critical")
+	assert.Contains(t, severityBadge("Critical", 0), "Critical-0-success")
+	assert.Contains(t, severityBadge("High", 1), "High-1-orange")
+	assert.Contains(t, severityBadge("High", 0), "High-0-success")
+	assert.Contains(t, severityBadge("Medium", 2), "Medium-2-yellow")
+	assert.Contains(t, severityBadge("Medium", 0), "Medium-0-success")
+}
+
+func TestWriteFindingsTable(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "x.py", Line: 5},
+			Rule:     dsl.RuleMetadata{Name: "Issue X", Severity: "high"},
+		},
+	}
+	var sb strings.Builder
+	writeFindingsTable(&sb, findings)
+
+	result := sb.String()
+	assert.Contains(t, result, "### Findings")
+	assert.Contains(t, result, "| Severity | File | Line | Issue |")
+	assert.Contains(t, result, "| `x.py` | 5 | Issue X |")
+}
+
+func TestWriteDetails(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "a.py", Line: 10},
+			Rule: dsl.RuleMetadata{
+				Name: "Bug", Severity: "high",
+				CWE: []string{"CWE-1"}, Description: "A description.",
+			},
+		},
+		{
+			Location: dsl.LocationInfo{RelPath: "b.py", Line: 20},
+			Rule:     dsl.RuleMetadata{Name: "NoCWE", Severity: "low"},
+		},
+	}
+	var sb strings.Builder
+	writeDetails(&sb, findings)
+
+	result := sb.String()
+	assert.Contains(t, result, "<details>")
+	assert.Contains(t, result, "Bug")
+	assert.Contains(t, result, "**a.py:10**")
+	assert.Contains(t, result, "CWE-1")
+	assert.Contains(t, result, "A description.")
+	// Second finding has no CWE.
+	assert.Contains(t, result, "**b.py:20**")
+	assert.Contains(t, result, "</details>")
+}
