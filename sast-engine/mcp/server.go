@@ -14,16 +14,17 @@ import (
 
 // Server handles MCP protocol communication.
 type Server struct {
-	projectPath    string
-	pythonVersion  string
-	callGraph      *core.CallGraph
-	moduleRegistry *core.ModuleRegistry
-	codeGraph      *graph.CodeGraph
-	indexedAt      time.Time
-	buildTime      time.Duration
-	statusTracker  *StatusTracker
-	degradation    *GracefulDegradation
-	analytics      *Analytics
+	projectPath      string
+	pythonVersion    string
+	callGraph        *core.CallGraph
+	moduleRegistry   *core.ModuleRegistry
+	codeGraph        *graph.CodeGraph
+	indexedAt        time.Time
+	buildTime        time.Duration
+	statusTracker    *StatusTracker
+	degradation      *GracefulDegradation
+	analytics        *Analytics
+	disableAnalytics bool
 }
 
 // NewServer creates a new MCP server with the given index data.
@@ -34,6 +35,7 @@ func NewServer(
 	moduleRegistry *core.ModuleRegistry,
 	codeGraph *graph.CodeGraph,
 	buildTime time.Duration,
+	disableAnalytics bool,
 ) *Server {
 	tracker := NewStatusTracker()
 
@@ -49,26 +51,27 @@ func NewServer(
 	tracker.CompleteIndexing(stats)
 
 	// Initialize analytics with stdio transport (default).
-	mcpAnalytics := NewAnalytics("stdio")
+	mcpAnalytics := NewAnalytics("stdio", disableAnalytics)
 	mcpAnalytics.ReportIndexingComplete(stats)
 
 	return &Server{
-		projectPath:    projectPath,
-		pythonVersion:  pythonVersion,
-		callGraph:      callGraph,
-		moduleRegistry: moduleRegistry,
-		codeGraph:      codeGraph,
-		indexedAt:      time.Now(),
-		buildTime:      buildTime,
-		statusTracker:  tracker,
-		degradation:    NewGracefulDegradation(tracker),
-		analytics:      mcpAnalytics,
+		projectPath:      projectPath,
+		pythonVersion:    pythonVersion,
+		callGraph:        callGraph,
+		moduleRegistry:   moduleRegistry,
+		codeGraph:        codeGraph,
+		indexedAt:        time.Now(),
+		buildTime:        buildTime,
+		statusTracker:    tracker,
+		degradation:      NewGracefulDegradation(tracker),
+		analytics:        mcpAnalytics,
+		disableAnalytics: disableAnalytics,
 	}
 }
 
 // SetTransport updates the analytics transport type (e.g., "http").
 func (s *Server) SetTransport(transport string) {
-	s.analytics = NewAnalytics(transport)
+	s.analytics = NewAnalytics(transport, s.disableAnalytics)
 }
 
 // ServeStdio starts the MCP server on stdin/stdout.

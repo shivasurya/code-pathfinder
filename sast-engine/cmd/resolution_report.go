@@ -338,7 +338,7 @@ func printFailureBreakdown(stats *resolutionStatistics) {
 				framework string
 				count     int
 			}
-			var frameworks []frameworkCount
+			frameworks := make([]frameworkCount, 0, len(stats.FrameworkCounts))
 			for fw, count := range stats.FrameworkCounts {
 				frameworks = append(frameworks, frameworkCount{fw, count})
 			}

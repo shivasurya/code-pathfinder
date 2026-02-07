@@ -261,7 +261,7 @@ func (e *Enricher) buildReferenceURLs(cwes []string) []string {
 func (e *Enricher) buildTaintPath(detection dsl.DataflowDetection) []dsl.TaintPathNode {
 	// For v1, return source and sink nodes only
 	// Full path reconstruction is a future enhancement
-	var path []dsl.TaintPathNode
+	path := make([]dsl.TaintPathNode, 0, 2)
 
 	// Source node
 	sourceLoc := dsl.LocationInfo{

@@ -187,7 +187,7 @@ func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSite
 
 // Helper: Extract patterns from CallMatcherIR list.
 func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
-	patterns := []string{}
+	patterns := make([]string, 0, len(matchers))
 	for _, matcher := range matchers {
 		patterns = append(patterns, matcher.Patterns...)
 	}

@@ -157,7 +157,11 @@ func (ts *TypeStore) AllBindings() []*TypeBinding {
 	ts.mutex.RLock()
 	defer ts.mutex.RUnlock()
 
-	var bindings []*TypeBinding
+	totalBindings := 0
+	for _, scope := range ts.scopes {
+		totalBindings += len(scope.bindings)
+	}
+	bindings := make([]*TypeBinding, 0, totalBindings)
 	for _, scope := range ts.scopes {
 		for _, binding := range scope.bindings {
 			bindings = append(bindings, binding)
