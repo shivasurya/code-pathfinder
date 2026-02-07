@@ -37,7 +37,7 @@ func TestGetPullRequest(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/repos/owner/repo/pulls/42", r.URL.Path)
 			assert.Equal(t, http.MethodGet, r.Method)
-			assert.Equal(t, "token test-token", r.Header.Get("Authorization"))
+			assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 			assert.Equal(t, "application/vnd.github.v3+json", r.Header.Get("Accept"))
 
 			pr := PullRequest{
@@ -258,6 +258,50 @@ func TestUpdateComment(t *testing.T) {
 	})
 }
 
+func TestUpdateReviewComment(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPatch, r.Method)
+			assert.Equal(t, "/repos/owner/repo/pulls/comments/77", r.URL.Path)
+
+			var req updateCommentRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			assert.Equal(t, "updated inline", req.Body)
+
+			json.NewEncoder(w).Encode(ReviewComment{ID: 77, Body: req.Body, Path: "app.py", Line: 10})
+		})
+
+		client := newTestClient(t, handler)
+		comment, err := client.UpdateReviewComment(context.Background(), 77, "updated inline")
+		require.NoError(t, err)
+		assert.Equal(t, int64(77), comment.ID)
+		assert.Equal(t, "updated inline", comment.Body)
+		assert.Equal(t, "app.py", comment.Path)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(apiError{Message: "Not Found"})
+		})
+
+		client := newTestClient(t, handler)
+		_, err := client.UpdateReviewComment(context.Background(), 999, "body")
+		assert.ErrorContains(t, err, "HTTP 404")
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("{bad"))
+		})
+
+		client := newTestClient(t, handler)
+		_, err := client.UpdateReviewComment(context.Background(), 1, "body")
+		assert.ErrorContains(t, err, "update review comment")
+	})
+}
+
 func TestCreateReview(t *testing.T) {
 	t.Run("success with comments", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +427,7 @@ func TestDeleteReviewComment(t *testing.T) {
 
 func TestDoRequest_AuthHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "token my-secret", r.Header.Get("Authorization"))
+		assert.Equal(t, "Bearer my-secret", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.github.v3+json", r.Header.Get("Accept"))
 		w.WriteHeader(http.StatusOK)
 	})

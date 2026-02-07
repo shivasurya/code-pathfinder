@@ -46,6 +46,7 @@ type GitRef struct {
 type ReviewCommentInput struct {
 	Path string `json:"path"`
 	Line int    `json:"line"`
+	Side string `json:"side"`
 	Body string `json:"body"`
 }
 

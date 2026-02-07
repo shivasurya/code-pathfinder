@@ -48,8 +48,8 @@ func (rm *ReviewManager) PostInlineComments(ctx context.Context, findings []*dsl
 		body := FormatInlineComment(f)
 
 		if commentID, ok := existingByMarker[marker]; ok {
-			// Update existing comment in-place.
-			if _, err := rm.client.UpdateComment(ctx, commentID, body); err != nil {
+			// Update existing review comment in-place (uses pulls/comments endpoint).
+			if _, err := rm.client.UpdateReviewComment(ctx, commentID, body); err != nil {
 				return fmt.Errorf("update inline comment: %w", err)
 			}
 			continue
@@ -58,6 +58,7 @@ func (rm *ReviewManager) PostInlineComments(ctx context.Context, findings []*dsl
 		newComments = append(newComments, ReviewCommentInput{
 			Path: f.Location.RelPath,
 			Line: f.Location.Line,
+			Side: "RIGHT",
 			Body: body,
 		})
 	}

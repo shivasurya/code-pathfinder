@@ -133,6 +133,29 @@ func (c *Client) UpdateComment(ctx context.Context, commentID int64, body string
 	return &comment, nil
 }
 
+// UpdateReviewComment updates an existing inline review comment.
+// Uses the pulls/comments endpoint (different from issue comments).
+func (c *Client) UpdateReviewComment(ctx context.Context, commentID int64, body string) (*ReviewComment, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/comments/%d", c.owner, c.repo, commentID)
+	payload := updateCommentRequest{Body: body}
+
+	resp, err := c.doRequest(ctx, http.MethodPatch, path, payload)
+	if err != nil {
+		return nil, fmt.Errorf("update review comment: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkResponse(resp); err != nil {
+		return nil, fmt.Errorf("update review comment: %w", err)
+	}
+
+	var comment ReviewComment
+	if err := decodeResponse(resp, &comment); err != nil {
+		return nil, fmt.Errorf("update review comment: %w", err)
+	}
+	return &comment, nil
+}
+
 // CreateReview creates a review with inline comments (posted atomically).
 func (c *Client) CreateReview(ctx context.Context, prNumber int, commitID string, body string, comments []ReviewCommentInput) error {
 	path := fmt.Sprintf("/repos/%s/%s/pulls/%d/reviews", c.owner, c.repo, prNumber)
@@ -220,7 +243,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any) (
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

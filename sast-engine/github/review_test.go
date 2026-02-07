@@ -83,6 +83,7 @@ func TestPostInlineComments_CreatesNewReview(t *testing.T) {
 	require.Len(t, reviewReq.Comments, 2)
 	assert.Equal(t, "app/views.py", reviewReq.Comments[0].Path)
 	assert.Equal(t, 47, reviewReq.Comments[0].Line)
+	assert.Equal(t, "RIGHT", reviewReq.Comments[0].Side)
 	assert.Contains(t, reviewReq.Comments[0].Body, "Command Injection")
 	assert.Contains(t, reviewReq.Comments[0].Body, "<!-- cpf-CMD-001-app/views.py-47 -->")
 }
@@ -105,11 +106,12 @@ func TestPostInlineComments_UpdatesExisting(t *testing.T) {
 			})
 
 		case r.Method == http.MethodPatch:
-			// UpdateComment (issue comment endpoint used for update).
+			// UpdateReviewComment (pulls/comments endpoint).
+			assert.Contains(t, r.URL.Path, "/pulls/comments/")
 			var req updateCommentRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 			updatedBody = req.Body
-			json.NewEncoder(w).Encode(Comment{ID: 99, Body: req.Body})
+			json.NewEncoder(w).Encode(ReviewComment{ID: 99, Body: req.Body})
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -139,7 +141,7 @@ func TestPostInlineComments_MixedUpdateAndNew(t *testing.T) {
 
 		case r.Method == http.MethodPatch:
 			gotPatch = true
-			json.NewEncoder(w).Encode(Comment{ID: 99, Body: "updated"})
+			json.NewEncoder(w).Encode(ReviewComment{ID: 99, Body: "updated"})
 
 		case r.Method == http.MethodPost:
 			gotPost = true
