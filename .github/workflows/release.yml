@@ -251,163 +251,26 @@ jobs:
         with:
           name: pathfinder-darwin-amd64
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
           draft: true
-          prerelease: false
-
-      - name: Upload Linux Release Asset
-        uses: actions/upload-release-asset@v1
+          files: |
+            pathfinder-linux-amd64
+            pathfinder-linux-amd64.tar.gz
+            pathfinder-linux-amd64.sha256sum.txt
+            pathfinder-linux-arm64
+            pathfinder-linux-arm64.tar.gz
+            pathfinder-linux-arm64.sha256sum.txt
+            pathfinder-windows-amd64.exe
+            pathfinder-windows-amd64.zip
+            pathfinder-windows-amd64.exe.sha256sum.txt
+            pathfinder-darwin-arm64
+            pathfinder-darwin-arm64.tar.gz
+            pathfinder-darwin-arm64.sha256sum.txt
+            pathfinder-darwin-amd64
+            pathfinder-darwin-amd64.tar.gz
+            pathfinder-darwin-amd64.sha256sum.txt
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-amd64
-          asset_name: pathfinder-linux-amd64
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux tar.gz Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-amd64.tar.gz
-          asset_name: pathfinder-linux-amd64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Linux ARM64 Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-arm64
-          asset_name: pathfinder-linux-arm64
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux ARM64 tar.gz Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-arm64.tar.gz
-          asset_name: pathfinder-linux-arm64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Windows Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-windows-amd64.exe
-          asset_name: pathfinder-windows-amd64.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Windows zip Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-windows-amd64.zip
-          asset_name: pathfinder-windows-amd64.zip
-          asset_content_type: application/zip
-
-      - name: Upload macOS Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-arm64
-          asset_name: pathfinder-darwin-arm64
-          asset_content_type: application/octet-stream
-
-      - name: Upload macOS tar.gz Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-arm64.tar.gz
-          asset_name: pathfinder-darwin-arm64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload macOS Intel Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-amd64
-          asset_name: pathfinder-darwin-amd64
-          asset_content_type: application/octet-stream
-
-      - name: Upload macOS Intel tar.gz Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-amd64.tar.gz
-          asset_name: pathfinder-darwin-amd64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Linux SHA256 Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-amd64.sha256sum.txt
-          asset_name: pathfinder-linux-amd64.sha256sum.txt
-          asset_content_type: text/plain
-
-      - name: Upload Windows SHA256 Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-windows-amd64.exe.sha256sum.txt
-          asset_name: pathfinder-windows-amd64.exe.sha256sum.txt
-          asset_content_type: text/plain
-
-      - name: Upload macOS SHA256 Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-arm64.sha256sum.txt
-          asset_name: pathfinder-darwin-arm64.sha256sum.txt
-          asset_content_type: text/plain
-
-      - name: Upload Linux ARM64 SHA256 Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-linux-arm64.sha256sum.txt
-          asset_name: pathfinder-linux-arm64.sha256sum.txt
-          asset_content_type: text/plain
-
-      - name: Upload macOS Intel SHA256 Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./pathfinder-darwin-amd64.sha256sum.txt
-          asset_name: pathfinder-darwin-amd64.sha256sum.txt
-          asset_content_type: text/plain
