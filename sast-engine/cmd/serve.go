@@ -46,6 +46,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	pythonVersionOverride, _ := cmd.Flags().GetString("python-version")
 	useHTTP, _ := cmd.Flags().GetBool("http")
 	address, _ := cmd.Flags().GetString("address")
+	disableAnalytics, _ := cmd.Flags().GetBool("disable-metrics")
 
 	fmt.Fprintln(os.Stderr, "Building index...")
 	start := time.Now()
@@ -87,7 +88,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(os.Stderr, "  Modules: %d\n", len(moduleRegistry.Modules))
 
 	// 4. Create MCP server
-	server := mcp.NewServer(projectPath, pythonVersion, callGraph, moduleRegistry, codeGraph, buildTime)
+	server := mcp.NewServer(projectPath, pythonVersion, callGraph, moduleRegistry, codeGraph, buildTime, disableAnalytics)
 
 	// 5. Start appropriate transport
 	if useHTTP {

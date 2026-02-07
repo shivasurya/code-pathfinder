@@ -62,7 +62,7 @@ func createTestServer() *Server {
 		ShortNames:   map[string][]string{"auth": {"/path/to/myapp/auth.py"}, "views": {"/path/to/myapp/views.py"}},
 	}
 
-	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 }
 
 // createExtendedTestServer creates a Server with extended fixture data for coverage testing.
@@ -165,7 +165,7 @@ func createExtendedTestServer() *Server {
 		},
 	}
 
-	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 }
 
 // createTestServerWithAttributes creates a Server with AttributeRegistry for testing attribute search.
@@ -265,7 +265,7 @@ func createTestServerWithAttributes() *Server {
 		ShortNames:   map[string][]string{"auth": {"/path/to/myapp/auth.py"}, "models": {"/path/to/myapp/models.py"}},
 	}
 
-	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 }
 
 func TestNewServer(t *testing.T) {
@@ -275,6 +275,63 @@ func TestNewServer(t *testing.T) {
 	assert.Equal(t, "3.11", server.pythonVersion)
 	assert.NotNil(t, server.callGraph)
 	assert.NotNil(t, server.moduleRegistry)
+	assert.False(t, server.disableAnalytics)
+}
+
+func TestNewServer_DisableAnalytics(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	callGraph.Functions["test.func"] = &graph.Node{
+		ID: "1", Name: "func", File: "/test.py", LineNumber: 1,
+	}
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{},
+		FileToModule: map[string]string{},
+		ShortNames:   map[string][]string{},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, true)
+
+	assert.NotNil(t, server)
+	assert.True(t, server.disableAnalytics)
+	assert.True(t, server.analytics.disabled)
+}
+
+func TestSetTransport_PreservesDisableAnalytics(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	callGraph.Functions["test.func"] = &graph.Node{
+		ID: "1", Name: "func", File: "/test.py", LineNumber: 1,
+	}
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{},
+		FileToModule: map[string]string{},
+		ShortNames:   map[string][]string{},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, true)
+	assert.True(t, server.analytics.disabled)
+
+	server.SetTransport("http")
+	assert.True(t, server.analytics.disabled)
+	assert.Equal(t, "http", server.analytics.transport)
+}
+
+func TestSetTransport_EnabledAnalytics(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	callGraph.Functions["test.func"] = &graph.Node{
+		ID: "1", Name: "func", File: "/test.py", LineNumber: 1,
+	}
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{},
+		FileToModule: map[string]string{},
+		ShortNames:   map[string][]string{},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
+	assert.False(t, server.analytics.disabled)
+
+	server.SetTransport("http")
+	assert.False(t, server.analytics.disabled)
+	assert.Equal(t, "http", server.analytics.transport)
 }
 
 func TestHandleInitialize(t *testing.T) {
@@ -762,7 +819,7 @@ func TestIsReady_NotReady(t *testing.T) {
 		ShortNames:   map[string][]string{},
 	}
 
-	server := NewServer("/test", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	// Manually set status tracker to indexing to simulate not-ready state.
 	server.statusTracker.StartIndexing()

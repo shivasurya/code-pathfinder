@@ -698,7 +698,7 @@ func TestToolGetCallers_MultipleMatches(t *testing.T) {
 
 	server := NewServer("/test", "3.11", callGraph, &core.ModuleRegistry{
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
-	}, nil, time.Second)
+	}, nil, time.Second, false)
 
 	result, isError := server.toolGetCallers(map[string]interface{}{"function": "handler"})
 
@@ -720,7 +720,7 @@ func TestToolGetCallers_NilCallerNode(t *testing.T) {
 
 	server := NewServer("/test", "3.11", callGraph, &core.ModuleRegistry{
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
-	}, nil, time.Second)
+	}, nil, time.Second, false)
 
 	result, isError := server.toolGetCallers(map[string]interface{}{"function": "func"})
 
@@ -1014,7 +1014,7 @@ func TestToolFindSymbol_InterfaceWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.interfaces"] = "/test/interfaces.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "IDrawable"})
 
@@ -1057,7 +1057,7 @@ func TestToolFindSymbol_EnumWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.enums"] = "/test/enums.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Color"})
 
@@ -1089,7 +1089,7 @@ func TestToolFindSymbol_DataclassWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Point"})
 
@@ -1121,7 +1121,7 @@ func TestToolFindSymbol_ConstructorWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__init__"})
 
@@ -1153,7 +1153,7 @@ func TestToolFindSymbol_PropertyWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "name"})
 
@@ -1194,7 +1194,7 @@ func TestToolFindSymbol_SpecialMethodWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__str__"})
 
@@ -1225,7 +1225,7 @@ func TestToolFindSymbol_MethodWithSymbolKind(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/user.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "get_profile"})
 
@@ -1291,7 +1291,7 @@ func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	moduleRegistry.Modules["myapp.module3"] = "/test/module3.py"
 	moduleRegistry.Modules["myapp.module4"] = "/test/module4.py"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	result, isError := server.toolGetIndexInfo()
 
@@ -1463,7 +1463,7 @@ func createMultiTypeTestServer() *Server {
 	moduleRegistry.Modules["myapp.utils"] = "/path/to/utils.py"
 	moduleRegistry.Modules["myapp.models"] = "/path/to/models.py"
 
-	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 }
 
 // Test: No filters provided (should error).
@@ -1961,7 +1961,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 	moduleRegistry.FileToModule["/test/config.py"] = "myapp.config"
 	moduleRegistry.FileToModule["/test/utils.py"] = "myapp.utils"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	// Test 1: Search for class_definition.
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2039,7 +2039,7 @@ func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
 	moduleRegistry.FileToModule["/test/settings.py"] = "myapp.settings"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	// Search by name (should find in codeGraph).
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2079,7 +2079,7 @@ func TestToolFindSymbol_CodeGraphNodesWithOptionalFields(t *testing.T) {
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	result, isError := server.toolFindSymbol(map[string]interface{}{
 		"name": "AdminUser",
@@ -2124,7 +2124,7 @@ func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	// Search for "User" - should find both class and method.
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2176,7 +2176,7 @@ func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
 	moduleRegistry.FileToModule["/test/proper.py"] = "myapp.proper"
 	// Note: orphan.py is NOT in the registry.
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	result, isError := server.toolFindSymbol(map[string]interface{}{
 		"type": "class_definition",
@@ -2204,7 +2204,7 @@ func TestToolFindSymbol_CodeGraphNilCodeGraph(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	
 	// Create server with nil codeGraph.
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 	
 	// Should still work for callGraph.Functions.
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2238,7 +2238,7 @@ func TestToolFindSymbol_CodeGraphPartialNameMatch(t *testing.T) {
 	moduleRegistry.Modules["myapp.db"] = "/test/db.py"
 	moduleRegistry.FileToModule["/test/db.py"] = "myapp.db"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	// Partial match "Connection" should find "DatabaseConnectionPool".
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2282,7 +2282,7 @@ func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
 	moduleRegistry.Modules["myapp.test"] = "/test/file.py"
 	moduleRegistry.FileToModule["/test/file.py"] = "myapp.test"
 	
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 	
 	for _, tt := range types {
 		t.Run(tt.typ, func(t *testing.T) {
@@ -2397,7 +2397,7 @@ func TestToolFindSymbol_ClassConstantFQN(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.FileToModule["/test/module.py"] = "module"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Module-level constant should have simple FQN
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2694,7 +2694,7 @@ func TestToolFindSymbol_ModuleFilter(t *testing.T) {
 	moduleRegistry.FileToModule["/test/data_manager/config.py"] = "data_manager.config"
 	moduleRegistry.FileToModule["/test/users/auth.py"] = "users.auth"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Filter by core module
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2767,7 +2767,7 @@ func TestToolFindSymbol_ModuleAndTypeFilter(t *testing.T) {
 	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
 	moduleRegistry.FileToModule["/test/core/config.py"] = "core.config"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Module + type filter (constants only in core)
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2850,7 +2850,7 @@ func TestToolFindSymbol_ModuleNameAndTypeFilter(t *testing.T) {
 	moduleRegistry.FileToModule["/test/core/utils.py"] = "core.utils"
 	moduleRegistry.FileToModule["/test/data_manager/settings.py"] = "data_manager.settings"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: name + module + type filter
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2898,7 +2898,7 @@ func TestToolFindSymbol_ModuleNoResults(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.FileToModule["/test/core/settings.py"] = "core.settings"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: Filter by non-existent module
 	result, isError := server.toolFindSymbol(map[string]interface{}{
@@ -2955,7 +2955,7 @@ func TestToolFindSymbol_ModuleFilterWithClassConstants(t *testing.T) {
 	moduleRegistry.FileToModule["/test/data_manager/prepare_params.py"] = "data_manager.prepare_params"
 	moduleRegistry.FileToModule["/test/core/config.py"] = "core.config"
 
-	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second)
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: Filter by data_manager module
 	result, isError := server.toolFindSymbol(map[string]interface{}{

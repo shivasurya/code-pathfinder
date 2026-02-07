@@ -116,7 +116,8 @@ func (s *Statement) HasNestedStatements() bool {
 // AllStatements returns a flattened list of this statement and all nested statements.
 // Performs depth-first traversal.
 func (s *Statement) AllStatements() []*Statement {
-	result := []*Statement{s}
+	result := make([]*Statement, 0, 1+len(s.NestedStatements)+len(s.ElseBranch))
+	result = append(result, s)
 
 	for _, nested := range s.NestedStatements {
 		result = append(result, nested.AllStatements()...)

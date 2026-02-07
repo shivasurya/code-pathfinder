@@ -31,47 +31,6 @@ func NewRuleLoader(rulesPath string) *RuleLoader {
 	return &RuleLoader{RulesPath: rulesPath}
 }
 
-// isSandboxEnabled checks if nsjail sandboxing is enabled via environment variable.
-// Returns true if PATHFINDER_SANDBOX_ENABLED is set to "true" (case-insensitive).
-func isSandboxEnabled() bool {
-	enabled := os.Getenv("PATHFINDER_SANDBOX_ENABLED")
-	return strings.ToLower(strings.TrimSpace(enabled)) == "true"
-}
-
-// buildNsjailCommand constructs an nsjail command for sandboxed Python execution.
-// Security features:
-//   - Network isolation (--iface_no_lo)
-//   - Filesystem isolation (chroot to /tmp/nsjail_root)
-//   - Process isolation (PID namespace)
-//   - User isolation (run as nobody)
-//   - Resource limits: 512MB memory, 30s CPU, 1MB file size, 30s wall time
-//   - Read-only system mounts (/usr, /lib)
-//   - Writable /tmp for output
-func buildNsjailCommand(ctx context.Context, filePath string) *exec.Cmd {
-	args := []string{
-		"-Mo",                          // Mode: ONCE (run once and exit)
-		"--user", "nobody",             // Run as nobody (UID 65534)
-		"--chroot", "/tmp/nsjail_root", // Isolated root filesystem
-		"--iface_no_lo",                // Block all network access (no loopback)
-		"--disable_proc",               // Disable /proc (no process visibility)
-		"--bindmount_ro", "/usr:/usr",  // Read-only /usr
-		"--bindmount_ro", "/lib:/lib",  // Read-only /lib
-		"--bindmount_ro", "/lib64:/lib64", // Read-only /lib64 (64-bit libraries)
-		"--bindmount", "/tmp:/tmp",     // Writable /tmp (for output)
-		"--cwd", "/tmp",                // Working directory
-		"--rlimit_as", "512",           // Memory limit: 512MB
-		"--rlimit_cpu", "30",           // CPU time limit: 30 seconds
-		"--rlimit_fsize", "1",          // File size limit: 1MB
-		"--rlimit_nofile", "64",        // Max open files: 64
-		"--time_limit", "30",           // Wall time limit: 30 seconds
-		"--quiet",                      // Suppress nsjail logs
-		"--",                           // End of nsjail args
-		"/usr/bin/python3", filePath,   // Command to execute
-	}
-
-	return exec.CommandContext(ctx, "nsjail", args...)
-}
-
 // LoadRules loads and executes Python DSL rules.
 //
 // Algorithm:
@@ -103,21 +62,12 @@ func (l *RuleLoader) LoadRules(logger Logger) ([]RuleIR, error) {
 }
 
 // loadRulesFromFile loads rules from a single Python file.
-// Uses nsjail sandboxing if PATHFINDER_SANDBOX_ENABLED=true, otherwise runs Python directly.
 func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR, error) {
 	// Create context with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build command based on sandbox configuration
-	var cmd *exec.Cmd
-	if isSandboxEnabled() {
-		// Use nsjail for sandboxed execution (production mode)
-		cmd = buildNsjailCommand(ctx, filePath)
-	} else {
-		// Direct Python execution (development mode)
-		cmd = exec.CommandContext(ctx, "python3", filePath)
-	}
+	cmd := exec.CommandContext(ctx, "python3", filePath)
 
 	// Execute Python script with context
 	output, err := cmd.Output()
@@ -383,26 +333,7 @@ json_ir = container_ir.compile_all_rules()
 print(json.dumps(json_ir))
 `, rulesPath)
 
-	// Execute Python script
-	var cmd *exec.Cmd
-	if isSandboxEnabled() {
-		// For sandbox mode, write script to temp file and execute with nsjail
-		tmpFile, err := os.CreateTemp("/tmp", "container_rules_*.py")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temp script file: %w", err)
-		}
-		defer os.Remove(tmpFile.Name())
-
-		if _, err := tmpFile.WriteString(compileScript); err != nil {
-			return nil, fmt.Errorf("failed to write temp script: %w", err)
-		}
-		tmpFile.Close()
-
-		cmd = buildNsjailCommand(ctx, tmpFile.Name())
-	} else {
-		// Direct Python execution (development mode)
-		cmd = exec.CommandContext(ctx, "python3", "-c", compileScript)
-	}
+	cmd := exec.CommandContext(ctx, "python3", "-c", compileScript)
 
 	output, err := cmd.Output()
 	if err != nil {

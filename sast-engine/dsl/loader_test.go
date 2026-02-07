@@ -490,36 +490,6 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 	})
 }
 
-func TestIsSandboxEnabled(t *testing.T) {
-	t.Run("returns false when env var not set", func(t *testing.T) {
-		os.Unsetenv("PATHFINDER_SANDBOX_ENABLED")
-		assert.False(t, isSandboxEnabled())
-	})
-
-	t.Run("returns true when env var is true", func(t *testing.T) {
-		os.Setenv("PATHFINDER_SANDBOX_ENABLED", "true")
-		defer os.Unsetenv("PATHFINDER_SANDBOX_ENABLED")
-		assert.True(t, isSandboxEnabled())
-	})
-
-	t.Run("returns true when env var is TRUE", func(t *testing.T) {
-		os.Setenv("PATHFINDER_SANDBOX_ENABLED", "TRUE")
-		defer os.Unsetenv("PATHFINDER_SANDBOX_ENABLED")
-		assert.True(t, isSandboxEnabled())
-	})
-
-	t.Run("returns false when env var is false", func(t *testing.T) {
-		os.Setenv("PATHFINDER_SANDBOX_ENABLED", "false")
-		defer os.Unsetenv("PATHFINDER_SANDBOX_ENABLED")
-		assert.False(t, isSandboxEnabled())
-	})
-
-	t.Run("returns false when env var is empty", func(t *testing.T) {
-		os.Setenv("PATHFINDER_SANDBOX_ENABLED", "")
-		defer os.Unsetenv("PATHFINDER_SANDBOX_ENABLED")
-		assert.False(t, isSandboxEnabled())
-	})
-}
 
 // Helper: Create temporary Python file for testing.
 func createTempPythonFile(t *testing.T, content string) string {

@@ -12,18 +12,23 @@ import (
 type Analytics struct {
 	transport string // "stdio" or "http"
 	startTime time.Time
+	disabled  bool
 }
 
 // NewAnalytics creates a new analytics instance.
-func NewAnalytics(transport string) *Analytics {
+func NewAnalytics(transport string, disabled bool) *Analytics {
 	return &Analytics{
 		transport: transport,
 		startTime: time.Now(),
+		disabled:  disabled,
 	}
 }
 
 // ReportServerStarted reports that the MCP server has started.
 func (a *Analytics) ReportServerStarted() {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPServerStarted, map[string]interface{}{
 		"transport": a.transport,
 		"os":        runtime.GOOS,
@@ -33,6 +38,9 @@ func (a *Analytics) ReportServerStarted() {
 
 // ReportServerStopped reports that the MCP server has stopped.
 func (a *Analytics) ReportServerStopped() {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPServerStopped, map[string]interface{}{
 		"transport":      a.transport,
 		"uptime_seconds": time.Since(a.startTime).Seconds(),
@@ -42,6 +50,9 @@ func (a *Analytics) ReportServerStopped() {
 // ReportToolCall reports a tool invocation with timing and success info.
 // No file paths or code content is included.
 func (a *Analytics) ReportToolCall(toolName string, durationMs int64, success bool) {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPToolCall, map[string]interface{}{
 		"tool":        toolName,
 		"duration_ms": durationMs,
@@ -52,6 +63,9 @@ func (a *Analytics) ReportToolCall(toolName string, durationMs int64, success bo
 
 // ReportIndexingStarted reports that indexing has begun.
 func (a *Analytics) ReportIndexingStarted() {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPIndexingStarted, map[string]interface{}{
 		"transport": a.transport,
 	})
@@ -60,6 +74,9 @@ func (a *Analytics) ReportIndexingStarted() {
 // ReportIndexingComplete reports successful indexing completion.
 // Only aggregate counts are reported, no file paths.
 func (a *Analytics) ReportIndexingComplete(stats *IndexingStats) {
+	if a.disabled {
+		return
+	}
 	props := map[string]interface{}{
 		"transport":         a.transport,
 		"duration_seconds":  stats.BuildDuration.Seconds(),
@@ -74,6 +91,9 @@ func (a *Analytics) ReportIndexingComplete(stats *IndexingStats) {
 // ReportIndexingFailed reports indexing failure.
 // Error messages are not included to avoid potential PII.
 func (a *Analytics) ReportIndexingFailed(phase string) {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPIndexingFailed, map[string]interface{}{
 		"transport": a.transport,
 		"phase":     phase,
@@ -83,6 +103,9 @@ func (a *Analytics) ReportIndexingFailed(phase string) {
 // ReportClientConnected reports a client connection with client info.
 // Only client name/version (from MCP protocol) is reported.
 func (a *Analytics) ReportClientConnected(clientName, clientVersion string) {
+	if a.disabled {
+		return
+	}
 	analytics.ReportEventWithProperties(analytics.MCPClientConnected, map[string]interface{}{
 		"transport":      a.transport,
 		"client_name":    clientName,

@@ -66,7 +66,7 @@ func (e *ContainerRuleExecutor) LoadRules(jsonIR []byte) error {
 func (e *ContainerRuleExecutor) ExecuteDockerfile(
 	dockerfile *docker.DockerfileGraph,
 ) []RuleMatch {
-	matches := make([]RuleMatch, 0)
+	matches := make([]RuleMatch, 0, len(e.dockerfileRules))
 
 	for _, rule := range e.dockerfileRules {
 		ruleMatches := e.evaluateDockerfileRule(rule, dockerfile)

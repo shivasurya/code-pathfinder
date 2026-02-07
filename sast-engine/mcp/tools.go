@@ -374,7 +374,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 	}
 
 	// Calculate module statistics.
-	moduleStats := make([]map[string]interface{}, 0)
+	moduleStats := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
 	totalFunctionsInModules := 0
 
 	for moduleFQN, filePath := range s.moduleRegistry.Modules {

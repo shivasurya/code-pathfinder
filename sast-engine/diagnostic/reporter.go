@@ -61,7 +61,7 @@ func GenerateConsoleReport(metrics *OverallMetrics, outputDir string) error {
 			category string
 			count    int
 		}
-		categories := []categoryCount{}
+		categories := make([]categoryCount, 0, len(metrics.FailuresByCategory))
 		for cat, count := range metrics.FailuresByCategory {
 			categories = append(categories, categoryCount{cat, count})
 		}
