@@ -69,9 +69,6 @@ Examples:
 		diffAware, _ := cmd.Flags().GetBool("diff-aware")
 		baseRef, _ := cmd.Flags().GetString("base")
 		headRef, _ := cmd.Flags().GetString("head")
-		ghToken, _ := cmd.Flags().GetString("github-token")
-		ghRepo, _ := cmd.Flags().GetString("github-repo")
-		ghPR, _ := cmd.Flags().GetInt("github-pr")
 
 		// Track scan started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.ScanStarted, map[string]interface{}{
@@ -165,14 +162,7 @@ Examples:
 			if err := diff.ValidateGitRef(projectPath, baseRef); err != nil {
 				return fmt.Errorf("invalid base ref %q: %w", baseRef, err)
 			}
-			ghOwner, ghRepoName := parseGitHubRepo(ghRepo)
-			ghOpts := githubOptions{
-				Token:    ghToken,
-				Owner:    ghOwner,
-				Repo:     ghRepoName,
-				PRNumber: ghPR,
-			}
-			files, err := computeChangedFiles(baseRef, headRef, projectPath, ghOpts, logger)
+			files, err := computeChangedFiles(baseRef, headRef, projectPath, logger)
 			if err != nil {
 				return fmt.Errorf("failed to compute changed files: %w", err)
 			}
@@ -963,8 +953,5 @@ func init() {
 	scanCmd.Flags().Bool("diff-aware", false, "Enable diff-aware scanning (only report findings in changed files)")
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
-	scanCmd.Flags().String("github-token", "", "GitHub API token for PR-based diff computation")
-	scanCmd.Flags().String("github-repo", "", "GitHub repository (owner/repo) for PR-based diff")
-	scanCmd.Flags().Int("github-pr", 0, "GitHub pull request number for PR-based diff")
 	scanCmd.MarkFlagRequired("project")
 }

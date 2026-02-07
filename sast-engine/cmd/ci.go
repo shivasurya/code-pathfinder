@@ -47,9 +47,6 @@ Examples:
 		baseRef, _ := cmd.Flags().GetString("base")
 		headRef, _ := cmd.Flags().GetString("head")
 		noDiff, _ := cmd.Flags().GetBool("no-diff")
-		ghToken, _ := cmd.Flags().GetString("github-token")
-		ghRepo, _ := cmd.Flags().GetString("github-repo")
-		ghPR, _ := cmd.Flags().GetInt("github-pr")
 
 		// Track CI started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
@@ -125,14 +122,7 @@ Examples:
 			}
 		}
 		if diffEnabled {
-			ghOwner, ghRepoName := parseGitHubRepo(ghRepo)
-			ghOpts := githubOptions{
-				Token:    ghToken,
-				Owner:    ghOwner,
-				Repo:     ghRepoName,
-				PRNumber: ghPR,
-			}
-			files, err := computeChangedFiles(baseRef, headRef, projectPath, ghOpts, logger)
+			files, err := computeChangedFiles(baseRef, headRef, projectPath, logger)
 			if err != nil {
 				logger.Warning("Failed to compute changed files: %v (showing all findings)", err)
 				diffEnabled = false
@@ -325,9 +315,6 @@ func init() {
 	ciCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (auto-detected in CI)")
 	ciCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	ciCmd.Flags().Bool("no-diff", false, "Disable diff-aware scanning (scan all files)")
-	ciCmd.Flags().String("github-token", "", "GitHub API token for PR-based diff computation")
-	ciCmd.Flags().String("github-repo", "", "GitHub repository (owner/repo) for PR-based diff")
-	ciCmd.Flags().Int("github-pr", 0, "GitHub pull request number for PR-based diff")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

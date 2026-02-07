@@ -14,66 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseGitHubRepo(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		wantOwner string
-		wantRepo  string
-	}{
-		{
-			name:      "valid owner/repo",
-			input:     "shivasurya/code-pathfinder",
-			wantOwner: "shivasurya",
-			wantRepo:  "code-pathfinder",
-		},
-		{
-			name:      "valid with dots and hyphens",
-			input:     "my-org/my.repo.name",
-			wantOwner: "my-org",
-			wantRepo:  "my.repo.name",
-		},
-		{
-			name:      "empty string",
-			input:     "",
-			wantOwner: "",
-			wantRepo:  "",
-		},
-		{
-			name:      "no slash",
-			input:     "noslash",
-			wantOwner: "",
-			wantRepo:  "",
-		},
-		{
-			name:      "empty owner",
-			input:     "/repo",
-			wantOwner: "",
-			wantRepo:  "",
-		},
-		{
-			name:      "empty repo",
-			input:     "owner/",
-			wantOwner: "",
-			wantRepo:  "",
-		},
-		{
-			name:      "multiple slashes keeps rest in repo",
-			input:     "owner/repo/extra",
-			wantOwner: "owner",
-			wantRepo:  "repo/extra",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			owner, repo := parseGitHubRepo(tt.input)
-			assert.Equal(t, tt.wantOwner, owner)
-			assert.Equal(t, tt.wantRepo, repo)
-		})
-	}
-}
-
 func TestResolveBaseRef(t *testing.T) {
 	// All env vars that resolveBaseRef checks.
 	envKeys := []string{
@@ -110,9 +50,9 @@ func TestResolveBaseRef(t *testing.T) {
 		{
 			name: "GITHUB_BASE_REF takes priority over GitLab CI",
 			envVars: map[string]string{
-				"GITHUB_BASE_REF":                      "main",
-				"CI_MERGE_REQUEST_TARGET_BRANCH_NAME":  "develop",
-				"PATHFINDER_BASELINE_REF":              "custom",
+				"GITHUB_BASE_REF":                     "main",
+				"CI_MERGE_REQUEST_TARGET_BRANCH_NAME": "develop",
+				"PATHFINDER_BASELINE_REF":             "custom",
 			},
 			want: "origin/main",
 		},
@@ -251,32 +191,28 @@ func TestComputeChangedFiles(t *testing.T) {
 	logger := output.NewLogger(output.VerbosityDefault)
 
 	t.Run("returns error for empty base ref", func(t *testing.T) {
-		ghOpts := githubOptions{}
-		_, err := computeChangedFiles("", "HEAD", "/tmp", ghOpts, logger)
+		_, err := computeChangedFiles("", "HEAD", "/tmp", logger)
 		assert.Error(t, err)
 	})
 
 	t.Run("returns error for nonexistent project root", func(t *testing.T) {
-		ghOpts := githubOptions{}
-		_, err := computeChangedFiles("main", "HEAD", "/nonexistent/path/xyz", ghOpts, logger)
+		_, err := computeChangedFiles("main", "HEAD", "/nonexistent/path/xyz", logger)
 		assert.Error(t, err)
 	})
 
 	t.Run("computes changed files with real git repo", func(t *testing.T) {
 		dir := setupDiffTestRepo(t)
-		ghOpts := githubOptions{}
 
-		files, err := computeChangedFiles("main", "feature", dir, ghOpts, logger)
+		files, err := computeChangedFiles("main", "feature", dir, logger)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"new_file.py"}, files)
 	})
 
 	t.Run("returns empty for no changes", func(t *testing.T) {
 		dir := setupDiffTestRepo(t)
-		ghOpts := githubOptions{}
 
 		// Compare main with itself — no changes.
-		files, err := computeChangedFiles("main", "main", dir, ghOpts, logger)
+		files, err := computeChangedFiles("main", "main", dir, logger)
 		require.NoError(t, err)
 		assert.Empty(t, files)
 	})
@@ -291,9 +227,6 @@ func TestCICommandDiffFlags(t *testing.T) {
 		{name: "base", flag: "base", defValue: ""},
 		{name: "head", flag: "head", defValue: "HEAD"},
 		{name: "no-diff", flag: "no-diff", defValue: "false"},
-		{name: "github-token", flag: "github-token", defValue: ""},
-		{name: "github-repo", flag: "github-repo", defValue: ""},
-		{name: "github-pr", flag: "github-pr", defValue: "0"},
 	}
 
 	for _, tt := range tests {
@@ -314,9 +247,6 @@ func TestScanCommandDiffFlags(t *testing.T) {
 		{name: "diff-aware", flag: "diff-aware", defValue: "false"},
 		{name: "base", flag: "base", defValue: ""},
 		{name: "head", flag: "head", defValue: "HEAD"},
-		{name: "github-token", flag: "github-token", defValue: ""},
-		{name: "github-repo", flag: "github-repo", defValue: ""},
-		{name: "github-pr", flag: "github-pr", defValue: "0"},
 	}
 
 	for _, tt := range tests {
@@ -326,18 +256,4 @@ func TestScanCommandDiffFlags(t *testing.T) {
 			assert.Equal(t, tt.defValue, flag.DefValue)
 		})
 	}
-}
-
-func TestGithubOptions(t *testing.T) {
-	// Verify that githubOptions correctly stores all fields.
-	opts := githubOptions{
-		Token:    "ghp_test123",
-		Owner:    "testowner",
-		Repo:     "testrepo",
-		PRNumber: 42,
-	}
-	assert.Equal(t, "ghp_test123", opts.Token)
-	assert.Equal(t, "testowner", opts.Owner)
-	assert.Equal(t, "testrepo", opts.Repo)
-	assert.Equal(t, 42, opts.PRNumber)
 }

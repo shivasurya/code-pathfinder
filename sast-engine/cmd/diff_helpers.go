@@ -2,30 +2,11 @@ package cmd
 
 import (
 	"os"
-	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/diff"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
-
-// githubOptions holds GitHub API context for diff computation and PR comments.
-type githubOptions struct {
-	Token    string
-	Owner    string
-	Repo     string
-	PRNumber int
-}
-
-// parseGitHubRepo splits "owner/repo" into owner and repo components.
-// Returns empty strings if the format is invalid.
-func parseGitHubRepo(repo string) (string, string) {
-	parts := strings.SplitN(repo, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", ""
-	}
-	return parts[0], parts[1]
-}
 
 // resolveBaseRef auto-detects the baseline ref from CI environment variables.
 // Used by the ci command when --base is not explicitly provided.
@@ -46,17 +27,13 @@ func resolveBaseRef() string {
 	return "" // No baseline detected → full scan.
 }
 
-// computeChangedFiles resolves changed files using the best available provider.
+// computeChangedFiles resolves changed files using git diff.
 // Shared between ci.go and scan.go to avoid duplication.
-func computeChangedFiles(baseRef, headRef, projectRoot string, ghOpts githubOptions, logger *output.Logger) ([]string, error) {
+func computeChangedFiles(baseRef, headRef, projectRoot string, logger *output.Logger) ([]string, error) {
 	provider, err := diff.NewChangedFilesProvider(diff.ProviderOptions{
 		ProjectRoot: projectRoot,
 		BaseRef:     baseRef,
 		HeadRef:     headRef,
-		GitHubToken: ghOpts.Token,
-		Owner:       ghOpts.Owner,
-		Repo:        ghOpts.Repo,
-		PRNumber:    ghOpts.PRNumber,
 	})
 	if err != nil {
 		return nil, err
@@ -72,7 +49,7 @@ func computeChangedFiles(baseRef, headRef, projectRoot string, ghOpts githubOpti
 }
 
 // applyDiffFilter filters detections to only those in changed files.
-// Returns the filtered detections and the count of detections that were removed.
+// Returns the filtered detections.
 func applyDiffFilter(allEnriched []*dsl.EnrichedDetection, changedFiles []string, logger *output.Logger) []*dsl.EnrichedDetection {
 	totalBefore := len(allEnriched)
 	diffFilter := output.NewDiffFilter(changedFiles)
