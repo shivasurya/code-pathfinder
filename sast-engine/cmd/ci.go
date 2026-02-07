@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
+	"github.com/shivasurya/code-pathfinder/sast-engine/diff"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
@@ -43,6 +44,12 @@ Examples:
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+		baseRef, _ := cmd.Flags().GetString("base")
+		headRef, _ := cmd.Flags().GetString("head")
+		noDiff, _ := cmd.Flags().GetBool("no-diff")
+		ghToken, _ := cmd.Flags().GetString("github-token")
+		ghRepo, _ := cmd.Flags().GetString("github-repo")
+		ghPR, _ := cmd.Flags().GetInt("github-pr")
 
 		// Track CI started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
@@ -97,6 +104,41 @@ Examples:
 				"phase":      "initialization",
 			})
 			return fmt.Errorf("--output must be 'sarif', 'json', or 'csv'")
+		}
+
+		// Diff-aware scanning (on by default in CI mode).
+		var changedFiles []string
+		diffEnabled := !noDiff
+		if diffEnabled {
+			if baseRef == "" {
+				baseRef = resolveBaseRef()
+			}
+			if baseRef == "" {
+				logger.Progress("No baseline ref detected, running full scan")
+				diffEnabled = false
+			}
+		}
+		if diffEnabled {
+			if err := diff.ValidateGitRef(projectPath, baseRef); err != nil {
+				logger.Warning("Invalid base ref %q: %v (running full scan)", baseRef, err)
+				diffEnabled = false
+			}
+		}
+		if diffEnabled {
+			ghOwner, ghRepoName := parseGitHubRepo(ghRepo)
+			ghOpts := githubOptions{
+				Token:    ghToken,
+				Owner:    ghOwner,
+				Repo:     ghRepoName,
+				PRNumber: ghPR,
+			}
+			files, err := computeChangedFiles(baseRef, headRef, projectPath, ghOpts, logger)
+			if err != nil {
+				logger.Warning("Failed to compute changed files: %v (showing all findings)", err)
+				diffEnabled = false
+			} else {
+				changedFiles = files
+			}
 		}
 
 		// Build code graph (AST)
@@ -194,6 +236,11 @@ Examples:
 		}
 		logger.FinishProgress()
 
+		// Apply diff filter when diff-aware mode is active.
+		if diffEnabled && len(changedFiles) > 0 {
+			allEnriched = applyDiffFilter(allEnriched, changedFiles, logger)
+		}
+
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
 
@@ -239,9 +286,11 @@ Examples:
 		}
 
 		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]interface{}{
-			"duration_ms":       time.Since(startTime).Milliseconds(),
-			"rules_count":       len(rules),
-			"findings_count":    len(allEnriched),
+			"duration_ms":         time.Since(startTime).Milliseconds(),
+			"rules_count":         len(rules),
+			"findings_count":      len(allEnriched),
+			"diff_aware":          diffEnabled,
+			"diff_changed_files":  len(changedFiles),
 			"severity_critical": severityBreakdown["critical"],
 			"severity_high":     severityBreakdown["high"],
 			"severity_medium":   severityBreakdown["medium"],
@@ -273,6 +322,12 @@ func init() {
 	ciCmd.Flags().Bool("debug", false, "Show detailed debug diagnostics with file-level progress and timestamps")
 	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	ciCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
+	ciCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (auto-detected in CI)")
+	ciCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
+	ciCmd.Flags().Bool("no-diff", false, "Disable diff-aware scanning (scan all files)")
+	ciCmd.Flags().String("github-token", "", "GitHub API token for PR-based diff computation")
+	ciCmd.Flags().String("github-repo", "", "GitHub repository (owner/repo) for PR-based diff")
+	ciCmd.Flags().Int("github-pr", 0, "GitHub pull request number for PR-based diff")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }
