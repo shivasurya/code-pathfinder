@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/diff"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/shivasurya/code-pathfinder/sast-engine/github"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -47,6 +48,17 @@ Examples:
 		baseRef, _ := cmd.Flags().GetString("base")
 		headRef, _ := cmd.Flags().GetString("head")
 		noDiff, _ := cmd.Flags().GetBool("no-diff")
+
+		// GitHub PR commenting flags.
+		prOpts := prCommentOptions{
+			Comment: false,
+			Inline:  false,
+		}
+		prOpts.Token, _ = cmd.Flags().GetString("github-token")
+		prOpts.Repo, _ = cmd.Flags().GetString("github-repo")
+		prOpts.PRNumber, _ = cmd.Flags().GetInt("github-pr")
+		prOpts.Comment, _ = cmd.Flags().GetBool("pr-comment")
+		prOpts.Inline, _ = cmd.Flags().GetBool("pr-inline")
 
 		// Track CI started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
@@ -101,6 +113,11 @@ Examples:
 				"phase":      "initialization",
 			})
 			return fmt.Errorf("--output must be 'sarif', 'json', or 'csv'")
+		}
+
+		// Validate PR commenting flags early.
+		if err := prOpts.validate(); err != nil {
+			return err
 		}
 
 		// Diff-aware scanning (on by default in CI mode).
@@ -266,6 +283,17 @@ Examples:
 			return fmt.Errorf("unknown output format: %s", outputFormat)
 		}
 
+		// Post PR comments if configured.
+		if prOpts.enabled() {
+			metrics := github.ScanMetrics{
+				FilesScanned:  len(codeGraph.Nodes),
+				RulesExecuted: len(rules),
+			}
+			if err := postPRComments(prOpts, allEnriched, metrics, logger); err != nil {
+				logger.Warning("Failed to post PR comments: %v", err)
+			}
+		}
+
 		// Determine exit code based on findings and --fail-on flag
 		exitCode := output.DetermineExitCode(allEnriched, failOn, hadErrors)
 
@@ -315,6 +343,11 @@ func init() {
 	ciCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (auto-detected in CI)")
 	ciCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	ciCmd.Flags().Bool("no-diff", false, "Disable diff-aware scanning (scan all files)")
+	ciCmd.Flags().String("github-token", "", "GitHub API token for posting PR comments")
+	ciCmd.Flags().String("github-repo", "", "GitHub repository in owner/repo format")
+	ciCmd.Flags().Int("github-pr", 0, "Pull request number for posting comments")
+	ciCmd.Flags().Bool("pr-comment", false, "Post summary comment on the pull request")
+	ciCmd.Flags().Bool("pr-inline", false, "Post inline review comments for critical/high findings")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

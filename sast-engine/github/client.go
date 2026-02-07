@@ -32,6 +32,11 @@ func NewClient(token, owner, repo string) *Client {
 	}
 }
 
+// SetBaseURL overrides the API base URL (used for testing).
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
+}
+
 // GetPullRequest retrieves PR metadata (head SHA, base branch, etc.).
 func (c *Client) GetPullRequest(ctx context.Context, prNumber int) (*PullRequest, error) {
 	path := fmt.Sprintf("/repos/%s/%s/pulls/%d", c.owner, c.repo, prNumber)
