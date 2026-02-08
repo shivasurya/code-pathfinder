@@ -425,6 +425,76 @@ func TestDeleteReviewComment(t *testing.T) {
 	})
 }
 
+func TestSetBaseURL(t *testing.T) {
+	c := NewClient("tok", "o", "r")
+	c.SetBaseURL("http://custom.example.com")
+	assert.Equal(t, "http://custom.example.com", c.baseURL)
+}
+
+func TestGetPullRequest_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.GetPullRequest(context.Background(), 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get pull request")
+}
+
+func TestListComments_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.ListComments(context.Background(), 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "list comments")
+}
+
+func TestCreateComment_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.CreateComment(context.Background(), 1, "body")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create comment")
+}
+
+func TestUpdateComment_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.UpdateComment(context.Background(), 1, "body")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update comment")
+}
+
+func TestUpdateReviewComment_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.UpdateReviewComment(context.Background(), 1, "body")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "update review comment")
+}
+
+func TestCreateReview_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	err := client.CreateReview(context.Background(), 1, "sha", "", nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create review")
+}
+
+func TestListReviewComments_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	_, err := client.ListReviewComments(context.Background(), 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "list review comments")
+}
+
+func TestDeleteReviewComment_NetworkError(t *testing.T) {
+	client := NewClient("tok", "o", "r")
+	client.baseURL = "http://127.0.0.1:1"
+	err := client.DeleteReviewComment(context.Background(), 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "delete review comment")
+}
+
 func TestDoRequest_AuthHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer my-secret", r.Header.Get("Authorization"))

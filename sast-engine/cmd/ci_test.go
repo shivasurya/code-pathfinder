@@ -43,6 +43,135 @@ func TestCICommandPRFlags(t *testing.T) {
 	}
 }
 
+// TestCICmdValidation tests the RunE validation paths in the ci command.
+func TestCICmdValidation(t *testing.T) {
+	// resetFlags restores all ci flags to their defaults before each subtest.
+	resetFlags := func() {
+		ciCmd.Flags().Set("rules", "")
+		ciCmd.Flags().Set("project", "")
+		ciCmd.Flags().Set("output", "sarif")
+		ciCmd.Flags().Set("verbose", "false")
+		ciCmd.Flags().Set("debug", "false")
+		ciCmd.Flags().Set("fail-on", "")
+		ciCmd.Flags().Set("skip-tests", "true")
+		ciCmd.Flags().Set("base", "")
+		ciCmd.Flags().Set("head", "HEAD")
+		ciCmd.Flags().Set("no-diff", "true") // disable diff to avoid git calls
+		ciCmd.Flags().Set("github-token", "")
+		ciCmd.Flags().Set("github-repo", "")
+		ciCmd.Flags().Set("github-pr", "0")
+		ciCmd.Flags().Set("pr-comment", "false")
+		ciCmd.Flags().Set("pr-inline", "false")
+	}
+
+	t.Run("missing rules returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--rules flag is required")
+	})
+
+	t.Run("missing project returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--project flag is required")
+	})
+
+	t.Run("invalid output format returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("output", "xml")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--output must be")
+	})
+
+	t.Run("pr-comment without github-token returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-comment", "true")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--github-token is required")
+	})
+
+	t.Run("pr-comment without github-repo returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-comment", "true")
+		ciCmd.Flags().Set("github-token", "test-token")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--github-repo is required")
+	})
+
+	t.Run("pr-comment with invalid pr number returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-comment", "true")
+		ciCmd.Flags().Set("github-token", "test-token")
+		ciCmd.Flags().Set("github-repo", "owner/repo")
+		ciCmd.Flags().Set("github-pr", "0")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--github-pr must be a positive number")
+	})
+
+	t.Run("pr-comment with invalid repo format returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-comment", "true")
+		ciCmd.Flags().Set("github-token", "test-token")
+		ciCmd.Flags().Set("github-repo", "invalidrepo")
+		ciCmd.Flags().Set("github-pr", "1")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "owner/repo")
+	})
+
+	t.Run("pr-inline without github-token returns error", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-inline", "true")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--github-token is required")
+	})
+
+	t.Run("pr-inline with valid flags and invalid repo format", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-inline", "true")
+		ciCmd.Flags().Set("github-token", "test-token")
+		ciCmd.Flags().Set("github-repo", "bad")
+		ciCmd.Flags().Set("github-pr", "5")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "owner/repo")
+	})
+
+	t.Run("both pr-comment and pr-inline without token", func(t *testing.T) {
+		resetFlags()
+		ciCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/test-project")
+		ciCmd.Flags().Set("pr-comment", "true")
+		ciCmd.Flags().Set("pr-inline", "true")
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--github-token is required")
+	})
+}
+
 func TestCICommandDiffFlags(t *testing.T) {
 	tests := []struct {
 		name     string
