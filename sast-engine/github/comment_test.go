@@ -147,7 +147,14 @@ func TestFormatSummaryComment_NoFindings(t *testing.T) {
 }
 
 func TestFormatSummaryComment_WithFindings(t *testing.T) {
+	// Provide findings in non-severity order to verify sorting.
 	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "app/utils.py", Line: 100},
+			Rule: dsl.RuleMetadata{
+				ID: "PATH-001", Name: "Path Traversal", Severity: "medium",
+			},
+		},
 		{
 			Location: dsl.LocationInfo{RelPath: "app/views.py", Line: 47},
 			Rule: dsl.RuleMetadata{
@@ -160,12 +167,6 @@ func TestFormatSummaryComment_WithFindings(t *testing.T) {
 			Rule: dsl.RuleMetadata{
 				ID: "SQL-001", Name: "SQL Injection", Severity: "high",
 				CWE: []string{"CWE-89"},
-			},
-		},
-		{
-			Location: dsl.LocationInfo{RelPath: "app/utils.py", Line: 100},
-			Rule: dsl.RuleMetadata{
-				ID: "PATH-001", Name: "Path Traversal", Severity: "medium",
 			},
 		},
 	}
@@ -184,6 +185,12 @@ func TestFormatSummaryComment_WithFindings(t *testing.T) {
 	assert.Contains(t, result, "| `app/views.py` | 47 | Command Injection |")
 	assert.Contains(t, result, "| `app/auth.py` | 23 | SQL Injection |")
 	assert.Contains(t, result, "| `app/utils.py` | 100 | Path Traversal |")
+	// Verify sort order: critical before high before medium.
+	critIdx := strings.Index(result, "Command Injection")
+	highIdx := strings.Index(result, "SQL Injection")
+	medIdx := strings.Index(result, "Path Traversal")
+	assert.Less(t, critIdx, highIdx, "critical should appear before high")
+	assert.Less(t, highIdx, medIdx, "high should appear before medium")
 	// Details section.
 	assert.Contains(t, result, "<details>")
 	assert.Contains(t, result, "Command Injection")
@@ -220,6 +227,54 @@ func TestFormatSummaryComment_ZeroBadgesGreen(t *testing.T) {
 	assert.Contains(t, result, "Critical-0-success")
 	assert.Contains(t, result, "High-0-success")
 	assert.Contains(t, result, "Medium-0-success")
+}
+
+// --- Sorting tests ---
+
+func TestSeverityOrder(t *testing.T) {
+	assert.Equal(t, 0, severityOrder("critical"))
+	assert.Equal(t, 1, severityOrder("high"))
+	assert.Equal(t, 2, severityOrder("medium"))
+	assert.Equal(t, 3, severityOrder("low"))
+	assert.Equal(t, 4, severityOrder("info"))
+	assert.Equal(t, 5, severityOrder("unknown"))
+}
+
+func TestSortBySeverity(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{Rule: dsl.RuleMetadata{ID: "R1", Severity: "low"}},
+		{Rule: dsl.RuleMetadata{ID: "R2", Severity: "critical"}},
+		{Rule: dsl.RuleMetadata{ID: "R3", Severity: "medium"}},
+		{Rule: dsl.RuleMetadata{ID: "R4", Severity: "high"}},
+		{Rule: dsl.RuleMetadata{ID: "R5", Severity: "info"}},
+	}
+
+	sorted := sortBySeverity(findings)
+
+	// Verify order: critical, high, medium, low, info.
+	assert.Equal(t, "R2", sorted[0].Rule.ID)
+	assert.Equal(t, "R4", sorted[1].Rule.ID)
+	assert.Equal(t, "R3", sorted[2].Rule.ID)
+	assert.Equal(t, "R1", sorted[3].Rule.ID)
+	assert.Equal(t, "R5", sorted[4].Rule.ID)
+
+	// Verify original slice is not mutated.
+	assert.Equal(t, "R1", findings[0].Rule.ID)
+}
+
+func TestSortBySeverity_StableOrder(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{Rule: dsl.RuleMetadata{ID: "A", Severity: "high"}},
+		{Rule: dsl.RuleMetadata{ID: "B", Severity: "high"}},
+		{Rule: dsl.RuleMetadata{ID: "C", Severity: "high"}},
+	}
+
+	sorted := sortBySeverity(findings)
+
+	// Same-severity items preserve original order (stable sort).
+	assert.Equal(t, "A", sorted[0].Rule.ID)
+	assert.Equal(t, "B", sorted[1].Rule.ID)
+	assert.Equal(t, "C", sorted[2].Rule.ID)
 }
 
 // --- Helper function tests ---

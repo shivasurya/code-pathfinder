@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
@@ -68,9 +69,38 @@ func (cm *CommentManager) findExisting(ctx context.Context) (int64, error) {
 	return 0, nil
 }
 
+// severityOrder returns a numeric rank for sorting (lower = more severe).
+func severityOrder(severity string) int {
+	switch strings.ToLower(severity) {
+	case "critical":
+		return 0
+	case "high":
+		return 1
+	case "medium":
+		return 2
+	case "low":
+		return 3
+	case "info":
+		return 4
+	default:
+		return 5
+	}
+}
+
+// sortBySeverity returns a copy of findings sorted by severity (critical first).
+func sortBySeverity(findings []*dsl.EnrichedDetection) []*dsl.EnrichedDetection {
+	sorted := make([]*dsl.EnrichedDetection, len(findings))
+	copy(sorted, findings)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return severityOrder(sorted[i].Rule.Severity) < severityOrder(sorted[j].Rule.Severity)
+	})
+	return sorted
+}
+
 // FormatSummaryComment builds the markdown body for a PR summary comment.
 func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics) string {
 	counts := countBySeverity(findings)
+	sorted := sortBySeverity(findings)
 	var sb strings.Builder
 
 	sb.WriteString("## Code Pathfinder Security Scan\n\n")
@@ -89,11 +119,11 @@ func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics
 	sb.WriteString(severityBadge("Medium", counts.Medium))
 	sb.WriteString("\n\n")
 
-	if len(findings) == 0 {
+	if len(sorted) == 0 {
 		sb.WriteString("**No security issues detected.**\n\n")
 	} else {
-		writeFindingsTable(&sb, findings)
-		writeDetails(&sb, findings)
+		writeFindingsTable(&sb, sorted)
+		writeDetails(&sb, sorted)
 		if counts.Critical > 0 {
 			sb.WriteString(fmt.Sprintf("> **%d critical issue(s)** require attention.\n\n", counts.Critical))
 		}
