@@ -167,6 +167,27 @@ Examples:
 		}
 		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
+		// Execute container rules if Docker/Compose files are present.
+		loader := dsl.NewRuleLoader(rulesPath)
+		var containerDetections []*dsl.EnrichedDetection
+		dockerFiles, composeFiles := extractContainerFiles(codeGraph)
+		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
+			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
+			logger.Progress("Loading container rules...")
+			containerRulesJSON, err := loader.LoadContainerRules(logger)
+			if err == nil {
+				logger.Progress("Executing container rules...")
+				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
+				if len(containerDetections) > 0 {
+					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
+				} else {
+					logger.Progress("No container issues detected")
+				}
+			} else {
+				logger.Debug("Container rule loading failed: %v", err)
+			}
+		}
+
 		// Build module registry
 		logger.StartProgress("Building module registry", -1)
 		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, skipTests)
@@ -195,7 +216,6 @@ Examples:
 
 		// Load Python DSL rules
 		logger.StartProgress("Loading rules", -1)
-		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
@@ -242,6 +262,9 @@ Examples:
 			logger.UpdateProgress(1)
 		}
 		logger.FinishProgress()
+
+		// Merge container detections with code analysis detections.
+		allEnriched = append(allEnriched, containerDetections...)
 
 		// Apply diff filter when diff-aware mode is active.
 		if diffEnabled && len(changedFiles) > 0 {
