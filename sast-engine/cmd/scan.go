@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
+	"github.com/shivasurya/code-pathfinder/sast-engine/diff"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/executor"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -65,6 +67,9 @@ Examples:
 		outputFormat, _ := cmd.Flags().GetString("output")
 		outputFile, _ := cmd.Flags().GetString("output-file")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+		diffAware, _ := cmd.Flags().GetBool("diff-aware")
+		baseRef, _ := cmd.Flags().GetString("base")
+		headRef, _ := cmd.Flags().GetString("head")
 
 		// Track scan started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.ScanStarted, map[string]interface{}{
@@ -148,6 +153,23 @@ Examples:
 			return fmt.Errorf("failed to resolve project path: %w", err)
 		}
 		projectPath = absProjectPath
+
+		// Diff-aware scanning (opt-in for scan command).
+		var changedFiles []string
+		if diffAware {
+			if baseRef == "" {
+				return fmt.Errorf("--base flag is required when --diff-aware is enabled")
+			}
+			if err := diff.ValidateGitRef(projectPath, baseRef); err != nil {
+				return fmt.Errorf("invalid base ref %q: %w", baseRef, err)
+			}
+			files, err := diff.ComputeChangedFiles(baseRef, headRef, projectPath)
+			if err != nil {
+				return fmt.Errorf("failed to compute changed files: %w", err)
+			}
+			changedFiles = files
+			logger.Progress("Changed files: %d", len(changedFiles))
+		}
 
 		// Create rule loader (used for both container and code analysis rules)
 		loader := dsl.NewRuleLoader(rulesPath)
@@ -277,6 +299,14 @@ Examples:
 		// Merge container detections with code analysis detections
 		allEnriched = append(allEnriched, containerDetections...)
 
+		// Apply diff filter when diff-aware mode is active.
+		if diffAware && len(changedFiles) > 0 {
+			totalBefore := len(allEnriched)
+			diffFilter := output.NewDiffFilter(changedFiles)
+			allEnriched = diffFilter.Filter(allEnriched)
+			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
+		}
+
 		// Step 6: Format and display results
 		// Count unique rule IDs from all detections (includes both code and container rules)
 		uniqueRules := make(map[string]bool)
@@ -373,9 +403,11 @@ Examples:
 		}
 
 		analytics.ReportEventWithProperties(analytics.ScanCompleted, map[string]interface{}{
-			"duration_ms":       time.Since(startTime).Milliseconds(),
-			"rules_count":       len(uniqueRules),
-			"findings_count":    len(allEnriched),
+			"duration_ms":         time.Since(startTime).Milliseconds(),
+			"rules_count":         len(uniqueRules),
+			"findings_count":      len(allEnriched),
+			"diff_aware":          diffAware,
+			"diff_changed_files":  len(changedFiles),
 			"severity_critical": severityBreakdown["critical"],
 			"severity_high":     severityBreakdown["high"],
 			"severity_medium":   severityBreakdown["medium"],
@@ -517,6 +549,18 @@ func executeContainerRules(
 	}
 
 	return enriched
+}
+
+// countContainerRules parses the container rules JSON IR and returns the total rule count.
+func countContainerRules(jsonIR []byte) int {
+	var ir struct {
+		Dockerfile []json.RawMessage `json:"dockerfile"`
+		Compose    []json.RawMessage `json:"compose"`
+	}
+	if err := json.Unmarshal(jsonIR, &ir); err != nil {
+		return 0
+	}
+	return len(ir.Dockerfile) + len(ir.Compose)
 }
 
 // generateCodeSnippet creates a code snippet with context lines around the target line.
@@ -923,5 +967,8 @@ func init() {
 	scanCmd.Flags().Bool("debug", false, "Show detailed debug diagnostics with file-level progress and timestamps")
 	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	scanCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
+	scanCmd.Flags().Bool("diff-aware", false, "Enable diff-aware scanning (only report findings in changed files)")
+	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
+	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	scanCmd.MarkFlagRequired("project")
 }

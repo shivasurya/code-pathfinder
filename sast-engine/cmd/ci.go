@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
+	"github.com/shivasurya/code-pathfinder/sast-engine/diff"
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
+	"github.com/shivasurya/code-pathfinder/sast-engine/github"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -14,6 +16,15 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
 )
+
+// prFlags holds the CLI flags for PR commenting.
+type prFlags struct {
+	Token    string
+	Repo     string // "owner/repo" format
+	PRNumber int
+	Comment  bool
+	Inline   bool
+}
 
 var ciCmd = &cobra.Command{
 	Use:   "ci",
@@ -43,6 +54,17 @@ Examples:
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+		baseRef, _ := cmd.Flags().GetString("base")
+		headRef, _ := cmd.Flags().GetString("head")
+		noDiff, _ := cmd.Flags().GetBool("no-diff")
+
+		// GitHub PR commenting flags.
+		var prOpts prFlags
+		prOpts.Token, _ = cmd.Flags().GetString("github-token")
+		prOpts.Repo, _ = cmd.Flags().GetString("github-repo")
+		prOpts.PRNumber, _ = cmd.Flags().GetInt("github-pr")
+		prOpts.Comment, _ = cmd.Flags().GetBool("pr-comment")
+		prOpts.Inline, _ = cmd.Flags().GetBool("pr-inline")
 
 		// Track CI started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
@@ -99,6 +121,51 @@ Examples:
 			return fmt.Errorf("--output must be 'sarif', 'json', or 'csv'")
 		}
 
+		// Validate PR commenting flags early.
+		if prOpts.Comment || prOpts.Inline {
+			if prOpts.Token == "" {
+				return fmt.Errorf("--github-token is required for PR commenting")
+			}
+			if prOpts.Repo == "" {
+				return fmt.Errorf("--github-repo is required for PR commenting")
+			}
+			if prOpts.PRNumber <= 0 {
+				return fmt.Errorf("--github-pr must be a positive number")
+			}
+			if _, _, err := github.ParseRepo(prOpts.Repo); err != nil {
+				return err
+			}
+		}
+
+		// Diff-aware scanning (on by default in CI mode).
+		var changedFiles []string
+		diffEnabled := !noDiff
+		if diffEnabled {
+			if baseRef == "" {
+				baseRef = diff.ResolveBaseRef()
+			}
+			if baseRef == "" {
+				logger.Progress("No baseline ref detected, running full scan")
+				diffEnabled = false
+			}
+		}
+		if diffEnabled {
+			if err := diff.ValidateGitRef(projectPath, baseRef); err != nil {
+				logger.Warning("Invalid base ref %q: %v (running full scan)", baseRef, err)
+				diffEnabled = false
+			}
+		}
+		if diffEnabled {
+			files, err := diff.ComputeChangedFiles(baseRef, headRef, projectPath)
+			if err != nil {
+				logger.Warning("Failed to compute changed files: %v (showing all findings)", err)
+				diffEnabled = false
+			} else {
+				changedFiles = files
+				logger.Progress("Changed files: %d", len(changedFiles))
+			}
+		}
+
 		// Build code graph (AST)
 		codeGraph := graph.Initialize(projectPath, &graph.ProgressCallbacks{
 			OnStart: func(totalFiles int) {
@@ -110,13 +177,33 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
-				"error_type": "empty_project",
-				"phase":      "graph_building",
-			})
-			return fmt.Errorf("no source files found in project")
+			logger.Progress("No source files found in project")
+		} else {
+			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}
-		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
+
+		// Execute container rules if Docker/Compose files are present.
+		loader := dsl.NewRuleLoader(rulesPath)
+		var containerDetections []*dsl.EnrichedDetection
+		var containerRulesCount int
+		dockerFiles, composeFiles := extractContainerFiles(codeGraph)
+		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
+			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
+			logger.Progress("Loading container rules...")
+			containerRulesJSON, err := loader.LoadContainerRules(logger)
+			if err == nil {
+				logger.Progress("Executing container rules...")
+				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
+				containerRulesCount = countContainerRules(containerRulesJSON)
+				if len(containerDetections) > 0 {
+					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
+				} else {
+					logger.Progress("No container issues detected")
+				}
+			} else {
+				logger.Debug("Container rule loading failed: %v", err)
+			}
+		}
 
 		// Build module registry
 		logger.StartProgress("Building module registry", -1)
@@ -146,7 +233,6 @@ Examples:
 
 		// Load Python DSL rules
 		logger.StartProgress("Loading rules", -1)
-		loader := dsl.NewRuleLoader(rulesPath)
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
@@ -194,6 +280,34 @@ Examples:
 		}
 		logger.FinishProgress()
 
+		// Merge container detections with code analysis detections.
+		allEnriched = append(allEnriched, containerDetections...)
+
+		// Apply diff filter when diff-aware mode is active.
+		if diffEnabled && len(changedFiles) > 0 {
+			totalBefore := len(allEnriched)
+			diffFilter := output.NewDiffFilter(changedFiles)
+			allEnriched = diffFilter.Filter(allEnriched)
+			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
+		}
+
+		// Total rules = code analysis rules loaded + container rules loaded.
+		totalRules := len(rules) + containerRulesCount
+
+		// Count unique source files. When diff-aware, only count changed files.
+		var filesScanned int
+		if diffEnabled && len(changedFiles) > 0 {
+			filesScanned = len(changedFiles)
+		} else {
+			uniqueFiles := make(map[string]bool)
+			for _, node := range codeGraph.Nodes {
+				if node.File != "" {
+					uniqueFiles[node.File] = true
+				}
+			}
+			filesScanned = len(uniqueFiles)
+		}
+
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
 
@@ -202,7 +316,7 @@ Examples:
 		case "sarif":
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
-				RulesExecuted: len(rules),
+				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
 			formatter := output.NewSARIFFormatter(nil)
@@ -210,10 +324,10 @@ Examples:
 				return fmt.Errorf("failed to format SARIF output: %w", err)
 			}
 		case "json":
-			summary := output.BuildSummary(allEnriched, len(rules))
+			summary := output.BuildSummary(allEnriched, totalRules)
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
-				RulesExecuted: len(rules),
+				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
 			formatter := output.NewJSONFormatter(nil)
@@ -229,6 +343,24 @@ Examples:
 			return fmt.Errorf("unknown output format: %s", outputFormat)
 		}
 
+		// Post PR comments if configured.
+		if prOpts.Comment || prOpts.Inline {
+			owner, repo, _ := github.ParseRepo(prOpts.Repo) // Already validated.
+			client := github.NewClient(prOpts.Token, owner, repo)
+			ghOpts := github.PRCommentOptions{
+				PRNumber: prOpts.PRNumber,
+				Comment:  prOpts.Comment,
+				Inline:   prOpts.Inline,
+			}
+			metrics := github.ScanMetrics{
+				FilesScanned:  filesScanned,
+				RulesExecuted: totalRules,
+			}
+			if err := github.PostPRComments(client, ghOpts, allEnriched, metrics, logger.Progress); err != nil {
+				logger.Warning("Failed to post PR comments: %v", err)
+			}
+		}
+
 		// Determine exit code based on findings and --fail-on flag
 		exitCode := output.DetermineExitCode(allEnriched, failOn, hadErrors)
 
@@ -239,9 +371,11 @@ Examples:
 		}
 
 		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]interface{}{
-			"duration_ms":       time.Since(startTime).Milliseconds(),
-			"rules_count":       len(rules),
-			"findings_count":    len(allEnriched),
+			"duration_ms":         time.Since(startTime).Milliseconds(),
+			"rules_count":         totalRules,
+			"findings_count":      len(allEnriched),
+			"diff_aware":          diffEnabled,
+			"diff_changed_files":  len(changedFiles),
 			"severity_critical": severityBreakdown["critical"],
 			"severity_high":     severityBreakdown["high"],
 			"severity_medium":   severityBreakdown["medium"],
@@ -273,6 +407,14 @@ func init() {
 	ciCmd.Flags().Bool("debug", false, "Show detailed debug diagnostics with file-level progress and timestamps")
 	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	ciCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
+	ciCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (auto-detected in CI)")
+	ciCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
+	ciCmd.Flags().Bool("no-diff", false, "Disable diff-aware scanning (scan all files)")
+	ciCmd.Flags().String("github-token", "", "GitHub API token for posting PR comments")
+	ciCmd.Flags().String("github-repo", "", "GitHub repository in owner/repo format")
+	ciCmd.Flags().Int("github-pr", 0, "Pull request number for posting comments")
+	ciCmd.Flags().Bool("pr-comment", false, "Post summary comment on the pull request")
+	ciCmd.Flags().Bool("pr-inline", false, "Post inline review comments for critical/high findings")
 	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

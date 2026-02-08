@@ -602,3 +602,89 @@ func TestExpandBundleSpecs(t *testing.T) {
 		assert.Equal(t, "java/security", expanded[2])
 	})
 }
+
+// TestScanCmdValidation tests RunE validation paths in the scan command.
+func TestScanCmdValidation(t *testing.T) {
+	resetFlags := func() {
+		scanCmd.Flags().Set("rules", "")
+		scanCmd.Flags().Set("project", "")
+		scanCmd.Flags().Set("output", "text")
+		scanCmd.Flags().Set("output-file", "")
+		scanCmd.Flags().Set("verbose", "false")
+		scanCmd.Flags().Set("debug", "false")
+		scanCmd.Flags().Set("fail-on", "")
+		scanCmd.Flags().Set("skip-tests", "true")
+		scanCmd.Flags().Set("diff-aware", "false")
+		scanCmd.Flags().Set("base", "")
+		scanCmd.Flags().Set("head", "HEAD")
+	}
+
+	t.Run("missing rules and ruleset returns error", func(t *testing.T) {
+		resetFlags()
+		scanCmd.Flags().Set("project", "/tmp/test-project")
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "either --rules or --ruleset flag is required")
+	})
+
+	t.Run("missing project returns error", func(t *testing.T) {
+		resetFlags()
+		scanCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		scanCmd.Flags().Set("project", "")
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--project flag is required")
+	})
+
+	t.Run("invalid output format returns error", func(t *testing.T) {
+		resetFlags()
+		scanCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		scanCmd.Flags().Set("project", t.TempDir())
+		scanCmd.Flags().Set("output", "xml")
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--output must be")
+	})
+
+	t.Run("diff-aware without base returns error", func(t *testing.T) {
+		resetFlags()
+		scanCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		scanCmd.Flags().Set("project", t.TempDir())
+		scanCmd.Flags().Set("diff-aware", "true")
+		scanCmd.Flags().Set("base", "")
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--base flag is required when --diff-aware is enabled")
+	})
+
+	t.Run("diff-aware with invalid base ref returns error", func(t *testing.T) {
+		resetFlags()
+		scanCmd.Flags().Set("rules", "/tmp/test-rules.py")
+		scanCmd.Flags().Set("project", t.TempDir())
+		scanCmd.Flags().Set("diff-aware", "true")
+		scanCmd.Flags().Set("base", "nonexistent-ref-xyz")
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid base ref")
+	})
+}
+
+func TestScanCommandDiffFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		flag     string
+		defValue string
+	}{
+		{name: "diff-aware", flag: "diff-aware", defValue: "false"},
+		{name: "base", flag: "base", defValue: ""},
+		{name: "head", flag: "head", defValue: "HEAD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := scanCmd.Flags().Lookup(tt.flag)
+			require.NotNil(t, flag, "flag %q should be registered on scan command", tt.flag)
+			assert.Equal(t, tt.defValue, flag.DefValue)
+		})
+	}
+}
