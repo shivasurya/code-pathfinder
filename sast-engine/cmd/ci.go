@@ -273,12 +273,18 @@ Examples:
 		// Total rules = code analysis rules loaded + container rules loaded.
 		totalRules := len(rules) + containerRulesCount
 
-		// Count unique source files in the code graph.
-		uniqueFiles := make(map[string]bool)
-		for _, node := range codeGraph.Nodes {
-			if node.File != "" {
-				uniqueFiles[node.File] = true
+		// Count unique source files. When diff-aware, only count changed files.
+		var filesScanned int
+		if diffEnabled && len(changedFiles) > 0 {
+			filesScanned = len(changedFiles)
+		} else {
+			uniqueFiles := make(map[string]bool)
+			for _, node := range codeGraph.Nodes {
+				if node.File != "" {
+					uniqueFiles[node.File] = true
+				}
 			}
+			filesScanned = len(uniqueFiles)
 		}
 
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
@@ -319,7 +325,7 @@ Examples:
 		// Post PR comments if configured.
 		if prOpts.enabled() {
 			metrics := github.ScanMetrics{
-				FilesScanned:  len(uniqueFiles),
+				FilesScanned:  filesScanned,
 				RulesExecuted: totalRules,
 			}
 			if err := postPRComments(prOpts, allEnriched, metrics, logger); err != nil {
