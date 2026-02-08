@@ -18,7 +18,7 @@ inputs:
     required: false
     default: '.'
   output:
-    description: 'Output format: sarif, json, csv, or text'
+    description: 'Output format: sarif, json, or csv'
     required: false
     default: 'sarif'
   output-file:
@@ -51,6 +51,22 @@ inputs:
     default: 'false'
   disable-metrics:
     description: 'Disable anonymous usage metrics collection'
+    required: false
+    default: 'false'
+  pr-comment:
+    description: 'Post a summary comment on the pull request with scan results'
+    required: false
+    default: 'false'
+  pr-inline:
+    description: 'Post inline review comments for critical/high severity findings'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for posting PR comments (required when pr-comment or pr-inline is enabled)'
+    required: false
+    default: ''
+  no-diff:
+    description: 'Disable diff-aware scanning (scan all files instead of only changed files)'
     required: false
     default: 'false'
 
@@ -111,9 +127,18 @@ runs:
         [ -n "${{ inputs.output }}" ] && validate_no_injection "${{ inputs.output }}" "output"
         [ -n "${{ inputs.output-file }}" ] && validate_no_injection "${{ inputs.output-file }}" "output-file"
         [ -n "${{ inputs.fail-on }}" ] && validate_no_injection "${{ inputs.fail-on }}" "fail-on"
+        [ -n "${{ inputs.github-token }}" ] && validate_no_injection "${{ inputs.github-token }}" "github-token"
+
+        # Validate PR commenting requirements
+        if [ "${{ inputs.pr-comment }}" = "true" ] || [ "${{ inputs.pr-inline }}" = "true" ]; then
+          if [ -z "${{ inputs.github-token }}" ]; then
+            echo "Error: 'github-token' input is required when 'pr-comment' or 'pr-inline' is enabled"
+            exit 1
+          fi
+        fi
 
         # Build command arguments using array to prevent injection
-        ARGS=(scan)
+        ARGS=(ci)
         ARGS+=(--project "${{ inputs.project }}")
 
         # Add rules or ruleset
@@ -127,6 +152,8 @@ runs:
           for ruleset in "${RULESETS[@]}"; do
             # Trim whitespace
             ruleset=$(echo "$ruleset" | xargs)
+            # Skip empty entries (e.g., trailing commas)
+            [ -z "$ruleset" ] && continue
             ARGS+=(--ruleset "$ruleset")
           done
         fi
@@ -160,5 +187,32 @@ runs:
           ARGS+=(--disable-metrics)
         fi
 
-        echo "Running: pathfinder ${ARGS[*]}"
+        if [ "${{ inputs.no-diff }}" = "true" ]; then
+          ARGS+=(--no-diff)
+        fi
+
+        # PR commenting flags - auto-wire GitHub context
+        if [ "${{ inputs.pr-comment }}" = "true" ] || [ "${{ inputs.pr-inline }}" = "true" ]; then
+          # Validate PR number is available (empty on non-pull_request events)
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Error: PR commenting requires a pull_request event, but 'github.event.pull_request.number' is empty."
+            echo "Hint: Use a conditional to only enable PR commenting on pull requests:"
+            echo "  pr-comment: \${{ github.event_name == 'pull_request' }}"
+            exit 1
+          fi
+
+          ARGS+=(--github-token "${{ inputs.github-token }}")
+          ARGS+=(--github-repo "${{ github.repository }}")
+          ARGS+=(--github-pr "$PR_NUMBER")
+
+          if [ "${{ inputs.pr-comment }}" = "true" ]; then
+            ARGS+=(--pr-comment)
+          fi
+
+          if [ "${{ inputs.pr-inline }}" = "true" ]; then
+            ARGS+=(--pr-inline)
+          fi
+        fi
+
         pathfinder "${ARGS[@]}"

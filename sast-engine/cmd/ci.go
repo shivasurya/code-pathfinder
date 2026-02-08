@@ -40,16 +40,30 @@ Examples:
   # Generate SARIF report with rules directory
   pathfinder ci --rules rules/ --project . --output sarif > results.sarif
 
+  # Use remote rulesets
+  pathfinder ci --ruleset python/django --ruleset docker/security --project . --output sarif
+
+  # Write output to file
+  pathfinder ci --ruleset docker/security --project . --output sarif --output-file results.sarif
+
   # Generate JSON report
   pathfinder ci --rules rules/owasp_top10.py --project . --output json > results.json
 
   # Generate CSV report
-  pathfinder ci --rules rules/owasp_top10.py --project . --output csv > results.csv`,
+  pathfinder ci --rules rules/owasp_top10.py --project . --output csv > results.csv
+
+  # Post PR comments on GitHub
+  pathfinder ci --ruleset python/django --project . --output sarif \
+    --github-token $GITHUB_TOKEN --github-repo owner/repo --github-pr 42 \
+    --pr-comment --pr-inline`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
 		rulesPath, _ := cmd.Flags().GetString("rules")
+		rulesetSpecs, _ := cmd.Flags().GetStringArray("ruleset")
+		refreshRules, _ := cmd.Flags().GetBool("refresh-rules")
 		projectPath, _ := cmd.Flags().GetString("project")
 		outputFormat, _ := cmd.Flags().GetString("output")
+		outputFile, _ := cmd.Flags().GetString("output-file")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		debug, _ := cmd.Flags().GetBool("debug")
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
@@ -68,8 +82,11 @@ Examples:
 
 		// Track CI started event (no PII, just metadata)
 		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
-			"output_format": outputFormat,
-			"skip_tests":    skipTests,
+			"output_format":     outputFormat,
+			"skip_tests":        skipTests,
+			"has_local_rules":   rulesPath != "",
+			"has_remote_rules":  len(rulesetSpecs) > 0,
+			"remote_rule_count": len(rulesetSpecs),
 		})
 
 		// Setup logger with appropriate verbosity
@@ -97,12 +114,12 @@ Examples:
 			}
 		}
 
-		if rulesPath == "" {
+		if rulesPath == "" && len(rulesetSpecs) == 0 {
 			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
-			return fmt.Errorf("--rules flag is required")
+			return fmt.Errorf("either --rules or --ruleset flag is required")
 		}
 
 		if projectPath == "" {
@@ -136,6 +153,24 @@ Examples:
 				return err
 			}
 		}
+
+		// Handle remote ruleset downloads and merge with local rules.
+		finalRulesPath, tempDir, err := prepareRules(rulesPath, rulesetSpecs, refreshRules, logger)
+		if err != nil {
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+				"error_type": "rule_preparation",
+				"phase":      "initialization",
+			})
+			return fmt.Errorf("failed to prepare rules: %w", err)
+		}
+		if tempDir != "" {
+			defer func() {
+				if err := os.RemoveAll(tempDir); err != nil {
+					logger.Warning("Failed to clean up temporary directory: %v", err)
+				}
+			}()
+		}
+		rulesPath = finalRulesPath
 
 		// Diff-aware scanning (on by default in CI mode).
 		var changedFiles []string
@@ -311,7 +346,18 @@ Examples:
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
 
-		// Generate output
+		// Setup output writer (file or stdout).
+		var outputWriter *os.File
+		if outputFile != "" {
+			outputWriter, err = os.Create(outputFile)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %w", err)
+			}
+			defer outputWriter.Close()
+			logger.Progress("Writing output to %s", outputFile)
+		}
+
+		// Generate output.
 		switch outputFormat {
 		case "sarif":
 			scanInfo := output.ScanInfo{
@@ -319,7 +365,12 @@ Examples:
 				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
-			formatter := output.NewSARIFFormatter(nil)
+			var formatter *output.SARIFFormatter
+			if outputWriter != nil {
+				formatter = output.NewSARIFFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewSARIFFormatter(nil)
+			}
 			if err := formatter.Format(allEnriched, scanInfo); err != nil {
 				return fmt.Errorf("failed to format SARIF output: %w", err)
 			}
@@ -330,17 +381,31 @@ Examples:
 				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
-			formatter := output.NewJSONFormatter(nil)
+			var formatter *output.JSONFormatter
+			if outputWriter != nil {
+				formatter = output.NewJSONFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewJSONFormatter(nil)
+			}
 			if err := formatter.Format(allEnriched, summary, scanInfo); err != nil {
 				return fmt.Errorf("failed to format JSON output: %w", err)
 			}
 		case "csv":
-			formatter := output.NewCSVFormatter(nil)
+			var formatter *output.CSVFormatter
+			if outputWriter != nil {
+				formatter = output.NewCSVFormatterWithWriter(outputWriter, nil)
+			} else {
+				formatter = output.NewCSVFormatter(nil)
+			}
 			if err := formatter.Format(allEnriched); err != nil {
 				return fmt.Errorf("failed to format CSV output: %w", err)
 			}
 		default:
 			return fmt.Errorf("unknown output format: %s", outputFormat)
+		}
+
+		if outputWriter != nil {
+			logger.Progress("Successfully wrote results to %s", outputFile)
 		}
 
 		// Post PR comments if configured.
@@ -400,9 +465,12 @@ var osExit = os.Exit
 
 func init() {
 	rootCmd.AddCommand(ciCmd)
-	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory (required)")
+	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
+	ciCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
+	ciCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	ciCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
-	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif or json (default: sarif)")
+	ciCmd.Flags().StringP("output", "o", "sarif", "Output format: sarif, json, or csv (default: sarif)")
+	ciCmd.Flags().StringP("output-file", "f", "", "Write output to file instead of stdout")
 	ciCmd.Flags().BoolP("verbose", "v", false, "Show statistics and timing information")
 	ciCmd.Flags().Bool("debug", false, "Show detailed debug diagnostics with file-level progress and timestamps")
 	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
@@ -415,6 +483,5 @@ func init() {
 	ciCmd.Flags().Int("github-pr", 0, "Pull request number for posting comments")
 	ciCmd.Flags().Bool("pr-comment", false, "Post summary comment on the pull request")
 	ciCmd.Flags().Bool("pr-inline", false, "Post inline review comments for critical/high findings")
-	ciCmd.MarkFlagRequired("rules")
 	ciCmd.MarkFlagRequired("project")
 }

@@ -2,7 +2,7 @@
 # Copy this to your repository at .github/workflows/security-scan.yml
 #
 # NOTE: This workflow uses './' to test the action from the current branch.
-# In your own repository, replace './' with 'shivasurya/code-pathfinder@v1.2.0'
+# In your own repository, replace './' with 'shivasurya/code-pathfinder@v1.3.5'
 # or 'shivasurya/code-pathfinder@main' for the latest version.
 
 name: Security Scan
@@ -13,17 +13,25 @@ on:
   pull_request:
     branches: [main, master]
 
-# Required for uploading SARIF results to GitHub Code Scanning
+# Required permissions:
+#   security-events: write  - for uploading SARIF results to GitHub Code Scanning
+#   contents: read          - for checking out the repository
+#   pull-requests: write    - for posting PR comments (optional, only needed with pr-comment/pr-inline)
 permissions:
   security-events: write
   contents: read
+  pull-requests: write
 
 jobs:
-  # Scan with multiple remote rulesets (Python + Docker)
+  # Basic scan with remote rulesets and SARIF upload
   security-scan:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 is required for diff-aware scanning to access full git history.
+      # Without it, only changed files in the PR cannot be determined.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Run Security Scan
         uses: ./
@@ -37,6 +45,10 @@ jobs:
             docker/best-practice
           project: .
           verbose: true
+          # Post scan results as PR comments (only on pull_request events)
+          pr-comment: ${{ github.event_name == 'pull_request' }}
+          pr-inline: ${{ github.event_name == 'pull_request' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
