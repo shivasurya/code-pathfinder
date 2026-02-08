@@ -212,9 +212,31 @@ func TestFormatSummaryComment_LowOnlyFindings(t *testing.T) {
 
 	// Issues found badge (not pass).
 	assert.Contains(t, result, "Issues_Found")
+	// Low badge with count.
+	assert.Contains(t, result, "Low-1-blue")
 	// No critical warning.
 	assert.NotContains(t, result, "critical issue(s)")
 	// Still has findings table.
+	assert.Contains(t, result, "### Findings")
+}
+
+func TestFormatSummaryComment_InfoOnlyFindings(t *testing.T) {
+	findings := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{RelPath: "Dockerfile", Line: 1},
+			Rule:     dsl.RuleMetadata{Name: "Deprecated Maintainer", Severity: "info"},
+		},
+	}
+
+	result := FormatSummaryComment(findings, ScanMetrics{})
+
+	// Issues found badge (not pass).
+	assert.Contains(t, result, "Issues_Found")
+	// Info badge with count.
+	assert.Contains(t, result, "Info-1-informational")
+	// No critical warning.
+	assert.NotContains(t, result, "critical issue(s)")
+	// Has findings table.
 	assert.Contains(t, result, "### Findings")
 }
 
@@ -224,6 +246,8 @@ func TestFormatSummaryComment_ZeroBadgesGreen(t *testing.T) {
 	assert.Contains(t, result, "Critical-0-success")
 	assert.Contains(t, result, "High-0-success")
 	assert.Contains(t, result, "Medium-0-success")
+	assert.Contains(t, result, "Low-0-success")
+	assert.Contains(t, result, "Info-0-success")
 }
 
 // --- Sorting tests ---
@@ -284,6 +308,7 @@ func TestCountBySeverity(t *testing.T) {
 		{Rule: dsl.RuleMetadata{Severity: "medium"}},
 		{Rule: dsl.RuleMetadata{Severity: "low"}},
 		{Rule: dsl.RuleMetadata{Severity: "low"}},
+		{Rule: dsl.RuleMetadata{Severity: "info"}},
 		{Rule: dsl.RuleMetadata{Severity: "unknown"}}, // Ignored.
 	}
 
@@ -292,6 +317,7 @@ func TestCountBySeverity(t *testing.T) {
 	assert.Equal(t, 1, c.High)
 	assert.Equal(t, 1, c.Medium)
 	assert.Equal(t, 2, c.Low)
+	assert.Equal(t, 1, c.Info)
 }
 
 func TestCountBySeverity_Empty(t *testing.T) {
@@ -300,6 +326,7 @@ func TestCountBySeverity_Empty(t *testing.T) {
 	assert.Equal(t, 0, c.High)
 	assert.Equal(t, 0, c.Medium)
 	assert.Equal(t, 0, c.Low)
+	assert.Equal(t, 0, c.Info)
 }
 
 func TestSeverityEmoji(t *testing.T) {
@@ -307,6 +334,7 @@ func TestSeverityEmoji(t *testing.T) {
 	assert.NotEmpty(t, severityEmoji("high"))
 	assert.NotEmpty(t, severityEmoji("medium"))
 	assert.NotEmpty(t, severityEmoji("low"))
+	assert.NotEmpty(t, severityEmoji("info"))
 	assert.Empty(t, severityEmoji("unknown"))
 }
 
@@ -315,6 +343,7 @@ func TestSeverityLabel(t *testing.T) {
 	assert.Contains(t, severityLabel("high"), "High")
 	assert.Contains(t, severityLabel("medium"), "Medium")
 	assert.Contains(t, severityLabel("low"), "Low")
+	assert.Contains(t, severityLabel("info"), "Info")
 	assert.Equal(t, "other", severityLabel("other"))
 }
 
@@ -334,6 +363,10 @@ func TestSeverityBadge(t *testing.T) {
 	assert.Contains(t, severityBadge("High", 0), "High-0-success")
 	assert.Contains(t, severityBadge("Medium", 2), "Medium-2-yellow")
 	assert.Contains(t, severityBadge("Medium", 0), "Medium-0-success")
+	assert.Contains(t, severityBadge("Low", 4), "Low-4-blue")
+	assert.Contains(t, severityBadge("Low", 0), "Low-0-success")
+	assert.Contains(t, severityBadge("Info", 1), "Info-1-informational")
+	assert.Contains(t, severityBadge("Info", 0), "Info-0-success")
 }
 
 func TestWriteFindingsTable_NoLinks(t *testing.T) {

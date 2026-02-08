@@ -107,7 +107,7 @@ func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics
 	sb.WriteString("## Code Pathfinder Security Scan\n\n")
 
 	// Status and severity badges.
-	if counts.Critical == 0 && counts.High == 0 && counts.Medium == 0 && counts.Low == 0 {
+	if counts.Critical == 0 && counts.High == 0 && counts.Medium == 0 && counts.Low == 0 && counts.Info == 0 {
 		sb.WriteString(statusBadge("Pass", "success"))
 	} else {
 		sb.WriteString(statusBadge("Issues Found", "critical"))
@@ -118,6 +118,10 @@ func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics
 	sb.WriteString(severityBadge("High", counts.High))
 	sb.WriteString(" ")
 	sb.WriteString(severityBadge("Medium", counts.Medium))
+	sb.WriteString(" ")
+	sb.WriteString(severityBadge("Low", counts.Low))
+	sb.WriteString(" ")
+	sb.WriteString(severityBadge("Info", counts.Info))
 	sb.WriteString("\n\n")
 
 	if len(sorted) == 0 {
@@ -147,6 +151,7 @@ type severityCounts struct {
 	High     int
 	Medium   int
 	Low      int
+	Info     int
 }
 
 func countBySeverity(findings []*dsl.EnrichedDetection) severityCounts {
@@ -161,6 +166,8 @@ func countBySeverity(findings []*dsl.EnrichedDetection) severityCounts {
 			c.Medium++
 		case "low":
 			c.Low++
+		case "info":
+			c.Info++
 		}
 	}
 	return c
@@ -192,6 +199,18 @@ func severityBadge(label string, count int) string {
 		} else {
 			color = "success"
 		}
+	case "Low":
+		if count > 0 {
+			color = "blue"
+		} else {
+			color = "success"
+		}
+	case "Info":
+		if count > 0 {
+			color = "informational"
+		} else {
+			color = "success"
+		}
 	}
 	return fmt.Sprintf("![%s](https://img.shields.io/badge/%s-%d-%s?style=flat-square)", label, label, count, color)
 }
@@ -206,6 +225,8 @@ func severityEmoji(severity string) string {
 		return "\xf0\x9f\x9f\xa1" // yellow circle
 	case "low":
 		return "\xf0\x9f\x94\xb5" // blue circle
+	case "info":
+		return "\xe2\x84\xb9\xef\xb8\x8f" // info icon
 	default:
 		return ""
 	}
@@ -221,6 +242,8 @@ func severityLabel(severity string) string {
 		return severityEmoji("medium") + " Medium"
 	case "low":
 		return severityEmoji("low") + " Low"
+	case "info":
+		return severityEmoji("info") + " Info"
 	default:
 		return severity
 	}
