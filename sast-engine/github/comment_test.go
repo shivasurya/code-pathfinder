@@ -136,7 +136,7 @@ func TestPostOrUpdate_UpdateError(t *testing.T) {
 func TestFormatSummaryComment_NoFindings(t *testing.T) {
 	result := FormatSummaryComment(nil, ScanMetrics{FilesScanned: 5, RulesExecuted: 10})
 
-	assert.Contains(t, result, "## Code Pathfinder Security Scan")
+	assert.Contains(t, result, "## [Code Pathfinder](https://codepathfinder.dev) Security Scan")
 	assert.Contains(t, result, "Security-Pass-success")
 	assert.Contains(t, result, "**No security issues detected.**")
 	assert.Contains(t, result, "| Files Scanned | 5 |")

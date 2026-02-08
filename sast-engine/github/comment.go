@@ -104,7 +104,7 @@ func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics
 	sorted := sortBySeverity(findings)
 	var sb strings.Builder
 
-	sb.WriteString("## Code Pathfinder Security Scan\n\n")
+	sb.WriteString("## [Code Pathfinder](https://codepathfinder.dev) Security Scan\n\n")
 
 	// Status and severity badges.
 	if counts.Critical == 0 && counts.High == 0 && counts.Medium == 0 && counts.Low == 0 && counts.Info == 0 {
