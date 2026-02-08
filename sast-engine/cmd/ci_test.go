@@ -50,10 +50,12 @@ func TestCICmdValidation(t *testing.T) {
 		ciCmd.Flags().Set("rules", "")
 		ciCmd.Flags().Set("project", "")
 		ciCmd.Flags().Set("output", "sarif")
+		ciCmd.Flags().Set("output-file", "")
 		ciCmd.Flags().Set("verbose", "false")
 		ciCmd.Flags().Set("debug", "false")
 		ciCmd.Flags().Set("fail-on", "")
 		ciCmd.Flags().Set("skip-tests", "true")
+		ciCmd.Flags().Set("refresh-rules", "false")
 		ciCmd.Flags().Set("base", "")
 		ciCmd.Flags().Set("head", "HEAD")
 		ciCmd.Flags().Set("no-diff", "true") // disable diff to avoid git calls
@@ -64,12 +66,12 @@ func TestCICmdValidation(t *testing.T) {
 		ciCmd.Flags().Set("pr-inline", "false")
 	}
 
-	t.Run("missing rules returns error", func(t *testing.T) {
+	t.Run("missing rules and ruleset returns error", func(t *testing.T) {
 		resetFlags()
 		ciCmd.Flags().Set("project", "/tmp/test-project")
 		err := ciCmd.RunE(ciCmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "--rules flag is required")
+		assert.Contains(t, err.Error(), "either --rules or --ruleset flag is required")
 	})
 
 	t.Run("missing project returns error", func(t *testing.T) {
@@ -190,4 +192,35 @@ func TestCICommandDiffFlags(t *testing.T) {
 			assert.Equal(t, tt.defValue, flag.DefValue)
 		})
 	}
+}
+
+func TestCICommandRulesetFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		flag     string
+		defValue string
+	}{
+		{name: "ruleset", flag: "ruleset", defValue: "[]"},
+		{name: "refresh-rules", flag: "refresh-rules", defValue: "false"},
+		{name: "output-file", flag: "output-file", defValue: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := ciCmd.Flags().Lookup(tt.flag)
+			require.NotNil(t, flag, "flag %q should be registered on ci command", tt.flag)
+			assert.Equal(t, tt.defValue, flag.DefValue)
+		})
+	}
+}
+
+func TestCICommandRulesNotRequired(t *testing.T) {
+	// Verify --rules is no longer marked as required (--ruleset can be used instead).
+	rulesFlag := ciCmd.Flags().Lookup("rules")
+	require.NotNil(t, rulesFlag)
+
+	// The flag should not have the "required" annotation.
+	annotations := rulesFlag.Annotations
+	_, isRequired := annotations["cobra_annotation_bash_completion_one_required_flags"]
+	assert.False(t, isRequired, "--rules should not be marked as required")
 }
