@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -223,4 +225,148 @@ func TestCICommandRulesNotRequired(t *testing.T) {
 	annotations := rulesFlag.Annotations
 	_, isRequired := annotations["cobra_annotation_bash_completion_one_required_flags"]
 	assert.False(t, isRequired, "--rules should not be marked as required")
+}
+
+// --- Integration tests for CI pipeline paths ---
+
+// setupCIIntegrationTest creates a minimal project and rules file for integration tests.
+// Returns (projectDir, rulesFile) paths. Cleanup is handled by t.TempDir().
+func setupCIIntegrationTest(t *testing.T) (string, string) {
+	t.Helper()
+
+	// Create temp project with a simple Python file
+	projectDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(projectDir, "app.py"), []byte("def hello():\n    print('hello')\n"), 0644)
+	require.NoError(t, err)
+
+	// Create a minimal rules file (no @Rule decorators = 0 rules loaded, no error)
+	rulesDir := t.TempDir()
+	rulesFile := filepath.Join(rulesDir, "empty_rules.py")
+	err = os.WriteFile(rulesFile, []byte("# No rules defined\n"), 0644)
+	require.NoError(t, err)
+
+	return projectDir, rulesFile
+}
+
+// resetCIFlags restores all ci flags to their defaults.
+func resetCIFlags() {
+	ciCmd.Flags().Set("rules", "")
+	ciCmd.Flags().Set("project", "")
+	ciCmd.Flags().Set("output", "sarif")
+	ciCmd.Flags().Set("output-file", "")
+	ciCmd.Flags().Set("verbose", "false")
+	ciCmd.Flags().Set("debug", "false")
+	ciCmd.Flags().Set("fail-on", "")
+	ciCmd.Flags().Set("skip-tests", "true")
+	ciCmd.Flags().Set("refresh-rules", "false")
+	ciCmd.Flags().Set("base", "")
+	ciCmd.Flags().Set("head", "HEAD")
+	ciCmd.Flags().Set("no-diff", "true")
+	ciCmd.Flags().Set("github-token", "")
+	ciCmd.Flags().Set("github-repo", "")
+	ciCmd.Flags().Set("github-pr", "0")
+	ciCmd.Flags().Set("pr-comment", "false")
+	ciCmd.Flags().Set("pr-inline", "false")
+}
+
+func TestCICmdOutputFileSARIF(t *testing.T) {
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+	outputFile := filepath.Join(t.TempDir(), "results.sarif")
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output", "sarif")
+	ciCmd.Flags().Set("output-file", outputFile)
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+
+	// Verify output file was created and contains valid SARIF
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"version": "2.1.0"`)
+	assert.Contains(t, string(data), "Code Pathfinder")
+}
+
+func TestCICmdOutputFileJSON(t *testing.T) {
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+	outputFile := filepath.Join(t.TempDir(), "results.json")
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output", "json")
+	ciCmd.Flags().Set("output-file", outputFile)
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "results")
+}
+
+func TestCICmdOutputFileCSV(t *testing.T) {
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+	outputFile := filepath.Join(t.TempDir(), "results.csv")
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output", "csv")
+	ciCmd.Flags().Set("output-file", outputFile)
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	// CSV formatter writes header even with 0 findings
+	assert.True(t, len(data) > 0)
+}
+
+func TestCICmdStdoutSARIF(t *testing.T) {
+	// Test SARIF output to stdout (no --output-file)
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output", "sarif")
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+}
+
+func TestCICmdOutputFileCreationError(t *testing.T) {
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output", "sarif")
+	ciCmd.Flags().Set("output-file", "/nonexistent/dir/results.sarif")
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create output file")
+}
+
+func TestCICmdPrepareRulesLocalOnly(t *testing.T) {
+	// Verify prepareRules passes through with local-only rules (no --ruleset)
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+	outputFile := filepath.Join(t.TempDir(), "results.sarif")
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output-file", outputFile)
+
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+
+	// Verify output was written (proves prepareRules succeeded and pipeline completed)
+	_, err = os.Stat(outputFile)
+	require.NoError(t, err)
 }
