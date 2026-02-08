@@ -17,6 +17,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// prFlags holds the CLI flags for PR commenting.
+type prFlags struct {
+	Token    string
+	Repo     string // "owner/repo" format
+	PRNumber int
+	Comment  bool
+	Inline   bool
+}
+
 var ciCmd = &cobra.Command{
 	Use:   "ci",
 	Short: "CI mode with SARIF, JSON, or CSV output for CI/CD integration",
@@ -50,10 +59,7 @@ Examples:
 		noDiff, _ := cmd.Flags().GetBool("no-diff")
 
 		// GitHub PR commenting flags.
-		prOpts := prCommentOptions{
-			Comment: false,
-			Inline:  false,
-		}
+		var prOpts prFlags
 		prOpts.Token, _ = cmd.Flags().GetString("github-token")
 		prOpts.Repo, _ = cmd.Flags().GetString("github-repo")
 		prOpts.PRNumber, _ = cmd.Flags().GetInt("github-pr")
@@ -116,8 +122,19 @@ Examples:
 		}
 
 		// Validate PR commenting flags early.
-		if err := prOpts.validate(); err != nil {
-			return err
+		if prOpts.Comment || prOpts.Inline {
+			if prOpts.Token == "" {
+				return fmt.Errorf("--github-token is required for PR commenting")
+			}
+			if prOpts.Repo == "" {
+				return fmt.Errorf("--github-repo is required for PR commenting")
+			}
+			if prOpts.PRNumber <= 0 {
+				return fmt.Errorf("--github-pr must be a positive number")
+			}
+			if _, _, err := github.ParseRepo(prOpts.Repo); err != nil {
+				return err
+			}
 		}
 
 		// Diff-aware scanning (on by default in CI mode).
@@ -125,7 +142,7 @@ Examples:
 		diffEnabled := !noDiff
 		if diffEnabled {
 			if baseRef == "" {
-				baseRef = resolveBaseRef()
+				baseRef = diff.ResolveBaseRef()
 			}
 			if baseRef == "" {
 				logger.Progress("No baseline ref detected, running full scan")
@@ -139,12 +156,13 @@ Examples:
 			}
 		}
 		if diffEnabled {
-			files, err := computeChangedFiles(baseRef, headRef, projectPath, logger)
+			files, err := diff.ComputeChangedFiles(baseRef, headRef, projectPath)
 			if err != nil {
 				logger.Warning("Failed to compute changed files: %v (showing all findings)", err)
 				diffEnabled = false
 			} else {
 				changedFiles = files
+				logger.Progress("Changed files: %d", len(changedFiles))
 			}
 		}
 
@@ -267,7 +285,10 @@ Examples:
 
 		// Apply diff filter when diff-aware mode is active.
 		if diffEnabled && len(changedFiles) > 0 {
-			allEnriched = applyDiffFilter(allEnriched, changedFiles, logger)
+			totalBefore := len(allEnriched)
+			diffFilter := output.NewDiffFilter(changedFiles)
+			allEnriched = diffFilter.Filter(allEnriched)
+			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
 		}
 
 		// Total rules = code analysis rules loaded + container rules loaded.
@@ -323,12 +344,19 @@ Examples:
 		}
 
 		// Post PR comments if configured.
-		if prOpts.enabled() {
+		if prOpts.Comment || prOpts.Inline {
+			owner, repo, _ := github.ParseRepo(prOpts.Repo) // Already validated.
+			client := github.NewClient(prOpts.Token, owner, repo)
+			ghOpts := github.PRCommentOptions{
+				PRNumber: prOpts.PRNumber,
+				Comment:  prOpts.Comment,
+				Inline:   prOpts.Inline,
+			}
 			metrics := github.ScanMetrics{
 				FilesScanned:  filesScanned,
 				RulesExecuted: totalRules,
 			}
-			if err := postPRComments(prOpts, allEnriched, metrics, logger); err != nil {
+			if err := github.PostPRComments(client, ghOpts, allEnriched, metrics, logger.Progress); err != nil {
 				logger.Warning("Failed to post PR comments: %v", err)
 			}
 		}

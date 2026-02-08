@@ -602,3 +602,23 @@ func TestExpandBundleSpecs(t *testing.T) {
 		assert.Equal(t, "java/security", expanded[2])
 	})
 }
+
+func TestScanCommandDiffFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		flag     string
+		defValue string
+	}{
+		{name: "diff-aware", flag: "diff-aware", defValue: "false"},
+		{name: "base", flag: "base", defValue: ""},
+		{name: "head", flag: "head", defValue: "HEAD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := scanCmd.Flags().Lookup(tt.flag)
+			require.NotNil(t, flag, "flag %q should be registered on scan command", tt.flag)
+			assert.Equal(t, tt.defValue, flag.DefValue)
+		})
+	}
+}

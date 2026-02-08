@@ -163,11 +163,12 @@ Examples:
 			if err := diff.ValidateGitRef(projectPath, baseRef); err != nil {
 				return fmt.Errorf("invalid base ref %q: %w", baseRef, err)
 			}
-			files, err := computeChangedFiles(baseRef, headRef, projectPath, logger)
+			files, err := diff.ComputeChangedFiles(baseRef, headRef, projectPath)
 			if err != nil {
 				return fmt.Errorf("failed to compute changed files: %w", err)
 			}
 			changedFiles = files
+			logger.Progress("Changed files: %d", len(changedFiles))
 		}
 
 		// Create rule loader (used for both container and code analysis rules)
@@ -300,7 +301,10 @@ Examples:
 
 		// Apply diff filter when diff-aware mode is active.
 		if diffAware && len(changedFiles) > 0 {
-			allEnriched = applyDiffFilter(allEnriched, changedFiles, logger)
+			totalBefore := len(allEnriched)
+			diffFilter := output.NewDiffFilter(changedFiles)
+			allEnriched = diffFilter.Filter(allEnriched)
+			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
 		}
 
 		// Step 6: Format and display results
