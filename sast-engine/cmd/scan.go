@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -544,6 +545,18 @@ func executeContainerRules(
 	}
 
 	return enriched
+}
+
+// countContainerRules parses the container rules JSON IR and returns the total rule count.
+func countContainerRules(jsonIR []byte) int {
+	var ir struct {
+		Dockerfile []json.RawMessage `json:"dockerfile"`
+		Compose    []json.RawMessage `json:"compose"`
+	}
+	if err := json.Unmarshal(jsonIR, &ir); err != nil {
+		return 0
+	}
+	return len(ir.Dockerfile) + len(ir.Compose)
 }
 
 // generateCodeSnippet creates a code snippet with context lines around the target line.

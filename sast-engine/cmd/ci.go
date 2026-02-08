@@ -167,6 +167,7 @@ Examples:
 		// Execute container rules if Docker/Compose files are present.
 		loader := dsl.NewRuleLoader(rulesPath)
 		var containerDetections []*dsl.EnrichedDetection
+		var containerRulesCount int
 		dockerFiles, composeFiles := extractContainerFiles(codeGraph)
 		if len(dockerFiles) > 0 || len(composeFiles) > 0 {
 			logger.Progress("Found %d Dockerfile(s) and %d docker-compose file(s)", len(dockerFiles), len(composeFiles))
@@ -175,6 +176,7 @@ Examples:
 			if err == nil {
 				logger.Progress("Executing container rules...")
 				containerDetections = executeContainerRules(containerRulesJSON, dockerFiles, composeFiles, projectPath, logger)
+				containerRulesCount = countContainerRules(containerRulesJSON)
 				if len(containerDetections) > 0 {
 					logger.Statistic("Container scan found %d issue(s)", len(containerDetections))
 				} else {
@@ -268,12 +270,8 @@ Examples:
 			allEnriched = applyDiffFilter(allEnriched, changedFiles, logger)
 		}
 
-		// Count unique rule IDs from all detections (includes both code and container rules).
-		uniqueRules := make(map[string]bool)
-		for _, det := range allEnriched {
-			uniqueRules[det.Rule.ID] = true
-		}
-		totalRules := len(uniqueRules)
+		// Total rules = code analysis rules loaded + container rules loaded.
+		totalRules := len(rules) + containerRulesCount
 
 		// Count unique source files in the code graph.
 		uniqueFiles := make(map[string]bool)
