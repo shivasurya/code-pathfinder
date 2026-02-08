@@ -42,7 +42,7 @@ func (rm *ReviewManager) PostInlineComments(ctx context.Context, findings []*dsl
 	existingByMarker := indexByMarker(existing)
 
 	// Separate findings into updates vs new comments.
-	var newComments []ReviewCommentInput
+	newComments := make([]ReviewCommentInput, 0, len(eligible))
 	for _, f := range eligible {
 		marker := ReviewCommentMarker(f)
 		body := FormatInlineComment(f)
