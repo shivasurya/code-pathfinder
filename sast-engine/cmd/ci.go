@@ -271,6 +271,21 @@ Examples:
 			allEnriched = applyDiffFilter(allEnriched, changedFiles, logger)
 		}
 
+		// Count unique rule IDs from all detections (includes both code and container rules).
+		uniqueRules := make(map[string]bool)
+		for _, det := range allEnriched {
+			uniqueRules[det.Rule.ID] = true
+		}
+		totalRules := len(uniqueRules)
+
+		// Count unique source files in the code graph.
+		uniqueFiles := make(map[string]bool)
+		for _, node := range codeGraph.Nodes {
+			if node.File != "" {
+				uniqueFiles[node.File] = true
+			}
+		}
+
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
 
@@ -279,7 +294,7 @@ Examples:
 		case "sarif":
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
-				RulesExecuted: len(rules),
+				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
 			formatter := output.NewSARIFFormatter(nil)
@@ -287,10 +302,10 @@ Examples:
 				return fmt.Errorf("failed to format SARIF output: %w", err)
 			}
 		case "json":
-			summary := output.BuildSummary(allEnriched, len(rules))
+			summary := output.BuildSummary(allEnriched, totalRules)
 			scanInfo := output.ScanInfo{
 				Target:        projectPath,
-				RulesExecuted: len(rules),
+				RulesExecuted: totalRules,
 				Errors:        scanErrors,
 			}
 			formatter := output.NewJSONFormatter(nil)
@@ -309,8 +324,8 @@ Examples:
 		// Post PR comments if configured.
 		if prOpts.enabled() {
 			metrics := github.ScanMetrics{
-				FilesScanned:  len(codeGraph.Nodes),
-				RulesExecuted: len(rules),
+				FilesScanned:  len(uniqueFiles),
+				RulesExecuted: totalRules,
 			}
 			if err := postPRComments(prOpts, allEnriched, metrics, logger); err != nil {
 				logger.Warning("Failed to post PR comments: %v", err)
@@ -328,7 +343,7 @@ Examples:
 
 		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]interface{}{
 			"duration_ms":         time.Since(startTime).Milliseconds(),
-			"rules_count":         len(rules),
+			"rules_count":         totalRules,
 			"findings_count":      len(allEnriched),
 			"diff_aware":          diffEnabled,
 			"diff_changed_files":  len(changedFiles),
