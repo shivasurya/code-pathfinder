@@ -159,13 +159,10 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
-				"error_type": "empty_project",
-				"phase":      "graph_building",
-			})
-			return fmt.Errorf("no source files found in project")
+			logger.Progress("No source files found in project")
+		} else {
+			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}
-		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Execute container rules if Docker/Compose files are present.
 		loader := dsl.NewRuleLoader(rulesPath)
