@@ -246,6 +246,10 @@ func TestPostPRComments_BothEnabled(t *testing.T) {
 }
 
 func TestPostPRComments_NoneEnabled(t *testing.T) {
+	srv := mockGitHubServer(t)
+	defer srv.Close()
+	withMockClient(t, srv.URL)
+
 	logger := output.NewLogger(output.VerbosityDefault)
 	opts := prCommentOptions{
 		Token:    "tok",
@@ -259,10 +263,12 @@ func TestPostPRComments_NoneEnabled(t *testing.T) {
 }
 
 func TestPostPRComments_SummaryError(t *testing.T) {
-	// Server that fails on CreateComment.
+	// Server that succeeds on GetPullRequest + ListComments but fails on CreateComment.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pulls/") && !strings.Contains(r.URL.Path, "/comments"):
+			json.NewEncoder(w).Encode(github.PullRequest{Number: 1, Head: github.GitRef{SHA: "abc"}})
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/comments"):
 			json.NewEncoder(w).Encode([]github.Comment{})
 		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/comments"):

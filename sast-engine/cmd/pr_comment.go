@@ -70,6 +70,13 @@ func postPRComments(
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	// Fetch PR metadata once for blob links and inline comments.
+	pr, err := client.GetPullRequest(ctx, opts.PRNumber)
+	if err != nil {
+		return fmt.Errorf("get PR metadata: %w", err)
+	}
+	metrics.BlobBaseURL = fmt.Sprintf("https://github.com/%s/%s/blob/%s", owner, repo, pr.Head.SHA)
+
 	// Post summary comment.
 	if opts.Comment {
 		logger.Progress("Posting PR summary comment...")
@@ -84,10 +91,6 @@ func postPRComments(
 	// Post inline review comments for critical/high findings.
 	if opts.Inline {
 		logger.Progress("Posting inline review comments...")
-		pr, err := client.GetPullRequest(ctx, opts.PRNumber)
-		if err != nil {
-			return fmt.Errorf("get PR metadata: %w", err)
-		}
 		rm := github.NewReviewManager(client, opts.PRNumber, pr.Head.SHA)
 		if err := rm.PostInlineComments(ctx, findings); err != nil {
 			return fmt.Errorf("post inline comments: %w", err)

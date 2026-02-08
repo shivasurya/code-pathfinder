@@ -17,6 +17,7 @@ const summaryMarker = "<!-- code-pathfinder-summary -->"
 type ScanMetrics struct {
 	FilesScanned  int
 	RulesExecuted int
+	BlobBaseURL   string // e.g. "https://github.com/owner/repo/blob/sha" — enables file links.
 }
 
 // CommentManager handles creating and updating PR summary comments.
@@ -122,8 +123,7 @@ func FormatSummaryComment(findings []*dsl.EnrichedDetection, metrics ScanMetrics
 	if len(sorted) == 0 {
 		sb.WriteString("**No security issues detected.**\n\n")
 	} else {
-		writeFindingsTable(&sb, sorted)
-		writeDetails(&sb, sorted)
+		writeFindingsTable(&sb, sorted, metrics.BlobBaseURL)
 		if counts.Critical > 0 {
 			sb.WriteString(fmt.Sprintf("> **%d critical issue(s)** require attention.\n\n", counts.Critical))
 		}
@@ -226,39 +226,38 @@ func severityLabel(severity string) string {
 	}
 }
 
-func writeFindingsTable(sb *strings.Builder, findings []*dsl.EnrichedDetection) {
+func writeFindingsTable(sb *strings.Builder, findings []*dsl.EnrichedDetection, blobBaseURL string) {
 	sb.WriteString("### Findings\n\n")
-	sb.WriteString("| Severity | File | Line | Issue |\n")
-	sb.WriteString("|:---------|:-----|-----:|:------|\n")
+	if blobBaseURL != "" {
+		sb.WriteString("| Severity | File | Line | Issue | |\n")
+		sb.WriteString("|:---------|:-----|-----:|:------|:-:|\n")
+	} else {
+		sb.WriteString("| Severity | File | Line | Issue |\n")
+		sb.WriteString("|:---------|:-----|-----:|:------|\n")
+	}
 	for _, f := range findings {
-		sb.WriteString(fmt.Sprintf("| %s | `%s` | %d | %s |\n",
-			severityLabel(f.Rule.Severity),
-			f.Location.RelPath,
-			f.Location.Line,
-			f.Rule.Name,
-		))
+		if blobBaseURL != "" {
+			link := fmt.Sprintf("[%s](%s/%s#L%d)",
+				"\xf0\x9f\x94\x97", // link emoji
+				blobBaseURL,
+				f.Location.RelPath,
+				f.Location.Line,
+			)
+			sb.WriteString(fmt.Sprintf("| %s | `%s` | %d | %s | %s |\n",
+				severityLabel(f.Rule.Severity),
+				f.Location.RelPath,
+				f.Location.Line,
+				f.Rule.Name,
+				link,
+			))
+		} else {
+			sb.WriteString(fmt.Sprintf("| %s | `%s` | %d | %s |\n",
+				severityLabel(f.Rule.Severity),
+				f.Location.RelPath,
+				f.Location.Line,
+				f.Rule.Name,
+			))
+		}
 	}
 	sb.WriteString("\n")
-}
-
-func writeDetails(sb *strings.Builder, findings []*dsl.EnrichedDetection) {
-	sb.WriteString("<details>\n<summary>View Details</summary>\n\n")
-	sb.WriteString("| Severity | Rule | File | Line | CWE | Description |\n")
-	sb.WriteString("|:---------|:-----|:-----|-----:|:----|:------------|\n")
-	for _, f := range findings {
-		cwe := ""
-		if len(f.Rule.CWE) > 0 {
-			cwe = strings.Join(f.Rule.CWE, ", ")
-		}
-		desc := strings.ReplaceAll(f.Rule.Description, "\n", " ")
-		sb.WriteString(fmt.Sprintf("| %s | %s | `%s` | %d | %s | %s |\n",
-			severityLabel(f.Rule.Severity),
-			f.Rule.Name,
-			f.Location.RelPath,
-			f.Location.Line,
-			cwe,
-			desc,
-		))
-	}
-	sb.WriteString("\n</details>\n\n")
 }

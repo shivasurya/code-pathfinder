@@ -191,12 +191,8 @@ func TestFormatSummaryComment_WithFindings(t *testing.T) {
 	medIdx := strings.Index(result, "Path Traversal")
 	assert.Less(t, critIdx, highIdx, "critical should appear before high")
 	assert.Less(t, highIdx, medIdx, "high should appear before medium")
-	// Details table section.
-	assert.Contains(t, result, "<details>")
-	assert.Contains(t, result, "| Severity | Rule | File | Line | CWE | Description |")
-	assert.Contains(t, result, "Command Injection")
-	assert.Contains(t, result, "CWE-78")
-	assert.Contains(t, result, "User input flows to subprocess.")
+	// No details section (removed).
+	assert.NotContains(t, result, "<details>")
 	// Critical warning.
 	assert.Contains(t, result, "1 critical issue(s)")
 	// Metrics.
@@ -340,7 +336,7 @@ func TestSeverityBadge(t *testing.T) {
 	assert.Contains(t, severityBadge("Medium", 0), "Medium-0-success")
 }
 
-func TestWriteFindingsTable(t *testing.T) {
+func TestWriteFindingsTable_NoLinks(t *testing.T) {
 	findings := []*dsl.EnrichedDetection{
 		{
 			Location: dsl.LocationInfo{RelPath: "x.py", Line: 5},
@@ -348,35 +344,27 @@ func TestWriteFindingsTable(t *testing.T) {
 		},
 	}
 	var sb strings.Builder
-	writeFindingsTable(&sb, findings)
+	writeFindingsTable(&sb, findings, "")
 
 	result := sb.String()
 	assert.Contains(t, result, "### Findings")
 	assert.Contains(t, result, "| Severity | File | Line | Issue |")
 	assert.Contains(t, result, "| `x.py` | 5 | Issue X |")
+	assert.NotContains(t, result, "\xf0\x9f\x94\x97") // No link emoji.
 }
 
-func TestWriteDetails(t *testing.T) {
+func TestWriteFindingsTable_WithLinks(t *testing.T) {
 	findings := []*dsl.EnrichedDetection{
 		{
-			Location: dsl.LocationInfo{RelPath: "a.py", Line: 10},
-			Rule: dsl.RuleMetadata{
-				Name: "Bug", Severity: "high",
-				CWE: []string{"CWE-1"}, Description: "A description.",
-			},
-		},
-		{
-			Location: dsl.LocationInfo{RelPath: "b.py", Line: 20},
-			Rule:     dsl.RuleMetadata{Name: "NoCWE", Severity: "low"},
+			Location: dsl.LocationInfo{RelPath: "app/views.py", Line: 42},
+			Rule:     dsl.RuleMetadata{Name: "SQL Injection", Severity: "critical"},
 		},
 	}
 	var sb strings.Builder
-	writeDetails(&sb, findings)
+	writeFindingsTable(&sb, findings, "https://github.com/owner/repo/blob/abc123")
 
 	result := sb.String()
-	assert.Contains(t, result, "<details>")
-	assert.Contains(t, result, "| Severity | Rule | File | Line | CWE | Description |")
-	assert.Contains(t, result, "| Bug | `a.py` | 10 | CWE-1 | A description. |")
-	assert.Contains(t, result, "| NoCWE | `b.py` | 20 |")
-	assert.Contains(t, result, "</details>")
+	assert.Contains(t, result, "| Severity | File | Line | Issue | |")
+	assert.Contains(t, result, "https://github.com/owner/repo/blob/abc123/app/views.py#L42")
+	assert.Contains(t, result, "\xf0\x9f\x94\x97") // Link emoji.
 }
