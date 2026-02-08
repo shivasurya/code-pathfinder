@@ -243,17 +243,22 @@ func writeFindingsTable(sb *strings.Builder, findings []*dsl.EnrichedDetection) 
 
 func writeDetails(sb *strings.Builder, findings []*dsl.EnrichedDetection) {
 	sb.WriteString("<details>\n<summary>View Details</summary>\n\n")
+	sb.WriteString("| Severity | Rule | File | Line | CWE | Description |\n")
+	sb.WriteString("|:---------|:-----|:-----|-----:|:----|:------------|\n")
 	for _, f := range findings {
-		sb.WriteString(fmt.Sprintf("### %s %s\n", severityEmoji(f.Rule.Severity), f.Rule.Name))
-		sb.WriteString(fmt.Sprintf("**%s:%d**", f.Location.RelPath, f.Location.Line))
+		cwe := ""
 		if len(f.Rule.CWE) > 0 {
-			sb.WriteString(fmt.Sprintf(" \u00b7 %s", strings.Join(f.Rule.CWE, ", ")))
+			cwe = strings.Join(f.Rule.CWE, ", ")
 		}
-		sb.WriteString("\n\n")
-		if f.Rule.Description != "" {
-			sb.WriteString(f.Rule.Description)
-			sb.WriteString("\n\n")
-		}
+		desc := strings.ReplaceAll(f.Rule.Description, "\n", " ")
+		sb.WriteString(fmt.Sprintf("| %s | %s | `%s` | %d | %s | %s |\n",
+			severityLabel(f.Rule.Severity),
+			f.Rule.Name,
+			f.Location.RelPath,
+			f.Location.Line,
+			cwe,
+			desc,
+		))
 	}
-	sb.WriteString("</details>\n\n")
+	sb.WriteString("\n</details>\n\n")
 }

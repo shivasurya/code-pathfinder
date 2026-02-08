@@ -191,8 +191,9 @@ func TestFormatSummaryComment_WithFindings(t *testing.T) {
 	medIdx := strings.Index(result, "Path Traversal")
 	assert.Less(t, critIdx, highIdx, "critical should appear before high")
 	assert.Less(t, highIdx, medIdx, "high should appear before medium")
-	// Details section.
+	// Details table section.
 	assert.Contains(t, result, "<details>")
+	assert.Contains(t, result, "| Severity | Rule | File | Line | CWE | Description |")
 	assert.Contains(t, result, "Command Injection")
 	assert.Contains(t, result, "CWE-78")
 	assert.Contains(t, result, "User input flows to subprocess.")
@@ -374,11 +375,8 @@ func TestWriteDetails(t *testing.T) {
 
 	result := sb.String()
 	assert.Contains(t, result, "<details>")
-	assert.Contains(t, result, "Bug")
-	assert.Contains(t, result, "**a.py:10**")
-	assert.Contains(t, result, "CWE-1")
-	assert.Contains(t, result, "A description.")
-	// Second finding has no CWE.
-	assert.Contains(t, result, "**b.py:20**")
+	assert.Contains(t, result, "| Severity | Rule | File | Line | CWE | Description |")
+	assert.Contains(t, result, "| Bug | `a.py` | 10 | CWE-1 | A description. |")
+	assert.Contains(t, result, "| NoCWE | `b.py` | 20 |")
 	assert.Contains(t, result, "</details>")
 }
