@@ -321,7 +321,7 @@ func resolveFirstChainStep(
 	// Check function scope first
 	functionScope := typeEngine.GetScope(callerFQN)
 	if functionScope != nil {
-		if binding, exists := functionScope.Variables[varName]; exists {
+		if binding := functionScope.GetVariable(varName); binding != nil {
 			if binding.Type != nil {
 				return binding.Type, varName, true
 			}
@@ -331,7 +331,7 @@ func resolveFirstChainStep(
 	// Check module scope
 	moduleScope := typeEngine.GetScope(currentModule)
 	if moduleScope != nil {
-		if binding, exists := moduleScope.Variables[varName]; exists {
+		if binding := moduleScope.GetVariable(varName); binding != nil {
 			if binding.Type != nil {
 				return binding.Type, varName, true
 			}

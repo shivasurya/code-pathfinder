@@ -149,25 +149,34 @@ func (te *TypeInferenceEngine) ResolveVariableType(
 
 // GetModuleVariableType returns type information for a module-level variable.
 // It looks up the module's scope and retrieves the variable binding's type info.
+// When line > 0, it returns the binding at that specific line (for reassignment tracking).
+// When line == 0, it returns the last binding (backward compatibility).
 // Thread-safe for concurrent reads.
 //
 // Parameters:
 //   - modulePath: fully qualified module path (e.g., "main", "helpers")
 //   - varName: variable name (e.g., "x", "calc")
+//   - line: line number to match (0 for last binding)
 //
 // Returns:
 //   - ModuleVariableInfo if the variable has type info, nil otherwise
-func (te *TypeInferenceEngine) GetModuleVariableType(modulePath string, varName string) *core.ModuleVariableInfo {
+func (te *TypeInferenceEngine) GetModuleVariableType(modulePath string, varName string, line uint32) *core.ModuleVariableInfo {
 	scope := te.GetScope(modulePath)
 	if scope == nil {
 		return nil
 	}
-	binding, exists := scope.Variables[varName]
-	if !exists || binding == nil || binding.Type == nil {
+	var binding *VariableBinding
+	if line > 0 {
+		binding = scope.GetVariableAtLine(varName, line)
+	} else {
+		binding = scope.GetVariable(varName)
+	}
+	if binding == nil || binding.Type == nil {
 		return nil
 	}
 	// Skip unresolved placeholders
-	if strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+	if strings.HasPrefix(binding.Type.TypeFQN, "call:") ||
+		strings.HasPrefix(binding.Type.TypeFQN, "var:") {
 		return nil
 	}
 	return &core.ModuleVariableInfo{
@@ -185,8 +194,11 @@ func (te *TypeInferenceEngine) GetModuleVariableType(modulePath string, varName 
 //   # After update, typed as "test.User" based on create_user's return type
 func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 	for _, scope := range te.Scopes {
-		for varName, binding := range scope.Variables {
-			if binding.Type != nil && strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
 				// Extract function name from "call:funcName"
 				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
 
@@ -202,7 +214,8 @@ func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 					methodName := parts[1]
 
 					// Check if receiver is a variable in current scope (instance method)
-					if receiverBinding, exists := scope.Variables[receiver]; exists {
+					receiverBinding := scope.GetVariable(receiver)
+					if receiverBinding != nil {
 						// This is an instance method call: obj.method()
 						if receiverBinding.Type != nil && !strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
 							// Receiver has a concrete type - build class-qualified FQN
@@ -234,10 +247,51 @@ func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 				// Resolve type
 				resolvedType := te.ResolveVariableType(funcFQN, binding.Type.Confidence)
 				if resolvedType != nil {
-					scope.Variables[varName].Type = resolvedType
-					scope.Variables[varName].AssignedFrom = funcFQN
+					scope.Variables[varName][i].Type = resolvedType
+					scope.Variables[varName][i].AssignedFrom = funcFQN
 				}
 			}
+		}
+	}
+}
+
+// ResolveReturnVariableReferences resolves "var:varName" placeholders in return types
+// by looking up the variable's type in the function's scope.
+// This handles the common pattern:
+//
+//	def foo():
+//	    result = some_expression
+//	    return result  # return type was "var:result", resolved to type of result
+//
+// Must be called AFTER ExtractVariableAssignments and BEFORE UpdateVariableBindingsWithFunctionReturns.
+func (te *TypeInferenceEngine) ResolveReturnVariableReferences() {
+	te.typeMutex.Lock()
+	defer te.typeMutex.Unlock()
+
+	for funcFQN, returnType := range te.ReturnTypes {
+		if returnType == nil || !strings.HasPrefix(returnType.TypeFQN, "var:") {
+			continue
+		}
+		varName := strings.TrimPrefix(returnType.TypeFQN, "var:")
+
+		// Look up variable in the function's scope
+		scope := te.GetScope(funcFQN)
+		if scope == nil {
+			continue
+		}
+		binding := scope.GetVariable(varName) // last binding
+		if binding == nil || binding.Type == nil {
+			continue
+		}
+		// Only resolve if the variable has a concrete type (not another placeholder)
+		if strings.HasPrefix(binding.Type.TypeFQN, "call:") ||
+			strings.HasPrefix(binding.Type.TypeFQN, "var:") {
+			continue
+		}
+		te.ReturnTypes[funcFQN] = &core.TypeInfo{
+			TypeFQN:    binding.Type.TypeFQN,
+			Confidence: returnType.Confidence * binding.Type.Confidence,
+			Source:     "return_variable_resolved",
 		}
 	}
 }

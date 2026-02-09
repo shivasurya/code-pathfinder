@@ -277,7 +277,7 @@ func processAssignment(
 		typeEngine.AddScope(scope)
 	}
 
-	scope.Variables[varName] = binding
+	scope.Variables[varName] = append(scope.Variables[varName], binding)
 }
 
 // inferTypeFromExpression infers the type of an expression.
