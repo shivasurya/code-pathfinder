@@ -43,20 +43,23 @@ def test_function():
 	assert.NotNil(t, scope)
 
 	// Check 'name' variable
-	nameBinding := scope.Variables["name"]
-	assert.NotNil(t, nameBinding)
+	nameBindings := scope.Variables["name"]
+	assert.Len(t, nameBindings, 1)
+	nameBinding := nameBindings[0]
 	assert.Equal(t, "builtins.str", nameBinding.Type.TypeFQN)
 	assert.Equal(t, float32(1.0), nameBinding.Type.Confidence)
 	assert.Equal(t, "literal", nameBinding.Type.Source)
 
 	// Check 'greeting' variable
-	greetingBinding := scope.Variables["greeting"]
-	assert.NotNil(t, greetingBinding)
+	greetingBindings := scope.Variables["greeting"]
+	assert.Len(t, greetingBindings, 1)
+	greetingBinding := greetingBindings[0]
 	assert.Equal(t, "builtins.str", greetingBinding.Type.TypeFQN)
 
 	// Check 'multiline' variable
-	multilineBinding := scope.Variables["multiline"]
-	assert.NotNil(t, multilineBinding)
+	multilineBindings := scope.Variables["multiline"]
+	assert.Len(t, multilineBindings, 1)
+	multilineBinding := multilineBindings[0]
 	assert.Equal(t, "builtins.str", multilineBinding.Type.TypeFQN)
 }
 
@@ -91,23 +94,27 @@ def calculate():
 	assert.NotNil(t, scope)
 
 	// Check 'count' variable (int)
-	countBinding := scope.Variables["count"]
-	assert.NotNil(t, countBinding)
+	countBindings := scope.Variables["count"]
+	assert.Len(t, countBindings, 1)
+	countBinding := countBindings[0]
 	assert.Equal(t, "builtins.int", countBinding.Type.TypeFQN)
 
 	// Check 'price' variable (float)
-	priceBinding := scope.Variables["price"]
-	assert.NotNil(t, priceBinding)
+	priceBindings := scope.Variables["price"]
+	assert.Len(t, priceBindings, 1)
+	priceBinding := priceBindings[0]
 	assert.Equal(t, "builtins.float", priceBinding.Type.TypeFQN)
 
 	// Check 'negative' variable (int)
-	negativeBinding := scope.Variables["negative"]
-	assert.NotNil(t, negativeBinding)
+	negativeBindings := scope.Variables["negative"]
+	assert.Len(t, negativeBindings, 1)
+	negativeBinding := negativeBindings[0]
 	assert.Equal(t, "builtins.int", negativeBinding.Type.TypeFQN)
 
 	// Check 'scientific' variable (float)
-	scientificBinding := scope.Variables["scientific"]
-	assert.NotNil(t, scientificBinding)
+	scientificBindings := scope.Variables["scientific"]
+	assert.Len(t, scientificBindings, 1)
+	scientificBinding := scientificBindings[0]
 	assert.Equal(t, "builtins.float", scientificBinding.Type.TypeFQN)
 }
 
@@ -142,23 +149,27 @@ def process_data():
 	assert.NotNil(t, scope)
 
 	// Check 'items' variable (list)
-	itemsBinding := scope.Variables["items"]
-	assert.NotNil(t, itemsBinding)
+	itemsBindings := scope.Variables["items"]
+	assert.Len(t, itemsBindings, 1)
+	itemsBinding := itemsBindings[0]
 	assert.Equal(t, "builtins.list", itemsBinding.Type.TypeFQN)
 
 	// Check 'config' variable (dict)
-	configBinding := scope.Variables["config"]
-	assert.NotNil(t, configBinding)
+	configBindings := scope.Variables["config"]
+	assert.Len(t, configBindings, 1)
+	configBinding := configBindings[0]
 	assert.Equal(t, "builtins.dict", configBinding.Type.TypeFQN)
 
 	// Check 'unique' variable (set)
-	uniqueBinding := scope.Variables["unique"]
-	assert.NotNil(t, uniqueBinding)
+	uniqueBindings := scope.Variables["unique"]
+	assert.Len(t, uniqueBindings, 1)
+	uniqueBinding := uniqueBindings[0]
 	assert.Equal(t, "builtins.set", uniqueBinding.Type.TypeFQN)
 
 	// Check 'coords' variable (tuple)
-	coordsBinding := scope.Variables["coords"]
-	assert.NotNil(t, coordsBinding)
+	coordsBindings := scope.Variables["coords"]
+	assert.Len(t, coordsBindings, 1)
+	coordsBinding := coordsBindings[0]
 	assert.Equal(t, "builtins.tuple", coordsBinding.Type.TypeFQN)
 }
 
@@ -192,18 +203,21 @@ def check_status():
 	assert.NotNil(t, scope)
 
 	// Check 'is_active' variable
-	isActiveBinding := scope.Variables["is_active"]
-	assert.NotNil(t, isActiveBinding)
+	isActiveBindings := scope.Variables["is_active"]
+	assert.Len(t, isActiveBindings, 1)
+	isActiveBinding := isActiveBindings[0]
 	assert.Equal(t, "builtins.bool", isActiveBinding.Type.TypeFQN)
 
 	// Check 'is_deleted' variable
-	isDeletedBinding := scope.Variables["is_deleted"]
-	assert.NotNil(t, isDeletedBinding)
+	isDeletedBindings := scope.Variables["is_deleted"]
+	assert.Len(t, isDeletedBindings, 1)
+	isDeletedBinding := isDeletedBindings[0]
 	assert.Equal(t, "builtins.bool", isDeletedBinding.Type.TypeFQN)
 
 	// Check 'result' variable
-	resultBinding := scope.Variables["result"]
-	assert.NotNil(t, resultBinding)
+	resultBindings := scope.Variables["result"]
+	assert.Len(t, resultBindings, 1)
+	resultBinding := resultBindings[0]
 	assert.Equal(t, "builtins.NoneType", resultBinding.Type.TypeFQN)
 }
 
@@ -238,10 +252,10 @@ def process():
 	assert.NotNil(t, scope)
 	assert.Equal(t, 4, len(scope.Variables))
 
-	assert.NotNil(t, scope.Variables["name"])
-	assert.NotNil(t, scope.Variables["age"])
-	assert.NotNil(t, scope.Variables["items"])
-	assert.NotNil(t, scope.Variables["is_valid"])
+	assert.True(t, len(scope.Variables["name"]) > 0)
+	assert.True(t, len(scope.Variables["age"]) > 0)
+	assert.True(t, len(scope.Variables["items"]) > 0)
+	assert.True(t, len(scope.Variables["is_valid"]) > 0)
 }
 
 // TestExtractVariableAssignments_NestedFunctions tests nested function scopes.
@@ -273,14 +287,14 @@ def outer():
 	// Verify outer function scope
 	outerScope := typeEngine.GetScope("test.outer")
 	assert.NotNil(t, outerScope)
-	assert.NotNil(t, outerScope.Variables["x"])
-	assert.Equal(t, "builtins.str", outerScope.Variables["x"].Type.TypeFQN)
+	assert.True(t, len(outerScope.Variables["x"]) > 0)
+	assert.Equal(t, "builtins.str", outerScope.Variables["x"][0].Type.TypeFQN)
 
 	// Verify inner function scope
 	innerScope := typeEngine.GetScope("test.outer.inner")
 	assert.NotNil(t, innerScope)
-	assert.NotNil(t, innerScope.Variables["y"])
-	assert.Equal(t, "builtins.str", innerScope.Variables["y"].Type.TypeFQN)
+	assert.True(t, len(innerScope.Variables["y"]) > 0)
+	assert.Equal(t, "builtins.str", innerScope.Variables["y"][0].Type.TypeFQN)
 }
 
 // TestExtractVariableAssignments_VariableReassignment tests variable reassignment.
@@ -307,13 +321,14 @@ def reassign():
 	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
 	assert.NoError(t, err)
 
-	// Verify - should have the last assignment
+	// Verify - should have both assignments in the slice
 	scope := typeEngine.GetScope("test.reassign")
 	assert.NotNil(t, scope)
 
-	xBinding := scope.Variables["x"]
-	assert.NotNil(t, xBinding)
-	// Last assignment wins (string)
+	xBindings := scope.Variables["x"]
+	assert.Len(t, xBindings, 2)
+	// Last assignment is string (at index 1)
+	xBinding := xBindings[len(xBindings)-1]
 	assert.Equal(t, "builtins.str", xBinding.Type.TypeFQN)
 }
 
@@ -398,13 +413,15 @@ def test():
 	scope := typeEngine.GetScope("test.test")
 	assert.NotNil(t, scope)
 
-	xBinding := scope.Variables["x"]
-	assert.NotNil(t, xBinding)
+	xBindings := scope.Variables["x"]
+	assert.Len(t, xBindings, 1)
+	xBinding := xBindings[0]
 	assert.Equal(t, filePath, xBinding.Location.File)
 	assert.Equal(t, uint32(3), xBinding.Location.Line)
 
-	yBinding := scope.Variables["y"]
-	assert.NotNil(t, yBinding)
+	yBindings := scope.Variables["y"]
+	assert.Len(t, yBindings, 1)
+	yBinding := yBindings[0]
 	assert.Equal(t, filePath, yBinding.Location.File)
 	assert.Equal(t, uint32(4), yBinding.Location.Line)
 }
@@ -448,8 +465,9 @@ func TestInferTypeFromExpression(t *testing.T) {
 			scope := typeEngine.GetScope("test.test")
 			assert.NotNil(t, scope)
 
-			xBinding := scope.Variables["x"]
-			assert.NotNil(t, xBinding, "Variable 'x' should be bound for code: %s", tt.code)
+			xBindings := scope.Variables["x"]
+			assert.True(t, len(xBindings) > 0, "Variable 'x' should be bound for code: %s", tt.code)
+			xBinding := xBindings[0]
 			assert.Equal(t, tt.expectedType, xBinding.Type.TypeFQN)
 		})
 	}
@@ -529,8 +547,9 @@ def get_items(items):
 			scope := typeEngine.GetScope(funcName)
 			assert.NotNil(t, scope, "Scope should exist for function %s", funcName)
 
-			binding := scope.Variables[tt.varName]
-			assert.NotNil(t, binding, "Variable %s should be bound", tt.varName)
+			bindings := scope.Variables[tt.varName]
+			assert.True(t, len(bindings) > 0, "Variable %s should be bound", tt.varName)
+			binding := bindings[0]
 			assert.Equal(t, tt.expectedType, binding.Type.TypeFQN, "Type FQN mismatch for %s", tt.varName)
 			assert.InDelta(t, tt.expectedConf, binding.Type.Confidence, 0.01, "Confidence mismatch for %s", tt.varName)
 
@@ -567,8 +586,8 @@ def test():
 	scope := typeEngine.GetScope("test.test")
 	assert.NotNil(t, scope, "Scope should exist")
 
-	binding := scope.Variables["x"]
-	assert.NotNil(t, binding, "Variable x should be bound")
+	xBindings := scope.Variables["x"]
+	assert.True(t, len(xBindings) > 0, "Variable x should be bound")
+	binding := xBindings[0]
 	assert.Equal(t, "builtins.str", binding.Type.TypeFQN, "Should infer string type from right operand")
 }
-

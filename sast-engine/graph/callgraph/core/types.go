@@ -299,7 +299,7 @@ type ModuleVariableInfo struct {
 // ModuleVariableProvider provides type information for module-level variables.
 // Implemented by resolution.TypeInferenceEngine.
 type ModuleVariableProvider interface {
-	GetModuleVariableType(modulePath string, varName string) *ModuleVariableInfo
+	GetModuleVariableType(modulePath string, varName string, line uint32) *ModuleVariableInfo
 }
 
 // Helper function to extract the last component of a dotted path.

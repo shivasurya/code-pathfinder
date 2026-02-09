@@ -3045,7 +3045,7 @@ type mockModuleVariableProvider struct {
 	types map[string]map[string]*core.ModuleVariableInfo // modulePath -> varName -> info
 }
 
-func (m *mockModuleVariableProvider) GetModuleVariableType(modulePath string, varName string) *core.ModuleVariableInfo {
+func (m *mockModuleVariableProvider) GetModuleVariableType(modulePath string, varName string, line uint32) *core.ModuleVariableInfo {
 	if module, ok := m.types[modulePath]; ok {
 		if info, ok := module[varName]; ok {
 			return info

@@ -274,6 +274,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 	logger.Debug("Completed variable assignment extraction: %d files processed", varProcessed.Load())
 
+	// Resolve var: placeholders in return types using scope variable lookups.
+	// Must happen AFTER variable extraction (scopes populated) and BEFORE call: resolution.
+	typeEngine.ResolveReturnVariableReferences()
+
 	// Phase 2 Task 8: Resolve call: placeholders with return types
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
@@ -986,7 +990,7 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		// Check function scope first
 		functionScope := typeEngine.GetScope(callerFQN)
 		if functionScope != nil {
-			if b, exists := functionScope.Variables[base]; exists {
+			if b := functionScope.GetVariable(base); b != nil {
 				binding = b
 			}
 		}
@@ -995,7 +999,7 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		if binding == nil {
 			moduleScope := typeEngine.GetScope(currentModule)
 			if moduleScope != nil {
-				if b, exists := moduleScope.Variables[base]; exists {
+				if b := moduleScope.GetVariable(base); b != nil {
 					binding = b
 				}
 			}
