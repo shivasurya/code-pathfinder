@@ -86,6 +86,11 @@ type CallGraph struct {
 	// Populated during call graph construction (Phase 3: Extract Class Attributes)
 	// Enables symbol search to find class fields and properties
 	Attributes interface{} // *registry.AttributeRegistry (interface{} to avoid import cycle)
+
+	// Type inference engine for querying module-level variable types
+	// Populated during call graph construction
+	// *resolution.TypeInferenceEngine (interface to avoid import cycle)
+	TypeEngine ModuleVariableProvider
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.
@@ -282,6 +287,19 @@ func contains(slice []string, item string) bool {
 // Helper function alias for consistency.
 func containsString(slice []string, item string) bool {
 	return contains(slice, item)
+}
+
+// ModuleVariableInfo holds type information for a module-level variable.
+type ModuleVariableInfo struct {
+	TypeFQN    string  // Fully qualified type name (e.g., "builtins.int", "helpers.Calculator")
+	Confidence float64 // Confidence score (0.0-1.0)
+	Source     string  // How the type was inferred (e.g., "literal", "class_instantiation")
+}
+
+// ModuleVariableProvider provides type information for module-level variables.
+// Implemented by resolution.TypeInferenceEngine.
+type ModuleVariableProvider interface {
+	GetModuleVariableType(modulePath string, varName string) *ModuleVariableInfo
 }
 
 // Helper function to extract the last component of a dotted path.

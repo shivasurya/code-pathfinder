@@ -147,6 +147,36 @@ func (te *TypeInferenceEngine) ResolveVariableType(
 	}
 }
 
+// GetModuleVariableType returns type information for a module-level variable.
+// It looks up the module's scope and retrieves the variable binding's type info.
+// Thread-safe for concurrent reads.
+//
+// Parameters:
+//   - modulePath: fully qualified module path (e.g., "main", "helpers")
+//   - varName: variable name (e.g., "x", "calc")
+//
+// Returns:
+//   - ModuleVariableInfo if the variable has type info, nil otherwise
+func (te *TypeInferenceEngine) GetModuleVariableType(modulePath string, varName string) *core.ModuleVariableInfo {
+	scope := te.GetScope(modulePath)
+	if scope == nil {
+		return nil
+	}
+	binding, exists := scope.Variables[varName]
+	if !exists || binding == nil || binding.Type == nil {
+		return nil
+	}
+	// Skip unresolved placeholders
+	if strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+		return nil
+	}
+	return &core.ModuleVariableInfo{
+		TypeFQN:    binding.Type.TypeFQN,
+		Confidence: float64(binding.Type.Confidence),
+		Source:     binding.Type.Source,
+	}
+}
+
 // UpdateVariableBindingsWithFunctionReturns resolves "call:funcName" placeholders.
 // It iterates through all scopes and replaces placeholder types with actual return types.
 //
