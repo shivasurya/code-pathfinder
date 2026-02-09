@@ -431,6 +431,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Store attribute registry for symbol search and type inference
 	callGraph.Attributes = typeEngine.Attributes
 
+	// Store type engine for module variable type lookups in MCP tools
+	callGraph.TypeEngine = typeEngine
+
 	return callGraph, nil
 }
 

@@ -748,6 +748,14 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 					match["modifier"] = node.Modifier
 				}
 
+				// Look up inferred type for module variables and constants.
+				if (node.Type == "module_variable" || node.Type == "constant") && s.callGraph.TypeEngine != nil {
+					if varInfo := s.callGraph.TypeEngine.GetModuleVariableType(modulePath, node.Name); varInfo != nil {
+						match["inferred_type"] = varInfo.TypeFQN
+						match["confidence"] = varInfo.Confidence
+					}
+				}
+
 				allMatches = append(allMatches, match)
 			}
 		}

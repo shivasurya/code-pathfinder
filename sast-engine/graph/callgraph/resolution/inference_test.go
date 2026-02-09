@@ -948,6 +948,185 @@ func TestTypeInferenceEngine_UpdateVariableBindings_NestedMethod(t *testing.T) {
 	assert.Equal(t, "myapp.models.Container.b.c.method", resultBinding.AssignedFrom)
 }
 
+// TestGetModuleVariableType tests retrieving type information for module-level variables.
+func TestGetModuleVariableType(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Set up a module-level scope with typed variables
+	scope := NewFunctionScope("main")
+	scope.Variables["x"] = &VariableBinding{
+		VarName: "x",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.int",
+			Confidence: 1.0,
+			Source:     "literal",
+		},
+		Location: Location{File: "/test/main.py", Line: 3, Column: 1},
+	}
+	scope.Variables["name"] = &VariableBinding{
+		VarName: "name",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.str",
+			Confidence: 1.0,
+			Source:     "literal",
+		},
+		Location: Location{File: "/test/main.py", Line: 4, Column: 1},
+	}
+	scope.Variables["calc"] = &VariableBinding{
+		VarName: "calc",
+		Type: &core.TypeInfo{
+			TypeFQN:    "helpers.Calculator",
+			Confidence: 0.95,
+			Source:     "class_instantiation",
+		},
+		Location: Location{File: "/test/main.py", Line: 10, Column: 1},
+	}
+	engine.AddScope(scope)
+
+	tests := []struct {
+		name           string
+		modulePath     string
+		varName        string
+		expectNil      bool
+		expectedType   string
+		expectedConf   float64
+		expectedSource string
+	}{
+		{
+			name:           "literal int variable",
+			modulePath:     "main",
+			varName:        "x",
+			expectNil:      false,
+			expectedType:   "builtins.int",
+			expectedConf:   1.0,
+			expectedSource: "literal",
+		},
+		{
+			name:           "literal str variable",
+			modulePath:     "main",
+			varName:        "name",
+			expectNil:      false,
+			expectedType:   "builtins.str",
+			expectedConf:   1.0,
+			expectedSource: "literal",
+		},
+		{
+			name:           "class instantiation variable",
+			modulePath:     "main",
+			varName:        "calc",
+			expectNil:      false,
+			expectedType:   "helpers.Calculator",
+			expectedConf:   0.95, // float32 → float64 conversion: use InDelta
+			expectedSource: "class_instantiation",
+		},
+		{
+			name:       "non-existent variable",
+			modulePath: "main",
+			varName:    "nonexistent",
+			expectNil:  true,
+		},
+		{
+			name:       "non-existent module",
+			modulePath: "nonexistent",
+			varName:    "x",
+			expectNil:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := engine.GetModuleVariableType(tt.modulePath, tt.varName)
+			if tt.expectNil {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.expectedType, result.TypeFQN)
+				assert.InDelta(t, tt.expectedConf, result.Confidence, 0.001)
+				assert.Equal(t, tt.expectedSource, result.Source)
+			}
+		})
+	}
+}
+
+// TestGetModuleVariableType_NilAndPlaceholder tests edge cases for GetModuleVariableType.
+func TestGetModuleVariableType_NilAndPlaceholder(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	scope := NewFunctionScope("mymod")
+
+	// Variable with nil type
+	scope.Variables["nilvar"] = &VariableBinding{
+		VarName:  "nilvar",
+		Type:     nil,
+		Location: Location{File: "/test/mymod.py", Line: 1, Column: 1},
+	}
+
+	// Variable with unresolved call: placeholder
+	scope.Variables["unresolved"] = &VariableBinding{
+		VarName: "unresolved",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:some_func",
+			Confidence: 0.5,
+			Source:     "function_call_placeholder",
+		},
+		Location: Location{File: "/test/mymod.py", Line: 2, Column: 1},
+	}
+
+	// Nil binding
+	scope.Variables["nilbinding"] = nil
+
+	engine.AddScope(scope)
+
+	// nil type should return nil
+	assert.Nil(t, engine.GetModuleVariableType("mymod", "nilvar"))
+
+	// call: placeholder should return nil (unresolved)
+	assert.Nil(t, engine.GetModuleVariableType("mymod", "unresolved"))
+
+	// nil binding should return nil
+	assert.Nil(t, engine.GetModuleVariableType("mymod", "nilbinding"))
+}
+
+// TestGetModuleVariableType_ConfidenceConversion tests float32 to float64 confidence conversion.
+func TestGetModuleVariableType_ConfidenceConversion(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	scope := NewFunctionScope("testmod")
+	scope.Variables["pi"] = &VariableBinding{
+		VarName: "pi",
+		Type: &core.TypeInfo{
+			TypeFQN:    "builtins.float",
+			Confidence: 0.95,
+			Source:     "literal",
+		},
+		Location: Location{File: "/test/testmod.py", Line: 1, Column: 1},
+	}
+	engine.AddScope(scope)
+
+	result := engine.GetModuleVariableType("testmod", "pi")
+	assert.NotNil(t, result)
+	assert.Equal(t, "builtins.float", result.TypeFQN)
+	// float32(0.95) converted to float64 should be close to 0.95
+	assert.InDelta(t, 0.95, result.Confidence, 0.001)
+}
+
+// TestGetModuleVariableType_ImplementsInterface tests that TypeInferenceEngine satisfies ModuleVariableProvider.
+func TestGetModuleVariableType_ImplementsInterface(t *testing.T) {
+	modRegistry := core.NewModuleRegistry()
+	engine := NewTypeInferenceEngine(modRegistry)
+
+	// Verify TypeInferenceEngine satisfies ModuleVariableProvider interface
+	var provider core.ModuleVariableProvider = engine
+	assert.NotNil(t, provider)
+
+	// Should return nil for empty engine
+	result := provider.GetModuleVariableType("any", "any")
+	assert.Nil(t, result)
+}
+
 // TestAddImportMap_GetImportMap tests ImportMap storage and retrieval (P0 fix).
 func TestAddImportMap_GetImportMap(t *testing.T) {
 	moduleRegistry := core.NewModuleRegistry()

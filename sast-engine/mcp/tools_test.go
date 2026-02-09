@@ -3035,3 +3035,175 @@ func TestMatchesModuleFilter(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// Tests for Module Variable Inferred Type Lookup in find_symbol
+// ============================================================================
+
+// mockModuleVariableProvider implements core.ModuleVariableProvider for testing.
+type mockModuleVariableProvider struct {
+	types map[string]map[string]*core.ModuleVariableInfo // modulePath -> varName -> info
+}
+
+func (m *mockModuleVariableProvider) GetModuleVariableType(modulePath string, varName string) *core.ModuleVariableInfo {
+	if module, ok := m.types[modulePath]; ok {
+		if info, ok := module[varName]; ok {
+			return info
+		}
+	}
+	return nil
+}
+
+// TestToolFindSymbol_ModuleVariableInferredType tests that module_variable symbols
+// include inferred_type and confidence from the TypeEngine.
+func TestToolFindSymbol_ModuleVariableInferredType(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	// Add module_variable nodes.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "var1",
+		Type:       "module_variable",
+		Name:       "counter",
+		File:       "/test/main.py",
+		LineNumber: 5,
+	})
+	codeGraph.AddNode(&graph.Node{
+		ID:         "var2",
+		Type:       "module_variable",
+		Name:       "untyped_var",
+		File:       "/test/main.py",
+		LineNumber: 6,
+	})
+
+	// Add constant node.
+	codeGraph.AddNode(&graph.Node{
+		ID:         "const1",
+		Type:       "constant",
+		Name:       "MAX_SIZE",
+		File:       "/test/main.py",
+		LineNumber: 1,
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["main"] = "/test/main.py"
+	moduleRegistry.FileToModule["/test/main.py"] = "main"
+
+	// Set up TypeEngine with type info for some variables.
+	callGraph.TypeEngine = &mockModuleVariableProvider{
+		types: map[string]map[string]*core.ModuleVariableInfo{
+			"main": {
+				"counter": {
+					TypeFQN:    "builtins.int",
+					Confidence: 1.0,
+					Source:     "literal",
+				},
+				"MAX_SIZE": {
+					TypeFQN:    "builtins.int",
+					Confidence: 1.0,
+					Source:     "literal",
+				},
+				// untyped_var intentionally missing
+			},
+		},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
+
+	// Test 1: module_variable with inferred type.
+	t.Run("module_variable with inferred type", func(t *testing.T) {
+		result, isError := server.toolFindSymbol(map[string]interface{}{
+			"name": "counter",
+		})
+		assert.False(t, isError)
+
+		var parsed map[string]interface{}
+		err := json.Unmarshal([]byte(result), &parsed)
+		assert.NoError(t, err)
+
+		matches := parsed["matches"].([]interface{})
+		assert.Len(t, matches, 1)
+
+		match := matches[0].(map[string]interface{})
+		assert.Equal(t, "builtins.int", match["inferred_type"])
+		assert.Equal(t, 1.0, match["confidence"])
+	})
+
+	// Test 2: constant with inferred type.
+	t.Run("constant with inferred type", func(t *testing.T) {
+		result, isError := server.toolFindSymbol(map[string]interface{}{
+			"name": "MAX_SIZE",
+		})
+		assert.False(t, isError)
+
+		var parsed map[string]interface{}
+		err := json.Unmarshal([]byte(result), &parsed)
+		assert.NoError(t, err)
+
+		matches := parsed["matches"].([]interface{})
+		assert.Len(t, matches, 1)
+
+		match := matches[0].(map[string]interface{})
+		assert.Equal(t, "builtins.int", match["inferred_type"])
+		assert.Equal(t, 1.0, match["confidence"])
+	})
+
+	// Test 3: module_variable without inferred type (TypeEngine returns nil).
+	t.Run("module_variable without inferred type", func(t *testing.T) {
+		result, isError := server.toolFindSymbol(map[string]interface{}{
+			"name": "untyped_var",
+		})
+		assert.False(t, isError)
+
+		var parsed map[string]interface{}
+		err := json.Unmarshal([]byte(result), &parsed)
+		assert.NoError(t, err)
+
+		matches := parsed["matches"].([]interface{})
+		assert.Len(t, matches, 1)
+
+		match := matches[0].(map[string]interface{})
+		_, hasInferredType := match["inferred_type"]
+		assert.False(t, hasInferredType, "untyped variable should not have inferred_type")
+	})
+}
+
+// TestToolFindSymbol_ModuleVariableNilTypeEngine tests that module_variable symbols
+// work correctly when TypeEngine is nil (no type inference data available).
+func TestToolFindSymbol_ModuleVariableNilTypeEngine(t *testing.T) {
+	callGraph := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+
+	codeGraph.AddNode(&graph.Node{
+		ID:         "var1",
+		Type:       "module_variable",
+		Name:       "my_var",
+		File:       "/test/app.py",
+		LineNumber: 3,
+	})
+
+	moduleRegistry := core.NewModuleRegistry()
+	moduleRegistry.Modules["app"] = "/test/app.py"
+	moduleRegistry.FileToModule["/test/app.py"] = "app"
+
+	// TypeEngine is nil (default for NewCallGraph).
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"name": "my_var",
+	})
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1)
+
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "module_variable", match["type"])
+	assert.Equal(t, "app.my_var", match["fqn"])
+	_, hasInferredType := match["inferred_type"]
+	assert.False(t, hasInferredType, "should not have inferred_type when TypeEngine is nil")
+}
