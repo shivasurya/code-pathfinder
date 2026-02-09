@@ -2323,6 +2323,321 @@ def parent_b():
 	}
 }
 
+// TestParsePythonFunctionDefinition_ReturnType tests that return type annotations
+// are correctly extracted from Python function definitions.
+func TestParsePythonFunctionDefinition_ReturnType(t *testing.T) {
+	tests := []struct {
+		name               string
+		code               string
+		expectedName       string
+		expectedReturnType string
+	}{
+		{
+			name:               "Simple return type",
+			code:               "def add(a: int, b: int) -> int:\n    return a + b",
+			expectedName:       "add",
+			expectedReturnType: "int",
+		},
+		{
+			name:               "String return type",
+			code:               "def greet(name: str) -> str:\n    return 'hello ' + name",
+			expectedName:       "greet",
+			expectedReturnType: "str",
+		},
+		{
+			name:               "None return type",
+			code:               "def setup() -> None:\n    pass",
+			expectedName:       "setup",
+			expectedReturnType: "None",
+		},
+		{
+			name:               "No return type annotation",
+			code:               "def process(x):\n    return x",
+			expectedName:       "process",
+			expectedReturnType: "",
+		},
+		{
+			name:               "Complex return type - union",
+			code:               "def safe_divide(a: float, b: float) -> float | None:\n    pass",
+			expectedName:       "safe_divide",
+			expectedReturnType: "float | None",
+		},
+		{
+			name:               "Generic return type",
+			code:               "def get_items() -> list[str]:\n    return []",
+			expectedName:       "get_items",
+			expectedReturnType: "list[str]",
+		},
+		{
+			name:               "Tuple return type",
+			code:               "def get_pair() -> tuple[int, str]:\n    return (1, 'a')",
+			expectedName:       "get_pair",
+			expectedReturnType: "tuple[int, str]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(python.GetLanguage())
+			defer parser.Close()
+
+			tree, err := parser.ParseCtx(context.Background(), nil, []byte(tt.code))
+			if err != nil {
+				t.Fatalf("Failed to parse: %v", err)
+			}
+			defer tree.Close()
+
+			graph := NewCodeGraph()
+			root := tree.RootNode()
+
+			funcNode := findNodeByType(root, "function_definition")
+			if funcNode == nil {
+				t.Fatal("No function_definition node found")
+			}
+
+			node := parsePythonFunctionDefinition(funcNode, []byte(tt.code), graph, "test.py", nil)
+
+			if node.Name != tt.expectedName {
+				t.Errorf("Expected name %s, got %s", tt.expectedName, node.Name)
+			}
+			if node.ReturnType != tt.expectedReturnType {
+				t.Errorf("Expected return type %q, got %q", tt.expectedReturnType, node.ReturnType)
+			}
+		})
+	}
+}
+
+// TestParsePythonFunctionDefinition_MethodArgumentsType tests that parameter type
+// annotations are correctly extracted into MethodArgumentsType.
+func TestParsePythonFunctionDefinition_MethodArgumentsType(t *testing.T) {
+	tests := []struct {
+		name              string
+		code              string
+		expectedName      string
+		expectedArgTypes  []string
+		expectedArgValues []string
+	}{
+		{
+			name:              "Typed parameters",
+			code:              "def add(a: int, b: int) -> int:\n    return a + b",
+			expectedName:      "add",
+			expectedArgTypes:  []string{"a: int", "b: int"},
+			expectedArgValues: []string{"a: int", "b: int"},
+		},
+		{
+			name:              "Mixed typed and untyped",
+			code:              "def greet(self, name: str) -> str:\n    pass",
+			expectedName:      "greet",
+			expectedArgTypes:  []string{"name: str"},
+			expectedArgValues: []string{"self", "name: str"},
+		},
+		{
+			name:              "No type annotations",
+			code:              "def process(x, y):\n    return x + y",
+			expectedName:      "process",
+			expectedArgTypes:  nil,
+			expectedArgValues: []string{"x", "y"},
+		},
+		{
+			name:              "Complex types",
+			code:              "def merge(items: list[str], count: int) -> dict[str, int]:\n    pass",
+			expectedName:      "merge",
+			expectedArgTypes:  []string{"items: list[str]", "count: int"},
+			expectedArgValues: []string{"items: list[str]", "count: int"},
+		},
+		{
+			name:              "Typed default parameter",
+			code:              "def connect(host: str, port: int = 8080) -> None:\n    pass",
+			expectedName:      "connect",
+			expectedArgTypes:  []string{"host: str", "port: int"},
+			expectedArgValues: []string{"host: str", "port: int = 8080"},
+		},
+		{
+			name:              "No parameters",
+			code:              "def noop() -> None:\n    pass",
+			expectedName:      "noop",
+			expectedArgTypes:  nil,
+			expectedArgValues: []string{},
+		},
+		{
+			name:              "Star args only - no types",
+			code:              "def variadic(*args, **kwargs):\n    pass",
+			expectedName:      "variadic",
+			expectedArgTypes:  nil,
+			expectedArgValues: []string{},
+		},
+		{
+			name:              "Typed with star args untyped",
+			code:              "def mixed(a: int, *args, **kwargs) -> None:\n    pass",
+			expectedName:      "mixed",
+			expectedArgTypes:  []string{"a: int"},
+			expectedArgValues: []string{"a: int"},
+		},
+		{
+			name:              "Only self - no types",
+			code:              "def method(self):\n    pass",
+			expectedName:      "method",
+			expectedArgTypes:  nil,
+			expectedArgValues: []string{"self"},
+		},
+		{
+			name:              "Untyped default only",
+			code:              "def greet(name, greeting='Hello'):\n    pass",
+			expectedName:      "greet",
+			expectedArgTypes:  nil,
+			expectedArgValues: []string{"name", "greeting='Hello'"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := sitter.NewParser()
+			parser.SetLanguage(python.GetLanguage())
+			defer parser.Close()
+
+			tree, err := parser.ParseCtx(context.Background(), nil, []byte(tt.code))
+			if err != nil {
+				t.Fatalf("Failed to parse: %v", err)
+			}
+			defer tree.Close()
+
+			graph := NewCodeGraph()
+			root := tree.RootNode()
+
+			funcNode := findNodeByType(root, "function_definition")
+			if funcNode == nil {
+				t.Fatal("No function_definition node found")
+			}
+
+			node := parsePythonFunctionDefinition(funcNode, []byte(tt.code), graph, "test.py", nil)
+
+			if node.Name != tt.expectedName {
+				t.Errorf("Expected name %s, got %s", tt.expectedName, node.Name)
+			}
+
+			// Check MethodArgumentsType
+			if tt.expectedArgTypes == nil {
+				if len(node.MethodArgumentsType) != 0 {
+					t.Errorf("Expected no argument types, got %v", node.MethodArgumentsType)
+				}
+			} else {
+				if len(node.MethodArgumentsType) != len(tt.expectedArgTypes) {
+					t.Errorf("Expected %d argument types, got %d: %v",
+						len(tt.expectedArgTypes), len(node.MethodArgumentsType), node.MethodArgumentsType)
+				} else {
+					for i, expected := range tt.expectedArgTypes {
+						if node.MethodArgumentsType[i] != expected {
+							t.Errorf("Argument type [%d]: expected %q, got %q", i, expected, node.MethodArgumentsType[i])
+						}
+					}
+				}
+			}
+
+			// Check MethodArgumentsValue unchanged
+			if len(node.MethodArgumentsValue) != len(tt.expectedArgValues) {
+				t.Errorf("Expected %d argument values, got %d: %v",
+					len(tt.expectedArgValues), len(node.MethodArgumentsValue), node.MethodArgumentsValue)
+			} else {
+				for i, expected := range tt.expectedArgValues {
+					if node.MethodArgumentsValue[i] != expected {
+						t.Errorf("Argument value [%d]: expected %q, got %q", i, expected, node.MethodArgumentsValue[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestParsePythonFunctionDefinition_ReturnTypeWithBuildGraph tests that return types
+// are populated when parsing through buildGraphFromAST (end-to-end).
+func TestParsePythonFunctionDefinition_ReturnTypeWithBuildGraph(t *testing.T) {
+	code := `
+def add_numbers(a: int, b: int) -> int:
+    return a + b
+
+def safe_divide(a: float, b: float) -> float | None:
+    if b == 0:
+        return None
+    return a / b
+
+def no_annotation(x):
+    return x
+
+class Calculator:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def add(self, a: int, b: int) -> int:
+        return a + b
+
+    @property
+    def display_name(self) -> str:
+        return self.name
+
+    def __str__(self) -> str:
+        return f"Calculator({self.name})"
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(python.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(code))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	defer tree.Close()
+
+	graph := NewCodeGraph()
+	buildGraphFromAST(tree.RootNode(), []byte(code), graph, nil, "test.py")
+
+	// Verify return types for each function.
+	expectations := map[string]struct {
+		returnType string
+		argTypes   []string
+	}{
+		"add_numbers":  {returnType: "int", argTypes: []string{"a: int", "b: int"}},
+		"safe_divide":  {returnType: "float | None", argTypes: []string{"a: float", "b: float"}},
+		"no_annotation": {returnType: "", argTypes: nil},
+		"__init__":     {returnType: "None", argTypes: []string{"name: str"}},
+		"add":          {returnType: "int", argTypes: []string{"a: int", "b: int"}},
+		"display_name": {returnType: "str", argTypes: nil},
+		"__str__":      {returnType: "str", argTypes: nil},
+	}
+
+	for expectedName, expected := range expectations {
+		var foundNode *Node
+		for _, node := range graph.Nodes {
+			if node.Name == expectedName {
+				foundNode = node
+				break
+			}
+		}
+
+		if foundNode == nil {
+			t.Errorf("Function %s not found in graph", expectedName)
+			continue
+		}
+
+		if foundNode.ReturnType != expected.returnType {
+			t.Errorf("Function %s: expected return type %q, got %q",
+				expectedName, expected.returnType, foundNode.ReturnType)
+		}
+
+		if expected.argTypes == nil {
+			if len(foundNode.MethodArgumentsType) != 0 {
+				t.Errorf("Function %s: expected no argument types, got %v",
+					expectedName, foundNode.MethodArgumentsType)
+			}
+		} else {
+			if len(foundNode.MethodArgumentsType) != len(expected.argTypes) {
+				t.Errorf("Function %s: expected %d argument types, got %d: %v",
+					expectedName, len(expected.argTypes), len(foundNode.MethodArgumentsType), foundNode.MethodArgumentsType)
+			}
+		}
+	}
+}
+
 // Helper function to find a node by name and type.
 func findNodeByNameAndType(graph *CodeGraph, name string, nodeType string) *Node {
 	for _, node := range graph.Nodes {
