@@ -143,13 +143,35 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	}
 
 	parametersNode := node.ChildByFieldName("parameters")
+	var methodArgumentsType []string
 	if parametersNode != nil {
 		for i := 0; i < int(parametersNode.NamedChildCount()); i++ {
 			param := parametersNode.NamedChild(i)
-			if param.Type() == "identifier" || param.Type() == "typed_parameter" || param.Type() == "default_parameter" {
+			switch param.Type() {
+			case "identifier", "typed_parameter", "default_parameter", "typed_default_parameter":
 				parameters = append(parameters, param.Content(sourceCode))
 			}
+			// Extract typed parameters for MethodArgumentsType in "name: type" format.
+			switch param.Type() {
+			case "typed_parameter":
+				// "a: int" → use full content directly.
+				methodArgumentsType = append(methodArgumentsType, param.Content(sourceCode))
+			case "typed_default_parameter":
+				// "port: int = 8080" → extract "port: int" (name + type, skip default).
+				nameNode := param.ChildByFieldName("name")
+				typeNode := param.ChildByFieldName("type")
+				if nameNode != nil && typeNode != nil {
+					methodArgumentsType = append(methodArgumentsType, nameNode.Content(sourceCode)+": "+typeNode.Content(sourceCode))
+				}
+			}
 		}
+	}
+
+	// Extract return type annotation (e.g., "-> int" produces "int").
+	returnType := ""
+	returnTypeNode := node.ChildByFieldName("return_type")
+	if returnTypeNode != nil {
+		returnType = returnTypeNode.Content(sourceCode)
 	}
 
 	// Determine node type based on function characteristics.
@@ -212,6 +234,8 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 			EndByte:   node.EndByte(),
 		},
 		LineNumber:           lineNumber,
+		ReturnType:           returnType,
+		MethodArgumentsType:  methodArgumentsType,
 		MethodArgumentsValue: parameters,
 		Annotation:           decorators,
 		File:                 file,
