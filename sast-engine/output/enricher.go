@@ -107,6 +107,20 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 		Function: extractFunctionFromFQN(detection.FunctionFQN),
 	}
 
+	// If FQN is already a file path (e.g. container rules use file path as FQN),
+	// use it directly.
+	if strings.Contains(detection.FunctionFQN, "/") || strings.Contains(detection.FunctionFQN, string(filepath.Separator)) {
+		if _, err := os.Stat(detection.FunctionFQN); err == nil {
+			loc.FilePath = detection.FunctionFQN
+			if e.options.ProjectRoot != "" {
+				if relPath, err := filepath.Rel(e.options.ProjectRoot, detection.FunctionFQN); err == nil {
+					loc.RelPath = relPath
+				}
+			}
+			return loc
+		}
+	}
+
 	// Try to extract file path from FQN
 	// Format: module.submodule.function or package.Class.method
 	parts := strings.Split(detection.FunctionFQN, ".")
