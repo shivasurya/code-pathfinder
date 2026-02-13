@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewEnricher(t *testing.T) {
@@ -448,6 +449,87 @@ func TestFallbackLocation(t *testing.T) {
 	if loc.ClassName != "login" {
 		t.Errorf("class name: got %v, want login", loc.ClassName)
 	}
+}
+
+func TestFallbackLocationFilePathFQN(t *testing.T) {
+	// When FQN is an actual file path (container rules), use it directly.
+	// Create a temp file to simulate a real file path as FQN.
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "Dockerfile")
+	os.WriteFile(tmpFile, []byte("FROM ubuntu"), 0644)
+
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: tmpFile,
+		SinkLine:    5,
+	}
+
+	loc := e.fallbackLocation(detection)
+
+	assert.Equal(t, tmpFile, loc.FilePath)
+	assert.Equal(t, "Dockerfile", loc.RelPath)
+	assert.Equal(t, 5, loc.Line)
+}
+
+func TestFallbackLocationFQNToFileResolution(t *testing.T) {
+	// When FQN is a dotted module path, try resolving to a file with extensions.
+	tmpDir := t.TempDir()
+	appDir := filepath.Join(tmpDir, "app")
+	os.MkdirAll(appDir, 0755)
+	viewsFile := filepath.Join(appDir, "views.py")
+	os.WriteFile(viewsFile, []byte("def login(): pass"), 0644)
+
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "app.views.login",
+		SinkLine:    1,
+	}
+
+	loc := e.fallbackLocation(detection)
+
+	assert.Equal(t, viewsFile, loc.FilePath)
+	assert.Equal(t, filepath.Join("app", "views.py"), loc.RelPath)
+	assert.Equal(t, "login", loc.Function)
+}
+
+func TestFallbackLocationFQNToJavaFileResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+	comDir := filepath.Join(tmpDir, "com", "example")
+	os.MkdirAll(comDir, 0755)
+	javaFile := filepath.Join(comDir, "Main.java")
+	os.WriteFile(javaFile, []byte("class Main {}"), 0644)
+
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "com.example.Main.run",
+		SinkLine:    10,
+	}
+
+	loc := e.fallbackLocation(detection)
+
+	assert.Equal(t, javaFile, loc.FilePath)
+	assert.Equal(t, filepath.Join("com", "example", "Main.java"), loc.RelPath)
+}
+
+func TestFallbackLocationUnresolvableFQN(t *testing.T) {
+	tmpDir := t.TempDir()
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "nonexistent.module.func",
+		SinkLine:    1,
+	}
+
+	loc := e.fallbackLocation(detection)
+
+	// Should not resolve to any file
+	assert.Empty(t, loc.FilePath)
+	assert.Empty(t, loc.RelPath)
+	assert.Equal(t, "func", loc.Function)
+	assert.Equal(t, "module", loc.ClassName)
 }
 
 func TestBuildTaintPath(t *testing.T) {
