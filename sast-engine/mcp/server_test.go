@@ -811,6 +811,87 @@ func TestIsReady(t *testing.T) {
 	assert.True(t, server.IsReady())
 }
 
+// createTestServerWithParameters creates a Server with parameter symbols for testing parameter search.
+func createTestServerWithParameters() *Server {
+	callGraph := core.NewCallGraph()
+
+	// Add function with typed parameters.
+	callGraph.Functions["myapp.auth.validate_user"] = &graph.Node{
+		ID:                  "1",
+		Type:                "function_definition",
+		Name:                "validate_user",
+		File:                "/path/to/myapp/auth.py",
+		LineNumber:          45,
+		ReturnType:          "User",
+		MethodArgumentsType: []string{"username: str", "password: str"},
+	}
+
+	// Add method with typed parameters.
+	callGraph.Functions["myapp.models.User.save"] = &graph.Node{
+		ID:                  "2",
+		Type:                "method",
+		Name:                "save",
+		File:                "/path/to/myapp/models.py",
+		LineNumber:          20,
+		MethodArgumentsType: []string{"self", "force: bool"},
+	}
+
+	// Add function with complex type parameters.
+	callGraph.Functions["myapp.utils.process"] = &graph.Node{
+		ID:                  "3",
+		Type:                "function_definition",
+		Name:                "process",
+		File:                "/path/to/myapp/utils.py",
+		LineNumber:          10,
+		MethodArgumentsType: []string{"items: list[str]", "count: int"},
+	}
+
+	// Add parameters to the Parameters map.
+	callGraph.Parameters["myapp.auth.validate_user.username"] = &core.ParameterSymbol{
+		Name:           "username",
+		TypeAnnotation: "str",
+		ParentFQN:      "myapp.auth.validate_user",
+		File:           "/path/to/myapp/auth.py",
+		Line:           45,
+	}
+	callGraph.Parameters["myapp.auth.validate_user.password"] = &core.ParameterSymbol{
+		Name:           "password",
+		TypeAnnotation: "str",
+		ParentFQN:      "myapp.auth.validate_user",
+		File:           "/path/to/myapp/auth.py",
+		Line:           45,
+	}
+	callGraph.Parameters["myapp.models.User.save.force"] = &core.ParameterSymbol{
+		Name:           "force",
+		TypeAnnotation: "bool",
+		ParentFQN:      "myapp.models.User.save",
+		File:           "/path/to/myapp/models.py",
+		Line:           20,
+	}
+	callGraph.Parameters["myapp.utils.process.items"] = &core.ParameterSymbol{
+		Name:           "items",
+		TypeAnnotation: "list[str]",
+		ParentFQN:      "myapp.utils.process",
+		File:           "/path/to/myapp/utils.py",
+		Line:           10,
+	}
+	callGraph.Parameters["myapp.utils.process.count"] = &core.ParameterSymbol{
+		Name:           "count",
+		TypeAnnotation: "int",
+		ParentFQN:      "myapp.utils.process",
+		File:           "/path/to/myapp/utils.py",
+		Line:           10,
+	}
+
+	moduleRegistry := &core.ModuleRegistry{
+		Modules:      map[string]string{"myapp.auth": "/path/to/myapp/auth.py", "myapp.models": "/path/to/myapp/models.py", "myapp.utils": "/path/to/myapp/utils.py"},
+		FileToModule: map[string]string{"/path/to/myapp/auth.py": "myapp.auth", "/path/to/myapp/models.py": "myapp.models", "/path/to/myapp/utils.py": "myapp.utils"},
+		ShortNames:   map[string][]string{"auth": {"/path/to/myapp/auth.py"}, "models": {"/path/to/myapp/models.py"}, "utils": {"/path/to/myapp/utils.py"}},
+	}
+
+	return NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
+}
+
 func TestIsReady_NotReady(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	moduleRegistry := &core.ModuleRegistry{

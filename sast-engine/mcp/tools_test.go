@@ -3207,3 +3207,172 @@ func TestToolFindSymbol_ModuleVariableNilTypeEngine(t *testing.T) {
 	_, hasInferredType := match["inferred_type"]
 	assert.False(t, hasInferredType, "should not have inferred_type when TypeEngine is nil")
 }
+
+// ============================================================================
+// Parameter symbol tests
+// ============================================================================
+
+func TestToolFindSymbol_FilterByParameter(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 5, "should find all 5 parameters")
+
+	// Verify all matches are parameters.
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		assert.Equal(t, "parameter", match["type"])
+	}
+}
+
+func TestToolFindSymbol_ParameterFields(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "username", "type": "parameter"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1)
+
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "myapp.auth.validate_user.username", match["fqn"])
+	assert.Equal(t, "/path/to/myapp/auth.py", match["file"])
+	assert.Equal(t, float64(45), match["line"])
+	assert.Equal(t, "parameter", match["type"])
+	assert.Equal(t, "str", match["inferred_type"])
+	assert.Equal(t, "myapp.auth.validate_user", match["parent_fqn"])
+	assert.Equal(t, float64(SymbolKindVariable), match["symbol_kind"])
+	assert.Equal(t, "Variable", match["symbol_kind_name"])
+}
+
+func TestToolFindSymbol_ParameterComplexType(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "items", "type": "parameter"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1)
+
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "list[str]", match["inferred_type"])
+	assert.Equal(t, "myapp.utils.process", match["parent_fqn"])
+}
+
+func TestToolFindSymbol_ParameterNameFilter(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	// Partial name match should work.
+	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "pass", "type": "parameter"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 1, "should match 'password' via partial match")
+
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "myapp.auth.validate_user.password", match["fqn"])
+}
+
+func TestToolFindSymbol_ParameterModuleFilter(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter", "module": "myapp.auth"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	assert.Len(t, matches, 2, "should find 2 parameters in myapp.auth module")
+
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		assert.Contains(t, match["fqn"].(string), "myapp.auth.")
+	}
+}
+
+func TestToolFindSymbol_ParameterExcludeWhenFiltering(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	// Filtering by type="method" should NOT include parameters.
+	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "method"})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		assert.NotEqual(t, "parameter", match["type"], "method filter should not return parameters")
+	}
+}
+
+func TestToolFindSymbol_ParameterInMultipleTypes(t *testing.T) {
+	server := createTestServerWithParameters()
+
+	// Querying with types=["parameter","method"] should return both.
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"types": []interface{}{"parameter", "method"},
+	})
+
+	assert.False(t, isError)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(result), &parsed)
+	assert.NoError(t, err)
+
+	matches := parsed["matches"].([]interface{})
+
+	hasParameter := false
+	hasMethod := false
+	for _, m := range matches {
+		match := m.(map[string]interface{})
+		if match["type"] == "parameter" {
+			hasParameter = true
+		}
+		if match["type"] == "method" {
+			hasMethod = true
+		}
+	}
+	assert.True(t, hasParameter, "should include parameter results")
+	assert.True(t, hasMethod, "should include method results")
+}
+
+func TestToolFindSymbol_ParameterNilParametersMap(t *testing.T) {
+	server := createTestServer()
+	// Default test server has no parameters set — ensure nil safety.
+	server.callGraph.Parameters = nil
+
+	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter"})
+
+	assert.True(t, isError)
+	assert.Contains(t, result, "No symbols found")
+}

@@ -74,6 +74,8 @@ func getSymbolKind(symbolType string) (int, string) {
 		return SymbolKindConstant, "Constant"
 	case "class_field":
 		return SymbolKindField, "Field"
+	case "parameter":
+		return SymbolKindVariable, "Variable"
 
 	// Java types (for compatibility)
 	case "method_declaration":
@@ -99,7 +101,7 @@ func (s *Server) getToolDefinitions() []Tool {
 Returns:
 - Project info: project_path, python_version, indexed_at, build_time_seconds
 - Overall stats: total_symbols, call_edges, modules, files, taint_summaries, class_fields
-- symbols_by_type: Breakdown by all 12 Python types (function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field)
+- symbols_by_type: Breakdown by all 13 Python types (function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field, parameter)
 - symbols_by_lsp_kind: Breakdown by LSP Symbol Kind (Function, Method, Constructor, Property, Operator, Class, Interface, Enum, Struct, Variable, Constant, Field)
 - top_modules: Top 10 modules by function count
 - health: Index health indicators (average functions per module, etc.)
@@ -112,15 +114,17 @@ Use when: Starting analysis, understanding project size and structure, verifying
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search and filter Python symbols by name and/or type across 12 symbol types. Supports partial matching. Results are paginated.
+			Description: `Search and filter Python symbols by name and/or type across 13 symbol types. Supports partial matching. Results are paginated.
 
 Symbol Types Available:
 - Functions: function_definition, method, constructor, property, special_method
 - Classes: class_definition, interface (Protocol/ABC), enum, dataclass
 - Variables: module_variable, constant (UPPERCASE), class_field
+- Parameters: parameter (typed function/method parameters)
 
 Returns: For ALL symbols: fqn, file, line, type, symbol_kind (LSP integer), symbol_kind_name (human-readable).
 For functions/methods: return_type, parameters, decorators. For classes: superclass, interfaces. For fields: inferred_type, confidence, assigned_in.
+For parameters: inferred_type (type annotation), parent_fqn (containing function).
 
 LSP Symbol Kinds: Function(12), Method(6), Constructor(9), Property(7), Operator(25), Class(5), Interface(11), Enum(10), Struct(23), Variable(13), Constant(14), Field(8).
 
@@ -136,12 +140,14 @@ Examples:
 - find_symbol(name="User", type="class_definition") - finds User class only
 - find_symbol(module="core.settings") - finds all symbols in core.settings module
 - find_symbol(type="constant", module="core.settings.base") - finds constants in specific module
-- find_symbol(module="data_manager", type="method") - finds all methods in data_manager package`,
+- find_symbol(module="data_manager", type="method") - finds all methods in data_manager package
+- find_symbol(type="parameter") - lists all typed parameters
+- find_symbol(type="parameter", module="core.utils") - finds parameters in specific module`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
 					"name":   {Type: "string", Description: "Symbol name to find. Optional. Can be: short name ('login'), partial name ('auth'), or FQN ('myapp.auth.login')"},
-					"type":   {Type: "string", Description: "Filter by single symbol type. Optional. One of: function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field"},
+					"type":   {Type: "string", Description: "Filter by single symbol type. Optional. One of: function_definition, method, constructor, property, special_method, class_definition, interface, enum, dataclass, module_variable, constant, class_field, parameter"},
 					"types":  {Type: "array", Description: "Filter by multiple symbol types. Optional. Array of type strings. Alternative to 'type' parameter"},
 					"module": {Type: "string", Description: "Filter by module. Optional. Matches symbols whose FQN starts with the module path (e.g., 'core.settings', 'data_manager.models'). Works with all symbol types"},
 					"limit":  {Type: "integer", Description: "Max results to return (default: 50, max: 500)"},
@@ -363,6 +369,14 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 		symbolsByLSPKind[kindName]++
 	}
 
+	// Count typed parameters.
+	parameterCount := len(s.callGraph.Parameters)
+	if parameterCount > 0 {
+		symbolsByType["parameter"] = parameterCount
+		_, paramKindName := getSymbolKind("parameter")
+		symbolsByLSPKind[paramKindName] += parameterCount
+	}
+
 	// Count class attributes if available.
 	classFieldsCount := 0
 	if s.callGraph.Attributes != nil {
@@ -521,11 +535,12 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		"module_variable":     true,
 		"constant":            true,
 		"class_field":         true,
+		"parameter":           true,
 	}
 
 	for _, t := range typeFilter {
 		if !validTypes[t] {
-			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field"]}`, t), true
+			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field","parameter"]}`, t), true
 		}
 	}
 
@@ -656,6 +671,40 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 							allMatches = append(allMatches, match)
 						}
 					}
+				}
+			}
+		}
+	}
+
+	// Search typed parameters from callGraph.Parameters.
+	if s.callGraph.Parameters != nil {
+		searchParameters := len(typeFilterMap) == 0 || typeFilterMap["parameter"]
+		if searchParameters {
+			for fqn, param := range s.callGraph.Parameters {
+				// Apply module filter if specified.
+				if !matchesModuleFilter(fqn, moduleFilter) {
+					continue
+				}
+
+				// Apply name filter if specified.
+				nameMatches := name == ""
+				if name != "" {
+					nameMatches = param.Name == name || strings.HasSuffix(fqn, "."+name) || fqn == name || strings.Contains(fqn, name)
+				}
+
+				if nameMatches {
+					symbolKind, symbolKindName := getSymbolKind("parameter")
+					match := map[string]interface{}{
+						"fqn":              fqn,
+						"file":             param.File,
+						"line":             param.Line,
+						"type":             "parameter",
+						"symbol_kind":      symbolKind,
+						"symbol_kind_name": symbolKindName,
+						"inferred_type":    param.TypeAnnotation,
+						"parent_fqn":       param.ParentFQN,
+					}
+					allMatches = append(allMatches, match)
 				}
 			}
 		}

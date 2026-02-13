@@ -149,6 +149,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// This builds the Functions map for quick lookup
 	indexFunctions(codeGraph, callGraph, registry)
 
+	// Index typed parameters as standalone symbols from the indexed functions
+	indexParameters(callGraph)
+
 	// Phase 2 Task 9: Extract return types from all functions (first pass - PARALLELIZED)
 	logger.Debug("Extracting return types from %d modules (parallel)...", len(registry.Modules))
 
@@ -476,6 +479,47 @@ func indexFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, regis
 		// Build fully qualified name with class context if applicable
 		fqn := buildFQN(modulePath, node, classContext)
 		callGraph.Functions[fqn] = node
+	}
+}
+
+// IndexParameters extracts typed parameters from indexed functions and stores them
+// as standalone symbols in callGraph.Parameters. This is the exported wrapper.
+func IndexParameters(callGraph *core.CallGraph) {
+	indexParameters(callGraph)
+}
+
+// indexParameters iterates all indexed functions and extracts their typed parameters
+// into the Parameters map. Each parameter with a type annotation becomes a ParameterSymbol
+// keyed by its FQN (e.g., "myapp.auth.validate_user.username").
+//
+// Parameters named "self" and "cls" are skipped as they don't carry useful type information.
+func indexParameters(callGraph *core.CallGraph) {
+	for fqn, node := range callGraph.Functions {
+		if len(node.MethodArgumentsType) == 0 {
+			continue
+		}
+		for _, paramStr := range node.MethodArgumentsType {
+			parts := strings.SplitN(paramStr, ": ", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			paramName := parts[0]
+			paramType := parts[1]
+
+			// Skip self and cls parameters — they don't carry useful type information.
+			if paramName == "self" || paramName == "cls" {
+				continue
+			}
+
+			paramFQN := fqn + "." + paramName
+			callGraph.Parameters[paramFQN] = &core.ParameterSymbol{
+				Name:           paramName,
+				TypeAnnotation: paramType,
+				ParentFQN:      fqn,
+				File:           node.File,
+				Line:           node.LineNumber,
+			}
+		}
 	}
 }
 
