@@ -8,7 +8,8 @@
 name: Security Scan
 
 on:
-  workflow_dispatch:  # Manual trigger only — disabled auto-run to avoid noise from test fixtures
+  pull_request:
+    branches: [main, master]
 
 # Required permissions:
 #   security-events: write  - for uploading SARIF results to GitHub Code Scanning
