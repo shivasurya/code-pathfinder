@@ -510,6 +510,81 @@ func TestSARIFFormatterFallbackToFilePath(t *testing.T) {
 	assert.Equal(t, "/absolute/path/to/file.py", artifact["uri"])
 }
 
+func TestSARIFFormatterEmptyFilePathSkipsLocation(t *testing.T) {
+	var buf bytes.Buffer
+	sf := NewSARIFFormatterWithWriter(&buf, nil)
+
+	detections := []*dsl.EnrichedDetection{
+		{
+			Location: dsl.LocationInfo{
+				FilePath: "", // Both empty
+				RelPath:  "",
+				Line:     10,
+			},
+			Rule: dsl.RuleMetadata{ID: "test", Name: "Test", Severity: "high", Description: "Test"},
+		},
+	}
+
+	err := sf.Format(detections, ScanInfo{})
+	require.NoError(t, err)
+
+	var report map[string]interface{}
+	err = json.Unmarshal(buf.Bytes(), &report)
+	require.NoError(t, err)
+
+	runs := report["runs"].([]interface{})
+	run := runs[0].(map[string]interface{})
+	results := run["results"].([]interface{})
+	require.Len(t, results, 1)
+
+	result := results[0].(map[string]interface{})
+	// Result should exist but without locations (no empty URI)
+	locations, hasLocations := result["locations"]
+	if hasLocations {
+		locArr := locations.([]interface{})
+		assert.Empty(t, locArr, "Should not have locations with empty file path")
+	}
+}
+
+func TestSARIFFormatterEmptyFilePathSkipsCodeFlow(t *testing.T) {
+	var buf bytes.Buffer
+	sf := NewSARIFFormatterWithWriter(&buf, nil)
+
+	detections := []*dsl.EnrichedDetection{
+		{
+			Detection: dsl.DataflowDetection{
+				SourceLine: 10,
+				SinkLine:   20,
+				TaintedVar: "user_input",
+				SinkCall:   "eval",
+			},
+			DetectionType: dsl.DetectionTypeTaintLocal,
+			Location: dsl.LocationInfo{
+				FilePath: "",
+				RelPath:  "",
+				Line:     20,
+			},
+			Rule: dsl.RuleMetadata{ID: "test", Name: "Test", Severity: "high", Description: "Test"},
+		},
+	}
+
+	err := sf.Format(detections, ScanInfo{})
+	require.NoError(t, err)
+
+	var report map[string]interface{}
+	err = json.Unmarshal(buf.Bytes(), &report)
+	require.NoError(t, err)
+
+	runs := report["runs"].([]interface{})
+	run := runs[0].(map[string]interface{})
+	results := run["results"].([]interface{})
+	result := results[0].(map[string]interface{})
+
+	// Should NOT have code flows when file path is empty
+	_, hasCodeFlows := result["codeFlows"]
+	assert.False(t, hasCodeFlows, "Should not have code flows with empty file path")
+}
+
 func TestBuildHelpMarkdown(t *testing.T) {
 	sf := NewSARIFFormatter(nil)
 

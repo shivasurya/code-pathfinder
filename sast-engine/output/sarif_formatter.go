@@ -189,6 +189,12 @@ func (f *SARIFFormatter) addLocation(det *dsl.EnrichedDetection, result *sarif.R
 		filePath = det.Location.FilePath
 	}
 
+	// Skip adding location if file path is empty — SARIF results with empty
+	// artifact URIs are rejected by GitHub Code Scanning.
+	if filePath == "" {
+		return
+	}
+
 	region := sarif.NewRegion().
 		WithStartLine(det.Location.Line)
 
@@ -216,6 +222,11 @@ func (f *SARIFFormatter) addCodeFlow(det *dsl.EnrichedDetection, result *sarif.R
 	filePath := det.Location.RelPath
 	if filePath == "" {
 		filePath = det.Location.FilePath
+	}
+
+	// Skip code flow if file path is empty — empty artifact URIs are invalid SARIF.
+	if filePath == "" {
+		return
 	}
 
 	// Create thread flow locations

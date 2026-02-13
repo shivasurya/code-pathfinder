@@ -118,6 +118,24 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 		}
 	}
 
+	// Try to resolve file path from FQN by converting module path to file path.
+	// e.g. "app.views.login" → "app/views.py" or "com.example.Main.run" → "com/example/Main.java"
+	if e.options.ProjectRoot != "" && len(parts) > 1 {
+		moduleParts := parts[:len(parts)-1] // Drop function name
+		modulePath := filepath.Join(e.options.ProjectRoot, filepath.Join(moduleParts...))
+		// Try common source file extensions
+		for _, ext := range []string{".py", ".java", ".go", ".js", ".ts", ".rb"} {
+			candidate := modulePath + ext
+			if _, err := os.Stat(candidate); err == nil {
+				loc.FilePath = candidate
+				if relPath, err := filepath.Rel(e.options.ProjectRoot, candidate); err == nil {
+					loc.RelPath = relPath
+				}
+				break
+			}
+		}
+	}
+
 	return loc
 }
 
