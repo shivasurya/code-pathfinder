@@ -107,6 +107,20 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 		Function: extractFunctionFromFQN(detection.FunctionFQN),
 	}
 
+	// If FQN is already a file path (e.g. container rules use file path as FQN),
+	// use it directly.
+	if strings.Contains(detection.FunctionFQN, "/") || strings.Contains(detection.FunctionFQN, string(filepath.Separator)) {
+		if _, err := os.Stat(detection.FunctionFQN); err == nil {
+			loc.FilePath = detection.FunctionFQN
+			if e.options.ProjectRoot != "" {
+				if relPath, err := filepath.Rel(e.options.ProjectRoot, detection.FunctionFQN); err == nil {
+					loc.RelPath = relPath
+				}
+			}
+			return loc
+		}
+	}
+
 	// Try to extract file path from FQN
 	// Format: module.submodule.function or package.Class.method
 	parts := strings.Split(detection.FunctionFQN, ".")
@@ -115,6 +129,24 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 		loc.Function = parts[len(parts)-1]
 		if len(parts) > 1 {
 			loc.ClassName = parts[len(parts)-2]
+		}
+	}
+
+	// Try to resolve file path from FQN by converting module path to file path.
+	// e.g. "app.views.login" → "app/views.py" or "com.example.Main.run" → "com/example/Main.java"
+	if e.options.ProjectRoot != "" && len(parts) > 1 {
+		moduleParts := parts[:len(parts)-1] // Drop function name
+		modulePath := filepath.Join(e.options.ProjectRoot, filepath.Join(moduleParts...))
+		// Try common source file extensions
+		for _, ext := range []string{".py", ".java", ".go", ".js", ".ts", ".rb"} {
+			candidate := modulePath + ext
+			if _, err := os.Stat(candidate); err == nil {
+				loc.FilePath = candidate
+				if relPath, err := filepath.Rel(e.options.ProjectRoot, candidate); err == nil {
+					loc.RelPath = relPath
+				}
+				break
+			}
 		}
 	}
 
