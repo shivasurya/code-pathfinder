@@ -510,7 +510,7 @@ func TestSARIFFormatterFallbackToFilePath(t *testing.T) {
 	assert.Equal(t, "/absolute/path/to/file.py", artifact["uri"])
 }
 
-func TestSARIFFormatterEmptyFilePathSkipsLocation(t *testing.T) {
+func TestSARIFFormatterEmptyFilePathSkipsResult(t *testing.T) {
 	var buf bytes.Buffer
 	sf := NewSARIFFormatterWithWriter(&buf, nil)
 
@@ -520,6 +520,13 @@ func TestSARIFFormatterEmptyFilePathSkipsLocation(t *testing.T) {
 				FilePath: "", // Both empty
 				RelPath:  "",
 				Line:     10,
+			},
+			Rule: dsl.RuleMetadata{ID: "test", Name: "Test", Severity: "high", Description: "Test"},
+		},
+		{
+			Location: dsl.LocationInfo{
+				RelPath: "valid.py",
+				Line:    5,
 			},
 			Rule: dsl.RuleMetadata{ID: "test", Name: "Test", Severity: "high", Description: "Test"},
 		},
@@ -535,15 +542,8 @@ func TestSARIFFormatterEmptyFilePathSkipsLocation(t *testing.T) {
 	runs := report["runs"].([]interface{})
 	run := runs[0].(map[string]interface{})
 	results := run["results"].([]interface{})
-	require.Len(t, results, 1)
-
-	result := results[0].(map[string]interface{})
-	// Result should exist but without locations (no empty URI)
-	locations, hasLocations := result["locations"]
-	if hasLocations {
-		locArr := locations.([]interface{})
-		assert.Empty(t, locArr, "Should not have locations with empty file path")
-	}
+	// Only the detection with a valid path should be included
+	assert.Len(t, results, 1, "Should exclude results with empty file path")
 }
 
 func TestSARIFFormatterEmptyFilePathSkipsCodeFlow(t *testing.T) {
@@ -578,11 +578,9 @@ func TestSARIFFormatterEmptyFilePathSkipsCodeFlow(t *testing.T) {
 	runs := report["runs"].([]interface{})
 	run := runs[0].(map[string]interface{})
 	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
 
-	// Should NOT have code flows when file path is empty
-	_, hasCodeFlows := result["codeFlows"]
-	assert.False(t, hasCodeFlows, "Should not have code flows with empty file path")
+	// Entire result should be excluded when file path is empty
+	assert.Empty(t, results, "Should exclude results with empty file path")
 }
 
 func TestBuildHelpMarkdown(t *testing.T) {

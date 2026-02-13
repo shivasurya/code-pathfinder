@@ -47,8 +47,12 @@ func (f *SARIFFormatter) Format(detections []*dsl.EnrichedDetection, scanInfo Sc
 	// Build rules from unique rule IDs
 	f.buildRules(detections, run)
 
-	// Build results
+	// Build results — skip detections with no resolvable file path since
+	// GitHub Code Scanning requires every result to have at least one location.
 	for _, det := range detections {
+		if det.Location.RelPath == "" && det.Location.FilePath == "" {
+			continue
+		}
 		f.buildResult(det, run)
 	}
 
