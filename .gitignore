@@ -32,6 +32,9 @@ docs/public/rules/*.json
 # macOS-specific files
 .DS_Store
 
+# local tooling
+mise.toml
+
 node_modules
 __pycache__/
 *.pyc

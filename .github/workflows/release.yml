@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.6'
+          go-version: '1.26.0'
 
       - name: Check out code
         uses: actions/checkout@v6
@@ -57,9 +57,9 @@ jobs:
     runs-on: ubuntu-24.04-arm  # Native ARM64 runner (public repos only)
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.6'
+          go-version: '1.26.0'
 
       - name: Check out code
         uses: actions/checkout@v6
@@ -100,9 +100,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.6'
+          go-version: '1.26.0'
 
       - name: Check out code
         uses: actions/checkout@v6
@@ -141,9 +141,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.6'
+          go-version: '1.26.0'
 
       - name: Check out code
         uses: actions/checkout@v6
@@ -183,9 +183,9 @@ jobs:
     runs-on: macos-15-intel  # Intel-based macOS runner (macOS 15)
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.6'
+          go-version: '1.26.0'
 
       - name: Check out code
         uses: actions/checkout@v6
