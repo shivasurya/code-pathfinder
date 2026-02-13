@@ -47,6 +47,23 @@ type Argument struct {
 	Position   int    // Position in the argument list (0-indexed)
 }
 
+// ParameterSymbol represents a typed function/method parameter as a standalone symbol.
+// This enables querying parameter types via find_symbol(type="parameter").
+//
+// Example:
+//
+//	def add(a: int, b: int) -> int:
+//	  Produces two ParameterSymbol entries:
+//	  - {Name: "a", TypeAnnotation: "int", ParentFQN: "module.add"}
+//	  - {Name: "b", TypeAnnotation: "int", ParentFQN: "module.add"}
+type ParameterSymbol struct {
+	Name           string // Parameter name (e.g., "a")
+	TypeAnnotation string // Type annotation (e.g., "int", "QuerySet[ModelType]")
+	ParentFQN      string // FQN of the containing function/method
+	File           string // Source file path
+	Line           uint32 // Line number of the function definition
+}
+
 // CallGraph represents the complete call graph of a program.
 // It maps function definitions to their call sites and provides
 // both forward (callers → callees) and reverse (callees → callers) edges.
@@ -77,6 +94,12 @@ type CallGraph struct {
 	// This allows quick lookup of function metadata (line number, file, etc.)
 	Functions map[string]*graph.Node
 
+	// Typed function/method parameters as standalone symbols.
+	// Key: parameter FQN (e.g., "myapp.auth.validate_user.username")
+	// Value: parameter type information
+	// Populated during call graph construction from MethodArgumentsType.
+	Parameters map[string]*ParameterSymbol
+
 	// Taint summaries for each function (intra-procedural analysis results)
 	// Key: function FQN
 	// Value: TaintSummary with taint flow information
@@ -101,6 +124,7 @@ func NewCallGraph() *CallGraph {
 		ReverseEdges: make(map[string][]string),
 		CallSites:    make(map[string][]CallSite),
 		Functions:    make(map[string]*graph.Node),
+		Parameters:   make(map[string]*ParameterSymbol),
 		Summaries:    make(map[string]*TaintSummary),
 	}
 }

@@ -817,3 +817,130 @@ def caller():
 
 	assert.True(t, foundEdge, "Expected at least one call edge")
 }
+
+// TestIndexParameters verifies that indexParameters extracts typed parameters
+// from indexed functions into the Parameters map.
+func TestIndexParameters(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	// Function with typed parameters.
+	callGraph.Functions["myapp.auth.validate"] = &graph.Node{
+		ID:                  "1",
+		Type:                "function_definition",
+		Name:                "validate",
+		File:                "/path/auth.py",
+		LineNumber:          10,
+		MethodArgumentsType: []string{"username: str", "password: str"},
+	}
+
+	// Method with self (should be excluded) and typed parameter.
+	callGraph.Functions["myapp.models.User.save"] = &graph.Node{
+		ID:                  "2",
+		Type:                "method",
+		Name:                "save",
+		File:                "/path/models.py",
+		LineNumber:          20,
+		MethodArgumentsType: []string{"self", "force: bool"},
+	}
+
+	// Class method with cls (should be excluded) and typed parameter.
+	callGraph.Functions["myapp.models.User.create"] = &graph.Node{
+		ID:                  "3",
+		Type:                "method",
+		Name:                "create",
+		File:                "/path/models.py",
+		LineNumber:          30,
+		MethodArgumentsType: []string{"cls", "name: str"},
+	}
+
+	// Function with complex types.
+	callGraph.Functions["myapp.utils.process"] = &graph.Node{
+		ID:                  "4",
+		Type:                "function_definition",
+		Name:                "process",
+		File:                "/path/utils.py",
+		LineNumber:          5,
+		MethodArgumentsType: []string{"items: list[str]", "qs: QuerySet[ModelType]"},
+	}
+
+	// Function with no typed parameters (should not produce any).
+	callGraph.Functions["myapp.utils.helper"] = &graph.Node{
+		ID:         "5",
+		Type:       "function_definition",
+		Name:       "helper",
+		File:       "/path/utils.py",
+		LineNumber: 15,
+	}
+
+	IndexParameters(callGraph)
+
+	// Verify total parameter count: 2 + 1 + 1 + 2 = 6 (self and cls excluded).
+	assert.Len(t, callGraph.Parameters, 6)
+
+	// Verify specific parameters.
+	usernameParam := callGraph.Parameters["myapp.auth.validate.username"]
+	assert.NotNil(t, usernameParam)
+	assert.Equal(t, "username", usernameParam.Name)
+	assert.Equal(t, "str", usernameParam.TypeAnnotation)
+	assert.Equal(t, "myapp.auth.validate", usernameParam.ParentFQN)
+	assert.Equal(t, "/path/auth.py", usernameParam.File)
+	assert.Equal(t, uint32(10), usernameParam.Line)
+
+	passwordParam := callGraph.Parameters["myapp.auth.validate.password"]
+	assert.NotNil(t, passwordParam)
+	assert.Equal(t, "str", passwordParam.TypeAnnotation)
+
+	// Verify self is excluded.
+	assert.Nil(t, callGraph.Parameters["myapp.models.User.save.self"])
+
+	// Verify cls is excluded.
+	assert.Nil(t, callGraph.Parameters["myapp.models.User.create.cls"])
+
+	// Verify typed param after self is included.
+	forceParam := callGraph.Parameters["myapp.models.User.save.force"]
+	assert.NotNil(t, forceParam)
+	assert.Equal(t, "force", forceParam.Name)
+	assert.Equal(t, "bool", forceParam.TypeAnnotation)
+
+	// Verify typed param after cls is included.
+	nameParam := callGraph.Parameters["myapp.models.User.create.name"]
+	assert.NotNil(t, nameParam)
+	assert.Equal(t, "str", nameParam.TypeAnnotation)
+
+	// Verify complex types.
+	itemsParam := callGraph.Parameters["myapp.utils.process.items"]
+	assert.NotNil(t, itemsParam)
+	assert.Equal(t, "list[str]", itemsParam.TypeAnnotation)
+
+	qsParam := callGraph.Parameters["myapp.utils.process.qs"]
+	assert.NotNil(t, qsParam)
+	assert.Equal(t, "QuerySet[ModelType]", qsParam.TypeAnnotation)
+}
+
+// TestIndexParameters_NoTypedParameters verifies that functions without typed
+// parameters don't produce any ParameterSymbol entries.
+func TestIndexParameters_NoTypedParameters(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	callGraph.Functions["myapp.utils.helper"] = &graph.Node{
+		ID:                   "1",
+		Type:                 "function_definition",
+		Name:                 "helper",
+		File:                 "/path/utils.py",
+		LineNumber:           5,
+		MethodArgumentsValue: []string{"x", "y"},
+	}
+
+	IndexParameters(callGraph)
+
+	assert.Len(t, callGraph.Parameters, 0)
+}
+
+// TestIndexParameters_EmptyCallGraph verifies safety with an empty call graph.
+func TestIndexParameters_EmptyCallGraph(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	IndexParameters(callGraph)
+
+	assert.Len(t, callGraph.Parameters, 0)
+}
