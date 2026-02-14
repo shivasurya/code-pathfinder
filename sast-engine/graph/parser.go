@@ -107,16 +107,19 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		// Implementation: PR-06
 
 	case "short_var_declaration":
-		// Go short variable declarations (:=).
-		// Implementation: PR-05
+		if isGoSourceFile {
+			parseGoShortVarDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "var_declaration":
-		// Go var declarations.
-		// Implementation: PR-05
+		if isGoSourceFile {
+			parseGoVarDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "const_declaration":
-		// Go const declarations.
-		// Implementation: PR-05
+		if isGoSourceFile {
+			parseGoConstDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "func_literal":
 		// Go anonymous functions / closures.
@@ -131,8 +134,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		// Implementation: PR-06
 
 	case "assignment_statement":
-		// Go assignment statements (=).
-		// Implementation: PR-05
+		if isGoSourceFile {
+			parseGoAssignment(node, sourceCode, graph, file)
+		}
 	}
 
 	// Recursively process child nodes

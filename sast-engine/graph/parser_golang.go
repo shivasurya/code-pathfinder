@@ -108,3 +108,118 @@ func parseGoTypeDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeG
 		graph.AddNode(node)
 	}
 }
+
+// parseGoVarDeclaration parses a Go var_declaration into CodeGraph nodes.
+// Handles grouped declarations and multi-name vars. Does not return a node.
+func parseGoVarDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	vars := golangpkg.ParseVarDeclaration(tsNode, sourceCode)
+
+	for _, info := range vars {
+		varID := GenerateMethodID(info.Name, []string{}, file, info.LineNumber)
+		node := &Node{
+			ID:             varID,
+			Type:           "module_variable",
+			Name:           info.Name,
+			LineNumber:     info.LineNumber,
+			VariableValue:  info.Value,
+			DataType:       info.TypeName,
+			Modifier:       info.Visibility,
+			File:           file,
+			isGoSourceFile: true,
+			SourceLocation: &SourceLocation{
+				File:      file,
+				StartByte: info.StartByte,
+				EndByte:   info.EndByte,
+			},
+		}
+		graph.AddNode(node)
+	}
+}
+
+// parseGoShortVarDeclaration parses a Go short_var_declaration into CodeGraph nodes.
+// Handles multi-variable assignments (x, y := foo()). Does not return a node.
+func parseGoShortVarDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	vars := golangpkg.ParseShortVarDeclaration(tsNode, sourceCode)
+
+	for _, info := range vars {
+		nodeType := "variable_assignment"
+		if info.IsMulti {
+			nodeType = "multi_var_assignment"
+		}
+
+		varID := GenerateMethodID(info.Name, []string{}, file, info.LineNumber)
+		node := &Node{
+			ID:             varID,
+			Type:           nodeType,
+			Name:           info.Name,
+			LineNumber:     info.LineNumber,
+			VariableValue:  info.Value,
+			Modifier:       info.Visibility,
+			File:           file,
+			isGoSourceFile: true,
+			SourceLocation: &SourceLocation{
+				File:      file,
+				StartByte: info.StartByte,
+				EndByte:   info.EndByte,
+			},
+		}
+		graph.AddNode(node)
+	}
+}
+
+// parseGoConstDeclaration parses a Go const_declaration into CodeGraph nodes.
+// Handles grouped const declarations with iota. Does not return a node.
+func parseGoConstDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	consts := golangpkg.ParseConstDeclaration(tsNode, sourceCode)
+
+	for _, info := range consts {
+		constID := GenerateMethodID(info.Name, []string{}, file, info.LineNumber)
+		node := &Node{
+			ID:             constID,
+			Type:           "constant",
+			Name:           info.Name,
+			LineNumber:     info.LineNumber,
+			VariableValue:  info.Value,
+			Modifier:       info.Visibility,
+			File:           file,
+			isGoSourceFile: true,
+			SourceLocation: &SourceLocation{
+				File:      file,
+				StartByte: info.StartByte,
+				EndByte:   info.EndByte,
+			},
+		}
+		graph.AddNode(node)
+	}
+}
+
+// parseGoAssignment parses a Go assignment_statement into CodeGraph nodes.
+// Handles multi-variable assignments (x, y = 1, 2). Does not return a node.
+func parseGoAssignment(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	vars := golangpkg.ParseAssignment(tsNode, sourceCode)
+
+	for _, info := range vars {
+		nodeType := "variable_assignment"
+		if info.IsMulti {
+			nodeType = "multi_var_assignment"
+		}
+
+		varID := GenerateMethodID(info.Name, []string{}, file, info.LineNumber)
+		node := &Node{
+			ID:             varID,
+			Type:           nodeType,
+			Name:           info.Name,
+			LineNumber:     info.LineNumber,
+			VariableValue:  info.Value,
+			Modifier:       info.Visibility,
+			File:           file,
+			isGoSourceFile: true,
+			SourceLocation: &SourceLocation{
+				File:      file,
+				StartByte: info.StartByte,
+				EndByte:   info.EndByte,
+			},
+		}
+		graph.AddNode(node)
+	}
+}
