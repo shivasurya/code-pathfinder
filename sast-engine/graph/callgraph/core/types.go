@@ -298,6 +298,101 @@ func (im *ImportMap) Resolve(alias string) (string, bool) {
 	return fqn, ok
 }
 
+// GoModuleRegistry maps directory paths to Go import paths.
+// Enables resolution of package-qualified function calls.
+//
+// Unlike Python's ModuleRegistry (which maps files to modules), Go's registry maps
+// directories to packages because multiple .go files can share the same package.
+// The module path comes from go.mod, not directory names.
+//
+// Example:
+//
+//	go.mod: module github.com/example/myapp
+//	Directory: /project/handlers/
+//	Import path: github.com/example/myapp/handlers
+type GoModuleRegistry struct {
+	// Module path from go.mod (e.g., "github.com/example/myapp").
+	ModulePath string
+
+	// Maps absolute directory path to full import path.
+	// Key: "/abs/path/to/project/handlers"
+	// Value: "github.com/example/myapp/handlers"
+	DirToImport map[string]string
+
+	// Reverse mapping for quick lookups.
+	// Key: "github.com/example/myapp/handlers"
+	// Value: "/abs/path/to/project/handlers"
+	ImportToDir map[string]string
+
+	// Standard library package names for quick detection.
+	// Key: package name (e.g., "fmt", "net/http")
+	// Value: always true (set semantics)
+	StdlibPackages map[string]bool
+}
+
+// NewGoModuleRegistry creates an initialized GoModuleRegistry.
+func NewGoModuleRegistry() *GoModuleRegistry {
+	return &GoModuleRegistry{
+		DirToImport:    make(map[string]string),
+		ImportToDir:    make(map[string]string),
+		StdlibPackages: make(map[string]bool),
+	}
+}
+
+// GoImportMap represents imports in a single Go file.
+// Maps local names (identifiers or aliases) to full import paths.
+//
+// Example:
+//
+//	import (
+//	    "fmt"                                    // "fmt" -> "fmt"
+//	    h "github.com/myapp/handlers"            // "h" -> "github.com/myapp/handlers"
+//	    . "github.com/myapp/utils"               // "." -> "github.com/myapp/utils"
+//	    _ "github.com/lib/pq"                    // "_" -> "github.com/lib/pq"
+//	)
+type GoImportMap struct {
+	// Maps local name to full import path.
+	// Key: local identifier (e.g., "h", "fmt", ".", "_")
+	// Value: full import path
+	Imports map[string]string
+
+	// Absolute path to the file containing these imports.
+	FilePath string
+
+	// Package name from "package X" declaration.
+	// Used to determine if a type reference is local to the package.
+	PackageName string
+}
+
+// NewGoImportMap creates an initialized GoImportMap.
+func NewGoImportMap(filePath string) *GoImportMap {
+	return &GoImportMap{
+		Imports:  make(map[string]string),
+		FilePath: filePath,
+	}
+}
+
+// AddImport adds an import mapping.
+//
+// Parameters:
+//   - localName: the local identifier used in the file (e.g., "h", "fmt", ".")
+//   - importPath: the full import path (e.g., "github.com/myapp/handlers")
+func (gim *GoImportMap) AddImport(localName, importPath string) {
+	gim.Imports[localName] = importPath
+}
+
+// Resolve looks up the import path for a local name.
+//
+// Parameters:
+//   - localName: the local identifier to resolve
+//
+// Returns:
+//   - import path and true if found, empty string and false otherwise
+func (gim *GoImportMap) Resolve(localName string) (string, bool) {
+	path, ok := gim.Imports[localName]
+	return path, ok
+}
+
 // Helper function to check if a string slice contains a specific string.
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
