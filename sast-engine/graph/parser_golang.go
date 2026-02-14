@@ -39,6 +39,7 @@ func parseGoFunctionDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *C
 		Modifier:             info.Visibility,
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 	}
 	setGoSourceLocation(node, tsNode, file)
 	graph.AddNode(node)
@@ -63,6 +64,7 @@ func parseGoMethodDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *Cod
 		Interface:            []string{info.ReceiverType},
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 	}
 	setGoSourceLocation(node, tsNode, file)
 	graph.AddNode(node)
@@ -100,6 +102,7 @@ func parseGoTypeDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeG
 			Interface:      iface,
 			File:           file,
 			isGoSourceFile: true,
+			Language:       "go",
 			SourceLocation: &SourceLocation{
 				File:      file,
 				StartByte: info.StartByte,
@@ -127,6 +130,7 @@ func parseGoVarDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeGr
 			Modifier:       info.Visibility,
 			File:           file,
 			isGoSourceFile: true,
+			Language:       "go",
 			SourceLocation: &SourceLocation{
 				File:      file,
 				StartByte: info.StartByte,
@@ -158,6 +162,7 @@ func parseGoShortVarDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *C
 			Modifier:       info.Visibility,
 			File:           file,
 			isGoSourceFile: true,
+			Language:       "go",
 			SourceLocation: &SourceLocation{
 				File:      file,
 				StartByte: info.StartByte,
@@ -184,6 +189,7 @@ func parseGoConstDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *Code
 			Modifier:       info.Visibility,
 			File:           file,
 			isGoSourceFile: true,
+			Language:       "go",
 			SourceLocation: &SourceLocation{
 				File:      file,
 				StartByte: info.StartByte,
@@ -215,6 +221,7 @@ func parseGoAssignment(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph,
 			Modifier:       info.Visibility,
 			File:           file,
 			isGoSourceFile: true,
+			Language:       "go",
 			SourceLocation: &SourceLocation{
 				File:      file,
 				StartByte: info.StartByte,
@@ -252,6 +259,7 @@ func parseGoCallExpression(tsNode *sitter.Node, sourceCode []byte, graph *CodeGr
 		IsExternal:           true,
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: info.StartByte,
@@ -317,6 +325,7 @@ func parseGoFuncLiteral(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph
 		Modifier:             "private",
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 	}
 	setGoSourceLocation(node, tsNode, file)
 	graph.AddNode(node)
@@ -348,6 +357,7 @@ func parseGoDeferStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGr
 		IsExternal:           true,
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: info.StartByte,
@@ -391,6 +401,7 @@ func parseGoGoStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph
 		IsExternal:           true,
 		File:                 file,
 		isGoSourceFile:       true,
+		Language:             "go",
 		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: info.StartByte,

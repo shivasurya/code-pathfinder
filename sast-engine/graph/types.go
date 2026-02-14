@@ -51,6 +51,7 @@ type Node struct {
 	AssertStmt           *model.AssertStmt
 	ReturnStmt           *model.ReturnStmt
 	BlockStmt            *model.BlockStmt
+	Language             string // "go", "python", "java" - set during parsing
 }
 
 // GetCodeSnippet returns the code snippet for this node.

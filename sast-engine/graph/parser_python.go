@@ -240,6 +240,7 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 		Annotation:           decorators,
 		File:                 file,
 		isPythonSourceFile:   true,
+		Language:             "python",
 	}
 	graph.AddNode(functionNode)
 	return functionNode
@@ -305,6 +306,7 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 		Annotation:         decorators,
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 	}
 	graph.AddNode(classNode)
 	return classNode
@@ -345,6 +347,7 @@ func parsePythonCall(node *sitter.Node, sourceCode []byte, graph *CodeGraph, cur
 		MethodArgumentsValue: arguments,
 		File:                 file,
 		isPythonSourceFile:   true,
+		Language:             "python",
 	}
 	graph.AddNode(callNode)
 	if currentContext != nil {
@@ -369,6 +372,7 @@ func parsePythonReturnStatement(node *sitter.Node, sourceCode []byte, graph *Cod
 		},
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 		ReturnStmt:         returnNode,
 	}
 	graph.AddNode(returnStmtNode)
@@ -391,6 +395,7 @@ func parsePythonBreakStatement(node *sitter.Node, sourceCode []byte, graph *Code
 		},
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 		BreakStmt:          breakNode,
 	}
 	graph.AddNode(breakStmtNode)
@@ -413,6 +418,7 @@ func parsePythonContinueStatement(node *sitter.Node, sourceCode []byte, graph *C
 		},
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 		ContinueStmt:       continueNode,
 	}
 	graph.AddNode(continueStmtNode)
@@ -435,6 +441,7 @@ func parsePythonAssertStatement(node *sitter.Node, sourceCode []byte, graph *Cod
 		},
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 		AssertStmt:         assertNode,
 	}
 	graph.AddNode(assertStmtNode)
@@ -461,6 +468,7 @@ func parsePythonYieldExpression(node *sitter.Node, sourceCode []byte, graph *Cod
 				},
 				File:               file,
 				isPythonSourceFile: true,
+				Language:           "python",
 				YieldStmt:          yieldNode,
 			}
 			graph.AddNode(yieldStmtNode)
@@ -534,6 +542,7 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 		Scope:              scope,
 		File:               file,
 		isPythonSourceFile: true,
+		Language:           "python",
 	}
 	graph.AddNode(variableNode)
 }

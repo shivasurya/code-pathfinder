@@ -145,6 +145,7 @@ func parseJavaMethodDeclaration(node *sitter.Node, sourceCode []byte, graph *Cod
 		MethodArgumentsValue: methodArgumentValue,
 		File:                 file,
 		isJavaSourceFile:     true,
+		Language:             "java",
 		ThrowsExceptions:     throws,
 		Annotation:           annotationMarkers,
 		JavaDoc:              javadoc,
@@ -187,6 +188,7 @@ func parseJavaMethodInvocation(node *sitter.Node, sourceCode []byte, graph *Code
 		MethodArgumentsValue: arguments,
 		File:                 file,
 		isJavaSourceFile:     true,
+		Language:             "java",
 	}
 	graph.AddNode(invokedNode)
 
@@ -248,6 +250,7 @@ func parseJavaClassDeclaration(node *sitter.Node, sourceCode []byte, graph *Code
 		Interface:        implementedInterface,
 		File:             file,
 		isJavaSourceFile: true,
+		Language:         "java",
 		JavaDoc:          javadoc,
 		Annotation:       annotationMarkers,
 	}
@@ -267,6 +270,7 @@ func parseJavaBlockComment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 			LineNumber:       node.StartPoint().Row + 1,
 			File:             file,
 			isJavaSourceFile: true,
+			Language:         "java",
 			JavaDoc:          javadocTags,
 		}
 		graph.AddNode(commentNode)
@@ -324,6 +328,7 @@ func parseJavaVariableDeclaration(node *sitter.Node, sourceCode []byte, graph *C
 		hasAccess:        hasAccessValue,
 		File:             file,
 		isJavaSourceFile: true,
+		Language:         "java",
 	}
 	graph.AddNode(variableNode)
 }
