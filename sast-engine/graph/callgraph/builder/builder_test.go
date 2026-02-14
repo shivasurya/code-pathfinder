@@ -8,6 +8,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -943,4 +944,224 @@ func TestIndexParameters_EmptyCallGraph(t *testing.T) {
 	IndexParameters(callGraph)
 
 	assert.Len(t, callGraph.Parameters, 0)
+}
+
+func TestNormalizeReturnType(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"builtins.str", "str"},
+		{"builtins.int", "int"},
+		{"builtins.float", "float"},
+		{"builtins.bool", "bool"},
+		{"builtins.list", "list"},
+		{"builtins.dict", "dict"},
+		{"builtins.set", "set"},
+		{"builtins.tuple", "tuple"},
+		{"builtins.NoneType", "None"},
+		{"builtins.bytes", "bytes"},
+		{"builtins.complex", "complex"},
+		{"builtins.Generator", "Generator"},
+		{"myapp.models.User", "myapp.models.User"},
+		{"str", "str"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, NormalizeReturnType(tt.input))
+		})
+	}
+}
+
+func TestPopulateInferredReturnTypes(t *testing.T) {
+	// Set up a call graph with Python functions
+	callGraph := core.NewCallGraph()
+	modRegistry := core.NewModuleRegistry()
+
+	// Function with annotation (should NOT be overwritten)
+	annotatedFunc := &graph.Node{
+		ID:         "annotated",
+		Type:       "function_definition",
+		Name:       "annotated_func",
+		ReturnType: "int",
+		File:       "test.py",
+		LineNumber: 1,
+	}
+	callGraph.Functions["test.annotated_func"] = annotatedFunc
+
+	// Function without annotation, inferred type available
+	inferredFunc := &graph.Node{
+		ID:         "inferred",
+		Type:       "function_definition",
+		Name:       "inferred_func",
+		ReturnType: "",
+		File:       "test.py",
+		LineNumber: 5,
+	}
+	callGraph.Functions["test.inferred_func"] = inferredFunc
+
+	// Void function (no return values, no inferred type)
+	voidFunc := &graph.Node{
+		ID:         "void",
+		Type:       "function_definition",
+		Name:       "void_func",
+		ReturnType: "",
+		File:       "test.py",
+		LineNumber: 10,
+	}
+	callGraph.Functions["test.void_func"] = voidFunc
+
+	// Function with return expression but uninferrable
+	unknownFunc := &graph.Node{
+		ID:         "unknown",
+		Type:       "function_definition",
+		Name:       "unknown_func",
+		ReturnType: "",
+		File:       "test.py",
+		LineNumber: 15,
+	}
+	callGraph.Functions["test.unknown_func"] = unknownFunc
+
+	// Function with low-confidence inferred type (should be skipped)
+	lowConfFunc := &graph.Node{
+		ID:         "lowconf",
+		Type:       "function_definition",
+		Name:       "lowconf_func",
+		ReturnType: "",
+		File:       "test.py",
+		LineNumber: 20,
+	}
+	callGraph.Functions["test.lowconf_func"] = lowConfFunc
+
+	// Function with placeholder return type (should be skipped)
+	placeholderFunc := &graph.Node{
+		ID:         "placeholder",
+		Type:       "function_definition",
+		Name:       "placeholder_func",
+		ReturnType: "",
+		File:       "test.py",
+		LineNumber: 25,
+	}
+	callGraph.Functions["test.placeholder_func"] = placeholderFunc
+
+	// Java function (should be skipped entirely)
+	javaFunc := &graph.Node{
+		ID:         "java",
+		Type:       "method_declaration",
+		Name:       "javaMethod",
+		ReturnType: "",
+		File:       "Test.java",
+		LineNumber: 1,
+	}
+	callGraph.Functions["com.Test.javaMethod"] = javaFunc
+
+	// Set up TypeEngine with return types
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.AddReturnTypesToEngine(map[string]*core.TypeInfo{
+		"test.inferred_func": {
+			TypeFQN:    "builtins.str",
+			Confidence: 1.0,
+			Source:     "return_literal",
+		},
+		"test.lowconf_func": {
+			TypeFQN:    "builtins.int",
+			Confidence: 0.2, // Below threshold
+			Source:     "return_variable",
+		},
+		"test.placeholder_func": {
+			TypeFQN:    "call:some_func",
+			Confidence: 0.8,
+			Source:     "return_function_call",
+		},
+	})
+
+	// Set up functions with return values tracking
+	functionsWithReturnValues := map[string]bool{
+		"test.inferred_func":    true,
+		"test.unknown_func":     true, // Has return <expr> but couldn't infer
+		"test.lowconf_func":     true,
+		"test.placeholder_func": true,
+		// test.void_func is NOT here — it's void
+	}
+
+	logger := output.NewLogger(output.VerbosityDefault)
+	populateInferredReturnTypes(callGraph, typeEngine, functionsWithReturnValues, logger)
+
+	// Verify results
+	assert.Equal(t, "int", annotatedFunc.ReturnType, "annotation should NOT be overwritten")
+	assert.Equal(t, "str", inferredFunc.ReturnType, "should be populated with normalized inferred type")
+	assert.Equal(t, "None", voidFunc.ReturnType, "void function should get None")
+	assert.Equal(t, "", unknownFunc.ReturnType, "function with uninferrable return should stay empty")
+	assert.Equal(t, "", lowConfFunc.ReturnType, "low-confidence should be skipped")
+	assert.Equal(t, "", placeholderFunc.ReturnType, "placeholder should be skipped")
+	assert.Equal(t, "", javaFunc.ReturnType, "Java function should be skipped")
+}
+
+func TestPopulateInferredReturnTypes_Integration(t *testing.T) {
+	// Full integration: parse real Python, build call graph, verify return types
+	tmpDir := t.TempDir()
+
+	mainPy := filepath.Join(tmpDir, "main.py")
+	err := os.WriteFile(mainPy, []byte(`
+def greet(name):
+    return f"Hello, {name}!"
+
+def get_count():
+    return 42
+
+def is_valid(x):
+    return x > 0
+
+def process():
+    greet("world")
+    print("done")
+
+def setup():
+    pass
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	moduleRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	require.NoError(t, err)
+
+	callGraph, err := BuildCallGraph(codeGraph, moduleRegistry, tmpDir, output.NewLogger(output.VerbosityDefault))
+	require.NoError(t, err)
+
+	// greet: returns f-string → str
+	if greetNode, ok := callGraph.Functions["main.greet"]; ok {
+		assert.Equal(t, "str", greetNode.ReturnType, "greet should return str from f-string")
+	} else {
+		t.Error("main.greet not found in call graph")
+	}
+
+	// get_count: returns int literal → int
+	if countNode, ok := callGraph.Functions["main.get_count"]; ok {
+		assert.Equal(t, "int", countNode.ReturnType, "get_count should return int")
+	} else {
+		t.Error("main.get_count not found in call graph")
+	}
+
+	// is_valid: returns comparison → bool
+	if validNode, ok := callGraph.Functions["main.is_valid"]; ok {
+		assert.Equal(t, "bool", validNode.ReturnType, "is_valid should return bool from comparison")
+	} else {
+		t.Error("main.is_valid not found in call graph")
+	}
+
+	// process: no return value → None (void)
+	if processNode, ok := callGraph.Functions["main.process"]; ok {
+		assert.Equal(t, "None", processNode.ReturnType, "process should return None (void)")
+	} else {
+		t.Error("main.process not found in call graph")
+	}
+
+	// setup: only `pass` → None (void)
+	if setupNode, ok := callGraph.Functions["main.setup"]; ok {
+		assert.Equal(t, "None", setupNode.ReturnType, "setup should return None (void)")
+	} else {
+		t.Error("main.setup not found in call graph")
+	}
 }

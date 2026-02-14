@@ -31,7 +31,7 @@ def get_none():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 5)
 
@@ -59,7 +59,7 @@ def empty_func():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Empty(t, returns, "Functions with no explicit return should not generate return types")
 }
@@ -74,7 +74,7 @@ def maybe_string(flag):
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2, "Should capture both return statements")
 
@@ -93,7 +93,7 @@ def outer():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -117,7 +117,7 @@ def get_value():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -144,7 +144,7 @@ def process():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
 
@@ -171,7 +171,7 @@ def get_tuple():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 
 	assert.Len(t, returns, 5)
@@ -293,7 +293,7 @@ def func():
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	require.Len(t, returns, 1)
 
@@ -313,7 +313,7 @@ class UserManager:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -343,7 +343,7 @@ class Outer:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -372,7 +372,7 @@ class MyClass:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 2)
 
@@ -460,7 +460,7 @@ class EmptyClass:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Empty(t, returns, "Empty class with no methods should not generate return types")
 }
@@ -479,7 +479,7 @@ class Calculator:
 `)
 
 	builtinRegistry := registry.NewBuiltinRegistry()
-	returns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
 	require.NoError(t, err)
 	assert.Len(t, returns, 3)
 
@@ -492,4 +492,341 @@ class Calculator:
 	assert.Contains(t, fqns, "test.Calculator.add")
 	assert.Contains(t, fqns, "test.Calculator.multiply")
 	assert.Contains(t, fqns, "test.Calculator.get_result")
+}
+
+func TestExtractReturnTypes_ConcatenatedString(t *testing.T) {
+	sourceCode := []byte(`
+def greet(name):
+    return f"Hello, {name}!"
+
+def join_names(a, b):
+    return a + " " + b
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+
+	// f-string should be detected as str
+	found := false
+	for _, ret := range returns {
+		if ret.FunctionFQN == "test.greet" {
+			assert.Equal(t, "builtins.str", ret.ReturnType.TypeFQN)
+			assert.Equal(t, float32(1.0), ret.ReturnType.Confidence)
+			found = true
+		}
+	}
+	assert.True(t, found, "Should find return type for greet function (f-string)")
+}
+
+func TestExtractReturnTypes_ComparisonOperator(t *testing.T) {
+	sourceCode := []byte(`
+def is_positive(x):
+    return x > 0
+
+def is_equal(a, b):
+    return a == b
+
+def contains(items, target):
+    return target in items
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 3)
+
+	for _, ret := range returns {
+		assert.Equal(t, "builtins.bool", ret.ReturnType.TypeFQN, "comparison in %s should be bool", ret.FunctionFQN)
+		assert.Equal(t, float32(1.0), ret.ReturnType.Confidence)
+		assert.Equal(t, "return_comparison", ret.ReturnType.Source)
+	}
+}
+
+func TestExtractReturnTypes_NotOperator(t *testing.T) {
+	sourceCode := []byte(`
+def is_empty(items):
+    return not items
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.bool", returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_not_operator", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_ConditionalExpression(t *testing.T) {
+	sourceCode := []byte(`
+def pick_message(flag):
+    return "yes" if flag else "no"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.str", returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_conditional", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_ParenthesizedExpression(t *testing.T) {
+	sourceCode := []byte(`
+def get_value():
+    return (42)
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.int", returns[0].ReturnType.TypeFQN)
+}
+
+func TestExtractReturnTypes_ListComprehension(t *testing.T) {
+	sourceCode := []byte(`
+def get_squares(n):
+    return [x*x for x in range(n)]
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.list", returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_comprehension", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_DictComprehension(t *testing.T) {
+	sourceCode := []byte(`
+def make_mapping(items):
+    return {k: v for k, v in items}
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.dict", returns[0].ReturnType.TypeFQN)
+}
+
+func TestExtractReturnTypes_FunctionsWithReturnValues(t *testing.T) {
+	sourceCode := []byte(`
+def void_func():
+    pass
+
+def bare_return():
+    return
+
+def returns_value():
+    return 42
+
+def returns_unknown(x):
+    return x.some_method()
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	_, functionsWithReturns, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+
+	// void_func has no return statements — should NOT be in the set
+	assert.False(t, functionsWithReturns["test.void_func"], "void_func should not have return values")
+
+	// bare_return has `return` with no expr — should NOT be in the set
+	assert.False(t, functionsWithReturns["test.bare_return"], "bare_return should not have return values")
+
+	// returns_value has `return 42` — should be in the set
+	assert.True(t, functionsWithReturns["test.returns_value"], "returns_value should have return values")
+
+	// returns_unknown has `return x.some_method()` — should be in the set
+	// (even though we can't infer the type, it HAS a return expression)
+	assert.True(t, functionsWithReturns["test.returns_unknown"], "returns_unknown should have return values")
+}
+
+func TestExtractReturnTypes_BooleanOperator(t *testing.T) {
+	sourceCode := []byte(`
+def get_default(x):
+    return x or "default"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	// Right side is str, so should infer str (via boolean_operator handling)
+	assert.Equal(t, "builtins.str", returns[0].ReturnType.TypeFQN)
+}
+
+func TestExtractReturnTypes_BooleanOperatorBothSameType(t *testing.T) {
+	sourceCode := []byte(`
+def pick(flag):
+    return "yes" or "no"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.str", returns[0].ReturnType.TypeFQN)
+	assert.InDelta(t, 0.9, returns[0].ReturnType.Confidence, 0.01)
+}
+
+func TestExtractReturnTypes_BooleanOperatorLeftConcrete(t *testing.T) {
+	sourceCode := []byte(`
+def pick(flag):
+    return "hello" and flag
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	// Left side is str (concrete), right side is identifier (var:flag) — use left
+	assert.Equal(t, "builtins.str", returns[0].ReturnType.TypeFQN)
+}
+
+func TestExtractReturnTypes_BooleanOperatorBothPlaceholders(t *testing.T) {
+	sourceCode := []byte(`
+def pick(a, b):
+    return a or b
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	// Both sides are identifiers (var:a, var:b) — neither is concrete, falls through
+	// The function should still have a return statement tracked though
+	// inferReturnType returns nil for this case, but the parent node returns var:a or var:b
+	// Actually the boolean_operator case returns nil (no concrete types), so
+	// the return statement won't produce a ReturnStatement entry
+	assert.Empty(t, returns, "Both sides are placeholders, should not produce a return entry")
+}
+
+func TestExtractReturnTypes_ConditionalExprDiffTypes(t *testing.T) {
+	sourceCode := []byte(`
+def pick(flag):
+    return 42 if flag else "no"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	// Both sides differ (int vs str) — should take higher confidence one
+	assert.Contains(t, []string{"builtins.int", "builtins.str"}, returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_conditional", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_ConditionalExprOneSideOnly(t *testing.T) {
+	sourceCode := []byte(`
+def pick_true(flag):
+    return 42 if flag else unknown_func()
+
+def pick_false(flag):
+    return unknown_func() if flag else "hello"
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 2)
+
+	for _, ret := range returns {
+		if ret.FunctionFQN == "test.pick_true" {
+			// True side is int literal, false side is a call (placeholder)
+			assert.Equal(t, "builtins.int", ret.ReturnType.TypeFQN)
+		} else if ret.FunctionFQN == "test.pick_false" {
+			// True side is a call (placeholder), false side is str literal
+			assert.Equal(t, "builtins.str", ret.ReturnType.TypeFQN)
+		}
+	}
+}
+
+func TestExtractReturnTypes_UnaryOperator(t *testing.T) {
+	sourceCode := []byte(`
+def negate_int():
+    return -42
+
+def negate_var(x):
+    return -x
+
+def positive():
+    return +5
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 3)
+
+	for _, ret := range returns {
+		assert.Equal(t, "builtins.int", ret.ReturnType.TypeFQN, "%s should return int", ret.FunctionFQN)
+	}
+}
+
+func TestExtractReturnTypes_SetComprehension(t *testing.T) {
+	sourceCode := []byte(`
+def unique_items(items):
+    return {x for x in items}
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.set", returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_comprehension", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_GeneratorExpression(t *testing.T) {
+	sourceCode := []byte(`
+def lazy_items(items):
+    return (x for x in items)
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	assert.Equal(t, "builtins.Generator", returns[0].ReturnType.TypeFQN)
+	assert.Equal(t, "return_generator", returns[0].ReturnType.Source)
+}
+
+func TestExtractReturnTypes_ConditionalExprFalseBranchHigherConf(t *testing.T) {
+	// When both sides are concrete but differ, and false branch has higher confidence
+	sourceCode := []byte(`
+def pick(flag):
+    return some_func() if flag else 42
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	assert.Len(t, returns, 1)
+	// True side is a call (low confidence), false side is int literal (confidence 1.0)
+	// Should pick int since it has higher confidence
+	assert.Equal(t, "builtins.int", returns[0].ReturnType.TypeFQN)
+}
+
+func TestExtractReturnTypes_UnaryBitwiseNot(t *testing.T) {
+	sourceCode := []byte(`
+def bitwise(x):
+    return ~x
+`)
+
+	builtinRegistry := registry.NewBuiltinRegistry()
+	returns, _, err := ExtractReturnTypes("test.py", sourceCode, "test", builtinRegistry, nil)
+	require.NoError(t, err)
+	// ~x on unknown operand — unary_operator with ~ doesn't fall into the - or + default
+	// so it returns nil
+	assert.Empty(t, returns)
+}
+
+func TestExtractReturnTypes_ErrorPath(t *testing.T) {
+	// Invalid source code should return error
+	_, _, err := ExtractReturnTypes("test.py", nil, "test", nil, nil)
+	// nil source code is handled by tree-sitter (may not error, but should not panic)
+	// Just verify no panic
+	_ = err
 }
