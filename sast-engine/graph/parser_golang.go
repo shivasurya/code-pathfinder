@@ -67,3 +67,44 @@ func parseGoMethodDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *Cod
 	graph.AddNode(node)
 	return node
 }
+
+// parseGoTypeDeclaration parses a Go type_declaration into CodeGraph nodes.
+// Handles grouped declarations (type ( A int; B string )) which produce multiple nodes.
+// Does not return a node — types don't set currentContext.
+func parseGoTypeDeclaration(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	types := golangpkg.ParseTypeDeclaration(tsNode, sourceCode)
+
+	for _, info := range types {
+		var nodeType string
+		var iface []string
+
+		switch info.Kind {
+		case "struct":
+			nodeType = "struct_definition"
+			iface = info.Fields
+		case "interface":
+			nodeType = "interface"
+			iface = info.Methods
+		default:
+			nodeType = "type_alias"
+		}
+
+		typeID := GenerateMethodID("class:"+info.Name, []string{}, file, info.LineNumber)
+		node := &Node{
+			ID:             typeID,
+			Type:           nodeType,
+			Name:           info.Name,
+			LineNumber:     info.LineNumber,
+			Modifier:       info.Visibility,
+			Interface:      iface,
+			File:           file,
+			isGoSourceFile: true,
+			SourceLocation: &SourceLocation{
+				File:      file,
+				StartByte: info.StartByte,
+				EndByte:   info.EndByte,
+			},
+		}
+		graph.AddNode(node)
+	}
+}
