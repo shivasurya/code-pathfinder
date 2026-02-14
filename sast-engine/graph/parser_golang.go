@@ -223,3 +223,51 @@ func parseGoAssignment(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph,
 		graph.AddNode(node)
 	}
 }
+
+// parseGoCallExpression parses a Go call_expression into a CodeGraph node.
+// CRITICAL: Creates an edge from currentContext to callNode to establish parent-child relationship.
+// Does not return a node — calls don't set currentContext.
+func parseGoCallExpression(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) {
+	info := golangpkg.ParseCallExpression(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Determine node type based on whether it's a selector expression
+	nodeType := "call"
+	if info.IsSelector {
+		nodeType = "method_expression"
+	}
+
+	// Generate unique ID for this call
+	callID := GenerateMethodID(info.FunctionName, info.Arguments, file, info.LineNumber)
+
+	node := &Node{
+		ID:                   callID,
+		Type:                 nodeType,
+		Name:                 info.FunctionName,
+		LineNumber:           info.LineNumber,
+		MethodArgumentsValue: info.Arguments,
+		IsExternal:           true,
+		File:                 file,
+		isGoSourceFile:       true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	// Store object name in Interface field for method calls
+	if info.IsSelector && info.ObjectName != "" {
+		node.Interface = []string{info.ObjectName}
+	}
+
+	graph.AddNode(node)
+
+	// CRITICAL: Create edge from parent function/method to this call
+	// This enables call graph construction in PR-08
+	if currentContext != nil {
+		graph.AddEdge(currentContext, node)
+	}
+}

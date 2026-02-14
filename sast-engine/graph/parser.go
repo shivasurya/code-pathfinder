@@ -103,8 +103,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "call_expression":
-		// Go function/method call expressions.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoCallExpression(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "short_var_declaration":
 		if isGoSourceFile {
