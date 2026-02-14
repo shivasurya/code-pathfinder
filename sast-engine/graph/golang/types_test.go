@@ -265,6 +265,97 @@ type (
 	}
 }
 
+func TestParseTypeDeclarationGeneric(t *testing.T) {
+	tests := []struct {
+		name           string
+		code           string
+		expectedName   string
+		expectedKind   string
+		expectedVis    string
+		minFieldCount  int
+		minMethodCount int
+	}{
+		{
+			name:          "Generic struct with single type param",
+			code:          "package p\ntype Set[T comparable] struct {\n\titems []T\n}",
+			expectedName:  "Set",
+			expectedKind:  "struct",
+			expectedVis:   "public",
+			minFieldCount: 1,
+		},
+		{
+			name:           "Generic interface with single type param",
+			code:           "package p\ntype Container[T any] interface {\n\tGet() T\n}",
+			expectedName:   "Container",
+			expectedKind:   "interface",
+			expectedVis:    "public",
+			minMethodCount: 1,
+		},
+		{
+			name:          "Generic struct with multiple type params",
+			code:          "package p\ntype Pair[K comparable, V any] struct {\n\tKey K\n\tValue V\n}",
+			expectedName:  "Pair",
+			expectedKind:  "struct",
+			expectedVis:   "public",
+			minFieldCount: 2,
+		},
+		{
+			name:         "Generic named type (slice)",
+			code:         `package p; type Vector[T any] []T`,
+			expectedName: "Vector",
+			expectedKind: "alias",
+			expectedVis:  "public",
+		},
+		{
+			name:         "Unexported generic struct",
+			code:         "package p\ntype stack[T any] struct {\n\titems []T\n}",
+			expectedName: "stack",
+			expectedKind: "struct",
+			expectedVis:  "private",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree, root := parseGoSnippet(t, tt.code)
+			defer tree.Close()
+
+			typeDecl := findNode(root, "type_declaration")
+			if typeDecl == nil {
+				t.Fatal("type_declaration not found")
+			}
+
+			types := ParseTypeDeclaration(typeDecl, []byte(tt.code))
+			if len(types) != 1 {
+				t.Fatalf("Expected 1 type, got %d", len(types))
+			}
+			info := types[0]
+
+			if info.Name != tt.expectedName {
+				t.Errorf("Name: expected %q, got %q", tt.expectedName, info.Name)
+			}
+			if info.Kind != tt.expectedKind {
+				t.Errorf("Kind: expected %q, got %q", tt.expectedKind, info.Kind)
+			}
+			if info.Visibility != tt.expectedVis {
+				t.Errorf("Visibility: expected %q, got %q", tt.expectedVis, info.Visibility)
+			}
+			if info.LineNumber == 0 {
+				t.Error("LineNumber should be > 0")
+			}
+			if info.StartByte == 0 && info.EndByte == 0 {
+				t.Error("StartByte/EndByte should be set")
+			}
+			if tt.minFieldCount > 0 && len(info.Fields) < tt.minFieldCount {
+				t.Errorf("Fields: expected at least %d, got %d: %v", tt.minFieldCount, len(info.Fields), info.Fields)
+			}
+			if tt.minMethodCount > 0 && len(info.Methods) < tt.minMethodCount {
+				t.Errorf("Methods: expected at least %d, got %d: %v", tt.minMethodCount, len(info.Methods), info.Methods)
+			}
+		})
+	}
+}
+
 func TestParseTypeDeclarationGroupedMixed(t *testing.T) {
 	code := `package p
 type (
