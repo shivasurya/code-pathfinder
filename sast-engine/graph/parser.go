@@ -7,8 +7,6 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	isJavaSourceFile := isJavaSourceFile(file)
 	isPythonSourceFile := isPythonSourceFile(file)
 	isGoSourceFile := isGoSourceFile(file)
-	// Suppress unused variable warning for isGoSourceFile until PR-03+ adds Go node extraction.
-	_ = isGoSourceFile
 
 	switch node.Type() {
 	// Python-specific node types
@@ -74,8 +72,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	case "method_declaration":
 		if isJavaSourceFile {
 			currentContext = parseJavaMethodDeclaration(node, sourceCode, graph, file)
+		} else if isGoSourceFile {
+			currentContext = parseGoMethodDeclaration(node, sourceCode, graph, file)
 		}
-		// Go method_declaration handled in PR-03
 
 	case "method_invocation":
 		parseJavaMethodInvocation(node, sourceCode, graph, currentContext, file)
@@ -94,8 +93,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	// Go-specific node types (stubs for PR-02+)
 	case "function_declaration":
-		// Go package-level function declarations. No collision with Python ("function_definition").
-		// Implementation: PR-03
+		if isGoSourceFile {
+			currentContext = parseGoFunctionDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "type_declaration":
 		// Go type declarations: struct, interface, type alias.
