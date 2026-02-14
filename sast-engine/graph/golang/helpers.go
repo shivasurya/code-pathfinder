@@ -21,7 +21,11 @@ type GoParams struct {
 //
 // Returns empty GoParams if paramList is nil.
 func ExtractParameters(paramList *sitter.Node, sourceCode []byte) GoParams {
-	result := GoParams{}
+	// Initialize with empty slices (not nil) for consistent behavior
+	result := GoParams{
+		Names: []string{},
+		Types: []string{},
+	}
 	if paramList == nil {
 		return result
 	}

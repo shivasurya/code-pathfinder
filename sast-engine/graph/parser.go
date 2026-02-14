@@ -123,16 +123,19 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "func_literal":
-		// Go anonymous functions / closures.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			currentContext = parseGoFuncLiteral(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "defer_statement":
-		// Go deferred function calls.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoDeferStatement(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "go_statement":
-		// Go goroutine launches.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoGoStatement(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "assignment_statement":
 		if isGoSourceFile {

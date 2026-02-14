@@ -271,3 +271,141 @@ func parseGoCallExpression(tsNode *sitter.Node, sourceCode []byte, graph *CodeGr
 		graph.AddEdge(currentContext, node)
 	}
 }
+
+// anonCounters maps parent context names to their anonymous function counter.
+// Used to generate unique $anon_N names scoped to each parent function.
+var anonCounters = make(map[string]int)
+
+// generateAnonName generates a unique anonymous function name scoped to the current context.
+// Returns "$anon_1", "$anon_2", etc. incrementing for each parent context.
+func generateAnonName(currentContext *Node) string {
+	if currentContext == nil {
+		// Top-level anonymous function (unlikely in Go)
+		anonCounters["$global"]++
+		return "$anon_" + string(rune(anonCounters["$global"]+'0'))
+	}
+
+	// Increment counter for this parent context
+	parentName := currentContext.Name
+	anonCounters[parentName]++
+	
+	// Format as "$anon_N"
+	return "$anon_" + string(rune(anonCounters[parentName]+'0'))
+}
+
+// parseGoFuncLiteral parses a Go func_literal into a CodeGraph node.
+// Returns the node so buildGraphFromAST can set it as currentContext for traversing the closure body.
+func parseGoFuncLiteral(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) *Node {
+	info := golangpkg.ParseFuncLiteral(tsNode, sourceCode)
+	if info == nil {
+		return nil
+	}
+
+	// Generate anonymous function name scoped to parent context
+	anonName := generateAnonName(currentContext)
+
+	methodID := GenerateMethodID("function:"+anonName, info.Params.Names, file, info.LineNumber)
+	node := &Node{
+		ID:                   methodID,
+		Type:                 "func_literal",
+		Name:                 anonName,
+		LineNumber:           info.LineNumber,
+		ReturnType:           info.ReturnType,
+		MethodArgumentsType:  info.Params.Types,
+		MethodArgumentsValue: info.Params.Names,
+		Modifier:             "private",
+		File:                 file,
+		isGoSourceFile:       true,
+	}
+	setGoSourceLocation(node, tsNode, file)
+	graph.AddNode(node)
+	
+	// Return node to become currentContext for closure body traversal
+	return node
+}
+
+// parseGoDeferStatement parses a Go defer_statement into a CodeGraph node.
+// Does not return a node — defer statements don't set currentContext.
+func parseGoDeferStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) {
+	info := golangpkg.ParseDeferStatement(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Determine node type based on whether it's a selector expression
+	nodeType := "defer_call"
+
+	// Generate unique ID for this defer call
+	callID := GenerateMethodID(info.FunctionName, info.Arguments, file, info.LineNumber)
+
+	node := &Node{
+		ID:                   callID,
+		Type:                 nodeType,
+		Name:                 info.FunctionName,
+		LineNumber:           info.LineNumber,
+		MethodArgumentsValue: info.Arguments,
+		IsExternal:           true,
+		File:                 file,
+		isGoSourceFile:       true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	// Store object name in Interface field for method calls
+	if info.IsSelector && info.ObjectName != "" {
+		node.Interface = []string{info.ObjectName}
+	}
+
+	graph.AddNode(node)
+
+	// Create edge from parent function to this defer call
+	if currentContext != nil {
+		graph.AddEdge(currentContext, node)
+	}
+}
+
+// parseGoGoStatement parses a Go go_statement into a CodeGraph node.
+// Does not return a node — go statements don't set currentContext.
+func parseGoGoStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string, currentContext *Node) {
+	info := golangpkg.ParseGoStatement(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Determine node type
+	nodeType := "go_call"
+
+	// Generate unique ID for this goroutine call
+	callID := GenerateMethodID(info.FunctionName, info.Arguments, file, info.LineNumber)
+
+	node := &Node{
+		ID:                   callID,
+		Type:                 nodeType,
+		Name:                 info.FunctionName,
+		LineNumber:           info.LineNumber,
+		MethodArgumentsValue: info.Arguments,
+		IsExternal:           true,
+		File:                 file,
+		isGoSourceFile:       true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	// Store object name in Interface field for method calls
+	if info.IsSelector && info.ObjectName != "" {
+		node.Interface = []string{info.ObjectName}
+	}
+
+	graph.AddNode(node)
+
+	// Create edge from parent function to this goroutine call
+	if currentContext != nil {
+		graph.AddEdge(currentContext, node)
+	}
+}
