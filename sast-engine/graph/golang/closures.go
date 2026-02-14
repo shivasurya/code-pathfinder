@@ -21,7 +21,7 @@ func ParseFuncLiteral(node *sitter.Node, sourceCode []byte) *ClosureInfo {
 	}
 
 	info := &ClosureInfo{
-		LineNumber: uint32(node.StartPoint().Row) + 1,
+		LineNumber: node.StartPoint().Row + 1,
 		StartByte:  node.StartByte(),
 		EndByte:    node.EndByte(),
 	}

@@ -21,7 +21,7 @@ func ParseReturnStatement(node *sitter.Node, sourceCode []byte) *ReturnInfo {
 
 	info := &ReturnInfo{
 		Values:     []string{},
-		LineNumber: uint32(node.StartPoint().Row) + 1,
+		LineNumber: node.StartPoint().Row + 1,
 		StartByte:  node.StartByte(),
 		EndByte:    node.EndByte(),
 	}
@@ -75,7 +75,7 @@ func ParseForStatement(node *sitter.Node, sourceCode []byte) *ForInfo {
 	}
 
 	info := &ForInfo{
-		LineNumber: uint32(node.StartPoint().Row) + 1,
+		LineNumber: node.StartPoint().Row + 1,
 		StartByte:  node.StartByte(),
 		EndByte:    node.EndByte(),
 	}
@@ -159,7 +159,7 @@ func ParseIfStatement(node *sitter.Node, sourceCode []byte) *IfInfo {
 	}
 
 	info := &IfInfo{
-		LineNumber: uint32(node.StartPoint().Row) + 1,
+		LineNumber: node.StartPoint().Row + 1,
 		StartByte:  node.StartByte(),
 		EndByte:    node.EndByte(),
 	}

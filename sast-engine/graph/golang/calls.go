@@ -23,7 +23,7 @@ func ParseCallExpression(node *sitter.Node, sourceCode []byte) *CallInfo {
 	}
 
 	info := &CallInfo{
-		LineNumber: uint32(node.StartPoint().Row) + 1,
+		LineNumber: node.StartPoint().Row + 1,
 		StartByte:  node.StartByte(),
 		EndByte:    node.EndByte(),
 	}

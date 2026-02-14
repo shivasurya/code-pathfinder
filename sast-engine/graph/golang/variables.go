@@ -43,8 +43,6 @@ func ParseVarDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 // extractVarSpec extracts variable info from a single var_spec node.
 // Handles multi-name declarations like "var x, y int".
 func extractVarSpec(spec *sitter.Node, sourceCode []byte) []*VarInfo {
-	var vars []*VarInfo
-
 	// Collect all identifier names
 	var names []string
 	for i := 0; i < int(spec.NamedChildCount()); i++ {
@@ -53,6 +51,9 @@ func extractVarSpec(spec *sitter.Node, sourceCode []byte) []*VarInfo {
 			names = append(names, child.Content(sourceCode))
 		}
 	}
+
+	// Preallocate vars with capacity
+	vars := make([]*VarInfo, 0, len(names))
 
 	// Get type and value
 	typeName := ""
