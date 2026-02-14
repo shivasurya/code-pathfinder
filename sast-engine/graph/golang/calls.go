@@ -70,7 +70,7 @@ func ParseCallExpression(node *sitter.Node, sourceCode []byte) *CallInfo {
 
 // ParseSelectorExpression extracts the object and field from a selector_expression.
 // Returns (object, field) as strings.
-// Example: "fmt.Println" returns ("fmt", "Println")
+// Example: "fmt.Println" returns ("fmt", "Println").
 func ParseSelectorExpression(node *sitter.Node, sourceCode []byte) (object string, field string) {
 	if node == nil || node.Type() != "selector_expression" {
 		return "", ""

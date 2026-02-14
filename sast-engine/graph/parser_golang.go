@@ -2,6 +2,7 @@ package graph
 
 import (
 	golangpkg "github.com/shivasurya/code-pathfinder/sast-engine/graph/golang"
+	"github.com/shivasurya/code-pathfinder/sast-engine/model"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -408,4 +409,145 @@ func parseGoGoStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph
 	if currentContext != nil {
 		graph.AddEdge(currentContext, node)
 	}
+}
+
+// parseGoReturnStatement parses a Go return_statement into a CodeGraph node.
+// Does not return a node — return statements don't set currentContext.
+// Uses GenerateSha256 for ID (NOT GenerateMethodID), following Python pattern.
+func parseGoReturnStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	info := golangpkg.ParseReturnStatement(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Generate unique ID using SHA256 (NOT GenerateMethodID)
+	uniqueID := "ReturnStmt:" + file + ":" + string(rune(info.LineNumber+'0'))
+	stmtID := GenerateSha256(uniqueID)
+
+	// Create a simple ReturnStmt model object
+	returnStmt := &model.ReturnStmt{
+		Stmt: model.Stmt{
+			NodeString: "return " + joinStrings(info.Values),
+		},
+	}
+
+	node := &Node{
+		ID:             stmtID,
+		Type:           "ReturnStmt",
+		Name:           "return",
+		LineNumber:     info.LineNumber,
+		ReturnStmt:     returnStmt,
+		File:           file,
+		isGoSourceFile: true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	graph.AddNode(node)
+	// NOTE: Do NOT create edges for statement nodes (Python pattern)
+}
+
+// joinStrings joins a slice of strings with commas (helper for statement parsing).
+func joinStrings(strs []string) string {
+	result := ""
+	for i, s := range strs {
+		if i > 0 {
+			result += ", "
+		}
+		result += s
+	}
+	return result
+}
+
+// parseGoForStatement parses a Go for_statement into a CodeGraph node.
+// Does not return a node — for statements don't set currentContext.
+// Uses GenerateSha256 for ID (NOT GenerateMethodID), following Python pattern.
+func parseGoForStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	info := golangpkg.ParseForStatement(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Generate unique ID using SHA256 (NOT GenerateMethodID)
+	uniqueID := "ForStmt:" + file + ":" + string(rune(info.LineNumber+'0'))
+	stmtID := GenerateSha256(uniqueID)
+
+	// Create node string representation
+	var nodeStr string
+	if info.IsRange {
+		nodeStr = "for " + info.Left + " := range " + info.Right
+	} else {
+		nodeStr = "for " + info.Init + "; " + info.Condition + "; " + info.Update
+	}
+
+	// Create a simple ForStmt model object
+	forStmt := &model.ForStmt{
+		ConditionalStmt: model.ConditionalStmt{
+			Stmt: model.Stmt{
+				NodeString: nodeStr,
+			},
+		},
+	}
+
+	node := &Node{
+		ID:             stmtID,
+		Type:           "ForStmt",
+		Name:           "for",
+		LineNumber:     info.LineNumber,
+		ForStmt:        forStmt,
+		File:           file,
+		isGoSourceFile: true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	graph.AddNode(node)
+	// NOTE: Do NOT create edges for statement nodes (Python pattern)
+}
+
+// parseGoIfStatement parses a Go if_statement into a CodeGraph node.
+// Does not return a node — if statements don't set currentContext.
+// Uses GenerateSha256 for ID (NOT GenerateMethodID), following Python pattern.
+func parseGoIfStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph, file string) {
+	info := golangpkg.ParseIfStatement(tsNode, sourceCode)
+	if info == nil {
+		return
+	}
+
+	// Generate unique ID using SHA256 (NOT GenerateMethodID)
+	uniqueID := "IfStmt:" + file + ":" + string(rune(info.LineNumber+'0'))
+	stmtID := GenerateSha256(uniqueID)
+
+	// Create a simple IfStmt model object
+	ifStmt := &model.IfStmt{
+		ConditionalStmt: model.ConditionalStmt{
+			Stmt: model.Stmt{
+				NodeString: "if " + info.Condition,
+			},
+		},
+	}
+
+	node := &Node{
+		ID:             stmtID,
+		Type:           "IfStmt",
+		Name:           "if",
+		LineNumber:     info.LineNumber,
+		IfStmt:         ifStmt,
+		File:           file,
+		isGoSourceFile: true,
+		SourceLocation: &SourceLocation{
+			File:      file,
+			StartByte: info.StartByte,
+			EndByte:   info.EndByte,
+		},
+	}
+
+	graph.AddNode(node)
+	// NOTE: Do NOT create edges for statement nodes (Python pattern)
 }

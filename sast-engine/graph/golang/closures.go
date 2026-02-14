@@ -14,7 +14,7 @@ type ClosureInfo struct {
 }
 
 // ParseFuncLiteral parses a Go func_literal node into a ClosureInfo.
-// Example: func(x int) int { return x + 1 }
+// Example: func(x int) int { return x + 1 }.
 func ParseFuncLiteral(node *sitter.Node, sourceCode []byte) *ClosureInfo {
 	if node == nil || node.Type() != "func_literal" {
 		return nil

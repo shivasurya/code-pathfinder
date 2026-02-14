@@ -180,7 +180,7 @@ func TestParseSelectorExpressionNil(t *testing.T) {
 	assert.Equal(t, "", field)
 }
 
-// Helper: recursively find the first call_expression node
+// Helper: recursively find the first call_expression node.
 func findCallExpression(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil
@@ -197,7 +197,7 @@ func findCallExpression(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// Helper: recursively find the first selector_expression node
+// Helper: recursively find the first selector_expression node.
 func findSelectorExpression(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil

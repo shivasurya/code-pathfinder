@@ -251,7 +251,7 @@ func TestParseGoStatementNil(t *testing.T) {
 	assert.Nil(t, info)
 }
 
-// Helper: recursively find the first func_literal node
+// Helper: recursively find the first func_literal node.
 func findFuncLiteral(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil
@@ -268,7 +268,7 @@ func findFuncLiteral(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// Helper: recursively find the first defer_statement node
+// Helper: recursively find the first defer_statement node.
 func findDeferStatement(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil
@@ -285,7 +285,7 @@ func findDeferStatement(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// Helper: recursively find the first go_statement node
+// Helper: recursively find the first go_statement node.
 func findGoStatement(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil
