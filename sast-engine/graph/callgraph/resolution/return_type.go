@@ -18,27 +18,32 @@ type ReturnStatement struct {
 }
 
 // ExtractReturnTypes analyzes return statements in all functions in a file.
+// Returns:
+//   - []*ReturnStatement: return statements with inferred types
+//   - map[string]bool: set of function FQNs that have at least one `return <expr>` statement
+//     (used to distinguish void functions from functions with uninferrable returns)
 func ExtractReturnTypes(
 	filePath string,
 	sourceCode []byte,
 	modulePath string,
 	builtinRegistry *registry.BuiltinRegistry,
 	importMap *core.ImportMap,
-) ([]*ReturnStatement, error) {
+) ([]*ReturnStatement, map[string]bool, error) {
 	parser := sitter.NewParser()
 	parser.SetLanguage(python.GetLanguage())
 	defer parser.Close()
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer tree.Close()
 
 	var returns []*ReturnStatement
-	traverseForReturns(tree.RootNode(), sourceCode, filePath, modulePath, "", &returns, builtinRegistry, importMap)
+	functionsWithReturnValues := make(map[string]bool)
+	traverseForReturns(tree.RootNode(), sourceCode, filePath, modulePath, "", &returns, functionsWithReturnValues, builtinRegistry, importMap)
 
-	return returns, nil
+	return returns, functionsWithReturnValues, nil
 }
 
 func traverseForReturns(
@@ -48,6 +53,7 @@ func traverseForReturns(
 	modulePath string,
 	currentFunction string,
 	returns *[]*ReturnStatement,
+	functionsWithReturnValues map[string]bool,
 	builtinRegistry *registry.BuiltinRegistry,
 	importMap *core.ImportMap,
 ) {
@@ -100,6 +106,9 @@ func traverseForReturns(
 		}
 
 		if valueNode != nil {
+			// Track that this function has at least one return <expr> statement
+			functionsWithReturnValues[newFunction] = true
+
 			returnType := inferReturnType(valueNode, sourceCode, modulePath, builtinRegistry, importMap)
 			if returnType != nil {
 				stmt := &ReturnStatement{
@@ -118,7 +127,7 @@ func traverseForReturns(
 
 	// Recurse with updated function context
 	for i := 0; i < int(node.ChildCount()); i++ {
-		traverseForReturns(node.Child(i), sourceCode, filePath, modulePath, newFunction, returns, builtinRegistry, importMap)
+		traverseForReturns(node.Child(i), sourceCode, filePath, modulePath, newFunction, returns, functionsWithReturnValues, builtinRegistry, importMap)
 	}
 }
 
@@ -136,7 +145,7 @@ func inferReturnType(
 	nodeType := node.Type()
 
 	switch nodeType {
-	case "string":
+	case "string", "concatenated_string":
 		return &core.TypeInfo{
 			TypeFQN:    "builtins.str",
 			Confidence: 1.0,
@@ -260,6 +269,153 @@ func inferReturnType(
 			TypeFQN:    "var:" + varName,
 			Confidence: 0.2,
 			Source:     "return_variable",
+		}
+
+	case "not_operator":
+		// `return not x` always produces bool
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.bool",
+			Confidence: 1.0,
+			Source:     "return_not_operator",
+		}
+
+	case "comparison_operator":
+		// `return x > 5`, `return a == b`, `return x in items`
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.bool",
+			Confidence: 1.0,
+			Source:     "return_comparison",
+		}
+
+	case "boolean_operator":
+		// `return x or y`, `return a and b`
+		// Try to infer from operands — both sides often have the same type
+		if node.ChildCount() >= 3 {
+			left := inferReturnType(node.Child(0), sourceCode, modulePath, builtinRegistry, importMap)
+			right := inferReturnType(node.Child(2), sourceCode, modulePath, builtinRegistry, importMap)
+
+			// Filter out placeholders (var: and call: prefixes)
+			leftConcrete := left != nil && !strings.HasPrefix(left.TypeFQN, "var:") && !strings.HasPrefix(left.TypeFQN, "call:")
+			rightConcrete := right != nil && !strings.HasPrefix(right.TypeFQN, "var:") && !strings.HasPrefix(right.TypeFQN, "call:")
+
+			if leftConcrete && rightConcrete && left.TypeFQN == right.TypeFQN {
+				return &core.TypeInfo{
+					TypeFQN:    left.TypeFQN,
+					Confidence: left.Confidence * 0.9,
+					Source:     "return_boolean_operator",
+				}
+			}
+			// If only one side has a concrete type, use it with lower confidence
+			if leftConcrete {
+				return &core.TypeInfo{
+					TypeFQN:    left.TypeFQN,
+					Confidence: left.Confidence * 0.7,
+					Source:     "return_boolean_operator",
+				}
+			}
+			if rightConcrete {
+				return &core.TypeInfo{
+					TypeFQN:    right.TypeFQN,
+					Confidence: right.Confidence * 0.7,
+					Source:     "return_boolean_operator",
+				}
+			}
+		}
+
+	case "conditional_expression":
+		// `return x if cond else y` — tree-sitter children: [body, "if", condition, "else", orelse]
+		if node.ChildCount() >= 5 {
+			trueExpr := inferReturnType(node.Child(0), sourceCode, modulePath, builtinRegistry, importMap)
+			falseExpr := inferReturnType(node.Child(4), sourceCode, modulePath, builtinRegistry, importMap)
+			if trueExpr != nil && falseExpr != nil && trueExpr.TypeFQN == falseExpr.TypeFQN {
+				return &core.TypeInfo{
+					TypeFQN:    trueExpr.TypeFQN,
+					Confidence: trueExpr.Confidence * 0.9,
+					Source:     "return_conditional",
+				}
+			}
+			// If both sides differ, take the higher confidence one
+			if trueExpr != nil && falseExpr != nil {
+				if trueExpr.Confidence >= falseExpr.Confidence {
+					return &core.TypeInfo{
+						TypeFQN:    trueExpr.TypeFQN,
+						Confidence: trueExpr.Confidence * 0.6,
+						Source:     "return_conditional",
+					}
+				}
+				return &core.TypeInfo{
+					TypeFQN:    falseExpr.TypeFQN,
+					Confidence: falseExpr.Confidence * 0.6,
+					Source:     "return_conditional",
+				}
+			}
+			if trueExpr != nil {
+				return trueExpr
+			}
+			if falseExpr != nil {
+				return falseExpr
+			}
+		}
+
+	case "parenthesized_expression":
+		// `return (expr)` — unwrap and infer inner expression
+		if node.ChildCount() >= 1 {
+			// Find the inner expression (skip parentheses)
+			for i := 0; i < int(node.ChildCount()); i++ {
+				child := node.Child(i)
+				if child.Type() != "(" && child.Type() != ")" {
+					return inferReturnType(child, sourceCode, modulePath, builtinRegistry, importMap)
+				}
+			}
+		}
+
+	case "unary_operator":
+		// `return -x` — check the operator
+		if node.ChildCount() >= 2 {
+			op := node.Child(0).Content(sourceCode)
+			if op == "-" || op == "+" || op == "~" {
+				// Unary numeric operators — infer from operand
+				operand := inferReturnType(node.Child(1), sourceCode, modulePath, builtinRegistry, importMap)
+				if operand != nil && (operand.TypeFQN == "builtins.int" || operand.TypeFQN == "builtins.float") {
+					return operand
+				}
+				// Default to int for unary - on unknown operand
+				if op == "-" || op == "+" {
+					return &core.TypeInfo{
+						TypeFQN:    "builtins.int",
+						Confidence: 0.5,
+						Source:     "return_unary_operator",
+					}
+				}
+			}
+		}
+
+	case "list_comprehension":
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.list",
+			Confidence: 1.0,
+			Source:     "return_comprehension",
+		}
+
+	case "dictionary_comprehension":
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.dict",
+			Confidence: 1.0,
+			Source:     "return_comprehension",
+		}
+
+	case "set_comprehension":
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.set",
+			Confidence: 1.0,
+			Source:     "return_comprehension",
+		}
+
+	case "generator_expression":
+		return &core.TypeInfo{
+			TypeFQN:    "builtins.Generator",
+			Confidence: 0.9,
+			Source:     "return_generator",
 		}
 	}
 

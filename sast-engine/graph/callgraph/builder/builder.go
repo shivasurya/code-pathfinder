@@ -163,6 +163,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	returnJobs := make(chan returnJob, 100)
 	var returnMutex sync.Mutex
 	allReturnStatements := make([]*resolution.ReturnStatement, 0)
+	allFunctionsWithReturnValues := make(map[string]bool)
 	var processedFiles atomic.Int64
 	numWorkers := getOptimalWorkerCount()
 	var wg sync.WaitGroup
@@ -189,16 +190,19 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 				// Store ImportMap for later use in attribute placeholder resolution (P0 fix)
 				typeEngine.AddImportMap(job.filePath, importMap)
 
-				returns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins, importMap)
+				returns, functionsWithReturns, err := resolution.ExtractReturnTypes(job.filePath, sourceCode, job.modulePath, typeEngine.Builtins, importMap)
 				if err != nil {
 					continue
 				}
 
+				returnMutex.Lock()
 				if len(returns) > 0 {
-					returnMutex.Lock()
 					allReturnStatements = append(allReturnStatements, returns...)
-					returnMutex.Unlock()
 				}
+				for fqn := range functionsWithReturns {
+					allFunctionsWithReturnValues[fqn] = true
+				}
+				returnMutex.Unlock()
 
 				// Progress tracking
 				count := processedFiles.Add(1)
@@ -224,6 +228,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Merge return types and add to engine
 	mergedReturns := resolution.MergeReturnTypes(allReturnStatements)
 	typeEngine.AddReturnTypesToEngine(mergedReturns)
+
+	// Back-populate inferred return types to function nodes and detect void functions
+	populateInferredReturnTypes(callGraph, typeEngine, allFunctionsWithReturnValues, logger)
 
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass - PARALLELIZED)
 	logger.Debug("Extracting variable assignments (parallel)...")
@@ -1486,4 +1493,90 @@ func extractMajorMinor(version string) string {
 		return parts[0]
 	}
 	return ""
+}
+
+// populateInferredReturnTypes back-populates inferred return types from the TypeInferenceEngine
+// to function Node.ReturnType fields and detects void functions (no return <expr>).
+//
+// For each Python function/method in the call graph:
+//  1. If it already has an annotation-based ReturnType, skip it
+//  2. If TypeEngine has an inferred return type with sufficient confidence, use it
+//  3. If no inferred type AND the function has no return <expr> statements, mark as "None" (void)
+func populateInferredReturnTypes(
+	callGraph *core.CallGraph,
+	typeEngine *resolution.TypeInferenceEngine,
+	functionsWithReturnValues map[string]bool,
+	logger *output.Logger,
+) {
+	populated := 0
+	voidDetected := 0
+
+	for fqn, node := range callGraph.Functions {
+		// Only process Python functions (skip Java etc.)
+		if !strings.HasSuffix(node.File, ".py") {
+			continue
+		}
+
+		// Skip if already has annotation-based return type
+		if node.ReturnType != "" {
+			continue
+		}
+
+		// Try to use inferred return type from TypeEngine
+		typeInfo, ok := typeEngine.GetReturnType(fqn)
+		if ok && typeInfo != nil && typeInfo.Confidence >= 0.5 {
+			// Skip unresolved placeholders
+			if strings.HasPrefix(typeInfo.TypeFQN, "call:") || strings.HasPrefix(typeInfo.TypeFQN, "var:") {
+				// Function has return expressions but we couldn't resolve the type — leave empty
+				continue
+			}
+			node.ReturnType = NormalizeReturnType(typeInfo.TypeFQN)
+			populated++
+			continue
+		}
+
+		// No inferred type — check if this is a void function
+		// A function is void if it has NO return <expr> statements at all
+		if !functionsWithReturnValues[fqn] {
+			node.ReturnType = "None"
+			voidDetected++
+		}
+		// If it HAS return expressions but we couldn't infer the type, leave empty (honest unknown)
+	}
+
+	logger.Debug("Populated %d inferred return types, detected %d void functions", populated, voidDetected)
+}
+
+// NormalizeReturnType converts fully-qualified builtin type names to their short form.
+// This normalizes the internal representation (e.g., "builtins.str") to the user-facing
+// form (e.g., "str") that matches what developers write in annotations.
+func NormalizeReturnType(typeFQN string) string {
+	switch typeFQN {
+	case "builtins.str":
+		return "str"
+	case "builtins.int":
+		return "int"
+	case "builtins.float":
+		return "float"
+	case "builtins.bool":
+		return "bool"
+	case "builtins.list":
+		return "list"
+	case "builtins.dict":
+		return "dict"
+	case "builtins.set":
+		return "set"
+	case "builtins.tuple":
+		return "tuple"
+	case "builtins.NoneType":
+		return "None"
+	case "builtins.bytes":
+		return "bytes"
+	case "builtins.complex":
+		return "complex"
+	case "builtins.Generator":
+		return "Generator"
+	default:
+		return typeFQN
+	}
 }
