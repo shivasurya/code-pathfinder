@@ -21,6 +21,7 @@ func parseBlockStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph,
 		SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		BlockStmt:        blockNode,
 	}
 	graph.AddNode(blockStmtNode)
@@ -42,6 +43,7 @@ func parseReturnStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph
 			SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 			File:             file,
 			isJavaSourceFile: isJava,
+			Language:         "java",
 			ReturnStmt:       returnNode,
 		}
 		graph.AddNode(returnStmtNode)
@@ -64,6 +66,7 @@ func parseBreakStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph,
 			SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 			File:             file,
 			isJavaSourceFile: isJava,
+			Language:         "java",
 			BreakStmt:        breakNode,
 		}
 		graph.AddNode(breakStmtNode)
@@ -86,6 +89,7 @@ func parseContinueStatement(node *sitter.Node, sourceCode []byte, graph *CodeGra
 			SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 			File:             file,
 			isJavaSourceFile: isJava,
+			Language:         "java",
 			ContinueStmt:     continueNode,
 		}
 		graph.AddNode(continueStmtNode)
@@ -108,6 +112,7 @@ func parseAssertStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph
 			SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 			File:             file,
 			isJavaSourceFile: isJava,
+			Language:         "java",
 			AssertStmt:       assertNode,
 		}
 		graph.AddNode(assertStmtNode)
@@ -127,6 +132,7 @@ func parseYieldStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph,
 		SourceLocation: &SourceLocation{File: file, StartByte: node.StartByte(), EndByte: node.EndByte()},
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		YieldStmt:        yieldNode,
 	}
 	graph.AddNode(yieldStmtNode)
@@ -158,6 +164,7 @@ func parseIfStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph, fi
 		LineNumber:       node.StartPoint().Row + 1,
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		IfStmt:           &ifNode,
 	}
 	graph.AddNode(ifStmtNode)
@@ -180,6 +187,7 @@ func parseWhileStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph,
 		LineNumber:       node.StartPoint().Row + 1,
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		WhileStmt:        &whileNode,
 	}
 	graph.AddNode(whileStmtNode)
@@ -202,6 +210,7 @@ func parseDoStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph, fi
 		LineNumber:       node.StartPoint().Row + 1,
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		DoStmt:           &doWhileNode,
 	}
 	graph.AddNode(doWhileStmtNode)
@@ -233,6 +242,7 @@ func parseForStatement(node *sitter.Node, sourceCode []byte, graph *CodeGraph, f
 		LineNumber:       node.StartPoint().Row + 1,
 		File:             file,
 		isJavaSourceFile: isJavaSourceFile,
+		Language:         "java",
 		ForStmt:          &forNode,
 	}
 	graph.AddNode(forStmtNode)

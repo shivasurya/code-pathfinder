@@ -17,6 +17,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/docker"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/shivasurya/code-pathfinder/sast-engine/ruleset"
@@ -242,6 +243,26 @@ Examples:
 		}
 		logger.Statistic("Callgraph built: %d functions, %d call sites",
 			len(cg.Functions), countTotalCallSites(cg))
+
+		// Build Go call graph if go.mod exists
+		goModPath := filepath.Join(projectPath, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			logger.Debug("Detected go.mod, building Go call graph...")
+
+			goRegistry, err := resolution.BuildGoModuleRegistry(projectPath)
+			if err != nil {
+				logger.Warning("Failed to build Go module registry: %v", err)
+			} else {
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry)
+				if err != nil {
+					logger.Warning("Failed to build Go call graph: %v", err)
+				} else {
+					builder.MergeCallGraphs(cg, goCG)
+					logger.Statistic("Go call graph merged: %d functions, %d call sites",
+						len(goCG.Functions), countTotalCallSites(goCG))
+				}
+			}
+		}
 
 		// Step 4: Load Python DSL rules
 		logger.StartProgress("Loading rules", -1)
