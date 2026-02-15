@@ -27,6 +27,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "return_statement":
 		parseReturnStatement(node, sourceCode, graph, file, isJavaSourceFile, isPythonSourceFile)
+		if isGoSourceFile {
+			parseGoReturnStatement(node, sourceCode, graph, file)
+		}
 
 	case "break_statement":
 		parseBreakStatement(node, sourceCode, graph, file, isJavaSourceFile, isPythonSourceFile)
@@ -56,6 +59,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "if_statement":
 		parseIfStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isGoSourceFile {
+			parseGoIfStatement(node, sourceCode, graph, file)
+		}
 
 	case "while_statement":
 		parseWhileStatement(node, sourceCode, graph, file, isJavaSourceFile)
@@ -65,6 +71,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "for_statement":
 		parseForStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isGoSourceFile {
+			parseGoForStatement(node, sourceCode, graph, file)
+		}
 
 	case "binary_expression":
 		currentContext = parseJavaBinaryExpression(node, sourceCode, graph, file, isJavaSourceFile)
@@ -103,8 +112,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "call_expression":
-		// Go function/method call expressions.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoCallExpression(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "short_var_declaration":
 		if isGoSourceFile {
@@ -122,16 +132,19 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "func_literal":
-		// Go anonymous functions / closures.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			currentContext = parseGoFuncLiteral(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "defer_statement":
-		// Go deferred function calls.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoDeferStatement(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "go_statement":
-		// Go goroutine launches.
-		// Implementation: PR-06
+		if isGoSourceFile {
+			parseGoGoStatement(node, sourceCode, graph, file, currentContext)
+		}
 
 	case "assignment_statement":
 		if isGoSourceFile {

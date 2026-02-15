@@ -16,7 +16,7 @@ type VarInfo struct {
 }
 
 // ParseVarDeclaration extracts variable information from a Go var_declaration node.
-// Handles: var x int, var x = 1, var ( x int; y string ), var x, y int
+// Handles: var x int, var x = 1, var ( x int; y string ), var x, y int.
 func ParseVarDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 	var vars []*VarInfo
 
@@ -43,8 +43,6 @@ func ParseVarDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 // extractVarSpec extracts variable info from a single var_spec node.
 // Handles multi-name declarations like "var x, y int".
 func extractVarSpec(spec *sitter.Node, sourceCode []byte) []*VarInfo {
-	var vars []*VarInfo
-
 	// Collect all identifier names
 	var names []string
 	for i := 0; i < int(spec.NamedChildCount()); i++ {
@@ -53,6 +51,9 @@ func extractVarSpec(spec *sitter.Node, sourceCode []byte) []*VarInfo {
 			names = append(names, child.Content(sourceCode))
 		}
 	}
+
+	// Preallocate vars with capacity
+	vars := make([]*VarInfo, 0, len(names))
 
 	// Get type and value
 	typeName := ""
@@ -85,7 +86,7 @@ func extractVarSpec(spec *sitter.Node, sourceCode []byte) []*VarInfo {
 }
 
 // ParseShortVarDeclaration extracts variable information from a short_var_declaration node.
-// Handles: name := "Alice", x, y := foo(), _, err := foo()
+// Handles: name := "Alice", x, y := foo(), _, err := foo().
 func ParseShortVarDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 	var vars []*VarInfo
 
@@ -137,7 +138,7 @@ func ParseShortVarDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 }
 
 // ParseConstDeclaration extracts constant information from a const_declaration node.
-// Handles: const Pi = 3.14, const ( A = iota; B; C )
+// Handles: const Pi = 3.14, const ( A = iota; B; C ).
 func ParseConstDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 	var consts []*VarInfo
 
@@ -174,7 +175,7 @@ func ParseConstDeclaration(node *sitter.Node, sourceCode []byte) []*VarInfo {
 }
 
 // ParseAssignment extracts assignment information from an assignment_statement node.
-// Handles: x = x + 1, x, y = 1, 2
+// Handles: x = x + 1, x, y = 1, 2.
 func ParseAssignment(node *sitter.Node, sourceCode []byte) []*VarInfo {
 	var vars []*VarInfo
 
