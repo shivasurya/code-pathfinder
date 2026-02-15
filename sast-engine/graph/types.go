@@ -35,6 +35,7 @@ type Node struct {
 	File                 string
 	isJavaSourceFile     bool
 	isPythonSourceFile   bool
+	isGoSourceFile       bool
 	ThrowsExceptions     []string
 	Annotation           []string
 	JavaDoc              *model.Javadoc

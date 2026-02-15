@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/shivasurya/code-pathfinder/sast-engine/model"
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/golang"
 	"github.com/smacker/go-tree-sitter/java"
 	"github.com/smacker/go-tree-sitter/python"
 	"os"
@@ -1350,4 +1351,330 @@ func getKeys(m map[string]bool) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// Go-specific tests
+
+func TestIsGoSourceFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		want     bool
+	}{
+		{"Valid Go file", "main.go", true},
+		{"Go file with path", "/path/to/main.go", true},
+		{"Go file with Windows path", "C:\\path\\to\\main.go", true},
+		{"File with multiple dots", "my.test.file.go", true},
+		{"Hidden Go file", ".hidden.go", true},
+		{"Go test file", "main_test.go", true},
+		{"Non-Go file", "main.py", false},
+		{"Java file", "Example.java", false},
+		{"No extension", "gofile", false},
+		{"Empty string", "", false},
+		{"Go-like extension", "file.goo", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isGoSourceFile(tt.filename); got != tt.want {
+				t.Errorf("isGoSourceFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetFilesIncludesGo(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_go")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files of various types
+	testFiles := []struct {
+		name       string
+		content    string
+		shouldFind bool
+	}{
+		{"main.go", "package main", true},
+		{"handler.go", "package handlers", true},
+		{"script.py", "print('hello')", true},
+		{"Test.java", "public class Test {}", true},
+		{"readme.txt", "text file", false},
+		{"subdir/util.go", "package subdir", true},
+	}
+
+	for _, tf := range testFiles {
+		path := filepath.Join(tempDir, tf.name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(tf.content), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	// Count files by extension
+	goCount := 0
+	pyCount := 0
+	javaCount := 0
+	for _, file := range files {
+		switch filepath.Ext(file) {
+		case ".go":
+			goCount++
+		case ".py":
+			pyCount++
+		case ".java":
+			javaCount++
+		}
+	}
+
+	if goCount != 3 {
+		t.Errorf("Expected 3 Go files, got %d", goCount)
+	}
+	if pyCount != 1 {
+		t.Errorf("Expected 1 Python file, got %d", pyCount)
+	}
+	if javaCount != 1 {
+		t.Errorf("Expected 1 Java file, got %d", javaCount)
+	}
+	if len(files) != 5 {
+		t.Errorf("Expected 5 total files, got %d", len(files))
+	}
+}
+
+func TestGetFilesSkipsVendor(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_vendor")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a Go file at the root and inside vendor/
+	rootFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(rootFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	vendorDir := filepath.Join(tempDir, "vendor", "github.com", "dep")
+	if err := os.MkdirAll(vendorDir, 0755); err != nil {
+		t.Fatalf("Failed to create vendor dir: %v", err)
+	}
+	vendorFile := filepath.Join(vendorDir, "dep.go")
+	if err := os.WriteFile(vendorFile, []byte("package dep"), 0644); err != nil {
+		t.Fatalf("Failed to create vendor file: %v", err)
+	}
+
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Errorf("Expected 1 file (vendor/ should be skipped), got %d: %v", len(files), files)
+	}
+}
+
+func TestGetFilesSkipsTestdata(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_testdata")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	rootFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(rootFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	testdataDir := filepath.Join(tempDir, "testdata")
+	if err := os.MkdirAll(testdataDir, 0755); err != nil {
+		t.Fatalf("Failed to create testdata dir: %v", err)
+	}
+	testdataFile := filepath.Join(testdataDir, "fixture.go")
+	if err := os.WriteFile(testdataFile, []byte("package testdata"), 0644); err != nil {
+		t.Fatalf("Failed to create testdata file: %v", err)
+	}
+
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Errorf("Expected 1 file (testdata/ should be skipped), got %d: %v", len(files), files)
+	}
+}
+
+func TestGetFilesSkipsUnderscoreDirs(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_get_files_underscore")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	rootFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(rootFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	underscoreDir := filepath.Join(tempDir, "_build")
+	if err := os.MkdirAll(underscoreDir, 0755); err != nil {
+		t.Fatalf("Failed to create underscore dir: %v", err)
+	}
+	underscoreFile := filepath.Join(underscoreDir, "output.go")
+	if err := os.WriteFile(underscoreFile, []byte("package build"), 0644); err != nil {
+		t.Fatalf("Failed to create underscore dir file: %v", err)
+	}
+
+	files, err := getFiles(tempDir)
+	if err != nil {
+		t.Fatalf("getFiles returned an error: %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Errorf("Expected 1 file (_build/ should be skipped), got %d: %v", len(files), files)
+	}
+}
+
+func TestInitializeWithGoFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_go_dir")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	goCode := `package main
+
+import "fmt"
+
+const MaxRetries = 3
+
+var version = "1.0"
+
+func main() {
+	fmt.Println("hello")
+}
+
+func add(x, y int) int {
+	return x + y
+}
+`
+	goFile := filepath.Join(tmpDir, "main.go")
+	if err := os.WriteFile(goFile, []byte(goCode), 0644); err != nil {
+		t.Fatalf("Failed to write Go file: %v", err)
+	}
+
+	graph := Initialize(tmpDir, nil)
+
+	if graph == nil {
+		t.Fatal("Initialize should return a non-nil graph")
+	}
+
+	// PR-01 only verifies that parsing doesn't panic.
+	// No Go-specific nodes are extracted yet (that's PR-03+).
+	// The graph should exist but may be empty since stubs don't create nodes.
+}
+
+func TestInitializeWithGoFileDoesNotBreakPython(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_mixed_go_py")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a Python file
+	pyCode := `def hello():
+    return "world"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "script.py"), []byte(pyCode), 0644); err != nil {
+		t.Fatalf("Failed to write Python file: %v", err)
+	}
+
+	// Create a Go file
+	goCode := `package main
+
+func main() {
+	println("hello")
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(goCode), 0644); err != nil {
+		t.Fatalf("Failed to write Go file: %v", err)
+	}
+
+	graph := Initialize(tmpDir, nil)
+
+	if graph == nil {
+		t.Fatal("Initialize should return a non-nil graph")
+	}
+
+	// Verify Python function was still extracted correctly
+	var foundPythonFunc bool
+	for _, node := range graph.Nodes {
+		if node.Type == "function_definition" && node.Name == "hello" && node.isPythonSourceFile {
+			foundPythonFunc = true
+			break
+		}
+	}
+
+	if !foundPythonFunc {
+		t.Error("Python function 'hello' should still be extracted in mixed Go+Python project")
+	}
+}
+
+func TestBuildGraphFromASTGoFileNoPanic(t *testing.T) {
+	goCode := `package main
+
+import "fmt"
+
+const MaxSize = 100
+
+var version = "1.0"
+
+type Server struct {
+	Host string
+	Port int
+}
+
+func NewServer(host string, port int) *Server {
+	return &Server{Host: host, Port: port}
+}
+
+func (s *Server) Start() error {
+	fmt.Println("starting")
+	return nil
+}
+
+func main() {
+	s := NewServer("localhost", 8080)
+	s.Start()
+	defer fmt.Println("done")
+	go func() {
+		fmt.Println("goroutine")
+	}()
+}
+`
+	parser := sitter.NewParser()
+	parser.SetLanguage(golang.GetLanguage())
+	defer parser.Close()
+
+	tree, err := parser.ParseCtx(context.Background(), nil, []byte(goCode))
+	if err != nil {
+		t.Fatalf("Failed to parse Go source code: %v", err)
+	}
+	defer tree.Close()
+
+	root := tree.RootNode()
+	graph := NewCodeGraph()
+
+	// This should not panic — all Go node types hit stubs or are recursively traversed.
+	buildGraphFromAST(root, []byte(goCode), graph, nil, "main.go")
+
+	// PR-01: No nodes expected (stubs don't create nodes).
+	// The important thing is it doesn't crash.
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/golang"
 	"github.com/smacker/go-tree-sitter/java"
 	"github.com/smacker/go-tree-sitter/python"
 )
@@ -95,6 +96,8 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 				parser.SetLanguage(java.GetLanguage())
 			case ".py":
 				parser.SetLanguage(python.GetLanguage())
+			case ".go":
+				parser.SetLanguage(golang.GetLanguage())
 			default:
 				// NOTE: This case is currently unreachable because getFiles() only returns
 				// .java, .py, Dockerfile*, and docker-compose* files. This exists as defensive

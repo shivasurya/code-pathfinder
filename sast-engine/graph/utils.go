@@ -110,6 +110,11 @@ func isPythonSourceFile(filename string) bool {
 	return filepath.Ext(filename) == ".py"
 }
 
+// isGoSourceFile checks if a file is a Go source file.
+func isGoSourceFile(filename string) bool {
+	return filepath.Ext(filename) == ".go"
+}
+
 //nolint:all
 func hasAccess(node *sitter.Node, variableName string, sourceCode []byte) bool {
 	if node == nil {
@@ -248,29 +253,40 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
-// getFiles walks through a directory and returns all source files (Java, Python, Dockerfile, docker-compose).
+// getFiles walks through a directory and returns all source files (Java, Python, Go, Dockerfile, docker-compose).
+// It skips vendor/, testdata/, node_modules/, .git/, and directories starting with "_".
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
-			// append java, python, dockerfile, and docker-compose files
-			ext := filepath.Ext(path)
-			base := filepath.Base(path)
-			baseLower := strings.ToLower(base)
-
-			switch {
-			case ext == ".java" || ext == ".py":
-				files = append(files, path)
-			case strings.HasPrefix(baseLower, "dockerfile"):
-				// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
-				files = append(files, path)
-			case strings.Contains(baseLower, "docker-compose") && (ext == ".yml" || ext == ".yaml"):
-				// Match docker-compose.yml, docker-compose.yaml, etc.
-				files = append(files, path)
+		// Skip directories that should never be scanned
+		if info.IsDir() {
+			name := info.Name()
+			switch name {
+			case "vendor", "testdata", "node_modules", ".git":
+				return filepath.SkipDir
 			}
+			if strings.HasPrefix(name, "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// append java, python, go, dockerfile, and docker-compose files
+		ext := filepath.Ext(path)
+		base := filepath.Base(path)
+		baseLower := strings.ToLower(base)
+
+		switch {
+		case ext == ".java" || ext == ".py" || ext == ".go":
+			files = append(files, path)
+		case strings.HasPrefix(baseLower, "dockerfile"):
+			// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
+			files = append(files, path)
+		case strings.Contains(baseLower, "docker-compose") && (ext == ".yml" || ext == ".yaml"):
+			// Match docker-compose.yml, docker-compose.yaml, etc.
+			files = append(files, path)
 		}
 		return nil
 	})

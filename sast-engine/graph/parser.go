@@ -6,7 +6,10 @@ import sitter "github.com/smacker/go-tree-sitter"
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	isPythonSourceFile := isPythonSourceFile(file)
-	
+	isGoSourceFile := isGoSourceFile(file)
+	// Suppress unused variable warning for isGoSourceFile until PR-03+ adds Go node extraction.
+	_ = isGoSourceFile
+
 	switch node.Type() {
 	// Python-specific node types
 	case "function_definition":
@@ -69,7 +72,10 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		currentContext = parseJavaBinaryExpression(node, sourceCode, graph, file, isJavaSourceFile)
 
 	case "method_declaration":
-		currentContext = parseJavaMethodDeclaration(node, sourceCode, graph, file)
+		if isJavaSourceFile {
+			currentContext = parseJavaMethodDeclaration(node, sourceCode, graph, file)
+		}
+		// Go method_declaration handled in PR-03
 
 	case "method_invocation":
 		parseJavaMethodInvocation(node, sourceCode, graph, currentContext, file)
@@ -85,6 +91,47 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 
 	case "object_creation_expression":
 		parseJavaObjectCreation(node, sourceCode, graph, file)
+
+	// Go-specific node types (stubs for PR-02+)
+	case "function_declaration":
+		// Go package-level function declarations. No collision with Python ("function_definition").
+		// Implementation: PR-03
+
+	case "type_declaration":
+		// Go type declarations: struct, interface, type alias.
+		// Implementation: PR-04
+
+	case "call_expression":
+		// Go function/method call expressions.
+		// Implementation: PR-06
+
+	case "short_var_declaration":
+		// Go short variable declarations (:=).
+		// Implementation: PR-05
+
+	case "var_declaration":
+		// Go var declarations.
+		// Implementation: PR-05
+
+	case "const_declaration":
+		// Go const declarations.
+		// Implementation: PR-05
+
+	case "func_literal":
+		// Go anonymous functions / closures.
+		// Implementation: PR-06
+
+	case "defer_statement":
+		// Go deferred function calls.
+		// Implementation: PR-06
+
+	case "go_statement":
+		// Go goroutine launches.
+		// Implementation: PR-06
+
+	case "assignment_statement":
+		// Go assignment statements (=).
+		// Implementation: PR-05
 	}
 
 	// Recursively process child nodes
