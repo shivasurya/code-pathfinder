@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/mcp"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
@@ -81,16 +83,36 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to build call graph: %w", err)
 	}
 
+	// 4. Build Go call graph if go.mod exists and merge with Python call graph
+	goModPath := filepath.Join(projectPath, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		logger.Debug("Detected go.mod, building Go call graph...")
+
+		goRegistry, err := resolution.BuildGoModuleRegistry(projectPath)
+		if err != nil {
+			logger.Warning("Failed to build Go module registry: %v", err)
+		} else {
+			goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry)
+			if err != nil {
+				logger.Warning("Failed to build Go call graph: %v", err)
+			} else {
+				builder.MergeCallGraphs(callGraph, goCG)
+				fmt.Fprintf(os.Stderr, "Go call graph merged: %d functions, %d call sites\n",
+					len(goCG.Functions), len(goCG.CallSites))
+			}
+		}
+	}
+
 	buildTime := time.Since(start)
 	fmt.Fprintf(os.Stderr, "Index built in %v\n", buildTime)
-	fmt.Fprintf(os.Stderr, "  Functions: %d\n", len(callGraph.Functions))
+	fmt.Fprintf(os.Stderr, "  Total functions: %d\n", len(callGraph.Functions))
 	fmt.Fprintf(os.Stderr, "  Call edges: %d\n", len(callGraph.Edges))
 	fmt.Fprintf(os.Stderr, "  Modules: %d\n", len(moduleRegistry.Modules))
 
-	// 4. Create MCP server
+	// 5. Create MCP server
 	server := mcp.NewServer(projectPath, pythonVersion, callGraph, moduleRegistry, codeGraph, buildTime, disableAnalytics)
 
-	// 5. Start appropriate transport
+	// 6. Start appropriate transport
 	if useHTTP {
 		return runHTTPServer(server, address)
 	}

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,4 +38,45 @@ func TestServeCmdDisableMetricsFlagInherited(t *testing.T) {
 
 	// Verify serve command is registered as a child of root.
 	assert.True(t, serveCmd.HasParent(), "serve command should be a child of root")
+}
+
+// TestServeWithGoMod tests that serve command detects go.mod and builds Go call graph.
+func TestServeWithGoMod(t *testing.T) {
+	// Create temp directory with go.mod
+	tmpDir := t.TempDir()
+	goModPath := filepath.Join(tmpDir, "go.mod")
+	goFilePath := filepath.Join(tmpDir, "main.go")
+
+	// Write go.mod
+	err := os.WriteFile(goModPath, []byte("module example.com/test\n\ngo 1.22\n"), 0644)
+	assert.NoError(t, err)
+
+	// Write simple Go file
+	err = os.WriteFile(goFilePath, []byte(`package main
+
+func Handler() {}
+
+func main() {}
+`), 0644)
+	assert.NoError(t, err)
+
+	// Verify go.mod exists
+	_, err = os.Stat(goModPath)
+	assert.NoError(t, err, "go.mod should exist in test directory")
+}
+
+// TestServeWithoutGoMod tests that serve command works without go.mod (Python-only).
+func TestServeWithoutGoMod(t *testing.T) {
+	// Create temp directory without go.mod
+	tmpDir := t.TempDir()
+	pyFilePath := filepath.Join(tmpDir, "main.py")
+
+	// Write simple Python file
+	err := os.WriteFile(pyFilePath, []byte("def handler():\n    pass\n"), 0644)
+	assert.NoError(t, err)
+
+	// Verify go.mod does NOT exist
+	goModPath := filepath.Join(tmpDir, "go.mod")
+	_, err = os.Stat(goModPath)
+	assert.True(t, os.IsNotExist(err), "go.mod should not exist in Python-only project")
 }

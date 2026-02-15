@@ -3376,3 +3376,160 @@ func TestToolFindSymbol_ParameterNilParametersMap(t *testing.T) {
 	assert.True(t, isError)
 	assert.Contains(t, result, "No symbols found")
 }
+
+// TestGetSymbolKind_GoTypes tests Go symbol type mapping for PR-12.
+func TestGetSymbolKind_GoTypes(t *testing.T) {
+	tests := []struct {
+		symbolType       string
+		expectedKind     int
+		expectedKindName string
+	}{
+		{"function_declaration", SymbolKindFunction, "Function"},
+		{"init_function", SymbolKindFunction, "Function"},
+		{"struct_definition", SymbolKindStruct, "Struct"},
+		{"type_alias", SymbolKindTypeParam, "TypeAlias"},
+		{"package_variable", SymbolKindVariable, "Variable"},
+		{"variable_assignment", SymbolKindVariable, "Variable"},
+		{"func_literal", SymbolKindFunction, "Function"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.symbolType, func(t *testing.T) {
+			kind, kindName := getSymbolKind(tt.symbolType)
+			assert.Equal(t, tt.expectedKind, kind, "symbol kind mismatch for Go type %s", tt.symbolType)
+			assert.Equal(t, tt.expectedKindName, kindName, "symbol kind name mismatch for Go type %s", tt.symbolType)
+		})
+	}
+}
+
+// TestToolFindSymbol_GoTypes tests that Go types are in validTypes.
+func TestToolFindSymbol_GoTypes(t *testing.T) {
+	server := createTestServer()
+
+	// Test each Go type is valid and doesn't error
+	goTypes := []string{
+		"function_declaration",
+		"init_function",
+		"struct_definition",
+		"type_alias",
+		"package_variable",
+		"variable_assignment",
+		"func_literal",
+	}
+
+	for _, goType := range goTypes {
+		t.Run(goType, func(t *testing.T) {
+			result, isError := server.toolFindSymbol(map[string]interface{}{"type": goType})
+
+			// Should not error about invalid type
+			if isError {
+				assert.NotContains(t, result, "Invalid symbol type", "Go type %s should be in validTypes", goType)
+			}
+		})
+	}
+}
+
+// TestToolFindSymbol_GoSymbols tests finding Go symbols in call graph.
+func TestToolFindSymbol_GoSymbols(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	// Add Go function
+	callGraph.Functions["example.com/test.Handler"] = &graph.Node{
+		Type:       "function_declaration",
+		Name:       "Handler",
+		File:       "/test/main.go",
+		LineNumber: 6,
+		Language:   "go",
+		Modifier:   "public",
+	}
+
+	// Add Go init function
+	callGraph.Functions["example.com/test.init"] = &graph.Node{
+		Type:       "init_function",
+		Name:       "init",
+		File:       "/test/main.go",
+		LineNumber: 25,
+		Language:   "go",
+	}
+
+	moduleRegistry := &core.ModuleRegistry{
+		Modules: map[string]string{},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
+
+	// Test finding Go function by type
+	result, isError := server.toolFindSymbol(map[string]interface{}{
+		"type": "function_declaration",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "example.com/test.Handler")
+	assert.Contains(t, result, "Function") // LSP kind name
+
+	// Parse and verify
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+	matches := parsed["matches"].([]interface{})
+	assert.Greater(t, len(matches), 0)
+
+	match := matches[0].(map[string]interface{})
+	assert.Equal(t, "function_declaration", match["type"])
+	assert.Equal(t, float64(SymbolKindFunction), match["symbol_kind"])
+	assert.Equal(t, "Function", match["symbol_kind_name"])
+
+	// Test finding Go function by name
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"name": "Handler",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "example.com/test.Handler")
+	assert.Contains(t, result, "main.go")
+
+	// Test finding Go init function
+	result, isError = server.toolFindSymbol(map[string]interface{}{
+		"type": "init_function",
+	})
+
+	assert.False(t, isError)
+	assert.Contains(t, result, "example.com/test.init")
+}
+
+// TestToolGetIndexInfo_GoSymbols tests get_index_info with Go symbols.
+func TestToolGetIndexInfo_GoSymbols(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	// Add Go functions
+	callGraph.Functions["example.com/test.Handler"] = &graph.Node{
+		Type:     "function_declaration",
+		Language: "go",
+	}
+
+	callGraph.Functions["example.com/test.main"] = &graph.Node{
+		Type:     "function_declaration",
+		Language: "go",
+	}
+
+	moduleRegistry := &core.ModuleRegistry{
+		Modules: map[string]string{},
+	}
+
+	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
+
+	result, isError := server.toolGetIndexInfo()
+
+	assert.False(t, isError)
+
+	// Parse and verify Go symbol types appear
+	var parsed map[string]interface{}
+	json.Unmarshal([]byte(result), &parsed)
+
+	symbolsByType := parsed["symbols_by_type"].(map[string]interface{})
+	assert.Contains(t, symbolsByType, "function_declaration")
+	assert.Equal(t, float64(2), symbolsByType["function_declaration"])
+
+	// Verify LSP kind mapping
+	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	assert.Contains(t, symbolsByLSPKind, "Function")
+}
