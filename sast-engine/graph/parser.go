@@ -98,8 +98,9 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "type_declaration":
-		// Go type declarations: struct, interface, type alias.
-		// Implementation: PR-04
+		if isGoSourceFile {
+			parseGoTypeDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "call_expression":
 		// Go function/method call expressions.
