@@ -34,7 +34,7 @@ REFERENCES:
 - https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
 """
 
-from codepathfinder import rule, calls, flows
+from codepathfinder import rule, calls
 
 @rule(
     id="GO-SEC-001",
@@ -43,21 +43,6 @@ from codepathfinder import rule, calls, flows
     owasp="A03:2021"
 )
 def go_sql_injection():
-    """Detects potential SQL injection in Go database calls where
-    user input flows to database query functions without parameterization."""
-    return flows(
-        from_sources=[
-            calls("net/http.Request.FormValue"),
-            calls("net/http.Request.URL.Query"),
-            calls("*gin.Context.Query"),
-            calls("*gin.Context.Param"),
-        ],
-        to_sinks=[
-            calls("database/sql.DB.Query"),
-            calls("database/sql.DB.Exec"),
-            calls("database/sql.DB.QueryRow"),
-            calls("database/sql.Tx.Query"),
-            calls("database/sql.Tx.Exec"),
-        ],
-        scope="global"
-    )
+    """Detects potential SQL injection in Go database calls.
+    Flags calls to database query methods that may execute SQL."""
+    return calls("*Query", "*Exec", "*QueryRow")

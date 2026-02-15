@@ -42,7 +42,7 @@ REFERENCES:
 - https://cwe.mitre.org/data/definitions/22.html
 """
 
-from codepathfinder import rule, calls, flows
+from codepathfinder import rule, calls
 
 @rule(
     id="GO-SEC-003",
@@ -51,20 +51,6 @@ from codepathfinder import rule, calls, flows
     owasp="A01:2021"
 )
 def go_path_traversal():
-    """Detects user input used in file system paths without sanitization."""
-    return flows(
-        from_sources=[
-            calls("net/http.Request.FormValue"),
-            calls("net/http.Request.URL.Query"),
-            calls("*gin.Context.Query"),
-            calls("*gin.Context.Param"),
-        ],
-        to_sinks=[
-            calls("os.Open"),
-            calls("os.OpenFile"),
-            calls("os.ReadFile"),
-            calls("os.Create"),
-            calls("os.MkdirAll"),
-        ],
-        scope="global"
-    )
+    """Detects file system operations that may be vulnerable to path traversal.
+    Flags calls to os.Open, os.ReadFile, and related functions."""
+    return calls("*Open", "*OpenFile", "*ReadFile", "*Create", "*MkdirAll")

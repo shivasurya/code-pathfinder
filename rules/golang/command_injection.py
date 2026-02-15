@@ -33,7 +33,7 @@ REFERENCES:
 - https://cwe.mitre.org/data/definitions/78.html
 """
 
-from codepathfinder import rule, calls, flows
+from codepathfinder import rule, calls
 
 @rule(
     id="GO-SEC-002",
@@ -42,17 +42,6 @@ from codepathfinder import rule, calls, flows
     owasp="A03:2021"
 )
 def go_command_injection():
-    """Detects user input flowing to OS command execution functions."""
-    return flows(
-        from_sources=[
-            calls("net/http.Request.FormValue"),
-            calls("net/http.Request.URL.Query"),
-            calls("*gin.Context.Query"),
-            calls("*gin.Context.Param"),
-        ],
-        to_sinks=[
-            calls("os/exec.Command"),
-            calls("os/exec.CommandContext"),
-        ],
-        scope="global"
-    )
+    """Detects OS command execution that may be vulnerable to injection.
+    Flags calls to exec.Command and exec.CommandContext."""
+    return calls("*Command", "*CommandContext")
