@@ -85,6 +85,22 @@ func getSymbolKind(symbolType string) (int, string) {
 	case "variable_declaration":
 		return SymbolKindVariable, "Variable"
 
+	// Go types
+	case "function_declaration":
+		return SymbolKindFunction, "Function"
+	case "init_function":
+		return SymbolKindFunction, "Function"
+	case "struct_definition":
+		return SymbolKindStruct, "Struct"
+	case "type_alias":
+		return SymbolKindTypeParam, "TypeAlias"
+	case "package_variable":
+		return SymbolKindVariable, "Variable"
+	case "variable_assignment":
+		return SymbolKindVariable, "Variable"
+	case "func_literal":
+		return SymbolKindFunction, "Function"
+
 	// Unknown/default
 	default:
 		return SymbolKindVariable, "Unknown"
@@ -96,7 +112,7 @@ func (s *Server) getToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name: "get_index_info",
-			Description: `Get comprehensive statistics about the indexed Python codebase. Use this FIRST to understand the project scope before making other queries.
+			Description: `Get comprehensive statistics about the indexed codebase (Python, Go, Java). Use this FIRST to understand the project scope before making other queries.
 
 Returns:
 - Project info: project_path, python_version, indexed_at, build_time_seconds
@@ -114,13 +130,15 @@ Use when: Starting analysis, understanding project size and structure, verifying
 		},
 		{
 			Name: "find_symbol",
-			Description: `Search and filter Python symbols by name and/or type across 13 symbol types. Supports partial matching. Results are paginated.
+			Description: `Search and filter symbols by name and/or type. Supports Python, Go, and Java. Supports partial matching. Results are paginated.
 
 Symbol Types Available:
-- Functions: function_definition, method, constructor, property, special_method
-- Classes: class_definition, interface (Protocol/ABC), enum, dataclass
-- Variables: module_variable, constant (UPPERCASE), class_field
-- Parameters: parameter (typed function/method parameters)
+- Python Functions: function_definition, method, constructor, property, special_method
+- Python Classes: class_definition, interface (Protocol/ABC), enum, dataclass
+- Python Variables: module_variable, constant (UPPERCASE), class_field, parameter
+- Go Functions: function_declaration, init_function, method, func_literal
+- Go Types: struct_definition, interface, type_alias
+- Go Variables: package_variable, constant, variable_assignment
 
 Returns: For ALL symbols: fqn, file, line, type, symbol_kind (LSP integer), symbol_kind_name (human-readable).
 For functions/methods: return_type, parameters, decorators. For classes: superclass, interfaces. For fields: inferred_type, confidence, assigned_in.
@@ -523,6 +541,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	// Validate type names.
 	validTypes := map[string]bool{
+		// Python types
 		"function_definition": true,
 		"method":              true,
 		"constructor":         true,
@@ -536,11 +555,19 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		"constant":            true,
 		"class_field":         true,
 		"parameter":           true,
+		// Go types
+		"function_declaration": true,
+		"init_function":        true,
+		"struct_definition":    true,
+		"type_alias":           true,
+		"package_variable":     true,
+		"variable_assignment":  true,
+		"func_literal":         true,
 	}
 
 	for _, t := range typeFilter {
 		if !validTypes[t] {
-			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field","parameter"]}`, t), true
+			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field","parameter","function_declaration","init_function","struct_definition","type_alias","package_variable","variable_assignment","func_literal"]}`, t), true
 		}
 	}
 
