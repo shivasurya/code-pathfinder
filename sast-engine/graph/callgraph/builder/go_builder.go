@@ -118,7 +118,7 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 
 	for _, node := range codeGraph.Nodes {
 		// Only index Go function-like nodes
-		if node.Type != "function_definition" && node.Type != "method_declaration" && node.Type != "func_literal" {
+		if node.Type != "function_declaration" && node.Type != "method_declaration" && node.Type != "func_literal" {
 			continue
 		}
 
@@ -147,19 +147,18 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 	callSites := make([]*CallSiteInternal, 0)
 
 	for _, node := range codeGraph.Nodes {
-		if node.Type != "call_expression" {
+		// Go call nodes are either "call" or "method_expression"
+		if node.Type != "call" && node.Type != "method_expression" {
 			continue
 		}
 
-		// Extract function name and object name from MethodArgumentsValue
-		// MethodArgumentsValue[0] = FunctionName (e.g., "Println", "Helper")
-		// MethodArgumentsValue[1] = ObjectName (e.g., "fmt", "utils", "")
-		var functionName, objectName string
-		if len(node.MethodArgumentsValue) > 0 {
-			functionName = node.MethodArgumentsValue[0]
-		}
-		if len(node.MethodArgumentsValue) > 1 {
-			objectName = node.MethodArgumentsValue[1]
+		// Extract function name and object name
+		// Function name is in node.Name
+		// Object name is in node.Interface[0] for method calls
+		functionName := node.Name
+		var objectName string
+		if len(node.Interface) > 0 {
+			objectName = node.Interface[0]
 		}
 
 		// Find containing function to get caller FQN
@@ -272,7 +271,7 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 	}
 
 	switch node.Type {
-	case "function_definition":
+	case "function_declaration":
 		// Package-level function: module.Function
 		return importPath + "." + node.Name
 
@@ -324,7 +323,7 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 		}
 
 		// Check if parent is a function-like node
-		if parent.Type == "function_definition" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
 			return parent
 		}
 

@@ -1,0 +1,14 @@
+{
+    "category": "golang",
+    "language": "Go",
+    "description": "Security rules for Go applications including SQL injection, command injection, path traversal, and credential management vulnerabilities",
+    "bundles": {
+        "security": {
+            "name": "Go Security Rules",
+            "description": "Critical and high-severity security vulnerabilities in Go code (GO-SEC-001 through GO-SEC-004)",
+            "severity_filter": ["CRITICAL", "HIGH"],
+            "recommended": true,
+            "tags": ["security", "go", "cwe", "owasp", "injection", "credentials"]
+        }
+    }
+}
