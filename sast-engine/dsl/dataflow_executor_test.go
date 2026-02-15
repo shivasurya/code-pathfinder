@@ -394,3 +394,108 @@ func TestDataflowExecutor_PatternMatching(t *testing.T) {
 		assert.True(t, executor.matchesPattern("anything", "*"))
 	})
 }
+
+// TestFindMatchingCalls_TargetFQN tests the bug fix for matching against TargetFQN
+// instead of Target for Go call sites (PR-10 bug fix).
+func TestFindMatchingCalls_TargetFQN(t *testing.T) {
+	t.Run("matches against TargetFQN when available (Go)", func(t *testing.T) {
+		// Setup: Go call graph with TargetFQN populated
+		cg := core.NewCallGraph()
+		cg.CallSites["main.handler"] = []core.CallSite{
+			{
+				Target:    "FormValue",         // Simple method name
+				TargetFQN: "net/http.Request.FormValue", // Full FQN for Go
+				Location:  core.Location{File: "main.go", Line: 10},
+			},
+			{
+				Target:    "Query",
+				TargetFQN: "database/sql.DB.Query",
+				Location:  core.Location{File: "main.go", Line: 15},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"net/http.Request.FormValue"}}},
+			Sinks:      []CallMatcherIR{{Patterns: []string{"database/sql.DB.Query"}}},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+
+		// Test that patterns match against TargetFQN
+		sourcePatterns := executor.extractPatterns(ir.Sources)
+		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		assert.Len(t, sourceCalls, 1, "Should match net/http.Request.FormValue")
+		assert.Equal(t, "FormValue", sourceCalls[0].CallSite.Target)
+		assert.Equal(t, "net/http.Request.FormValue", sourceCalls[0].CallSite.TargetFQN)
+
+		sinkPatterns := executor.extractPatterns(ir.Sinks)
+		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		assert.Len(t, sinkCalls, 1, "Should match database/sql.DB.Query")
+		assert.Equal(t, "Query", sinkCalls[0].CallSite.Target)
+		assert.Equal(t, "database/sql.DB.Query", sinkCalls[0].CallSite.TargetFQN)
+	})
+
+	t.Run("falls back to Target when TargetFQN is empty (Python/Java)", func(t *testing.T) {
+		// Setup: Python call graph without TargetFQN
+		cg := core.NewCallGraph()
+		cg.CallSites["app.views.index"] = []core.CallSite{
+			{
+				Target:    "request.GET", // Python-style
+				TargetFQN: "",            // Empty for Python
+				Location:  core.Location{File: "views.py", Line: 20},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
+			Sinks:      []CallMatcherIR{},
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+
+		// Test that patterns match against Target when TargetFQN is empty
+		sourcePatterns := executor.extractPatterns(ir.Sources)
+		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		assert.Len(t, sourceCalls, 1, "Should match request.GET via Target field")
+		assert.Equal(t, "request.GET", sourceCalls[0].CallSite.Target)
+	})
+
+	t.Run("wildcard patterns work with TargetFQN", func(t *testing.T) {
+		// Setup: Go call sites with wildcards
+		cg := core.NewCallGraph()
+		cg.CallSites["main.handler"] = []core.CallSite{
+			{
+				Target:    "FormValue",
+				TargetFQN: "net/http.Request.FormValue",
+				Location:  core.Location{File: "main.go", Line: 10},
+			},
+			{
+				Target:    "Query",
+				TargetFQN: "database/sql.DB.Query",
+				Location:  core.Location{File: "main.go", Line: 15},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    []CallMatcherIR{{Patterns: []string{"*FormValue"}}}, // Wildcard pattern
+			Sinks:      []CallMatcherIR{{Patterns: []string{"*Query"}}},     // Wildcard pattern
+			Sanitizers: []CallMatcherIR{},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+
+		// Test wildcard matching works with TargetFQN
+		sourcePatterns := executor.extractPatterns(ir.Sources)
+		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		assert.Len(t, sourceCalls, 1, "Should match *FormValue against TargetFQN")
+
+		sinkPatterns := executor.extractPatterns(ir.Sinks)
+		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		assert.Len(t, sinkCalls, 1, "Should match *Query against TargetFQN")
+	})
+}

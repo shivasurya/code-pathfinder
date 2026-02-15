@@ -13,20 +13,21 @@ func TestBuildGoCallGraph(t *testing.T) {
 	// Create a simple mock CodeGraph with functions and a builtin call
 	mainFunc := &graph.Node{
 		ID:         "main",
-		Type:       "function_definition",
+		Type:       "function_declaration", // Fixed: was "function_definition"
 		Name:       "main",
 		File:       "/project/main.go",
 		LineNumber: 10,
 	}
 	// Builtin call - these don't require imports
 	callNode := &graph.Node{
-		ID:                  "call1",
-		Type:                "call_expression",
-		File:                "/project/main.go",
-		LineNumber:          12,
-		MethodArgumentsValue: []string{"append", ""}, // builtin call
+		ID:         "call1",
+		Type:       "call", // Fixed: was "call_expression"
+		Name:       "append", // Fixed: use Name field
+		File:       "/project/main.go",
+		LineNumber: 12,
 	}
 
+	// Set up parent-child relationship so findContainingGoFunction works
 	edge := &graph.Edge{From: mainFunc, To: callNode}
 	mainFunc.OutgoingEdges = []*graph.Edge{edge}
 
@@ -73,7 +74,7 @@ func TestIndexGoFunctions(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "main",
 					File:       "/project/main.go",
 					LineNumber: 10,
@@ -100,7 +101,7 @@ func TestIndexGoFunctions(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "process",
 					File:       "/project/main.go",
 					LineNumber: 10,
@@ -126,7 +127,7 @@ func TestIndexGoFunctions(t *testing.T) {
 				},
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "main",
 					File:       "/project/main.go",
 					LineNumber: 10,
@@ -193,17 +194,18 @@ func TestExtractGoCallSites(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "main",
 					File:       "/project/main.go",
 					LineNumber: 10,
 				},
 				{
-					ID:                  "call1",
-					Type:                "call_expression",
-					File:                "/project/main.go",
-					LineNumber:          12,
-					MethodArgumentsValue: []string{"Println", "fmt"},
+					ID:        "call1",
+					Type:      "method_expression", // Fixed: was "call_expression"
+					Name:      "Println", // Fixed: use Name field
+					Interface: []string{"fmt"}, // Fixed: use Interface field for object name
+					File:      "/project/main.go",
+					LineNumber: 12,
 				},
 			},
 			expectedCallCount: 1,
@@ -214,17 +216,17 @@ func TestExtractGoCallSites(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "main",
 					File:       "/project/main.go",
 					LineNumber: 10,
 				},
 				{
-					ID:                  "call1",
-					Type:                "call_expression",
-					File:                "/project/main.go",
-					LineNumber:          12,
-					MethodArgumentsValue: []string{"helper", ""},
+					ID:         "call1",
+					Type:       "call", // Fixed: was "call_expression"
+					Name:       "helper", // Fixed: use Name field
+					File:       "/project/main.go",
+					LineNumber: 12,
 				},
 			},
 			expectedCallCount: 1,
@@ -235,7 +237,7 @@ func TestExtractGoCallSites(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "func1",
-					Type:       "function_definition",
+					Type:       "function_declaration", // Fixed: was "function_definition"
 					Name:       "main",
 					File:       "/project/main.go",
 					LineNumber: 10,
@@ -404,7 +406,7 @@ func TestBuildGoFQN(t *testing.T) {
 		{
 			name: "package function FQN",
 			node: &graph.Node{
-				Type: "function_definition",
+				Type: "function_declaration", // Fixed: was "function_definition"
 				Name: "main",
 				File: "/project/cmd/main.go",
 			},

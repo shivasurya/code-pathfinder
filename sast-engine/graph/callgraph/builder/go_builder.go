@@ -323,7 +323,7 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 		}
 
 		// Check if parent is a function-like node
-		if parent.Type == "function_definition" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
 			return parent
 		}
 
