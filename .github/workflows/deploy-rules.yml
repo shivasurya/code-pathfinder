@@ -82,7 +82,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "🔄 Purging Cloudflare cache for updated rule bundles..."
+            # Count files to purge
+            FILE_COUNT=$(find dist/rules -name "*.zip" | wc -l | tr -d ' ')
+            echo "🔄 Purging Cloudflare cache for $FILE_COUNT rule bundle(s)..."
 
             # Build JSON array of file URLs to purge
             FILES_JSON="["
@@ -102,18 +104,23 @@ jobs:
             done
             FILES_JSON="${FILES_JSON}]"
 
-            # Purge cache via Cloudflare API
-            RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+            # Purge cache via Cloudflare API (suppress response to avoid leaking sensitive data)
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/cf_response.json \
+              -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
               --data "{\"files\":${FILES_JSON}}")
 
-            if echo "$RESPONSE" | grep -q '"success":true'; then
-              echo "✅ Cache purged successfully for all rule bundles"
+            # Check if purge was successful (don't print response body)
+            if [ "$HTTP_CODE" = "200" ] && grep -q '"success":true' /tmp/cf_response.json 2>/dev/null; then
+              echo "✅ Cache purged successfully for $FILE_COUNT bundle(s)"
             else
-              echo "⚠️  Cache purge failed (non-critical): $RESPONSE"
+              echo "⚠️  Cache purge failed (HTTP $HTTP_CODE) - non-critical"
               echo "Files will be available after cache expires (24h)"
             fi
+
+            # Clean up response file
+            rm -f /tmp/cf_response.json
           else
             echo "⚠️  Cloudflare credentials not configured - skipping cache purge"
             echo "Add CLOUDFLARE_ZONE_ID and CLOUDFLARE_API_TOKEN secrets to enable automatic cache purging"
