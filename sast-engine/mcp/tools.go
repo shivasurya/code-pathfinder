@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -344,6 +345,90 @@ Examples:
 				Required: []string{"import"},
 			},
 		},
+		{
+			Name: "find_dockerfile_instructions",
+			Description: `Search Dockerfile instructions with semantic filtering. Supports instruction-specific filters (has_digest for FROM, user for USER, port for EXPOSE). Includes security analysis.
+
+Returns:
+- file, line, instruction, raw_content
+- Parsed details (base_image, tag, digest for FROM; user, group for USER; port, protocol for EXPOSE)
+- Security analysis (security_issue, risk_level)
+
+Use when: Auditing Dockerfile security, finding unpinned images, locating root users, analyzing exposed ports, or understanding Dockerfile structure.
+
+Examples:
+- find_dockerfile_instructions(instruction_type="FROM", has_digest=false) - find unpinned base images
+- find_dockerfile_instructions(instruction_type="USER", user="root") - find containers running as root
+- find_dockerfile_instructions(instruction_type="EXPOSE", port=8080) - find services on port 8080
+- find_dockerfile_instructions(instruction_type="FROM", base_image="python") - find Python-based images
+- find_dockerfile_instructions(file_path="api/Dockerfile") - get all instructions from specific Dockerfile`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"instruction_type": {Type: "string", Description: "Filter by instruction type (FROM, RUN, USER, EXPOSE, COPY, ADD, WORKDIR, etc.)"},
+					"file_path":        {Type: "string", Description: "Filter by Dockerfile path (supports partial matching)"},
+					"base_image":       {Type: "string", Description: "Filter FROM instructions by base image name (e.g., 'python', 'alpine')"},
+					"port":             {Type: "integer", Description: "Filter EXPOSE instructions by port number"},
+					"has_digest":       {Type: "boolean", Description: "Filter FROM instructions by digest pinning (true=pinned, false=unpinned)"},
+					"user":             {Type: "string", Description: "Filter USER instructions by username"},
+					"limit":            {Type: "integer", Description: "Maximum results to return (default: 100)"},
+				},
+				Required: []string{},
+			},
+		},
+		{
+			Name: "find_compose_services",
+			Description: `Search docker-compose services with filtering. Supports security filters (has_privileged, has_volume). Includes security risk analysis.
+
+Returns:
+- service_name, file, line
+- Configuration (image, build, ports, volumes, environment, privileged, network_mode)
+- Security analysis (security_issues, risk_level)
+
+Use when: Auditing docker-compose security, finding privileged containers, detecting Docker socket exposure, analyzing service configurations, or understanding multi-container architecture.
+
+Examples:
+- find_compose_services(has_privileged=true) - find privileged containers (CRITICAL risk)
+- find_compose_services(has_volume="/var/run/docker.sock") - find Docker socket exposure
+- find_compose_services(exposes_port=8080) - find services on port 8080
+- find_compose_services(service_name="db") - find database services
+- find_compose_services(file_path="docker-compose.yml") - get all services from specific file`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"service_name":   {Type: "string", Description: "Filter by service name (supports partial matching)"},
+					"file_path":      {Type: "string", Description: "Filter by docker-compose.yml path"},
+					"has_privileged": {Type: "boolean", Description: "Filter by privileged mode (true=privileged containers only)"},
+					"exposes_port":   {Type: "integer", Description: "Filter services exposing specific port"},
+					"has_volume":     {Type: "string", Description: "Filter services with specific volume path (e.g., '/var/run/docker.sock')"},
+					"limit":          {Type: "integer", Description: "Maximum results to return (default: 100)"},
+				},
+				Required: []string{},
+			},
+		},
+		{
+			Name: "get_dockerfile_details",
+			Description: `Get complete breakdown of a Dockerfile with all instructions, multi-stage analysis, and security summary.
+
+Returns:
+- file, total_instructions
+- instructions: Array of parsed instructions with security analysis
+- multi_stage: is_multi_stage, base_image, stages (array of stage aliases)
+- security_summary: has_user_instruction, has_healthcheck, unpinned_images, issues (array), risk_level
+
+Use when: Comprehensive Dockerfile audit, understanding multi-stage builds, security review, or analyzing complete Dockerfile structure.
+
+Examples:
+- get_dockerfile_details(file_path="/app/Dockerfile") - get complete Dockerfile breakdown
+- get_dockerfile_details(file_path="Dockerfile") - analyze Dockerfile in current context`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"file_path": {Type: "string", Description: "Path to Dockerfile (required)"},
+				},
+				Required: []string{"file_path"},
+			},
+		},
 	}
 }
 
@@ -370,6 +455,12 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 	case "resolve_import":
 		importPath, _ := args["import"].(string)
 		return s.toolResolveImport(importPath)
+	case "find_dockerfile_instructions":
+		return s.toolFindDockerfileInstructions(args)
+	case "find_compose_services":
+		return s.toolFindComposeServices(args)
+	case "get_dockerfile_details":
+		return s.toolGetDockerfileDetails(args)
 	default:
 		return fmt.Sprintf(`{"error": "Unknown tool: %s"}`, name), true
 	}
@@ -1318,6 +1409,679 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 	}
 
 	return fmt.Sprintf(`{"error": "Import not found: %s", "suggestion": "Check if the module is in the indexed project path"}`, importPath), true
+}
+
+// toolFindDockerfileInstructions searches Dockerfile instructions with semantic filtering.
+func (s *Server) toolFindDockerfileInstructions(args map[string]interface{}) (string, bool) {
+	// Extract parameters
+	instructionType, _ := args["instruction_type"].(string)
+	filePath, _ := args["file_path"].(string)
+	baseImage, _ := args["base_image"].(string)
+	port, _ := args["port"].(float64) // JSON numbers are float64
+	user, _ := args["user"].(string)
+	limit, _ := args["limit"].(float64)
+
+	// Handle has_digest parameter (optional bool pointer)
+	var hasDigest *bool
+	if val, ok := args["has_digest"]; ok && val != nil {
+		if boolVal, ok := val.(bool); ok {
+			hasDigest = &boolVal
+		}
+	}
+
+	// Default limit
+	if limit == 0 {
+		limit = 100
+	}
+
+	matches := []map[string]interface{}{}
+
+	// Check if codeGraph exists
+	if s.codeGraph == nil || s.codeGraph.Nodes == nil {
+		result := map[string]interface{}{
+			"matches": matches,
+			"total":   0,
+			"filters_applied": map[string]interface{}{
+				"instruction_type": instructionType,
+				"file_path":        filePath,
+				"base_image":       baseImage,
+				"port":             int(port),
+				"has_digest":       hasDigest,
+				"user":             user,
+			},
+		}
+		bytes, _ := json.Marshal(result)
+		return string(bytes), false
+	}
+
+	// Iterate through Docker instruction nodes
+	for _, node := range s.codeGraph.Nodes {
+		if node.Type != "dockerfile_instruction" {
+			continue
+		}
+
+		// Filter by instruction type
+		if instructionType != "" && node.Name != instructionType {
+			continue
+		}
+
+		// Filter by file path
+		if filePath != "" && !strings.Contains(node.File, filePath) {
+			continue
+		}
+
+		// Get raw content for instruction-specific filtering
+		rawContent := ""
+		if len(node.MethodArgumentsValue) > 0 {
+			rawContent = node.MethodArgumentsValue[0]
+		}
+
+		// Apply instruction-specific filters
+		if node.Name == "FROM" {
+			// Filter by base image
+			if baseImage != "" && !strings.Contains(rawContent, baseImage) {
+				continue
+			}
+
+			// Filter by digest pinning
+			if hasDigest != nil {
+				nodeHasDigest := strings.Contains(rawContent, "@sha256:")
+				if *hasDigest != nodeHasDigest {
+					continue
+				}
+			}
+		}
+
+		if node.Name == "USER" && user != "" {
+			if !strings.Contains(rawContent, user) {
+				continue
+			}
+		}
+
+		if node.Name == "EXPOSE" && port > 0 {
+			portStr := fmt.Sprintf("%d", int(port))
+			if !strings.Contains(rawContent, portStr) {
+				continue
+			}
+		}
+
+		// Build rich result
+		match := buildDockerInstructionMatch(node, rawContent)
+		matches = append(matches, match)
+
+		if len(matches) >= int(limit) {
+			break
+		}
+	}
+
+	result := map[string]interface{}{
+		"matches": matches,
+		"total":   len(matches),
+		"filters_applied": map[string]interface{}{
+			"instruction_type": instructionType,
+			"file_path":        filePath,
+			"base_image":       baseImage,
+			"port":             int(port),
+			"has_digest":       hasDigest,
+			"user":             user,
+		},
+	}
+
+	bytes, _ := json.Marshal(result)
+	return string(bytes), false
+}
+
+// buildDockerInstructionMatch builds a rich match result for a Dockerfile instruction.
+func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string]interface{} {
+	match := map[string]interface{}{
+		"file":        node.File,
+		"line":        node.LineNumber,
+		"instruction": node.Name,
+		"raw_content": rawContent,
+	}
+
+	// Extract args (skip first element which is raw_content)
+	args := []string{}
+	if len(node.MethodArgumentsValue) > 1 {
+		args = node.MethodArgumentsValue[1:]
+	}
+	match["args"] = args
+
+	// Instruction-specific parsing and security analysis
+	switch node.Name {
+	case "FROM":
+		details := parseFromInstruction(rawContent)
+		match["base_image"] = details.BaseImage
+		match["tag"] = details.Tag
+		match["digest"] = details.Digest
+		match["stage_alias"] = details.StageAlias
+
+		if details.Digest == "" {
+			match["security_issue"] = "No digest pinning (CWE-1188)"
+			match["risk_level"] = "MEDIUM"
+		}
+
+	case "USER":
+		details := parseUserInstruction(rawContent)
+		match["user"] = details.User
+		match["group"] = details.Group
+
+		if details.User == "root" || details.User == "0" {
+			match["security_issue"] = "Container runs as root"
+			match["risk_level"] = "HIGH"
+		}
+
+	case "EXPOSE":
+		details := parseExposeInstruction(rawContent)
+		match["port"] = details.Port
+		match["protocol"] = details.Protocol
+
+	case "WORKDIR":
+		match["path"] = extractWorkdirPath(rawContent)
+
+	case "COPY", "ADD":
+		details := parseCopyInstruction(rawContent)
+		match["source"] = details.Source
+		match["destination"] = details.Destination
+		match["from_stage"] = details.FromStage
+		match["chown"] = details.Chown
+	}
+
+	return match
+}
+
+// toolFindComposeServices searches docker-compose services with filtering.
+func (s *Server) toolFindComposeServices(args map[string]interface{}) (string, bool) {
+	// Extract parameters
+	serviceName, _ := args["service_name"].(string)
+	filePath, _ := args["file_path"].(string)
+	exposesPort, _ := args["exposes_port"].(float64)
+	hasVolume, _ := args["has_volume"].(string)
+	limit, _ := args["limit"].(float64)
+
+	// Handle has_privileged parameter (optional bool pointer)
+	var hasPrivileged *bool
+	if val, ok := args["has_privileged"]; ok && val != nil {
+		if boolVal, ok := val.(bool); ok {
+			hasPrivileged = &boolVal
+		}
+	}
+
+	// Default limit
+	if limit == 0 {
+		limit = 100
+	}
+
+	matches := []map[string]interface{}{}
+
+	// Check if codeGraph exists
+	if s.codeGraph == nil || s.codeGraph.Nodes == nil {
+		result := map[string]interface{}{
+			"matches": matches,
+			"total":   0,
+			"filters_applied": map[string]interface{}{
+				"service_name":   serviceName,
+				"file_path":      filePath,
+				"has_privileged": hasPrivileged,
+				"exposes_port":   int(exposesPort),
+				"has_volume":     hasVolume,
+			},
+		}
+		bytes, _ := json.Marshal(result)
+		return string(bytes), false
+	}
+
+	// Iterate through compose service nodes
+	for _, node := range s.codeGraph.Nodes {
+		if node.Type != "compose_service" {
+			continue
+		}
+
+		// Filter by service name
+		if serviceName != "" && !strings.Contains(node.Name, serviceName) {
+			continue
+		}
+
+		// Filter by file path
+		if filePath != "" && !strings.Contains(node.File, filePath) {
+			continue
+		}
+
+		// Parse service properties
+		serviceProps := parseComposeServiceProperties(node)
+
+		// Apply filters
+		if hasPrivileged != nil && serviceProps.Privileged != *hasPrivileged {
+			continue
+		}
+
+		if exposesPort > 0 && !serviceProps.exposesPort(int(exposesPort)) {
+			continue
+		}
+
+		if hasVolume != "" && !serviceProps.hasVolumePath(hasVolume) {
+			continue
+		}
+
+		// Build rich result
+		match := buildComposeServiceMatch(node, serviceProps)
+		matches = append(matches, match)
+
+		if len(matches) >= int(limit) {
+			break
+		}
+	}
+
+	result := map[string]interface{}{
+		"matches": matches,
+		"total":   len(matches),
+		"filters_applied": map[string]interface{}{
+			"service_name":   serviceName,
+			"file_path":      filePath,
+			"has_privileged": hasPrivileged,
+			"exposes_port":   int(exposesPort),
+			"has_volume":     hasVolume,
+		},
+	}
+
+	bytes, _ := json.Marshal(result)
+	return string(bytes), false
+}
+
+// parseComposeServiceProperties parses service properties from node.
+func parseComposeServiceProperties(node *graph.Node) ComposeServiceProperties {
+	props := ComposeServiceProperties{}
+
+	// Parse from MethodArgumentsValue (format: "key=value")
+	for _, arg := range node.MethodArgumentsValue {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "image":
+			props.Image = value
+		case "build":
+			props.Build = value
+		case "port":
+			props.Ports = append(props.Ports, value)
+		case "volume":
+			props.Volumes = append(props.Volumes, value)
+		case "env":
+			props.Environment = append(props.Environment, value)
+		case "privileged":
+			props.Privileged = (value == "true")
+		case "network_mode":
+			props.NetworkMode = value
+		case "cap_add":
+			props.CapAdd = append(props.CapAdd, value)
+		case "cap_drop":
+			props.CapDrop = append(props.CapDrop, value)
+		case "security_opt":
+			props.SecurityOpt = append(props.SecurityOpt, value)
+		}
+	}
+
+	return props
+}
+
+// buildComposeServiceMatch builds a rich match result for a compose service.
+func buildComposeServiceMatch(node *graph.Node, props ComposeServiceProperties) map[string]interface{} {
+	match := map[string]interface{}{
+		"service_name": node.Name,
+		"file":         node.File,
+		"line":         node.LineNumber,
+		"image":        props.Image,
+		"build":        props.Build,
+		"ports":        props.Ports,
+		"volumes":      props.Volumes,
+		"environment":  props.Environment,
+		"privileged":   props.Privileged,
+		"network_mode": props.NetworkMode,
+	}
+
+	// Security analysis
+	securityIssues := []string{}
+	riskLevel := "LOW"
+
+	// Check privileged mode (CRITICAL risk)
+	if props.Privileged {
+		securityIssues = append(securityIssues, "Privileged mode enabled (high risk)")
+		riskLevel = "CRITICAL"
+	}
+
+	// Check Docker socket exposure (CRITICAL risk)
+	for _, vol := range props.Volumes {
+		if strings.Contains(vol, "/var/run/docker.sock") {
+			securityIssues = append(securityIssues, "Docker socket exposed (container can control host)")
+			riskLevel = "CRITICAL"
+		}
+	}
+
+	// Check host network mode (HIGH risk)
+	if props.NetworkMode == "host" {
+		securityIssues = append(securityIssues, "Host network mode (no network isolation)")
+		if riskLevel != "CRITICAL" {
+			riskLevel = "HIGH"
+		}
+	}
+
+	// Check dangerous capabilities (HIGH risk)
+	for _, cap := range props.CapAdd {
+		if cap == "SYS_ADMIN" || cap == "ALL" {
+			securityIssues = append(securityIssues, fmt.Sprintf("Dangerous capability: %s", cap))
+			if riskLevel == "LOW" {
+				riskLevel = "HIGH"
+			}
+		}
+	}
+
+	if len(securityIssues) > 0 {
+		match["security_issues"] = securityIssues
+		match["risk_level"] = riskLevel
+	}
+
+	return match
+}
+
+// toolGetDockerfileDetails returns complete breakdown of a Dockerfile.
+func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, bool) {
+	filePath, _ := args["file_path"].(string)
+
+	if filePath == "" {
+		return `{"error": "file_path parameter is required"}`, true
+	}
+
+	// Check if codeGraph exists
+	if s.codeGraph == nil || s.codeGraph.Nodes == nil {
+		return `{"error": "No code graph available"}`, true
+	}
+
+	instructions := []map[string]interface{}{}
+	var baseImage string
+	stages := []string{}
+	isMultiStage := false
+	hasUserInstruction := false
+	hasHealthcheck := false
+	unpinnedImages := 0
+
+	// Collect all instructions for the file
+	for _, node := range s.codeGraph.Nodes {
+		if node.Type != "dockerfile_instruction" {
+			continue
+		}
+
+		// Match file path (exact or suffix match)
+		if node.File != filePath && !strings.HasSuffix(node.File, filePath) {
+			continue
+		}
+
+		rawContent := ""
+		if len(node.MethodArgumentsValue) > 0 {
+			rawContent = node.MethodArgumentsValue[0]
+		}
+
+		instruction := buildDockerInstructionMatch(node, rawContent)
+		instructions = append(instructions, instruction)
+
+		// Track metadata
+		if node.Name == "FROM" {
+			fromDetails := parseFromInstruction(rawContent)
+			if baseImage == "" {
+				baseImage = fromDetails.BaseImage + ":" + fromDetails.Tag
+			}
+			if fromDetails.StageAlias != "" {
+				stages = append(stages, fromDetails.StageAlias)
+				isMultiStage = true
+			}
+			if fromDetails.Digest == "" {
+				unpinnedImages++
+			}
+		}
+
+		if node.Name == "USER" {
+			hasUserInstruction = true
+		}
+
+		if node.Name == "HEALTHCHECK" {
+			hasHealthcheck = true
+		}
+	}
+
+	if len(instructions) == 0 {
+		return fmt.Sprintf(`{"error": "No Dockerfile found at path: %s"}`, filePath), true
+	}
+
+	// Build result
+	result := map[string]interface{}{
+		"file":               filePath,
+		"total_instructions": len(instructions),
+		"instructions":       instructions,
+		"multi_stage": map[string]interface{}{
+			"is_multi_stage": isMultiStage,
+			"base_image":     baseImage,
+			"stages":         stages,
+		},
+	}
+
+	// Security summary
+	securitySummary := map[string]interface{}{
+		"has_user_instruction": hasUserInstruction,
+		"has_healthcheck":      hasHealthcheck,
+		"unpinned_images":      unpinnedImages,
+	}
+
+	securityIssues := []string{}
+	if !hasUserInstruction {
+		securityIssues = append(securityIssues, "No USER instruction (runs as root)")
+	}
+	if !hasHealthcheck {
+		securityIssues = append(securityIssues, "No HEALTHCHECK defined")
+	}
+	if unpinnedImages > 0 {
+		securityIssues = append(securityIssues, fmt.Sprintf("%d unpinned base image(s)", unpinnedImages))
+	}
+
+	securitySummary["issues"] = securityIssues
+	if len(securityIssues) == 0 {
+		securitySummary["risk_level"] = "LOW"
+	} else if len(securityIssues) <= 2 {
+		securitySummary["risk_level"] = "MEDIUM"
+	} else {
+		securitySummary["risk_level"] = "HIGH"
+	}
+
+	result["security_summary"] = securitySummary
+
+	bytes, _ := json.Marshal(result)
+	return string(bytes), false
+}
+
+// ============================================================================
+// Docker Parsing Helpers
+// ============================================================================
+
+// FromDetails contains parsed FROM instruction data.
+type FromDetails struct {
+	BaseImage  string // e.g., "python"
+	Tag        string // e.g., "3.11" or "latest" (default if omitted)
+	Digest     string // e.g., "sha256:abc123..." (empty if not pinned)
+	StageAlias string // e.g., "builder" (from AS clause, empty if single-stage)
+}
+
+// UserDetails contains parsed USER instruction data.
+type UserDetails struct {
+	User  string // Username or UID
+	Group string // Group name or GID (empty if not specified)
+}
+
+// ExposeDetails contains parsed EXPOSE instruction data.
+type ExposeDetails struct {
+	Port     int    // Port number
+	Protocol string // "tcp" or "udp" (default: "tcp")
+}
+
+// CopyDetails contains parsed COPY/ADD instruction data.
+type CopyDetails struct {
+	Source      string // Source path
+	Destination string // Destination path
+	FromStage   string // --from flag value (empty if not multi-stage copy)
+	Chown       string // --chown flag value (empty if not specified)
+}
+
+// ComposeServiceProperties contains parsed compose service data.
+type ComposeServiceProperties struct {
+	Image       string
+	Build       string
+	Ports       []string
+	Volumes     []string
+	Environment []string
+	Privileged  bool
+	NetworkMode string
+	CapAdd      []string
+	CapDrop     []string
+	SecurityOpt []string
+}
+
+// exposesPort checks if the service exposes a specific port.
+func (c *ComposeServiceProperties) exposesPort(port int) bool {
+	portStr := fmt.Sprintf("%d", port)
+	for _, p := range c.Ports {
+		if strings.Contains(p, portStr) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasVolumePath checks if the service has a volume with specific path.
+func (c *ComposeServiceProperties) hasVolumePath(path string) bool {
+	for _, v := range c.Volumes {
+		if strings.Contains(v, path) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseFromInstruction parses: FROM python:3.11@sha256:abc AS builder
+func parseFromInstruction(rawContent string) FromDetails {
+	details := FromDetails{Tag: "latest"} // Default tag
+
+	parts := strings.Fields(rawContent)
+	if len(parts) < 2 {
+		return details
+	}
+
+	image := parts[1]
+
+	// Extract digest (@sha256:...)
+	if idx := strings.Index(image, "@"); idx != -1 {
+		details.Digest = image[idx+1:]
+		image = image[:idx]
+	}
+
+	// Extract tag (:3.11)
+	if idx := strings.Index(image, ":"); idx != -1 {
+		details.BaseImage = image[:idx]
+		details.Tag = image[idx+1:]
+	} else {
+		details.BaseImage = image
+	}
+
+	// Extract stage alias (AS builder)
+	for i, part := range parts {
+		if strings.ToUpper(part) == "AS" && i+1 < len(parts) {
+			details.StageAlias = parts[i+1]
+			break
+		}
+	}
+
+	return details
+}
+
+// parseUserInstruction parses: USER appuser:appgroup
+func parseUserInstruction(rawContent string) UserDetails {
+	details := UserDetails{}
+
+	parts := strings.Fields(rawContent)
+	if len(parts) < 2 {
+		return details
+	}
+
+	userSpec := parts[1]
+	if idx := strings.Index(userSpec, ":"); idx != -1 {
+		details.User = userSpec[:idx]
+		details.Group = userSpec[idx+1:]
+	} else {
+		details.User = userSpec
+	}
+
+	return details
+}
+
+// parseExposeInstruction parses: EXPOSE 8080/tcp
+func parseExposeInstruction(rawContent string) ExposeDetails {
+	details := ExposeDetails{Protocol: "tcp"} // Default protocol
+
+	parts := strings.Fields(rawContent)
+	if len(parts) < 2 {
+		return details
+	}
+
+	portSpec := parts[1]
+	if idx := strings.Index(portSpec, "/"); idx != -1 {
+		details.Port, _ = strconv.Atoi(portSpec[:idx])
+		details.Protocol = portSpec[idx+1:]
+	} else {
+		details.Port, _ = strconv.Atoi(portSpec)
+	}
+
+	return details
+}
+
+// parseCopyInstruction parses: COPY --from=builder --chown=user:group /src /dst
+func parseCopyInstruction(rawContent string) CopyDetails {
+	details := CopyDetails{}
+
+	parts := strings.Fields(rawContent)
+
+	// Parse flags and find source/destination indices
+	sourceIdx := 1
+	for i := 1; i < len(parts); i++ {
+		if strings.HasPrefix(parts[i], "--from=") {
+			details.FromStage = strings.TrimPrefix(parts[i], "--from=")
+			sourceIdx = i + 1
+		} else if strings.HasPrefix(parts[i], "--chown=") {
+			details.Chown = strings.TrimPrefix(parts[i], "--chown=")
+			sourceIdx = i + 1
+		} else if !strings.HasPrefix(parts[i], "--") {
+			break
+		}
+	}
+
+	// Extract source and destination
+	if sourceIdx < len(parts) {
+		details.Source = parts[sourceIdx]
+	}
+	if sourceIdx+1 < len(parts) {
+		details.Destination = parts[sourceIdx+1]
+	}
+
+	return details
+}
+
+// extractWorkdirPath parses: WORKDIR /app
+func extractWorkdirPath(rawContent string) string {
+	parts := strings.Fields(rawContent)
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	return ""
 }
 
 // ============================================================================

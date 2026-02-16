@@ -509,7 +509,7 @@ func TestGetToolDefinitions(t *testing.T) {
 
 	tools := server.getToolDefinitions()
 
-	assert.Len(t, tools, 8) // Updated for Phase 3B: added find_module and list_modules
+	assert.Len(t, tools, 11) // Updated for Docker MCP: added find_dockerfile_instructions, find_compose_services, get_dockerfile_details
 
 	// Verify each tool has required fields.
 	for _, tool := range tools {
@@ -531,6 +531,9 @@ func TestGetToolDefinitions(t *testing.T) {
 	assert.True(t, toolNames["get_callees"])
 	assert.True(t, toolNames["get_call_details"])
 	assert.True(t, toolNames["resolve_import"])
+	assert.True(t, toolNames["find_dockerfile_instructions"])
+	assert.True(t, toolNames["find_compose_services"])
+	assert.True(t, toolNames["get_dockerfile_details"])
 }
 
 // ============================================================================
