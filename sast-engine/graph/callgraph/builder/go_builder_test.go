@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -388,7 +389,8 @@ func TestResolveGoCallTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			targetFQN, resolved := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext)
+			// Pass nil for typeEngine and callGraph (backward compatibility)
+			targetFQN, resolved := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil)
 
 			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
 
@@ -641,4 +643,197 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 
 	// Verify Pass 3 & 4: Call sites and edges work (tested in other tests)
 	// The integration test ensures all passes run without errors
+}
+
+// TestResolveGoCallTarget_VariableMethod tests Pattern 1b: variable-based method resolution (PR-17).
+// This verifies that method calls like user.Save() are resolved using variable types from typeEngine.
+func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
+	tests := []struct {
+		name          string
+		callSite      *CallSiteInternal
+		variableName  string
+		variableType  string
+		methodExists  bool
+		expectedFQN   string
+		shouldResolve bool
+	}{
+		{
+			name: "resolve user.Save() to User.Save",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "user",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "user",
+			variableType:  "models.User",
+			methodExists:  true,
+			expectedFQN:   "models.User.Save",
+			shouldResolve: true,
+		},
+		{
+			name: "resolve pointer variable (*User).Save",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "userPtr",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "userPtr",
+			variableType:  "*models.User", // Pointer type
+			methodExists:  true,
+			expectedFQN:   "models.User.Save", // Stripped *
+			shouldResolve: true,
+		},
+		{
+			name: "fail when method doesn't exist",
+			callSite: &CallSiteInternal{
+				FunctionName: "NonExistent",
+				ObjectName:   "user",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "user",
+			variableType:  "models.User",
+			methodExists:  false,
+			shouldResolve: false,
+		},
+		{
+			name: "fail when variable not in scope",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "unknown",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			shouldResolve: false,
+		},
+		{
+			name: "fallback to import when typeEngine is nil",
+			callSite: &CallSiteInternal{
+				FunctionName: "Println",
+				ObjectName:   "fmt",
+				CallerFQN:    "main.Main",
+				CallerFile:   "/project/main.go",
+			},
+			expectedFQN:   "fmt.Println",
+			shouldResolve: true,
+		},
+		{
+			name: "prioritize import over variable",
+			callSite: &CallSiteInternal{
+				FunctionName: "Println",
+				ObjectName:   "fmt",
+				CallerFQN:    "main.Main",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "fmt", // Variable named "fmt" (edge case)
+			variableType:  "models.Formatter",
+			methodExists:  true,
+			expectedFQN:   "fmt.Println", // Import wins over variable
+			shouldResolve: true,
+		},
+		{
+			name: "resolve config.Validate() with return type",
+			callSite: &CallSiteInternal{
+				FunctionName: "Validate",
+				ObjectName:   "config",
+				CallerFQN:    "main.Setup",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "config",
+			variableType:  "pkg.Config",
+			methodExists:  true,
+			expectedFQN:   "pkg.Config.Validate",
+			shouldResolve: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup registry
+			registry := &core.GoModuleRegistry{
+				DirToImport: map[string]string{
+					"/project":        "main",
+					"/project/models": "models",
+					"/project/pkg":    "pkg",
+				},
+				StdlibPackages: map[string]bool{
+					"fmt": true,
+				},
+			}
+
+			// Setup import map
+			importMap := core.NewGoImportMap("/project/main.go")
+			if tt.callSite.ObjectName == "fmt" {
+				importMap.AddImport("fmt", "fmt")
+			}
+
+			// Setup type engine with variable binding
+			var typeEngine *resolution.GoTypeInferenceEngine
+			if tt.variableName != "" || tt.name == "fallback to import when typeEngine is nil" {
+				typeEngine = resolution.NewGoTypeInferenceEngine(registry)
+				if tt.variableName != "" {
+					scope := resolution.NewGoFunctionScope(tt.callSite.CallerFQN)
+					binding := &resolution.GoVariableBinding{
+						VarName: tt.variableName,
+						Type: &core.TypeInfo{
+							TypeFQN:    tt.variableType,
+							Confidence: 1.0,
+							Source:     "test",
+						},
+						AssignedFrom: "test",
+						Location: resolution.Location{
+							File: tt.callSite.CallerFile,
+							Line: 10,
+						},
+					}
+					scope.AddVariable(binding)
+					typeEngine.AddScope(scope)
+				}
+			}
+
+			// Setup call graph with method
+			callGraph := core.NewCallGraph()
+			if tt.methodExists {
+				// Strip pointer prefix for method FQN
+				methodTypeFQN := tt.variableType
+				if strings.HasPrefix(methodTypeFQN, "*") {
+					methodTypeFQN = strings.TrimPrefix(methodTypeFQN, "*")
+				}
+				methodFQN := methodTypeFQN + "." + tt.callSite.FunctionName
+				callGraph.Functions[methodFQN] = &graph.Node{
+					Type: "method_declaration",
+					Name: tt.callSite.FunctionName,
+					File: "/project/models/user.go",
+				}
+			}
+			// Add fmt.Println for import tests
+			if tt.callSite.ObjectName == "fmt" {
+				callGraph.Functions["fmt.Println"] = &graph.Node{
+					Type: "function_declaration",
+					Name: "Println",
+					File: "/usr/lib/go/fmt/print.go",
+				}
+			}
+
+			functionContext := make(map[string][]*graph.Node)
+
+			// Execute
+			targetFQN, resolved := resolveGoCallTarget(
+				tt.callSite,
+				importMap,
+				registry,
+				functionContext,
+				typeEngine,
+				callGraph,
+			)
+
+			// Assert
+			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
+			if tt.shouldResolve {
+				assert.Equal(t, tt.expectedFQN, targetFQN, "Resolved FQN mismatch")
+			}
+		})
+	}
 }

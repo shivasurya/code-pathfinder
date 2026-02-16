@@ -134,7 +134,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext)
+		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
 
 		if resolved {
 			// Add edge from caller to callee
@@ -256,7 +256,8 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 // This is Pass 4 of the 5-pass algorithm.
 //
 // Resolution patterns:
-//  1. Qualified call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
+//  1a. Qualified import call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
+//  1b. Variable method call: user.Save() → resolve "user" via typeEngine → "pkg.User.Save" (PR-17)
 //  2. Same-package call: Helper() → find in functionContext → "github.com/myapp/utils.Helper"
 //  3. Builtin call: append() → "builtin.append"
 //  4. Unresolved: return false
@@ -266,6 +267,8 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 //   - importMap: imports for the caller's file (from PR-07)
 //   - registry: module registry with stdlib information
 //   - functionContext: map from simple name to nodes
+//   - typeEngine: Go type inference engine for variable type lookup (PR-14/PR-15/PR-16)
+//   - callGraph: call graph for method existence verification (PR-16)
 //
 // Returns:
 //   - targetFQN: the resolved fully qualified name
@@ -275,17 +278,46 @@ func resolveGoCallTarget(
 	importMap *core.GoImportMap,
 	registry *core.GoModuleRegistry,
 	functionContext map[string][]*graph.Node,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	callGraph *core.CallGraph,
 ) (string, bool) {
-	// Pattern 1: Qualified call (pkg.Func or obj.Method)
+	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
-		// Resolve object name through imports
+		// Try import resolution first (existing pattern)
 		importPath, ok := importMap.Resolve(callSite.ObjectName)
 		if ok {
 			// Successfully resolved import path
 			targetFQN := importPath + "." + callSite.FunctionName
 			return targetFQN, true
 		}
-		// Import not found - unresolved
+
+		// Pattern 1b: Variable-based method resolution (PR-17)
+		// If import resolution failed, try resolving as variable.method()
+		// Example: user.Save() where user is a variable of type *User
+		if typeEngine != nil && callGraph != nil && callSite.CallerFQN != "" {
+			scope := typeEngine.GetScope(callSite.CallerFQN)
+			if scope != nil {
+				binding := scope.GetVariable(callSite.ObjectName)
+				if binding != nil && binding.Type != nil {
+					// Build method FQN: "pkg.Type.Method"
+					// Handle pointer types: *User -> User (methods are defined on the type, not the pointer in FQN)
+					typeFQN := binding.Type.TypeFQN
+					if strings.HasPrefix(typeFQN, "*") {
+						typeFQN = strings.TrimPrefix(typeFQN, "*")
+					}
+
+					methodFQN := typeFQN + "." + callSite.FunctionName
+
+					// Verify method exists in callGraph before returning
+					// This prevents false positives from unindexed methods
+					if callGraph.Functions[methodFQN] != nil {
+						return methodFQN, true
+					}
+				}
+			}
+		}
+
+		// Import not found and variable not found - unresolved
 		return "", false
 	}
 
