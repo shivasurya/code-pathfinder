@@ -75,6 +75,58 @@ jobs:
           path: dist/rules/
           retention-days: 7
 
+      - name: Purge Cloudflare cache
+        if: success()
+        env:
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            # Count files to purge
+            FILE_COUNT=$(find dist/rules -name "*.zip" | wc -l | tr -d ' ')
+            echo "🔄 Purging Cloudflare cache for $FILE_COUNT rule bundle(s)..."
+
+            # Build JSON array of file URLs to purge
+            FILES_JSON="["
+            FIRST=true
+
+            find dist/rules -name "*.zip" | while read -r zipfile; do
+              # Extract relative path from dist/rules/
+              relative_path="${zipfile#dist/rules/}"
+              url="https://assets.codepathfinder.dev/rules/${relative_path}"
+
+              if [ "$FIRST" = true ]; then
+                FILES_JSON="${FILES_JSON}\"${url}\""
+                FIRST=false
+              else
+                FILES_JSON="${FILES_JSON},\"${url}\""
+              fi
+            done
+            FILES_JSON="${FILES_JSON}]"
+
+            # Purge cache via Cloudflare API (suppress response to avoid leaking sensitive data)
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/cf_response.json \
+              -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "{\"files\":${FILES_JSON}}")
+
+            # Check if purge was successful (don't print response body)
+            if [ "$HTTP_CODE" = "200" ] && grep -q '"success":true' /tmp/cf_response.json 2>/dev/null; then
+              echo "✅ Cache purged successfully for $FILE_COUNT bundle(s)"
+            else
+              echo "⚠️  Cache purge failed (HTTP $HTTP_CODE) - non-critical"
+              echo "Files will be available after cache expires (24h)"
+            fi
+
+            # Clean up response file
+            rm -f /tmp/cf_response.json
+          else
+            echo "⚠️  Cloudflare credentials not configured - skipping cache purge"
+            echo "Add CLOUDFLARE_ZONE_ID and CLOUDFLARE_API_TOKEN secrets to enable automatic cache purging"
+            echo "Files will be available after cache expires (24h)"
+          fi
+
       - name: Trigger website deploy
         if: success()
         # This step will be implemented in PR-07
