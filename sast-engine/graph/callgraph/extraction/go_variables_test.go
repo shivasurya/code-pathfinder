@@ -642,3 +642,51 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 		assert.Equal(t, "builtin.int", xBindings[0].Type.TypeFQN)
 	}
 }
+
+// TestExtractGoVariables_RelativePath tests that relative paths are handled correctly.
+func TestExtractGoVariables_RelativePath(t *testing.T) {
+	code := `package test
+func Demo() {
+	x := 42
+}`
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
+	
+	// Should not panic with relative path, even if registry lookup fails
+	err := ExtractGoVariableAssignments(
+		"test.go", // Relative path
+		[]byte(code),
+		typeEngine,
+		registry,
+		&core.GoImportMap{},
+	)
+	
+	// Should return nil (skipped) since path not in registry, not an error
+	assert.NoError(t, err)
+}
+
+// TestExtractGoVariables_EmptyPath tests edge case with empty file path.
+func TestExtractGoVariables_EmptyPath(t *testing.T) {
+	code := `package test
+func Demo() {
+	x := 42
+}`
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
+	
+	err := ExtractGoVariableAssignments(
+		"", // Empty path
+		[]byte(code),
+		typeEngine,
+		registry,
+		&core.GoImportMap{},
+	)
+	
+	assert.NoError(t, err)
+}

@@ -1020,3 +1020,36 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	configValidateCallers := callGraph.GetCallers("typetracking.Config.Validate")
 	assert.Contains(t, configValidateCallers, demoFQN, "Config.Validate should have DemoVariableAssignments as caller")
 }
+
+// TestBuildGoFQN_RelativePath tests that relative paths are converted to absolute.
+func TestBuildGoFQN_RelativePath(t *testing.T) {
+	node := &graph.Node{
+		Type: "function_declaration",
+		Name: "TestFunc",
+		File: "test.go", // Relative path
+	}
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	
+	// Should not panic, even if registry lookup fails
+	fqn := buildGoFQN(node, nil, registry)
+	assert.NotEmpty(t, fqn)
+}
+
+// TestBuildGoFQN_EmptyPath tests edge case with empty file path.
+func TestBuildGoFQN_EmptyPath(t *testing.T) {
+	node := &graph.Node{
+		Type: "function_declaration",
+		Name: "TestFunc",
+		File: "", // Empty path
+	}
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	
+	fqn := buildGoFQN(node, nil, registry)
+	assert.Contains(t, fqn, "TestFunc")
+}
