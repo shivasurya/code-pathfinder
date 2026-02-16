@@ -1,2 +1,2 @@
 ignore:
-  - "sast-engine/antlr/"  # ignore folders and all its contents
+  - "sast-engine/test-fixtures/"  # ignore test fixture files
