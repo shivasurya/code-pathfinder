@@ -5,7 +5,7 @@ package typetracking
 
 // ===== BUILTIN RETURN TYPES =====
 
-// Numeric types
+// Numeric types.
 func GetInt() int {
 	return 42
 }
@@ -18,7 +18,7 @@ func GetFloat64() float64 {
 	return 3.14
 }
 
-// String and character types
+// String and character types.
 func GetString() string {
 	return "hello"
 }
@@ -31,12 +31,12 @@ func GetRune() rune {
 	return '日'
 }
 
-// Boolean
+// Boolean.
 func GetBool() bool {
 	return true
 }
 
-// Error interface
+// Error interface.
 func GetError() error {
 	return nil
 }
@@ -51,7 +51,7 @@ func GetConfigPointer() *Config {
 	return &Config{Port: 8080}
 }
 
-// Double pointer (edge case)
+// Double pointer (edge case).
 func GetDoublePointer() **User {
 	u := &User{ID: 1}
 	return &u
@@ -71,7 +71,7 @@ func GetUserWithError() (*User, error) {
 	return &User{ID: 1}, nil
 }
 
-// Three returns (extract first)
+// Three returns (extract first).
 func ThreeReturns() (string, int, error) {
 	return "data", 42, nil
 }

@@ -7,21 +7,21 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
-// Go builtin types (Go 1.21+)
+// Go builtin types (Go 1.21+).
 var goBuiltinTypes = map[string]bool{
-	// Numeric types
+	// Numeric types.
 	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"float32": true, "float64": true,
 	"complex64": true, "complex128": true,
 
-	// String and character types
+	// String and character types.
 	"string": true, "byte": true, "rune": true,
 
-	// Boolean
+	// Boolean.
 	"bool": true,
 
-	// Special types
+	// Special types.
 	"error": true, "any": true,
 }
 
@@ -112,14 +112,11 @@ func ParseGoTypeString(
 	registry *core.GoModuleRegistry,
 	filePath string,
 ) (*core.TypeInfo, error) {
-	// Handle empty type string
-	if typeStr == "" {
-		return nil, nil
-	}
-
 	// Step 1: Normalize - trim whitespace
 	typeStr = strings.TrimSpace(typeStr)
 	if typeStr == "" {
+		// Empty type string is valid for void functions - return nil TypeInfo, no error.
+		//nolint:nilnil // Returning (nil, nil) is correct here: no type info and no error
 		return nil, nil
 	}
 
