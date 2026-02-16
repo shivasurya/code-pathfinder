@@ -82,6 +82,14 @@ func ExtractGoVariableAssignments(
 
 	// Get package path for this file
 	dirPath := filepath.Dir(filePath)
+
+	// Convert to absolute path if relative (for registry lookup)
+	if !filepath.IsAbs(dirPath) {
+		if absPath, err := filepath.Abs(dirPath); err == nil {
+			dirPath = absPath
+		}
+	}
+
 	packagePath, exists := registry.DirToImport[dirPath]
 	if !exists {
 		// File not in registry (e.g., external dependency), skip

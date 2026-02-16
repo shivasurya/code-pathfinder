@@ -159,6 +159,14 @@ func ParseGoTypeString(
 	// Use registry to resolve to full import path
 	if filePath != "" && registry != nil {
 		dirPath := filepath.Dir(filePath)
+
+		// Convert to absolute path if relative (for registry lookup)
+		if !filepath.IsAbs(dirPath) {
+			if absPath, err := filepath.Abs(dirPath); err == nil {
+				dirPath = absPath
+			}
+		}
+
 		importPath, ok := registry.DirToImport[dirPath]
 		if ok {
 			// Successfully resolved to import path

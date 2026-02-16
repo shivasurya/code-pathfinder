@@ -359,6 +359,13 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 	// Get directory path for this file
 	dirPath := filepath.Dir(node.File)
 
+	// Convert to absolute path if relative (for registry lookup)
+	if !filepath.IsAbs(dirPath) {
+		if absPath, err := filepath.Abs(dirPath); err == nil {
+			dirPath = absPath
+		}
+	}
+
 	// Look up import path from registry
 	importPath, ok := registry.DirToImport[dirPath]
 	if !ok {

@@ -575,6 +575,10 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 	// Use the all_type_patterns.go fixture from PR-14/PR-15
 	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
 
+	// Convert to absolute path for consistency with buildGoFQN's path resolution
+	absFixturePath, err := filepath.Abs(fixturePath)
+	require.NoError(t, err)
+
 	// Build CodeGraph from the fixture
 	codeGraph := &graph.CodeGraph{
 		Nodes: make(map[string]*graph.Node),
@@ -586,7 +590,7 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 		ID:         "func1",
 		Type:       "function_declaration",
 		Name:       "GetInt",
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 9,
 		ReturnType: "int", // Annotation-based return type
 	}
@@ -597,16 +601,16 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 		ID:         "func2",
 		Type:       "function_declaration",
 		Name:       "GetUserPointer",
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 46,
 		ReturnType: "*User", // Annotation-based return type
 	}
 	codeGraph.Nodes["func2"] = getUserPtrNode
 
-	// Build module registry
+	// Build module registry with absolute path
 	registry := &core.GoModuleRegistry{
 		DirToImport: map[string]string{
-			"../../../test-fixtures/golang/type_tracking": "typetracking",
+			filepath.Dir(absFixturePath): "typetracking",
 		},
 		StdlibPackages: map[string]bool{},
 	}
@@ -845,6 +849,10 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
 
+	// Convert to absolute path for consistency with buildGoFQN's path resolution
+	absFixturePath, err := filepath.Abs(fixturePath)
+	require.NoError(t, err)
+
 	// Build CodeGraph with realistic nodes that would come from PR-06 AST parsing
 	codeGraph := &graph.CodeGraph{
 		Nodes: make(map[string]*graph.Node),
@@ -855,7 +863,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		ID:         "demo_func",
 		Type:       "function_declaration",
 		Name:       "DemoVariableAssignments",
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 141,
 	}
 	codeGraph.Nodes["demo_func"] = demoFunc
@@ -866,7 +874,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		Type:       "method",
 		Name:       "Save",
 		Interface:  []string{"User"}, // Receiver type
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 124,
 		ReturnType: "error",
 	}
@@ -878,7 +886,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		Type:       "method",
 		Name:       "Validate",
 		Interface:  []string{"Config"}, // Receiver type
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 133,
 		ReturnType: "(bool, error)",
 	}
@@ -891,7 +899,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		Type:       "method_expression",
 		Name:       "Save",
 		Interface:  []string{"user"}, // ObjectName = "user"
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 150, // Inside DemoVariableAssignments (after user := GetUserPointer())
 	}
 	// Set up parent-child relationship
@@ -905,17 +913,17 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		Type:       "method_expression",
 		Name:       "Validate",
 		Interface:  []string{"config"}, // ObjectName = "config"
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 152, // Inside DemoVariableAssignments (after config := CreateConfig())
 	}
 	edge2 := &graph.Edge{From: demoFunc, To: configValidateCall}
 	demoFunc.OutgoingEdges = append(demoFunc.OutgoingEdges, edge2)
 	codeGraph.Nodes["call_config_validate"] = configValidateCall
 
-	// Setup registry
+	// Setup registry with absolute path
 	registry := &core.GoModuleRegistry{
 		DirToImport: map[string]string{
-			filepath.Dir(fixturePath): "typetracking",
+			filepath.Dir(absFixturePath): "typetracking",
 		},
 		StdlibPackages: map[string]bool{},
 	}
@@ -940,7 +948,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		},
 		AssignedFrom: "typetracking.GetUserPointer",
 		Location: resolution.Location{
-			File: fixturePath,
+			File: absFixturePath,
 			Line: 143,
 		},
 	}
@@ -956,7 +964,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 		},
 		AssignedFrom: "typetracking.CreateConfig",
 		Location: resolution.Location{
-			File: fixturePath,
+			File: absFixturePath,
 			Line: 144,
 		},
 	}

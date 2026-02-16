@@ -2,11 +2,13 @@ package extraction
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestExtractGoVariables_Literals tests literal value assignments.
@@ -527,18 +529,22 @@ func Test() {
 func TestExtractGoVariables_Integration(t *testing.T) {
 	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
 
+	// Convert to absolute path for consistency with ExtractGoVariableAssignments
+	absFixturePath, err := filepath.Abs(fixturePath)
+	require.NoError(t, err)
+
 	// Read fixture
-	sourceCode, err := os.ReadFile(fixturePath)
+	sourceCode, err := os.ReadFile(absFixturePath)
 	if err != nil {
 		t.Skip("Fixture file not found, skipping integration test")
 		return
 	}
 
-	// Setup
+	// Setup with absolute path
 	registry := &core.GoModuleRegistry{
 		ModulePath: "github.com/test/typetracking",
 		DirToImport: map[string]string{
-			"../../../test-fixtures/golang/type_tracking": "github.com/test/typetracking",
+			filepath.Dir(absFixturePath): "github.com/test/typetracking",
 		},
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
@@ -568,7 +574,7 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 
 	// Execute
 	err = ExtractGoVariableAssignments(
-		fixturePath,
+		absFixturePath,
 		sourceCode,
 		typeEngine,
 		registry,
