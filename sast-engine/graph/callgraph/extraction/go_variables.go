@@ -212,7 +212,7 @@ func extractReceiverType(receiverNode *sitter.Node, sourceCode []byte) string {
 }
 
 // processShortVarDeclaration processes a short_var_declaration node.
-// Placeholder for now, will be implemented in next step.
+// Extracts variable names and infers types from RHS.
 func processShortVarDeclaration(
 	node *sitter.Node,
 	sourceCode []byte,
@@ -222,11 +222,60 @@ func processShortVarDeclaration(
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
 ) {
-	// TODO: Implement in Step 4
+	// Use existing helper to extract variable info
+	varInfos := golangpkg.ParseShortVarDeclaration(node, sourceCode)
+	if len(varInfos) == 0 {
+		return
+	}
+
+	// Get RHS node for type inference
+	rhsNode := node.ChildByFieldName("right")
+	if rhsNode == nil {
+		return
+	}
+
+	// For multi-assignment (x, y := foo()), all variables get same type
+	// For single assignment (x := foo()), just one variable
+	for _, varInfo := range varInfos {
+		// Skip blank identifier
+		if varInfo.Name == "_" {
+			continue
+		}
+
+		// Infer type from RHS
+		typeInfo := inferTypeFromRHS(
+			rhsNode,
+			sourceCode,
+			filePath,
+			functionFQN,
+			typeEngine,
+			registry,
+			importMap,
+		)
+
+		if typeInfo == nil {
+			// Could not infer type, skip
+			continue
+		}
+
+		// Create variable binding
+		binding := &resolution.GoVariableBinding{
+			VarName:      varInfo.Name,
+			Type:         typeInfo,
+			AssignedFrom: varInfo.Value,
+			Location: resolution.Location{
+				File: filePath,
+				Line: int(varInfo.LineNumber),
+			},
+		}
+
+		// Add to function scope
+		typeEngine.AddVariableBinding(functionFQN, binding)
+	}
 }
 
 // processAssignmentStatement processes an assignment_statement node.
-// Placeholder for now, will be implemented in next step.
+// Handles reassignments: x = value.
 func processAssignmentStatement(
 	node *sitter.Node,
 	sourceCode []byte,
@@ -236,5 +285,75 @@ func processAssignmentStatement(
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
 ) {
-	// TODO: Implement in Step 4
+	// Use existing helper to extract variable info
+	varInfos := golangpkg.ParseAssignment(node, sourceCode)
+	if len(varInfos) == 0 {
+		return
+	}
+
+	// Get RHS node for type inference
+	rhsNode := node.ChildByFieldName("right")
+	if rhsNode == nil {
+		return
+	}
+
+	// Process each LHS variable
+	for _, varInfo := range varInfos {
+		// Infer type from RHS
+		typeInfo := inferTypeFromRHS(
+			rhsNode,
+			sourceCode,
+			filePath,
+			functionFQN,
+			typeEngine,
+			registry,
+			importMap,
+		)
+
+		if typeInfo == nil {
+			// Could not infer type, skip
+			continue
+		}
+
+		// Create variable binding (allows multiple bindings for reassignments)
+		binding := &resolution.GoVariableBinding{
+			VarName:      varInfo.Name,
+			Type:         typeInfo,
+			AssignedFrom: varInfo.Value,
+			Location: resolution.Location{
+				File: filePath,
+				Line: int(varInfo.LineNumber),
+			},
+		}
+
+		// Add to function scope
+		typeEngine.AddVariableBinding(functionFQN, binding)
+	}
+}
+
+// inferTypeFromRHS infers the type from a RHS expression node.
+// Returns nil if type cannot be inferred.
+//
+// Handles:
+//   - Function calls: Look up return type
+//   - Literals: Return builtin type
+//   - Variable refs: Copy type from scope
+//   - Struct literals: Extract type name
+//   - Address-of operator: Recurse on operand
+func inferTypeFromRHS(
+	rhsNode *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) *core.TypeInfo {
+	if rhsNode == nil {
+		return nil
+	}
+
+	// TODO: Implement type inference for different RHS patterns
+	// This will be implemented in Steps 5-7
+	return nil
 }
