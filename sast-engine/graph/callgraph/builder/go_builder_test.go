@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -836,4 +837,178 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBuildGoCallGraph_MethodResolution is an integration test that verifies
+// variable-based method calls are resolved end-to-end through BuildGoCallGraph.
+// This uses the all_type_patterns.go fixture to validate realistic scenarios.
+func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
+	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
+
+	// Build CodeGraph with realistic nodes that would come from PR-06 AST parsing
+	codeGraph := &graph.CodeGraph{
+		Nodes: make(map[string]*graph.Node),
+	}
+
+	// Function: DemoVariableAssignments() - contains variable.method() calls
+	demoFunc := &graph.Node{
+		ID:         "demo_func",
+		Type:       "function_declaration",
+		Name:       "DemoVariableAssignments",
+		File:       fixturePath,
+		LineNumber: 141,
+	}
+	codeGraph.Nodes["demo_func"] = demoFunc
+
+	// Method: (*User).Save() error
+	saveMethod := &graph.Node{
+		ID:         "user_save",
+		Type:       "method_declaration",
+		Name:       "Save",
+		DataType:   "User", // Receiver type
+		File:       fixturePath,
+		LineNumber: 124,
+		ReturnType: "error",
+	}
+	codeGraph.Nodes["user_save"] = saveMethod
+
+	// Method: (*Config).Validate() (bool, error)
+	validateMethod := &graph.Node{
+		ID:         "config_validate",
+		Type:       "method_declaration",
+		Name:       "Validate",
+		DataType:   "Config",
+		File:       fixturePath,
+		LineNumber: 133,
+		ReturnType: "(bool, error)",
+	}
+	codeGraph.Nodes["config_validate"] = validateMethod
+
+	// Call node: user.Save() inside DemoVariableAssignments
+	// This simulates what PR-06 AST parsing would create
+	userSaveCall := &graph.Node{
+		ID:         "call_user_save",
+		Type:       "method_expression",
+		Name:       "Save",
+		Interface:  []string{"user"}, // ObjectName = "user"
+		File:       fixturePath,
+		LineNumber: 150, // Inside DemoVariableAssignments (after user := GetUserPointer())
+	}
+	// Set up parent-child relationship
+	edge1 := &graph.Edge{From: demoFunc, To: userSaveCall}
+	demoFunc.OutgoingEdges = append(demoFunc.OutgoingEdges, edge1)
+	codeGraph.Nodes["call_user_save"] = userSaveCall
+
+	// Call node: config.Validate() inside DemoVariableAssignments
+	configValidateCall := &graph.Node{
+		ID:         "call_config_validate",
+		Type:       "method_expression",
+		Name:       "Validate",
+		Interface:  []string{"config"}, // ObjectName = "config"
+		File:       fixturePath,
+		LineNumber: 152, // Inside DemoVariableAssignments (after config := CreateConfig())
+	}
+	edge2 := &graph.Edge{From: demoFunc, To: configValidateCall}
+	demoFunc.OutgoingEdges = append(demoFunc.OutgoingEdges, edge2)
+	codeGraph.Nodes["call_config_validate"] = configValidateCall
+
+	// Setup registry
+	registry := &core.GoModuleRegistry{
+		DirToImport: map[string]string{
+			filepath.Dir(fixturePath): "typetracking",
+		},
+		StdlibPackages: map[string]bool{},
+	}
+
+	// Initialize type engine
+	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
+	// Manually populate variable bindings that would come from PR-15 variable extraction
+	// In DemoVariableAssignments:
+	//   user := GetUserPointer()  // Type: *User
+	//   config := CreateConfig()  // Type: Config
+	demoFQN := "typetracking.DemoVariableAssignments"
+	scope := resolution.NewGoFunctionScope(demoFQN)
+
+	// Variable: user (type: *User from GetUserPointer)
+	userBinding := &resolution.GoVariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "typetracking.User", // Note: pointer stripped for method lookup
+			Confidence: 1.0,
+			Source:     "function_call",
+		},
+		AssignedFrom: "typetracking.GetUserPointer",
+		Location: resolution.Location{
+			File: fixturePath,
+			Line: 143,
+		},
+	}
+	scope.AddVariable(userBinding)
+
+	// Variable: config (type: Config from CreateConfig)
+	configBinding := &resolution.GoVariableBinding{
+		VarName: "config",
+		Type: &core.TypeInfo{
+			TypeFQN:    "typetracking.Config",
+			Confidence: 1.0,
+			Source:     "function_call",
+		},
+		AssignedFrom: "typetracking.CreateConfig",
+		Location: resolution.Location{
+			File: fixturePath,
+			Line: 144,
+		},
+	}
+	scope.AddVariable(configBinding)
+
+	typeEngine.AddScope(scope)
+
+	// Build call graph
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine)
+	require.NoError(t, err)
+	assert.NotNil(t, callGraph)
+
+	// Verify functions were indexed
+	assert.Contains(t, callGraph.Functions, "typetracking.DemoVariableAssignments")
+	assert.Contains(t, callGraph.Functions, "typetracking.User.Save")
+	assert.Contains(t, callGraph.Functions, "typetracking.Config.Validate")
+
+	// Verify call sites for DemoVariableAssignments
+	callSites := callGraph.CallSites[demoFQN]
+	assert.NotEmpty(t, callSites, "DemoVariableAssignments should have call sites")
+
+	// Track which methods were resolved
+	var userSaveResolved bool
+	var configValidateResolved bool
+
+	for _, cs := range callSites {
+		t.Logf("Call site: Target=%s, TargetFQN=%s, Resolved=%v", cs.Target, cs.TargetFQN, cs.Resolved)
+
+		if cs.Target == "Save" && cs.Resolved {
+			assert.Equal(t, "typetracking.User.Save", cs.TargetFQN, "user.Save() should resolve to User.Save")
+			userSaveResolved = true
+		}
+
+		if cs.Target == "Validate" && cs.Resolved {
+			assert.Equal(t, "typetracking.Config.Validate", cs.TargetFQN, "config.Validate() should resolve to Config.Validate")
+			configValidateResolved = true
+		}
+	}
+
+	// Assert both methods were resolved via variable types
+	assert.True(t, userSaveResolved, "user.Save() should be resolved via variable type")
+	assert.True(t, configValidateResolved, "config.Validate() should be resolved via variable type")
+
+	// Verify edges were added
+	callees := callGraph.GetCallees(demoFQN)
+	assert.Contains(t, callees, "typetracking.User.Save", "Should have edge to User.Save")
+	assert.Contains(t, callees, "typetracking.Config.Validate", "Should have edge to Config.Validate")
+
+	// Verify reverse edges
+	userSaveCallers := callGraph.GetCallers("typetracking.User.Save")
+	assert.Contains(t, userSaveCallers, demoFQN, "User.Save should have DemoVariableAssignments as caller")
+
+	configValidateCallers := callGraph.GetCallers("typetracking.Config.Validate")
+	assert.Contains(t, configValidateCallers, demoFQN, "Config.Validate should have DemoVariableAssignments as caller")
 }
