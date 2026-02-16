@@ -8,6 +8,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	dockerpkg "github.com/shivasurya/code-pathfinder/sast-engine/mcp/docker"
 )
 
 // LSP Symbol Kind constants (Language Server Protocol specification).
@@ -427,6 +428,64 @@ Examples:
 				Required: []string{"file_path"},
 			},
 		},
+		{
+			Name: "get_docker_dependencies",
+			Description: `Retrieves dependency information for Docker entities (compose services or Dockerfile stages).
+
+Use cases:
+- Map docker-compose service dependencies (depends_on relationships)
+- Analyze multi-stage Dockerfile build dependencies (COPY --from)
+- Traverse upstream/downstream dependency chains
+
+Examples:
+- get_docker_dependencies(type="compose", name="web") - find all dependencies for "web" service
+- get_docker_dependencies(type="dockerfile", name="builder", file_path="Dockerfile") - find stage dependencies
+- get_docker_dependencies(type="compose", name="api", direction="upstream", max_depth=2) - upstream only, 2 levels
+
+Parameters:
+- type: Entity type - "compose" for docker-compose services or "dockerfile" for Dockerfile stages (required)
+- name: Entity name - service name (for compose) or stage name/alias (for dockerfile) (required)
+- file_path: Filter to specific file path (optional)
+- direction: Traversal direction - "upstream" (dependencies), "downstream" (dependents), or "both" (default: "both")
+- max_depth: Maximum traversal depth (default: 10)
+
+Returns:
+- target: Target entity name
+- type: Entity type (compose or dockerfile)
+- file: Source file path
+- line: Line number
+- direction: Traversal direction used
+- max_depth: Maximum depth used
+- upstream: Array of dependencies (entities this depends on)
+- downstream: Array of dependents (entities that depend on this)
+- dependency_chain: Simple chain string (e.g., "db → api → web")`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"type": {
+						Type:        "string",
+						Description: "Entity type: \"compose\" for docker-compose services or \"dockerfile\" for Dockerfile stages",
+					},
+					"name": {
+						Type:        "string",
+						Description: "Entity name: service name (for compose) or stage name/alias (for dockerfile)",
+					},
+					"file_path": {
+						Type:        "string",
+						Description: "Optional: Filter to specific file path",
+					},
+					"direction": {
+						Type:        "string",
+						Description: "Traversal direction: \"upstream\", \"downstream\", or \"both\" (default: \"both\")",
+					},
+					"max_depth": {
+						Type:        "integer",
+						Description: "Maximum traversal depth (default: 10)",
+					},
+				},
+				Required: []string{"type", "name"},
+			},
+		},
 	}
 }
 
@@ -459,6 +518,8 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 		return s.toolFindComposeServices(args)
 	case "get_dockerfile_details":
 		return s.toolGetDockerfileDetails(args)
+	case "get_docker_dependencies":
+		return s.toolGetDockerDependencies(args)
 	default:
 		return fmt.Sprintf(`{"error": "Unknown tool: %s"}`, name), true
 	}
@@ -1824,6 +1885,72 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 
 	result["summary"] = summary
 
+	bytes, _ := json.Marshal(result)
+	return string(bytes), false
+}
+
+// toolGetDockerDependencies retrieves dependency information for Docker entities.
+func (s *Server) toolGetDockerDependencies(args map[string]interface{}) (string, bool) {
+	// Extract parameters
+	entityType, _ := args["type"].(string)
+	if entityType == "" {
+		return `{"error": "type parameter is required"}`, false
+	}
+
+	name, _ := args["name"].(string)
+	if name == "" {
+		return `{"error": "name parameter is required"}`, false
+	}
+
+	filePath, _ := args["file_path"].(string)
+
+	direction, _ := args["direction"].(string)
+	if direction == "" {
+		direction = "both"
+	}
+
+	maxDepth := 10
+	if depth, ok := args["max_depth"].(float64); ok {
+		maxDepth = int(depth)
+	}
+
+	// Build dependency graph based on entity type
+	var depGraph *dockerpkg.DependencyGraph
+	switch entityType {
+	case "compose":
+		depGraph = dockerpkg.BuildComposeGraph(s.codeGraph)
+	case "dockerfile":
+		depGraph = dockerpkg.BuildDockerfileGraph(s.codeGraph, filePath)
+	default:
+		return `{"error": "type must be 'compose' or 'dockerfile'"}`, false
+	}
+
+	// Parse direction
+	var traversalDirection dockerpkg.TraversalDirection
+	switch direction {
+	case "upstream":
+		traversalDirection = dockerpkg.DirectionUpstream
+	case "downstream":
+		traversalDirection = dockerpkg.DirectionDownstream
+	case "both":
+		traversalDirection = dockerpkg.DirectionBoth
+	default:
+		return `{"error": "direction must be 'upstream', 'downstream', or 'both'"}`, false
+	}
+
+	// Perform traversal
+	result := dockerpkg.Traverse(depGraph, name, traversalDirection, maxDepth)
+
+	// Add filters applied
+	result.FiltersApplied = map[string]interface{}{
+		"type":      entityType,
+		"name":      name,
+		"file_path": filePath,
+		"direction": direction,
+		"max_depth": maxDepth,
+	}
+
+	// Marshal to JSON
 	bytes, _ := json.Marshal(result)
 	return string(bytes), false
 }
