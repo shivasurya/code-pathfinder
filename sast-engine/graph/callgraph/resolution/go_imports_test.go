@@ -302,7 +302,7 @@ func TestParseGoMod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			modulePath, err := parseGoMod(tt.projectRoot)
+			modulePath, _, err := parseGoMod(tt.projectRoot)
 
 			if tt.wantErr {
 				assert.Error(t, err)

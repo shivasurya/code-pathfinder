@@ -325,6 +325,9 @@ type GoModuleRegistry struct {
 	// Module path from go.mod (e.g., "github.com/example/myapp").
 	ModulePath string
 
+	// Go version from go.mod (e.g., "1.21").
+	GoVersion string
+
 	// Maps absolute directory path to full import path.
 	// Key: "/abs/path/to/project/handlers"
 	// Value: "github.com/example/myapp/handlers"

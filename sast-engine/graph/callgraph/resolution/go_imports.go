@@ -24,12 +24,13 @@ import (
 func BuildGoModuleRegistry(projectRoot string) (*core.GoModuleRegistry, error) {
 	registry := core.NewGoModuleRegistry()
 
-	// Step 1: Parse go.mod to get module path
-	modulePath, err := parseGoMod(projectRoot)
+	// Step 1: Parse go.mod to get module path and Go version
+	modulePath, goVersion, err := parseGoMod(projectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
 	}
 	registry.ModulePath = modulePath
+	registry.GoVersion = goVersion
 
 	// Step 2: Get absolute path
 	absRoot, err := filepath.Abs(projectRoot)
@@ -225,30 +226,45 @@ func processImportSpec(node *sitter.Node, sourceCode []byte, importMap *core.GoI
 //
 // Returns:
 //   - module path (e.g., "github.com/example/myapp") or error if not found
-func parseGoMod(projectRoot string) (string, error) {
+func parseGoMod(projectRoot string) (modulePath string, goVersion string, err error) {
 	goModPath := filepath.Join(projectRoot, "go.mod")
 
-	content, err := os.ReadFile(goModPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("go.mod not found in %s", projectRoot)
+	content, readErr := os.ReadFile(goModPath)
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			return "", "", fmt.Errorf("go.mod not found in %s", projectRoot)
 		}
-		return "", err
+		return "", "", readErr
 	}
 
 	// Parse go.mod line by line
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+
+		// Extract module path
 		if strings.HasPrefix(line, "module ") {
 			parts := strings.Fields(line)
 			if len(parts) >= 2 {
-				return parts[1], nil
+				modulePath = parts[1]
+			}
+		}
+
+		// Extract Go version
+		if strings.HasPrefix(line, "go ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				goVersion = parts[1]
 			}
 		}
 	}
 
-	return "", fmt.Errorf("module declaration not found in go.mod")
+	if modulePath == "" {
+		return "", "", fmt.Errorf("module declaration not found in go.mod")
+	}
+
+	// goVersion is optional, so we don't error if it's missing
+	return modulePath, goVersion, nil
 }
 
 // goStdlibSet returns a set of Go standard library packages for Go 1.21.
