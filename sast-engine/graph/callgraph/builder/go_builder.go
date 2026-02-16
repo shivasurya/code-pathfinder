@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,12 +70,15 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	}
 
 	// Pass 1: Index all function definitions
+	fmt.Fprintf(os.Stderr, "  Pass 1: Indexing functions...\n")
 	functionContext := indexGoFunctions(codeGraph, callGraph, registry)
+	fmt.Fprintf(os.Stderr, "    Indexed %d functions\n", len(callGraph.Functions))
 
 	// Pass 2a: Extract return types from all indexed Go functions
 	// Only run if typeEngine is provided (not nil)
 	// ExtractGoReturnTypes operates on already-indexed functions in callGraph
 	if typeEngine != nil {
+		fmt.Fprintf(os.Stderr, "  Pass 2a: Extracting return types...\n")
 		_ = extraction.ExtractGoReturnTypes(callGraph, registry, typeEngine)
 
 		// Pass 2b: Extract variable assignments from all Go source files (parallel)
@@ -85,6 +89,9 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				goFiles[node.File] = true
 			}
 		}
+
+		totalFiles := len(goFiles)
+		fmt.Fprintf(os.Stderr, "  Pass 2b: Extracting variable assignments (%d files)...\n", totalFiles)
 
 		// Determine optimal worker count (same pattern as Python builder)
 		numWorkers := getOptimalWorkerCount()
@@ -110,7 +117,11 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					_ = extraction.ExtractGoVariableAssignments(filePath, sourceCode, typeEngine, registry, importMaps[filePath])
 
 					// Progress tracking
-					varProcessed.Add(1)
+					count := varProcessed.Add(1)
+					if count%50 == 0 || count == int64(totalFiles) {
+						percentage := float64(count) / float64(totalFiles) * 100
+						fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (%.1f%%)", count, totalFiles, percentage)
+					}
 				}
 			}()
 		}
@@ -121,13 +132,24 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		}
 		close(varJobs)
 		wg.Wait()
+
+		// Final progress line
+		if totalFiles > 0 {
+			fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (100.0%%)\n", totalFiles, totalFiles)
+		}
 	}
 
 	// Pass 3: Extract call sites from call_expression nodes
+	fmt.Fprintf(os.Stderr, "  Pass 3: Extracting call sites...\n")
 	callSites := extractGoCallSitesFromCodeGraph(codeGraph, callGraph)
+	fmt.Fprintf(os.Stderr, "    Found %d call sites\n", len(callSites))
 
 	// Pass 4: Resolve call targets and add edges
-	for _, callSite := range callSites {
+	fmt.Fprintf(os.Stderr, "  Pass 4: Resolving call targets...\n")
+	totalCallSites := len(callSites)
+	resolvedCount := 0
+
+	for i, callSite := range callSites {
 		importMap := importMaps[callSite.CallerFile]
 		if importMap == nil {
 			// No import map - can still resolve builtins and same-package calls
@@ -137,6 +159,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
 
 		if resolved {
+			resolvedCount++
 			// Add edge from caller to callee
 			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
 
@@ -162,6 +185,21 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				FailureReason: "unresolved_go_call",
 			})
 		}
+
+		// Progress tracking
+		if (i+1)%500 == 0 || i+1 == totalCallSites {
+			percentage := float64(i+1) / float64(totalCallSites) * 100
+			resolutionRate := float64(resolvedCount) / float64(i+1) * 100
+			fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%) - %.1f%% resolved",
+				i+1, totalCallSites, percentage, resolutionRate)
+		}
+	}
+
+	// Final summary
+	if totalCallSites > 0 {
+		finalResolutionRate := float64(resolvedCount) / float64(totalCallSites) * 100
+		fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (100.0%%) - %.1f%% resolved\n",
+			totalCallSites, totalCallSites, finalResolutionRate)
 	}
 
 	return callGraph, nil
@@ -180,7 +218,20 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.GoModuleRegistry) map[string][]*graph.Node {
 	functionContext := make(map[string][]*graph.Node)
 
+	totalNodes := len(codeGraph.Nodes)
+	processed := 0
+	indexed := 0
+
 	for _, node := range codeGraph.Nodes {
+		processed++
+
+		// Progress tracking every 5000 nodes
+		if processed%5000 == 0 {
+			percentage := float64(processed) / float64(totalNodes) * 100
+			fmt.Fprintf(os.Stderr, "\r    Scanning nodes: %d/%d (%.1f%%) - %d functions found",
+				processed, totalNodes, percentage, indexed)
+		}
+
 		// Only index Go function-like nodes
 		if node.Type != "function_declaration" && node.Type != "method" && node.Type != "func_literal" {
 			continue
@@ -194,6 +245,13 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 
 		// Add to function context for name-based lookup
 		functionContext[node.Name] = append(functionContext[node.Name], node)
+		indexed++
+	}
+
+	// Final line
+	if totalNodes > 0 {
+		fmt.Fprintf(os.Stderr, "\r    Scanning nodes: %d/%d (100.0%%) - %d functions found\n",
+			totalNodes, totalNodes, indexed)
 	}
 
 	return functionContext
@@ -210,11 +268,32 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core.CallGraph) []*CallSiteInternal {
 	callSites := make([]*CallSiteInternal, 0)
 
+	// Build reverse map: node ID → FQN (O(n) once instead of O(n²) per call)
+	nodeIDToFQN := make(map[string]string, len(callGraph.Functions))
+	for fqn, funcNode := range callGraph.Functions {
+		nodeIDToFQN[funcNode.ID] = fqn
+	}
+
+	totalNodes := len(codeGraph.Nodes)
+	processed := 0
+	callNodesFound := 0
+
 	for _, node := range codeGraph.Nodes {
+		processed++
+
+		// Progress tracking every 5000 nodes
+		if processed%5000 == 0 {
+			percentage := float64(processed) / float64(totalNodes) * 100
+			fmt.Fprintf(os.Stderr, "\r    Scanning for calls: %d/%d (%.1f%%) - %d calls found",
+				processed, totalNodes, percentage, callNodesFound)
+		}
+
 		// Go call nodes are either "call" or "method_expression"
 		if node.Type != "call" && node.Type != "method_expression" {
 			continue
 		}
+
+		callNodesFound++
 
 		// Extract function name and object name
 		// Function name is in node.Name
@@ -229,13 +308,8 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		containingFunc := findContainingGoFunction(node, codeGraph)
 		var callerFQN string
 		if containingFunc != nil {
-			// Look up FQN from CallGraph.Functions (reverse lookup)
-			for fqn, funcNode := range callGraph.Functions {
-				if funcNode.ID == containingFunc.ID {
-					callerFQN = fqn
-					break
-				}
-			}
+			// Fast O(1) lookup using reverse map
+			callerFQN = nodeIDToFQN[containingFunc.ID]
 		}
 
 		callSite := &CallSiteInternal{
@@ -247,6 +321,12 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		}
 
 		callSites = append(callSites, callSite)
+	}
+
+	// Final line
+	if totalNodes > 0 {
+		fmt.Fprintf(os.Stderr, "\r    Scanning for calls: %d/%d (100.0%%) - %d calls found\n",
+			totalNodes, totalNodes, callNodesFound)
 	}
 
 	return callSites

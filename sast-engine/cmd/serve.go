@@ -86,12 +86,18 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	// 4. Build Go call graph if go.mod exists and merge with Python call graph
 	goModPath := filepath.Join(projectPath, "go.mod")
 	if _, err := os.Stat(goModPath); err == nil {
-		logger.Debug("Detected go.mod, building Go call graph...")
+		fmt.Fprintf(os.Stderr, "Detected go.mod, building Go module registry...\n")
 
 		goRegistry, err := resolution.BuildGoModuleRegistry(projectPath)
 		if err != nil {
 			logger.Warning("Failed to build Go module registry: %v", err)
 		} else {
+			if goRegistry.GoVersion != "" {
+				fmt.Fprintf(os.Stderr, "Detected Go version: %s\n", goRegistry.GoVersion)
+			}
+			fmt.Fprintf(os.Stderr, "Go module: %s\n", goRegistry.ModulePath)
+			fmt.Fprintf(os.Stderr, "Building Go call graph...\n")
+
 			// Initialize Go type inference engine for Phase 2 type tracking
 			goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
