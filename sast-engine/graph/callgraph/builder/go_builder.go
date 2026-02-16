@@ -172,7 +172,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 //
 // Handles:
 //   - function_definition: package-level functions
-//   - method_declaration: methods with receivers
+//   - method: methods with receivers
 //   - func_literal: anonymous functions/closures
 //
 // Returns:
@@ -182,7 +182,7 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 
 	for _, node := range codeGraph.Nodes {
 		// Only index Go function-like nodes
-		if node.Type != "function_declaration" && node.Type != "method_declaration" && node.Type != "func_literal" {
+		if node.Type != "function_declaration" && node.Type != "method" && node.Type != "func_literal" {
 			continue
 		}
 
@@ -349,7 +349,7 @@ func resolveGoCallTarget(
 //   - Closure: "github.com/myapp/handlers.HandleRequest.$anon_1"
 //
 // Parameters:
-//   - node: the function node (function_definition, method_declaration, func_literal)
+//   - node: the function node (function_declaration, method, func_literal)
 //   - codeGraph: the code graph for parent lookup
 //   - registry: module registry for import path mapping
 //
@@ -371,11 +371,11 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 		// Package-level function: module.Function
 		return importPath + "." + node.Name
 
-	case "method_declaration":
+	case "method":
 		// Method: module.Receiver.Method
-		// Receiver type is stored in node.DataType
-		if node.DataType != "" {
-			return importPath + "." + node.DataType + "." + node.Name
+		// Receiver type is stored in node.Interface[0]
+		if len(node.Interface) > 0 && node.Interface[0] != "" {
+			return importPath + "." + node.Interface[0] + "." + node.Name
 		}
 		// Fallback if no receiver type
 		return importPath + "." + node.Name
@@ -419,7 +419,7 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 		}
 
 		// Check if parent is a function-like node
-		if parent.Type == "function_declaration" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method" || parent.Type == "func_literal" {
 			return parent
 		}
 
@@ -448,7 +448,7 @@ func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *
 			return nil
 		}
 
-		if parent.Type == "function_definition" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method" || parent.Type == "func_literal" {
 			return parent
 		}
 

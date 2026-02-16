@@ -93,9 +93,9 @@ func TestIndexGoFunctions(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "method1",
-					Type:       "method_declaration",
+					Type:       "method",
 					Name:       "Start",
-					DataType:   "Server",
+					Interface:  []string{"Server"},
 					File:       "/project/models/server.go",
 					LineNumber: 15,
 				},
@@ -427,10 +427,10 @@ func TestBuildGoFQN(t *testing.T) {
 		{
 			name: "method FQN with receiver",
 			node: &graph.Node{
-				Type:     "method_declaration",
-				Name:     "Start",
-				DataType: "Server",
-				File:     "/project/server/server.go",
+				Type:      "method",
+				Name:      "Start",
+				Interface: []string{"Server"},
+				File:      "/project/server/server.go",
 			},
 			registry: &core.GoModuleRegistry{
 				DirToImport: map[string]string{
@@ -450,7 +450,7 @@ func TestBuildGoFQN(t *testing.T) {
 			codeGraph: func() *graph.CodeGraph {
 				func1 := &graph.Node{
 					ID:   "func1",
-					Type: "function_definition",
+					Type: "function_declaration",
 					Name: "HandleRequest",
 					File: "/project/handlers/handler.go",
 				}
@@ -804,7 +804,7 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 				}
 				methodFQN := methodTypeFQN + "." + tt.callSite.FunctionName
 				callGraph.Functions[methodFQN] = &graph.Node{
-					Type: "method_declaration",
+					Type: "method",
 					Name: tt.callSite.FunctionName,
 					File: "/project/models/user.go",
 				}
@@ -863,9 +863,9 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	// Method: (*User).Save() error
 	saveMethod := &graph.Node{
 		ID:         "user_save",
-		Type:       "method_declaration",
+		Type:       "method",
 		Name:       "Save",
-		DataType:   "User", // Receiver type
+		Interface:  []string{"User"}, // Receiver type
 		File:       fixturePath,
 		LineNumber: 124,
 		ReturnType: "error",
@@ -875,9 +875,9 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	// Method: (*Config).Validate() (bool, error)
 	validateMethod := &graph.Node{
 		ID:         "config_validate",
-		Type:       "method_declaration",
+		Type:       "method",
 		Name:       "Validate",
-		DataType:   "Config",
+		Interface:  []string{"Config"}, // Receiver type
 		File:       fixturePath,
 		LineNumber: 133,
 		ReturnType: "(bool, error)",
