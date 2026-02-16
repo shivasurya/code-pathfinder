@@ -50,83 +50,95 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	address, _ := cmd.Flags().GetString("address")
 	disableAnalytics, _ := cmd.Flags().GetBool("disable-metrics")
 
-	fmt.Fprintln(os.Stderr, "Building index...")
-	start := time.Now()
-
-	// Auto-detect Python version (same logic as BuildCallGraph).
+	// Auto-detect Python version
 	pythonVersion := builder.DetectPythonVersion(projectPath)
 	if pythonVersionOverride != "" {
 		pythonVersion = pythonVersionOverride
-		fmt.Fprintf(os.Stderr, "Using Python version override: %s\n", pythonVersion)
-	} else {
-		fmt.Fprintf(os.Stderr, "Detected Python version: %s\n", pythonVersion)
 	}
 
-	// Create logger for build process (verbose to stderr)
-	logger := output.NewLogger(output.VerbosityVerbose)
+	fmt.Fprintln(os.Stderr, "Starting MCP server...")
 
-	// 1. Initialize code graph (AST parsing)
-	codeGraph := graph.Initialize(projectPath, nil)
-	if codeGraph == nil {
-		return fmt.Errorf("failed to initialize code graph")
-	}
+	// Create server with empty index (will be populated by background indexing)
+	server := mcp.NewServerWithBackgroundIndexing(projectPath, pythonVersion, disableAnalytics)
 
-	// 2. Build module registry
-	moduleRegistry, err := registry.BuildModuleRegistry(projectPath, true) // skip tests
-	if err != nil {
-		return fmt.Errorf("failed to build module registry: %w", err)
-	}
+	// Start indexing in background goroutine
+	go func() {
+		fmt.Fprintln(os.Stderr, "Building index in background...")
+		server.UpdateIndexingStatus(mcp.StateIndexing, mcp.PhaseParsing, "Parsing AST...", 0.1)
+		start := time.Now()
 
-	// 3. Build call graph (5-pass algorithm)
-	callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
-	if err != nil {
-		return fmt.Errorf("failed to build call graph: %w", err)
-	}
+		logger := output.NewLogger(output.VerbosityVerbose)
 
-	// 4. Build Go call graph if go.mod exists and merge with Python call graph
-	goModPath := filepath.Join(projectPath, "go.mod")
-	if _, err := os.Stat(goModPath); err == nil {
-		fmt.Fprintf(os.Stderr, "Detected go.mod, building Go module registry...\n")
+		// 1. Initialize code graph (AST parsing)
+		server.UpdateIndexingStatus(mcp.StateIndexing, mcp.PhaseParsing, "Parsing source files...", 0.2)
+		codeGraph := graph.Initialize(projectPath, nil)
+		if codeGraph == nil {
+			server.SetIndexingError(fmt.Errorf("failed to initialize code graph"))
+			return
+		}
 
-		goRegistry, err := resolution.BuildGoModuleRegistry(projectPath)
+		// 2. Build module registry
+		server.UpdateIndexingStatus(mcp.StateIndexing, mcp.PhaseModuleRegistry, "Building module registry...", 0.3)
+		moduleRegistry, err := registry.BuildModuleRegistry(projectPath, true)
 		if err != nil {
-			logger.Warning("Failed to build Go module registry: %v", err)
-		} else {
-			if goRegistry.GoVersion != "" {
-				fmt.Fprintf(os.Stderr, "Detected Go version: %s\n", goRegistry.GoVersion)
-			}
-			fmt.Fprintf(os.Stderr, "Go module: %s\n", goRegistry.ModulePath)
-			fmt.Fprintf(os.Stderr, "Building Go call graph...\n")
+			server.SetIndexingError(fmt.Errorf("failed to build module registry: %w", err))
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Loaded manifest: %d modules\n", len(moduleRegistry.Modules))
 
-			// Initialize Go type inference engine for Phase 2 type tracking
-			goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+		// 3. Build call graph (5-pass algorithm)
+		server.UpdateIndexingStatus(mcp.StateIndexing, mcp.PhaseCallGraph, "Building Python call graph...", 0.5)
+		callGraph, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
+		if err != nil {
+			server.SetIndexingError(fmt.Errorf("failed to build call graph: %w", err))
+			return
+		}
 
-			goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+		// 4. Build Go call graph if go.mod exists
+		goModPath := filepath.Join(projectPath, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			server.UpdateIndexingStatus(mcp.StateIndexing, mcp.PhaseCallGraph, "Building Go call graph...", 0.7)
+			fmt.Fprintf(os.Stderr, "Detected go.mod, building Go call graph...\n")
+
+			goRegistry, err := resolution.BuildGoModuleRegistry(projectPath)
 			if err != nil {
-				logger.Warning("Failed to build Go call graph: %v", err)
+				logger.Warning("Failed to build Go module registry: %v", err)
 			} else {
-				builder.MergeCallGraphs(callGraph, goCG)
-				fmt.Fprintf(os.Stderr, "Go call graph merged: %d functions, %d call sites\n",
-					len(goCG.Functions), len(goCG.CallSites))
+				if goRegistry.GoVersion != "" {
+					fmt.Fprintf(os.Stderr, "Detected Go version: %s\n", goRegistry.GoVersion)
+				}
+				fmt.Fprintf(os.Stderr, "Go module: %s\n", goRegistry.ModulePath)
+
+				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+				if err != nil {
+					logger.Warning("Failed to build Go call graph: %v", err)
+				} else {
+					builder.MergeCallGraphs(callGraph, goCG)
+					fmt.Fprintf(os.Stderr, "Go call graph merged: %d functions, %d call sites\n",
+						len(goCG.Functions), len(goCG.CallSites))
+				}
 			}
 		}
-	}
 
-	buildTime := time.Since(start)
-	fmt.Fprintf(os.Stderr, "Index built in %v\n", buildTime)
-	fmt.Fprintf(os.Stderr, "  Total functions: %d\n", len(callGraph.Functions))
-	fmt.Fprintf(os.Stderr, "  Call edges: %d\n", len(callGraph.Edges))
-	fmt.Fprintf(os.Stderr, "  Modules: %d\n", len(moduleRegistry.Modules))
+		buildTime := time.Since(start)
+		fmt.Fprintf(os.Stderr, "Index built in %v\n", buildTime)
+		fmt.Fprintf(os.Stderr, "  Total functions: %d\n", len(callGraph.Functions))
+		fmt.Fprintf(os.Stderr, "  Call edges: %d\n", len(callGraph.Edges))
+		fmt.Fprintf(os.Stderr, "  Modules: %d\n", len(moduleRegistry.Modules))
 
-	// 5. Create MCP server
-	server := mcp.NewServer(projectPath, pythonVersion, callGraph, moduleRegistry, codeGraph, buildTime, disableAnalytics)
+		// Mark indexing as complete and update server with data
+		server.SetIndexReady(callGraph, moduleRegistry, codeGraph, buildTime)
+		fmt.Fprintln(os.Stderr, "Indexing complete - server ready!")
+	}()
 
-	// 6. Start appropriate transport
+	// Start serving immediately (before indexing completes)
+	fmt.Fprintln(os.Stderr, "MCP server ready (indexing in background)...")
+
 	if useHTTP {
 		return runHTTPServer(server, address)
 	}
 
-	fmt.Fprintln(os.Stderr, "Starting MCP server on stdio...")
 	return server.ServeStdio()
 }
 

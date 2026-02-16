@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"sync"
+
 	golangpkg "github.com/shivasurya/code-pathfinder/sast-engine/graph/golang"
 	"github.com/shivasurya/code-pathfinder/sast-engine/model"
 	sitter "github.com/smacker/go-tree-sitter"
@@ -284,10 +286,15 @@ func parseGoCallExpression(tsNode *sitter.Node, sourceCode []byte, graph *CodeGr
 // anonCounters maps parent context names to their anonymous function counter.
 // Used to generate unique $anon_N names scoped to each parent function.
 var anonCounters = make(map[string]int)
+var anonCountersMutex sync.Mutex
 
 // generateAnonName generates a unique anonymous function name scoped to the current context.
 // Returns "$anon_1", "$anon_2", etc. incrementing for each parent context.
+// Thread-safe for concurrent parsing.
 func generateAnonName(currentContext *Node) string {
+	anonCountersMutex.Lock()
+	defer anonCountersMutex.Unlock()
+
 	if currentContext == nil {
 		// Top-level anonymous function (unlikely in Go)
 		anonCounters["$global"]++

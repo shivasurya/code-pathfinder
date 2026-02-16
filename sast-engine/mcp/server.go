@@ -69,6 +69,54 @@ func NewServer(
 	}
 }
 
+// NewServerWithBackgroundIndexing creates a server that will be populated via background indexing.
+func NewServerWithBackgroundIndexing(projectPath, pythonVersion string, disableAnalytics bool) *Server {
+	tracker := NewStatusTracker()
+	// Starts in StateUninitialized
+
+	return &Server{
+		projectPath:      projectPath,
+		pythonVersion:    pythonVersion,
+		callGraph:        nil, // Will be set later
+		moduleRegistry:   nil, // Will be set later
+		codeGraph:        nil, // Will be set later
+		statusTracker:    tracker,
+		degradation:      NewGracefulDegradation(tracker),
+		analytics:        NewAnalytics("stdio", disableAnalytics),
+		disableAnalytics: disableAnalytics,
+	}
+}
+
+// UpdateIndexingStatus updates the indexing progress.
+func (s *Server) UpdateIndexingStatus(state IndexingState, phase IndexingPhase, message string, progress float64) {
+	s.statusTracker.SetPhase(phase, message)
+}
+
+// SetIndexReady marks indexing as complete and updates with indexed data.
+func (s *Server) SetIndexReady(callGraph *core.CallGraph, moduleReg *core.ModuleRegistry,
+	codeGraph *graph.CodeGraph, buildTime time.Duration) {
+	s.callGraph = callGraph
+	s.moduleRegistry = moduleReg
+	s.codeGraph = codeGraph
+	s.buildTime = buildTime
+	s.indexedAt = time.Now()
+
+	stats := &IndexingStats{
+		Functions:     len(callGraph.Functions),
+		CallEdges:     len(callGraph.Edges),
+		Modules:       len(moduleReg.Modules),
+		Files:         len(moduleReg.FileToModule),
+		BuildDuration: buildTime,
+	}
+	s.statusTracker.CompleteIndexing(stats)
+	s.analytics.ReportIndexingComplete(stats)
+}
+
+// SetIndexingError marks indexing as failed.
+func (s *Server) SetIndexingError(err error) {
+	s.statusTracker.FailIndexing(err)
+}
+
 // SetTransport updates the analytics transport type (e.g., "http").
 func (s *Server) SetTransport(transport string) {
 	s.analytics = NewAnalytics(transport, s.disableAnalytics)
