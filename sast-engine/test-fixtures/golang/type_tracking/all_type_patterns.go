@@ -133,3 +133,66 @@ func (c *Config) GetPort() int {
 func (c *Config) Validate() (bool, error) {
 	return true, nil
 }
+
+// ===== VARIABLE ASSIGNMENTS =====
+
+// DemoVariableAssignments demonstrates all variable assignment patterns
+// that Phase 2 should track for type inference.
+func DemoVariableAssignments() {
+	// Function call assignments - type from return type
+	user := GetUserPointer()        // *User
+	config := CreateConfig()        // Config
+	name, err := LoadConfig()       // string, error (multi-assignment)
+	intVal := GetInt()              // int
+	boolVal := GetBool()            // bool
+
+	// Literal assignments - type from literal
+	str := "hello"                  // builtin.string
+	num := 42                       // builtin.int
+	floatNum := 3.14                // builtin.float64
+	flag := true                    // builtin.bool
+	falsyFlag := false              // builtin.bool
+
+	// Variable reference assignments - type copied from original
+	user2 := user                   // *User (copied from user)
+	config2 := config               // Config (copied from config)
+
+	// Struct literal assignments - type from literal type
+	u := User{ID: 1, Name: "Alice"} // User
+	c := Config{Port: 8080}         // Config
+
+	// Pointer to struct literal - type from literal type
+	userPtr := &User{ID: 2, Name: "Bob"} // *User
+	configPtr := &Config{Port: 9090}     // *Config
+
+	// Reassignment - creates new binding for same variable
+	user = &User{ID: 3}             // *User (new binding)
+	config = Config{Port: 3000}     // Config (new binding)
+
+	// Suppress unused variable warnings
+	_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = user2, config2, u, c, userPtr, configPtr, str, num, floatNum, flag, falsyFlag, intVal, boolVal, name, err, user, config
+}
+
+// GetTwoInts returns two integers for multi-assignment testing.
+func GetTwoInts() (int, int) {
+	return 1, 2
+}
+
+// DemoComplexAssignments demonstrates more complex assignment patterns.
+func DemoComplexAssignments() {
+	// Multi-assignment from function
+	x, y := GetTwoInts()            // int, int
+
+	// Assignment from method call
+	user := GetUserPointer()
+	id := user.GetID()              // int
+	name := user.GetName()          // string
+
+	// Chained assignments
+	a := GetInt()                   // int
+	b := a                          // int (copied)
+	c := b                          // int (copied again)
+
+	// Suppress unused variable warnings
+	_, _, _, _, _, _ = x, y, id, name, a, c
+}
