@@ -411,12 +411,105 @@ func inferTypeFromRHS(
 			Source:     "literal",
 		}
 
-	// TODO: Handle other patterns in subsequent steps
-	// - call_expression (function calls)
+	// Function call - look up return type
+	case "call_expression":
+		return inferTypeFromFunctionCall(
+			rhsNode,
+			sourceCode,
+			filePath,
+			typeEngine,
+			registry,
+			importMap,
+		)
+
+	// TODO: Handle other patterns in step 7
 	// - identifier (variable references)
 	// - composite_literal (struct literals)
 	// - unary_expression (address-of operator)
 	default:
 		return nil
+	}
+}
+
+// inferTypeFromFunctionCall infers type from a function call expression.
+// Looks up the function's return type in the TypeInferenceEngine.
+func inferTypeFromFunctionCall(
+	callNode *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) *core.TypeInfo {
+	// Extract function name from call_expression
+	functionNode := callNode.ChildByFieldName("function")
+	if functionNode == nil {
+		return nil
+	}
+
+	funcName := extractFunctionName(functionNode, sourceCode, importMap)
+	if funcName == "" {
+		return nil
+	}
+
+	// Look up return type in engine (populated by Pass 2a)
+	if typeInfo, ok := typeEngine.GetReturnType(funcName); ok {
+		return typeInfo
+	}
+
+	// Function not found or has no return type
+	return nil
+}
+
+// extractFunctionName extracts the function name from a function node.
+// Handles:
+//   - Simple calls: foo()
+//   - Qualified calls: pkg.Foo()
+//   - Method calls: obj.Method() (returns Method)
+func extractFunctionName(
+	funcNode *sitter.Node,
+	sourceCode []byte,
+	importMap *core.GoImportMap,
+) string {
+	nodeType := funcNode.Type()
+
+	switch nodeType {
+	case "identifier":
+		// Simple function call: foo()
+		return funcNode.Content(sourceCode)
+
+	case "selector_expression":
+		// Qualified call: pkg.Foo() or obj.Method()
+		// Get the selector (Foo or Method)
+		fieldNode := funcNode.ChildByFieldName("field")
+		if fieldNode == nil {
+			return ""
+		}
+
+		fieldName := fieldNode.Content(sourceCode)
+
+		// Get the operand (pkg or obj)
+		operandNode := funcNode.ChildByFieldName("operand")
+		if operandNode == nil {
+			return fieldName
+		}
+
+		operandName := operandNode.Content(sourceCode)
+
+		// Check if operand is a package name in imports
+		if importMap != nil {
+			if importPath, ok := importMap.Aliases[operandName]; ok {
+				// It's a package: return importPath.FunctionName
+				return importPath + "." + fieldName
+			}
+		}
+
+		// Could be a method call (obj.Method) or unknown qualified call
+		// Return just the method name for now
+		// The actual resolution will happen in PR-17
+		return fieldName
+
+	default:
+		return ""
 	}
 }
