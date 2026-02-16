@@ -69,7 +69,7 @@ func Test() {
 			}
 			typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 			importMap := &core.GoImportMap{
-				Aliases: make(map[string]string),
+				Imports: make(map[string]string),
 			}
 
 			// Execute
@@ -85,8 +85,9 @@ func Test() {
 			assert.NoError(t, err)
 
 			// Check variable binding was created
-			scope, ok := typeEngine.GetScope("test.Test")
-			assert.True(t, ok, "Expected scope for test.Test")
+			scope := typeEngine.GetScope("test.Test")
+
+			assert.NotNil(t, scope, "Expected scope for test.Test")
 
 			// Get bindings (name depends on test case, but all use same var names)
 			var varName string
@@ -137,7 +138,7 @@ func Test() {
 	})
 
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -152,8 +153,16 @@ func Test() {
 	// Verify
 	assert.NoError(t, err)
 
-	scope, ok := typeEngine.GetScope("test.Test")
-	assert.True(t, ok)
+	scope := typeEngine.GetScope("test.Test")
+
+
+	if scope == nil {
+
+
+		t.Fatal("Expected scope but got nil")
+
+
+	}
 
 	bindings, ok := scope.Variables["user"]
 	assert.True(t, ok)
@@ -178,7 +187,7 @@ func Test() {
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -193,8 +202,16 @@ func Test() {
 	// Verify
 	assert.NoError(t, err)
 
-	scope, ok := typeEngine.GetScope("test.Test")
-	assert.True(t, ok)
+	scope := typeEngine.GetScope("test.Test")
+
+
+	if scope == nil {
+
+
+		t.Fatal("Expected scope but got nil")
+
+
+	}
 
 	// Check name2 has same type as name
 	bindings, ok := scope.Variables["name2"]
@@ -219,7 +236,7 @@ func Test() {
 	u := User{}
 }`,
 			varName:      "u",
-			expectedType: "User",
+			expectedType: "test.User", // Resolved to full FQN with package
 		},
 		{
 			name: "pointer to struct literal",
@@ -229,7 +246,7 @@ func Test() {
 	c := &Config{}
 }`,
 			varName:      "c",
-			expectedType: "Config",
+			expectedType: "test.Config", // Resolved to full FQN with package
 		},
 	}
 
@@ -244,7 +261,7 @@ func Test() {
 			}
 			typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 			importMap := &core.GoImportMap{
-				Aliases: make(map[string]string),
+				Imports: make(map[string]string),
 			}
 
 			// Execute
@@ -259,8 +276,16 @@ func Test() {
 			// Verify
 			assert.NoError(t, err)
 
-			scope, ok := typeEngine.GetScope("test.Test")
-			assert.True(t, ok)
+			scope := typeEngine.GetScope("test.Test")
+
+
+			if scope == nil {
+
+
+				t.Fatal("Expected scope but got nil")
+
+
+			}
 
 			bindings, ok := scope.Variables[tt.varName]
 			assert.True(t, ok)
@@ -297,7 +322,7 @@ func Test() {
 	})
 
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -312,8 +337,16 @@ func Test() {
 	// Verify
 	assert.NoError(t, err)
 
-	scope, ok := typeEngine.GetScope("test.Test")
-	assert.True(t, ok)
+	scope := typeEngine.GetScope("test.Test")
+
+
+	if scope == nil {
+
+
+		t.Fatal("Expected scope but got nil")
+
+
+	}
 
 	// Both variables should have the first return type
 	xBindings, ok := scope.Variables["x"]
@@ -344,7 +377,7 @@ func Test() {
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -359,8 +392,16 @@ func Test() {
 	// Verify
 	assert.NoError(t, err)
 
-	scope, ok := typeEngine.GetScope("test.Test")
-	assert.True(t, ok)
+	scope := typeEngine.GetScope("test.Test")
+
+
+	if scope == nil {
+
+
+		t.Fatal("Expected scope but got nil")
+
+
+	}
 
 	// Should have two bindings for x
 	bindings, ok := scope.Variables["x"]
@@ -389,7 +430,7 @@ func (u *User) Test() {
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -405,8 +446,9 @@ func (u *User) Test() {
 	assert.NoError(t, err)
 
 	// Check method FQN is correct
-	scope, ok := typeEngine.GetScope("test.User.Test")
-	assert.True(t, ok, "Expected scope for method test.User.Test")
+	scope := typeEngine.GetScope("test.User.Test")
+
+	assert.NotNil(t, scope, "Expected scope for method test.User.Test")
 
 	bindings, ok := scope.Variables["name"]
 	assert.True(t, ok)
@@ -427,7 +469,7 @@ func TestExtractGoVariables_EmptyFile(t *testing.T) {
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -461,7 +503,7 @@ func Test() {
 	}
 	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -521,7 +563,7 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 	}
 
 	importMap := &core.GoImportMap{
-		Aliases: make(map[string]string),
+		Imports: make(map[string]string),
 	}
 
 	// Execute
@@ -537,8 +579,9 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check DemoVariableAssignments function scope
-	scope, ok := typeEngine.GetScope("github.com/test/typetracking.DemoVariableAssignments")
-	assert.True(t, ok, "Expected scope for DemoVariableAssignments")
+	scope := typeEngine.GetScope("github.com/test/typetracking.DemoVariableAssignments")
+
+	assert.NotNil(t, scope, "Expected scope for DemoVariableAssignments")
 
 	// Test function call assignments
 	expectedFunctionCallTypes := map[string]string{
@@ -582,8 +625,9 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 	}
 
 	// Check DemoComplexAssignments scope
-	complexScope, ok := typeEngine.GetScope("github.com/test/typetracking.DemoComplexAssignments")
-	assert.True(t, ok, "Expected scope for DemoComplexAssignments")
+	complexScope := typeEngine.GetScope("github.com/test/typetracking.DemoComplexAssignments")
+
+	assert.NotNil(t, complexScope, "Expected scope for DemoComplexAssignments")
 
 	// Test multi-assignment
 	xBindings, ok := complexScope.Variables["x"]

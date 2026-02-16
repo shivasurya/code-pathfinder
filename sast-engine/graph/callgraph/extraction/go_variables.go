@@ -95,7 +95,6 @@ func ExtractGoVariableAssignments(
 		filePath,
 		packagePath,
 		"", // currentFunctionFQN (empty at start)
-		"", // currentClassName (empty at start)
 		typeEngine,
 		registry,
 		importMap,
@@ -112,7 +111,6 @@ func traverseForVariableAssignments(
 	filePath string,
 	packagePath string,
 	currentFunctionFQN string,
-	currentClassName string,
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
@@ -184,7 +182,6 @@ func traverseForVariableAssignments(
 			filePath,
 			packagePath,
 			currentFunctionFQN,
-			currentClassName,
 			typeEngine,
 			registry,
 			importMap,
@@ -265,12 +262,19 @@ func processShortVarDeclaration(
 			AssignedFrom: varInfo.Value,
 			Location: resolution.Location{
 				File: filePath,
-				Line: int(varInfo.LineNumber),
+				Line: varInfo.LineNumber,
 			},
 		}
 
-		// Add to function scope
-		typeEngine.AddVariableBinding(functionFQN, binding)
+		// Get or create function scope
+		scope := typeEngine.GetScope(functionFQN)
+		if scope == nil {
+			scope = resolution.NewGoFunctionScope(functionFQN)
+			typeEngine.AddScope(scope)
+		}
+
+		// Add variable binding to scope
+		scope.AddVariable(binding)
 	}
 }
 
@@ -322,12 +326,19 @@ func processAssignmentStatement(
 			AssignedFrom: varInfo.Value,
 			Location: resolution.Location{
 				File: filePath,
-				Line: int(varInfo.LineNumber),
+				Line: varInfo.LineNumber,
 			},
 		}
 
-		// Add to function scope
-		typeEngine.AddVariableBinding(functionFQN, binding)
+		// Get or create function scope
+		scope := typeEngine.GetScope(functionFQN)
+		if scope == nil {
+			scope = resolution.NewGoFunctionScope(functionFQN)
+			typeEngine.AddScope(scope)
+		}
+
+		// Add variable binding to scope
+		scope.AddVariable(binding)
 	}
 }
 
@@ -485,9 +496,18 @@ func inferTypeFromFunctionCall(
 		return nil
 	}
 
-	funcName := extractFunctionName(functionNode, sourceCode, importMap)
+	funcName := extractGoFunctionName(functionNode, sourceCode, importMap)
 	if funcName == "" {
 		return nil
+	}
+
+	// For unqualified function names (no package prefix), qualify with current package
+	if !strings.Contains(funcName, ".") {
+		// Get current package path
+		dirPath := filepath.Dir(filePath)
+		if packagePath, ok := registry.DirToImport[dirPath]; ok {
+			funcName = packagePath + "." + funcName
+		}
 	}
 
 	// Look up return type in engine (populated by Pass 2a)
@@ -499,12 +519,12 @@ func inferTypeFromFunctionCall(
 	return nil
 }
 
-// extractFunctionName extracts the function name from a function node.
+// extractGoFunctionName extracts the function name from a function node.
 // Handles:
 //   - Simple calls: foo()
 //   - Qualified calls: pkg.Foo()
 //   - Method calls: obj.Method() (returns Method)
-func extractFunctionName(
+func extractGoFunctionName(
 	funcNode *sitter.Node,
 	sourceCode []byte,
 	importMap *core.GoImportMap,
@@ -536,7 +556,7 @@ func extractFunctionName(
 
 		// Check if operand is a package name in imports
 		if importMap != nil {
-			if importPath, ok := importMap.Aliases[operandName]; ok {
+			if importPath, ok := importMap.Imports[operandName]; ok {
 				// It's a package: return importPath.FunctionName
 				return importPath + "." + fieldName
 			}
@@ -560,8 +580,8 @@ func inferTypeFromVariable(
 	typeEngine *resolution.GoTypeInferenceEngine,
 ) *core.TypeInfo {
 	// Get function scope
-	scope, ok := typeEngine.GetScope(functionFQN)
-	if !ok {
+	scope := typeEngine.GetScope(functionFQN)
+	if scope == nil {
 		return nil
 	}
 
@@ -576,7 +596,7 @@ func inferTypeFromVariable(
 }
 
 // inferTypeFromCompositeLiteral infers type from a composite literal (struct literal).
-// Handles: User{...}, &Config{...}, pkg.Type{...}
+// Handles: User{...}, &Config{...}, pkg.Type{...}.
 func inferTypeFromCompositeLiteral(
 	literalNode *sitter.Node,
 	sourceCode []byte,
@@ -592,11 +612,15 @@ func inferTypeFromCompositeLiteral(
 	typeName := typeNode.Content(sourceCode)
 
 	// Parse the type name using existing parser from PR-14
-	return ParseGoTypeString(typeName, registry, filePath)
+	typeInfo, err := ParseGoTypeString(typeName, registry, filePath)
+	if err != nil {
+		return nil
+	}
+	return typeInfo
 }
 
 // inferTypeFromUnaryExpression infers type from a unary expression.
-// Primarily handles address-of operator: &User{...}
+// Primarily handles address-of operator: &User{...}.
 func inferTypeFromUnaryExpression(
 	unaryNode *sitter.Node,
 	sourceCode []byte,
