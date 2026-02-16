@@ -2,11 +2,14 @@ package extraction
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
+	golangpkg "github.com/shivasurya/code-pathfinder/sast-engine/graph/golang"
 )
 
 // ExtractGoVariableAssignments extracts variable assignments from a Go file
@@ -77,8 +80,161 @@ func ExtractGoVariableAssignments(
 	}
 	defer tree.Close()
 
-	// TODO: Implement AST traversal and variable extraction
-	// This will be implemented in subsequent steps
+	// Get package path for this file
+	dirPath := filepath.Dir(filePath)
+	packagePath, exists := registry.DirToImport[dirPath]
+	if !exists {
+		// File not in registry (e.g., external dependency), skip
+		return nil
+	}
+
+	// Traverse AST to find variable assignments
+	traverseForVariableAssignments(
+		tree.RootNode(),
+		sourceCode,
+		filePath,
+		packagePath,
+		"", // currentFunctionFQN (empty at start)
+		"", // currentClassName (empty at start)
+		typeEngine,
+		registry,
+		importMap,
+	)
 
 	return nil
+}
+
+// traverseForVariableAssignments recursively traverses the AST to find variable assignments.
+// Tracks function context to properly scope variable bindings.
+func traverseForVariableAssignments(
+	node *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	packagePath string,
+	currentFunctionFQN string,
+	currentClassName string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) {
+	if node == nil {
+		return
+	}
+
+	nodeType := node.Type()
+
+	// Track function context
+	switch nodeType {
+	case "function_declaration":
+		// Regular function: packagePath.FunctionName
+		nameNode := node.ChildByFieldName("name")
+		if nameNode != nil {
+			funcName := nameNode.Content(sourceCode)
+			currentFunctionFQN = packagePath + "." + funcName
+		}
+
+	case "method_declaration":
+		// Method: packagePath.ClassName.MethodName
+		nameNode := node.ChildByFieldName("name")
+		receiverNode := node.ChildByFieldName("receiver")
+		if nameNode != nil && receiverNode != nil {
+			methodName := nameNode.Content(sourceCode)
+			// Extract receiver type
+			receiverType := extractReceiverType(receiverNode, sourceCode)
+			if receiverType != "" {
+				currentFunctionFQN = packagePath + "." + receiverType + "." + methodName
+			}
+		}
+
+	case "short_var_declaration":
+		// Handle short variable declaration: x := value
+		if currentFunctionFQN != "" {
+			processShortVarDeclaration(
+				node,
+				sourceCode,
+				filePath,
+				currentFunctionFQN,
+				typeEngine,
+				registry,
+				importMap,
+			)
+		}
+
+	case "assignment_statement":
+		// Handle regular assignment: x = value
+		if currentFunctionFQN != "" {
+			processAssignmentStatement(
+				node,
+				sourceCode,
+				filePath,
+				currentFunctionFQN,
+				typeEngine,
+				registry,
+				importMap,
+			)
+		}
+	}
+
+	// Recursively traverse children
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		traverseForVariableAssignments(
+			child,
+			sourceCode,
+			filePath,
+			packagePath,
+			currentFunctionFQN,
+			currentClassName,
+			typeEngine,
+			registry,
+			importMap,
+		)
+	}
+}
+
+// extractReceiverType extracts the type name from a receiver node.
+// Handles both value and pointer receivers: (u User) or (u *User).
+func extractReceiverType(receiverNode *sitter.Node, sourceCode []byte) string {
+	// Receiver is a parameter_list with one parameter
+	for i := 0; i < int(receiverNode.NamedChildCount()); i++ {
+		param := receiverNode.NamedChild(i)
+		if param.Type() == "parameter_declaration" {
+			typeNode := param.ChildByFieldName("type")
+			if typeNode != nil {
+				typeName := typeNode.Content(sourceCode)
+				// Strip pointer prefix if present
+				typeName = strings.TrimPrefix(typeName, "*")
+				return typeName
+			}
+		}
+	}
+	return ""
+}
+
+// processShortVarDeclaration processes a short_var_declaration node.
+// Placeholder for now, will be implemented in next step.
+func processShortVarDeclaration(
+	node *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) {
+	// TODO: Implement in Step 4
+}
+
+// processAssignmentStatement processes an assignment_statement node.
+// Placeholder for now, will be implemented in next step.
+func processAssignmentStatement(
+	node *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) {
+	// TODO: Implement in Step 4
 }
