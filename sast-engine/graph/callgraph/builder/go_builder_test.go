@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -91,9 +93,9 @@ func TestIndexGoFunctions(t *testing.T) {
 			nodes: []*graph.Node{
 				{
 					ID:         "method1",
-					Type:       "method_declaration",
+					Type:       "method",
 					Name:       "Start",
-					DataType:   "Server",
+					Interface:  []string{"Server"},
 					File:       "/project/models/server.go",
 					LineNumber: 15,
 				},
@@ -388,7 +390,8 @@ func TestResolveGoCallTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			targetFQN, resolved := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext)
+			// Pass nil for typeEngine and callGraph (backward compatibility)
+			targetFQN, resolved := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil)
 
 			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
 
@@ -424,10 +427,10 @@ func TestBuildGoFQN(t *testing.T) {
 		{
 			name: "method FQN with receiver",
 			node: &graph.Node{
-				Type:     "method_declaration",
-				Name:     "Start",
-				DataType: "Server",
-				File:     "/project/server/server.go",
+				Type:      "method",
+				Name:      "Start",
+				Interface: []string{"Server"},
+				File:      "/project/server/server.go",
 			},
 			registry: &core.GoModuleRegistry{
 				DirToImport: map[string]string{
@@ -447,7 +450,7 @@ func TestBuildGoFQN(t *testing.T) {
 			codeGraph: func() *graph.CodeGraph {
 				func1 := &graph.Node{
 					ID:   "func1",
-					Type: "function_definition",
+					Type: "function_declaration",
 					Name: "HandleRequest",
 					File: "/project/handlers/handler.go",
 				}
@@ -572,6 +575,10 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 	// Use the all_type_patterns.go fixture from PR-14/PR-15
 	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
 
+	// Convert to absolute path for consistency with buildGoFQN's path resolution
+	absFixturePath, err := filepath.Abs(fixturePath)
+	require.NoError(t, err)
+
 	// Build CodeGraph from the fixture
 	codeGraph := &graph.CodeGraph{
 		Nodes: make(map[string]*graph.Node),
@@ -583,7 +590,7 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 		ID:         "func1",
 		Type:       "function_declaration",
 		Name:       "GetInt",
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 9,
 		ReturnType: "int", // Annotation-based return type
 	}
@@ -594,16 +601,16 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 		ID:         "func2",
 		Type:       "function_declaration",
 		Name:       "GetUserPointer",
-		File:       fixturePath,
+		File:       absFixturePath,
 		LineNumber: 46,
 		ReturnType: "*User", // Annotation-based return type
 	}
 	codeGraph.Nodes["func2"] = getUserPtrNode
 
-	// Build module registry
+	// Build module registry with absolute path
 	registry := &core.GoModuleRegistry{
 		DirToImport: map[string]string{
-			"../../../test-fixtures/golang/type_tracking": "typetracking",
+			filepath.Dir(absFixturePath): "typetracking",
 		},
 		StdlibPackages: map[string]bool{},
 	}
@@ -641,4 +648,408 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 
 	// Verify Pass 3 & 4: Call sites and edges work (tested in other tests)
 	// The integration test ensures all passes run without errors
+}
+
+// TestResolveGoCallTarget_VariableMethod tests Pattern 1b: variable-based method resolution (PR-17).
+// This verifies that method calls like user.Save() are resolved using variable types from typeEngine.
+func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
+	tests := []struct {
+		name          string
+		callSite      *CallSiteInternal
+		variableName  string
+		variableType  string
+		methodExists  bool
+		expectedFQN   string
+		shouldResolve bool
+	}{
+		{
+			name: "resolve user.Save() to User.Save",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "user",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "user",
+			variableType:  "models.User",
+			methodExists:  true,
+			expectedFQN:   "models.User.Save",
+			shouldResolve: true,
+		},
+		{
+			name: "resolve pointer variable (*User).Save",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "userPtr",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "userPtr",
+			variableType:  "*models.User", // Pointer type
+			methodExists:  true,
+			expectedFQN:   "models.User.Save", // Stripped *
+			shouldResolve: true,
+		},
+		{
+			name: "fail when method doesn't exist",
+			callSite: &CallSiteInternal{
+				FunctionName: "NonExistent",
+				ObjectName:   "user",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "user",
+			variableType:  "models.User",
+			methodExists:  false,
+			shouldResolve: false,
+		},
+		{
+			name: "fail when variable not in scope",
+			callSite: &CallSiteInternal{
+				FunctionName: "Save",
+				ObjectName:   "unknown",
+				CallerFQN:    "main.ProcessUser",
+				CallerFile:   "/project/main.go",
+			},
+			shouldResolve: false,
+		},
+		{
+			name: "fallback to import when typeEngine is nil",
+			callSite: &CallSiteInternal{
+				FunctionName: "Println",
+				ObjectName:   "fmt",
+				CallerFQN:    "main.Main",
+				CallerFile:   "/project/main.go",
+			},
+			expectedFQN:   "fmt.Println",
+			shouldResolve: true,
+		},
+		{
+			name: "prioritize import over variable",
+			callSite: &CallSiteInternal{
+				FunctionName: "Println",
+				ObjectName:   "fmt",
+				CallerFQN:    "main.Main",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "fmt", // Variable named "fmt" (edge case)
+			variableType:  "models.Formatter",
+			methodExists:  true,
+			expectedFQN:   "fmt.Println", // Import wins over variable
+			shouldResolve: true,
+		},
+		{
+			name: "resolve config.Validate() with return type",
+			callSite: &CallSiteInternal{
+				FunctionName: "Validate",
+				ObjectName:   "config",
+				CallerFQN:    "main.Setup",
+				CallerFile:   "/project/main.go",
+			},
+			variableName:  "config",
+			variableType:  "pkg.Config",
+			methodExists:  true,
+			expectedFQN:   "pkg.Config.Validate",
+			shouldResolve: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup registry
+			registry := &core.GoModuleRegistry{
+				DirToImport: map[string]string{
+					"/project":        "main",
+					"/project/models": "models",
+					"/project/pkg":    "pkg",
+				},
+				StdlibPackages: map[string]bool{
+					"fmt": true,
+				},
+			}
+
+			// Setup import map
+			importMap := core.NewGoImportMap("/project/main.go")
+			if tt.callSite.ObjectName == "fmt" {
+				importMap.AddImport("fmt", "fmt")
+			}
+
+			// Setup type engine with variable binding
+			var typeEngine *resolution.GoTypeInferenceEngine
+			if tt.variableName != "" || tt.name == "fallback to import when typeEngine is nil" {
+				typeEngine = resolution.NewGoTypeInferenceEngine(registry)
+				if tt.variableName != "" {
+					scope := resolution.NewGoFunctionScope(tt.callSite.CallerFQN)
+					binding := &resolution.GoVariableBinding{
+						VarName: tt.variableName,
+						Type: &core.TypeInfo{
+							TypeFQN:    tt.variableType,
+							Confidence: 1.0,
+							Source:     "test",
+						},
+						AssignedFrom: "test",
+						Location: resolution.Location{
+							File: tt.callSite.CallerFile,
+							Line: 10,
+						},
+					}
+					scope.AddVariable(binding)
+					typeEngine.AddScope(scope)
+				}
+			}
+
+			// Setup call graph with method
+			callGraph := core.NewCallGraph()
+			if tt.methodExists {
+				// Strip pointer prefix for method FQN
+				methodTypeFQN := tt.variableType
+				if strings.HasPrefix(methodTypeFQN, "*") {
+					methodTypeFQN = strings.TrimPrefix(methodTypeFQN, "*")
+				}
+				methodFQN := methodTypeFQN + "." + tt.callSite.FunctionName
+				callGraph.Functions[methodFQN] = &graph.Node{
+					Type: "method",
+					Name: tt.callSite.FunctionName,
+					File: "/project/models/user.go",
+				}
+			}
+			// Add fmt.Println for import tests
+			if tt.callSite.ObjectName == "fmt" {
+				callGraph.Functions["fmt.Println"] = &graph.Node{
+					Type: "function_declaration",
+					Name: "Println",
+					File: "/usr/lib/go/fmt/print.go",
+				}
+			}
+
+			functionContext := make(map[string][]*graph.Node)
+
+			// Execute
+			targetFQN, resolved := resolveGoCallTarget(
+				tt.callSite,
+				importMap,
+				registry,
+				functionContext,
+				typeEngine,
+				callGraph,
+			)
+
+			// Assert
+			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
+			if tt.shouldResolve {
+				assert.Equal(t, tt.expectedFQN, targetFQN, "Resolved FQN mismatch")
+			}
+		})
+	}
+}
+
+// TestBuildGoCallGraph_MethodResolution is an integration test that verifies
+// variable-based method calls are resolved end-to-end through BuildGoCallGraph.
+// This uses the all_type_patterns.go fixture to validate realistic scenarios.
+func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
+	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
+
+	// Convert to absolute path for consistency with buildGoFQN's path resolution
+	absFixturePath, err := filepath.Abs(fixturePath)
+	require.NoError(t, err)
+
+	// Build CodeGraph with realistic nodes that would come from PR-06 AST parsing
+	codeGraph := &graph.CodeGraph{
+		Nodes: make(map[string]*graph.Node),
+	}
+
+	// Function: DemoVariableAssignments() - contains variable.method() calls
+	demoFunc := &graph.Node{
+		ID:         "demo_func",
+		Type:       "function_declaration",
+		Name:       "DemoVariableAssignments",
+		File:       absFixturePath,
+		LineNumber: 141,
+	}
+	codeGraph.Nodes["demo_func"] = demoFunc
+
+	// Method: (*User).Save() error
+	saveMethod := &graph.Node{
+		ID:         "user_save",
+		Type:       "method",
+		Name:       "Save",
+		Interface:  []string{"User"}, // Receiver type
+		File:       absFixturePath,
+		LineNumber: 124,
+		ReturnType: "error",
+	}
+	codeGraph.Nodes["user_save"] = saveMethod
+
+	// Method: (*Config).Validate() (bool, error)
+	validateMethod := &graph.Node{
+		ID:         "config_validate",
+		Type:       "method",
+		Name:       "Validate",
+		Interface:  []string{"Config"}, // Receiver type
+		File:       absFixturePath,
+		LineNumber: 133,
+		ReturnType: "(bool, error)",
+	}
+	codeGraph.Nodes["config_validate"] = validateMethod
+
+	// Call node: user.Save() inside DemoVariableAssignments
+	// This simulates what PR-06 AST parsing would create
+	userSaveCall := &graph.Node{
+		ID:         "call_user_save",
+		Type:       "method_expression",
+		Name:       "Save",
+		Interface:  []string{"user"}, // ObjectName = "user"
+		File:       absFixturePath,
+		LineNumber: 150, // Inside DemoVariableAssignments (after user := GetUserPointer())
+	}
+	// Set up parent-child relationship
+	edge1 := &graph.Edge{From: demoFunc, To: userSaveCall}
+	demoFunc.OutgoingEdges = append(demoFunc.OutgoingEdges, edge1)
+	codeGraph.Nodes["call_user_save"] = userSaveCall
+
+	// Call node: config.Validate() inside DemoVariableAssignments
+	configValidateCall := &graph.Node{
+		ID:         "call_config_validate",
+		Type:       "method_expression",
+		Name:       "Validate",
+		Interface:  []string{"config"}, // ObjectName = "config"
+		File:       absFixturePath,
+		LineNumber: 152, // Inside DemoVariableAssignments (after config := CreateConfig())
+	}
+	edge2 := &graph.Edge{From: demoFunc, To: configValidateCall}
+	demoFunc.OutgoingEdges = append(demoFunc.OutgoingEdges, edge2)
+	codeGraph.Nodes["call_config_validate"] = configValidateCall
+
+	// Setup registry with absolute path
+	registry := &core.GoModuleRegistry{
+		DirToImport: map[string]string{
+			filepath.Dir(absFixturePath): "typetracking",
+		},
+		StdlibPackages: map[string]bool{},
+	}
+
+	// Initialize type engine
+	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
+	// Manually populate variable bindings that would come from PR-15 variable extraction
+	// In DemoVariableAssignments:
+	//   user := GetUserPointer()  // Type: *User
+	//   config := CreateConfig()  // Type: Config
+	demoFQN := "typetracking.DemoVariableAssignments"
+	scope := resolution.NewGoFunctionScope(demoFQN)
+
+	// Variable: user (type: *User from GetUserPointer)
+	userBinding := &resolution.GoVariableBinding{
+		VarName: "user",
+		Type: &core.TypeInfo{
+			TypeFQN:    "typetracking.User", // Note: pointer stripped for method lookup
+			Confidence: 1.0,
+			Source:     "function_call",
+		},
+		AssignedFrom: "typetracking.GetUserPointer",
+		Location: resolution.Location{
+			File: absFixturePath,
+			Line: 143,
+		},
+	}
+	scope.AddVariable(userBinding)
+
+	// Variable: config (type: Config from CreateConfig)
+	configBinding := &resolution.GoVariableBinding{
+		VarName: "config",
+		Type: &core.TypeInfo{
+			TypeFQN:    "typetracking.Config",
+			Confidence: 1.0,
+			Source:     "function_call",
+		},
+		AssignedFrom: "typetracking.CreateConfig",
+		Location: resolution.Location{
+			File: absFixturePath,
+			Line: 144,
+		},
+	}
+	scope.AddVariable(configBinding)
+
+	typeEngine.AddScope(scope)
+
+	// Build call graph
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine)
+	require.NoError(t, err)
+	assert.NotNil(t, callGraph)
+
+	// Verify functions were indexed
+	assert.Contains(t, callGraph.Functions, "typetracking.DemoVariableAssignments")
+	assert.Contains(t, callGraph.Functions, "typetracking.User.Save")
+	assert.Contains(t, callGraph.Functions, "typetracking.Config.Validate")
+
+	// Verify call sites for DemoVariableAssignments
+	callSites := callGraph.CallSites[demoFQN]
+	assert.NotEmpty(t, callSites, "DemoVariableAssignments should have call sites")
+
+	// Track which methods were resolved
+	var userSaveResolved bool
+	var configValidateResolved bool
+
+	for _, cs := range callSites {
+		t.Logf("Call site: Target=%s, TargetFQN=%s, Resolved=%v", cs.Target, cs.TargetFQN, cs.Resolved)
+
+		if cs.Target == "Save" && cs.Resolved {
+			assert.Equal(t, "typetracking.User.Save", cs.TargetFQN, "user.Save() should resolve to User.Save")
+			userSaveResolved = true
+		}
+
+		if cs.Target == "Validate" && cs.Resolved {
+			assert.Equal(t, "typetracking.Config.Validate", cs.TargetFQN, "config.Validate() should resolve to Config.Validate")
+			configValidateResolved = true
+		}
+	}
+
+	// Assert both methods were resolved via variable types
+	assert.True(t, userSaveResolved, "user.Save() should be resolved via variable type")
+	assert.True(t, configValidateResolved, "config.Validate() should be resolved via variable type")
+
+	// Verify edges were added
+	callees := callGraph.GetCallees(demoFQN)
+	assert.Contains(t, callees, "typetracking.User.Save", "Should have edge to User.Save")
+	assert.Contains(t, callees, "typetracking.Config.Validate", "Should have edge to Config.Validate")
+
+	// Verify reverse edges
+	userSaveCallers := callGraph.GetCallers("typetracking.User.Save")
+	assert.Contains(t, userSaveCallers, demoFQN, "User.Save should have DemoVariableAssignments as caller")
+
+	configValidateCallers := callGraph.GetCallers("typetracking.Config.Validate")
+	assert.Contains(t, configValidateCallers, demoFQN, "Config.Validate should have DemoVariableAssignments as caller")
+}
+
+// TestBuildGoFQN_RelativePath tests that relative paths are converted to absolute.
+func TestBuildGoFQN_RelativePath(t *testing.T) {
+	node := &graph.Node{
+		Type: "function_declaration",
+		Name: "TestFunc",
+		File: "test.go", // Relative path
+	}
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	
+	// Should not panic, even if registry lookup fails
+	fqn := buildGoFQN(node, nil, registry)
+	assert.NotEmpty(t, fqn)
+}
+
+// TestBuildGoFQN_EmptyPath tests edge case with empty file path.
+func TestBuildGoFQN_EmptyPath(t *testing.T) {
+	node := &graph.Node{
+		Type: "function_declaration",
+		Name: "TestFunc",
+		File: "", // Empty path
+	}
+	
+	registry := &core.GoModuleRegistry{
+		DirToImport: make(map[string]string),
+	}
+	
+	fqn := buildGoFQN(node, nil, registry)
+	assert.Contains(t, fqn, "TestFunc")
 }

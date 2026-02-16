@@ -134,7 +134,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext)
+		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
 
 		if resolved {
 			// Add edge from caller to callee
@@ -172,7 +172,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 //
 // Handles:
 //   - function_definition: package-level functions
-//   - method_declaration: methods with receivers
+//   - method: methods with receivers
 //   - func_literal: anonymous functions/closures
 //
 // Returns:
@@ -182,7 +182,7 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 
 	for _, node := range codeGraph.Nodes {
 		// Only index Go function-like nodes
-		if node.Type != "function_declaration" && node.Type != "method_declaration" && node.Type != "func_literal" {
+		if node.Type != "function_declaration" && node.Type != "method" && node.Type != "func_literal" {
 			continue
 		}
 
@@ -256,7 +256,8 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 // This is Pass 4 of the 5-pass algorithm.
 //
 // Resolution patterns:
-//  1. Qualified call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
+//  1a. Qualified import call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
+//  1b. Variable method call: user.Save() → resolve "user" via typeEngine → "pkg.User.Save" (PR-17)
 //  2. Same-package call: Helper() → find in functionContext → "github.com/myapp/utils.Helper"
 //  3. Builtin call: append() → "builtin.append"
 //  4. Unresolved: return false
@@ -266,6 +267,8 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 //   - importMap: imports for the caller's file (from PR-07)
 //   - registry: module registry with stdlib information
 //   - functionContext: map from simple name to nodes
+//   - typeEngine: Go type inference engine for variable type lookup (PR-14/PR-15/PR-16)
+//   - callGraph: call graph for method existence verification (PR-16)
 //
 // Returns:
 //   - targetFQN: the resolved fully qualified name
@@ -275,17 +278,46 @@ func resolveGoCallTarget(
 	importMap *core.GoImportMap,
 	registry *core.GoModuleRegistry,
 	functionContext map[string][]*graph.Node,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	callGraph *core.CallGraph,
 ) (string, bool) {
-	// Pattern 1: Qualified call (pkg.Func or obj.Method)
+	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
-		// Resolve object name through imports
+		// Try import resolution first (existing pattern)
 		importPath, ok := importMap.Resolve(callSite.ObjectName)
 		if ok {
 			// Successfully resolved import path
 			targetFQN := importPath + "." + callSite.FunctionName
 			return targetFQN, true
 		}
-		// Import not found - unresolved
+
+		// Pattern 1b: Variable-based method resolution (PR-17)
+		// If import resolution failed, try resolving as variable.method()
+		// Example: user.Save() where user is a variable of type *User
+		if typeEngine != nil && callGraph != nil && callSite.CallerFQN != "" {
+			scope := typeEngine.GetScope(callSite.CallerFQN)
+			if scope != nil {
+				binding := scope.GetVariable(callSite.ObjectName)
+				if binding != nil && binding.Type != nil {
+					// Build method FQN: "pkg.Type.Method"
+					// Handle pointer types: *User -> User (methods are defined on the type, not the pointer in FQN)
+					typeFQN := binding.Type.TypeFQN
+					if strings.HasPrefix(typeFQN, "*") {
+						typeFQN = strings.TrimPrefix(typeFQN, "*")
+					}
+
+					methodFQN := typeFQN + "." + callSite.FunctionName
+
+					// Verify method exists in callGraph before returning
+					// This prevents false positives from unindexed methods
+					if callGraph.Functions[methodFQN] != nil {
+						return methodFQN, true
+					}
+				}
+			}
+		}
+
+		// Import not found and variable not found - unresolved
 		return "", false
 	}
 
@@ -317,7 +349,7 @@ func resolveGoCallTarget(
 //   - Closure: "github.com/myapp/handlers.HandleRequest.$anon_1"
 //
 // Parameters:
-//   - node: the function node (function_definition, method_declaration, func_literal)
+//   - node: the function node (function_declaration, method, func_literal)
 //   - codeGraph: the code graph for parent lookup
 //   - registry: module registry for import path mapping
 //
@@ -326,6 +358,13 @@ func resolveGoCallTarget(
 func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry) string {
 	// Get directory path for this file
 	dirPath := filepath.Dir(node.File)
+
+	// Convert to absolute path if relative (for registry lookup)
+	if !filepath.IsAbs(dirPath) {
+		if absPath, err := filepath.Abs(dirPath); err == nil {
+			dirPath = absPath
+		}
+	}
 
 	// Look up import path from registry
 	importPath, ok := registry.DirToImport[dirPath]
@@ -339,11 +378,11 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 		// Package-level function: module.Function
 		return importPath + "." + node.Name
 
-	case "method_declaration":
+	case "method":
 		// Method: module.Receiver.Method
-		// Receiver type is stored in node.DataType
-		if node.DataType != "" {
-			return importPath + "." + node.DataType + "." + node.Name
+		// Receiver type is stored in node.Interface[0]
+		if len(node.Interface) > 0 && node.Interface[0] != "" {
+			return importPath + "." + node.Interface[0] + "." + node.Name
 		}
 		// Fallback if no receiver type
 		return importPath + "." + node.Name
@@ -387,7 +426,7 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 		}
 
 		// Check if parent is a function-like node
-		if parent.Type == "function_declaration" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method" || parent.Type == "func_literal" {
 			return parent
 		}
 
@@ -416,7 +455,7 @@ func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *
 			return nil
 		}
 
-		if parent.Type == "function_definition" || parent.Type == "method_declaration" || parent.Type == "func_literal" {
+		if parent.Type == "function_declaration" || parent.Type == "method" || parent.Type == "func_literal" {
 			return parent
 		}
 
