@@ -101,6 +101,12 @@ func getSymbolKind(symbolType string) (int, string) {
 	case "func_literal":
 		return SymbolKindFunction, "Function"
 
+	// Docker types
+	case "dockerfile_instruction":
+		return SymbolKindConstant, "DockerInstruction"
+	case "compose_service":
+		return SymbolKindModule, "ComposeService"
+
 	// Unknown/default
 	default:
 		return SymbolKindVariable, "Unknown"
@@ -405,6 +411,19 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 		}
 	}
 
+	// Count Docker nodes from CodeGraph.
+	dockerfileCount := 0
+	composeServiceCount := 0
+	if s.codeGraph != nil && s.codeGraph.Nodes != nil {
+		for _, node := range s.codeGraph.Nodes {
+			if node.Type == "dockerfile_instruction" {
+				dockerfileCount++
+			} else if node.Type == "compose_service" {
+				composeServiceCount++
+			}
+		}
+	}
+
 	// Calculate module statistics.
 	moduleStats := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
 	totalFunctionsInModules := 0
@@ -434,12 +453,14 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 
 		// Overall statistics.
 		"stats": map[string]interface{}{
-			"total_symbols":   len(s.callGraph.Functions),
-			"call_edges":      len(s.callGraph.Edges),
-			"modules":         len(s.moduleRegistry.Modules),
-			"files":           len(s.moduleRegistry.FileToModule),
-			"taint_summaries": len(s.callGraph.Summaries),
-			"class_fields":    classFieldsCount,
+			"total_symbols":       len(s.callGraph.Functions),
+			"call_edges":          len(s.callGraph.Edges),
+			"modules":             len(s.moduleRegistry.Modules),
+			"files":               len(s.moduleRegistry.FileToModule),
+			"taint_summaries":     len(s.callGraph.Summaries),
+			"class_fields":        classFieldsCount,
+			"docker_instructions": dockerfileCount,
+			"compose_services":    composeServiceCount,
 		},
 
 		// Symbol breakdown by Python type (12 types).
@@ -563,11 +584,14 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		"package_variable":     true,
 		"variable_assignment":  true,
 		"func_literal":         true,
+		// Docker types
+		"dockerfile_instruction": true,
+		"compose_service":        true,
 	}
 
 	for _, t := range typeFilter {
 		if !validTypes[t] {
-			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field","parameter","function_declaration","init_function","struct_definition","type_alias","package_variable","variable_assignment","func_literal"]}`, t), true
+			return fmt.Sprintf(`{"error": "Invalid symbol type: %s", "valid_types": ["function_definition","method","constructor","property","special_method","class_definition","interface","enum","dataclass","module_variable","constant","class_field","parameter","function_declaration","init_function","struct_definition","type_alias","package_variable","variable_assignment","func_literal","dockerfile_instruction","compose_service"]}`, t), true
 		}
 	}
 
@@ -737,15 +761,17 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		}
 	}
 
-	// Search codeGraph.Nodes for class definitions and variables.
+	// Search codeGraph.Nodes for class definitions, variables, and Docker nodes.
 	// These types are stored in the raw AST graph, not in callGraph.Functions.
 	missingTypes := map[string]bool{
-		"class_definition": true,
-		"interface":        true,
-		"enum":             true,
-		"dataclass":        true,
-		"module_variable":  true,
-		"constant":         true,
+		"class_definition":       true,
+		"interface":              true,
+		"enum":                   true,
+		"dataclass":              true,
+		"module_variable":        true,
+		"constant":               true,
+		"dockerfile_instruction": true,
+		"compose_service":        true,
 	}
 
 	// Only search if we're looking for these types or no type filter specified.
@@ -777,13 +803,23 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			// Classes: module.ClassName
 			// Module-level variables/constants: module.VARIABLE_NAME
 			// Class-level constants/fields: module.ClassName.CONSTANT_NAME
-			modulePath, ok := s.moduleRegistry.FileToModule[node.File]
-			if !ok {
-				continue
+			// Docker nodes: Dockerfile.INSTRUCTION or docker-compose.yml.SERVICE_NAME
+			var fqn string
+			if node.Type == "dockerfile_instruction" || node.Type == "compose_service" {
+				// Docker nodes: use file name as prefix.
+				fileName := node.File
+				if idx := strings.LastIndex(fileName, "/"); idx != -1 {
+					fileName = fileName[idx+1:]
+				}
+				fqn = fileName + "." + node.Name
+			} else {
+				modulePath, ok := s.moduleRegistry.FileToModule[node.File]
+				if !ok {
+					continue
+				}
+				// Use helper function to build class-qualified FQN for class-level symbols.
+				fqn = buildNodeFQN(modulePath, node, classContext)
 			}
-
-			// Use helper function to build class-qualified FQN for class-level symbols.
-			fqn := buildNodeFQN(modulePath, node, classContext)
 
 			// Apply module filter if specified.
 			if !matchesModuleFilter(fqn, moduleFilter) {
@@ -826,9 +862,11 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 				// Look up inferred type for module variables and constants.
 				if (node.Type == "module_variable" || node.Type == "constant") && s.callGraph.TypeEngine != nil {
-					if varInfo := s.callGraph.TypeEngine.GetModuleVariableType(modulePath, node.Name, node.LineNumber); varInfo != nil {
-						match["inferred_type"] = varInfo.TypeFQN
-						match["confidence"] = varInfo.Confidence
+					if modulePath, ok := s.moduleRegistry.FileToModule[node.File]; ok {
+						if varInfo := s.callGraph.TypeEngine.GetModuleVariableType(modulePath, node.Name, node.LineNumber); varInfo != nil {
+							match["inferred_type"] = varInfo.TypeFQN
+							match["confidence"] = varInfo.Confidence
+						}
 					}
 				}
 
