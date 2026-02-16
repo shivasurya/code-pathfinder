@@ -5,6 +5,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,8 +49,11 @@ func TestBuildGoCallGraph(t *testing.T) {
 		},
 	}
 
+	// Initialize type engine
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
 	require.NoError(t, err)
 
 	// Verify functions were indexed

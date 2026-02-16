@@ -92,7 +92,10 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			logger.Warning("Failed to build Go module registry: %v", err)
 		} else {
-			goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry)
+			// Initialize Go type inference engine for Phase 2 type tracking
+			goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+
+			goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
 			if err != nil {
 				logger.Warning("Failed to build Go call graph: %v", err)
 			} else {

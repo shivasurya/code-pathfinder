@@ -20,21 +20,29 @@ type CallSiteInternal struct {
 	Arguments    []string
 }
 
-// BuildGoCallGraph constructs the call graph for a Go project using a 3-pass algorithm.
+// BuildGoCallGraph constructs the call graph for a Go project using a 5-pass algorithm.
 //
 // Pass 1: Index functions from CodeGraph → populate CallGraph.Functions
-// Pass 2: Extract call sites from call_expression nodes → create CallSiteInternal list
-// Pass 3: Resolve call targets to FQNs → add edges to CallGraph
+// Pass 2a: Extract return types from all functions (PR-14)
+// Pass 2b: Extract variable assignments from all functions (PR-15)
+// Pass 3: Extract call sites from call_expression nodes → create CallSiteInternal list
+// Pass 4: Resolve call targets to FQNs → add edges to CallGraph
 //
 // Parameters:
 //   - codeGraph: the existing code graph with parsed AST nodes from PR-06
 //   - registry: Go module registry from PR-07 with import path mappings
+//   - typeEngine: Go type inference engine for Phase 2 type tracking (PR-14/PR-15)
 //
 // Returns:
-//   - CallGraph: complete call graph with resolved edges
+//   - CallGraph: complete call graph with resolved edges and type information
 //   - error: if any critical step fails
-func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry) (*core.CallGraph, error) {
+func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
+
+	// Store type engine in call graph for MCP tool access
+	if typeEngine != nil {
+		callGraph.GoTypeEngine = typeEngine
+	}
 
 	// Build import map cache for each source file
 	// Map: filePath → GoImportMap
