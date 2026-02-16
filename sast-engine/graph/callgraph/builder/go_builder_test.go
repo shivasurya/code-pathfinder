@@ -5,6 +5,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,8 +49,11 @@ func TestBuildGoCallGraph(t *testing.T) {
 		},
 	}
 
+	// Initialize type engine
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
 	require.NoError(t, err)
 
 	// Verify functions were indexed
@@ -554,4 +558,87 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestBuildGoCallGraph_WithTypeTracking verifies the 5-pass algorithm with type tracking.
+// This integration test ensures that:
+//  - Pass 1: Functions are indexed
+//  - Pass 2a: Return types are extracted
+//  - Pass 2b: Variable assignments are tracked
+//  - Pass 3: Call sites are extracted
+//  - Pass 4: Call targets are resolved
+//  - GoTypeEngine is populated and attached to CallGraph
+func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
+	// Use the all_type_patterns.go fixture from PR-14/PR-15
+	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
+
+	// Build CodeGraph from the fixture
+	codeGraph := &graph.CodeGraph{
+		Nodes: make(map[string]*graph.Node),
+	}
+
+	// Create minimal nodes for testing (normally these come from graph.Initialize)
+	// Function: GetInt() int
+	getIntNode := &graph.Node{
+		ID:         "func1",
+		Type:       "function_declaration",
+		Name:       "GetInt",
+		File:       fixturePath,
+		LineNumber: 9,
+		ReturnType: "int", // Annotation-based return type
+	}
+	codeGraph.Nodes["func1"] = getIntNode
+
+	// Function: GetUserPointer() *User
+	getUserPtrNode := &graph.Node{
+		ID:         "func2",
+		Type:       "function_declaration",
+		Name:       "GetUserPointer",
+		File:       fixturePath,
+		LineNumber: 46,
+		ReturnType: "*User", // Annotation-based return type
+	}
+	codeGraph.Nodes["func2"] = getUserPtrNode
+
+	// Build module registry
+	registry := &core.GoModuleRegistry{
+		DirToImport: map[string]string{
+			"../../../test-fixtures/golang/type_tracking": "typetracking",
+		},
+		StdlibPackages: map[string]bool{},
+	}
+
+	// Initialize type engine
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
+	// Build call graph with type tracking
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
+	require.NoError(t, err)
+	assert.NotNil(t, callGraph)
+
+	// Verify Pass 1: Functions indexed
+	assert.NotEmpty(t, callGraph.Functions, "Functions should be indexed")
+	assert.Contains(t, callGraph.Functions, "typetracking.GetInt")
+	assert.Contains(t, callGraph.Functions, "typetracking.GetUserPointer")
+
+	// Verify Pass 2a: Return types extracted and stored in GoTypeEngine
+	assert.NotNil(t, callGraph.GoTypeEngine, "GoTypeEngine should be attached to CallGraph")
+	returnTypes := callGraph.GoTypeEngine.GetAllReturnTypes()
+	assert.NotNil(t, returnTypes, "Return types should be extracted")
+
+	// Return types should be stored in GoTypeEngine
+	getIntReturnType, ok := callGraph.GoTypeEngine.GetReturnType("typetracking.GetInt")
+	assert.True(t, ok, "GetInt return type should be in type engine")
+	if ok && getIntReturnType != nil {
+		assert.Equal(t, "builtin.int", getIntReturnType.TypeFQN, "GetInt should return int")
+	}
+
+	getUserPtrReturnType, ok := callGraph.GoTypeEngine.GetReturnType("typetracking.GetUserPointer")
+	assert.True(t, ok, "GetUserPointer return type should be in type engine")
+	if ok && getUserPtrReturnType != nil {
+		assert.Equal(t, "typetracking.User", getUserPtrReturnType.TypeFQN, "GetUserPointer should return *User")
+	}
+
+	// Verify Pass 3 & 4: Call sites and edges work (tested in other tests)
+	// The integration test ensures all passes run without errors
 }

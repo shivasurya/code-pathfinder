@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	dockerpkg "github.com/shivasurya/code-pathfinder/sast-engine/mcp/docker"
 )
@@ -1203,6 +1204,11 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 			"line": callerNode.LineNumber,
 		}
 
+		// Add return type if available (Python annotations or Go inferred types)
+		if returnType := getReturnType(callerNode, callerFQN, s.callGraph); returnType != "" {
+			caller["return_type"] = returnType
+		}
+
 		// Find the specific call site location.
 		for _, cs := range s.callGraph.CallSites[callerFQN] {
 			if cs.TargetFQN == targetFQN || cs.Target == getShortName(targetFQN) {
@@ -1218,13 +1224,20 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 	// Apply pagination.
 	callers, pageInfo := PaginateSlice(allCallers, pageParams)
 
+	targetInfo := map[string]interface{}{
+		"fqn":  targetFQN,
+		"name": getShortName(targetFQN),
+		"file": targetNode.File,
+		"line": targetNode.LineNumber,
+	}
+
+	// Add return type if available (Python annotations or Go inferred types)
+	if returnType := getReturnType(targetNode, targetFQN, s.callGraph); returnType != "" {
+		targetInfo["return_type"] = returnType
+	}
+
 	result := map[string]interface{}{
-		"target": map[string]interface{}{
-			"fqn":  targetFQN,
-			"name": getShortName(targetFQN),
-			"file": targetNode.File,
-			"line": targetNode.LineNumber,
-		},
+		"target":     targetInfo,
 		"callers":    callers,
 		"pagination": pageInfo,
 	}
@@ -1302,13 +1315,20 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 	// Apply pagination.
 	callees, pageInfo := PaginateSlice(allCallees, pageParams)
 
+	sourceInfo := map[string]interface{}{
+		"fqn":  sourceFQN,
+		"name": getShortName(sourceFQN),
+		"file": sourceNode.File,
+		"line": sourceNode.LineNumber,
+	}
+
+	// Add return type if available (Python annotations or Go inferred types)
+	if returnType := getReturnType(sourceNode, sourceFQN, s.callGraph); returnType != "" {
+		sourceInfo["return_type"] = returnType
+	}
+
 	result := map[string]interface{}{
-		"source": map[string]interface{}{
-			"fqn":  sourceFQN,
-			"name": getShortName(sourceFQN),
-			"file": sourceNode.File,
-			"line": sourceNode.LineNumber,
-		},
+		"source":           sourceInfo,
 		"callees":          callees,
 		"pagination":       pageInfo,
 		"resolved_count":   resolvedCount,
@@ -2162,6 +2182,29 @@ func getShortName(fqn string) string {
 		return fqn
 	}
 	return parts[len(parts)-1]
+}
+
+// getReturnType retrieves the return type for a function from either:
+//  1. node.ReturnType (annotation-based or inferred for Python/Go)
+//  2. callGraph.GoTypeEngine (for Go Phase 2 type tracking)
+//
+// Returns empty string if no return type is available.
+func getReturnType(node *graph.Node, fqn string, callGraph *core.CallGraph) string {
+	// Check node.ReturnType first (covers Python and Go with annotations)
+	if node.ReturnType != "" {
+		return node.ReturnType
+	}
+
+	// For Go functions: check GoTypeEngine for inferred types
+	if callGraph.GoTypeEngine != nil && strings.HasSuffix(node.File, ".go") {
+		if typeInfo, ok := callGraph.GoTypeEngine.GetReturnType(fqn); ok {
+			if typeInfo != nil && typeInfo.TypeFQN != "" {
+				return typeInfo.TypeFQN
+			}
+		}
+	}
+
+	return ""
 }
 
 // buildClassContext creates a map of file locations to class names.

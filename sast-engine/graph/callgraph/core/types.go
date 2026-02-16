@@ -110,10 +110,15 @@ type CallGraph struct {
 	// Enables symbol search to find class fields and properties
 	Attributes interface{} // *registry.AttributeRegistry (interface{} to avoid import cycle)
 
-	// Type inference engine for querying module-level variable types
+	// Type inference engine for querying module-level variable types (Python)
 	// Populated during call graph construction
 	// *resolution.TypeInferenceEngine (interface to avoid import cycle)
 	TypeEngine ModuleVariableProvider
+
+	// Go type inference engine for Phase 2 type tracking
+	// Stores return types and variable bindings extracted during call graph construction
+	// *resolution.GoTypeInferenceEngine (interface to avoid import cycle)
+	GoTypeEngine GoTypeProvider
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.
@@ -185,6 +190,12 @@ func (cg *CallGraph) GetCallees(caller string) []string {
 		return callees
 	}
 	return []string{}
+}
+
+// GetGoTypeEngine returns the Go type inference engine.
+// Returns nil if no type engine has been attached to this call graph.
+func (cg *CallGraph) GetGoTypeEngine() GoTypeProvider {
+	return cg.GoTypeEngine
 }
 
 // ModuleRegistry maintains the mapping between Python file paths and module paths.
@@ -419,6 +430,14 @@ type ModuleVariableInfo struct {
 // Implemented by resolution.TypeInferenceEngine.
 type ModuleVariableProvider interface {
 	GetModuleVariableType(modulePath string, varName string, line uint32) *ModuleVariableInfo
+}
+
+// GoTypeProvider provides access to Go type information.
+// This interface avoids import cycles between core and resolution packages.
+// Implemented by *resolution.GoTypeInferenceEngine.
+type GoTypeProvider interface {
+	GetReturnType(functionFQN string) (*TypeInfo, bool)
+	GetAllReturnTypes() map[string]*TypeInfo
 }
 
 // Helper function to extract the last component of a dotted path.
