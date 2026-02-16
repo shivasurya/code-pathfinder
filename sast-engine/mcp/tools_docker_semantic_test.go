@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -395,12 +396,11 @@ func TestFindDockerfileInstructions_SecurityFilters(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, 2, len(matches), "Expected 2 unpinned FROM instructions")
 
-		// Verify security issue is flagged
+		// Verify digest field is empty
 		for _, m := range matches {
 			match := m.(map[string]interface{})
-			assert.Contains(t, match, "security_issue")
-			assert.Equal(t, "No digest pinning (CWE-1188)", match["security_issue"])
-			assert.Equal(t, "MEDIUM", match["risk_level"])
+			assert.Contains(t, match, "digest")
+			assert.Empty(t, match["digest"])
 		}
 	})
 
@@ -441,8 +441,6 @@ func TestFindDockerfileInstructions_SecurityFilters(t *testing.T) {
 
 		match := matches[0].(map[string]interface{})
 		assert.Equal(t, "root", match["user"])
-		assert.Equal(t, "Container runs as root", match["security_issue"])
-		assert.Equal(t, "HIGH", match["risk_level"])
 	})
 }
 
@@ -527,12 +525,6 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 		match := matches[0].(map[string]interface{})
 		assert.Equal(t, "privileged-service", match["service_name"])
 		assert.Equal(t, true, match["privileged"])
-
-		// Verify security analysis
-		securityIssues, ok := match["security_issues"].([]interface{})
-		require.True(t, ok)
-		assert.Greater(t, len(securityIssues), 0)
-		assert.Equal(t, "CRITICAL", match["risk_level"])
 	})
 
 	t.Run("Find Docker socket exposure", func(t *testing.T) {
@@ -551,7 +543,18 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 
 		match := matches[0].(map[string]interface{})
 		assert.Equal(t, "privileged-service", match["service_name"])
-		assert.Equal(t, "CRITICAL", match["risk_level"])
+
+		// Verify volumes contain docker socket
+		volumes, ok := match["volumes"].([]interface{})
+		require.True(t, ok)
+		found := false
+		for _, v := range volumes {
+			if strings.Contains(v.(string), "/var/run/docker.sock") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found)
 	})
 
 	t.Run("Find host network mode services", func(t *testing.T) {
@@ -570,11 +573,9 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 
 		match := matches[0].(map[string]interface{})
 		assert.Equal(t, "host", match["network_mode"])
-		assert.Contains(t, match, "security_issues")
-		assert.Equal(t, "HIGH", match["risk_level"])
 	})
 
-	t.Run("Find dangerous capabilities", func(t *testing.T) {
+	t.Run("Find services with capabilities", func(t *testing.T) {
 		result, isError := server.toolFindComposeServices(map[string]interface{}{
 			"service_name": "dangerous-caps",
 		})
@@ -587,10 +588,6 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 		matches, ok := parsed["matches"].([]interface{})
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
-
-		match := matches[0].(map[string]interface{})
-		assert.Contains(t, match, "security_issues")
-		assert.Equal(t, "HIGH", match["risk_level"])
 	})
 }
 
@@ -630,22 +627,22 @@ func TestGetDockerfileDetails_Complete(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, stages, "builder")
 
-	// Verify security summary
-	securitySummary, ok := parsed["security_summary"].(map[string]interface{})
+	// Verify summary
+	summary, ok := parsed["summary"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, true, securitySummary["has_user_instruction"])
-	assert.Equal(t, true, securitySummary["has_healthcheck"])
-	assert.Equal(t, float64(2), securitySummary["unpinned_images"])
+	assert.Equal(t, true, summary["has_user_instruction"])
+	assert.Equal(t, true, summary["has_healthcheck"])
+	assert.Equal(t, float64(2), summary["unpinned_images"])
 }
 
 // ============================================================================
 // Test 7: get_dockerfile_details - Security Summary
 // ============================================================================
 
-func TestGetDockerfileDetails_SecuritySummary(t *testing.T) {
+func TestGetDockerfileDetails_Summary(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
-	t.Run("Dockerfile with unpinned images", func(t *testing.T) {
+	t.Run("Dockerfile with summary stats", func(t *testing.T) {
 		result, isError := server.toolGetDockerfileDetails(map[string]interface{}{
 			"file_path": "/test/Dockerfile",
 		})
@@ -655,18 +652,10 @@ func TestGetDockerfileDetails_SecuritySummary(t *testing.T) {
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		securitySummary := parsed["security_summary"].(map[string]interface{})
-		assert.Equal(t, float64(2), securitySummary["unpinned_images"])
-
-		issues, ok := securitySummary["issues"].([]interface{})
-		require.True(t, ok)
-		hasUnpinnedIssue := false
-		for _, issue := range issues {
-			if issueStr, ok := issue.(string); ok && issueStr == "2 unpinned base image(s)" {
-				hasUnpinnedIssue = true
-			}
-		}
-		assert.True(t, hasUnpinnedIssue, "Expected unpinned images issue")
+		summary := parsed["summary"].(map[string]interface{})
+		assert.Equal(t, float64(2), summary["unpinned_images"])
+		assert.Equal(t, true, summary["has_user_instruction"])
+		assert.Equal(t, true, summary["has_healthcheck"])
 	})
 
 	t.Run("File not found", func(t *testing.T) {

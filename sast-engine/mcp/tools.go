@@ -347,18 +347,17 @@ Examples:
 		},
 		{
 			Name: "find_dockerfile_instructions",
-			Description: `Search Dockerfile instructions with semantic filtering. Supports instruction-specific filters (has_digest for FROM, user for USER, port for EXPOSE). Includes security analysis.
+			Description: `Search Dockerfile instructions with semantic filtering. Supports instruction-specific filters (has_digest for FROM, user for USER, port for EXPOSE).
 
 Returns:
 - file, line, instruction, raw_content
 - Parsed details (base_image, tag, digest for FROM; user, group for USER; port, protocol for EXPOSE)
-- Security analysis (security_issue, risk_level)
 
-Use when: Auditing Dockerfile security, finding unpinned images, locating root users, analyzing exposed ports, or understanding Dockerfile structure.
+Use when: Finding specific instructions, locating images, analyzing exposed ports, or understanding Dockerfile structure.
 
 Examples:
 - find_dockerfile_instructions(instruction_type="FROM", has_digest=false) - find unpinned base images
-- find_dockerfile_instructions(instruction_type="USER", user="root") - find containers running as root
+- find_dockerfile_instructions(instruction_type="USER", user="appuser") - find specific user
 - find_dockerfile_instructions(instruction_type="EXPOSE", port=8080) - find services on port 8080
 - find_dockerfile_instructions(instruction_type="FROM", base_image="python") - find Python-based images
 - find_dockerfile_instructions(file_path="api/Dockerfile") - get all instructions from specific Dockerfile`,
@@ -378,18 +377,17 @@ Examples:
 		},
 		{
 			Name: "find_compose_services",
-			Description: `Search docker-compose services with filtering. Supports security filters (has_privileged, has_volume). Includes security risk analysis.
+			Description: `Search docker-compose services with filtering. Supports configuration filters (has_privileged, has_volume, exposes_port).
 
 Returns:
 - service_name, file, line
 - Configuration (image, build, ports, volumes, environment, privileged, network_mode)
-- Security analysis (security_issues, risk_level)
 
-Use when: Auditing docker-compose security, finding privileged containers, detecting Docker socket exposure, analyzing service configurations, or understanding multi-container architecture.
+Use when: Finding specific services, analyzing service configurations, or understanding multi-container architecture.
 
 Examples:
-- find_compose_services(has_privileged=true) - find privileged containers (CRITICAL risk)
-- find_compose_services(has_volume="/var/run/docker.sock") - find Docker socket exposure
+- find_compose_services(has_privileged=true) - find privileged containers
+- find_compose_services(has_volume="/var/run/docker.sock") - find services with Docker socket
 - find_compose_services(exposes_port=8080) - find services on port 8080
 - find_compose_services(service_name="db") - find database services
 - find_compose_services(file_path="docker-compose.yml") - get all services from specific file`,
@@ -408,15 +406,15 @@ Examples:
 		},
 		{
 			Name: "get_dockerfile_details",
-			Description: `Get complete breakdown of a Dockerfile with all instructions, multi-stage analysis, and security summary.
+			Description: `Get complete breakdown of a Dockerfile with all instructions and multi-stage analysis.
 
 Returns:
 - file, total_instructions
-- instructions: Array of parsed instructions with security analysis
+- instructions: Array of parsed instructions with details
 - multi_stage: is_multi_stage, base_image, stages (array of stage aliases)
-- security_summary: has_user_instruction, has_healthcheck, unpinned_images, issues (array), risk_level
+- summary: has_user_instruction, has_healthcheck, unpinned_images
 
-Use when: Comprehensive Dockerfile audit, understanding multi-stage builds, security review, or analyzing complete Dockerfile structure.
+Use when: Understanding complete Dockerfile structure, analyzing multi-stage builds, or reviewing all instructions.
 
 Examples:
 - get_dockerfile_details(file_path="/app/Dockerfile") - get complete Dockerfile breakdown
@@ -1547,7 +1545,7 @@ func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string
 	}
 	match["args"] = args
 
-	// Instruction-specific parsing and security analysis
+	// Instruction-specific parsing
 	switch node.Name {
 	case "FROM":
 		details := parseFromInstruction(rawContent)
@@ -1556,20 +1554,10 @@ func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string
 		match["digest"] = details.Digest
 		match["stage_alias"] = details.StageAlias
 
-		if details.Digest == "" {
-			match["security_issue"] = "No digest pinning (CWE-1188)"
-			match["risk_level"] = "MEDIUM"
-		}
-
 	case "USER":
 		details := parseUserInstruction(rawContent)
 		match["user"] = details.User
 		match["group"] = details.Group
-
-		if details.User == "root" || details.User == "0" {
-			match["security_issue"] = "Container runs as root"
-			match["risk_level"] = "HIGH"
-		}
 
 	case "EXPOSE":
 		details := parseExposeInstruction(rawContent)
@@ -1744,47 +1732,6 @@ func buildComposeServiceMatch(node *graph.Node, props ComposeServiceProperties) 
 		"network_mode": props.NetworkMode,
 	}
 
-	// Security analysis
-	securityIssues := []string{}
-	riskLevel := "LOW"
-
-	// Check privileged mode (CRITICAL risk)
-	if props.Privileged {
-		securityIssues = append(securityIssues, "Privileged mode enabled (high risk)")
-		riskLevel = "CRITICAL"
-	}
-
-	// Check Docker socket exposure (CRITICAL risk)
-	for _, vol := range props.Volumes {
-		if strings.Contains(vol, "/var/run/docker.sock") {
-			securityIssues = append(securityIssues, "Docker socket exposed (container can control host)")
-			riskLevel = "CRITICAL"
-		}
-	}
-
-	// Check host network mode (HIGH risk)
-	if props.NetworkMode == "host" {
-		securityIssues = append(securityIssues, "Host network mode (no network isolation)")
-		if riskLevel != "CRITICAL" {
-			riskLevel = "HIGH"
-		}
-	}
-
-	// Check dangerous capabilities (HIGH risk)
-	for _, cap := range props.CapAdd {
-		if cap == "SYS_ADMIN" || cap == "ALL" {
-			securityIssues = append(securityIssues, fmt.Sprintf("Dangerous capability: %s", cap))
-			if riskLevel == "LOW" {
-				riskLevel = "HIGH"
-			}
-		}
-	}
-
-	if len(securityIssues) > 0 {
-		match["security_issues"] = securityIssues
-		match["risk_level"] = riskLevel
-	}
-
 	return match
 }
 
@@ -1868,34 +1815,14 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 		},
 	}
 
-	// Security summary
-	securitySummary := map[string]interface{}{
+	// Summary
+	summary := map[string]interface{}{
 		"has_user_instruction": hasUserInstruction,
 		"has_healthcheck":      hasHealthcheck,
 		"unpinned_images":      unpinnedImages,
 	}
 
-	securityIssues := []string{}
-	if !hasUserInstruction {
-		securityIssues = append(securityIssues, "No USER instruction (runs as root)")
-	}
-	if !hasHealthcheck {
-		securityIssues = append(securityIssues, "No HEALTHCHECK defined")
-	}
-	if unpinnedImages > 0 {
-		securityIssues = append(securityIssues, fmt.Sprintf("%d unpinned base image(s)", unpinnedImages))
-	}
-
-	securitySummary["issues"] = securityIssues
-	if len(securityIssues) == 0 {
-		securitySummary["risk_level"] = "LOW"
-	} else if len(securityIssues) <= 2 {
-		securitySummary["risk_level"] = "MEDIUM"
-	} else {
-		securitySummary["risk_level"] = "HIGH"
-	}
-
-	result["security_summary"] = securitySummary
+	result["summary"] = summary
 
 	bytes, _ := json.Marshal(result)
 	return string(bytes), false
@@ -1968,7 +1895,7 @@ func (c *ComposeServiceProperties) hasVolumePath(path string) bool {
 	return false
 }
 
-// parseFromInstruction parses: FROM python:3.11@sha256:abc AS builder
+// parseFromInstruction parses: FROM python:3.11@sha256:abc AS builder.
 func parseFromInstruction(rawContent string) FromDetails {
 	details := FromDetails{Tag: "latest"} // Default tag
 
@@ -2004,7 +1931,7 @@ func parseFromInstruction(rawContent string) FromDetails {
 	return details
 }
 
-// parseUserInstruction parses: USER appuser:appgroup
+// parseUserInstruction parses: USER appuser:appgroup.
 func parseUserInstruction(rawContent string) UserDetails {
 	details := UserDetails{}
 
@@ -2024,7 +1951,7 @@ func parseUserInstruction(rawContent string) UserDetails {
 	return details
 }
 
-// parseExposeInstruction parses: EXPOSE 8080/tcp
+// parseExposeInstruction parses: EXPOSE 8080/tcp.
 func parseExposeInstruction(rawContent string) ExposeDetails {
 	details := ExposeDetails{Protocol: "tcp"} // Default protocol
 
@@ -2044,7 +1971,7 @@ func parseExposeInstruction(rawContent string) ExposeDetails {
 	return details
 }
 
-// parseCopyInstruction parses: COPY --from=builder --chown=user:group /src /dst
+// parseCopyInstruction parses: COPY --from=builder --chown=user:group /src /dst.
 func parseCopyInstruction(rawContent string) CopyDetails {
 	details := CopyDetails{}
 
@@ -2053,13 +1980,14 @@ func parseCopyInstruction(rawContent string) CopyDetails {
 	// Parse flags and find source/destination indices
 	sourceIdx := 1
 	for i := 1; i < len(parts); i++ {
-		if strings.HasPrefix(parts[i], "--from=") {
+		switch {
+		case strings.HasPrefix(parts[i], "--from="):
 			details.FromStage = strings.TrimPrefix(parts[i], "--from=")
 			sourceIdx = i + 1
-		} else if strings.HasPrefix(parts[i], "--chown=") {
+		case strings.HasPrefix(parts[i], "--chown="):
 			details.Chown = strings.TrimPrefix(parts[i], "--chown=")
 			sourceIdx = i + 1
-		} else if !strings.HasPrefix(parts[i], "--") {
+		case !strings.HasPrefix(parts[i], "--"):
 			break
 		}
 	}
@@ -2075,7 +2003,7 @@ func parseCopyInstruction(rawContent string) CopyDetails {
 	return details
 }
 
-// extractWorkdirPath parses: WORKDIR /app
+// extractWorkdirPath parses: WORKDIR /app.
 func extractWorkdirPath(rawContent string) string {
 	parts := strings.Fields(rawContent)
 	if len(parts) >= 2 {
