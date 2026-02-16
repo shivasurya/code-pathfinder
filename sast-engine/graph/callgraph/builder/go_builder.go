@@ -3,9 +3,13 @@ package builder
 import (
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 )
 
@@ -67,10 +71,62 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	// Pass 1: Index all function definitions
 	functionContext := indexGoFunctions(codeGraph, callGraph, registry)
 
-	// Pass 2: Extract call sites from call_expression nodes
+	// Pass 2a: Extract return types from all indexed Go functions
+	// Only run if typeEngine is provided (not nil)
+	// ExtractGoReturnTypes operates on already-indexed functions in callGraph
+	if typeEngine != nil {
+		_ = extraction.ExtractGoReturnTypes(callGraph, registry, typeEngine)
+
+		// Pass 2b: Extract variable assignments from all Go source files (parallel)
+		// Collect all Go source files
+		goFiles := make(map[string]bool)
+		for _, node := range codeGraph.Nodes {
+			if node.File != "" && strings.HasSuffix(node.File, ".go") {
+				goFiles[node.File] = true
+			}
+		}
+
+		// Determine optimal worker count (same pattern as Python builder)
+		numWorkers := getOptimalWorkerCount()
+
+		// Create job queue for parallel processing
+		varJobs := make(chan string, 100)
+		var varProcessed atomic.Int64
+		var wg sync.WaitGroup
+
+		// Start workers for variable assignment extraction
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for filePath := range varJobs {
+					sourceCode, err := ReadFileBytes(filePath)
+					if err != nil {
+						continue // Skip files we can't read
+					}
+
+					// Extract variable assignments for this file
+					// ExtractGoVariableAssignments is thread-safe (uses mutex internally)
+					_ = extraction.ExtractGoVariableAssignments(filePath, sourceCode, typeEngine, registry, importMaps[filePath])
+
+					// Progress tracking
+					varProcessed.Add(1)
+				}
+			}()
+		}
+
+		// Queue all Go files for variable assignment extraction
+		for filePath := range goFiles {
+			varJobs <- filePath
+		}
+		close(varJobs)
+		wg.Wait()
+	}
+
+	// Pass 3: Extract call sites from call_expression nodes
 	callSites := extractGoCallSitesFromCodeGraph(codeGraph, callGraph)
 
-	// Pass 3: Resolve call targets and add edges
+	// Pass 4: Resolve call targets and add edges
 	for _, callSite := range callSites {
 		importMap := importMaps[callSite.CallerFile]
 		if importMap == nil {
@@ -144,13 +200,13 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 }
 
 // extractGoCallSitesFromCodeGraph extracts call sites from call_expression nodes.
-// This is Pass 2 of the 3-pass algorithm.
+// This is Pass 3 of the 5-pass algorithm.
 //
 // Reuses call_expression nodes created in PR-06 to avoid AST re-parsing.
 // Converts each call node to a CallSiteInternal struct for resolution.
 //
 // Returns:
-//   - list of CallSiteInternal structs ready for resolution in Pass 3
+//   - list of CallSiteInternal structs ready for resolution in Pass 4
 func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core.CallGraph) []*CallSiteInternal {
 	callSites := make([]*CallSiteInternal, 0)
 
@@ -197,7 +253,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 }
 
 // resolveGoCallTarget resolves a call site to a fully qualified name.
-// This is Pass 3 of the 3-pass algorithm.
+// This is Pass 4 of the 5-pass algorithm.
 //
 // Resolution patterns:
 //  1. Qualified call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
