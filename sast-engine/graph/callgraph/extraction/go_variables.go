@@ -422,10 +422,48 @@ func inferTypeFromRHS(
 			importMap,
 		)
 
-	// TODO: Handle other patterns in step 7
-	// - identifier (variable references)
-	// - composite_literal (struct literals)
-	// - unary_expression (address-of operator)
+	// Variable reference - copy type from scope
+	case "identifier":
+		varName := rhsNode.Content(sourceCode)
+		return inferTypeFromVariable(varName, functionFQN, typeEngine)
+
+	// Struct literal - extract type name
+	case "composite_literal":
+		return inferTypeFromCompositeLiteral(
+			rhsNode,
+			sourceCode,
+			filePath,
+			registry,
+		)
+
+	// Unary expression - handle address-of operator
+	case "unary_expression":
+		return inferTypeFromUnaryExpression(
+			rhsNode,
+			sourceCode,
+			filePath,
+			functionFQN,
+			typeEngine,
+			registry,
+			importMap,
+		)
+
+	// Expression list - for multi-assignment, get first element
+	case "expression_list":
+		if rhsNode.NamedChildCount() > 0 {
+			firstChild := rhsNode.NamedChild(0)
+			return inferTypeFromRHS(
+				firstChild,
+				sourceCode,
+				filePath,
+				functionFQN,
+				typeEngine,
+				registry,
+				importMap,
+			)
+		}
+		return nil
+
 	default:
 		return nil
 	}
@@ -511,5 +549,94 @@ func extractFunctionName(
 
 	default:
 		return ""
+	}
+}
+
+// inferTypeFromVariable infers type by looking up the variable in the current function scope.
+// Returns the most recent binding for the variable.
+func inferTypeFromVariable(
+	varName string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+) *core.TypeInfo {
+	// Get function scope
+	scope, ok := typeEngine.GetScope(functionFQN)
+	if !ok {
+		return nil
+	}
+
+	// Get variable bindings
+	bindings, ok := scope.Variables[varName]
+	if !ok || len(bindings) == 0 {
+		return nil
+	}
+
+	// Return most recent binding
+	return bindings[len(bindings)-1].Type
+}
+
+// inferTypeFromCompositeLiteral infers type from a composite literal (struct literal).
+// Handles: User{...}, &Config{...}, pkg.Type{...}
+func inferTypeFromCompositeLiteral(
+	literalNode *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	registry *core.GoModuleRegistry,
+) *core.TypeInfo {
+	// Get type node from composite literal
+	typeNode := literalNode.ChildByFieldName("type")
+	if typeNode == nil {
+		return nil
+	}
+
+	typeName := typeNode.Content(sourceCode)
+
+	// Parse the type name using existing parser from PR-14
+	return ParseGoTypeString(typeName, registry, filePath)
+}
+
+// inferTypeFromUnaryExpression infers type from a unary expression.
+// Primarily handles address-of operator: &User{...}
+func inferTypeFromUnaryExpression(
+	unaryNode *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) *core.TypeInfo {
+	// Check operator
+	operatorNode := unaryNode.ChildByFieldName("operator")
+	if operatorNode == nil {
+		return nil
+	}
+
+	operator := operatorNode.Content(sourceCode)
+
+	// Get operand
+	operandNode := unaryNode.ChildByFieldName("operand")
+	if operandNode == nil {
+		return nil
+	}
+
+	switch operator {
+	case "&":
+		// Address-of operator: &User{...}
+		// Infer type from operand (the result will be the same type,
+		// pointer handling is done by ParseGoTypeString which strips *)
+		return inferTypeFromRHS(
+			operandNode,
+			sourceCode,
+			filePath,
+			functionFQN,
+			typeEngine,
+			registry,
+			importMap,
+		)
+
+	default:
+		// Other unary operators (!, -, +, etc.) - not handling for now
+		return nil
 	}
 }
