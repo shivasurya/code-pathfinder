@@ -353,7 +353,70 @@ func inferTypeFromRHS(
 		return nil
 	}
 
-	// TODO: Implement type inference for different RHS patterns
-	// This will be implemented in Steps 5-7
-	return nil
+	nodeType := rhsNode.Type()
+
+	// Handle different RHS patterns
+	switch nodeType {
+	// String literals
+	case "interpreted_string_literal", "raw_string_literal":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.string",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	// Numeric literals
+	case "int_literal":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.int",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	case "float_literal":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.float64",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	case "imaginary_literal":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.complex128",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	// Boolean literals
+	case "true", "false":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.bool",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	// Rune literal
+	case "rune_literal":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.rune",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	// Nil literal
+	case "nil":
+		return &core.TypeInfo{
+			TypeFQN:    "builtin.nil",
+			Confidence: 1.0,
+			Source:     "literal",
+		}
+
+	// TODO: Handle other patterns in subsequent steps
+	// - call_expression (function calls)
+	// - identifier (variable references)
+	// - composite_literal (struct literals)
+	// - unary_expression (address-of operator)
+	default:
+		return nil
+	}
 }
