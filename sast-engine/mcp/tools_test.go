@@ -509,7 +509,7 @@ func TestGetToolDefinitions(t *testing.T) {
 
 	tools := server.getToolDefinitions()
 
-	assert.Len(t, tools, 11) // Updated for Docker MCP: added find_dockerfile_instructions, find_compose_services, get_dockerfile_details
+	assert.Len(t, tools, 12) // Updated for Docker MCP: added find_dockerfile_instructions, find_compose_services, get_dockerfile_details, get_docker_dependencies
 
 	// Verify each tool has required fields.
 	for _, tool := range tools {
