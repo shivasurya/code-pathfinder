@@ -1,6 +1,7 @@
 package extraction
 
 import (
+	"os"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -478,4 +479,116 @@ func Test() {
 	// No scopes should be created
 	allScopes := typeEngine.GetAllScopes()
 	assert.Len(t, allScopes, 0)
+}
+
+// TestExtractGoVariables_Integration tests with real fixture file.
+func TestExtractGoVariables_Integration(t *testing.T) {
+	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
+
+	// Read fixture
+	sourceCode, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Skip("Fixture file not found, skipping integration test")
+		return
+	}
+
+	// Setup
+	registry := &core.GoModuleRegistry{
+		ModulePath: "github.com/test/typetracking",
+		DirToImport: map[string]string{
+			"../../../test-fixtures/golang/type_tracking": "github.com/test/typetracking",
+		},
+	}
+	typeEngine := resolution.NewGoTypeInferenceEngine(registry)
+
+	// Pre-populate return types (simulating Pass 2a)
+	returnTypes := map[string]string{
+		"github.com/test/typetracking.GetInt":         "builtin.int",
+		"github.com/test/typetracking.GetString":      "builtin.string",
+		"github.com/test/typetracking.GetBool":        "builtin.bool",
+		"github.com/test/typetracking.GetUserPointer": "User",
+		"github.com/test/typetracking.CreateConfig":   "Config",
+		"github.com/test/typetracking.LoadConfig":     "builtin.string",
+		"github.com/test/typetracking.GetTwoInts":     "builtin.int",
+	}
+
+	for fqn, typeFQN := range returnTypes {
+		typeEngine.AddReturnType(fqn, &core.TypeInfo{
+			TypeFQN:    typeFQN,
+			Confidence: 1.0,
+			Source:     "declaration",
+		})
+	}
+
+	importMap := &core.GoImportMap{
+		Aliases: make(map[string]string),
+	}
+
+	// Execute
+	err = ExtractGoVariableAssignments(
+		fixturePath,
+		sourceCode,
+		typeEngine,
+		registry,
+		importMap,
+	)
+
+	// Verify
+	assert.NoError(t, err)
+
+	// Check DemoVariableAssignments function scope
+	scope, ok := typeEngine.GetScope("github.com/test/typetracking.DemoVariableAssignments")
+	assert.True(t, ok, "Expected scope for DemoVariableAssignments")
+
+	// Test function call assignments
+	expectedFunctionCallTypes := map[string]string{
+		"user":    "User",
+		"config":  "Config",
+		"name":    "builtin.string",
+		"intVal":  "builtin.int",
+		"boolVal": "builtin.bool",
+	}
+
+	for varName, expectedType := range expectedFunctionCallTypes {
+		bindings, ok := scope.Variables[varName]
+		assert.True(t, ok, "Expected binding for %s", varName)
+		if ok && len(bindings) > 0 {
+			assert.Equal(t, expectedType, bindings[0].Type.TypeFQN, "Wrong type for %s", varName)
+		}
+	}
+
+	// Test literal assignments
+	expectedLiteralTypes := map[string]string{
+		"str":       "builtin.string",
+		"num":       "builtin.int",
+		"floatNum":  "builtin.float64",
+		"flag":      "builtin.bool",
+		"falsyFlag": "builtin.bool",
+	}
+
+	for varName, expectedType := range expectedLiteralTypes {
+		bindings, ok := scope.Variables[varName]
+		assert.True(t, ok, "Expected binding for %s", varName)
+		if ok && len(bindings) > 0 {
+			assert.Equal(t, expectedType, bindings[0].Type.TypeFQN, "Wrong type for %s", varName)
+		}
+	}
+
+	// Test variable reference
+	user2Bindings, ok := scope.Variables["user2"]
+	assert.True(t, ok, "Expected binding for user2")
+	if ok && len(user2Bindings) > 0 {
+		assert.Equal(t, "User", user2Bindings[0].Type.TypeFQN)
+	}
+
+	// Check DemoComplexAssignments scope
+	complexScope, ok := typeEngine.GetScope("github.com/test/typetracking.DemoComplexAssignments")
+	assert.True(t, ok, "Expected scope for DemoComplexAssignments")
+
+	// Test multi-assignment
+	xBindings, ok := complexScope.Variables["x"]
+	assert.True(t, ok, "Expected binding for x")
+	if ok && len(xBindings) > 0 {
+		assert.Equal(t, "builtin.int", xBindings[0].Type.TypeFQN)
+	}
 }
