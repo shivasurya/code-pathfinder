@@ -532,6 +532,26 @@ func (s *Server) executeTool(name string, args map[string]interface{}) (string, 
 
 // toolGetIndexInfo returns comprehensive index statistics including symbol type breakdown.
 func (s *Server) toolGetIndexInfo() (string, bool) {
+	// Check if indexing is complete.
+	status := s.statusTracker.GetStatus()
+	if status.State != StateReady {
+		// Return indexing status instead of full info.
+		result := map[string]interface{}{
+			"status":   "indexing",
+			"state":    status.State.String(),
+			"phase":    status.Progress.Phase.String(),
+			"message":  status.Progress.Message,
+			"progress": status.Progress.OverallProgress,
+		}
+
+		if status.State == StateFailed {
+			result["error"] = status.Error
+		}
+
+		jsonData, _ := json.Marshal(result)
+		return string(jsonData), false
+	}
+
 	// Count symbols by type and LSP kind.
 	symbolsByType := make(map[string]int)
 	symbolsByLSPKind := make(map[string]int)
@@ -670,6 +690,19 @@ func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string
 	return result
 }
 
+// returnIndexingStatus returns a consistent "indexing" response for all tools.
+func (s *Server) returnIndexingStatus() string {
+	status := s.statusTracker.GetStatus()
+	result := map[string]interface{}{
+		"status":   "indexing",
+		"message":  "Index is still building. Please wait.",
+		"phase":    status.Progress.Phase.String(),
+		"progress": status.Progress.OverallProgress * 100, // As percentage
+	}
+	jsonData, _ := json.Marshal(result)
+	return string(jsonData)
+}
+
 // max returns the maximum of two integers.
 func maxInt(a, b int) int {
 	if a > b {
@@ -682,6 +715,11 @@ func maxInt(a, b int) int {
 // Searches all 12 Python symbol types: functions, methods, constructors, properties,
 // special methods, classes, interfaces, enums, dataclasses, module variables, constants, and class fields.
 func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	name, _ := args["name"].(string)
 	singleType, _ := args["type"].(string)
 	moduleFilter, _ := args["module"].(string)
@@ -1072,6 +1110,11 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 // toolFindModule searches for Python modules by name.
 func (s *Server) toolFindModule(name string) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	if name == "" {
 		return `{"error": "name parameter is required"}`, true
 	}
@@ -1139,6 +1182,11 @@ func (s *Server) toolFindModule(name string) (string, bool) {
 
 // toolListModules lists all modules in the project.
 func (s *Server) toolListModules() (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	modules := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
 
 	for moduleFQN, filePath := range s.moduleRegistry.Modules {
@@ -1167,6 +1215,11 @@ func (s *Server) toolListModules() (string, bool) {
 
 // toolGetCallers finds all callers of a function with pagination support.
 func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	function, _ := args["function"].(string)
 	if function == "" {
 		return `{"error": "function parameter is required"}`, true
@@ -1252,6 +1305,11 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 
 // toolGetCallees finds all functions called by a function.
 func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	function, _ := args["function"].(string)
 	if function == "" {
 		return `{"error": "function parameter is required"}`, true
@@ -1341,6 +1399,11 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 
 // toolGetCallDetails gets detailed info about a specific call site.
 func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	if callerName == "" || calleeName == "" {
 		return `{"error": "caller and callee parameters are required"}`, true
 	}
@@ -1408,6 +1471,11 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 
 // toolResolveImport resolves an import path to file location.
 func (s *Server) toolResolveImport(importPath string) (string, bool) {
+	// Check if ready.
+	if !s.statusTracker.IsReady() {
+		return s.returnIndexingStatus(), false
+	}
+
 	if importPath == "" {
 		return `{"error": "import parameter is required"}`, true
 	}
