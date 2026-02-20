@@ -342,6 +342,11 @@ type GoModuleRegistry struct {
 	// Key: package name (e.g., "fmt", "net/http")
 	// Value: always true (set semantics)
 	StdlibPackages map[string]bool
+
+	// StdlibLoader provides function-level metadata for Go stdlib packages.
+	// It is initialized lazily from the CDN registry during call graph construction.
+	// Nil when stdlib registry loading is disabled or unavailable.
+	StdlibLoader GoStdlibLoader
 }
 
 // NewGoModuleRegistry creates an initialized GoModuleRegistry.
@@ -441,6 +446,59 @@ type ModuleVariableProvider interface {
 type GoTypeProvider interface {
 	GetReturnType(functionFQN string) (*TypeInfo, bool)
 	GetAllReturnTypes() map[string]*TypeInfo
+}
+
+// GoCallEdge represents a single call graph edge for Go code with stdlib classification metadata.
+// It extends the basic caller → callee relationship with source location, argument capture,
+// and confidence scoring to support accurate data-flow analysis.
+type GoCallEdge struct {
+	// Source is the fully qualified name of the calling function.
+	Source string
+	// Target is the fully qualified name or import-path of the called function.
+	Target string
+	// CallType describes the kind of call: "call", "method_call", or "stdlib_call".
+	CallType string
+	// LineNumber is the source line where the call expression appears.
+	LineNumber uint32
+	// Arguments holds the argument expressions captured at the call site.
+	Arguments []string
+	// FilePath is the absolute path to the source file containing the call.
+	FilePath string
+	// IsExternal is true when the target is outside the project (stdlib or third-party).
+	IsExternal bool
+	// IsStdlib is true when the target is a Go standard library function.
+	IsStdlib bool
+	// Confidence is the call-target resolution confidence score in [0.0, 1.0].
+	Confidence float32
+}
+
+// NewGoCallEdge creates a new GoCallEdge with the given source and target.
+// The CallType field defaults to "call".
+func NewGoCallEdge(source, target string) *GoCallEdge {
+	return &GoCallEdge{
+		Source:   source,
+		Target:   target,
+		CallType: "call",
+	}
+}
+
+// GoStdlibLoader provides access to Go standard library function and type metadata.
+// The interface decouples the core package from the registry package, avoiding import cycles.
+// It is implemented by registry.GoStdlibRegistryRemote.
+type GoStdlibLoader interface {
+	// ValidateStdlibImport reports whether the given import path belongs to the Go stdlib.
+	ValidateStdlibImport(importPath string) bool
+
+	// GetFunction returns the metadata for a named function in the given stdlib package.
+	// Returns a non-nil error if the package or function is not found in the registry.
+	GetFunction(importPath, funcName string) (*GoStdlibFunction, error)
+
+	// GetType returns the metadata for a named type in the given stdlib package.
+	// Returns a non-nil error if the package or type is not found in the registry.
+	GetType(importPath, typeName string) (*GoStdlibType, error)
+
+	// PackageCount returns the total number of stdlib packages available in the registry.
+	PackageCount() int
 }
 
 // Helper function to extract the last component of a dotted path.
