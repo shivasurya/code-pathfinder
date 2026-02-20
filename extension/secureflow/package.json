@@ -288,7 +288,7 @@
     "glob": "^13.0.0",
     "prettier": "^3.6.2",
     "style-loader": "^4.0.0",
-    "svelte": "^4.2.20",
+    "svelte": "^5.53.0",
     "svelte-loader": "^3.2.4",
     "svelte-preprocess": "^6.0.3",
     "ts-loader": "^9.5.2",
