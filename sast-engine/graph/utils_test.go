@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
