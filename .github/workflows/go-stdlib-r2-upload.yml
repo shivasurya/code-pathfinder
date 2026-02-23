@@ -1,0 +1,181 @@
+name: Upload Go Stdlib Registries to R2
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      force_upload:
+        description: 'Force upload even if not a release'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  upload-go-stdlib-registries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # -----------------------------------------------------------------------
+      # Install each target Go version and capture its GOROOT.
+      # The generator is always compiled with the latest stable Go so that it
+      # satisfies the module's go.mod; it is pointed at each version's GOROOT
+      # via the --goroot flag to extract that version's stdlib API surface.
+      # -----------------------------------------------------------------------
+
+      - name: Setup Go 1.18
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.18'
+          cache: false
+      - name: Save Go 1.18 GOROOT
+        run: echo "GOROOT_1_18=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.19
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.19'
+          cache: false
+      - name: Save Go 1.19 GOROOT
+        run: echo "GOROOT_1_19=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.20
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.20'
+          cache: false
+      - name: Save Go 1.20 GOROOT
+        run: echo "GOROOT_1_20=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.21
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.21'
+          cache: false
+      - name: Save Go 1.21 GOROOT
+        run: echo "GOROOT_1_21=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.22
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: false
+      - name: Save Go 1.22 GOROOT
+        run: echo "GOROOT_1_22=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.23
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: false
+      - name: Save Go 1.23 GOROOT
+        run: echo "GOROOT_1_23=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.24
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
+          cache: false
+      - name: Save Go 1.24 GOROOT
+        run: echo "GOROOT_1_24=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.25
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Save Go 1.25 GOROOT
+        run: echo "GOROOT_1_25=$GOROOT" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.26
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Save Go 1.26 GOROOT
+        run: echo "GOROOT_1_26=$GOROOT" >> "$GITHUB_ENV"
+
+      # The last setup-go call above leaves Go 1.26 as the active compiler,
+      # which satisfies the module's `go 1.26.0` requirement in go.mod.
+      - name: Verify Go installations
+        run: |
+          echo "Verifying Go installations..."
+          echo "Active compiler: $(go version)"
+          echo ""
+          echo "Captured GOROOTs:"
+          for var in GOROOT_1_18 GOROOT_1_19 GOROOT_1_20 GOROOT_1_21 GOROOT_1_22 GOROOT_1_23 GOROOT_1_24 GOROOT_1_25 GOROOT_1_26; do
+            val="${!var}"
+            if [ -n "$val" ]; then
+              gobin="$val/bin/go"
+              ver=$("$gobin" version 2>/dev/null || echo "unknown")
+              echo "  $var=$val  ($ver)"
+            else
+              echo "  $var=<not set>"
+            fi
+          done
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Generate and upload Go stdlib registries
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          cd sast-engine/tools
+          chmod +x upload_go_stdlib_to_r2.sh
+          ./upload_go_stdlib_to_r2.sh
+
+      - name: Verify uploads in R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          echo "Verifying uploaded manifests in R2..."
+          for version in 1.18 1.19 1.20 1.21 1.22 1.23 1.24 1.25 1.26; do
+            echo "Checking Go $version manifest..."
+            aws s3 ls "s3://code-pathfinder-assets/registries/go${version}/stdlib/v1/manifest.json" \
+              --endpoint-url "$R2_ENDPOINT" \
+              || echo "Warning: manifest.json not found for Go $version"
+          done
+
+      - name: Test public accessibility
+        run: |
+          echo "Testing public CDN URLs..."
+          for version in 1.18 1.19 1.20 1.21 1.22 1.23 1.24 1.25 1.26; do
+            URL="https://assets.codepathfinder.dev/registries/go${version}/stdlib/v1/manifest.json"
+            echo "Testing: $URL"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "  ✓ Go $version manifest is publicly accessible"
+            else
+              echo "  ✗ Go $version manifest returned HTTP $STATUS"
+            fi
+          done
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "Go Stdlib Registry Upload Complete"
+          echo "========================================="
+          echo ""
+          echo "Registries are now available at:"
+          for version in 1.18 1.19 1.20 1.21 1.22 1.23 1.24 1.25 1.26; do
+            echo "  - https://assets.codepathfinder.dev/registries/go${version}/stdlib/v1/manifest.json"
+          done
+          echo ""
+          echo "These will be used by code-pathfinder for Go stdlib type inference."
