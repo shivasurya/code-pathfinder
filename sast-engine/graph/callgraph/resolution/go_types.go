@@ -1,6 +1,7 @@
 package resolution
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -167,9 +168,7 @@ func (e *GoTypeInferenceEngine) GetAllScopes() map[string]*GoFunctionScope {
 	defer e.scopeMutex.RUnlock()
 
 	scopes := make(map[string]*GoFunctionScope)
-	for fqn, scope := range e.Scopes {
-		scopes[fqn] = scope
-	}
+	maps.Copy(scopes, e.Scopes)
 	return scopes
 }
 
@@ -210,8 +209,6 @@ func (e *GoTypeInferenceEngine) GetAllReturnTypes() map[string]*core.TypeInfo {
 	defer e.typeMutex.RUnlock()
 
 	types := make(map[string]*core.TypeInfo)
-	for fqn, typeInfo := range e.ReturnTypes {
-		types[fqn] = typeInfo
-	}
+	maps.Copy(types, e.ReturnTypes)
 	return types
 }

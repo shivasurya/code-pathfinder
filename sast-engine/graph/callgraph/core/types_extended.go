@@ -3,6 +3,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -13,19 +14,19 @@ import (
 // Type represents any inferred type in the system.
 // All concrete types must implement this interface.
 type Type interface {
-	isType()                    // Marker method for type safety
-	String() string             // Human-readable representation
-	FQN() string                // Fully qualified name (e.g., "myapp.models.User")
-	Equals(other Type) bool     // Structural equality check
-	Confidence() float64        // Confidence score 0.0-1.0
+	isType()                // Marker method for type safety
+	String() string         // Human-readable representation
+	FQN() string            // Fully qualified name (e.g., "myapp.models.User")
+	Equals(other Type) bool // Structural equality check
+	Confidence() float64    // Confidence score 0.0-1.0
 }
 
 // ConcreteType represents a known, resolved type.
 // Example: "myapp.models.User", "builtins.str".
 type ConcreteType struct {
-	Name       string   // Short name: "User"
-	Module     string   // Module path: "myapp.models"
-	confidence float64  // Inference confidence
+	Name       string  // Short name: "User"
+	Module     string  // Module path: "myapp.models"
+	confidence float64 // Inference confidence
 }
 
 func (t *ConcreteType) isType() {}
@@ -66,9 +67,9 @@ func NewConcreteType(fqn string, confidence float64) *ConcreteType {
 // TypeVariable represents an unresolved type placeholder.
 // Used during constraint solving before concrete resolution.
 type TypeVariable struct {
-	ID         int      // Unique identifier
-	Name       string   // Optional name hint (e.g., "T" for generics)
-	Constraint Type     // Upper bound constraint, if any
+	ID         int    // Unique identifier
+	Name       string // Optional name hint (e.g., "T" for generics)
+	Constraint Type   // Upper bound constraint, if any
 }
 
 func (t *TypeVariable) isType() {}
@@ -98,7 +99,7 @@ func (t *TypeVariable) Confidence() float64 {
 // UnionType represents a type that could be one of several types.
 // Example: Union[str, None] for Optional[str].
 type UnionType struct {
-	Types      []Type  // Member types
+	Types      []Type // Member types
 	confidence float64
 }
 
@@ -123,13 +124,7 @@ func (t *UnionType) Equals(other Type) bool {
 		}
 		// Order-independent comparison
 		for _, tt := range t.Types {
-			found := false
-			for _, ot := range o.Types {
-				if tt.Equals(ot) {
-					found = true
-					break
-				}
-			}
+			found := slices.ContainsFunc(o.Types, tt.Equals)
 			if !found {
 				return false
 			}
@@ -223,8 +218,8 @@ func (t *NoneType) Confidence() float64 {
 
 // FunctionType represents a callable type with signature.
 type FunctionType struct {
-	Parameters []Type  // Parameter types
-	ReturnType Type    // Return type
+	Parameters []Type // Parameter types
+	ReturnType Type   // Return type
 	confidence float64
 }
 
@@ -279,14 +274,14 @@ func (t *FunctionType) Confidence() float64 {
 type ConfidenceSource string
 
 const (
-	ConfidenceAnnotation   ConfidenceSource = "annotation"   // Type annotation: 1.0
-	ConfidenceLiteral      ConfidenceSource = "literal"      // Literal value: 0.95
-	ConfidenceConstructor  ConfidenceSource = "constructor"  // Constructor call: 0.95
-	ConfidenceReturnType   ConfidenceSource = "return_type"  // Function return: 0.9
-	ConfidenceAssignment   ConfidenceSource = "assignment"   // Assignment tracking: 0.85
-	ConfidenceAttribute    ConfidenceSource = "attribute"    // Attribute access: 0.8
-	ConfidenceFluentHeuristic ConfidenceSource = "fluent"    // Fluent interface guess: 0.7
-	ConfidenceUnknown      ConfidenceSource = "unknown"      // Unknown: 0.0
+	ConfidenceAnnotation      ConfidenceSource = "annotation"  // Type annotation: 1.0
+	ConfidenceLiteral         ConfidenceSource = "literal"     // Literal value: 0.95
+	ConfidenceConstructor     ConfidenceSource = "constructor" // Constructor call: 0.95
+	ConfidenceReturnType      ConfidenceSource = "return_type" // Function return: 0.9
+	ConfidenceAssignment      ConfidenceSource = "assignment"  // Assignment tracking: 0.85
+	ConfidenceAttribute       ConfidenceSource = "attribute"   // Attribute access: 0.8
+	ConfidenceFluentHeuristic ConfidenceSource = "fluent"      // Fluent interface guess: 0.7
+	ConfidenceUnknown         ConfidenceSource = "unknown"     // Unknown: 0.0
 )
 
 // ConfidenceScore returns the numeric confidence for a source.
@@ -378,10 +373,8 @@ func SimplifyUnion(u *UnionType) Type {
 	}
 
 	// Check for Any
-	for _, t := range u.Types {
-		if IsAnyType(t) {
-			return &AnyType{Reason: "union contains Any"}
-		}
+	if slices.ContainsFunc(u.Types, IsAnyType) {
+		return &AnyType{Reason: "union contains Any"}
 	}
 
 	return u

@@ -15,8 +15,8 @@ import (
 
 // Logger interface for verbose logging (avoids import cycle with output package).
 type Logger interface {
-	Debug(format string, args ...interface{})
-	Statistic(format string, args ...interface{})
+	Debug(format string, args ...any)
+	Statistic(format string, args ...any)
 	IsDebug() bool
 	IsVerbose() bool
 }
@@ -83,8 +83,8 @@ func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR
 	if err := json.Unmarshal(output, &rules); err != nil {
 		// If array parsing fails, check if it's a container rule (object format)
 		var containerTest struct {
-			Dockerfile []interface{} `json:"dockerfile"`
-			Compose    []interface{} `json:"compose"`
+			Dockerfile []any `json:"dockerfile"`
+			Compose    []any `json:"compose"`
 		}
 		if containerErr := json.Unmarshal(output, &containerTest); containerErr == nil {
 			// This is a container rule file, skip it (handled by LoadContainerRules)
@@ -219,8 +219,8 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 	}
 
 	var containerRulesJSON struct {
-		Dockerfile []map[string]interface{} `json:"dockerfile"`
-		Compose    []map[string]interface{} `json:"compose"`
+		Dockerfile []map[string]any `json:"dockerfile"`
+		Compose    []map[string]any `json:"compose"`
 	}
 
 	// If single file, load directly
@@ -231,8 +231,8 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 		}
 		// Parse and merge
 		var fileRules struct {
-			Dockerfile []map[string]interface{} `json:"dockerfile"`
-			Compose    []map[string]interface{} `json:"compose"`
+			Dockerfile []map[string]any `json:"dockerfile"`
+			Compose    []map[string]any `json:"compose"`
 		}
 		if err := json.Unmarshal(jsonIR, &fileRules); err != nil {
 			return nil, fmt.Errorf("failed to parse container rules JSON: %w", err)
@@ -266,8 +266,8 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 
 			// Parse and merge
 			var fileRules struct {
-				Dockerfile []map[string]interface{} `json:"dockerfile"`
-				Compose    []map[string]interface{} `json:"compose"`
+				Dockerfile []map[string]any `json:"dockerfile"`
+				Compose    []map[string]any `json:"compose"`
 			}
 			if err := json.Unmarshal(jsonIR, &fileRules); err != nil {
 				// Skip files with invalid JSON (might not be container rules)
@@ -345,8 +345,8 @@ print(json.dumps(json_ir))
 
 	// Validate it's valid JSON and log loaded rules in verbose mode
 	var containerRules struct {
-		Dockerfile []map[string]interface{} `json:"dockerfile"`
-		Compose    []map[string]interface{} `json:"compose"`
+		Dockerfile []map[string]any `json:"dockerfile"`
+		Compose    []map[string]any `json:"compose"`
 	}
 	if err := json.Unmarshal(output, &containerRules); err != nil {
 		return nil, fmt.Errorf("invalid JSON output from container rules: %w", err)
@@ -372,7 +372,7 @@ print(json.dumps(json_ir))
 // ExecuteRule executes a single rule against callgraph.
 func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Determine matcher type and execute
-	matcherMap, ok := rule.Matcher.(map[string]interface{})
+	matcherMap, ok := rule.Matcher.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("matcher is not a map")
 	}
@@ -404,7 +404,7 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 	}
 }
 
-func (l *RuleLoader) executeCallMatcher(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeCallMatcher(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to CallMatcherIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -435,7 +435,7 @@ func (l *RuleLoader) executeCallMatcher(matcherMap map[string]interface{}, cg *c
 	return detections, nil
 }
 
-func (l *RuleLoader) executeDataflow(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeDataflow(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to DataflowIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -451,7 +451,7 @@ func (l *RuleLoader) executeDataflow(matcherMap map[string]interface{}, cg *core
 	return executor.Execute(), nil
 }
 
-func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// Convert map to VariableMatcherIR
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
@@ -483,7 +483,7 @@ func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]interface{}, c
 }
 
 //nolint:unparam // Will be implemented in future PRs
-func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]interface{}, cg *core.CallGraph) ([]DataflowDetection, error) {
+func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
 	// TODO: Handle And/Or/Not logic operators
 	// This requires recursive execution of nested matchers
 	// For now, return empty detections as placeholder

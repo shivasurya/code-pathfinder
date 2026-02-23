@@ -491,7 +491,7 @@ Returns:
 }
 
 // executeTool runs a tool and returns the result.
-func (s *Server) executeTool(name string, args map[string]interface{}) (string, bool) {
+func (s *Server) executeTool(name string, args map[string]any) (string, bool) {
 	switch name {
 	case "get_index_info":
 		return s.toolGetIndexInfo()
@@ -536,7 +536,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 	status := s.statusTracker.GetStatus()
 	if status.State != StateReady {
 		// Return indexing status instead of full info.
-		result := map[string]interface{}{
+		result := map[string]any{
 			"status":   "indexing",
 			"state":    status.State.String(),
 			"phase":    status.Progress.Phase.String(),
@@ -596,7 +596,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 	}
 
 	// Calculate module statistics.
-	moduleStats := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
+	moduleStats := make([]map[string]any, 0, len(s.moduleRegistry.Modules))
 	totalFunctionsInModules := 0
 
 	for moduleFQN, filePath := range s.moduleRegistry.Modules {
@@ -608,7 +608,7 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 		}
 		totalFunctionsInModules += functionsCount
 
-		moduleStats = append(moduleStats, map[string]interface{}{
+		moduleStats = append(moduleStats, map[string]any{
 			"module_fqn":      moduleFQN,
 			"file_path":       filePath,
 			"functions_count": functionsCount,
@@ -616,14 +616,14 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 	}
 
 	// Build comprehensive result.
-	result := map[string]interface{}{
+	result := map[string]any{
 		"project_path":       s.projectPath,
 		"python_version":     s.pythonVersion,
 		"indexed_at":         s.indexedAt.Format("2006-01-02T15:04:05Z07:00"),
 		"build_time_seconds": s.buildTime.Seconds(),
 
 		// Overall statistics.
-		"stats": map[string]interface{}{
+		"stats": map[string]any{
 			"total_symbols":       len(s.callGraph.Functions),
 			"call_edges":          len(s.callGraph.Edges),
 			"modules":             len(s.moduleRegistry.Modules),
@@ -644,10 +644,10 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 		"top_modules": getTopModules(moduleStats, 10),
 
 		// Index health indicators.
-		"health": map[string]interface{}{
-			"indexed_symbols":          len(s.callGraph.Functions),
-			"symbols_with_call_edges":  len(s.callGraph.Edges),
-			"modules_indexed":          len(s.moduleRegistry.Modules),
+		"health": map[string]any{
+			"indexed_symbols":              len(s.callGraph.Functions),
+			"symbols_with_call_edges":      len(s.callGraph.Edges),
+			"modules_indexed":              len(s.moduleRegistry.Modules),
 			"average_functions_per_module": float64(totalFunctionsInModules) / float64(maxInt(len(s.moduleRegistry.Modules), 1)),
 		},
 	}
@@ -657,10 +657,10 @@ func (s *Server) toolGetIndexInfo() (string, bool) {
 }
 
 // getTopModules returns the top N modules by function count.
-func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string]interface{} {
+func getTopModules(moduleStats []map[string]any, limit int) []map[string]any {
 	// Sort by functions_count descending.
 	type moduleStat struct {
-		data           map[string]interface{}
+		data           map[string]any
 		functionsCount int
 	}
 
@@ -682,7 +682,7 @@ func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string
 	}
 
 	// Return top N.
-	result := make([]map[string]interface{}, 0, limit)
+	result := make([]map[string]any, 0, limit)
 	for i := 0; i < len(stats) && i < limit; i++ {
 		result = append(result, stats[i].data)
 	}
@@ -693,7 +693,7 @@ func getTopModules(moduleStats []map[string]interface{}, limit int) []map[string
 // returnIndexingStatus returns a consistent "indexing" response for all tools.
 func (s *Server) returnIndexingStatus() string {
 	status := s.statusTracker.GetStatus()
-	result := map[string]interface{}{
+	result := map[string]any{
 		"status":   "indexing",
 		"message":  "Index is still building. Please wait.",
 		"phase":    status.Progress.Phase.String(),
@@ -714,7 +714,7 @@ func maxInt(a, b int) int {
 // toolFindSymbol finds symbols by name with pagination support.
 // Searches all 12 Python symbol types: functions, methods, constructors, properties,
 // special methods, classes, interfaces, enums, dataclasses, module variables, constants, and class fields.
-func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
+func (s *Server) toolFindSymbol(args map[string]any) (string, bool) {
 	// Check if ready.
 	if !s.statusTracker.IsReady() {
 		return s.returnIndexingStatus(), false
@@ -726,7 +726,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 	// Handle types parameter (array).
 	var typeFilter []string
-	if typesParam, ok := args["types"].([]interface{}); ok {
+	if typesParam, ok := args["types"].([]any); ok {
 		for _, t := range typesParam {
 			if typeStr, ok := t.(string); ok {
 				typeFilter = append(typeFilter, typeStr)
@@ -796,7 +796,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		return NewToolError(err.Message, err.Code, err.Data), true
 	}
 
-	var allMatches []map[string]interface{}
+	var allMatches []map[string]any
 
 	// Search functions, methods, constructors, properties, special methods, and classes.
 	for fqn, node := range s.callGraph.Functions {
@@ -821,7 +821,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 			// Get LSP symbol kind.
 			symbolKind, symbolKindName := getSymbolKind(node.Type)
 
-			match := map[string]interface{}{
+			match := map[string]any{
 				"fqn":              fqn,
 				"file":             node.File,
 				"line":             node.LineNumber,
@@ -881,7 +881,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 						if nameMatches {
 							// Get LSP symbol kind for class_field.
 							symbolKind, symbolKindName := getSymbolKind("class_field")
-							match := map[string]interface{}{
+							match := map[string]any{
 								"fqn":              attributeFQN,
 								"type":             "class_field",
 								"symbol_kind":      symbolKind,
@@ -934,7 +934,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 
 				if nameMatches {
 					symbolKind, symbolKindName := getSymbolKind("parameter")
-					match := map[string]interface{}{
+					match := map[string]any{
 						"fqn":              fqn,
 						"file":             param.File,
 						"line":             param.Line,
@@ -1026,7 +1026,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 				// Get LSP symbol kind.
 				symbolKind, symbolKindName := getSymbolKind(node.Type)
 
-				match := map[string]interface{}{
+				match := map[string]any{
 					"fqn":              fqn,
 					"file":             node.File,
 					"line":             node.LineNumber,
@@ -1084,7 +1084,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 	matches, pageInfo := PaginateSlice(allMatches, pageParams)
 
 	// Build filters_applied info for response.
-	filtersApplied := map[string]interface{}{}
+	filtersApplied := map[string]any{}
 	if name != "" {
 		filtersApplied["name"] = name
 	}
@@ -1099,7 +1099,7 @@ func (s *Server) toolFindSymbol(args map[string]interface{}) (string, bool) {
 		filtersApplied["module"] = moduleFilter
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"filters_applied": filtersApplied,
 		"matches":         matches,
 		"pagination":      pageInfo,
@@ -1129,7 +1129,7 @@ func (s *Server) toolFindModule(name string) (string, bool) {
 			}
 		}
 
-		result := map[string]interface{}{
+		result := map[string]any{
 			"module_fqn":      name,
 			"file_path":       filePath,
 			"match_type":      "exact",
@@ -1140,7 +1140,7 @@ func (s *Server) toolFindModule(name string) (string, bool) {
 	}
 
 	// Try partial match.
-	var matches []map[string]interface{}
+	var matches []map[string]any
 	for moduleFQN, filePath := range s.moduleRegistry.Modules {
 		if strings.Contains(moduleFQN, name) {
 			// Count functions in this module.
@@ -1151,7 +1151,7 @@ func (s *Server) toolFindModule(name string) (string, bool) {
 				}
 			}
 
-			matches = append(matches, map[string]interface{}{
+			matches = append(matches, map[string]any{
 				"module_fqn":      moduleFQN,
 				"file_path":       filePath,
 				"match_type":      "partial",
@@ -1171,7 +1171,7 @@ func (s *Server) toolFindModule(name string) (string, bool) {
 	}
 
 	// Multiple matches.
-	result := map[string]interface{}{
+	result := map[string]any{
 		"query":         name,
 		"matches":       matches,
 		"matches_count": len(matches),
@@ -1187,7 +1187,7 @@ func (s *Server) toolListModules() (string, bool) {
 		return s.returnIndexingStatus(), false
 	}
 
-	modules := make([]map[string]interface{}, 0, len(s.moduleRegistry.Modules))
+	modules := make([]map[string]any, 0, len(s.moduleRegistry.Modules))
 
 	for moduleFQN, filePath := range s.moduleRegistry.Modules {
 		// Count functions in this module.
@@ -1198,14 +1198,14 @@ func (s *Server) toolListModules() (string, bool) {
 			}
 		}
 
-		modules = append(modules, map[string]interface{}{
+		modules = append(modules, map[string]any{
 			"module_fqn":      moduleFQN,
 			"file_path":       filePath,
 			"functions_count": functionsCount,
 		})
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"modules":       modules,
 		"total_modules": len(modules),
 	}
@@ -1214,7 +1214,7 @@ func (s *Server) toolListModules() (string, bool) {
 }
 
 // toolGetCallers finds all callers of a function with pagination support.
-func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
+func (s *Server) toolGetCallers(args map[string]any) (string, bool) {
 	// Check if ready.
 	if !s.statusTracker.IsReady() {
 		return s.returnIndexingStatus(), false
@@ -1243,14 +1243,14 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 	// Get callers from reverse edges.
 	callerFQNs := s.callGraph.ReverseEdges[targetFQN]
 
-	allCallers := make([]map[string]interface{}, 0, len(callerFQNs))
+	allCallers := make([]map[string]any, 0, len(callerFQNs))
 	for _, callerFQN := range callerFQNs {
 		callerNode := s.callGraph.Functions[callerFQN]
 		if callerNode == nil {
 			continue
 		}
 
-		caller := map[string]interface{}{
+		caller := map[string]any{
 			"fqn":  callerFQN,
 			"name": getShortName(callerFQN),
 			"file": callerNode.File,
@@ -1277,7 +1277,7 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 	// Apply pagination.
 	callers, pageInfo := PaginateSlice(allCallers, pageParams)
 
-	targetInfo := map[string]interface{}{
+	targetInfo := map[string]any{
 		"fqn":  targetFQN,
 		"name": getShortName(targetFQN),
 		"file": targetNode.File,
@@ -1289,7 +1289,7 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 		targetInfo["return_type"] = returnType
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"target":     targetInfo,
 		"callers":    callers,
 		"pagination": pageInfo,
@@ -1304,7 +1304,7 @@ func (s *Server) toolGetCallers(args map[string]interface{}) (string, bool) {
 }
 
 // toolGetCallees finds all functions called by a function.
-func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
+func (s *Server) toolGetCallees(args map[string]any) (string, bool) {
 	// Check if ready.
 	if !s.statusTracker.IsReady() {
 		return s.returnIndexingStatus(), false
@@ -1332,12 +1332,12 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 	// Get call sites for this function.
 	callSites := s.callGraph.CallSites[sourceFQN]
 
-	allCallees := make([]map[string]interface{}, 0, len(callSites))
+	allCallees := make([]map[string]any, 0, len(callSites))
 	resolvedCount := 0
 	unresolvedCount := 0
 
 	for _, cs := range callSites {
-		callee := map[string]interface{}{
+		callee := map[string]any{
 			"target":    cs.Target,
 			"call_line": cs.Location.Line,
 			"resolved":  cs.Resolved,
@@ -1361,7 +1361,7 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 
 		// Include type inference info if used.
 		if cs.ResolvedViaTypeInference {
-			callee["type_inference"] = map[string]interface{}{
+			callee["type_inference"] = map[string]any{
 				"inferred_type":   cs.InferredType,
 				"type_confidence": cs.TypeConfidence,
 			}
@@ -1373,7 +1373,7 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 	// Apply pagination.
 	callees, pageInfo := PaginateSlice(allCallees, pageParams)
 
-	sourceInfo := map[string]interface{}{
+	sourceInfo := map[string]any{
 		"fqn":  sourceFQN,
 		"name": getShortName(sourceFQN),
 		"file": sourceNode.File,
@@ -1385,7 +1385,7 @@ func (s *Server) toolGetCallees(args map[string]interface{}) (string, bool) {
 		sourceInfo["return_type"] = returnType
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"source":           sourceInfo,
 		"callees":          callees,
 		"pagination":       pageInfo,
@@ -1419,11 +1419,11 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 	// Find matching call site.
 	for _, cs := range callSites {
 		if strings.Contains(cs.Target, calleeName) || strings.Contains(cs.TargetFQN, calleeName) {
-			callSite := map[string]interface{}{
+			callSite := map[string]any{
 				"caller_fqn": callerFQN,
 				"target":     cs.Target,
 				"target_fqn": cs.TargetFQN,
-				"location": map[string]interface{}{
+				"location": map[string]any{
 					"file":   cs.Location.File,
 					"line":   cs.Location.Line,
 					"column": cs.Location.Column,
@@ -1433,9 +1433,9 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 
 			// Add arguments if available.
 			if len(cs.Arguments) > 0 {
-				args := make([]map[string]interface{}, len(cs.Arguments))
+				args := make([]map[string]any, len(cs.Arguments))
 				for i, arg := range cs.Arguments {
-					args[i] = map[string]interface{}{
+					args[i] = map[string]any{
 						"position": arg.Position,
 						"value":    arg.Value,
 					}
@@ -1444,7 +1444,7 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 			}
 
 			// Add resolution info.
-			resolution := map[string]interface{}{
+			resolution := map[string]any{
 				"resolved": cs.Resolved,
 			}
 			if !cs.Resolved && cs.FailureReason != "" {
@@ -1458,7 +1458,7 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 			}
 			callSite["resolution"] = resolution
 
-			result := map[string]interface{}{
+			result := map[string]any{
 				"call_site": callSite,
 			}
 			bytes, _ := json.MarshalIndent(result, "", "  ")
@@ -1482,13 +1482,13 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 
 	// Try exact match first.
 	if filePath, ok := s.moduleRegistry.Modules[importPath]; ok {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"import":       importPath,
 			"resolved":     true,
 			"file_path":    filePath,
 			"module_fqn":   importPath,
 			"match_type":   "exact",
-			"alternatives": []interface{}{},
+			"alternatives": []any{},
 		}
 		bytes, _ := json.MarshalIndent(result, "", "  ")
 		return string(bytes), false
@@ -1501,13 +1501,13 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 			// Unique match.
 			filePath := files[0]
 			moduleFQN := s.moduleRegistry.FileToModule[filePath]
-			result := map[string]interface{}{
+			result := map[string]any{
 				"import":       importPath,
 				"resolved":     true,
 				"file_path":    filePath,
 				"module_fqn":   moduleFQN,
 				"match_type":   "short_name",
-				"alternatives": []interface{}{},
+				"alternatives": []any{},
 			}
 			bytes, _ := json.MarshalIndent(result, "", "  ")
 			return string(bytes), false
@@ -1521,7 +1521,7 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 				"file": f,
 			}
 		}
-		result := map[string]interface{}{
+		result := map[string]any{
 			"import":       importPath,
 			"resolved":     false,
 			"match_type":   "ambiguous",
@@ -1544,7 +1544,7 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 	}
 
 	if len(partialMatches) > 0 {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"import":       importPath,
 			"resolved":     false,
 			"match_type":   "partial",
@@ -1559,7 +1559,7 @@ func (s *Server) toolResolveImport(importPath string) (string, bool) {
 }
 
 // toolFindDockerfileInstructions searches Dockerfile instructions with semantic filtering.
-func (s *Server) toolFindDockerfileInstructions(args map[string]interface{}) (string, bool) {
+func (s *Server) toolFindDockerfileInstructions(args map[string]any) (string, bool) {
 	// Extract parameters
 	instructionType, _ := args["instruction_type"].(string)
 	filePath, _ := args["file_path"].(string)
@@ -1581,14 +1581,14 @@ func (s *Server) toolFindDockerfileInstructions(args map[string]interface{}) (st
 		limit = 100
 	}
 
-	matches := []map[string]interface{}{}
+	matches := []map[string]any{}
 
 	// Check if codeGraph exists
 	if s.codeGraph == nil || s.codeGraph.Nodes == nil {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"matches": matches,
 			"total":   0,
-			"filters_applied": map[string]interface{}{
+			"filters_applied": map[string]any{
 				"instruction_type": instructionType,
 				"file_path":        filePath,
 				"base_image":       baseImage,
@@ -1661,10 +1661,10 @@ func (s *Server) toolFindDockerfileInstructions(args map[string]interface{}) (st
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"matches": matches,
 		"total":   len(matches),
-		"filters_applied": map[string]interface{}{
+		"filters_applied": map[string]any{
 			"instruction_type": instructionType,
 			"file_path":        filePath,
 			"base_image":       baseImage,
@@ -1679,8 +1679,8 @@ func (s *Server) toolFindDockerfileInstructions(args map[string]interface{}) (st
 }
 
 // buildDockerInstructionMatch builds a rich match result for a Dockerfile instruction.
-func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string]interface{} {
-	match := map[string]interface{}{
+func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string]any {
+	match := map[string]any{
 		"file":        node.File,
 		"line":        node.LineNumber,
 		"instruction": node.Name,
@@ -1728,7 +1728,7 @@ func buildDockerInstructionMatch(node *graph.Node, rawContent string) map[string
 }
 
 // toolFindComposeServices searches docker-compose services with filtering.
-func (s *Server) toolFindComposeServices(args map[string]interface{}) (string, bool) {
+func (s *Server) toolFindComposeServices(args map[string]any) (string, bool) {
 	// Extract parameters
 	serviceName, _ := args["service_name"].(string)
 	filePath, _ := args["file_path"].(string)
@@ -1749,14 +1749,14 @@ func (s *Server) toolFindComposeServices(args map[string]interface{}) (string, b
 		limit = 100
 	}
 
-	matches := []map[string]interface{}{}
+	matches := []map[string]any{}
 
 	// Check if codeGraph exists
 	if s.codeGraph == nil || s.codeGraph.Nodes == nil {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"matches": matches,
 			"total":   0,
-			"filters_applied": map[string]interface{}{
+			"filters_applied": map[string]any{
 				"service_name":   serviceName,
 				"file_path":      filePath,
 				"has_privileged": hasPrivileged,
@@ -1809,10 +1809,10 @@ func (s *Server) toolFindComposeServices(args map[string]interface{}) (string, b
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"matches": matches,
 		"total":   len(matches),
-		"filters_applied": map[string]interface{}{
+		"filters_applied": map[string]any{
 			"service_name":   serviceName,
 			"file_path":      filePath,
 			"has_privileged": hasPrivileged,
@@ -1867,8 +1867,8 @@ func parseComposeServiceProperties(node *graph.Node) ComposeServiceProperties {
 }
 
 // buildComposeServiceMatch builds a rich match result for a compose service.
-func buildComposeServiceMatch(node *graph.Node, props ComposeServiceProperties) map[string]interface{} {
-	match := map[string]interface{}{
+func buildComposeServiceMatch(node *graph.Node, props ComposeServiceProperties) map[string]any {
+	match := map[string]any{
 		"service_name": node.Name,
 		"file":         node.File,
 		"line":         node.LineNumber,
@@ -1885,7 +1885,7 @@ func buildComposeServiceMatch(node *graph.Node, props ComposeServiceProperties) 
 }
 
 // toolGetDockerfileDetails returns complete breakdown of a Dockerfile.
-func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, bool) {
+func (s *Server) toolGetDockerfileDetails(args map[string]any) (string, bool) {
 	filePath, _ := args["file_path"].(string)
 
 	if filePath == "" {
@@ -1897,7 +1897,7 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 		return `{"error": "No code graph available"}`, true
 	}
 
-	instructions := []map[string]interface{}{}
+	instructions := []map[string]any{}
 	var baseImage string
 	stages := []string{}
 	isMultiStage := false
@@ -1953,11 +1953,11 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 	}
 
 	// Build result
-	result := map[string]interface{}{
+	result := map[string]any{
 		"file":               filePath,
 		"total_instructions": len(instructions),
 		"instructions":       instructions,
-		"multi_stage": map[string]interface{}{
+		"multi_stage": map[string]any{
 			"is_multi_stage": isMultiStage,
 			"base_image":     baseImage,
 			"stages":         stages,
@@ -1965,7 +1965,7 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 	}
 
 	// Summary
-	summary := map[string]interface{}{
+	summary := map[string]any{
 		"has_user_instruction": hasUserInstruction,
 		"has_healthcheck":      hasHealthcheck,
 		"unpinned_images":      unpinnedImages,
@@ -1978,7 +1978,7 @@ func (s *Server) toolGetDockerfileDetails(args map[string]interface{}) (string, 
 }
 
 // toolGetDockerDependencies retrieves dependency information for Docker entities.
-func (s *Server) toolGetDockerDependencies(args map[string]interface{}) (string, bool) {
+func (s *Server) toolGetDockerDependencies(args map[string]any) (string, bool) {
 	// Extract parameters
 	entityType, _ := args["type"].(string)
 	if entityType == "" {
@@ -2030,7 +2030,7 @@ func (s *Server) toolGetDockerDependencies(args map[string]interface{}) (string,
 	result := dockerpkg.Traverse(depGraph, name, traversalDirection, maxDepth)
 
 	// Add filters applied
-	result.FiltersApplied = map[string]interface{}{
+	result.FiltersApplied = map[string]any{
 		"type":      entityType,
 		"name":      name,
 		"file_path": filePath,
@@ -2128,9 +2128,9 @@ func parseFromInstruction(rawContent string) FromDetails {
 	}
 
 	// Extract tag (:3.11)
-	if idx := strings.Index(image, ":"); idx != -1 {
-		details.BaseImage = image[:idx]
-		details.Tag = image[idx+1:]
+	if before, after, ok := strings.Cut(image, ":"); ok {
+		details.BaseImage = before
+		details.Tag = after
 	} else {
 		details.BaseImage = image
 	}
@@ -2156,9 +2156,9 @@ func parseUserInstruction(rawContent string) UserDetails {
 	}
 
 	userSpec := parts[1]
-	if idx := strings.Index(userSpec, ":"); idx != -1 {
-		details.User = userSpec[:idx]
-		details.Group = userSpec[idx+1:]
+	if before, after, ok := strings.Cut(userSpec, ":"); ok {
+		details.User = before
+		details.Group = after
 	} else {
 		details.User = userSpec
 	}
@@ -2176,9 +2176,9 @@ func parseExposeInstruction(rawContent string) ExposeDetails {
 	}
 
 	portSpec := parts[1]
-	if idx := strings.Index(portSpec, "/"); idx != -1 {
-		details.Port, _ = strconv.Atoi(portSpec[:idx])
-		details.Protocol = portSpec[idx+1:]
+	if before, after, ok := strings.Cut(portSpec, "/"); ok {
+		details.Port, _ = strconv.Atoi(before)
+		details.Protocol = after
 	} else {
 		details.Port, _ = strconv.Atoi(portSpec)
 	}

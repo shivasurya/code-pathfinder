@@ -102,10 +102,8 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		var wg sync.WaitGroup
 
 		// Start workers for variable assignment extraction
-		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range numWorkers {
+			wg.Go(func() {
 				for filePath := range varJobs {
 					sourceCode, err := ReadFileBytes(filePath)
 					if err != nil {
@@ -123,7 +121,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 						fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (%.1f%%)", count, totalFiles, percentage)
 					}
 				}
-			}()
+			})
 		}
 
 		// Queue all Go files for variable assignment extraction
@@ -336,11 +334,12 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 // This is Pass 4 of the 5-pass algorithm.
 //
 // Resolution patterns:
-//  1a. Qualified import call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
-//  1b. Variable method call: user.Save() → resolve "user" via typeEngine → "pkg.User.Save" (PR-17)
-//  2. Same-package call: Helper() → find in functionContext → "github.com/myapp/utils.Helper"
-//  3. Builtin call: append() → "builtin.append"
-//  4. Unresolved: return false
+//
+//	1a. Qualified import call: fmt.Println → resolve "fmt" via imports → "fmt.Println"
+//	1b. Variable method call: user.Save() → resolve "user" via typeEngine → "pkg.User.Save" (PR-17)
+//	2. Same-package call: Helper() → find in functionContext → "github.com/myapp/utils.Helper"
+//	3. Builtin call: append() → "builtin.append"
+//	4. Unresolved: return false
 //
 // Parameters:
 //   - callSite: the call site to resolve
@@ -382,8 +381,8 @@ func resolveGoCallTarget(
 					// Build method FQN: "pkg.Type.Method"
 					// Handle pointer types: *User -> User (methods are defined on the type, not the pointer in FQN)
 					typeFQN := binding.Type.TypeFQN
-					if strings.HasPrefix(typeFQN, "*") {
-						typeFQN = strings.TrimPrefix(typeFQN, "*")
+					if after, ok0 := strings.CutPrefix(typeFQN, "*"); ok0 {
+						typeFQN = after
 					}
 
 					methodFQN := typeFQN + "." + callSite.FunctionName

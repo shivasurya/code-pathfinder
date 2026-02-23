@@ -256,7 +256,7 @@ func TestGoTypeInferenceEngine_ThreadSafety(t *testing.T) {
 	numGoroutines := 100
 
 	// Concurrent writes to scopes
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -267,7 +267,7 @@ func TestGoTypeInferenceEngine_ThreadSafety(t *testing.T) {
 	}
 
 	// Concurrent writes to return types
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -291,7 +291,7 @@ func TestGoTypeInferenceEngine_ConcurrentReads(t *testing.T) {
 	engine := NewGoTypeInferenceEngine(nil)
 
 	// Setup data
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fqn := fmt.Sprintf("myapp.Func%d", i)
 		scope := NewGoFunctionScope(fqn)
 		engine.AddScope(scope)
@@ -302,7 +302,7 @@ func TestGoTypeInferenceEngine_ConcurrentReads(t *testing.T) {
 	numReaders := 100
 
 	// Concurrent reads
-	for i := 0; i < numReaders; i++ {
+	for i := range numReaders {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

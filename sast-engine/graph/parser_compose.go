@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 )
@@ -43,25 +44,19 @@ func NewComposeGraph(yamlGraph *YAMLGraph, filePath string) *ComposeGraph {
 	// Index services
 	servicesNode := yamlGraph.Query("services")
 	if servicesNode != nil && servicesNode.Children != nil {
-		for name, node := range servicesNode.Children {
-			compose.Services[name] = node
-		}
+		maps.Copy(compose.Services, servicesNode.Children)
 	}
 
 	// Index volumes
 	volumesNode := yamlGraph.Query("volumes")
 	if volumesNode != nil && volumesNode.Children != nil {
-		for name, node := range volumesNode.Children {
-			compose.Volumes[name] = node
-		}
+		maps.Copy(compose.Volumes, volumesNode.Children)
 	}
 
 	// Index networks
 	networksNode := yamlGraph.Query("networks")
 	if networksNode != nil && networksNode.Children != nil {
-		for name, node := range networksNode.Children {
-			compose.Networks[name] = node
-		}
+		maps.Copy(compose.Networks, networksNode.Children)
 	}
 
 	// Get version
@@ -85,7 +80,7 @@ func (c *ComposeGraph) GetServices() []string {
 }
 
 // ServiceHas checks if a service has a property with specified value.
-func (c *ComposeGraph) ServiceHas(serviceName, key string, value interface{}) bool {
+func (c *ComposeGraph) ServiceHas(serviceName, key string, value any) bool {
 	service, exists := c.Services[serviceName]
 	if !exists {
 		return false
@@ -103,7 +98,7 @@ func (c *ComposeGraph) ServiceHasKey(serviceName, key string) bool {
 }
 
 // ServiceGet retrieves a service property value.
-func (c *ComposeGraph) ServiceGet(serviceName, key string) interface{} {
+func (c *ComposeGraph) ServiceGet(serviceName, key string) any {
 	service, exists := c.Services[serviceName]
 	if !exists {
 		return nil
@@ -260,8 +255,8 @@ func (c *ComposeGraph) ServiceExposesPort(serviceName string, port int) bool {
 			continue
 		}
 		// Parse formats: "8080:80", "8080", "8080:80/tcp"
-		parts := strings.Split(strings.Split(portStr, "/")[0], ":")
-		for _, p := range parts {
+		parts := strings.SplitSeq(strings.Split(portStr, "/")[0], ":")
+		for p := range parts {
 			if portNum, err := strconv.Atoi(p); err == nil && portNum == port {
 				return true
 			}
@@ -304,7 +299,7 @@ func (c *ComposeGraph) ServiceHasEnvVar(serviceName, varName string) bool {
 
 // --- Helper Methods ---
 
-func (c *ComposeGraph) nodeHasValue(node *YAMLNode, key string, expected interface{}) bool {
+func (c *ComposeGraph) nodeHasValue(node *YAMLNode, key string, expected any) bool {
 	if node == nil {
 		return false
 	}

@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -40,12 +41,7 @@ func extractDecorators(node *sitter.Node, sourceCode []byte) []string {
 
 // hasDecorator checks if a list of decorators contains a specific decorator.
 func hasDecorator(decorators []string, name string) bool {
-	for _, d := range decorators {
-		if d == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(decorators, name)
 }
 
 // isConstantName checks if a variable name follows Python constant naming convention.
@@ -178,15 +174,13 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	nodeType := "function_definition"
 
 	// Check if function is inside a class (method vs function).
-	isInsideClass := currentContext != nil && (
-		currentContext.Type == "class_definition" ||
+	isInsideClass := currentContext != nil && (currentContext.Type == "class_definition" ||
 		currentContext.Type == "interface" ||
 		currentContext.Type == "enum" ||
 		currentContext.Type == "dataclass")
 
 	// Check if function is nested inside another function.
-	isNestedFunction := currentContext != nil && (
-		currentContext.Type == "function_definition" ||
+	isNestedFunction := currentContext != nil && (currentContext.Type == "function_definition" ||
 		currentContext.Type == "method" ||
 		currentContext.Type == "property" ||
 		currentContext.Type == "constructor" ||
@@ -225,10 +219,10 @@ func parsePythonFunctionDefinition(node *sitter.Node, sourceCode []byte, graph *
 	lineNumber := node.StartPoint().Row + 1
 	methodID := GenerateMethodID("function:"+qualifiedFunctionName, parameters, file, lineNumber)
 	functionNode := &Node{
-		ID:                   methodID,
-		Type:                 nodeType,
-		Name:                 qualifiedFunctionName,
-		SourceLocation:       &SourceLocation{
+		ID:   methodID,
+		Type: nodeType,
+		Name: qualifiedFunctionName,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -293,10 +287,10 @@ func parsePythonClassDefinition(node *sitter.Node, sourceCode []byte, graph *Cod
 
 	classLineNumber := node.StartPoint().Row + 1
 	classNode := &Node{
-		ID:                 GenerateMethodID("class:"+className, []string{}, file, classLineNumber),
-		Type:               classType,
-		Name:               className,
-		SourceLocation:     &SourceLocation{
+		ID:   GenerateMethodID("class:"+className, []string{}, file, classLineNumber),
+		Type: classType,
+		Name: className,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -334,11 +328,11 @@ func parsePythonCall(node *sitter.Node, sourceCode []byte, graph *CodeGraph, cur
 	callLineNumber := node.StartPoint().Row + 1
 	callID := GenerateMethodID(callName, arguments, file, callLineNumber)
 	callNode := &Node{
-		ID:                   callID,
-		Type:                 "call",
-		Name:                 callName,
-		IsExternal:           true,
-		SourceLocation:       &SourceLocation{
+		ID:         callID,
+		Type:       "call",
+		Name:       callName,
+		IsExternal: true,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -360,12 +354,12 @@ func parsePythonReturnStatement(node *sitter.Node, sourceCode []byte, graph *Cod
 	returnNode := pythonlang.ParseReturnStatement(node, sourceCode)
 	uniqueReturnID := fmt.Sprintf("return_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	returnStmtNode := &Node{
-		ID:                 GenerateSha256(uniqueReturnID),
-		Type:               "ReturnStmt",
-		LineNumber:         node.StartPoint().Row + 1,
-		Name:               "ReturnStmt",
-		IsExternal:         true,
-		SourceLocation:     &SourceLocation{
+		ID:         GenerateSha256(uniqueReturnID),
+		Type:       "ReturnStmt",
+		LineNumber: node.StartPoint().Row + 1,
+		Name:       "ReturnStmt",
+		IsExternal: true,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -383,12 +377,12 @@ func parsePythonBreakStatement(node *sitter.Node, sourceCode []byte, graph *Code
 	breakNode := pythonlang.ParseBreakStatement(node, sourceCode)
 	uniquebreakstmtID := fmt.Sprintf("breakstmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	breakStmtNode := &Node{
-		ID:                 GenerateSha256(uniquebreakstmtID),
-		Type:               "BreakStmt",
-		LineNumber:         node.StartPoint().Row + 1,
-		Name:               "BreakStmt",
-		IsExternal:         true,
-		SourceLocation:     &SourceLocation{
+		ID:         GenerateSha256(uniquebreakstmtID),
+		Type:       "BreakStmt",
+		LineNumber: node.StartPoint().Row + 1,
+		Name:       "BreakStmt",
+		IsExternal: true,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -406,12 +400,12 @@ func parsePythonContinueStatement(node *sitter.Node, sourceCode []byte, graph *C
 	continueNode := pythonlang.ParseContinueStatement(node, sourceCode)
 	uniquecontinueID := fmt.Sprintf("continuestmt_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	continueStmtNode := &Node{
-		ID:                 GenerateSha256(uniquecontinueID),
-		Type:               "ContinueStmt",
-		LineNumber:         node.StartPoint().Row + 1,
-		Name:               "ContinueStmt",
-		IsExternal:         true,
-		SourceLocation:     &SourceLocation{
+		ID:         GenerateSha256(uniquecontinueID),
+		Type:       "ContinueStmt",
+		LineNumber: node.StartPoint().Row + 1,
+		Name:       "ContinueStmt",
+		IsExternal: true,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -429,12 +423,12 @@ func parsePythonAssertStatement(node *sitter.Node, sourceCode []byte, graph *Cod
 	assertNode := pythonlang.ParseAssertStatement(node, sourceCode)
 	uniqueAssertID := fmt.Sprintf("assert_%d_%d_%s", node.StartPoint().Row+1, node.StartPoint().Column+1, file)
 	assertStmtNode := &Node{
-		ID:                 GenerateSha256(uniqueAssertID),
-		Type:               "AssertStmt",
-		LineNumber:         node.StartPoint().Row + 1,
-		Name:               "AssertStmt",
-		IsExternal:         true,
-		SourceLocation:     &SourceLocation{
+		ID:         GenerateSha256(uniqueAssertID),
+		Type:       "AssertStmt",
+		LineNumber: node.StartPoint().Row + 1,
+		Name:       "AssertStmt",
+		IsExternal: true,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -456,12 +450,12 @@ func parsePythonYieldExpression(node *sitter.Node, sourceCode []byte, graph *Cod
 			yieldNode := pythonlang.ParseYieldStatement(child, sourceCode)
 			uniqueyieldID := fmt.Sprintf("yield_%d_%d_%s", child.StartPoint().Row+1, child.StartPoint().Column+1, file)
 			yieldStmtNode := &Node{
-				ID:                 GenerateSha256(uniqueyieldID),
-				Type:               "YieldStmt",
-				LineNumber:         child.StartPoint().Row + 1,
-				Name:               "YieldStmt",
-				IsExternal:         true,
-				SourceLocation:     &SourceLocation{
+				ID:         GenerateSha256(uniqueyieldID),
+				Type:       "YieldStmt",
+				LineNumber: child.StartPoint().Row + 1,
+				Name:       "YieldStmt",
+				IsExternal: true,
+				SourceLocation: &SourceLocation{
 					File:      file,
 					StartByte: child.StartByte(),
 					EndByte:   child.EndByte(),
@@ -529,10 +523,10 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 
 	varLineNumber := node.StartPoint().Row + 1
 	variableNode := &Node{
-		ID:                 GenerateMethodID(variableName, []string{}, file, varLineNumber),
-		Type:               nodeType,
-		Name:               variableName,
-		SourceLocation:     &SourceLocation{
+		ID:   GenerateMethodID(variableName, []string{}, file, varLineNumber),
+		Type: nodeType,
+		Name: variableName,
+		SourceLocation: &SourceLocation{
 			File:      file,
 			StartByte: node.StartByte(),
 			EndByte:   node.EndByte(),
@@ -552,11 +546,12 @@ func parsePythonAssignment(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 // base classes are not properly detected.
 //
 // Example:
-//   class CustomEnum(Enum):  # Detected as enum (direct inheritance)
-//       pass
 //
-//   class Operator(CustomEnum):  # NOT detected without this fix (transitive)
-//       pass
+//	class CustomEnum(Enum):  # Detected as enum (direct inheritance)
+//	    pass
+//
+//	class Operator(CustomEnum):  # NOT detected without this fix (transitive)
+//	    pass
 //
 // After this function, Operator will also be marked as "enum".
 func ResolveTransitiveInheritance(codeGraph *CodeGraph) {

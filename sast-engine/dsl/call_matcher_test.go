@@ -119,7 +119,7 @@ func TestCallMatcherExecutor_ExecuteWithContext(t *testing.T) {
 func BenchmarkCallMatcherExecutor(b *testing.B) {
 	// Create realistic callgraph (1000 functions, 7 calls each)
 	cg := core.NewCallGraph()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		funcName := fmt.Sprintf("module.func_%d", i)
 		cg.CallSites[funcName] = []core.CallSite{
 			{Target: "print"},
@@ -285,8 +285,8 @@ func TestParseKeywordArguments_EdgeCases(t *testing.T) {
 
 	// Test with malformed arguments (should skip or include based on behavior)
 	args := []core.Argument{
-		{Value: "=value", Position: 0},            // Missing key
-		{Value: "key=", Position: 1},              // Missing value (should include)
+		{Value: "=value", Position: 0}, // Missing key
+		{Value: "key=", Position: 1},   // Missing value (should include)
 		{Value: "validkey=validvalue", Position: 2},
 	}
 	result := executor.parseKeywordArguments(args)
@@ -495,7 +495,7 @@ func TestMatchesArguments_PartialMatch(t *testing.T) {
 		Target: "app.run",
 		Arguments: []core.Argument{
 			{Value: "host=\"0.0.0.0\"", Position: 0}, // Matches
-			{Value: "debug=False", Position: 1},       // Doesn't match
+			{Value: "debug=False", Position: 1},      // Doesn't match
 		},
 	}
 
@@ -728,8 +728,8 @@ func TestMatchesPositionalArguments_PartialMatch(t *testing.T) {
 	}
 
 	args := []core.Argument{
-		{Value: "/tmp/file", Position: 0},   // Matches
-		{Value: "0o755", Position: 1},       // Doesn't match (755 octal = 493 decimal)
+		{Value: "/tmp/file", Position: 0}, // Matches
+		{Value: "0o755", Position: 1},     // Doesn't match (755 octal = 493 decimal)
 	}
 
 	assert.False(t, executor.matchesPositionalArguments(args), "Expected NOT to match when one positional constraint fails")
@@ -872,7 +872,7 @@ func TestMatchesArguments_CombinedPartialMatch(t *testing.T) {
 	callSite := core.CallSite{
 		Target: "app.run",
 		Arguments: []core.Argument{
-			{Value: "localhost", Position: 0}, // Matches positional
+			{Value: "localhost", Position: 0},   // Matches positional
 			{Value: "debug=False", Position: 1}, // Doesn't match keyword
 		},
 	}
@@ -897,7 +897,7 @@ func TestMatchesArguments_CombinedPositionalFails(t *testing.T) {
 	callSite := core.CallSite{
 		Target: "app.run",
 		Arguments: []core.Argument{
-			{Value: "0.0.0.0", Position: 0}, // Doesn't match positional
+			{Value: "0.0.0.0", Position: 0},    // Doesn't match positional
 			{Value: "debug=True", Position: 1}, // Matches keyword
 		},
 	}
@@ -908,10 +908,10 @@ func TestMatchesArguments_CombinedPositionalFails(t *testing.T) {
 // TestPositionalArguments_RealWorldPatterns tests real-world security patterns.
 func TestPositionalArguments_RealWorldPatterns(t *testing.T) {
 	tests := []struct {
-		name       string
-		pattern    string
-		constraint map[string]ArgumentConstraint
-		callSite   core.CallSite
+		name        string
+		pattern     string
+		constraint  map[string]ArgumentConstraint
+		callSite    core.CallSite
 		shouldMatch bool
 	}{
 		{
@@ -1108,7 +1108,7 @@ func TestMatchesArgumentValue_ORLogic_Strings(t *testing.T) {
 			Patterns: []string{"open"},
 			PositionalArgs: map[string]ArgumentConstraint{
 				"1": {
-					Value:    []interface{}{"w", "a", "w+", "a+"},
+					Value:    []any{"w", "a", "w+", "a+"},
 					Wildcard: false,
 				},
 			},
@@ -1150,7 +1150,7 @@ func TestMatchesArgumentValue_ORLogic_Mixed(t *testing.T) {
 			Patterns: []string{"config.set"},
 			KeywordArgs: map[string]ArgumentConstraint{
 				"mode": {
-					Value:    []interface{}{"debug", "development", "test"},
+					Value:    []any{"debug", "development", "test"},
 					Wildcard: false,
 				},
 			},
@@ -1191,7 +1191,7 @@ func TestMatchesArgumentValue_ORLogic_Numbers(t *testing.T) {
 			Patterns: []string{"chmod"},
 			PositionalArgs: map[string]ArgumentConstraint{
 				"1": {
-					Value:    []interface{}{float64(511), float64(493), float64(448)}, // 0o777, 0o755, 0o700
+					Value:    []any{float64(511), float64(493), float64(448)}, // 0o777, 0o755, 0o700
 					Wildcard: false,
 				},
 			},
@@ -1354,7 +1354,7 @@ func TestMatchesArgumentValue_ORLogicWithWildcards(t *testing.T) {
 			Patterns: []string{"yaml.load"},
 			KeywordArgs: map[string]ArgumentConstraint{
 				"Loader": {
-					Value:    []interface{}{"*Loader", "*UnsafeLoader"},
+					Value:    []any{"*Loader", "*UnsafeLoader"},
 					Wildcard: true,
 				},
 			},
@@ -1396,7 +1396,7 @@ func TestMatchesArgumentValue_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name        string
 		actual      string
-		expected    interface{}
+		expected    any
 		wildcard    bool
 		shouldMatch bool
 	}{
@@ -1668,11 +1668,11 @@ func TestExtractTupleElement(t *testing.T) {
 // TestMatchesPositionalArguments_TupleIndexing tests tuple indexing in positional arguments.
 func TestMatchesPositionalArguments_TupleIndexing(t *testing.T) {
 	tests := []struct {
-		name          string
-		args          []core.Argument
-		constraints   map[string]ArgumentConstraint
-		shouldMatch   bool
-		description   string
+		name        string
+		args        []core.Argument
+		constraints map[string]ArgumentConstraint
+		shouldMatch bool
+		description string
 	}{
 		{
 			name: "tuple first element matches",
@@ -1784,7 +1784,7 @@ func TestMatchesPositionalArguments_TupleIndexing(t *testing.T) {
 			},
 			constraints: map[string]ArgumentConstraint{
 				"0[0]": {
-					Value:    []interface{}{"0.0.0.0", "127.0.0.1", "localhost"},
+					Value:    []any{"0.0.0.0", "127.0.0.1", "localhost"},
 					Wildcard: false,
 				},
 			},

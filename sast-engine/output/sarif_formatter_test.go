@@ -31,7 +31,7 @@ func TestSARIFFormatterVersion(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{Target: "/project"})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
@@ -52,16 +52,16 @@ func TestSARIFFormatterTool(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
+	runs := report["runs"].([]any)
 	require.Len(t, runs, 1)
 
-	run := runs[0].(map[string]interface{})
-	tool := run["tool"].(map[string]interface{})
-	driver := tool["driver"].(map[string]interface{})
+	run := runs[0].(map[string]any)
+	tool := run["tool"].(map[string]any)
+	driver := tool["driver"].(map[string]any)
 	assert.Equal(t, "Code Pathfinder", driver["name"])
 }
 
@@ -85,26 +85,26 @@ func TestSARIFFormatterRules(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	tool := run["tool"].(map[string]interface{})
-	driver := tool["driver"].(map[string]interface{})
-	rules := driver["rules"].([]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	tool := run["tool"].(map[string]any)
+	driver := tool["driver"].(map[string]any)
+	rules := driver["rules"].([]any)
 	require.Len(t, rules, 1)
 
-	rule := rules[0].(map[string]interface{})
+	rule := rules[0].(map[string]any)
 	assert.Equal(t, "command-injection", rule["id"])
 	assert.Equal(t, "Command Injection", rule["name"])
 
 	// Check description (could be in fullDescription or shortDescription)
-	if fullDesc, ok := rule["fullDescription"].(map[string]interface{}); ok {
+	if fullDesc, ok := rule["fullDescription"].(map[string]any); ok {
 		assert.Contains(t, fullDesc["text"], "User input flows to shell command")
 		assert.Contains(t, fullDesc["text"], "CWE-78")
-	} else if shortDesc, ok := rule["shortDescription"].(map[string]interface{}); ok {
+	} else if shortDesc, ok := rule["shortDescription"].(map[string]any); ok {
 		assert.Contains(t, shortDesc["text"], "User input flows to shell command")
 		assert.Contains(t, shortDesc["text"], "CWE-78")
 	} else {
@@ -131,18 +131,18 @@ func TestSARIFFormatterRuleProperties(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	tool := run["tool"].(map[string]interface{})
-	driver := tool["driver"].(map[string]interface{})
-	rules := driver["rules"].([]interface{})
-	rule := rules[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	tool := run["tool"].(map[string]any)
+	driver := tool["driver"].(map[string]any)
+	rules := driver["rules"].([]any)
+	rule := rules[0].(map[string]any)
 
-	props := rule["properties"].(map[string]interface{})
+	props := rule["properties"].(map[string]any)
 	assert.Equal(t, "9.0", props["security-severity"])
 	assert.Equal(t, "high", props["precision"])
 	assert.Contains(t, props["tags"], "security")
@@ -178,16 +178,16 @@ func TestSARIFFormatterResults(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
 	require.Len(t, results, 1)
 
-	result := results[0].(map[string]interface{})
+	result := results[0].(map[string]any)
 	assert.Equal(t, "cmd-inj", result["ruleId"])
 	// Level may be optional in result, it's defined in rule configuration
 	if level, ok := result["level"]; ok {
@@ -195,14 +195,14 @@ func TestSARIFFormatterResults(t *testing.T) {
 	}
 
 	// Check location
-	locations := result["locations"].([]interface{})
+	locations := result["locations"].([]any)
 	require.Len(t, locations, 1)
-	loc := locations[0].(map[string]interface{})
-	physLoc := loc["physicalLocation"].(map[string]interface{})
-	artifact := physLoc["artifactLocation"].(map[string]interface{})
+	loc := locations[0].(map[string]any)
+	physLoc := loc["physicalLocation"].(map[string]any)
+	artifact := physLoc["artifactLocation"].(map[string]any)
 	assert.Equal(t, "auth/login.py", artifact["uri"])
 
-	region := physLoc["region"].(map[string]interface{})
+	region := physLoc["region"].(map[string]any)
 	assert.Equal(t, float64(20), region["startLine"])
 	assert.Equal(t, float64(8), region["startColumn"])
 }
@@ -228,37 +228,37 @@ func TestSARIFFormatterCodeFlows(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
+	result := results[0].(map[string]any)
 
 	// Check code flows exist for taint detection
-	codeFlows := result["codeFlows"].([]interface{})
+	codeFlows := result["codeFlows"].([]any)
 	require.Len(t, codeFlows, 1)
 
-	codeFlow := codeFlows[0].(map[string]interface{})
-	threadFlows := codeFlow["threadFlows"].([]interface{})
+	codeFlow := codeFlows[0].(map[string]any)
+	threadFlows := codeFlow["threadFlows"].([]any)
 	require.Len(t, threadFlows, 1)
 
-	threadFlow := threadFlows[0].(map[string]interface{})
-	tfLocations := threadFlow["locations"].([]interface{})
+	threadFlow := threadFlows[0].(map[string]any)
+	tfLocations := threadFlow["locations"].([]any)
 	require.Len(t, tfLocations, 2)
 
 	// Source should be line 10
-	sourceLoc := tfLocations[0].(map[string]interface{})
-	sourcePhys := sourceLoc["location"].(map[string]interface{})["physicalLocation"].(map[string]interface{})
-	sourceRegion := sourcePhys["region"].(map[string]interface{})
+	sourceLoc := tfLocations[0].(map[string]any)
+	sourcePhys := sourceLoc["location"].(map[string]any)["physicalLocation"].(map[string]any)
+	sourceRegion := sourcePhys["region"].(map[string]any)
 	assert.Equal(t, float64(10), sourceRegion["startLine"])
 
 	// Sink should be line 20
-	sinkLoc := tfLocations[1].(map[string]interface{})
-	sinkPhys := sinkLoc["location"].(map[string]interface{})["physicalLocation"].(map[string]interface{})
-	sinkRegion := sinkPhys["region"].(map[string]interface{})
+	sinkLoc := tfLocations[1].(map[string]any)
+	sinkPhys := sinkLoc["location"].(map[string]any)["physicalLocation"].(map[string]any)
+	sinkRegion := sinkPhys["region"].(map[string]any)
 	assert.Equal(t, float64(20), sinkRegion["startLine"])
 }
 
@@ -282,22 +282,22 @@ func TestSARIFFormatterRelatedLocations(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
+	result := results[0].(map[string]any)
 
 	// Check related locations
-	relatedLocs := result["relatedLocations"].([]interface{})
+	relatedLocs := result["relatedLocations"].([]any)
 	require.Len(t, relatedLocs, 1)
 
-	relatedLoc := relatedLocs[0].(map[string]interface{})
-	physLoc := relatedLoc["physicalLocation"].(map[string]interface{})
-	region := physLoc["region"].(map[string]interface{})
+	relatedLoc := relatedLocs[0].(map[string]any)
+	physLoc := relatedLoc["physicalLocation"].(map[string]any)
+	region := physLoc["region"].(map[string]any)
 	assert.Equal(t, float64(10), region["startLine"])
 }
 
@@ -316,14 +316,14 @@ func TestSARIFFormatterNoCodeFlowForPattern(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
+	result := results[0].(map[string]any)
 
 	// Pattern matches should NOT have code flows
 	_, hasCodeFlows := result["codeFlows"]
@@ -419,21 +419,21 @@ func TestSARIFFormatterMultipleRules(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	tool := run["tool"].(map[string]interface{})
-	driver := tool["driver"].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	tool := run["tool"].(map[string]any)
+	driver := tool["driver"].(map[string]any)
 
 	// Should have 2 unique rules
-	rules := driver["rules"].([]interface{})
+	rules := driver["rules"].([]any)
 	assert.Len(t, rules, 2)
 
 	// Should have 3 results
-	results := run["results"].([]interface{})
+	results := run["results"].([]any)
 	assert.Len(t, results, 3)
 }
 
@@ -458,20 +458,20 @@ func TestSARIFFormatterTaintGlobalCodeFlow(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
+	result := results[0].(map[string]any)
 
 	// Taint-global should also have code flows
-	codeFlows := result["codeFlows"].([]interface{})
+	codeFlows := result["codeFlows"].([]any)
 	require.Len(t, codeFlows, 1)
 
-	codeFlow := codeFlows[0].(map[string]interface{})
+	codeFlow := codeFlows[0].(map[string]any)
 	assert.NotNil(t, codeFlow["message"])
 }
 
@@ -494,19 +494,19 @@ func TestSARIFFormatterFallbackToFilePath(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
-	result := results[0].(map[string]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
+	result := results[0].(map[string]any)
 
-	locations := result["locations"].([]interface{})
-	loc := locations[0].(map[string]interface{})
-	physLoc := loc["physicalLocation"].(map[string]interface{})
-	artifact := physLoc["artifactLocation"].(map[string]interface{})
+	locations := result["locations"].([]any)
+	loc := locations[0].(map[string]any)
+	physLoc := loc["physicalLocation"].(map[string]any)
+	artifact := physLoc["artifactLocation"].(map[string]any)
 	assert.Equal(t, "/absolute/path/to/file.py", artifact["uri"])
 }
 
@@ -535,13 +535,13 @@ func TestSARIFFormatterEmptyFilePathSkipsResult(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
 	// Only the detection with a valid path should be included
 	assert.Len(t, results, 1, "Should exclude results with empty file path")
 }
@@ -571,13 +571,13 @@ func TestSARIFFormatterEmptyFilePathSkipsCodeFlow(t *testing.T) {
 	err := sf.Format(detections, ScanInfo{})
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(buf.Bytes(), &report)
 	require.NoError(t, err)
 
-	runs := report["runs"].([]interface{})
-	run := runs[0].(map[string]interface{})
-	results := run["results"].([]interface{})
+	runs := report["runs"].([]any)
+	run := runs[0].(map[string]any)
+	results := run["results"].([]any)
 
 	// Entire result should be excluded when file path is empty
 	assert.Empty(t, results, "Should exclude results with empty file path")

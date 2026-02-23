@@ -144,7 +144,7 @@ func GenerateJSONReport(
 	comparisons []*DualLevelComparison,
 	outputPath string,
 ) error {
-	report := map[string]interface{}{
+	report := map[string]any{
 		"metrics":     metrics,
 		"comparisons": comparisons,
 		"timestamp":   time.Now().Format(time.RFC3339),

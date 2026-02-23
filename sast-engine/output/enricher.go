@@ -184,14 +184,8 @@ func (e *Enricher) extractSnippet(loc dsl.LocationInfo) (dsl.CodeSnippet, error)
 		contextLines = 3
 	}
 
-	startLine := loc.Line - contextLines
-	if startLine < 1 {
-		startLine = 1
-	}
-	endLine := loc.Line + contextLines
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
+	startLine := max(loc.Line-contextLines, 1)
+	endLine := min(loc.Line+contextLines, len(lines))
 
 	snippet.StartLine = startLine
 

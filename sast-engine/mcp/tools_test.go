@@ -24,12 +24,12 @@ func TestToolGetIndexInfo(t *testing.T) {
 	assert.Contains(t, result, "stats")
 
 	// Verify JSON is valid.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
 	// Verify stats structure (enhanced with Phase 3).
-	stats, ok := parsed["stats"].(map[string]interface{})
+	stats, ok := parsed["stats"].(map[string]any)
 	assert.True(t, ok)
 	assert.Contains(t, stats, "total_symbols")
 	assert.Contains(t, stats, "call_edges")
@@ -44,12 +44,12 @@ func TestToolGetIndexInfo(t *testing.T) {
 	assert.Contains(t, parsed, "health")
 
 	// Verify symbols_by_type has data.
-	symbolsByType, ok := parsed["symbols_by_type"].(map[string]interface{})
+	symbolsByType, ok := parsed["symbols_by_type"].(map[string]any)
 	assert.True(t, ok)
 	assert.NotEmpty(t, symbolsByType)
 
 	// Verify symbols_by_lsp_kind has data.
-	symbolsByLSPKind, ok := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	symbolsByLSPKind, ok := parsed["symbols_by_lsp_kind"].(map[string]any)
 	assert.True(t, ok)
 	assert.NotEmpty(t, symbolsByLSPKind)
 
@@ -59,7 +59,7 @@ func TestToolGetIndexInfo(t *testing.T) {
 func TestToolFindSymbol_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
@@ -70,7 +70,7 @@ func TestToolFindSymbol_Found(t *testing.T) {
 func TestToolFindSymbol_PartialMatch(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate"})
 
 	// Should find validate_user via partial match.
 	assert.False(t, isError)
@@ -80,7 +80,7 @@ func TestToolFindSymbol_PartialMatch(t *testing.T) {
 func TestToolFindSymbol_MultipleMatches(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "log"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "log"})
 
 	// Should find both login and logout.
 	assert.False(t, isError)
@@ -91,7 +91,7 @@ func TestToolFindSymbol_MultipleMatches(t *testing.T) {
 func TestToolFindSymbol_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "nonexistent_function_xyz"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "nonexistent_function_xyz"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "No symbols found")
@@ -101,7 +101,7 @@ func TestToolFindSymbol_NotFound(t *testing.T) {
 func TestToolFindSymbol_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": ""})
+	result, isError := server.toolFindSymbol(map[string]any{"name": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "At least one filter required")
@@ -111,7 +111,7 @@ func TestToolFindSymbol_EmptyName(t *testing.T) {
 func TestToolFindSymbol_AttributeFound(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "email"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "email")
@@ -124,7 +124,7 @@ func TestToolFindSymbol_AttributeFound(t *testing.T) {
 func TestToolFindSymbol_AttributePartialMatch(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "name"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "name"})
 
 	// Should find username attribute via partial match.
 	assert.False(t, isError)
@@ -136,7 +136,7 @@ func TestToolFindSymbol_AttributePartialMatch(t *testing.T) {
 func TestToolFindSymbol_AttributeWithConfidence(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "email"})
 
 	assert.False(t, isError)
 	// Verify confidence is included in output.
@@ -148,7 +148,7 @@ func TestToolFindSymbol_AttributeWithConfidence(t *testing.T) {
 func TestToolFindSymbol_AttributeAndFunction(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "User"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "User"})
 
 	assert.False(t, isError)
 	// Should find both class User and possibly attributes containing "User".
@@ -159,7 +159,7 @@ func TestToolFindSymbol_AttributeAndFunction(t *testing.T) {
 func TestToolFindSymbol_NoAttributeRegistry(t *testing.T) {
 	server := createTestServer() // No attributes registry.
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	// Should still find functions.
 	assert.False(t, isError)
@@ -171,7 +171,7 @@ func TestToolFindSymbol_NilAttributes(t *testing.T) {
 	server := createTestServer()
 	server.callGraph.Attributes = nil // Explicitly set to nil.
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	// Should still work for functions.
 	assert.False(t, isError)
@@ -183,7 +183,7 @@ func TestToolFindSymbol_WrongTypeAttributes(t *testing.T) {
 	server := createTestServer()
 	server.callGraph.Attributes = "not a registry" // Wrong type.
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	// Should still work for functions without crashing.
 	assert.False(t, isError)
@@ -194,7 +194,7 @@ func TestToolFindSymbol_WrongTypeAttributes(t *testing.T) {
 func TestToolFindSymbol_AttributeNoType(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "id"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "id"})
 
 	// Should find attribute even without type info.
 	assert.False(t, isError)
@@ -207,7 +207,7 @@ func TestToolFindSymbol_AttributeNoType(t *testing.T) {
 func TestToolFindSymbol_AttributeEmptyType(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "created_at"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "created_at"})
 
 	// Should find attribute even with empty type.
 	assert.False(t, isError)
@@ -219,7 +219,7 @@ func TestToolFindSymbol_AttributeEmptyType(t *testing.T) {
 func TestToolFindSymbol_AttributeNoLocation(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "id"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "id"})
 
 	// Should find attribute even without location.
 	assert.False(t, isError)
@@ -231,7 +231,7 @@ func TestToolFindSymbol_AttributeNoLocation(t *testing.T) {
 func TestToolFindSymbol_AttributeNoAssignedIn(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "created_at"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "created_at"})
 
 	// Should find attribute even without AssignedIn.
 	assert.False(t, isError)
@@ -242,7 +242,7 @@ func TestToolFindSymbol_AttributeNoAssignedIn(t *testing.T) {
 func TestToolGetCallers_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "validate_user"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callers")
@@ -255,7 +255,7 @@ func TestToolGetCallers_NoCallers(t *testing.T) {
 	server := createTestServer()
 
 	// login has no callers in our test data.
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "login"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "login"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "pagination")
@@ -265,7 +265,7 @@ func TestToolGetCallers_NoCallers(t *testing.T) {
 func TestToolGetCallers_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "nonexistent_function"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "nonexistent_function"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "not found")
@@ -274,7 +274,7 @@ func TestToolGetCallers_NotFound(t *testing.T) {
 func TestToolGetCallers_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": ""})
+	result, isError := server.toolGetCallers(map[string]any{"function": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "required")
@@ -283,7 +283,7 @@ func TestToolGetCallers_EmptyName(t *testing.T) {
 func TestToolGetCallees_Found(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees(map[string]interface{}{"function": "login"})
+	result, isError := server.toolGetCallees(map[string]any{"function": "login"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callees")
@@ -296,7 +296,7 @@ func TestToolGetCallees_NoCallees(t *testing.T) {
 	server := createTestServer()
 
 	// validate_user has no callees in our test data.
-	result, isError := server.toolGetCallees(map[string]interface{}{"function": "validate_user"})
+	result, isError := server.toolGetCallees(map[string]any{"function": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "pagination")
@@ -305,7 +305,7 @@ func TestToolGetCallees_NoCallees(t *testing.T) {
 func TestToolGetCallees_NotFound(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees(map[string]interface{}{"function": "nonexistent_function"})
+	result, isError := server.toolGetCallees(map[string]any{"function": "nonexistent_function"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "not found")
@@ -314,7 +314,7 @@ func TestToolGetCallees_NotFound(t *testing.T) {
 func TestToolGetCallees_EmptyName(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolGetCallees(map[string]interface{}{"function": ""})
+	result, isError := server.toolGetCallees(map[string]any{"function": ""})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "required")
@@ -411,15 +411,15 @@ func TestExecuteTool_AllToolsDispatch(t *testing.T) {
 	tests := []struct {
 		name      string
 		toolName  string
-		args      map[string]interface{}
+		args      map[string]any
 		wantError bool
 	}{
 		{"get_index_info", "get_index_info", nil, false},
-		{"find_symbol", "find_symbol", map[string]interface{}{"name": "login"}, false},
-		{"get_callers", "get_callers", map[string]interface{}{"function": "validate_user"}, false},
-		{"get_callees", "get_callees", map[string]interface{}{"function": "login"}, false},
-		{"get_call_details", "get_call_details", map[string]interface{}{"caller": "login", "callee": "validate_user"}, false},
-		{"resolve_import", "resolve_import", map[string]interface{}{"import": "myapp.auth"}, false},
+		{"find_symbol", "find_symbol", map[string]any{"name": "login"}, false},
+		{"get_callers", "get_callers", map[string]any{"function": "validate_user"}, false},
+		{"get_callees", "get_callees", map[string]any{"function": "login"}, false},
+		{"get_call_details", "get_call_details", map[string]any{"caller": "login", "callee": "validate_user"}, false},
+		{"resolve_import", "resolve_import", map[string]any{"import": "myapp.auth"}, false},
 	}
 
 	for _, tt := range tests {
@@ -483,21 +483,21 @@ func TestToolOutputFormat_ValidJSON(t *testing.T) {
 	// All tools should return valid JSON.
 	tools := []struct {
 		name string
-		args map[string]interface{}
+		args map[string]any
 	}{
 		{"get_index_info", nil},
-		{"find_symbol", map[string]interface{}{"name": "validate_user"}},
-		{"get_callers", map[string]interface{}{"function": "validate_user"}},
-		{"get_callees", map[string]interface{}{"function": "login"}},
-		{"get_call_details", map[string]interface{}{"caller": "login", "callee": "validate_user"}},
-		{"resolve_import", map[string]interface{}{"import": "myapp.auth"}},
+		{"find_symbol", map[string]any{"name": "validate_user"}},
+		{"get_callers", map[string]any{"function": "validate_user"}},
+		{"get_callees", map[string]any{"function": "login"}},
+		{"get_call_details", map[string]any{"caller": "login", "callee": "validate_user"}},
+		{"resolve_import", map[string]any{"import": "myapp.auth"}},
 	}
 
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
 			result, _ := server.executeTool(tt.name, tt.args)
 
-			var parsed interface{}
+			var parsed any
 			err := json.Unmarshal([]byte(result), &parsed)
 			assert.NoError(t, err, "Tool %s should return valid JSON", tt.name)
 		})
@@ -543,7 +543,7 @@ func TestGetToolDefinitions(t *testing.T) {
 func TestToolFindSymbol_WithAllFields(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	assert.False(t, isError)
 
@@ -603,7 +603,7 @@ func TestToolGetCallDetails_TypeInference(t *testing.T) {
 func TestToolGetCallees_WithUnresolvedCalls(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolGetCallees(map[string]interface{}{"function": "login"})
+	result, isError := server.toolGetCallees(map[string]any{"function": "login"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callees")
@@ -672,7 +672,7 @@ func TestToolResolveImport_PartialContainsMatch(t *testing.T) {
 func TestToolGetCallers_WithMultipleCallSites(t *testing.T) {
 	server := createExtendedTestServer()
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "validate_user"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "validate_user"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "callers")
@@ -703,7 +703,7 @@ func TestToolGetCallers_MultipleMatches(t *testing.T) {
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
 	}, nil, time.Second, false)
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "handler"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "handler"})
 
 	assert.False(t, isError)
 	// Should have a note about multiple matches.
@@ -725,7 +725,7 @@ func TestToolGetCallers_NilCallerNode(t *testing.T) {
 		Modules: map[string]string{}, FileToModule: map[string]string{}, ShortNames: map[string][]string{},
 	}, nil, time.Second, false)
 
-	result, isError := server.toolGetCallers(map[string]interface{}{"function": "func"})
+	result, isError := server.toolGetCallers(map[string]any{"function": "func"})
 
 	// Should still succeed but skip the nil caller.
 	assert.False(t, isError)
@@ -737,7 +737,7 @@ func TestToolFindSymbol_SubstringMatch(t *testing.T) {
 	server := createExtendedTestServer()
 
 	// "valid" should match "validate_user" via substring.
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "valid"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "valid"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
@@ -747,11 +747,12 @@ func TestToolFindSymbol_FQNSubstringMatch(t *testing.T) {
 	server := createExtendedTestServer()
 
 	// "myapp.auth" should match via FQN substring.
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "myapp.auth"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "myapp.auth"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "validate_user")
 }
+
 // ============================================================================
 // Phase 3B Tests: LSP Symbol Kind Mapping + Module Search
 // ============================================================================
@@ -806,23 +807,23 @@ func TestGetSymbolKind(t *testing.T) {
 func TestToolFindSymbol_SymbolKindFields(t *testing.T) {
 	server := createTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "validate_user"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "validate_user"})
 
 	assert.False(t, isError)
 
 	// Parse JSON response.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
 	// Get matches array.
-	matches, ok := parsed["matches"].([]interface{})
+	matches, ok := parsed["matches"].([]any)
 	assert.True(t, ok, "Should have matches array")
 	assert.Greater(t, len(matches), 0, "Should have at least one match")
 
 	// Verify each match has symbol_kind and symbol_kind_name.
 	for i, matchInterface := range matches {
-		match, ok := matchInterface.(map[string]interface{})
+		match, ok := matchInterface.(map[string]any)
 		assert.True(t, ok, "Match %d should be an object", i)
 
 		// Verify symbol_kind (integer).
@@ -849,24 +850,24 @@ func TestToolFindSymbol_SymbolKindFields(t *testing.T) {
 func TestToolFindSymbol_ClassFieldSymbolKind(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "email"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "email"})
 
 	assert.False(t, isError)
 
 	// Parse JSON response.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
 	// Get matches array.
-	matches, ok := parsed["matches"].([]interface{})
+	matches, ok := parsed["matches"].([]any)
 	assert.True(t, ok)
 	assert.Greater(t, len(matches), 0)
 
 	// Find the class_field match.
-	var fieldMatch map[string]interface{}
+	var fieldMatch map[string]any
 	for _, matchInterface := range matches {
-		match := matchInterface.(map[string]interface{})
+		match := matchInterface.(map[string]any)
 		if match["type"] == "class_field" {
 			fieldMatch = match
 			break
@@ -899,7 +900,7 @@ func TestToolFindModule_ExactMatch(t *testing.T) {
 	assert.Contains(t, result, "functions_count")
 
 	// Parse JSON to verify structure.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
@@ -919,14 +920,14 @@ func TestToolFindModule_PartialMatch(t *testing.T) {
 	assert.Contains(t, result, "auth")
 
 	// Parse JSON to verify structure.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
 	// Should have matches array for partial matches.
-	if matches, ok := parsed["matches"].([]interface{}); ok {
+	if matches, ok := parsed["matches"].([]any); ok {
 		assert.Greater(t, len(matches), 0, "Should have at least one match")
-		firstMatch := matches[0].(map[string]interface{})
+		firstMatch := matches[0].(map[string]any)
 		assert.Contains(t, firstMatch["module_fqn"], "auth")
 		assert.Equal(t, "partial", firstMatch["match_type"])
 	} else {
@@ -968,12 +969,12 @@ func TestToolListModules(t *testing.T) {
 	assert.Contains(t, result, "total_modules")
 
 	// Parse JSON to verify structure.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
 	// Verify modules array.
-	modules, ok := parsed["modules"].([]interface{})
+	modules, ok := parsed["modules"].([]any)
 	assert.True(t, ok, "Should have modules array")
 	assert.Greater(t, len(modules), 0, "Should have at least one module")
 
@@ -984,7 +985,7 @@ func TestToolListModules(t *testing.T) {
 
 	// Verify each module has required fields.
 	for i, moduleInterface := range modules {
-		module, ok := moduleInterface.(map[string]interface{})
+		module, ok := moduleInterface.(map[string]any)
 		assert.True(t, ok, "Module %d should be an object", i)
 
 		assert.Contains(t, module, "module_fqn", "Module %d should have module_fqn", i)
@@ -1019,19 +1020,19 @@ func TestToolFindSymbol_InterfaceWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "IDrawable"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "IDrawable"})
 
 	assert.False(t, isError)
 
 	// Parse JSON.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Greater(t, len(matches), 0)
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 
 	// Verify interface has correct symbol kind.
 	assert.Equal(t, float64(SymbolKindInterface), match["symbol_kind"],
@@ -1040,7 +1041,7 @@ func TestToolFindSymbol_InterfaceWithSymbolKind(t *testing.T) {
 
 	// Verify interfaces field is present.
 	assert.Contains(t, match, "interfaces")
-	interfaces := match["interfaces"].([]interface{})
+	interfaces := match["interfaces"].([]any)
 	assert.Equal(t, "Protocol", interfaces[0])
 }
 
@@ -1062,14 +1063,14 @@ func TestToolFindSymbol_EnumWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Color"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "Color"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+	match := parsed["matches"].([]any)[0].(map[string]any)
 
 	assert.Equal(t, float64(SymbolKindEnum), match["symbol_kind"],
 		"Enum should have symbol_kind = SymbolKindEnum (10)")
@@ -1094,14 +1095,14 @@ func TestToolFindSymbol_DataclassWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "Point"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "Point"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+	match := parsed["matches"].([]any)[0].(map[string]any)
 
 	assert.Equal(t, float64(SymbolKindStruct), match["symbol_kind"],
 		"Dataclass should have symbol_kind = SymbolKindStruct (23)")
@@ -1126,14 +1127,14 @@ func TestToolFindSymbol_ConstructorWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__init__"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "__init__"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+	match := parsed["matches"].([]any)[0].(map[string]any)
 
 	assert.Equal(t, float64(SymbolKindConstructor), match["symbol_kind"],
 		"Constructor should have symbol_kind = SymbolKindConstructor (9)")
@@ -1158,18 +1159,18 @@ func TestToolFindSymbol_PropertyWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "name"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "name"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	// Find the property match (there might be other "name" matches).
-	var propertyMatch map[string]interface{}
+	var propertyMatch map[string]any
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		if match["type"] == "property" {
 			propertyMatch = match
 			break
@@ -1199,14 +1200,14 @@ func TestToolFindSymbol_SpecialMethodWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "__str__"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "__str__"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+	match := parsed["matches"].([]any)[0].(map[string]any)
 
 	assert.Equal(t, float64(SymbolKindOperator), match["symbol_kind"],
 		"Special method should have symbol_kind = SymbolKindOperator (25)")
@@ -1230,20 +1231,21 @@ func TestToolFindSymbol_MethodWithSymbolKind(t *testing.T) {
 
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "get_profile"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "get_profile"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	match := parsed["matches"].([]interface{})[0].(map[string]interface{})
+	match := parsed["matches"].([]any)[0].(map[string]any)
 
 	assert.Equal(t, float64(SymbolKindMethod), match["symbol_kind"],
 		"Method should have symbol_kind = SymbolKindMethod (6)")
 	assert.Equal(t, "Method", match["symbol_kind_name"])
 	assert.Equal(t, "method", match["type"])
 }
+
 // TestToolGetIndexInfo_Enhanced demonstrates the enhanced index info with all symbol types.
 func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	// Create a comprehensive test server with all 12 symbol types.
@@ -1301,7 +1303,7 @@ func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	assert.False(t, isError)
 
 	// Parse and display the comprehensive result.
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
@@ -1317,7 +1319,7 @@ func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	assert.Contains(t, parsed, "health")
 
 	// Verify symbols_by_type has all the types we added.
-	symbolsByType := parsed["symbols_by_type"].(map[string]interface{})
+	symbolsByType := parsed["symbols_by_type"].(map[string]any)
 	assert.Contains(t, symbolsByType, "function_definition")
 	assert.Contains(t, symbolsByType, "method")
 	assert.Contains(t, symbolsByType, "constructor")
@@ -1329,7 +1331,7 @@ func TestToolGetIndexInfo_Enhanced(t *testing.T) {
 	assert.Contains(t, symbolsByType, "dataclass")
 
 	// Verify LSP kind breakdown.
-	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]any)
 	assert.Contains(t, symbolsByLSPKind, "Function")
 	assert.Contains(t, symbolsByLSPKind, "Method")
 	assert.Contains(t, symbolsByLSPKind, "Constructor")
@@ -1473,7 +1475,7 @@ func createMultiTypeTestServer() *Server {
 func TestToolFindSymbol_NoFilters(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{})
+	result, isError := server.toolFindSymbol(map[string]any{})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "At least one filter required")
@@ -1483,7 +1485,7 @@ func TestToolFindSymbol_NoFilters(t *testing.T) {
 func TestToolFindSymbol_FilterBySingleType(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "method"})
+	result, isError := server.toolFindSymbol(map[string]any{"type": "method"})
 
 	assert.False(t, isError)
 	assert.Contains(t, result, "get_profile")
@@ -1491,17 +1493,17 @@ func TestToolFindSymbol_FilterBySingleType(t *testing.T) {
 	assert.NotContains(t, result, "login") // Should not include function_definition
 
 	// Verify only methods are returned.
-	var parsedResult map[string]interface{}
+	var parsedResult map[string]any
 	json.Unmarshal([]byte(result), &parsedResult)
-	matches := parsedResult["matches"].([]interface{})
+	matches := parsedResult["matches"].([]any)
 	for _, match := range matches {
-		m := match.(map[string]interface{})
+		m := match.(map[string]any)
 		assert.Equal(t, "method", m["type"])
 	}
 
 	// Verify filters_applied.
 	assert.Contains(t, result, "filters_applied")
-	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	filtersApplied := parsedResult["filters_applied"].(map[string]any)
 	assert.Equal(t, "method", filtersApplied["type"])
 }
 
@@ -1509,8 +1511,8 @@ func TestToolFindSymbol_FilterBySingleType(t *testing.T) {
 func TestToolFindSymbol_FilterByMultipleTypes(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
-		"types": []interface{}{"interface", "enum"},
+	result, isError := server.toolFindSymbol(map[string]any{
+		"types": []any{"interface", "enum"},
 	})
 
 	assert.False(t, isError)
@@ -1529,7 +1531,7 @@ func TestToolFindSymbol_CombineNameAndType(t *testing.T) {
 	server := createMultiTypeTestServer()
 
 	// Search for anything named "User" but only class_definition type.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "User",
 		"type": "class_definition",
 	})
@@ -1547,9 +1549,9 @@ func TestToolFindSymbol_CombineNameAndTypes(t *testing.T) {
 	server := createMultiTypeTestServer()
 
 	// Search for anything with "User" in name, but only methods or constructors.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name":  "User",
-		"types": []interface{}{"method", "constructor"},
+		"types": []any{"method", "constructor"},
 	})
 
 	assert.False(t, isError)
@@ -1558,11 +1560,11 @@ func TestToolFindSymbol_CombineNameAndTypes(t *testing.T) {
 	assert.Contains(t, result, "get_profile")
 	assert.Contains(t, result, "save")
 	// Should NOT include class User itself.
-	parsedResult := map[string]interface{}{}
+	parsedResult := map[string]any{}
 	json.Unmarshal([]byte(result), &parsedResult)
-	matches := parsedResult["matches"].([]interface{})
+	matches := parsedResult["matches"].([]any)
 	for _, match := range matches {
-		m := match.(map[string]interface{})
+		m := match.(map[string]any)
 		typ := m["type"].(string)
 		assert.NotEqual(t, "class_definition", typ)
 	}
@@ -1572,9 +1574,9 @@ func TestToolFindSymbol_CombineNameAndTypes(t *testing.T) {
 func TestToolFindSymbol_BothTypeAndTypes(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type":  "method",
-		"types": []interface{}{"function_definition"},
+		"types": []any{"function_definition"},
 	})
 
 	assert.True(t, isError)
@@ -1585,7 +1587,7 @@ func TestToolFindSymbol_BothTypeAndTypes(t *testing.T) {
 func TestToolFindSymbol_InvalidType(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "invalid_type_xyz",
 	})
 
@@ -1599,8 +1601,8 @@ func TestToolFindSymbol_InvalidType(t *testing.T) {
 func TestToolFindSymbol_InvalidTypeInArray(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
-		"types": []interface{}{"method", "bad_type"},
+	result, isError := server.toolFindSymbol(map[string]any{
+		"types": []any{"method", "bad_type"},
 	})
 
 	assert.True(t, isError)
@@ -1613,7 +1615,7 @@ func TestToolFindSymbol_NoResultsWithTypeFilter(t *testing.T) {
 	server := createMultiTypeTestServer()
 
 	// Search for module_variable (not in test data).
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "module_variable",
 	})
 
@@ -1627,7 +1629,7 @@ func TestToolFindSymbol_NoResultsCombinedFilters(t *testing.T) {
 	server := createMultiTypeTestServer()
 
 	// Search for "login" but with type "method" (login is a function_definition).
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "login",
 		"type": "method",
 	})
@@ -1640,7 +1642,7 @@ func TestToolFindSymbol_NoResultsCombinedFilters(t *testing.T) {
 func TestToolFindSymbol_FilterByConstructor(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "constructor",
 	})
 
@@ -1654,7 +1656,7 @@ func TestToolFindSymbol_FilterByConstructor(t *testing.T) {
 func TestToolFindSymbol_FilterByProperty(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "property",
 	})
 
@@ -1667,7 +1669,7 @@ func TestToolFindSymbol_FilterByProperty(t *testing.T) {
 func TestToolFindSymbol_FilterBySpecialMethod(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "special_method",
 	})
 
@@ -1680,7 +1682,7 @@ func TestToolFindSymbol_FilterBySpecialMethod(t *testing.T) {
 func TestToolFindSymbol_FilterByClassDefinition(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "class_definition",
 	})
 
@@ -1695,7 +1697,7 @@ func TestToolFindSymbol_FilterByClassDefinition(t *testing.T) {
 func TestToolFindSymbol_FilterByInterface(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "interface",
 	})
 
@@ -1708,7 +1710,7 @@ func TestToolFindSymbol_FilterByInterface(t *testing.T) {
 func TestToolFindSymbol_FilterByEnum(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "enum",
 	})
 
@@ -1721,7 +1723,7 @@ func TestToolFindSymbol_FilterByEnum(t *testing.T) {
 func TestToolFindSymbol_FilterByDataclass(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "dataclass",
 	})
 
@@ -1734,7 +1736,7 @@ func TestToolFindSymbol_FilterByDataclass(t *testing.T) {
 func TestToolFindSymbol_FilterByFunctionDefinition(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "function_definition",
 	})
 
@@ -1749,7 +1751,7 @@ func TestToolFindSymbol_FilterByFunctionDefinition(t *testing.T) {
 func TestToolFindSymbol_FilterClassFieldWithType(t *testing.T) {
 	server := createTestServerWithAttributes()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "class_field",
 	})
 
@@ -1762,7 +1764,7 @@ func TestToolFindSymbol_ExcludeClassFieldWhenFiltering(t *testing.T) {
 	server := createTestServerWithAttributes()
 
 	// Filter by method type only - should not include class fields.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "method",
 	})
 
@@ -1777,7 +1779,7 @@ func TestToolFindSymbol_ExcludeClassFieldWhenFiltering(t *testing.T) {
 func TestToolFindSymbol_FiltersAppliedNameOnly(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "User",
 	})
 
@@ -1785,9 +1787,9 @@ func TestToolFindSymbol_FiltersAppliedNameOnly(t *testing.T) {
 	assert.Contains(t, result, "filters_applied")
 
 	// Parse JSON to verify filters_applied structure.
-	var parsedResult map[string]interface{}
+	var parsedResult map[string]any
 	json.Unmarshal([]byte(result), &parsedResult)
-	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	filtersApplied := parsedResult["filters_applied"].(map[string]any)
 
 	// Should have name but not type or types.
 	assert.Equal(t, "User", filtersApplied["name"])
@@ -1801,7 +1803,7 @@ func TestToolFindSymbol_FiltersAppliedNameOnly(t *testing.T) {
 func TestToolFindSymbol_FiltersAppliedTypeOnly(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "method",
 	})
 
@@ -1810,9 +1812,9 @@ func TestToolFindSymbol_FiltersAppliedTypeOnly(t *testing.T) {
 	assert.Contains(t, result, `"type": "method"`)
 
 	// Parse JSON to verify name is not in filters_applied.
-	var parsedResult map[string]interface{}
+	var parsedResult map[string]any
 	json.Unmarshal([]byte(result), &parsedResult)
-	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	filtersApplied := parsedResult["filters_applied"].(map[string]any)
 	_, hasName := filtersApplied["name"]
 	assert.False(t, hasName, "filters_applied should not contain 'name' when not provided")
 }
@@ -1821,8 +1823,8 @@ func TestToolFindSymbol_FiltersAppliedTypeOnly(t *testing.T) {
 func TestToolFindSymbol_FiltersAppliedMultipleTypes(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
-		"types": []interface{}{"method", "function_definition"},
+	result, isError := server.toolFindSymbol(map[string]any{
+		"types": []any{"method", "function_definition"},
 	})
 
 	assert.False(t, isError)
@@ -1830,12 +1832,12 @@ func TestToolFindSymbol_FiltersAppliedMultipleTypes(t *testing.T) {
 	assert.Contains(t, result, `"types"`)
 
 	// Verify 'types' is an array in filters_applied (not 'type' as string).
-	var parsedResult map[string]interface{}
+	var parsedResult map[string]any
 	json.Unmarshal([]byte(result), &parsedResult)
-	filtersApplied := parsedResult["filters_applied"].(map[string]interface{})
+	filtersApplied := parsedResult["filters_applied"].(map[string]any)
 	types, hasTypes := filtersApplied["types"]
 	assert.True(t, hasTypes, "filters_applied should contain 'types'")
-	typesArray, ok := types.([]interface{})
+	typesArray, ok := types.([]any)
 	assert.True(t, ok, "types should be an array")
 	assert.Equal(t, 2, len(typesArray))
 }
@@ -1844,7 +1846,7 @@ func TestToolFindSymbol_FiltersAppliedMultipleTypes(t *testing.T) {
 func TestToolFindSymbol_FiltersAppliedCombined(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, _ := server.toolFindSymbol(map[string]interface{}{
+	result, _ := server.toolFindSymbol(map[string]any{
 		"name": "User",
 		"type": "method",
 	})
@@ -1859,7 +1861,7 @@ func TestToolFindSymbol_FiltersAppliedCombined(t *testing.T) {
 func TestToolFindSymbol_PaginationWithTypeFilter(t *testing.T) {
 	server := createMultiTypeTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type":  "function_definition",
 		"limit": 1,
 	})
@@ -1868,11 +1870,11 @@ func TestToolFindSymbol_PaginationWithTypeFilter(t *testing.T) {
 	assert.Contains(t, result, "pagination")
 
 	// Parse to verify pagination info.
-	var parsedResult map[string]interface{}
+	var parsedResult map[string]any
 	json.Unmarshal([]byte(result), &parsedResult)
-	matches := parsedResult["matches"].([]interface{})
+	matches := parsedResult["matches"].([]any)
 	assert.LessOrEqual(t, len(matches), 1, "Should respect limit")
-	pagination := parsedResult["pagination"].(map[string]interface{})
+	pagination := parsedResult["pagination"].(map[string]any)
 	assert.NotNil(t, pagination)
 }
 
@@ -1894,7 +1896,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 	// Create server with codeGraph containing the 6 missing types.
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	// Add class_definition to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
@@ -1903,7 +1905,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		File:       "/test/db.py",
 		LineNumber: 10,
 	})
-	
+
 	// Add interface to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "iface1",
@@ -1913,7 +1915,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		LineNumber: 5,
 		Interface:  []string{"Protocol"},
 	})
-	
+
 	// Add enum to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "enum1",
@@ -1923,7 +1925,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		LineNumber: 3,
 		Interface:  []string{"Enum"},
 	})
-	
+
 	// Add dataclass to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "dc1",
@@ -1933,7 +1935,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		LineNumber: 8,
 		Annotation: []string{"dataclass"},
 	})
-	
+
 	// Add module_variable to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "var1",
@@ -1942,7 +1944,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		File:       "/test/utils.py",
 		LineNumber: 1,
 	})
-	
+
 	// Add constant to codeGraph.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "const1",
@@ -1951,7 +1953,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 		File:       "/test/config.py",
 		LineNumber: 2,
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.db"] = "/test/db.py"
 	moduleRegistry.Modules["myapp.interfaces"] = "/test/interfaces.py"
@@ -1963,51 +1965,51 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 	moduleRegistry.FileToModule["/test/enums.py"] = "myapp.enums"
 	moduleRegistry.FileToModule["/test/config.py"] = "myapp.config"
 	moduleRegistry.FileToModule["/test/utils.py"] = "myapp.utils"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
+
 	// Test 1: Search for class_definition.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "class_definition",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "DatabaseConnection")
 	assert.Contains(t, result, "myapp.db.DatabaseConnection")
-	
+
 	// Test 2: Search for interface.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "interface",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "IRepository")
 	assert.Contains(t, result, "myapp.interfaces.IRepository")
-	
+
 	// Test 3: Search for enum.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "enum",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "StatusCode")
 	assert.Contains(t, result, "myapp.enums.StatusCode")
-	
+
 	// Test 4: Search for dataclass.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "dataclass",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "Configuration")
 	assert.Contains(t, result, "myapp.config.Configuration")
-	
+
 	// Test 5: Search for module_variable.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "module_variable",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "logger")
 	assert.Contains(t, result, "myapp.utils.logger")
-	
+
 	// Test 6: Search for constant.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "constant",
 	})
 	assert.False(t, isError)
@@ -2019,7 +2021,7 @@ func TestToolFindSymbol_SearchCodeGraphNodes(t *testing.T) {
 func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
 		Type:       "class_definition",
@@ -2027,7 +2029,7 @@ func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
 		File:       "/test/models.py",
 		LineNumber: 10,
 	})
-	
+
 	codeGraph.AddNode(&graph.Node{
 		ID:         "const1",
 		Type:       "constant",
@@ -2035,24 +2037,24 @@ func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
 		File:       "/test/settings.py",
 		LineNumber: 5,
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 	moduleRegistry.Modules["myapp.settings"] = "/test/settings.py"
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
 	moduleRegistry.FileToModule["/test/settings.py"] = "myapp.settings"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
+
 	// Search by name (should find in codeGraph).
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "User",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "User")
 	assert.Contains(t, result, "class_definition")
-	
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+
+	result, isError = server.toolFindSymbol(map[string]any{
 		"name": "DEBUG_MODE",
 	})
 	assert.False(t, isError)
@@ -2064,7 +2066,7 @@ func TestToolFindSymbol_CodeGraphNodesByName(t *testing.T) {
 func TestToolFindSymbol_CodeGraphNodesWithOptionalFields(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	// Add class with superclass and decorators.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
@@ -2077,17 +2079,17 @@ func TestToolFindSymbol_CodeGraphNodesWithOptionalFields(t *testing.T) {
 		Annotation: []string{"register_model"},
 		Modifier:   "public",
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "AdminUser",
 	})
-	
+
 	assert.False(t, isError)
 	assert.Contains(t, result, "AdminUser")
 	assert.Contains(t, result, "superclass")
@@ -2104,7 +2106,7 @@ func TestToolFindSymbol_CodeGraphNodesWithOptionalFields(t *testing.T) {
 func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	// Add method to callGraph.Functions.
 	callGraph.Functions["myapp.models.User.save"] = &graph.Node{
 		ID:         "method1",
@@ -2113,7 +2115,7 @@ func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
 		File:       "/test/models.py",
 		LineNumber: 30,
 	}
-	
+
 	// Add class to codeGraph.Nodes.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
@@ -2122,32 +2124,32 @@ func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
 		File:       "/test/models.py",
 		LineNumber: 10,
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.models"] = "/test/models.py"
 	moduleRegistry.FileToModule["/test/models.py"] = "myapp.models"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
+
 	// Search for "User" - should find both class and method.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "User",
 	})
-	
+
 	assert.False(t, isError)
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
-	
-	matches := parsed["matches"].([]interface{})
+
+	matches := parsed["matches"].([]any)
 	assert.GreaterOrEqual(t, len(matches), 2, "Should find both class and method")
-	
+
 	// Verify we have both types.
 	types := make(map[string]bool)
 	for _, match := range matches {
-		m := match.(map[string]interface{})
+		m := match.(map[string]any)
 		types[m["type"].(string)] = true
 	}
-	
+
 	assert.True(t, types["class_definition"] || types["method"], "Should find User class or method")
 }
 
@@ -2155,7 +2157,7 @@ func TestToolFindSymbol_CombineCallGraphAndCodeGraph(t *testing.T) {
 func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	// Add node but don't add file to module registry.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
@@ -2164,7 +2166,7 @@ func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
 		File:       "/test/orphan.py",
 		LineNumber: 10,
 	})
-	
+
 	// Add another node with proper mapping.
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class2",
@@ -2173,18 +2175,18 @@ func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
 		File:       "/test/proper.py",
 		LineNumber: 10,
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.proper"] = "/test/proper.py"
 	moduleRegistry.FileToModule["/test/proper.py"] = "myapp.proper"
 	// Note: orphan.py is NOT in the registry.
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "class_definition",
 	})
-	
+
 	// Should find ProperClass but skip OrphanClass.
 	assert.False(t, isError)
 	assert.Contains(t, result, "ProperClass")
@@ -2194,7 +2196,7 @@ func TestToolFindSymbol_CodeGraphNoModule(t *testing.T) {
 // TestToolFindSymbol_CodeGraphNilCodeGraph tests handling when codeGraph is nil.
 func TestToolFindSymbol_CodeGraphNilCodeGraph(t *testing.T) {
 	callGraph := core.NewCallGraph()
-	
+
 	// Add something to callGraph.Functions.
 	callGraph.Functions["myapp.utils.helper"] = &graph.Node{
 		ID:         "func1",
@@ -2203,21 +2205,21 @@ func TestToolFindSymbol_CodeGraphNilCodeGraph(t *testing.T) {
 		File:       "/test/utils.py",
 		LineNumber: 5,
 	}
-	
+
 	moduleRegistry := core.NewModuleRegistry()
-	
+
 	// Create server with nil codeGraph.
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
-	
+
 	// Should still work for callGraph.Functions.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "helper",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "helper")
-	
+
 	// Should not crash when searching for class_definition with nil codeGraph.
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "class_definition",
 	})
 	assert.True(t, isError)
@@ -2228,7 +2230,7 @@ func TestToolFindSymbol_CodeGraphNilCodeGraph(t *testing.T) {
 func TestToolFindSymbol_CodeGraphPartialNameMatch(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	codeGraph.AddNode(&graph.Node{
 		ID:         "class1",
 		Type:       "class_definition",
@@ -2236,18 +2238,18 @@ func TestToolFindSymbol_CodeGraphPartialNameMatch(t *testing.T) {
 		File:       "/test/db.py",
 		LineNumber: 10,
 	})
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.db"] = "/test/db.py"
 	moduleRegistry.FileToModule["/test/db.py"] = "myapp.db"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
+
 	// Partial match "Connection" should find "DatabaseConnectionPool".
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "Connection",
 	})
-	
+
 	assert.False(t, isError)
 	assert.Contains(t, result, "DatabaseConnectionPool")
 }
@@ -2256,7 +2258,7 @@ func TestToolFindSymbol_CodeGraphPartialNameMatch(t *testing.T) {
 func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
 	callGraph := core.NewCallGraph()
 	codeGraph := graph.NewCodeGraph()
-	
+
 	types := []struct {
 		typ          string
 		name         string
@@ -2270,7 +2272,7 @@ func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
 		{"module_variable", "logger", SymbolKindVariable, "Variable"},
 		{"constant", "MAX_SIZE", SymbolKindConstant, "Constant"},
 	}
-	
+
 	for i, tt := range types {
 		codeGraph.AddNode(&graph.Node{
 			ID:         fmt.Sprintf("node%d", i),
@@ -2280,27 +2282,27 @@ func TestToolFindSymbol_CodeGraphSymbolKinds(t *testing.T) {
 			LineNumber: uint32(10 + i),
 		})
 	}
-	
+
 	moduleRegistry := core.NewModuleRegistry()
 	moduleRegistry.Modules["myapp.test"] = "/test/file.py"
 	moduleRegistry.FileToModule["/test/file.py"] = "myapp.test"
-	
+
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
-	
+
 	for _, tt := range types {
 		t.Run(tt.typ, func(t *testing.T) {
-			result, isError := server.toolFindSymbol(map[string]interface{}{
+			result, isError := server.toolFindSymbol(map[string]any{
 				"name": tt.name,
 			})
-			
+
 			assert.False(t, isError)
-			
-			var parsed map[string]interface{}
+
+			var parsed map[string]any
 			json.Unmarshal([]byte(result), &parsed)
-			matches := parsed["matches"].([]interface{})
+			matches := parsed["matches"].([]any)
 			assert.Greater(t, len(matches), 0)
-			
-			match := matches[0].(map[string]interface{})
+
+			match := matches[0].(map[string]any)
 			assert.Equal(t, float64(tt.expectedKind), match["symbol_kind"],
 				"Type %s should have symbol_kind %d", tt.typ, tt.expectedKind)
 			assert.Equal(t, tt.expectedName, match["symbol_kind_name"],
@@ -2403,47 +2405,47 @@ func TestToolFindSymbol_ClassConstantFQN(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Module-level constant should have simple FQN
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "MODULE_CONST",
 	})
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 1)
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "module.MODULE_CONST", match["fqn"])
 
 	// Test 2: Class-level constant should have class-qualified FQN
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"name": "CLASS_CONST",
 	})
 	assert.False(t, isError)
 
 	err = json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
-	matches = parsed["matches"].([]interface{})
+	matches = parsed["matches"].([]any)
 	assert.Len(t, matches, 1)
-	match = matches[0].(map[string]interface{})
+	match = matches[0].(map[string]any)
 	assert.Equal(t, "module.MyClass.CLASS_CONST", match["fqn"])
 
 	// Test 3: Same-named constants in different classes should have distinct FQNs
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"name": "SAME_NAME",
 	})
 	assert.False(t, isError)
 
 	err = json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
-	matches = parsed["matches"].([]interface{})
+	matches = parsed["matches"].([]any)
 	assert.Len(t, matches, 2, "Should find both SAME_NAME constants")
 
 	// Verify distinct FQNs
 	fqns := make(map[string]bool)
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		fqn := match["fqn"].(string)
 		fqns[fqn] = true
 	}
@@ -2700,7 +2702,7 @@ func TestToolFindSymbol_ModuleFilter(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Filter by core module
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"module": "core",
 	})
 	assert.False(t, isError)
@@ -2710,7 +2712,7 @@ func TestToolFindSymbol_ModuleFilter(t *testing.T) {
 	assert.NotContains(t, result, "users")
 
 	// Test 2: Filter by data_manager module
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"module": "data_manager",
 	})
 	assert.False(t, isError)
@@ -2720,7 +2722,7 @@ func TestToolFindSymbol_ModuleFilter(t *testing.T) {
 	assert.NotContains(t, result, "users")
 
 	// Test 3: Filter by specific sub-module
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"module": "core.utils",
 	})
 	assert.False(t, isError)
@@ -2773,18 +2775,18 @@ func TestToolFindSymbol_ModuleAndTypeFilter(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test 1: Module + type filter (constants only in core)
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"module": "core",
 		"type":   "constant",
 	})
 	assert.False(t, isError)
 	assert.Contains(t, result, "core.settings.DEBUG")
-	assert.NotContains(t, result, "get_logger")     // function, not constant
-	assert.NotContains(t, result, "User.save")      // method, not constant
-	assert.NotContains(t, result, "Config")         // class, not constant
+	assert.NotContains(t, result, "get_logger") // function, not constant
+	assert.NotContains(t, result, "User.save")  // method, not constant
+	assert.NotContains(t, result, "Config")     // class, not constant
 
 	// Test 2: Module + type filter (methods only in core)
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"module": "core",
 		"type":   "method",
 	})
@@ -2794,7 +2796,7 @@ func TestToolFindSymbol_ModuleAndTypeFilter(t *testing.T) {
 	assert.NotContains(t, result, "DEBUG")
 
 	// Test 3: Module + type filter (classes only)
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"module": "core",
 		"type":   "class_definition",
 	})
@@ -2856,25 +2858,25 @@ func TestToolFindSymbol_ModuleNameAndTypeFilter(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: name + module + type filter
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name":   "DEBUG",
 		"module": "core",
 		"type":   "constant",
 	})
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	// Name filter uses partial matching, so it finds both DEBUG and DEBUG_MODE
 	assert.GreaterOrEqual(t, len(matches), 1, "Should find at least one DEBUG constant in core module")
 
 	// Verify that core.settings.DEBUG is in the results
 	foundDEBUG := false
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		if match["fqn"] == "core.settings.DEBUG" {
 			foundDEBUG = true
 			assert.Equal(t, "constant", match["type"])
@@ -2904,7 +2906,7 @@ func TestToolFindSymbol_ModuleNoResults(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: Filter by non-existent module
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"module": "nonexistent",
 	})
 	assert.True(t, isError)
@@ -2961,7 +2963,7 @@ func TestToolFindSymbol_ModuleFilterWithClassConstants(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
 	// Test: Filter by data_manager module
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"module": "data_manager",
 		"type":   "constant",
 	})
@@ -3115,57 +3117,57 @@ func TestToolFindSymbol_ModuleVariableInferredType(t *testing.T) {
 
 	// Test 1: module_variable with inferred type.
 	t.Run("module_variable with inferred type", func(t *testing.T) {
-		result, isError := server.toolFindSymbol(map[string]interface{}{
+		result, isError := server.toolFindSymbol(map[string]any{
 			"name": "counter",
 		})
 		assert.False(t, isError)
 
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		assert.NoError(t, err)
 
-		matches := parsed["matches"].([]interface{})
+		matches := parsed["matches"].([]any)
 		assert.Len(t, matches, 1)
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "builtins.int", match["inferred_type"])
 		assert.Equal(t, 1.0, match["confidence"])
 	})
 
 	// Test 2: constant with inferred type.
 	t.Run("constant with inferred type", func(t *testing.T) {
-		result, isError := server.toolFindSymbol(map[string]interface{}{
+		result, isError := server.toolFindSymbol(map[string]any{
 			"name": "MAX_SIZE",
 		})
 		assert.False(t, isError)
 
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		assert.NoError(t, err)
 
-		matches := parsed["matches"].([]interface{})
+		matches := parsed["matches"].([]any)
 		assert.Len(t, matches, 1)
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "builtins.int", match["inferred_type"])
 		assert.Equal(t, 1.0, match["confidence"])
 	})
 
 	// Test 3: module_variable without inferred type (TypeEngine returns nil).
 	t.Run("module_variable without inferred type", func(t *testing.T) {
-		result, isError := server.toolFindSymbol(map[string]interface{}{
+		result, isError := server.toolFindSymbol(map[string]any{
 			"name": "untyped_var",
 		})
 		assert.False(t, isError)
 
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		assert.NoError(t, err)
 
-		matches := parsed["matches"].([]interface{})
+		matches := parsed["matches"].([]any)
 		assert.Len(t, matches, 1)
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		_, hasInferredType := match["inferred_type"]
 		assert.False(t, hasInferredType, "untyped variable should not have inferred_type")
 	})
@@ -3192,19 +3194,19 @@ func TestToolFindSymbol_ModuleVariableNilTypeEngine(t *testing.T) {
 	// TypeEngine is nil (default for NewCallGraph).
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, codeGraph, time.Second, false)
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"name": "my_var",
 	})
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 1)
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "module_variable", match["type"])
 	assert.Equal(t, "app.my_var", match["fqn"])
 	_, hasInferredType := match["inferred_type"]
@@ -3218,20 +3220,20 @@ func TestToolFindSymbol_ModuleVariableNilTypeEngine(t *testing.T) {
 func TestToolFindSymbol_FilterByParameter(t *testing.T) {
 	server := createTestServerWithParameters()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter"})
+	result, isError := server.toolFindSymbol(map[string]any{"type": "parameter"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 5, "should find all 5 parameters")
 
 	// Verify all matches are parameters.
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		assert.Equal(t, "parameter", match["type"])
 	}
 }
@@ -3239,18 +3241,18 @@ func TestToolFindSymbol_FilterByParameter(t *testing.T) {
 func TestToolFindSymbol_ParameterFields(t *testing.T) {
 	server := createTestServerWithParameters()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "username", "type": "parameter"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "username", "type": "parameter"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 1)
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "myapp.auth.validate_user.username", match["fqn"])
 	assert.Equal(t, "/path/to/myapp/auth.py", match["file"])
 	assert.Equal(t, float64(45), match["line"])
@@ -3264,18 +3266,18 @@ func TestToolFindSymbol_ParameterFields(t *testing.T) {
 func TestToolFindSymbol_ParameterComplexType(t *testing.T) {
 	server := createTestServerWithParameters()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "items", "type": "parameter"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "items", "type": "parameter"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 1)
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "list[str]", match["inferred_type"])
 	assert.Equal(t, "myapp.utils.process", match["parent_fqn"])
 }
@@ -3284,37 +3286,37 @@ func TestToolFindSymbol_ParameterNameFilter(t *testing.T) {
 	server := createTestServerWithParameters()
 
 	// Partial name match should work.
-	result, isError := server.toolFindSymbol(map[string]interface{}{"name": "pass", "type": "parameter"})
+	result, isError := server.toolFindSymbol(map[string]any{"name": "pass", "type": "parameter"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 1, "should match 'password' via partial match")
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "myapp.auth.validate_user.password", match["fqn"])
 }
 
 func TestToolFindSymbol_ParameterModuleFilter(t *testing.T) {
 	server := createTestServerWithParameters()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter", "module": "myapp.auth"})
+	result, isError := server.toolFindSymbol(map[string]any{"type": "parameter", "module": "myapp.auth"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Len(t, matches, 2, "should find 2 parameters in myapp.auth module")
 
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		assert.Contains(t, match["fqn"].(string), "myapp.auth.")
 	}
 }
@@ -3323,17 +3325,17 @@ func TestToolFindSymbol_ParameterExcludeWhenFiltering(t *testing.T) {
 	server := createTestServerWithParameters()
 
 	// Filtering by type="method" should NOT include parameters.
-	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "method"})
+	result, isError := server.toolFindSymbol(map[string]any{"type": "method"})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		assert.NotEqual(t, "parameter", match["type"], "method filter should not return parameters")
 	}
 }
@@ -3342,22 +3344,22 @@ func TestToolFindSymbol_ParameterInMultipleTypes(t *testing.T) {
 	server := createTestServerWithParameters()
 
 	// Querying with types=["parameter","method"] should return both.
-	result, isError := server.toolFindSymbol(map[string]interface{}{
-		"types": []interface{}{"parameter", "method"},
+	result, isError := server.toolFindSymbol(map[string]any{
+		"types": []any{"parameter", "method"},
 	})
 
 	assert.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	assert.NoError(t, err)
 
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 
 	hasParameter := false
 	hasMethod := false
 	for _, m := range matches {
-		match := m.(map[string]interface{})
+		match := m.(map[string]any)
 		if match["type"] == "parameter" {
 			hasParameter = true
 		}
@@ -3374,7 +3376,7 @@ func TestToolFindSymbol_ParameterNilParametersMap(t *testing.T) {
 	// Default test server has no parameters set — ensure nil safety.
 	server.callGraph.Parameters = nil
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{"type": "parameter"})
+	result, isError := server.toolFindSymbol(map[string]any{"type": "parameter"})
 
 	assert.True(t, isError)
 	assert.Contains(t, result, "No symbols found")
@@ -3422,7 +3424,7 @@ func TestToolFindSymbol_GoTypes(t *testing.T) {
 
 	for _, goType := range goTypes {
 		t.Run(goType, func(t *testing.T) {
-			result, isError := server.toolFindSymbol(map[string]interface{}{"type": goType})
+			result, isError := server.toolFindSymbol(map[string]any{"type": goType})
 
 			// Should not error about invalid type
 			if isError {
@@ -3462,7 +3464,7 @@ func TestToolFindSymbol_GoSymbols(t *testing.T) {
 	server := NewServer("/test/project", "3.11", callGraph, moduleRegistry, nil, time.Second, false)
 
 	// Test finding Go function by type
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "function_declaration",
 	})
 
@@ -3471,18 +3473,18 @@ func TestToolFindSymbol_GoSymbols(t *testing.T) {
 	assert.Contains(t, result, "Function") // LSP kind name
 
 	// Parse and verify
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
-	matches := parsed["matches"].([]interface{})
+	matches := parsed["matches"].([]any)
 	assert.Greater(t, len(matches), 0)
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "function_declaration", match["type"])
 	assert.Equal(t, float64(SymbolKindFunction), match["symbol_kind"])
 	assert.Equal(t, "Function", match["symbol_kind_name"])
 
 	// Test finding Go function by name
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"name": "Handler",
 	})
 
@@ -3491,7 +3493,7 @@ func TestToolFindSymbol_GoSymbols(t *testing.T) {
 	assert.Contains(t, result, "main.go")
 
 	// Test finding Go init function
-	result, isError = server.toolFindSymbol(map[string]interface{}{
+	result, isError = server.toolFindSymbol(map[string]any{
 		"type": "init_function",
 	})
 
@@ -3525,14 +3527,14 @@ func TestToolGetIndexInfo_GoSymbols(t *testing.T) {
 	assert.False(t, isError)
 
 	// Parse and verify Go symbol types appear
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 
-	symbolsByType := parsed["symbols_by_type"].(map[string]interface{})
+	symbolsByType := parsed["symbols_by_type"].(map[string]any)
 	assert.Contains(t, symbolsByType, "function_declaration")
 	assert.Equal(t, float64(2), symbolsByType["function_declaration"])
 
 	// Verify LSP kind mapping
-	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]interface{})
+	symbolsByLSPKind := parsed["symbols_by_lsp_kind"].(map[string]any)
 	assert.Contains(t, symbolsByLSPKind, "Function")
 }

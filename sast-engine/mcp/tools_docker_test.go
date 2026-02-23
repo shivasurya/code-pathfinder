@@ -102,22 +102,22 @@ func createDockerTestServer() *Server {
 func TestFindSymbol_DockerfileInstruction(t *testing.T) {
 	server := createDockerTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "dockerfile_instruction",
 	})
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
-	matches, ok := parsed["matches"].([]interface{})
+	matches, ok := parsed["matches"].([]any)
 	require.True(t, ok, "Expected matches array")
 	assert.Equal(t, 4, len(matches), "Expected 4 Dockerfile instructions")
 
 	// Verify first match structure.
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Contains(t, match, "fqn")
 	assert.Contains(t, match, "file")
 	assert.Contains(t, match, "line")
@@ -130,22 +130,22 @@ func TestFindSymbol_DockerfileInstruction(t *testing.T) {
 func TestFindSymbol_ComposeService(t *testing.T) {
 	server := createDockerTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "compose_service",
 	})
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
-	matches, ok := parsed["matches"].([]interface{})
+	matches, ok := parsed["matches"].([]any)
 	require.True(t, ok, "Expected matches array")
 	assert.Equal(t, 2, len(matches), "Expected 2 compose services")
 
 	// Verify first match structure.
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Equal(t, "compose_service", match["type"])
 	assert.Equal(t, float64(2), match["symbol_kind"]) // SymbolKindModule
 	assert.Equal(t, "ComposeService", match["symbol_kind_name"])
@@ -155,22 +155,22 @@ func TestFindSymbol_ComposeService(t *testing.T) {
 func TestFindSymbol_DockerByName(t *testing.T) {
 	server := createDockerTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "dockerfile_instruction",
 		"name": "FROM",
 	})
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
-	matches, ok := parsed["matches"].([]interface{})
+	matches, ok := parsed["matches"].([]any)
 	require.True(t, ok, "Expected matches array")
 	assert.Equal(t, 1, len(matches), "Expected 1 FROM instruction")
 
-	match := matches[0].(map[string]interface{})
+	match := matches[0].(map[string]any)
 	assert.Contains(t, match["fqn"], "FROM")
 }
 
@@ -178,7 +178,7 @@ func TestFindSymbol_DockerByName(t *testing.T) {
 func TestFindSymbol_InvalidDockerType(t *testing.T) {
 	server := createDockerTestServer()
 
-	result, isError := server.toolFindSymbol(map[string]interface{}{
+	result, isError := server.toolFindSymbol(map[string]any{
 		"type": "invalid_docker_type",
 	})
 
@@ -224,12 +224,12 @@ func TestGetIndexInfo_DockerStats(t *testing.T) {
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
 	// Verify stats section includes Docker counts.
-	stats, ok := parsed["stats"].(map[string]interface{})
+	stats, ok := parsed["stats"].(map[string]any)
 	require.True(t, ok, "Expected stats object")
 
 	// Check Docker instruction count.
@@ -279,11 +279,11 @@ func TestGetIndexInfo_NoDockerNodes(t *testing.T) {
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
-	stats, ok := parsed["stats"].(map[string]interface{})
+	stats, ok := parsed["stats"].(map[string]any)
 	require.True(t, ok, "Expected stats object")
 
 	// Docker counts should be 0.
@@ -314,11 +314,11 @@ func TestGetIndexInfo_NilCodeGraph(t *testing.T) {
 
 	require.False(t, isError, "Expected no error")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err, "Expected valid JSON")
 
-	stats, ok := parsed["stats"].(map[string]interface{})
+	stats, ok := parsed["stats"].(map[string]any)
 	require.True(t, ok, "Expected stats object")
 
 	// Docker counts should be 0 when CodeGraph is nil.

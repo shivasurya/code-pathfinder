@@ -62,7 +62,7 @@ func TestJSONRPCRequest_Deserialization(t *testing.T) {
 		name           string
 		input          string
 		expectedMethod string
-		expectedID     interface{}
+		expectedID     any
 	}{
 		{
 			name:           "integer id",
@@ -125,7 +125,7 @@ func TestJSONRPCResponse_Serialization(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify it's valid JSON.
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			err = json.Unmarshal(data, &parsed)
 			require.NoError(t, err)
 			assert.Equal(t, "2.0", parsed["jsonrpc"])
@@ -231,7 +231,7 @@ func TestInitializeResult_Serialization(t *testing.T) {
 	data, err := json.Marshal(result)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "2024-11-05", parsed["protocolVersion"])
@@ -256,7 +256,7 @@ func TestCapabilities_WithTools(t *testing.T) {
 	data, err := json.Marshal(caps)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.NotNil(t, parsed["tools"])
@@ -280,7 +280,7 @@ func TestTool_Serialization(t *testing.T) {
 	data, err := json.Marshal(tool)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "get_index_info", parsed["name"])
@@ -304,15 +304,15 @@ func TestTool_WithProperties(t *testing.T) {
 	data, err := json.Marshal(tool)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 
-	schema := parsed["inputSchema"].(map[string]interface{})
-	props := schema["properties"].(map[string]interface{})
+	schema := parsed["inputSchema"].(map[string]any)
+	props := schema["properties"].(map[string]any)
 	assert.NotNil(t, props["name"])
 
-	required := schema["required"].([]interface{})
+	required := schema["required"].([]any)
 	assert.Equal(t, "name", required[0])
 }
 
@@ -327,11 +327,11 @@ func TestToolsListResult_Serialization(t *testing.T) {
 	data, err := json.Marshal(result)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 
-	tools := parsed["tools"].([]interface{})
+	tools := parsed["tools"].([]any)
 	assert.Len(t, tools, 2)
 }
 
@@ -346,7 +346,7 @@ func TestToolsListResult_Empty(t *testing.T) {
 func TestToolCallParams_Serialization(t *testing.T) {
 	params := ToolCallParams{
 		Name: "find_symbol",
-		Arguments: map[string]interface{}{
+		Arguments: map[string]any{
 			"name": "validate_user",
 		},
 	}
@@ -354,7 +354,7 @@ func TestToolCallParams_Serialization(t *testing.T) {
 	data, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "find_symbol", parsed["name"])
@@ -366,13 +366,13 @@ func TestToolCallParams_Deserialization(t *testing.T) {
 		name         string
 		input        string
 		expectedName string
-		expectedArgs map[string]interface{}
+		expectedArgs map[string]any
 	}{
 		{
 			name:         "with arguments",
 			input:        `{"name":"get_callers","arguments":{"function":"login"}}`,
 			expectedName: "get_callers",
-			expectedArgs: map[string]interface{}{"function": "login"},
+			expectedArgs: map[string]any{"function": "login"},
 		},
 		{
 			name:         "without arguments",
@@ -384,7 +384,7 @@ func TestToolCallParams_Deserialization(t *testing.T) {
 			name:         "empty arguments",
 			input:        `{"name":"get_index_info","arguments":{}}`,
 			expectedName: "get_index_info",
-			expectedArgs: map[string]interface{}{},
+			expectedArgs: map[string]any{},
 		},
 	}
 
@@ -439,11 +439,11 @@ func TestToolResult_Serialization(t *testing.T) {
 			data, err := json.Marshal(tt.result)
 			require.NoError(t, err)
 
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			err = json.Unmarshal(data, &parsed)
 			require.NoError(t, err)
 
-			content := parsed["content"].([]interface{})
+			content := parsed["content"].([]any)
 			assert.Len(t, content, len(tt.result.Content))
 		})
 	}
@@ -509,8 +509,8 @@ func TestContentBlock_SpecialCharacters(t *testing.T) {
 func TestSuccessResponse(t *testing.T) {
 	tests := []struct {
 		name   string
-		id     interface{}
-		result interface{}
+		id     any
+		result any
 	}{
 		{
 			name:   "integer id",
@@ -544,7 +544,7 @@ func TestSuccessResponse(t *testing.T) {
 func TestErrorResponse(t *testing.T) {
 	tests := []struct {
 		name        string
-		id          interface{}
+		id          any
 		code        int
 		message     string
 		expectedErr *RPCError
@@ -594,12 +594,12 @@ func TestErrorResponse(t *testing.T) {
 }
 
 func TestSuccessResponse_Serializable(t *testing.T) {
-	resp := SuccessResponse(1, map[string]interface{}{"tools": []Tool{}})
+	resp := SuccessResponse(1, map[string]any{"tools": []Tool{}})
 
 	data, err := json.Marshal(resp)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "2.0", parsed["jsonrpc"])
@@ -612,13 +612,13 @@ func TestErrorResponse_Serializable(t *testing.T) {
 	data, err := json.Marshal(resp)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "2.0", parsed["jsonrpc"])
 	assert.NotNil(t, parsed["error"])
 
-	errObj := parsed["error"].(map[string]interface{})
+	errObj := parsed["error"].(map[string]any)
 	assert.Equal(t, float64(-32601), errObj["code"])
 	assert.Equal(t, "Method not found", errObj["message"])
 }

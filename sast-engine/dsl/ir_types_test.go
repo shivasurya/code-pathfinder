@@ -82,7 +82,7 @@ func TestDataflowIR_GetType(t *testing.T) {
 			},
 			Sanitizers: []CallMatcherIR{},
 			Propagation: []PropagationIR{
-				{Type: "assignment", Metadata: map[string]interface{}{"key": "value"}},
+				{Type: "assignment", Metadata: map[string]any{"key": "value"}},
 			},
 			Scope: "global",
 		}

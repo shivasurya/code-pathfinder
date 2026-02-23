@@ -59,7 +59,7 @@ func DecodeCursor(cursor string) (*Cursor, error) {
 }
 
 // ExtractPaginationParams extracts and validates pagination params.
-func ExtractPaginationParams(args map[string]interface{}) (*PaginationParams, *RPCError) {
+func ExtractPaginationParams(args map[string]any) (*PaginationParams, *RPCError) {
 	params := &PaginationParams{
 		Limit: DefaultLimit,
 	}
@@ -114,10 +114,7 @@ func PaginateSlice[T any](items []T, params *PaginationParams) ([]T, *Pagination
 		}
 	}
 
-	end := offset + limit
-	if end > total {
-		end = total
-	}
+	end := min(offset+limit, total)
 
 	result := items[offset:end]
 	hasMore := end < total
@@ -137,12 +134,12 @@ func PaginateSlice[T any](items []T, params *PaginationParams) ([]T, *Pagination
 
 // PaginatedResult wraps results with pagination info.
 type PaginatedResult struct {
-	Items      interface{}    `json:"items"`
+	Items      any            `json:"items"`
 	Pagination PaginationInfo `json:"pagination"`
 }
 
 // NewPaginatedResult creates a paginated result.
-func NewPaginatedResult(items interface{}, info *PaginationInfo) *PaginatedResult {
+func NewPaginatedResult(items any, info *PaginationInfo) *PaginatedResult {
 	return &PaginatedResult{
 		Items:      items,
 		Pagination: *info,

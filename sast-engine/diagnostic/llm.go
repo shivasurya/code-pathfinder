@@ -58,7 +58,7 @@ func NewOpenAIClient(baseURL, model, apiKey string) *LLMClient {
 		BaseURL:     baseURL,
 		Model:       model,
 		APIKey:      apiKey,
-		Temperature: 0.0, // Deterministic
+		Temperature: 0.0,  // Deterministic
 		MaxTokens:   4000, // Increased for complex functions
 		HTTPClient: &http.Client{
 			Timeout: 120 * time.Second,
@@ -141,11 +141,11 @@ func (c *LLMClient) AnalyzeFunction(fn *FunctionMetadata) (*LLMAnalysisResult, e
 // callOllama makes HTTP request to Ollama API.
 func (c *LLMClient) callOllama(prompt string) (string, error) {
 	// Ollama API format
-	requestBody := map[string]interface{}{
+	requestBody := map[string]any{
 		"model":  c.Model,
 		"prompt": prompt,
 		"stream": false,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"temperature": c.Temperature,
 			"num_predict": c.MaxTokens,
 		},
@@ -198,7 +198,7 @@ func (c *LLMClient) callOllama(prompt string) (string, error) {
 // callOpenAI makes HTTP request to OpenAI-compatible API (xAI Grok, vLLM, etc.).
 func (c *LLMClient) callOpenAI(prompt string) (string, error) {
 	// OpenAI API format
-	requestBody := map[string]interface{}{
+	requestBody := map[string]any{
 		"model": c.Model,
 		"messages": []map[string]string{
 			{
@@ -206,8 +206,8 @@ func (c *LLMClient) callOpenAI(prompt string) (string, error) {
 				"content": prompt,
 			},
 		},
-		"temperature":    c.Temperature,
-		"max_tokens":     c.MaxTokens,
+		"temperature":     c.Temperature,
+		"max_tokens":      c.MaxTokens,
 		"response_format": map[string]string{"type": "json_object"}, // Request JSON output
 	}
 
@@ -307,7 +307,7 @@ func (c *LLMClient) AnalyzeBatch(functions []*FunctionMetadata, concurrency int)
 	}, len(functions))
 
 	// Start workers
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		go func() {
 			for fn := range workChan {
 				result, err := c.AnalyzeFunction(fn)
@@ -327,7 +327,7 @@ func (c *LLMClient) AnalyzeBatch(functions []*FunctionMetadata, concurrency int)
 	close(workChan)
 
 	// Collect results
-	for i := 0; i < len(functions); i++ {
+	for range functions {
 		res := <-resultChan
 		if res.err != nil {
 			errors[res.fqn] = res.err

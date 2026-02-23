@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -51,7 +52,7 @@ func convertDockerInstructionToNode(dockerNode *docker.DockerfileNode, filePath 
 			StartByte: 0, // Will be set if we need lazy loading
 			EndByte:   0,
 		},
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 
 	// Store instruction-specific details in MethodArgumentsValue
@@ -189,7 +190,7 @@ func convertComposeServiceToNode(serviceName string, serviceNode *YAMLNode, file
 			StartByte: 0,
 			EndByte:   0,
 		},
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 
 	// Extract service properties and store in MethodArgumentsValue
@@ -197,10 +198,10 @@ func convertComposeServiceToNode(serviceName string, serviceNode *YAMLNode, file
 	node.MethodArgumentsValue = extractComposeServiceProperties(serviceNode)
 
 	// Extract and store depends_on in Metadata for dependency graph traversal
-	depends := []interface{}{}
+	depends := []any{}
 	for _, prop := range node.MethodArgumentsValue {
-		if strings.HasPrefix(prop, "depends_on=") {
-			depends = append(depends, strings.TrimPrefix(prop, "depends_on="))
+		if after, ok := strings.CutPrefix(prop, "depends_on="); ok {
+			depends = append(depends, after)
 		}
 	}
 	if len(depends) > 0 {
@@ -309,13 +310,7 @@ func extractComposeServiceProperties(serviceNode *YAMLNode) []string {
 		if dependsNode.Children != nil {
 			for serviceName := range dependsNode.Children {
 				// Avoid duplicates from array format
-				found := false
-				for _, existing := range dependsList {
-					if existing == serviceName {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(dependsList, serviceName)
 				if !found {
 					dependsList = append(dependsList, serviceName)
 				}
@@ -366,12 +361,7 @@ func HasDockerInstructionArg(node *Node, arg string) bool {
 	if !IsDockerNode(node) {
 		return false
 	}
-	for _, value := range node.MethodArgumentsValue {
-		if value == arg {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(node.MethodArgumentsValue, arg)
 }
 
 // GetComposeServiceProperty gets a property value from a compose service node.
@@ -407,10 +397,5 @@ func HasComposeServiceProperty(node *Node, property string, expectedValue ...str
 
 	// Check for specific value
 	expected := property + "=" + expectedValue[0]
-	for _, value := range node.MethodArgumentsValue {
-		if value == expected {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(node.MethodArgumentsValue, expected)
 }

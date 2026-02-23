@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
-	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
 // ExtractImports extracts all import statements from a Python file and builds an ImportMap.
@@ -244,11 +244,12 @@ func processImportFromStatement(node *sitter.Node, sourceCode []byte, importMap 
 //   - Resolved absolute module path
 //
 // Examples:
-//   File: /project/myapp/submodule/helper.py (module: myapp.submodule.helper)
-//   - resolveRelativeImport(..., 1, "utils", registry)   → "myapp.submodule.utils"
-//   - resolveRelativeImport(..., 2, "config", registry)  → "myapp.config"
-//   - resolveRelativeImport(..., 1, "", registry)        → "myapp.submodule"
-//   - resolveRelativeImport(..., 3, "db", registry)      → "myapp.db" (if grandparent is myapp)
+//
+//	File: /project/myapp/submodule/helper.py (module: myapp.submodule.helper)
+//	- resolveRelativeImport(..., 1, "utils", registry)   → "myapp.submodule.utils"
+//	- resolveRelativeImport(..., 2, "config", registry)  → "myapp.config"
+//	- resolveRelativeImport(..., 1, "", registry)        → "myapp.submodule"
+//	- resolveRelativeImport(..., 3, "db", registry)      → "myapp.db" (if grandparent is myapp)
 func resolveRelativeImport(filePath string, dotCount int, moduleSuffix string, registry *core.ModuleRegistry) string {
 	// Get the current file's module path from the reverse map
 	currentModule, found := registry.FileToModule[filePath]
@@ -271,12 +272,9 @@ func resolveRelativeImport(filePath string, dotCount int, moduleSuffix string, r
 	// Single dot (.) = current package (no change)
 	// Two dots (..) = parent package (go up 1 level)
 	// Three dots (...) = grandparent package (go up 2 levels)
-	levelsUp := dotCount - 1
-
-	if levelsUp > len(parts) {
+	levelsUp := min(dotCount-1,
 		// Can't go up more levels than available - clamp to root
-		levelsUp = len(parts)
-	}
+		len(parts))
 
 	if levelsUp > 0 {
 		parts = parts[:len(parts)-levelsUp]
@@ -320,13 +318,14 @@ func resolveRelativeImport(filePath string, dotCount int, moduleSuffix string, r
 //   - Normalized module path with project root prepended if it's project-internal
 //
 // Examples:
-//   File: label_studio/data_manager/functions.py (module: label_studio.data_manager.functions)
-//   - normalizeProjectImport("data_manager.prepare_params", ..., registry)
-//     → "label_studio.data_manager.prepare_params" (project-internal)
-//   - normalizeProjectImport("django.db.models", ..., registry)
-//     → "django.db.models" (third-party, unchanged)
-//   - normalizeProjectImport("rest_framework.views", ..., registry)
-//     → "rest_framework.views" (third-party, unchanged)
+//
+//	File: label_studio/data_manager/functions.py (module: label_studio.data_manager.functions)
+//	- normalizeProjectImport("data_manager.prepare_params", ..., registry)
+//	  → "label_studio.data_manager.prepare_params" (project-internal)
+//	- normalizeProjectImport("django.db.models", ..., registry)
+//	  → "django.db.models" (third-party, unchanged)
+//	- normalizeProjectImport("rest_framework.views", ..., registry)
+//	  → "rest_framework.views" (third-party, unchanged)
 func normalizeProjectImport(moduleName string, filePath string, registry *core.ModuleRegistry) string {
 	// If moduleName is empty, return as-is
 	if moduleName == "" {

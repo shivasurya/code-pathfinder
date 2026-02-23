@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	python "github.com/smacker/go-tree-sitter/python"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution/strategies"
+	sitter "github.com/smacker/go-tree-sitter"
+	python "github.com/smacker/go-tree-sitter/python"
 )
 
 // =============================================================================
@@ -19,11 +20,11 @@ import (
 
 // ResolveInstanceCallRequest represents the input for resolve_instance_call.
 type ResolveInstanceCallRequest struct {
-	Expression string                 `json:"expression"`
-	FilePath   string                 `json:"file_path"` //nolint:tagliatelle // MCP protocol uses snake_case
-	Line       int                    `json:"line"`
-	Column     int                    `json:"column"`
-	Context    *InstanceCallContext   `json:"context,omitempty"`
+	Expression string               `json:"expression"`
+	FilePath   string               `json:"file_path"` //nolint:tagliatelle // MCP protocol uses snake_case
+	Line       int                  `json:"line"`
+	Column     int                  `json:"column"`
+	Context    *InstanceCallContext `json:"context,omitempty"`
 }
 
 // InstanceCallContext provides additional context for resolution.
@@ -222,14 +223,12 @@ func (h *InstanceToolHandler) lookupDefinition(classFQN, methodName string) *Def
 
 	// Check if method exists
 	methodFQN := classFQN + "." + methodName
-	for _, m := range classAttrs.Methods {
-		if m == methodFQN {
-			// Return basic location from class (detailed location would require method registry)
-			return &DefinitionLocation{
-				FilePath: classAttrs.FilePath,
-				Line:     0, // Would need method-level tracking
-				Column:   0,
-			}
+	if slices.Contains(classAttrs.Methods, methodFQN) {
+		// Return basic location from class (detailed location would require method registry)
+		return &DefinitionLocation{
+			FilePath: classAttrs.FilePath,
+			Line:     0, // Would need method-level tracking
+			Column:   0,
 		}
 	}
 

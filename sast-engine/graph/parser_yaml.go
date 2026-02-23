@@ -9,7 +9,7 @@ import (
 
 // YAMLNode represents a node in the YAML tree.
 type YAMLNode struct {
-	Value      interface{}
+	Value      any
 	Children   map[string]*YAMLNode
 	Type       string // "scalar", "mapping", "sequence"
 	LineNumber int    // Line number in source file (1-indexed)
@@ -86,7 +86,7 @@ func convertYAMLNodeToInternal(node *yaml.Node) *YAMLNode {
 
 	case yaml.SequenceNode:
 		result.Type = "sequence"
-		var items []interface{}
+		var items []any
 		for _, item := range node.Content {
 			converted := convertYAMLNodeToInternal(item)
 			if converted.Type == "scalar" {
@@ -100,7 +100,7 @@ func convertYAMLNodeToInternal(node *yaml.Node) *YAMLNode {
 	case yaml.ScalarNode:
 		result.Type = "scalar"
 		// Decode scalar value to proper type (bool, int, float, string)
-		var decoded interface{}
+		var decoded any
 		if err := node.Decode(&decoded); err == nil {
 			result.Value = decoded
 		} else {
@@ -121,13 +121,13 @@ func convertYAMLNodeToInternal(node *yaml.Node) *YAMLNode {
 }
 
 // convertToYAMLNode converts a generic interface{} to YAMLNode (deprecated, use convertYAMLNodeToInternal).
-func convertToYAMLNode(data interface{}) *YAMLNode {
+func convertToYAMLNode(data any) *YAMLNode {
 	if data == nil {
 		return &YAMLNode{Type: "scalar", Value: nil}
 	}
 
 	switch v := data.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		node := &YAMLNode{
 			Type:     "mapping",
 			Children: make(map[string]*YAMLNode),
@@ -137,7 +137,7 @@ func convertToYAMLNode(data interface{}) *YAMLNode {
 		}
 		return node
 
-	case map[interface{}]interface{}:
+	case map[any]any:
 		// YAML v3 sometimes returns map[interface{}]interface{}
 		node := &YAMLNode{
 			Type:     "mapping",
@@ -149,7 +149,7 @@ func convertToYAMLNode(data interface{}) *YAMLNode {
 		}
 		return node
 
-	case []interface{}:
+	case []any:
 		node := &YAMLNode{
 			Type:  "sequence",
 			Value: v,
@@ -190,12 +190,12 @@ func (yn *YAMLNode) GetChild(key string) *YAMLNode {
 }
 
 // ListValues returns the value as a slice (for sequence nodes).
-func (yn *YAMLNode) ListValues() []interface{} {
+func (yn *YAMLNode) ListValues() []any {
 	if yn == nil {
 		return nil
 	}
 	if yn.Type == "sequence" {
-		if list, ok := yn.Value.([]interface{}); ok {
+		if list, ok := yn.Value.([]any); ok {
 			return list
 		}
 	}

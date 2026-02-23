@@ -30,9 +30,11 @@ func NewCallMatcherExecutor(ir *CallMatcherIR, cg *core.CallGraph) *CallMatcherE
 //  4. Return list of matching CallSite objects
 //
 // Performance: O(F * C * P) where:
-//   F = number of functions
-//   C = avg call sites per function (~5-10)
-//   P = number of patterns (~2-5)
+//
+//	F = number of functions
+//	C = avg call sites per function (~5-10)
+//	P = number of patterns (~2-5)
+//
 // Typical: 1000 functions * 7 calls * 3 patterns = 21,000 comparisons (fast!)
 func (e *CallMatcherExecutor) Execute() []core.CallSite {
 	matches := []core.CallSite{}
@@ -84,10 +86,11 @@ func (e *CallMatcherExecutor) matchesCallSite(cs *core.CallSite) bool {
 // matchesPattern checks if target matches pattern (with wildcard support)
 //
 // Examples:
-//   matchesPattern("eval", "eval") → true
-//   matchesPattern("request.GET", "request.*") → true
-//   matchesPattern("utils.sanitize", "*.sanitize") → true
-//   matchesPattern("os.system", "eval") → false
+//
+//	matchesPattern("eval", "eval") → true
+//	matchesPattern("request.GET", "request.*") → true
+//	matchesPattern("utils.sanitize", "*.sanitize") → true
+//	matchesPattern("os.system", "eval") → false
 func (e *CallMatcherExecutor) matchesPattern(target, pattern string) bool {
 	if !e.IR.Wildcard {
 		// Exact match (fast path)
@@ -105,15 +108,15 @@ func (e *CallMatcherExecutor) matchesPattern(target, pattern string) bool {
 		return strings.Contains(target, substr)
 	}
 
-	if strings.HasPrefix(pattern, "*") {
+	if after, ok := strings.CutPrefix(pattern, "*"); ok {
 		// *suffix → ends with
-		suffix := strings.TrimPrefix(pattern, "*")
+		suffix := after
 		return strings.HasSuffix(target, suffix)
 	}
 
-	if strings.HasSuffix(pattern, "*") {
+	if before, ok := strings.CutSuffix(pattern, "*"); ok {
 		// prefix* → starts with
-		prefix := strings.TrimSuffix(pattern, "*")
+		prefix := before
 		return strings.HasPrefix(target, prefix)
 	}
 
@@ -466,7 +469,7 @@ func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint Arg
 	expected := constraint.Value
 
 	// Handle list of values (OR logic)
-	if values, isList := expected.([]interface{}); isList {
+	if values, isList := expected.([]any); isList {
 		return e.matchesAnyValue(actual, values, constraint.Wildcard)
 	}
 
@@ -482,7 +485,7 @@ func (e *CallMatcherExecutor) matchesArgumentValue(actual string, constraint Arg
 //  3. Return false if no values match
 //
 // Performance: O(N) where N = number of values in list.
-func (e *CallMatcherExecutor) matchesAnyValue(actual string, values []interface{}, wildcard bool) bool {
+func (e *CallMatcherExecutor) matchesAnyValue(actual string, values []any, wildcard bool) bool {
 	for _, v := range values {
 		if e.matchesSingleValue(actual, v, wildcard) {
 			return true
@@ -499,7 +502,7 @@ func (e *CallMatcherExecutor) matchesAnyValue(actual string, values []interface{
 //  3. Return match result
 //
 // Performance: O(1) for non-wildcard, O(M) for wildcard where M = string length.
-func (e *CallMatcherExecutor) matchesSingleValue(actual string, expected interface{}, wildcard bool) bool {
+func (e *CallMatcherExecutor) matchesSingleValue(actual string, expected any, wildcard bool) bool {
 	switch v := expected.(type) {
 	case string:
 		// String comparison with optional wildcard
@@ -608,9 +611,10 @@ func (e *CallMatcherExecutor) wildcardMatch(str string, pattern string) bool {
 // cleanValue removes surrounding quotes and whitespace from argument values.
 //
 // Examples:
-//   "\"0.0.0.0\"" → "0.0.0.0"
-//   "'localhost'" → "localhost"
-//   "  True  "    → "True"
+//
+//	"\"0.0.0.0\"" → "0.0.0.0"
+//	"'localhost'" → "localhost"
+//	"  True  "    → "True"
 func (e *CallMatcherExecutor) cleanValue(value string) string {
 	value = strings.TrimSpace(value)
 

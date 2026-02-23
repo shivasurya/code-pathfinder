@@ -39,7 +39,7 @@ func (e *RPCError) Error() string {
 }
 
 // NewRPCError creates a new RPC error with optional data.
-func NewRPCError(code int, data interface{}) *RPCError {
+func NewRPCError(code int, data any) *RPCError {
 	message := errorMessages[code]
 	if message == "" {
 		message = "Unknown error"
@@ -52,7 +52,7 @@ func NewRPCError(code int, data interface{}) *RPCError {
 }
 
 // NewRPCErrorWithMessage creates an RPC error with custom message.
-func NewRPCErrorWithMessage(code int, message string, data interface{}) *RPCError {
+func NewRPCErrorWithMessage(code int, message string, data any) *RPCError {
 	return &RPCError{
 		Code:    code,
 		Message: message,
@@ -89,7 +89,7 @@ func InternalError(detail string) *RPCError {
 
 // SymbolNotFoundError creates a symbol not found error with suggestions.
 func SymbolNotFoundError(symbol string, suggestions []string) *RPCError {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"symbol": symbol,
 	}
 	if len(suggestions) > 0 {
@@ -101,7 +101,7 @@ func SymbolNotFoundError(symbol string, suggestions []string) *RPCError {
 
 // IndexNotReadyError creates an index not ready error with optional progress info.
 func IndexNotReadyError(phase string, progress float64) *RPCError {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"phase":    phase,
 		"progress": progress,
 	}
@@ -118,7 +118,7 @@ func QueryTimeoutError(timeout string) *RPCError {
 }
 
 // MakeErrorResponse creates a JSON-RPC error response from an RPCError.
-func MakeErrorResponse(id interface{}, err *RPCError) *JSONRPCResponse {
+func MakeErrorResponse(id any, err *RPCError) *JSONRPCResponse {
 	return &JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -128,13 +128,13 @@ func MakeErrorResponse(id interface{}, err *RPCError) *JSONRPCResponse {
 
 // ToolError represents a structured tool error response.
 type ToolError struct {
-	Error   string      `json:"error"`
-	Code    int         `json:"code,omitempty"`
-	Details interface{} `json:"details,omitempty"`
+	Error   string `json:"error"`
+	Code    int    `json:"code,omitempty"`
+	Details any    `json:"details,omitempty"`
 }
 
 // NewToolError creates a JSON-formatted tool error response.
-func NewToolError(message string, code int, details interface{}) string {
+func NewToolError(message string, code int, details any) string {
 	te := ToolError{
 		Error:   message,
 		Code:    code,
@@ -145,7 +145,7 @@ func NewToolError(message string, code int, details interface{}) string {
 }
 
 // ValidateRequiredParams checks for required parameters.
-func ValidateRequiredParams(args map[string]interface{}, required []string) *RPCError {
+func ValidateRequiredParams(args map[string]any, required []string) *RPCError {
 	missing := []string{}
 	for _, param := range required {
 		if _, ok := args[param]; !ok {
@@ -159,7 +159,7 @@ func ValidateRequiredParams(args map[string]interface{}, required []string) *RPC
 }
 
 // ValidateStringParam validates a string parameter.
-func ValidateStringParam(args map[string]interface{}, name string) (string, *RPCError) {
+func ValidateStringParam(args map[string]any, name string) (string, *RPCError) {
 	val, ok := args[name]
 	if !ok {
 		return "", InvalidParamsError(fmt.Sprintf("missing required parameter: %s", name))
@@ -175,7 +175,7 @@ func ValidateStringParam(args map[string]interface{}, name string) (string, *RPC
 }
 
 // ValidateIntParam validates an integer parameter with optional default.
-func ValidateIntParam(args map[string]interface{}, name string, defaultVal int) (int, *RPCError) {
+func ValidateIntParam(args map[string]any, name string, defaultVal int) (int, *RPCError) {
 	val, ok := args[name]
 	if !ok {
 		return defaultVal, nil

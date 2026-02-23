@@ -1,6 +1,7 @@
 package taint
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -259,10 +260,8 @@ var stdlibNonPropagators = map[string][]string{
 func isStdlibSource(callTarget string) bool {
 	module, funcName := splitModuleFunction(callTarget)
 	if sources, ok := stdlibSources[module]; ok {
-		for _, s := range sources {
-			if s == funcName {
-				return true
-			}
+		if slices.Contains(sources, funcName) {
+			return true
 		}
 	}
 	return false
@@ -272,10 +271,8 @@ func isStdlibSource(callTarget string) bool {
 func isStdlibSanitizer(callTarget string) bool {
 	module, funcName := splitModuleFunction(callTarget)
 	if sanitizers, ok := stdlibSanitizers[module]; ok {
-		for _, s := range sanitizers {
-			if s == funcName {
-				return true
-			}
+		if slices.Contains(sanitizers, funcName) {
+			return true
 		}
 	}
 	return false
@@ -287,20 +284,16 @@ func isNonPropagator(callTarget string) bool {
 
 	// Check exact module.function match
 	if funcs, ok := stdlibNonPropagators[module]; ok {
-		for _, f := range funcs {
-			if f == funcName {
-				return true
-			}
+		if slices.Contains(funcs, funcName) {
+			return true
 		}
 	}
 
 	// Check builtins (no module prefix)
 	if module == "" {
 		if funcs, ok := stdlibNonPropagators["builtins"]; ok {
-			for _, f := range funcs {
-				if f == callTarget {
-					return true
-				}
+			if slices.Contains(funcs, callTarget) {
+				return true
 			}
 		}
 	}
@@ -323,8 +316,8 @@ func splitModuleFunction(callTarget string) (module, function string) {
 func matchesFunctionName(callTarget, pattern string) bool {
 	// Strip parentheses from call target if present
 	cleanTarget := callTarget
-	if idx := strings.Index(callTarget, "("); idx >= 0 {
-		cleanTarget = callTarget[:idx]
+	if before, _, ok := strings.Cut(callTarget, "("); ok {
+		cleanTarget = before
 	}
 
 	// Exact match: "eval" == "eval"

@@ -168,33 +168,33 @@ func TestBuildDependencyChain(t *testing.T) {
 func TestExtractRelevantMetadata(t *testing.T) {
 	tests := []struct {
 		name     string
-		metadata map[string]interface{}
-		expected map[string]interface{}
+		metadata map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "With stage info",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"stage_name":  "builder",
 				"stage_index": 0,
 				"other_field": "ignored",
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"stage_name":  "builder",
 				"stage_index": 0,
 			},
 		},
 		{
 			name: "Only stage index",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"stage_index": 1,
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"stage_index": 1,
 			},
 		},
 		{
-			name:     "No relevant metadata",
-			metadata: map[string]interface{}{
+			name: "No relevant metadata",
+			metadata: map[string]any{
 				"other_field": "value",
 			},
 			expected: nil,

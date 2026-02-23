@@ -1,6 +1,8 @@
 package core
 
 import (
+	"slices"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 )
 
@@ -108,7 +110,7 @@ type CallGraph struct {
 	// Attribute registry for class attributes and instance variables
 	// Populated during call graph construction (Phase 3: Extract Class Attributes)
 	// Enables symbol search to find class fields and properties
-	Attributes interface{} // *registry.AttributeRegistry (interface{} to avoid import cycle)
+	Attributes any // *registry.AttributeRegistry (interface{} to avoid import cycle)
 
 	// Type inference engine for querying module-level variable types (Python)
 	// Populated during call graph construction
@@ -409,12 +411,7 @@ func (gim *GoImportMap) Resolve(localName string) (string, bool) {
 
 // Helper function to check if a string slice contains a specific string.
 func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, item)
 }
 
 // Helper function alias for consistency.

@@ -93,7 +93,7 @@ func TestAnalyzeFunction_Success(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responseBytes, _ := json.Marshal(mockResponse)
-		ollamaResp := map[string]interface{}{
+		ollamaResp := map[string]any{
 			"response": string(responseBytes),
 			"done":     true,
 		}
@@ -132,7 +132,7 @@ func TestAnalyzeFunction_Success(t *testing.T) {
 func TestAnalyzeFunction_InvalidJSON(t *testing.T) {
 	// Create mock server that returns invalid JSON
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ollamaResp := map[string]interface{}{
+		ollamaResp := map[string]any{
 			"response": "This is not valid JSON {{{",
 			"done":     true,
 		}
@@ -314,7 +314,7 @@ func TestAnalyzeBatch(t *testing.T) {
 			},
 		}
 		responseBytes, _ := json.Marshal(mockResponse)
-		ollamaResp := map[string]interface{}{
+		ollamaResp := map[string]any{
 			"response": string(responseBytes),
 			"done":     true,
 		}
@@ -349,7 +349,7 @@ func TestAnalyzeBatch_WithErrors(t *testing.T) {
 	// Mock server that fails on certain requests
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read request to determine which function
-		var reqBody map[string]interface{}
+		var reqBody map[string]any
 		json.NewDecoder(r.Body).Decode(&reqBody)
 		prompt := reqBody["prompt"].(string)
 
@@ -366,7 +366,7 @@ func TestAnalyzeBatch_WithErrors(t *testing.T) {
 			},
 		}
 		responseBytes, _ := json.Marshal(mockResponse)
-		ollamaResp := map[string]interface{}{
+		ollamaResp := map[string]any{
 			"response": string(responseBytes),
 			"done":     true,
 		}
@@ -423,7 +423,7 @@ func TestAnalyzeFunction_OpenAI(t *testing.T) {
 	// Create mock OpenAI server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify OpenAI request format
-		var reqBody map[string]interface{}
+		var reqBody map[string]any
 		json.NewDecoder(r.Body).Decode(&reqBody)
 
 		assert.Equal(t, "grok-test", reqBody["model"])
@@ -432,8 +432,8 @@ func TestAnalyzeFunction_OpenAI(t *testing.T) {
 
 		// Return OpenAI format response
 		responseBytes, _ := json.Marshal(mockResponse)
-		openaiResp := map[string]interface{}{
-			"choices": []map[string]interface{}{
+		openaiResp := map[string]any{
+			"choices": []map[string]any{
 				{
 					"message": map[string]string{
 						"content": string(responseBytes),
@@ -482,8 +482,8 @@ func TestAnalyzeFunction_OpenAI_HTTPError(t *testing.T) {
 // TestAnalyzeFunction_OpenAI_NoChoices tests OpenAI response with no choices.
 func TestAnalyzeFunction_OpenAI_NoChoices(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		openaiResp := map[string]interface{}{
-			"choices": []map[string]interface{}{},
+		openaiResp := map[string]any{
+			"choices": []map[string]any{},
 		}
 		json.NewEncoder(w).Encode(openaiResp)
 	}))

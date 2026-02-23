@@ -199,9 +199,9 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 
 	t.Run("executes call_matcher rule", func(t *testing.T) {
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"type":     "call_matcher",
-				"patterns": []interface{}{"eval"},
+				"patterns": []any{"eval"},
 				"wildcard": false,
 			},
 		}
@@ -217,22 +217,22 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 
 	t.Run("executes dataflow rule", func(t *testing.T) {
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"type": "dataflow",
-				"sources": []interface{}{
-					map[string]interface{}{
-						"patterns": []interface{}{"request.GET"},
+				"sources": []any{
+					map[string]any{
+						"patterns": []any{"request.GET"},
 						"wildcard": false,
 					},
 				},
-				"sinks": []interface{}{
-					map[string]interface{}{
-						"patterns": []interface{}{"eval"},
+				"sinks": []any{
+					map[string]any{
+						"patterns": []any{"eval"},
 						"wildcard": false,
 					},
 				},
-				"sanitizers": []interface{}{},
-				"propagation": []interface{}{},
+				"sanitizers":  []any{},
+				"propagation": []any{},
 				"scope":       "local",
 			},
 		}
@@ -257,7 +257,7 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 		}
 
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"type":     "variable_matcher",
 				"pattern":  "user_input",
 				"wildcard": false,
@@ -274,7 +274,7 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 
 	t.Run("handles invalid matcher type", func(t *testing.T) {
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"type": "invalid_type",
 			},
 		}
@@ -288,7 +288,7 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 
 	t.Run("handles missing matcher type", func(t *testing.T) {
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"no_type_field": "value",
 			},
 		}
@@ -319,7 +319,7 @@ func TestRuleLoader_ExecuteLogic(t *testing.T) {
 		loader := NewRuleLoader("")
 
 		rule := &RuleIR{
-			Matcher: map[string]interface{}{
+			Matcher: map[string]any{
 				"type": "logic_and",
 			},
 		}
@@ -360,7 +360,7 @@ def test_rule():
 		assert.NotEmpty(t, jsonData)
 
 		// Verify it's valid JSON
-		var result map[string]interface{}
+		var result map[string]any
 		err = json.Unmarshal(jsonData, &result)
 		require.NoError(t, err)
 		assert.Contains(t, result, "dockerfile")
@@ -489,7 +489,6 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 		assert.Empty(t, rules, "container format file should return empty list from LoadRules")
 	})
 }
-
 
 // Helper: Create temporary Python file for testing.
 func createTempPythonFile(t *testing.T, content string) string {

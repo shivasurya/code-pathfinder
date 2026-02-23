@@ -317,7 +317,7 @@ func BenchmarkExtractAllFunctions(b *testing.B) {
 	// Create temporary directory with 100 functions
 	tmpDir := b.TempDir()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		fileName := filepath.Join(tmpDir, fmt.Sprintf("file%d.py", i))
 		sourceCode := `
 def function_one():

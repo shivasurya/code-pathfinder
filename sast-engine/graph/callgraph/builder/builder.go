@@ -46,12 +46,11 @@ func getOptimalWorkerCount() int {
 	cpuCount := runtime.NumCPU()
 
 	// Conservative approach: use 75% of cores, leave some for OS
-	workers := int(float64(cpuCount) * 0.75)
-
-	// Apply bounds
-	if workers < 2 {
-		workers = 2 // Minimum parallelism
-	}
+	workers := max(
+		// Apply bounds
+		int(float64(cpuCount)*0.75),
+		// Minimum parallelism
+		2)
 	if workers > 16 {
 		workers = 16 // Cap at 16 (memory/connection limits)
 	}
@@ -86,15 +85,16 @@ func getOptimalWorkerCount() int {
 //   - error: if any step fails
 //
 // Example:
-//   Given:
-//     File: myapp/views.py
-//       def get_user():
-//           sanitize(data)  # call to myapp.utils.sanitize
 //
-//   Creates:
-//     edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
-//     reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
-//     callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
+//	Given:
+//	  File: myapp/views.py
+//	    def get_user():
+//	        sanitize(data)  # call to myapp.utils.sanitize
+//
+//	Creates:
+//	  edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
+//	  reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
+//	  callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
 func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string, logger *output.Logger) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
@@ -171,10 +171,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	logger.Debug("Using %d parallel workers for callgraph construction", numWorkers)
 
 	// Start workers for return type extraction
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 			for job := range returnJobs {
 				sourceCode, err := ReadFileBytes(job.filePath)
 				if err != nil {
@@ -210,7 +208,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					logger.Debug("Processed %d/%d files for return types", count, len(registry.Modules))
 				}
 			}
-		}()
+		})
 	}
 
 	// Queue all Python files
@@ -240,10 +238,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	wg = sync.WaitGroup{}
 
 	// Start workers for variable assignment extraction
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 			for filePath := range varJobs {
 				sourceCode, err := ReadFileBytes(filePath)
 				if err != nil {
@@ -269,7 +265,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					logger.Debug("Processed %d files for variable assignments", count)
 				}
 			}
-		}()
+		})
 	}
 
 	// Queue all Python files
@@ -300,10 +296,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	wg = sync.WaitGroup{}
 
 	// Start workers for class attribute extraction
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 			for job := range attrJobs {
 				sourceCode, err := ReadFileBytes(job.filePath)
 				if err != nil {
@@ -319,7 +313,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					logger.Debug("Processed %d files for class attributes", count)
 				}
 			}
-		}()
+		})
 	}
 
 	// Queue all Python files
@@ -346,10 +340,8 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	wg = sync.WaitGroup{}
 
 	// Start workers for call site resolution
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 			for job := range callSiteJobs {
 				// Read source code for parsing
 				sourceCode, err := ReadFileBytes(job.filePath)
@@ -419,7 +411,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					logger.Debug("Processed %d files for call sites", count)
 				}
 			}
-		}()
+		})
 	}
 
 	// Queue all Python files
@@ -763,8 +755,8 @@ func categorizeResolutionFailure(target, targetFQN string) string {
 
 	// Check for attribute chains (has dots, looks like obj.method())
 	// Heuristic: lowercase first component likely means variable/object
-	if dotIndex := strings.Index(target, "."); dotIndex != -1 {
-		firstComponent := target[:dotIndex]
+	if before, _, ok := strings.Cut(target, "."); ok {
+		firstComponent := before
 		// If starts with lowercase and not a known module pattern, likely attribute chain
 		if len(firstComponent) > 0 && firstComponent[0] >= 'a' && firstComponent[0] <= 'z' {
 			// Could be variable method or attribute chain
@@ -833,14 +825,15 @@ var pythonBuiltins = map[string]bool{
 //   - TypeInfo if resolved via type inference
 //
 // Examples:
-//   target="sanitize", imports={"sanitize": "myapp.utils.sanitize"}
-//     → "myapp.utils.sanitize", true, nil
 //
-//   target="utils.sanitize", imports={"utils": "myapp.utils"}
-//     → "myapp.utils.sanitize", true, nil
+//	target="sanitize", imports={"sanitize": "myapp.utils.sanitize"}
+//	  → "myapp.utils.sanitize", true, nil
 //
-//   target="obj.method", imports={}
-//     → "obj.method", false, nil  (needs type inference)
+//	target="utils.sanitize", imports={"utils": "myapp.utils"}
+//	  → "myapp.utils.sanitize", true, nil
+//
+//	target="obj.method", imports={}
+//	  → "obj.method", false, nil  (needs type inference)
 func ResolveCallTarget(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph, typeEngine *resolution.TypeInferenceEngine, callerFQN string, callGraph *core.CallGraph, logger *output.Logger) (string, bool, *core.TypeInfo) {
 	return resolveCallTarget(target, importMap, registry, currentModule, codeGraph, typeEngine, callerFQN, callGraph, logger)
 }
@@ -889,8 +882,8 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	}
 
 	// Phase 3: Handle super().method() calls - resolve to parent class method
-	if strings.HasPrefix(target, "super().") {
-		methodName := strings.TrimPrefix(target, "super().")
+	if after, ok := strings.CutPrefix(target, "super()."); ok {
+		methodName := after
 
 		// Extract current class name from callerFQN
 		// callerFQN format: "module.ClassName.methodName"
@@ -951,8 +944,8 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	}
 
 	// Phase 2: Handle self.method() calls - resolve to current class method
-	if strings.HasPrefix(target, "self.") {
-		methodName := strings.TrimPrefix(target, "self.")
+	if after, ok := strings.CutPrefix(target, "self."); ok {
+		methodName := after
 
 		// Phase 2: Extract class name from callerFQN for class-qualified lookup
 		// callerFQN format: "module.ClassName.methodName" for methods
@@ -1200,9 +1193,10 @@ var stdlibModuleAliases = map[string]string{
 // Uses lazy loading via remote registry to download modules on-demand.
 //
 // Examples:
-//   "os.getcwd" - returns true if os.getcwd exists in stdlib
-//   "os.path.join" - returns true if posixpath.join exists in stdlib (alias resolution)
-//   "json.dumps" - returns true if json.dumps exists in stdlib
+//
+//	"os.getcwd" - returns true if os.getcwd exists in stdlib
+//	"os.path.join" - returns true if posixpath.join exists in stdlib (alias resolution)
+//	"json.dumps" - returns true if json.dumps exists in stdlib
 //
 // Parameters:
 //   - fqn: fully qualified name to check
@@ -1281,8 +1275,9 @@ func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote
 // Handles both module names and function names within modules.
 //
 // Examples:
-//   "myapp.utils" - checks if module exists
-//   "myapp.utils.sanitize" - checks if module "myapp.utils" exists
+//
+//	"myapp.utils" - checks if module exists
+//	"myapp.utils.sanitize" - checks if module "myapp.utils" exists
 //
 // Parameters:
 //   - fqn: fully qualified name to validate
@@ -1329,8 +1324,8 @@ func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
 // Used for backward compatibility with existing tests.
 func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
 	// Handle self.method() calls - resolve to current module
-	if strings.HasPrefix(target, "self.") {
-		methodName := strings.TrimPrefix(target, "self.")
+	if after, ok := strings.CutPrefix(target, "self."); ok {
+		methodName := after
 		// Resolve to module.method
 		moduleFQN := currentModule + "." + methodName
 		// Validate exists
@@ -1463,13 +1458,13 @@ func parsePyprojectToml(projectPath string) string {
 	}
 
 	// Very simple regex-free parsing - just look for version numbers
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(data), "\n")
+	for line := range lines {
 		// Check for requires-python or python = patterns
 		if strings.Contains(line, "requires-python") || strings.Contains(line, "python") {
 			// Extract version number pattern (e.g., 3.11, 3.9, etc.)
-			parts := strings.Fields(line)
-			for _, part := range parts {
+			parts := strings.FieldsSeq(line)
+			for part := range parts {
 				part = strings.Trim(part, `"'>=<~^`)
 				if strings.Contains(part, ".") && len(part) >= 3 && len(part) <= 5 {
 					// Check if it looks like a version (starts with digit)

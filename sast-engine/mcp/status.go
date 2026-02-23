@@ -341,7 +341,7 @@ func (g *GracefulDegradation) CheckReady() *RPCError {
 // WrapToolCall wraps a tool call with readiness checking.
 func (g *GracefulDegradation) WrapToolCall(toolName string, fn func() (string, bool)) (string, bool) {
 	if err := g.CheckReady(); err != nil {
-		return NewToolError(err.Message, err.Code, map[string]interface{}{
+		return NewToolError(err.Message, err.Code, map[string]any{
 			"tool":   toolName,
 			"status": g.tracker.GetStatus(),
 		}), true
@@ -350,12 +350,12 @@ func (g *GracefulDegradation) WrapToolCall(toolName string, fn func() (string, b
 }
 
 // GetStatusJSON returns the current status as a JSON-friendly map.
-func (g *GracefulDegradation) GetStatusJSON() map[string]interface{} {
+func (g *GracefulDegradation) GetStatusJSON() map[string]any {
 	status := g.tracker.GetStatus()
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"state": status.State.String(),
-		"progress": map[string]interface{}{
+		"progress": map[string]any{
 			"phase":           status.Progress.Phase.String(),
 			"phaseProgress":   status.Progress.PhaseProgress,
 			"overallProgress": status.Progress.OverallProgress,
@@ -365,11 +365,11 @@ func (g *GracefulDegradation) GetStatusJSON() map[string]interface{} {
 	}
 
 	if status.Progress.CurrentFile != "" {
-		result["progress"].(map[string]interface{})["currentFile"] = status.Progress.CurrentFile
+		result["progress"].(map[string]any)["currentFile"] = status.Progress.CurrentFile
 	}
 
 	if status.Progress.Message != "" {
-		result["progress"].(map[string]interface{})["message"] = status.Progress.Message
+		result["progress"].(map[string]any)["message"] = status.Progress.Message
 	}
 
 	if status.StartedAt != nil {
@@ -385,7 +385,7 @@ func (g *GracefulDegradation) GetStatusJSON() map[string]interface{} {
 	}
 
 	if status.Stats != nil {
-		result["stats"] = map[string]interface{}{
+		result["stats"] = map[string]any{
 			"functions":     status.Stats.Functions,
 			"callEdges":     status.Stats.CallEdges,
 			"modules":       status.Stats.Modules,

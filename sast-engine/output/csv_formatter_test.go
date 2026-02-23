@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/csv"
+	"slices"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/dsl"
@@ -27,13 +28,7 @@ func TestCSVHeaders(t *testing.T) {
 	// Verify key headers exist
 	expectedHeaders := []string{"severity", "rule_id", "file", "line", "detection_type"}
 	for _, expected := range expectedHeaders {
-		found := false
-		for _, h := range headers {
-			if h == expected {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(headers, expected)
 		if !found {
 			t.Errorf("missing expected header: %s", expected)
 		}

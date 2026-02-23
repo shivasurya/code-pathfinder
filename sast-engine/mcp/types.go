@@ -9,24 +9,24 @@ import "encoding/json"
 // JSONRPCRequest represents a JSON-RPC 2.0 request.
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id"`
+	ID      any             `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
 // JSONRPCResponse represents a JSON-RPC 2.0 response.
 type JSONRPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *RPCError   `json:"error,omitempty"`
+	JSONRPC string    `json:"jsonrpc"`
+	ID      any       `json:"id"`
+	Result  any       `json:"result,omitempty"`
+	Error   *RPCError `json:"error,omitempty"`
 }
 
 // RPCError represents a JSON-RPC 2.0 error.
 type RPCError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // ============================================================================
@@ -99,8 +99,8 @@ type ToolsListResult struct {
 
 // ToolCallParams contains parameters for tools/call requests.
 type ToolCallParams struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
 // ToolResult is returned for tools/call responses.
@@ -120,7 +120,7 @@ type ContentBlock struct {
 // ============================================================================
 
 // SuccessResponse creates a successful JSON-RPC response.
-func SuccessResponse(id interface{}, result interface{}) *JSONRPCResponse {
+func SuccessResponse(id any, result any) *JSONRPCResponse {
 	return &JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -129,7 +129,7 @@ func SuccessResponse(id interface{}, result interface{}) *JSONRPCResponse {
 }
 
 // ErrorResponse creates an error JSON-RPC response.
-func ErrorResponse(id interface{}, code int, message string) *JSONRPCResponse {
+func ErrorResponse(id any, code int, message string) *JSONRPCResponse {
 	return &JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,

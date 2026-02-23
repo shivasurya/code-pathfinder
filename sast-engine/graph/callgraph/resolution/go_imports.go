@@ -238,8 +238,8 @@ func parseGoMod(projectRoot string) (modulePath string, goVersion string, err er
 	}
 
 	// Parse go.mod line by line
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(content), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Extract module path
@@ -390,21 +390,21 @@ func goStdlibSet() map[string]bool {
 // shouldSkipGoDirectory returns true if the directory should be skipped during traversal.
 func shouldSkipGoDirectory(dirName string) bool {
 	skipDirs := map[string]bool{
-		"vendor":      true, // Vendored dependencies
-		"testdata":    true, // Test fixtures
-		".git":        true, // Version control
-		".svn":        true,
-		".hg":         true,
+		"vendor":       true, // Vendored dependencies
+		"testdata":     true, // Test fixtures
+		".git":         true, // Version control
+		".svn":         true,
+		".hg":          true,
 		"node_modules": true, // If Go project has frontend
-		"dist":        true, // Build output
-		"build":       true,
-		"_build":      true,
-		".vscode":     true, // IDE files
-		".idea":       true,
-		"tmp":         true, // Temporary files
-		"temp":        true,
-		"__pycache__": true, // If mixed project
-		".DS_Store":   true, // macOS metadata
+		"dist":         true, // Build output
+		"build":        true,
+		"_build":       true,
+		".vscode":      true, // IDE files
+		".idea":        true,
+		"tmp":          true, // Temporary files
+		"temp":         true,
+		"__pycache__":  true, // If mixed project
+		".DS_Store":    true, // macOS metadata
 	}
 	return skipDirs[dirName]
 }

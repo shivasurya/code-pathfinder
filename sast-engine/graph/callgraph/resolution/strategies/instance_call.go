@@ -2,8 +2,10 @@
 package strategies
 
 import (
-	sitter "github.com/smacker/go-tree-sitter"
+	"slices"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // InstanceCallStrategy resolves instance method calls like `obj.method()`.
@@ -134,13 +136,11 @@ func (s *InstanceCallStrategy) lookupMethodReturnType(receiverType core.Type, me
 		classAttrs := ctx.AttrRegistry.GetClassAttributes(classFQN)
 		if classAttrs != nil {
 			// Check if method exists in the class
-			for _, methodFQN := range classAttrs.Methods {
-				if methodFQN == classFQN+"."+methodName {
-					// Method found - need to look up return type
-					// For now, return the class type for self-returning methods
-					// This is a heuristic; full implementation uses return type tracking
-					return receiverType, core.ConfidenceScore(core.ConfidenceFluentHeuristic)
-				}
+			if slices.Contains(classAttrs.Methods, classFQN+"."+methodName) {
+				// Method found - need to look up return type
+				// For now, return the class type for self-returning methods
+				// This is a heuristic; full implementation uses return type tracking
+				return receiverType, core.ConfidenceScore(core.ConfidenceFluentHeuristic)
 			}
 		}
 	}

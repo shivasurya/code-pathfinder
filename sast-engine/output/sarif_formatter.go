@@ -102,20 +102,21 @@ func (f *SARIFFormatter) buildRules(detections []*dsl.EnrichedDetection, run *sa
 }
 
 func (f *SARIFFormatter) buildHelpMarkdown(rule dsl.RuleMetadata) string {
-	markdown := "## " + rule.Name + "\n\n"
+	var markdown strings.Builder
+	markdown.WriteString("## " + rule.Name + "\n\n")
 	if rule.Description != "" {
-		markdown += rule.Description + "\n\n"
+		markdown.WriteString(rule.Description + "\n\n")
 	}
 
 	if len(rule.CWE) > 0 {
-		markdown += "### References\n\n"
+		markdown.WriteString("### References\n\n")
 		for _, cwe := range rule.CWE {
 			cweNum := extractCWENumber(cwe)
-			markdown += "- [" + cwe + "](https://cwe.mitre.org/data/definitions/" + cweNum + ".html)\n"
+			markdown.WriteString("- [" + cwe + "](https://cwe.mitre.org/data/definitions/" + cweNum + ".html)\n")
 		}
 	}
 
-	return markdown
+	return markdown.String()
 }
 
 func extractCWENumber(cwe string) string {
@@ -139,8 +140,8 @@ func (f *SARIFFormatter) severityToLevelString(severity string) string {
 	}
 }
 
-func (f *SARIFFormatter) buildRuleProperties(rule dsl.RuleMetadata) map[string]interface{} {
-	props := make(map[string]interface{})
+func (f *SARIFFormatter) buildRuleProperties(rule dsl.RuleMetadata) map[string]any {
+	props := make(map[string]any)
 
 	// Tags for filtering
 	props["tags"] = []string{"security"}

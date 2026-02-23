@@ -2,8 +2,10 @@
 package strategies
 
 import (
-	sitter "github.com/smacker/go-tree-sitter"
+	"slices"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // SelfReferenceStrategy resolves self.attribute access patterns.
@@ -70,15 +72,13 @@ func (s *SelfReferenceStrategy) Synthesize(node *sitter.Node, ctx *InferenceCont
 		// Check if it's a method
 		classAttrs := ctx.AttrRegistry.GetClassAttributes(classFQN)
 		if classAttrs != nil {
-			for _, methodFQN := range classAttrs.Methods {
-				if methodFQN == classFQN+"."+attrName {
-					// It's a method - return a callable type
-					// For simplicity, return FunctionType with unknown signature
-					return &core.FunctionType{
-						Parameters: nil, // Unknown
-						ReturnType: nil, // Unknown until called
-					}, core.ConfidenceScore(core.ConfidenceAttribute)
-				}
+			if slices.Contains(classAttrs.Methods, classFQN+"."+attrName) {
+				// It's a method - return a callable type
+				// For simplicity, return FunctionType with unknown signature
+				return &core.FunctionType{
+					Parameters: nil, // Unknown
+					ReturnType: nil, // Unknown until called
+				}, core.ConfidenceScore(core.ConfidenceAttribute)
 			}
 		}
 	}
