@@ -48,9 +48,9 @@ func TestHTTPServer_ServeHTTP_Initialize(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"protocolVersion": "2024-11-05",
-		"clientInfo": map[string]interface{}{
+		"clientInfo": map[string]any{
 			"name":    "test-client",
 			"version": "1.0",
 		},
@@ -85,9 +85,9 @@ func TestHTTPServer_ServeHTTP_ToolsCall(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"name":      "get_index_info",
-		"arguments": map[string]interface{}{},
+		"arguments": map[string]any{},
 	}
 	paramsBytes, _ := json.Marshal(params)
 
@@ -231,7 +231,7 @@ func TestHTTPServer_HealthHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, "healthy", response["status"])

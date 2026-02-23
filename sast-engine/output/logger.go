@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"time"
 
@@ -51,7 +52,7 @@ func NewLoggerWithWriter(verbosity VerbosityLevel, w io.Writer) *Logger {
 
 // Progress logs progress messages (shown in verbose and debug modes).
 // Use for high-level progress like "Building code graph...".
-func (l *Logger) Progress(format string, args ...interface{}) {
+func (l *Logger) Progress(format string, args ...any) {
 	if l.verbosity >= VerbosityVerbose {
 		fmt.Fprintf(l.writer, format+"\n", args...)
 	}
@@ -59,7 +60,7 @@ func (l *Logger) Progress(format string, args ...interface{}) {
 
 // Statistic logs statistics (shown in verbose and debug modes).
 // Use for counts and metrics like "Code graph built: 1234 nodes".
-func (l *Logger) Statistic(format string, args ...interface{}) {
+func (l *Logger) Statistic(format string, args ...any) {
 	if l.verbosity >= VerbosityVerbose {
 		fmt.Fprintf(l.writer, format+"\n", args...)
 	}
@@ -67,7 +68,7 @@ func (l *Logger) Statistic(format string, args ...interface{}) {
 
 // Debug logs debug diagnostics (shown only in debug mode).
 // Includes elapsed time prefix for performance analysis.
-func (l *Logger) Debug(format string, args ...interface{}) {
+func (l *Logger) Debug(format string, args ...any) {
 	if l.verbosity >= VerbosityDebug {
 		elapsed := time.Since(l.startTime)
 		prefix := formatDuration(elapsed)
@@ -76,12 +77,12 @@ func (l *Logger) Debug(format string, args ...interface{}) {
 }
 
 // Warning logs warnings (always shown).
-func (l *Logger) Warning(format string, args ...interface{}) {
+func (l *Logger) Warning(format string, args ...any) {
 	fmt.Fprintf(l.writer, "Warning: %s\n", fmt.Sprintf(format, args...))
 }
 
 // Error logs errors (always shown).
-func (l *Logger) Error(format string, args ...interface{}) {
+func (l *Logger) Error(format string, args ...any) {
 	fmt.Fprintf(l.writer, "Error: %s\n", fmt.Sprintf(format, args...))
 }
 
@@ -101,9 +102,7 @@ func (l *Logger) GetTiming(name string) time.Duration {
 // GetAllTimings returns all recorded timings.
 func (l *Logger) GetAllTimings() map[string]time.Duration {
 	result := make(map[string]time.Duration)
-	for k, v := range l.timings {
-		result[k] = v
-	}
+	maps.Copy(result, l.timings)
 	return result
 }
 

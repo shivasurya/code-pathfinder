@@ -1,6 +1,7 @@
 package resolution
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -66,10 +67,8 @@ func IsDjangoORMPattern(target string) (bool, string) {
 	if len(parts) == 2 {
 		methodName := parts[1]
 		// Check if it's a known Django ORM method
-		for _, knownMethod := range djangoORMMethods {
-			if methodName == knownMethod {
-				return true, methodName
-			}
+		if slices.Contains(djangoORMMethods, methodName) {
+			return true, methodName
 		}
 		// Even if not in our list, if it follows the pattern, mark it as ORM
 		// This handles custom managers and less common methods
@@ -102,10 +101,8 @@ func IsSQLAlchemyORMPattern(target string) (bool, string) {
 		parts := strings.Split(target, ".query.")
 		if len(parts) == 2 {
 			methodName := parts[1]
-			for _, knownMethod := range sqlalchemyORMMethods {
-				if methodName == knownMethod {
-					return true, methodName
-				}
+			if slices.Contains(sqlalchemyORMMethods, methodName) {
+				return true, methodName
 			}
 			return true, methodName
 		}

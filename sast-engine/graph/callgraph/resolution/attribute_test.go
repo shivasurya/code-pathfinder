@@ -398,11 +398,11 @@ func (m *mockLogger) IsDebug() bool {
 // TestPrintAttributeFailureStats tests the statistics printing function.
 func TestPrintAttributeFailureStats(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupStats    func()
-		logger        interface{ IsDebug() bool }
-		expectOutput  bool
-		checkOutput   func(*testing.T, string)
+		name         string
+		setupStats   func()
+		logger       interface{ IsDebug() bool }
+		expectOutput bool
+		checkOutput  func(*testing.T, string)
 	}{
 		{
 			name: "no attempts - should be silent",
@@ -461,16 +461,16 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			name: "with attempts and various failures",
 			setupStats: func() {
 				attributeFailureStats = &FailureStats{
-					TotalAttempts:          100,
-					NotSelfPrefix:          20,
-					DeepChains:             15,
-					ClassNotFound:          10,
-					AttributeNotFound:      25,
-					MethodNotInBuiltins:    20,
-					CustomClassUnsupported: 10,
-					DeepChainSamples:       []string{"self.a.b.c", "self.x.y.z"},
+					TotalAttempts:            100,
+					NotSelfPrefix:            20,
+					DeepChains:               15,
+					ClassNotFound:            10,
+					AttributeNotFound:        25,
+					MethodNotInBuiltins:      20,
+					CustomClassUnsupported:   10,
+					DeepChainSamples:         []string{"self.a.b.c", "self.x.y.z"},
 					AttributeNotFoundSamples: []string{"self.missing.method (in class test.MyClass)"},
-					CustomClassSamples:     []string{"self.user.get_name (type: myapp.User)"},
+					CustomClassSamples:       []string{"self.user.get_name (type: myapp.User)"},
 				}
 			},
 			logger:       nil,
@@ -495,7 +495,7 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 			name: "with many samples (should limit to 10)",
 			setupStats: func() {
 				samples := make([]string, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					samples[i] = "sample" + string(rune('0'+i))
 				}
 				attributeFailureStats = &FailureStats{
@@ -582,10 +582,10 @@ func TestPrintAttributeFailureStats(t *testing.T) {
 // TestFindClassContainingMethod tests the internal class lookup function.
 func TestFindClassContainingMethod(t *testing.T) {
 	tests := []struct {
-		name           string
-		methodFQN      string
-		setupRegistry  func() *registry.AttributeRegistry
-		expectedClass  string
+		name          string
+		methodFQN     string
+		setupRegistry func() *registry.AttributeRegistry
+		expectedClass string
 	}{
 		{
 			name:      "method found in class",
@@ -635,8 +635,8 @@ func TestFindClassContainingMethod(t *testing.T) {
 			expectedClass: "test_module.ClassB",
 		},
 		{
-			name:      "method name without module",
-			methodFQN: "process",
+			name:          "method name without module",
+			methodFQN:     "process",
 			setupRegistry: newAttributeRegistryWithClass("test_module.MyClass", []string{"test_module.MyClass.process"}),
 			expectedClass: "test_module.MyClass",
 		},
@@ -660,9 +660,9 @@ func TestFindClassContainingMethod(t *testing.T) {
 // TestResolveAttributePlaceholders tests placeholder resolution.
 func TestResolveAttributePlaceholders(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupFunc     func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph)
-		checkFunc     func(*testing.T, *registry.AttributeRegistry)
+		name      string
+		setupFunc func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph)
+		checkFunc func(*testing.T, *registry.AttributeRegistry)
 	}{
 		{
 			name: "resolve class: placeholder",
@@ -1074,7 +1074,7 @@ func TestFailureStats_SampleLimit(t *testing.T) {
 	callGraph := core.NewCallGraph()
 
 	// Try to add 30 deep chain samples
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		target := "self.a.b.c"
 		callerFQN := "test.Class.method"
 		ResolveSelfAttributeCall(target, callerFQN, typeEngine, builtins, callGraph)

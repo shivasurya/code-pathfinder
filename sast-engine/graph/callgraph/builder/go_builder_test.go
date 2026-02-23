@@ -24,7 +24,7 @@ func TestBuildGoCallGraph(t *testing.T) {
 	// Builtin call - these don't require imports
 	callNode := &graph.Node{
 		ID:         "call1",
-		Type:       "call", // Fixed: was "call_expression"
+		Type:       "call",   // Fixed: was "call_expression"
 		Name:       "append", // Fixed: use Name field
 		File:       "/project/main.go",
 		LineNumber: 12,
@@ -206,11 +206,11 @@ func TestExtractGoCallSites(t *testing.T) {
 					LineNumber: 10,
 				},
 				{
-					ID:        "call1",
-					Type:      "method_expression", // Fixed: was "call_expression"
-					Name:      "Println", // Fixed: use Name field
-					Interface: []string{"fmt"}, // Fixed: use Interface field for object name
-					File:      "/project/main.go",
+					ID:         "call1",
+					Type:       "method_expression", // Fixed: was "call_expression"
+					Name:       "Println",           // Fixed: use Name field
+					Interface:  []string{"fmt"},     // Fixed: use Interface field for object name
+					File:       "/project/main.go",
 					LineNumber: 12,
 				},
 			},
@@ -229,7 +229,7 @@ func TestExtractGoCallSites(t *testing.T) {
 				},
 				{
 					ID:         "call1",
-					Type:       "call", // Fixed: was "call_expression"
+					Type:       "call",   // Fixed: was "call_expression"
 					Name:       "helper", // Fixed: use Name field
 					File:       "/project/main.go",
 					LineNumber: 12,
@@ -283,12 +283,12 @@ func TestExtractGoCallSites(t *testing.T) {
 
 func TestResolveGoCallTarget(t *testing.T) {
 	tests := []struct {
-		name         string
-		callSite     *CallSiteInternal
-		importMap    *core.GoImportMap
-		registry     *core.GoModuleRegistry
-		funcContext  map[string][]*graph.Node
-		expectedFQN  string
+		name          string
+		callSite      *CallSiteInternal
+		importMap     *core.GoImportMap
+		registry      *core.GoModuleRegistry
+		funcContext   map[string][]*graph.Node
+		expectedFQN   string
 		shouldResolve bool
 	}{
 		{
@@ -308,8 +308,8 @@ func TestResolveGoCallTarget(t *testing.T) {
 					"fmt": true,
 				},
 			},
-			funcContext:  make(map[string][]*graph.Node),
-			expectedFQN:  "fmt.Println",
+			funcContext:   make(map[string][]*graph.Node),
+			expectedFQN:   "fmt.Println",
 			shouldResolve: true,
 		},
 		{
@@ -327,8 +327,8 @@ func TestResolveGoCallTarget(t *testing.T) {
 			registry: &core.GoModuleRegistry{
 				StdlibPackages: map[string]bool{},
 			},
-			funcContext:  make(map[string][]*graph.Node),
-			expectedFQN:  "github.com/example/myapp/utils.Helper",
+			funcContext:   make(map[string][]*graph.Node),
+			expectedFQN:   "github.com/example/myapp/utils.Helper",
 			shouldResolve: true,
 		},
 		{
@@ -354,7 +354,7 @@ func TestResolveGoCallTarget(t *testing.T) {
 					},
 				},
 			},
-			expectedFQN:  "github.com/example/myapp/utils.helper",
+			expectedFQN:   "github.com/example/myapp/utils.helper",
 			shouldResolve: true,
 		},
 		{
@@ -364,10 +364,10 @@ func TestResolveGoCallTarget(t *testing.T) {
 				ObjectName:   "",
 				CallerFile:   "/project/main.go",
 			},
-			importMap:    core.NewGoImportMap("/project/main.go"),
-			registry:     &core.GoModuleRegistry{},
-			funcContext:  make(map[string][]*graph.Node),
-			expectedFQN:  "builtin.append",
+			importMap:     core.NewGoImportMap("/project/main.go"),
+			registry:      &core.GoModuleRegistry{},
+			funcContext:   make(map[string][]*graph.Node),
+			expectedFQN:   "builtin.append",
 			shouldResolve: true,
 		},
 		{
@@ -383,7 +383,7 @@ func TestResolveGoCallTarget(t *testing.T) {
 			registry: &core.GoModuleRegistry{
 				StdlibPackages: map[string]bool{},
 			},
-			funcContext:  make(map[string][]*graph.Node),
+			funcContext:   make(map[string][]*graph.Node),
 			shouldResolve: false,
 		},
 	}
@@ -493,9 +493,9 @@ func TestBuildGoFQN(t *testing.T) {
 
 func TestIsBuiltin(t *testing.T) {
 	tests := []struct {
-		name       string
-		funcName   string
-		isBuiltin  bool
+		name      string
+		funcName  string
+		isBuiltin bool
 	}{
 		{"append is builtin", "append", true},
 		{"len is builtin", "len", true},
@@ -516,27 +516,27 @@ func TestIsBuiltin(t *testing.T) {
 
 func TestIsSameGoPackage(t *testing.T) {
 	tests := []struct {
-		name       string
-		file1      string
-		file2      string
+		name        string
+		file1       string
+		file2       string
 		samePackage bool
 	}{
 		{
-			name:       "same directory",
-			file1:      "/project/utils/helper.go",
-			file2:      "/project/utils/validator.go",
+			name:        "same directory",
+			file1:       "/project/utils/helper.go",
+			file2:       "/project/utils/validator.go",
 			samePackage: true,
 		},
 		{
-			name:       "different directories",
-			file1:      "/project/handlers/handler.go",
-			file2:      "/project/utils/helper.go",
+			name:        "different directories",
+			file1:       "/project/handlers/handler.go",
+			file2:       "/project/utils/helper.go",
 			samePackage: false,
 		},
 		{
-			name:       "same file",
-			file1:      "/project/main.go",
-			file2:      "/project/main.go",
+			name:        "same file",
+			file1:       "/project/main.go",
+			file2:       "/project/main.go",
 			samePackage: true,
 		},
 	}
@@ -565,12 +565,12 @@ func findSubstring(s, substr string) bool {
 
 // TestBuildGoCallGraph_WithTypeTracking verifies the 5-pass algorithm with type tracking.
 // This integration test ensures that:
-//  - Pass 1: Functions are indexed
-//  - Pass 2a: Return types are extracted
-//  - Pass 2b: Variable assignments are tracked
-//  - Pass 3: Call sites are extracted
-//  - Pass 4: Call targets are resolved
-//  - GoTypeEngine is populated and attached to CallGraph
+//   - Pass 1: Functions are indexed
+//   - Pass 2a: Return types are extracted
+//   - Pass 2b: Variable assignments are tracked
+//   - Pass 3: Call sites are extracted
+//   - Pass 4: Call targets are resolved
+//   - GoTypeEngine is populated and attached to CallGraph
 func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 	// Use the all_type_patterns.go fixture from PR-14/PR-15
 	fixturePath := "../../../test-fixtures/golang/type_tracking/all_type_patterns.go"
@@ -803,8 +803,8 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			if tt.methodExists {
 				// Strip pointer prefix for method FQN
 				methodTypeFQN := tt.variableType
-				if strings.HasPrefix(methodTypeFQN, "*") {
-					methodTypeFQN = strings.TrimPrefix(methodTypeFQN, "*")
+				if after, ok := strings.CutPrefix(methodTypeFQN, "*"); ok {
+					methodTypeFQN = after
 				}
 				methodFQN := methodTypeFQN + "." + tt.callSite.FunctionName
 				callGraph.Functions[methodFQN] = &graph.Node{
@@ -1028,11 +1028,11 @@ func TestBuildGoFQN_RelativePath(t *testing.T) {
 		Name: "TestFunc",
 		File: "test.go", // Relative path
 	}
-	
+
 	registry := &core.GoModuleRegistry{
 		DirToImport: make(map[string]string),
 	}
-	
+
 	// Should not panic, even if registry lookup fails
 	fqn := buildGoFQN(node, nil, registry)
 	assert.NotEmpty(t, fqn)
@@ -1045,11 +1045,11 @@ func TestBuildGoFQN_EmptyPath(t *testing.T) {
 		Name: "TestFunc",
 		File: "", // Empty path
 	}
-	
+
 	registry := &core.GoModuleRegistry{
 		DirToImport: make(map[string]string),
 	}
-	
+
 	fqn := buildGoFQN(node, nil, registry)
 	assert.Contains(t, fqn, "TestFunc")
 }

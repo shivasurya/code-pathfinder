@@ -239,12 +239,12 @@ func (e *DataflowExecutor) matchesPattern(target, pattern string) bool {
 			substr := strings.Trim(pattern, "*")
 			return strings.Contains(target, substr)
 		}
-		if strings.HasPrefix(pattern, "*") {
-			suffix := strings.TrimPrefix(pattern, "*")
+		if after, ok := strings.CutPrefix(pattern, "*"); ok {
+			suffix := after
 			return strings.HasSuffix(target, suffix)
 		}
-		if strings.HasSuffix(pattern, "*") {
-			prefix := strings.TrimSuffix(pattern, "*")
+		if before, ok := strings.CutSuffix(pattern, "*"); ok {
+			prefix := before
 			return strings.HasPrefix(target, prefix)
 		}
 	}

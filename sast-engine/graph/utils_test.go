@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,7 +159,7 @@ public void toString() {
 			defer tree.Close()
 
 			root := tree.RootNode()
-			
+
 			// Find the relevant node
 			var targetNode *sitter.Node
 			var findNode func(*sitter.Node)
@@ -200,7 +199,7 @@ public void toString() {
 
 func TestGetFilesComprehensive(t *testing.T) {
 	// Create temp directory structure
-	tmpDir, err := ioutil.TempDir("", "test_getfiles")
+	tmpDir, err := os.MkdirTemp("", "test_getfiles")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -228,7 +227,7 @@ func TestGetFilesComprehensive(t *testing.T) {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("Failed to create directory: %v", err)
 		}
-		if err := ioutil.WriteFile(fullPath, []byte("test content"), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte("test content"), 0644); err != nil {
 			t.Fatalf("Failed to create file: %v", err)
 		}
 	}
@@ -281,11 +280,11 @@ func TestGetFilesErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			files, err := getFiles(tt.directory)
-			
+
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
 			}
-			
+
 			if err == nil && len(files) > 0 {
 				t.Errorf("Expected empty files list for invalid directory, got %d files", len(files))
 			}
@@ -295,7 +294,7 @@ func TestGetFilesErrors(t *testing.T) {
 
 func TestReadFileComprehensive(t *testing.T) {
 	// Create temp file
-	tmpFile, err := ioutil.TempFile("", "test_readfile_*.java")
+	tmpFile, err := os.CreateTemp("", "test_readfile_*.java")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -326,7 +325,7 @@ func TestReadFileComprehensive(t *testing.T) {
 	})
 
 	t.Run("Read empty file", func(t *testing.T) {
-		emptyFile, err := ioutil.TempFile("", "test_empty_*.java")
+		emptyFile, err := os.CreateTemp("", "test_empty_*.java")
 		if err != nil {
 			t.Fatalf("Failed to create empty file: %v", err)
 		}
@@ -344,7 +343,7 @@ func TestReadFileComprehensive(t *testing.T) {
 	})
 
 	t.Run("Read large file", func(t *testing.T) {
-		largeFile, err := ioutil.TempFile("", "test_large_*.java")
+		largeFile, err := os.CreateTemp("", "test_large_*.java")
 		if err != nil {
 			t.Fatalf("Failed to create large file: %v", err)
 		}
@@ -462,9 +461,9 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 	t.Run("Append to empty slice", func(t *testing.T) {
 		var slice []*Node
 		node := &Node{ID: "test1", Name: "Node1"}
-		
+
 		result := appendUnique(slice, node)
-		
+
 		if len(result) != 1 {
 			t.Errorf("Expected length 1, got %d", len(result))
 		}
@@ -477,11 +476,11 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 		node1 := &Node{ID: "test1", Name: "Node1"}
 		node2 := &Node{ID: "test2", Name: "Node2"}
 		node3 := &Node{ID: "test3", Name: "Node3"}
-		
+
 		slice := []*Node{node1}
 		slice = appendUnique(slice, node2)
 		slice = appendUnique(slice, node3)
-		
+
 		if len(slice) != 3 {
 			t.Errorf("Expected length 3, got %d", len(slice))
 		}
@@ -490,9 +489,9 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 	t.Run("Append duplicate node", func(t *testing.T) {
 		node := &Node{ID: "test1", Name: "Node1"}
 		slice := []*Node{node}
-		
+
 		result := appendUnique(slice, node)
-		
+
 		if len(result) != 1 {
 			t.Errorf("Expected length 1 after duplicate, got %d", len(result))
 		}
@@ -504,12 +503,12 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 	t.Run("Multiple duplicates", func(t *testing.T) {
 		node1 := &Node{ID: "test1"}
 		node2 := &Node{ID: "test2"}
-		
+
 		slice := []*Node{node1, node2}
 		slice = appendUnique(slice, node1)
 		slice = appendUnique(slice, node2)
 		slice = appendUnique(slice, node1)
-		
+
 		if len(slice) != 2 {
 			t.Errorf("Expected length 2, got %d", len(slice))
 		}
@@ -518,7 +517,7 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 	t.Run("Nil node", func(t *testing.T) {
 		slice := []*Node{&Node{ID: "test1"}}
 		result := appendUnique(slice, nil)
-		
+
 		if len(result) != 2 {
 			t.Errorf("Expected length 2, got %d", len(result))
 		}
@@ -528,7 +527,7 @@ func TestAppendUniqueComprehensive(t *testing.T) {
 func TestFormatTypeComprehensive(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{"String", "hello world", "hello world"},
@@ -542,10 +541,10 @@ func TestFormatTypeComprehensive(t *testing.T) {
 		{"Bool true", true, "true"},
 		{"Bool false", false, "false"},
 		{"Nil", nil, "<nil>"},
-		{"Empty slice", []interface{}{}, "[]"},
-		{"Int slice", []interface{}{1, 2, 3}, "[1,2,3]"},
-		{"Mixed slice", []interface{}{1, "two", 3.0}, "[1,\"two\",3]"},
-		{"Nested slice", []interface{}{[]interface{}{1, 2}, []interface{}{3, 4}}, "[[1,2],[3,4]]"},
+		{"Empty slice", []any{}, "[]"},
+		{"Int slice", []any{1, 2, 3}, "[1,2,3]"},
+		{"Mixed slice", []any{1, "two", 3.0}, "[1,\"two\",3]"},
+		{"Nested slice", []any{[]any{1, 2}, []any{3, 4}}, "[[1,2],[3,4]]"},
 		{"Struct", struct{ Name string }{"test"}, "{test}"},
 	}
 

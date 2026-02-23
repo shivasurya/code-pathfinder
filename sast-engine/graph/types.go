@@ -51,8 +51,8 @@ type Node struct {
 	AssertStmt           *model.AssertStmt
 	ReturnStmt           *model.ReturnStmt
 	BlockStmt            *model.BlockStmt
-	Language             string                 // "go", "python", "java" - set during parsing
-	Metadata             map[string]interface{} // Generic key-value store for language/tool-specific metadata
+	Language             string         // "go", "python", "java" - set during parsing
+	Metadata             map[string]any // Generic key-value store for language/tool-specific metadata
 }
 
 // GetCodeSnippet returns the code snippet for this node.

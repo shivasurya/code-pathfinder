@@ -139,7 +139,7 @@ func TestTypeCache_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent writes
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -149,7 +149,7 @@ func TestTypeCache_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent reads
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -168,7 +168,7 @@ func TestMakeCacheKey(t *testing.T) {
 }
 
 func TestTypeCache_DefaultCapacity(t *testing.T) {
-	cache := NewTypeCache(0)  // Should default to 10000
+	cache := NewTypeCache(0) // Should default to 10000
 
 	// Should not panic and work normally
 	cache.Put("key1", core.NewConcreteType("Type1", 0.9), "file.py")

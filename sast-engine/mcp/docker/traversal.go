@@ -1,5 +1,7 @@
 package docker
 
+import "strings"
+
 // TraversalDirection specifies the direction for dependency traversal.
 type TraversalDirection string
 
@@ -16,34 +18,34 @@ const (
 
 // TraversalResult contains the results of a dependency traversal.
 type TraversalResult struct {
-	Target             string
-	Type               string
-	File               string
-	Line               uint32
-	Direction          string
-	MaxDepth           int
-	Upstream           []DependencyInfo
-	Downstream         []DependencyInfo
-	DependencyChain    string
-	FiltersApplied     map[string]interface{}
+	Target          string
+	Type            string
+	File            string
+	Line            uint32
+	Direction       string
+	MaxDepth        int
+	Upstream        []DependencyInfo
+	Downstream      []DependencyInfo
+	DependencyChain string
+	FiltersApplied  map[string]any
 }
 
 // DependencyInfo contains enriched information about a dependency.
 type DependencyInfo struct {
-	Name       string                 `json:"name"`
-	Type       string                 `json:"type"`
-	File       string                 `json:"file"`
-	Line       uint32                 `json:"line"`
-	Depth      int                    `json:"depth"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Name     string         `json:"name"`
+	Type     string         `json:"type"`
+	File     string         `json:"file"`
+	Line     uint32         `json:"line"`
+	Depth    int            `json:"depth"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // Traverse performs dependency traversal from a starting node.
 func Traverse(graph *DependencyGraph, startNode string, direction TraversalDirection, maxDepth int) *TraversalResult {
 	result := &TraversalResult{
-		Target:   startNode,
-		MaxDepth: maxDepth,
-		Upstream: []DependencyInfo{},
+		Target:     startNode,
+		MaxDepth:   maxDepth,
+		Upstream:   []DependencyInfo{},
 		Downstream: []DependencyInfo{},
 	}
 
@@ -143,12 +145,12 @@ func traverseDirection(graph *DependencyGraph, startNode string, upstream bool, 
 }
 
 // extractRelevantMetadata extracts relevant metadata for the response.
-func extractRelevantMetadata(metadata map[string]interface{}) map[string]interface{} {
+func extractRelevantMetadata(metadata map[string]any) map[string]any {
 	if metadata == nil {
 		return nil
 	}
 
-	relevant := make(map[string]interface{})
+	relevant := make(map[string]any)
 
 	// Include stage-related metadata for Dockerfile stages
 	if stageName, ok := metadata["stage_name"].(string); ok {
@@ -188,13 +190,13 @@ func buildDependencyChain(upstream []DependencyInfo, target string, downstream [
 	}
 
 	// Join with arrow
-	result := ""
+	var result strings.Builder
 	for i, node := range chain {
 		if i > 0 {
-			result += " → "
+			result.WriteString(" → ")
 		}
-		result += node
+		result.WriteString(node)
 	}
 
-	return result
+	return result.String()
 }

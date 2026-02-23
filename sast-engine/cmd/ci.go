@@ -83,7 +83,7 @@ Examples:
 		prOpts.Inline, _ = cmd.Flags().GetBool("pr-inline")
 
 		// Track CI started event (no PII, just metadata)
-		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]interface{}{
+		analytics.ReportEventWithProperties(analytics.CIStarted, map[string]any{
 			"output_format":     outputFormat,
 			"skip_tests":        skipTests,
 			"has_local_rules":   rulesPath != "",
@@ -117,7 +117,7 @@ Examples:
 		}
 
 		if rulesPath == "" && len(rulesetSpecs) == 0 {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
@@ -125,7 +125,7 @@ Examples:
 		}
 
 		if projectPath == "" {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
@@ -133,7 +133,7 @@ Examples:
 		}
 
 		if outputFormat != "sarif" && outputFormat != "json" && outputFormat != "csv" {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
@@ -159,7 +159,7 @@ Examples:
 		// Handle remote ruleset downloads and merge with local rules.
 		finalRulesPath, tempDir, err := prepareRules(rulesPath, rulesetSpecs, refreshRules, logger)
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "rule_preparation",
 				"phase":      "initialization",
 			})
@@ -259,7 +259,7 @@ Examples:
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		logger.FinishProgress()
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "callgraph_build",
 				"phase":      "graph_building",
 			})
@@ -296,7 +296,7 @@ Examples:
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
 				"error_type": "rule_loading",
 				"phase":      "rule_loading",
 			})
@@ -460,19 +460,19 @@ Examples:
 			severityBreakdown[det.Rule.Severity]++
 		}
 
-		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]interface{}{
-			"duration_ms":         time.Since(startTime).Milliseconds(),
-			"rules_count":         totalRules,
-			"findings_count":      len(allEnriched),
-			"diff_aware":          diffEnabled,
-			"diff_changed_files":  len(changedFiles),
-			"severity_critical": severityBreakdown["critical"],
-			"severity_high":     severityBreakdown["high"],
-			"severity_medium":   severityBreakdown["medium"],
-			"severity_low":      severityBreakdown["low"],
-			"output_format":     outputFormat,
-			"exit_code":         int(exitCode),
-			"had_errors":        hadErrors,
+		analytics.ReportEventWithProperties(analytics.CICompleted, map[string]any{
+			"duration_ms":        time.Since(startTime).Milliseconds(),
+			"rules_count":        totalRules,
+			"findings_count":     len(allEnriched),
+			"diff_aware":         diffEnabled,
+			"diff_changed_files": len(changedFiles),
+			"severity_critical":  severityBreakdown["critical"],
+			"severity_high":      severityBreakdown["high"],
+			"severity_medium":    severityBreakdown["medium"],
+			"severity_low":       severityBreakdown["low"],
+			"output_format":      outputFormat,
+			"exit_code":          int(exitCode),
+			"had_errors":         hadErrors,
 		})
 
 		if exitCode != output.ExitCodeSuccess {
@@ -482,8 +482,6 @@ Examples:
 		return nil
 	},
 }
-
-
 
 // Variable to allow mocking os.Exit in tests.
 var osExit = os.Exit

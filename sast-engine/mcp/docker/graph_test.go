@@ -11,9 +11,9 @@ func TestDependencyGraph_AddNode(t *testing.T) {
 	g := NewDependencyGraph()
 
 	node := &DependencyNode{
-		Name: "web",
-		Type: "compose_service",
-		File: "docker-compose.yml",
+		Name:       "web",
+		Type:       "compose_service",
+		File:       "docker-compose.yml",
 		LineNumber: 5,
 	}
 
@@ -75,8 +75,8 @@ func TestBuildComposeGraph(t *testing.T) {
 		Name:       "web",
 		File:       "docker-compose.yml",
 		LineNumber: 5,
-		Metadata: map[string]interface{}{
-			"depends_on": []interface{}{"api", "redis"},
+		Metadata: map[string]any{
+			"depends_on": []any{"api", "redis"},
 		},
 	}
 	codeGraph.Nodes["web-id"] = webNode
@@ -87,8 +87,8 @@ func TestBuildComposeGraph(t *testing.T) {
 		Name:       "api",
 		File:       "docker-compose.yml",
 		LineNumber: 12,
-		Metadata: map[string]interface{}{
-			"depends_on": []interface{}{"db"},
+		Metadata: map[string]any{
+			"depends_on": []any{"db"},
 		},
 	}
 	codeGraph.Nodes["api-id"] = apiNode
@@ -99,7 +99,7 @@ func TestBuildComposeGraph(t *testing.T) {
 		Name:       "db",
 		File:       "docker-compose.yml",
 		LineNumber: 20,
-		Metadata:   map[string]interface{}{},
+		Metadata:   map[string]any{},
 	}
 	codeGraph.Nodes["db-id"] = dbNode
 
@@ -130,7 +130,7 @@ func TestBuildDockerfileGraph(t *testing.T) {
 		Name:       "FROM",
 		File:       "Dockerfile",
 		LineNumber: 1,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"stage_index": 0,
 			"stage_name":  "builder",
 		},
@@ -144,7 +144,7 @@ func TestBuildDockerfileGraph(t *testing.T) {
 		Name:       "FROM",
 		File:       "Dockerfile",
 		LineNumber: 10,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"stage_index": 1,
 		},
 	}
@@ -157,7 +157,7 @@ func TestBuildDockerfileGraph(t *testing.T) {
 		Name:       "COPY",
 		File:       "Dockerfile",
 		LineNumber: 11,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"copy_from":   "builder",
 			"stage_index": 1,
 		},
@@ -186,8 +186,8 @@ func TestGetStageName(t *testing.T) {
 		{
 			name: "Named stage",
 			node: &graph.Node{
-				Metadata: map[string]interface{}{
-					"stage_name": "builder",
+				Metadata: map[string]any{
+					"stage_name":  "builder",
 					"stage_index": 0,
 				},
 			},
@@ -196,7 +196,7 @@ func TestGetStageName(t *testing.T) {
 		{
 			name: "Unnamed stage",
 			node: &graph.Node{
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"stage_index": 2,
 				},
 			},

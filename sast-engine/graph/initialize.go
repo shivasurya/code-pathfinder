@@ -142,7 +142,7 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 
 	// Start workers
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go worker()
 	}
 

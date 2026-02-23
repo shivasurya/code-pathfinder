@@ -153,8 +153,8 @@ func convertENV(node *sitter.Node, source []byte, dn *DockerfileNode) {
 	raw = strings.TrimSpace(raw)
 
 	// Split on whitespace to handle multiple env vars.
-	parts := strings.Fields(raw)
-	for _, part := range parts {
+	parts := strings.FieldsSeq(raw)
+	for part := range parts {
 		if strings.Contains(part, "=") {
 			kv := strings.SplitN(part, "=", 2)
 			key := strings.Trim(kv[0], "\"")
@@ -344,8 +344,8 @@ func extractParams(node *sitter.Node, source []byte) map[string]string {
 			text := getNodeText(child, source)
 			// Parse --name=value.
 			text = strings.TrimPrefix(text, "--")
-			if idx := strings.Index(text, "="); idx != -1 {
-				params[text[:idx]] = text[idx+1:]
+			if before, after, ok := strings.Cut(text, "="); ok {
+				params[before] = after
 			}
 		}
 	}

@@ -2,12 +2,13 @@ package resolution
 
 import (
 	"context"
+	"maps"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/python"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/python"
 )
 
 // ReturnStatement represents a return statement in a function.
@@ -449,9 +450,7 @@ func (te *TypeInferenceEngine) AddReturnTypesToEngine(returnTypes map[string]*co
 	te.typeMutex.Lock()
 	defer te.typeMutex.Unlock()
 
-	for funcFQN, typeInfo := range returnTypes {
-		te.ReturnTypes[funcFQN] = typeInfo
-	}
+	maps.Copy(te.ReturnTypes, returnTypes)
 }
 
 // isPascalCase checks if a string is in PascalCase (likely a class name).

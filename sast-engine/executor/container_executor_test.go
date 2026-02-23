@@ -101,7 +101,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_MissingInstruction(t *testing.T
 		Severity: "HIGH",
 		CWE:      "CWE-250",
 		Message:  "No USER instruction",
-		Matcher: map[string]interface{}{
+		Matcher: map[string]any{
 			"type":        "missing_instruction",
 			"instruction": "USER",
 		},
@@ -140,7 +140,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 				ID:       "TEST-002",
 				Name:     "Using latest tag",
 				Severity: "MEDIUM",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":        "instruction",
 					"instruction": "FROM",
 					"image_tag":   "latest",
@@ -163,7 +163,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			rule: CompiledRule{
 				ID:   "TEST-003",
 				Name: "Running as root",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":        "instruction",
 					"instruction": "USER",
 					"user_name":   "root",
@@ -185,7 +185,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			rule: CompiledRule{
 				ID:   "TEST-004",
 				Name: "Secret in ARG",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":           "instruction",
 					"instruction":    "ARG",
 					"arg_name_regex": "(?i).*password.*",
@@ -206,7 +206,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			name: "contains substring",
 			rule: CompiledRule{
 				ID: "TEST-005",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":        "instruction",
 					"instruction": "RUN",
 					"contains":    "apt-get install",
@@ -227,7 +227,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			name: "not contains",
 			rule: CompiledRule{
 				ID: "TEST-006",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":         "instruction",
 					"instruction":  "RUN",
 					"contains":     "apt-get install",
@@ -249,7 +249,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			name: "port less than 1024",
 			rule: CompiledRule{
 				ID: "TEST-007",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":           "instruction",
 					"instruction":    "EXPOSE",
 					"port_less_than": float64(1024),
@@ -270,7 +270,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			name: "missing digest",
 			rule: CompiledRule{
 				ID: "TEST-008",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":           "instruction",
 					"instruction":    "FROM",
 					"missing_digest": true,
@@ -293,7 +293,7 @@ func TestContainerRuleExecutor_ExecuteDockerfile_Instruction(t *testing.T) {
 			name: "base image match",
 			rule: CompiledRule{
 				ID: "TEST-009",
-				Matcher: map[string]interface{}{
+				Matcher: map[string]any{
 					"type":        "instruction",
 					"instruction": "FROM",
 					"base_image":  "ubuntu",
@@ -338,15 +338,15 @@ func TestContainerRuleExecutor_Combinators(t *testing.T) {
 				{
 					ID:   "TEST-ALL-01",
 					Name: "All conditions",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "all_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "FROM",
 								"image_tag":   "latest",
 							},
-							map[string]interface{}{
+							map[string]any{
 								"type":        "missing_instruction",
 								"instruction": "USER",
 							},
@@ -372,15 +372,15 @@ func TestContainerRuleExecutor_Combinators(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ANY-01",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "any_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "FROM",
 								"image_tag":   "latest",
 							},
-							map[string]interface{}{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "FROM",
 								"base_image":  "scratch",
@@ -408,10 +408,10 @@ func TestContainerRuleExecutor_Combinators(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-NONE-01",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "none_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "HEALTHCHECK",
 							},
@@ -441,7 +441,7 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 					ID:       "COMPOSE-001",
 					Name:     "Privileged service",
 					Severity: "CRITICAL",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":   "service_has",
 						"key":    "privileged",
 						"equals": true,
@@ -478,7 +478,7 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-002",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":     "service_has",
 						"key":      "security_opt",
 						"contains": "seccomp:unconfined",
@@ -495,7 +495,7 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 					Children: map[string]*graph.YAMLNode{
 						"security_opt": {
 							Type:     "sequence",
-							Value:    []interface{}{"seccomp:unconfined"},
+							Value:    []any{"seccomp:unconfined"},
 							Children: nil,
 						},
 					},
@@ -513,10 +513,10 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-003",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_has",
 						"key":  "volumes",
-						"contains_any": []interface{}{
+						"contains_any": []any{
 							"/var/run/docker.sock",
 							"/run/docker.sock",
 						},
@@ -533,7 +533,7 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 					Children: map[string]*graph.YAMLNode{
 						"volumes": {
 							Type:     "sequence",
-							Value:    []interface{}{"/var/run/docker.sock:/var/run/docker.sock"},
+							Value:    []any{"/var/run/docker.sock:/var/run/docker.sock"},
 							Children: nil,
 						},
 					},
@@ -551,7 +551,7 @@ func TestContainerRuleExecutor_ExecuteCompose(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-004",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_missing",
 						"key":  "read_only",
 					},
@@ -582,7 +582,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-001",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "missing_instruction",
 						"instruction": "USER",
 					},
@@ -600,7 +600,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-001",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":   "service_has",
 						"key":    "privileged",
 						"equals": true,
@@ -623,7 +623,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-INVALID",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "unknown_type",
 					},
 				},
@@ -640,7 +640,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID:      "TEST-NO-TYPE",
-					Matcher: map[string]interface{}{},
+					Matcher: map[string]any{},
 				},
 			},
 		}
@@ -655,7 +655,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-WRONG-TYPE",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "missing_instruction",
 						"instruction": 123, // Wrong type - should be string
 					},
@@ -673,7 +673,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-WRONG-INST",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "instruction",
 						"instruction": 456, // Wrong type
 					},
@@ -691,7 +691,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-NO-MATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "instruction",
 						"instruction": "HEALTHCHECK",
 					},
@@ -716,7 +716,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-INVALID-REGEX",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":           "instruction",
 						"instruction":    "ARG",
 						"arg_name_regex": "[invalid(regex",
@@ -741,7 +741,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-TAG-MISMATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "instruction",
 						"instruction": "FROM",
 						"image_tag":   "latest",
@@ -766,7 +766,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-USER-MISMATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "instruction",
 						"instruction": "USER",
 						"user_name":   "root",
@@ -791,7 +791,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-PORT-NO-MATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":           "instruction",
 						"instruction":    "EXPOSE",
 						"port_less_than": float64(1024),
@@ -816,7 +816,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-DIGEST-PRESENT",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":           "instruction",
 						"instruction":    "FROM",
 						"missing_digest": false, // Requires digest
@@ -841,7 +841,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-DIGEST-MISSING",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":           "instruction",
 						"instruction":    "FROM",
 						"missing_digest": false,
@@ -866,7 +866,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-BASE-MISMATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":        "instruction",
 						"instruction": "FROM",
 						"base_image":  "alpine",
@@ -891,7 +891,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-WRONG-KEY",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_has",
 						"key":  123, // Wrong type
 					},
@@ -915,7 +915,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-MISSING-WRONG",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_missing",
 						"key":  456,
 					},
@@ -939,7 +939,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-INVALID",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "unknown_compose_type",
 					},
 				},
@@ -962,7 +962,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-NO-MATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":   "service_has",
 						"key":    "privileged",
 						"equals": true,
@@ -992,10 +992,10 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-CONTAINS-NO-MATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_has",
 						"key":  "volumes",
-						"contains_any": []interface{}{
+						"contains_any": []any{
 							"/var/run/docker.sock",
 						},
 					},
@@ -1010,7 +1010,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 					Children: map[string]*graph.YAMLNode{
 						"volumes": {
 							Type:  "sequence",
-							Value: []interface{}{"/data:/data"}, // Different volume
+							Value: []any{"/data:/data"}, // Different volume
 						},
 					},
 				},
@@ -1027,10 +1027,10 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-NON-STRING",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_has",
 						"key":  "volumes",
-						"contains_any": []interface{}{
+						"contains_any": []any{
 							123, // Non-string value
 						},
 					},
@@ -1043,7 +1043,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 				"web": {
 					Type: "mapping",
 					Children: map[string]*graph.YAMLNode{
-						"volumes": {Type: "sequence", Value: []interface{}{"volume1"}},
+						"volumes": {Type: "sequence", Value: []any{"volume1"}},
 					},
 				},
 			},
@@ -1059,7 +1059,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-HAS-KEY",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "service_missing",
 						"key":  "read_only",
 					},
@@ -1088,9 +1088,9 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ALLOF-MALFORMED",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "all_of",
-						"conditions": []interface{}{
+						"conditions": []any{
 							"not_a_map", // Invalid condition type
 						},
 					},
@@ -1108,15 +1108,15 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ALLOF-FAIL",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "all_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "FROM",
 								"image_tag":   "latest",
 							},
-							map[string]interface{}{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "HEALTHCHECK", // This won't exist
 							},
@@ -1142,7 +1142,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ALLOF-WRONG-TYPE",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":       "all_of",
 						"conditions": "not_an_array",
 					},
@@ -1160,14 +1160,14 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ANYOF-ALL-FAIL",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "any_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "HEALTHCHECK",
 							},
-							map[string]interface{}{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "STOPSIGNAL",
 							},
@@ -1192,9 +1192,9 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ANYOF-MALFORMED",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "any_of",
-						"conditions": []interface{}{
+						"conditions": []any{
 							123, // Invalid type
 						},
 					},
@@ -1212,7 +1212,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-ANYOF-WRONG-TYPE",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":       "any_of",
 						"conditions": 789,
 					},
@@ -1230,10 +1230,10 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-NONEOF-NO-MATCH",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "none_of",
-						"conditions": []interface{}{
-							map[string]interface{}{
+						"conditions": []any{
+							map[string]any{
 								"type":        "instruction",
 								"instruction": "HEALTHCHECK",
 							},
@@ -1259,9 +1259,9 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-NONEOF-MALFORMED",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type": "none_of",
-						"conditions": []interface{}{
+						"conditions": []any{
 							false, // Invalid type
 						},
 					},
@@ -1279,9 +1279,9 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			dockerfileRules: []CompiledRule{
 				{
 					ID: "TEST-NONEOF-WRONG-TYPE",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":       "none_of",
-						"conditions": map[string]interface{}{},
+						"conditions": map[string]any{},
 					},
 				},
 			},
@@ -1297,7 +1297,7 @@ func TestContainerRuleExecutor_EdgeCases(t *testing.T) {
 			composeRules: []CompiledRule{
 				{
 					ID: "COMPOSE-MULTI",
-					Matcher: map[string]interface{}{
+					Matcher: map[string]any{
 						"type":   "service_has",
 						"key":    "privileged",
 						"equals": true,
@@ -1362,15 +1362,15 @@ func TestContainerRuleExecutor_MultiplePortViolations(t *testing.T) {
 		Severity: "HIGH",
 		CWE:      "CWE-20",
 		Message:  "Invalid port number",
-		Matcher: map[string]interface{}{
+		Matcher: map[string]any{
 			"type": "any_of",
-			"conditions": []interface{}{
-				map[string]interface{}{
+			"conditions": []any{
+				map[string]any{
 					"type":           "instruction",
 					"instruction":    "EXPOSE",
 					"port_less_than": float64(1),
 				},
-				map[string]interface{}{
+				map[string]any{
 					"type":              "instruction",
 					"instruction":       "EXPOSE",
 					"port_greater_than": float64(65535),
@@ -1410,7 +1410,7 @@ func TestContainerRuleExecutor_PortGreaterThan(t *testing.T) {
 	rule := CompiledRule{
 		ID:   "TEST-PORT-GT",
 		Name: "Port too high",
-		Matcher: map[string]interface{}{
+		Matcher: map[string]any{
 			"type":              "instruction",
 			"instruction":       "EXPOSE",
 			"port_greater_than": float64(65535),

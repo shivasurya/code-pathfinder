@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestParsePythonFunctionDefinition(t *testing.T) {
 
 			graph := NewCodeGraph()
 			root := tree.RootNode()
-			
+
 			// Find function_definition node
 			var funcNode *sitter.Node
 			for i := 0; i < int(root.NamedChildCount()); i++ {
@@ -121,7 +122,7 @@ func TestParsePythonClassDefinition(t *testing.T) {
 
 			graph := NewCodeGraph()
 			root := tree.RootNode()
-			
+
 			var classNode *sitter.Node
 			for i := 0; i < int(root.NamedChildCount()); i++ {
 				child := root.NamedChild(i)
@@ -165,7 +166,7 @@ func TestParsePythonClassDefinition(t *testing.T) {
 
 func TestParsePythonAssignment(t *testing.T) {
 	code := "x = 42"
-	
+
 	parser := sitter.NewParser()
 	parser.SetLanguage(python.GetLanguage())
 	defer parser.Close()
@@ -178,7 +179,7 @@ func TestParsePythonAssignment(t *testing.T) {
 
 	graph := NewCodeGraph()
 	root := tree.RootNode()
-	
+
 	var assignNode *sitter.Node
 	for i := 0; i < int(root.NamedChildCount()); i++ {
 		child := root.NamedChild(i)
@@ -234,23 +235,23 @@ func TestExtractDecorators(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "Single decorator",
-			code: "@property\ndef get_value(self):\n    return self.value",
+			name:     "Single decorator",
+			code:     "@property\ndef get_value(self):\n    return self.value",
 			expected: []string{"property"},
 		},
 		{
-			name: "Multiple decorators",
-			code: "@classmethod\n@cache\ndef compute(cls):\n    pass",
+			name:     "Multiple decorators",
+			code:     "@classmethod\n@cache\ndef compute(cls):\n    pass",
 			expected: []string{"classmethod", "cache"},
 		},
 		{
-			name: "Decorator with arguments",
-			code: "@app.route('/api/users')\ndef get_users():\n    pass",
+			name:     "Decorator with arguments",
+			code:     "@app.route('/api/users')\ndef get_users():\n    pass",
 			expected: []string{"app.route"},
 		},
 		{
-			name: "No decorators",
-			code: "def simple():\n    pass",
+			name:     "No decorators",
+			code:     "def simple():\n    pass",
 			expected: []string{},
 		},
 	}
@@ -1111,7 +1112,6 @@ func TestParsePythonClassDefinition_ReturnsNode(t *testing.T) {
 	}
 }
 
-
 // TestMultipleConstructorsInSameFile verifies that multiple __init__ methods
 // in the same file are all indexed (regression test for constructor bug where
 // only one constructor per file was being captured).
@@ -1581,13 +1581,7 @@ class WebhookAction:
 	// Verify specific constants.
 	expectedConstants := []string{"PROJECT_CREATED", "PROJECT_UPDATED", "TASK_CREATED"}
 	for _, expected := range expectedConstants {
-		found := false
-		for _, name := range constantNames {
-			if name == expected {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(constantNames, expected)
 		if !found {
 			t.Errorf("Expected class-level constant %s not found", expected)
 		}
@@ -1637,13 +1631,7 @@ class Column(Enum):
 	// Verify specific constants.
 	expectedConstants := []string{"OR", "AND", "ID", "INNER_ID", "DATA"}
 	for _, expected := range expectedConstants {
-		found := false
-		for _, name := range constantsByClass["all"] {
-			if name == expected {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(constantsByClass["all"], expected)
 		if !found {
 			t.Errorf("Expected enum constant %s not found", expected)
 		}
@@ -1834,12 +1822,7 @@ class Settings:
 
 // Helper function to check if a slice contains a string.
 func containsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, item)
 }
 
 // TestSubscriptAssignmentNotIndexed tests that subscript assignments are not indexed as module variables.
@@ -2212,12 +2195,12 @@ def another_decorator_factory(action):
 		"another_decorator_factory": 1,
 
 		// Nested functions with parent qualification
-		"outer_function.inner_function":                         1,
-		"outer_function.inner_function.deeply_nested":           1,
-		"decorator_factory.decorator":                           1,
-		"decorator_factory.decorator.wrapper":                   1,
-		"another_decorator_factory.decorator":                   1,
-		"another_decorator_factory.decorator.wrapper":           1,
+		"outer_function.inner_function":               1,
+		"outer_function.inner_function.deeply_nested": 1,
+		"decorator_factory.decorator":                 1,
+		"decorator_factory.decorator.wrapper":         1,
+		"another_decorator_factory.decorator":         1,
+		"another_decorator_factory.decorator.wrapper": 1,
 	}
 
 	// Count functions by name
@@ -2596,13 +2579,13 @@ class Calculator:
 		returnType string
 		argTypes   []string
 	}{
-		"add_numbers":  {returnType: "int", argTypes: []string{"a: int", "b: int"}},
-		"safe_divide":  {returnType: "float | None", argTypes: []string{"a: float", "b: float"}},
+		"add_numbers":   {returnType: "int", argTypes: []string{"a: int", "b: int"}},
+		"safe_divide":   {returnType: "float | None", argTypes: []string{"a: float", "b: float"}},
 		"no_annotation": {returnType: "", argTypes: nil},
-		"__init__":     {returnType: "None", argTypes: []string{"name: str"}},
-		"add":          {returnType: "int", argTypes: []string{"a: int", "b: int"}},
-		"display_name": {returnType: "str", argTypes: nil},
-		"__str__":      {returnType: "str", argTypes: nil},
+		"__init__":      {returnType: "None", argTypes: []string{"name: str"}},
+		"add":           {returnType: "int", argTypes: []string{"a: int", "b: int"}},
+		"display_name":  {returnType: "str", argTypes: nil},
+		"__str__":       {returnType: "str", argTypes: nil},
 	}
 
 	for expectedName, expected := range expectations {

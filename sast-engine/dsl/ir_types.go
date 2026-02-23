@@ -22,7 +22,7 @@ type ArgumentConstraint struct {
 	// Value is the expected argument value(s).
 	// Can be a single value or a list of acceptable values (OR logic).
 	// Examples: "0.0.0.0", "true", "777", ["Loader", "UnsafeLoader"]
-	Value interface{} `json:"value"`
+	Value any `json:"value"`
 
 	// Wildcard enables pattern matching with * and ? in Value.
 	// Example: "0o7*" matches "0o777", "0o755", etc.
@@ -67,12 +67,12 @@ func (v *VariableMatcherIR) GetType() IRType {
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
 type DataflowIR struct {
-	Type        string           `json:"type"`        // "dataflow"
-	Sources     []CallMatcherIR  `json:"sources"`     // Where taint originates
-	Sinks       []CallMatcherIR  `json:"sinks"`       // Dangerous functions
-	Sanitizers  []CallMatcherIR  `json:"sanitizers"`  // Taint-removing functions
-	Propagation []PropagationIR  `json:"propagation"` // How taint flows (for future use)
-	Scope       string           `json:"scope"`       // "local" or "global"
+	Type        string          `json:"type"`        // "dataflow"
+	Sources     []CallMatcherIR `json:"sources"`     // Where taint originates
+	Sinks       []CallMatcherIR `json:"sinks"`       // Dangerous functions
+	Sanitizers  []CallMatcherIR `json:"sanitizers"`  // Taint-removing functions
+	Propagation []PropagationIR `json:"propagation"` // How taint flows (for future use)
+	Scope       string          `json:"scope"`       // "local" or "global"
 }
 
 // GetType returns the IR type.
@@ -82,8 +82,8 @@ func (d *DataflowIR) GetType() IRType {
 
 // PropagationIR represents propagation primitives (currently informational only).
 type PropagationIR struct {
-	Type     string                 `json:"type"`     // "assignment", "function_args", etc.
-	Metadata map[string]interface{} `json:"metadata"` // Future use
+	Type     string         `json:"type"`     // "assignment", "function_args", etc.
+	Metadata map[string]any `json:"metadata"` // Future use
 }
 
 // DataflowDetection represents a detected taint flow.
@@ -108,5 +108,5 @@ type RuleIR struct {
 		OWASP       string `json:"owasp"`
 		Description string `json:"description"`
 	} `json:"rule"`
-	Matcher interface{} `json:"matcher"` // Will be one of *MatcherIR types
+	Matcher any `json:"matcher"` // Will be one of *MatcherIR types
 }

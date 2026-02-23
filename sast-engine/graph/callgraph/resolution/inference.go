@@ -12,22 +12,22 @@ import (
 // It maintains function scopes, return types, and references to other registries.
 // Thread-safe for concurrent access via mutex protection.
 type TypeInferenceEngine struct {
-	Scopes         map[string]*FunctionScope    // Function FQN -> scope
-	ReturnTypes    map[string]*core.TypeInfo    // Function FQN -> return type
-	Builtins       *registry.BuiltinRegistry    // Builtin types registry
-	Registry       *core.ModuleRegistry         // Module registry reference
-	Attributes     *registry.AttributeRegistry  // Class attributes registry (Phase 3 Task 12)
-	StdlibRegistry *core.StdlibRegistry         // Python stdlib registry (PR #2)
-	StdlibRemote   interface{}                  // Remote loader for lazy module loading (PR #3)
-	ImportMaps     map[string]*core.ImportMap   // File path -> ImportMap (P0 fix: for attribute placeholder resolution)
-	scopeMutex     sync.RWMutex                 // Protects Scopes map for concurrent access
-	typeMutex      sync.RWMutex                 // Protects ReturnTypes map for concurrent access
-	importMutex    sync.RWMutex                 // Protects ImportMaps for concurrent access
+	Scopes         map[string]*FunctionScope   // Function FQN -> scope
+	ReturnTypes    map[string]*core.TypeInfo   // Function FQN -> return type
+	Builtins       *registry.BuiltinRegistry   // Builtin types registry
+	Registry       *core.ModuleRegistry        // Module registry reference
+	Attributes     *registry.AttributeRegistry // Class attributes registry (Phase 3 Task 12)
+	StdlibRegistry *core.StdlibRegistry        // Python stdlib registry (PR #2)
+	StdlibRemote   any                         // Remote loader for lazy module loading (PR #3)
+	ImportMaps     map[string]*core.ImportMap  // File path -> ImportMap (P0 fix: for attribute placeholder resolution)
+	scopeMutex     sync.RWMutex                // Protects Scopes map for concurrent access
+	typeMutex      sync.RWMutex                // Protects ReturnTypes map for concurrent access
+	importMutex    sync.RWMutex                // Protects ImportMaps for concurrent access
 }
 
 // StdlibRegistryRemote will be defined in registry package.
 // For now, use an interface or accept nil.
-type StdlibRegistryRemote interface{}
+type StdlibRegistryRemote any
 
 // NewTypeInferenceEngine creates a new type inference engine.
 // The engine is initialized with empty scopes and return types.
@@ -190,8 +190,9 @@ func (te *TypeInferenceEngine) GetModuleVariableType(modulePath string, varName 
 // It iterates through all scopes and replaces placeholder types with actual return types.
 //
 // This enables inter-procedural type propagation:
-//   user = create_user()  # Initially typed as "call:create_user"
-//   # After update, typed as "test.User" based on create_user's return type
+//
+//	user = create_user()  # Initially typed as "call:create_user"
+//	# After update, typed as "test.User" based on create_user's return type
 func (te *TypeInferenceEngine) UpdateVariableBindingsWithFunctionReturns() {
 	for _, scope := range te.Scopes {
 		for varName, bindings := range scope.Variables {

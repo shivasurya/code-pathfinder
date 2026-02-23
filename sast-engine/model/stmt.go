@@ -15,7 +15,7 @@ type IStmt interface {
 	GetEnclosingStmt() *Stmt
 	GetHalsteadID() int
 	GetIndex() int
-	GetMetrics() interface{}
+	GetMetrics() any
 	GetParent() *Stmt
 	IsNthChildOf(parent *Stmt, n int) bool
 	Pp() string

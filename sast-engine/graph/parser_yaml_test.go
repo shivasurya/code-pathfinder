@@ -94,7 +94,7 @@ func TestConvertToYAMLNode_BoolScalar(t *testing.T) {
 }
 
 func TestConvertToYAMLNode_MapStringInterface(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"key1": "value1",
 		"key2": 42,
 	}
@@ -107,7 +107,7 @@ func TestConvertToYAMLNode_MapStringInterface(t *testing.T) {
 }
 
 func TestConvertToYAMLNode_MapInterfaceInterface(t *testing.T) {
-	data := map[interface{}]interface{}{
+	data := map[any]any{
 		"key1": "value1",
 		"key2": 42,
 		123:    "numeric key",
@@ -122,18 +122,18 @@ func TestConvertToYAMLNode_MapInterfaceInterface(t *testing.T) {
 }
 
 func TestConvertToYAMLNode_Sequence(t *testing.T) {
-	data := []interface{}{"item1", "item2", 42}
+	data := []any{"item1", "item2", 42}
 	node := convertToYAMLNode(data)
 	assert.Equal(t, "sequence", node.Type)
 	assert.Equal(t, data, node.Value)
 }
 
 func TestConvertToYAMLNode_NestedStructure(t *testing.T) {
-	data := map[string]interface{}{
-		"services": map[string]interface{}{
-			"web": map[string]interface{}{
+	data := map[string]any{
+		"services": map[string]any{
+			"web": map[string]any{
 				"image": "nginx",
-				"ports": []interface{}{"80:80", "443:443"},
+				"ports": []any{"80:80", "443:443"},
 			},
 		},
 	}
@@ -235,7 +235,7 @@ func TestYAMLNode_GetChild_Nil(t *testing.T) {
 }
 
 func TestYAMLNode_ListValues(t *testing.T) {
-	data := []interface{}{"item1", "item2", 42}
+	data := []any{"item1", "item2", 42}
 	node := &YAMLNode{
 		Type:  "sequence",
 		Value: data,

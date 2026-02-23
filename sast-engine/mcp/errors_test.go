@@ -84,7 +84,7 @@ func TestSymbolNotFoundError(t *testing.T) {
 	assert.Equal(t, ErrCodeSymbolNotFound, err.Code)
 	assert.Contains(t, err.Message, "MyClass")
 
-	data := err.Data.(map[string]interface{})
+	data := err.Data.(map[string]any)
 	assert.Equal(t, "MyClass", data["symbol"])
 	assert.Contains(t, data["suggestions"], "MyClass2")
 }
@@ -92,7 +92,7 @@ func TestSymbolNotFoundError(t *testing.T) {
 func TestSymbolNotFoundError_NoSuggestions(t *testing.T) {
 	err := SymbolNotFoundError("xyz", nil)
 
-	data := err.Data.(map[string]interface{})
+	data := err.Data.(map[string]any)
 	_, hasSuggestions := data["suggestions"]
 	assert.False(t, hasSuggestions)
 }
@@ -104,7 +104,7 @@ func TestIndexNotReadyError(t *testing.T) {
 	assert.Contains(t, err.Message, "parsing")
 	assert.Contains(t, err.Message, "50%")
 
-	data := err.Data.(map[string]interface{})
+	data := err.Data.(map[string]any)
 	assert.Equal(t, "parsing", data["phase"])
 	assert.Equal(t, 0.5, data["progress"])
 }
@@ -158,7 +158,7 @@ func TestNewToolError_NoDetails(t *testing.T) {
 }
 
 func TestValidateRequiredParams(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"name": "test",
 	}
 
@@ -174,7 +174,7 @@ func TestValidateRequiredParams(t *testing.T) {
 }
 
 func TestValidateRequiredParams_AllPresent(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"name":  "test",
 		"value": 123,
 	}
@@ -184,7 +184,7 @@ func TestValidateRequiredParams_AllPresent(t *testing.T) {
 }
 
 func TestValidateRequiredParams_Empty(t *testing.T) {
-	args := map[string]interface{}{}
+	args := map[string]any{}
 
 	err := ValidateRequiredParams(args, []string{"name"})
 	assert.NotNil(t, err)
@@ -192,7 +192,7 @@ func TestValidateRequiredParams_Empty(t *testing.T) {
 }
 
 func TestValidateStringParam(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"name":   "test",
 		"number": 123,
 		"empty":  "",
@@ -220,7 +220,7 @@ func TestValidateStringParam(t *testing.T) {
 }
 
 func TestValidateIntParam(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"count": float64(10),
 		"limit": 100,
 		"name":  "test",

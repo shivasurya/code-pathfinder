@@ -2,8 +2,10 @@
 package strategies
 
 import (
-	sitter "github.com/smacker/go-tree-sitter"
+	"slices"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // ChainStep represents a single step in a method/attribute chain.
@@ -291,11 +293,9 @@ func (s *ChainStrategy) resolveMethodStep(classFQN, methodName string, currentTy
 	if ctx.AttrRegistry != nil {
 		classAttrs := ctx.AttrRegistry.GetClassAttributes(classFQN)
 		if classAttrs != nil {
-			for _, methodFQN := range classAttrs.Methods {
-				if methodFQN == classFQN+"."+methodName {
-					// Method found - use fluent heuristic (returns self)
-					return currentType, core.ConfidenceScore(core.ConfidenceFluentHeuristic)
-				}
+			if slices.Contains(classAttrs.Methods, classFQN+"."+methodName) {
+				// Method found - use fluent heuristic (returns self)
+				return currentType, core.ConfidenceScore(core.ConfidenceFluentHeuristic)
 			}
 		}
 	}

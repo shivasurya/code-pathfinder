@@ -5,19 +5,20 @@ import (
 	"fmt"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/python"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution/strategies"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/python"
 )
 
 // ExtractClassAttributes extracts all class attributes from a Python file
 // This is Pass 1 & 2 of the attribute extraction algorithm:
-//   Pass 1: Extract class metadata (FQN, methods, file path)
-//   Pass 2: Extract attribute assignments (self.attr = value)
+//
+//	Pass 1: Extract class metadata (FQN, methods, file path)
+//	Pass 2: Extract attribute assignments (self.attr = value)
 //
 // Algorithm:
 //  1. Parse file with tree-sitter
@@ -757,8 +758,8 @@ func stripTypeHintWrappers(typeName string) string {
 	// Handle Union[ClassName, None] or Union[None, ClassName] → extract ClassName
 	if strings.HasPrefix(typeName, "Union[") && strings.HasSuffix(typeName, "]") {
 		inner := typeName[len("Union[") : len(typeName)-1]
-		parts := strings.Split(inner, ",")
-		for _, part := range parts {
+		parts := strings.SplitSeq(inner, ",")
+		for part := range parts {
 			part = strings.TrimSpace(part)
 			if part != "None" && part != "" {
 				return part
@@ -768,8 +769,8 @@ func stripTypeHintWrappers(typeName string) string {
 
 	// Handle ClassName | None or None | ClassName → extract ClassName
 	if strings.Contains(typeName, "|") {
-		parts := strings.Split(typeName, "|")
-		for _, part := range parts {
+		parts := strings.SplitSeq(typeName, "|")
+		for part := range parts {
 			part = strings.TrimSpace(part)
 			if part != "None" && part != "" {
 				return part

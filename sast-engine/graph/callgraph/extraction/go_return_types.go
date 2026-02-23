@@ -37,8 +37,9 @@ type FunctionJob struct {
 //  4. Report progress every 500 functions
 //
 // Thread Safety:
-//   This function is thread-safe because typeEngine.AddReturnType() uses mutexes.
-//   Multiple workers can call it concurrently.
+//
+//	This function is thread-safe because typeEngine.AddReturnType() uses mutexes.
+//	Multiple workers can call it concurrently.
 //
 // Parameters:
 //   - callGraph: The call graph with indexed functions (from Pass 1)
@@ -81,10 +82,7 @@ func ExtractGoReturnTypesWithProgress(
 	}
 
 	// Determine worker count (same as Python builder)
-	numWorkers := runtime.NumCPU() * 3 / 4
-	if numWorkers < 1 {
-		numWorkers = 1
-	}
+	numWorkers := max(runtime.NumCPU()*3/4, 1)
 	if numWorkers > 8 {
 		numWorkers = 8 // Cap at 8 for diminishing returns
 	}
@@ -96,9 +94,7 @@ func ExtractGoReturnTypesWithProgress(
 
 	// Start workers
 	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for job := range jobChan {
 				// Parse return type
 				typeInfo, err := ParseGoTypeString(job.ReturnType, registry, job.File)
@@ -113,7 +109,7 @@ func ExtractGoReturnTypesWithProgress(
 					fmt.Fprintf(os.Stderr, "\r    Return types: %d/%d (%.1f%%)", count, totalJobs, percentage)
 				}
 			}
-		}()
+		})
 	}
 
 	// Queue all jobs

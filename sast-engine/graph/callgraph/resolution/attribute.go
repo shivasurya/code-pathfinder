@@ -2,6 +2,7 @@ package resolution
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -20,15 +21,15 @@ type FailureStats struct {
 	CustomClassUnsupported int
 
 	// Pattern samples for analysis
-	DeepChainSamples       []string
+	DeepChainSamples         []string
 	AttributeNotFoundSamples []string
-	CustomClassSamples     []string
+	CustomClassSamples       []string
 }
 
 var attributeFailureStats = &FailureStats{
-	DeepChainSamples:       make([]string, 0, 20),
+	DeepChainSamples:         make([]string, 0, 20),
 	AttributeNotFoundSamples: make([]string, 0, 20),
-	CustomClassSamples:     make([]string, 0, 20),
+	CustomClassSamples:       make([]string, 0, 20),
 }
 
 // ResolveSelfAttributeCall resolves self.attribute.method() patterns
@@ -42,13 +43,14 @@ var attributeFailureStats = &FailureStats{
 //  5. Resolve method on inferred type
 //
 // Example:
-//  Input: self.value.upper (caller: test_chaining.StringBuilder.process)
-//  Steps:
-//    1. Parse → attr="value", method="upper"
-//    2. Extract class → test_chaining.StringBuilder
-//    3. Lookup value type → builtins.str
-//    4. Resolve upper on str → builtins.str.upper
-//  Output: (builtins.str.upper, true, TypeInfo{builtins.str, 1.0, "self_attribute"})
+//
+//	Input: self.value.upper (caller: test_chaining.StringBuilder.process)
+//	Steps:
+//	  1. Parse → attr="value", method="upper"
+//	  2. Extract class → test_chaining.StringBuilder
+//	  3. Lookup value type → builtins.str
+//	  4. Resolve upper on str → builtins.str.upper
+//	Output: (builtins.str.upper, true, TypeInfo{builtins.str, 1.0, "self_attribute"})
 //
 // Parameters:
 //   - target: call target string (e.g., "self.value.upper")
@@ -272,10 +274,8 @@ func findClassContainingMethod(methodFQN string, registry *registry.AttributeReg
 		// Check if this method is in the class's method list
 		// Methods in the list are fully qualified with class name
 		expectedMethodFQN := classFQN + "." + methodName
-		for _, method := range classAttrs.Methods {
-			if method == expectedMethodFQN {
-				return classFQN
-			}
+		if slices.Contains(classAttrs.Methods, expectedMethodFQN) {
+			return classFQN
 		}
 	}
 
@@ -409,8 +409,9 @@ func classExists(classFQN string, codeGraph *graph.CodeGraph) bool {
 
 // getModuleFromClassFQN extracts the module path from a class FQN
 // Examples:
-//   test_chaining.StringBuilder → test_chaining
-//   myapp.models.User → myapp.models
+//
+//	test_chaining.StringBuilder → test_chaining
+//	myapp.models.User → myapp.models
 func getModuleFromClassFQN(classFQN string) string {
 	parts := strings.Split(classFQN, ".")
 	if len(parts) < 2 {

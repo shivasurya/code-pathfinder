@@ -69,11 +69,11 @@ func TestVariableBinding_Creation(t *testing.T) {
 		location     Location
 	}{
 		{
-			name:       "simple variable",
-			varName:    "user",
-			typeFQN:    "myapp.models.User",
-			confidence: 1.0,
-			source:     "assignment",
+			name:         "simple variable",
+			varName:      "user",
+			typeFQN:      "myapp.models.User",
+			confidence:   1.0,
+			source:       "assignment",
 			assignedFrom: "myapp.controllers.get_user",
 			location: Location{
 				File:   "/path/to/file.py",
@@ -82,11 +82,11 @@ func TestVariableBinding_Creation(t *testing.T) {
 			},
 		},
 		{
-			name:       "builtin variable",
-			varName:    "data",
-			typeFQN:    "builtins.str",
-			confidence: 1.0,
-			source:     "literal",
+			name:         "builtin variable",
+			varName:      "data",
+			typeFQN:      "builtins.str",
+			confidence:   1.0,
+			source:       "literal",
 			assignedFrom: "",
 			location: Location{
 				File:   "/path/to/file.py",
@@ -873,7 +873,7 @@ func TestTypeInferenceEngine_UpdateVariableBindings_UnresolvedReceiverType(t *te
 	scope.Variables["user"] = []*VariableBinding{&VariableBinding{
 		VarName: "user",
 		Type: &core.TypeInfo{
-			TypeFQN:    "call:get_user",  // Still a placeholder!
+			TypeFQN:    "call:get_user", // Still a placeholder!
 			Confidence: 0.5,
 			Source:     "assignment",
 		},
@@ -1175,7 +1175,7 @@ func TestAddImportMap_ThreadSafety(t *testing.T) {
 
 	// Add ImportMaps concurrently
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(idx int) {
 			filePath := "/test/file" + string(rune(idx+'0')) + ".py"
 			importMap := core.NewImportMap(filePath)
@@ -1186,12 +1186,12 @@ func TestAddImportMap_ThreadSafety(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
 	// Verify all ImportMaps were added
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		filePath := "/test/file" + string(rune(i+'0')) + ".py"
 		importMap := engine.GetImportMap(filePath)
 		assert.NotNil(t, importMap, "ImportMap for %s should exist", filePath)
@@ -1206,14 +1206,14 @@ func TestGetModuleVariableType_Reassignment(t *testing.T) {
 	scope := NewFunctionScope("main")
 	// val = "" at line 15
 	scope.Variables["val"] = append(scope.Variables["val"], &VariableBinding{
-		VarName: "val",
-		Type:    &core.TypeInfo{TypeFQN: "builtins.str", Confidence: 1.0, Source: "literal"},
+		VarName:  "val",
+		Type:     &core.TypeInfo{TypeFQN: "builtins.str", Confidence: 1.0, Source: "literal"},
 		Location: Location{File: "/test/main.py", Line: 15, Column: 1},
 	})
 	// val = 5 at line 16
 	scope.Variables["val"] = append(scope.Variables["val"], &VariableBinding{
-		VarName: "val",
-		Type:    &core.TypeInfo{TypeFQN: "builtins.int", Confidence: 1.0, Source: "literal"},
+		VarName:  "val",
+		Type:     &core.TypeInfo{TypeFQN: "builtins.int", Confidence: 1.0, Source: "literal"},
 		Location: Location{File: "/test/main.py", Line: 16, Column: 1},
 	})
 	engine.AddScope(scope)
@@ -1240,8 +1240,8 @@ func TestGetModuleVariableType_VarPlaceholder(t *testing.T) {
 	engine := NewTypeInferenceEngine(modRegistry)
 	scope := NewFunctionScope("mymod")
 	scope.Variables["leaked"] = []*VariableBinding{{
-		VarName: "leaked",
-		Type:    &core.TypeInfo{TypeFQN: "var:result", Confidence: 0.2, Source: "return_variable"},
+		VarName:  "leaked",
+		Type:     &core.TypeInfo{TypeFQN: "var:result", Confidence: 0.2, Source: "return_variable"},
 		Location: Location{File: "/test/mymod.py", Line: 5, Column: 1},
 	}}
 	engine.AddScope(scope)
@@ -1263,8 +1263,8 @@ func TestResolveReturnVariableReferences(t *testing.T) {
 	// Set up scope with result variable having concrete type
 	scope := NewFunctionScope("helpers.Calculator.add")
 	scope.Variables["result"] = []*VariableBinding{{
-		VarName: "result",
-		Type:    &core.TypeInfo{TypeFQN: "builtins.int", Confidence: 1.0, Source: "literal"},
+		VarName:  "result",
+		Type:     &core.TypeInfo{TypeFQN: "builtins.int", Confidence: 1.0, Source: "literal"},
 		Location: Location{File: "/test/helpers.py", Line: 5, Column: 1},
 	}}
 	engine.AddScope(scope)

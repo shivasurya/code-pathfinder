@@ -85,7 +85,7 @@ func ReportEvent(event string) {
 
 // ReportEventWithProperties sends an event with additional properties.
 // Properties should not contain any PII (no file paths, code, user info).
-func ReportEventWithProperties(event string, properties map[string]interface{}) {
+func ReportEventWithProperties(event string, properties map[string]any) {
 	if enableMetrics && PublicKey != "" {
 		// Enable GeoIP resolution by setting DisableGeoIP to false (pointer to bool)
 		disableGeoIP := false

@@ -1,6 +1,8 @@
 package cfg
 
 import (
+	"slices"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -369,10 +371,5 @@ func slicesEqual(a, b []string) bool {
 
 // Helper function to check if a string slice contains a specific string.
 func containsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, item)
 }

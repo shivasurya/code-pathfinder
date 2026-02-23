@@ -1,5 +1,7 @@
 package core
 
+import "slices"
+
 // TaintInfo represents detailed taint tracking information for a single detection.
 type TaintInfo struct {
 	// SourceLine is the line number where taint originated (1-indexed)
@@ -182,10 +184,8 @@ func (ts *TaintSummary) MarkTaintedParam(paramName string) {
 	}
 
 	// Check if already marked
-	for _, p := range ts.TaintedParams {
-		if p == paramName {
-			return
-		}
+	if slices.Contains(ts.TaintedParams, paramName) {
+		return
 	}
 
 	ts.TaintedParams = append(ts.TaintedParams, paramName)
@@ -193,12 +193,7 @@ func (ts *TaintSummary) MarkTaintedParam(paramName string) {
 
 // IsParamTainted checks if a function parameter is tainted.
 func (ts *TaintSummary) IsParamTainted(paramName string) bool {
-	for _, p := range ts.TaintedParams {
-		if p == paramName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ts.TaintedParams, paramName)
 }
 
 // MarkReturnTainted marks the function's return value as tainted.

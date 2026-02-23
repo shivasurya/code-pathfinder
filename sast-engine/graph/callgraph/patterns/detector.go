@@ -2,6 +2,7 @@ package patterns
 
 import (
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
@@ -216,11 +217,8 @@ func (pr *PatternRegistry) matchMissingSanitizer(pattern *Pattern, callGraph *co
 				hasSanitizer := false
 				for _, sanitizer := range sanitizerCalls {
 					// Check if sanitizer is in the path
-					for _, pathFunc := range path {
-						if pathFunc == sanitizer.caller {
-							hasSanitizer = true
-							break
-						}
+					if slices.Contains(path, sanitizer.caller) {
+						hasSanitizer = true
 					}
 					if hasSanitizer {
 						break
@@ -345,7 +343,7 @@ func (pr *PatternRegistry) dfsPathWithTrace(current, target string, callGraph *c
 // sortCallInfo sorts callInfo slices by caller FQN for deterministic results.
 func sortCallInfo(calls []callInfo) {
 	// Simple bubble sort - good enough for small slices
-	for i := 0; i < len(calls); i++ {
+	for i := range calls {
 		for j := i + 1; j < len(calls); j++ {
 			if calls[i].caller > calls[j].caller {
 				calls[i], calls[j] = calls[j], calls[i]
@@ -363,8 +361,8 @@ func sortCallInfo(calls []callInfo) {
 func matchesFunctionName(fqn, pattern string) bool {
 	// Strip everything after ( from fqn if present (e.g., "input(...)" -> "input")
 	cleanFqn := fqn
-	if idx := strings.Index(fqn, "("); idx >= 0 {
-		cleanFqn = fqn[:idx]
+	if before, _, ok := strings.Cut(fqn, "("); ok {
+		cleanFqn = before
 	}
 
 	// Exact match: "eval" == "eval"

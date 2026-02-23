@@ -29,7 +29,7 @@ func (a *Analytics) ReportServerStarted() {
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPServerStarted, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPServerStarted, map[string]any{
 		"transport": a.transport,
 		"os":        runtime.GOOS,
 		"arch":      runtime.GOARCH,
@@ -41,7 +41,7 @@ func (a *Analytics) ReportServerStopped() {
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPServerStopped, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPServerStopped, map[string]any{
 		"transport":      a.transport,
 		"uptime_seconds": time.Since(a.startTime).Seconds(),
 	})
@@ -53,7 +53,7 @@ func (a *Analytics) ReportToolCall(toolName string, durationMs int64, success bo
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPToolCall, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPToolCall, map[string]any{
 		"tool":        toolName,
 		"duration_ms": durationMs,
 		"success":     success,
@@ -66,7 +66,7 @@ func (a *Analytics) ReportIndexingStarted() {
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPIndexingStarted, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPIndexingStarted, map[string]any{
 		"transport": a.transport,
 	})
 }
@@ -77,13 +77,13 @@ func (a *Analytics) ReportIndexingComplete(stats *IndexingStats) {
 	if a.disabled {
 		return
 	}
-	props := map[string]interface{}{
-		"transport":         a.transport,
-		"duration_seconds":  stats.BuildDuration.Seconds(),
-		"function_count":    stats.Functions,
-		"call_edge_count":   stats.CallEdges,
-		"module_count":      stats.Modules,
-		"file_count":        stats.Files,
+	props := map[string]any{
+		"transport":        a.transport,
+		"duration_seconds": stats.BuildDuration.Seconds(),
+		"function_count":   stats.Functions,
+		"call_edge_count":  stats.CallEdges,
+		"module_count":     stats.Modules,
+		"file_count":       stats.Files,
 	}
 	analytics.ReportEventWithProperties(analytics.MCPIndexingComplete, props)
 }
@@ -94,7 +94,7 @@ func (a *Analytics) ReportIndexingFailed(phase string) {
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPIndexingFailed, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPIndexingFailed, map[string]any{
 		"transport": a.transport,
 		"phase":     phase,
 	})
@@ -106,7 +106,7 @@ func (a *Analytics) ReportClientConnected(clientName, clientVersion string) {
 	if a.disabled {
 		return
 	}
-	analytics.ReportEventWithProperties(analytics.MCPClientConnected, map[string]interface{}{
+	analytics.ReportEventWithProperties(analytics.MCPClientConnected, map[string]any{
 		"transport":      a.transport,
 		"client_name":    clientName,
 		"client_version": clientVersion,

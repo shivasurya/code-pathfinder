@@ -243,37 +243,37 @@ func TestFindDockerfileInstructions_Basic(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		args     map[string]interface{}
+		args     map[string]any
 		expected int
 	}{
 		{
 			name:     "Find all FROM instructions",
-			args:     map[string]interface{}{"instruction_type": "FROM"},
+			args:     map[string]any{"instruction_type": "FROM"},
 			expected: 3,
 		},
 		{
 			name:     "Find all USER instructions",
-			args:     map[string]interface{}{"instruction_type": "USER"},
+			args:     map[string]any{"instruction_type": "USER"},
 			expected: 2,
 		},
 		{
 			name:     "Find all EXPOSE instructions",
-			args:     map[string]interface{}{"instruction_type": "EXPOSE"},
+			args:     map[string]any{"instruction_type": "EXPOSE"},
 			expected: 2,
 		},
 		{
 			name:     "Find all COPY instructions",
-			args:     map[string]interface{}{"instruction_type": "COPY"},
+			args:     map[string]any{"instruction_type": "COPY"},
 			expected: 1,
 		},
 		{
 			name:     "Find all WORKDIR instructions",
-			args:     map[string]interface{}{"instruction_type": "WORKDIR"},
+			args:     map[string]any{"instruction_type": "WORKDIR"},
 			expected: 1,
 		},
 		{
 			name:     "Find all HEALTHCHECK instructions",
-			args:     map[string]interface{}{"instruction_type": "HEALTHCHECK"},
+			args:     map[string]any{"instruction_type": "HEALTHCHECK"},
 			expected: 1,
 		},
 	}
@@ -283,11 +283,11 @@ func TestFindDockerfileInstructions_Basic(t *testing.T) {
 			result, isError := server.toolFindDockerfileInstructions(tt.args)
 			require.False(t, isError, "Expected no error")
 
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			err := json.Unmarshal([]byte(result), &parsed)
 			require.NoError(t, err, "Expected valid JSON")
 
-			matches, ok := parsed["matches"].([]interface{})
+			matches, ok := parsed["matches"].([]any)
 			require.True(t, ok, "Expected matches array")
 			assert.Equal(t, tt.expected, len(matches), "Match count mismatch")
 		})
@@ -302,73 +302,73 @@ func TestFindDockerfileInstructions_Filters(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
 	t.Run("Filter by base_image", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "FROM",
 			"base_image":       "python",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Contains(t, match["raw_content"], "python")
 	})
 
 	t.Run("Filter by port", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "EXPOSE",
 			"port":             float64(8080),
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, float64(8080), match["port"])
 	})
 
 	t.Run("Filter by user", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "USER",
 			"user":             "appuser",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "appuser", match["user"])
 	})
 
 	t.Run("Filter by file_path", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"file_path": "Dockerfile.root",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 	})
@@ -382,64 +382,64 @@ func TestFindDockerfileInstructions_SecurityFilters(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
 	t.Run("Find unpinned base images", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "FROM",
 			"has_digest":       false,
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 2, len(matches), "Expected 2 unpinned FROM instructions")
 
 		// Verify digest field is empty
 		for _, m := range matches {
-			match := m.(map[string]interface{})
+			match := m.(map[string]any)
 			assert.Contains(t, match, "digest")
 			assert.Empty(t, match["digest"])
 		}
 	})
 
 	t.Run("Find pinned base images", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "FROM",
 			"has_digest":       true,
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches), "Expected 1 pinned FROM instruction")
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Contains(t, match, "digest")
 		assert.NotEmpty(t, match["digest"])
 	})
 
 	t.Run("Find root users", func(t *testing.T) {
-		result, isError := server.toolFindDockerfileInstructions(map[string]interface{}{
+		result, isError := server.toolFindDockerfileInstructions(map[string]any{
 			"instruction_type": "USER",
 			"user":             "root",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "root", match["user"])
 	})
 }
@@ -452,51 +452,51 @@ func TestFindComposeServices_Basic(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
 	t.Run("Find all services", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{})
+		result, isError := server.toolFindComposeServices(map[string]any{})
 		require.False(t, isError)
 
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 5, len(matches), "Expected 5 compose services")
 	})
 
 	t.Run("Find service by name", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"service_name": "web",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "web", match["service_name"])
 	})
 
 	t.Run("Filter by exposes_port", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"exposes_port": float64(8080),
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "web", match["service_name"])
 	})
 }
@@ -509,43 +509,43 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
 	t.Run("Find privileged containers", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"has_privileged": true,
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "privileged-service", match["service_name"])
 		assert.Equal(t, true, match["privileged"])
 	})
 
 	t.Run("Find Docker socket exposure", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"has_volume": "/var/run/docker.sock",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "privileged-service", match["service_name"])
 
 		// Verify volumes contain docker socket
-		volumes, ok := match["volumes"].([]interface{})
+		volumes, ok := match["volumes"].([]any)
 		require.True(t, ok)
 		found := false
 		for _, v := range volumes {
@@ -558,34 +558,34 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 	})
 
 	t.Run("Find host network mode services", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"service_name": "host-network",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 
-		match := matches[0].(map[string]interface{})
+		match := matches[0].(map[string]any)
 		assert.Equal(t, "host", match["network_mode"])
 	})
 
 	t.Run("Find services with capabilities", func(t *testing.T) {
-		result, isError := server.toolFindComposeServices(map[string]interface{}{
+		result, isError := server.toolFindComposeServices(map[string]any{
 			"service_name": "dangerous-caps",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		matches, ok := parsed["matches"].([]interface{})
+		matches, ok := parsed["matches"].([]any)
 		require.True(t, ok)
 		assert.Equal(t, 1, len(matches))
 	})
@@ -598,13 +598,13 @@ func TestFindComposeServices_SecurityFilters(t *testing.T) {
 func TestGetDockerfileDetails_Complete(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
-	result, isError := server.toolGetDockerfileDetails(map[string]interface{}{
+	result, isError := server.toolGetDockerfileDetails(map[string]any{
 		"file_path": "/test/Dockerfile",
 	})
 
 	require.False(t, isError)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err := json.Unmarshal([]byte(result), &parsed)
 	require.NoError(t, err)
 
@@ -613,22 +613,22 @@ func TestGetDockerfileDetails_Complete(t *testing.T) {
 	assert.Equal(t, float64(10), parsed["total_instructions"]) // 10 instructions in /test/Dockerfile (user2 is in Dockerfile.root)
 
 	// Verify instructions array
-	instructions, ok := parsed["instructions"].([]interface{})
+	instructions, ok := parsed["instructions"].([]any)
 	require.True(t, ok)
 	assert.Equal(t, 10, len(instructions))
 
 	// Verify multi-stage detection
-	multiStage, ok := parsed["multi_stage"].(map[string]interface{})
+	multiStage, ok := parsed["multi_stage"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, true, multiStage["is_multi_stage"])
 	assert.NotEmpty(t, multiStage["base_image"])
 
-	stages, ok := multiStage["stages"].([]interface{})
+	stages, ok := multiStage["stages"].([]any)
 	require.True(t, ok)
 	assert.Contains(t, stages, "builder")
 
 	// Verify summary
-	summary, ok := parsed["summary"].(map[string]interface{})
+	summary, ok := parsed["summary"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, true, summary["has_user_instruction"])
 	assert.Equal(t, true, summary["has_healthcheck"])
@@ -643,23 +643,23 @@ func TestGetDockerfileDetails_Summary(t *testing.T) {
 	server := createSemanticDockerTestServer()
 
 	t.Run("Dockerfile with summary stats", func(t *testing.T) {
-		result, isError := server.toolGetDockerfileDetails(map[string]interface{}{
+		result, isError := server.toolGetDockerfileDetails(map[string]any{
 			"file_path": "/test/Dockerfile",
 		})
 
 		require.False(t, isError)
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		summary := parsed["summary"].(map[string]interface{})
+		summary := parsed["summary"].(map[string]any)
 		assert.Equal(t, float64(2), summary["unpinned_images"])
 		assert.Equal(t, true, summary["has_user_instruction"])
 		assert.Equal(t, true, summary["has_healthcheck"])
 	})
 
 	t.Run("File not found", func(t *testing.T) {
-		result, isError := server.toolGetDockerfileDetails(map[string]interface{}{
+		result, isError := server.toolGetDockerfileDetails(map[string]any{
 			"file_path": "/nonexistent/Dockerfile",
 		})
 
@@ -668,7 +668,7 @@ func TestGetDockerfileDetails_Summary(t *testing.T) {
 	})
 
 	t.Run("Missing file_path parameter", func(t *testing.T) {
-		result, isError := server.toolGetDockerfileDetails(map[string]interface{}{})
+		result, isError := server.toolGetDockerfileDetails(map[string]any{})
 
 		require.True(t, isError)
 		assert.Contains(t, result, "file_path parameter is required")

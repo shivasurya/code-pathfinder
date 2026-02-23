@@ -20,15 +20,15 @@ type ContainerRuleExecutor struct {
 //
 //nolint:tagliatelle
 type CompiledRule struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Severity    string                 `json:"severity"`
-	Category    string                 `json:"category"`
-	CWE         string                 `json:"cwe"`
-	Message     string                 `json:"message"`
-	FilePattern string                 `json:"file_pattern"`
-	RuleType    string                 `json:"rule_type"`
-	Matcher     map[string]interface{} `json:"matcher"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Severity    string         `json:"severity"`
+	Category    string         `json:"category"`
+	CWE         string         `json:"cwe"`
+	Message     string         `json:"message"`
+	FilePattern string         `json:"file_pattern"`
+	RuleType    string         `json:"rule_type"`
+	Matcher     map[string]any `json:"matcher"`
 }
 
 // RuleMatch represents a matched security issue.
@@ -172,7 +172,7 @@ func (e *ContainerRuleExecutor) evaluateInstruction(
 }
 
 func (e *ContainerRuleExecutor) matchesInstructionCriteria(
-	matcher map[string]interface{},
+	matcher map[string]any,
 	node *docker.DockerfileNode,
 ) bool {
 	// Check image_tag
@@ -328,7 +328,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 			}
 		}
 		// Handle array value
-		if valueList, ok := value.([]interface{}); ok {
+		if valueList, ok := value.([]any); ok {
 			for _, v := range valueList {
 				if vStr, ok := v.(string); ok && strings.Contains(vStr, contains) {
 					return &RuleMatch{
@@ -347,7 +347,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 	}
 
 	// Check contains_any
-	if containsAny, ok := rule.Matcher["contains_any"].([]interface{}); ok {
+	if containsAny, ok := rule.Matcher["contains_any"].([]any); ok {
 		lineNumber := compose.ServiceGetLineNumber(serviceName, key)
 		for _, val := range containsAny {
 			valStr, ok := val.(string)
@@ -356,7 +356,7 @@ func (e *ContainerRuleExecutor) evaluateServiceHas(
 			}
 			// Check volumes for string match
 			volumes := compose.ServiceGet(serviceName, key)
-			if volumeList, ok := volumes.([]interface{}); ok {
+			if volumeList, ok := volumes.([]any); ok {
 				for _, v := range volumeList {
 					if vStr, ok := v.(string); ok && strings.Contains(vStr, valStr) {
 						return &RuleMatch{
@@ -411,7 +411,7 @@ func (e *ContainerRuleExecutor) evaluateAllOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
 ) []RuleMatch {
-	conditions, ok := rule.Matcher["conditions"].([]interface{})
+	conditions, ok := rule.Matcher["conditions"].([]any)
 	if !ok {
 		return nil
 	}
@@ -421,7 +421,7 @@ func (e *ContainerRuleExecutor) evaluateAllOf(
 
 	// All conditions must match
 	for _, cond := range conditions {
-		condMap, ok := cond.(map[string]interface{})
+		condMap, ok := cond.(map[string]any)
 		if !ok {
 			return nil
 		}
@@ -455,7 +455,7 @@ func (e *ContainerRuleExecutor) evaluateAnyOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
 ) []RuleMatch {
-	conditions, ok := rule.Matcher["conditions"].([]interface{})
+	conditions, ok := rule.Matcher["conditions"].([]any)
 	if !ok {
 		return nil
 	}
@@ -463,7 +463,7 @@ func (e *ContainerRuleExecutor) evaluateAnyOf(
 	// Collect matches from all conditions
 	allMatches := make([]RuleMatch, 0)
 	for _, cond := range conditions {
-		condMap, ok := cond.(map[string]interface{})
+		condMap, ok := cond.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -488,7 +488,7 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 	rule CompiledRule,
 	dockerfile *docker.DockerfileGraph,
 ) []RuleMatch {
-	conditions, ok := rule.Matcher["conditions"].([]interface{})
+	conditions, ok := rule.Matcher["conditions"].([]any)
 	if !ok {
 		return nil
 	}
@@ -496,7 +496,7 @@ func (e *ContainerRuleExecutor) evaluateNoneOf(
 	// Collect all violations (matches that should NOT have happened)
 	violations := make([]RuleMatch, 0)
 	for _, cond := range conditions {
-		condMap, ok := cond.(map[string]interface{})
+		condMap, ok := cond.(map[string]any)
 		if !ok {
 			continue
 		}

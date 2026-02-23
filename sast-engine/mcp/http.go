@@ -214,7 +214,7 @@ func (h *HTTPServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"status":    "healthy",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
@@ -248,7 +248,7 @@ func (h *HTTPServer) setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeJSON writes a JSON response.
-func (h *HTTPServer) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func (h *HTTPServer) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)

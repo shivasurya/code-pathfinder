@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"maps"
+
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -8,9 +10,10 @@ import (
 // This enables combining Go and Python call graphs into a unified graph.
 //
 // FQN namespaces prevent collisions:
-//   Go:     "github.com/myapp/handlers.HandleRequest"
-//   Python: "myapp.handlers.handle_request"
-//   Java:   "com.myapp.handlers.HandleRequest"
+//
+//	Go:     "github.com/myapp/handlers.HandleRequest"
+//	Python: "myapp.handlers.handle_request"
+//	Java:   "com.myapp.handlers.HandleRequest"
 //
 // All maps are merged by appending src entries to dst:
 //   - Functions: Direct assignment (FQNs are unique)
@@ -25,9 +28,7 @@ import (
 // Note: This function modifies dst in-place. No return value.
 func MergeCallGraphs(dst, src *core.CallGraph) {
 	// Merge Functions map
-	for fqn, node := range src.Functions {
-		dst.Functions[fqn] = node
-	}
+	maps.Copy(dst.Functions, src.Functions)
 
 	// Merge CallSites map
 	for caller, sites := range src.CallSites {

@@ -150,7 +150,7 @@ func TestGenerateJSONReport(t *testing.T) {
 	jsonBytes, err := os.ReadFile(jsonPath)
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(jsonBytes, &report)
 	require.NoError(t, err)
 
@@ -159,12 +159,12 @@ func TestGenerateJSONReport(t *testing.T) {
 	assert.Contains(t, report, "timestamp")
 
 	// Verify metrics structure
-	metricsData := report["metrics"].(map[string]interface{})
+	metricsData := report["metrics"].(map[string]any)
 	assert.Equal(t, float64(100), metricsData["TotalFunctions"])
 	assert.Equal(t, float64(60), metricsData["TruePositives"])
 
 	// Verify comparisons array
-	comparisonsData := report["comparisons"].([]interface{})
+	comparisonsData := report["comparisons"].([]any)
 	assert.Equal(t, 2, len(comparisonsData))
 }
 
@@ -192,7 +192,7 @@ func TestGenerateJSONReport_EmptyData(t *testing.T) {
 	jsonBytes, err := os.ReadFile(jsonPath)
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(jsonBytes, &report)
 	require.NoError(t, err)
 }
@@ -227,7 +227,7 @@ func TestGenerateJSONReport_TimestampFormat(t *testing.T) {
 	jsonBytes, err := os.ReadFile(jsonPath)
 	require.NoError(t, err)
 
-	var report map[string]interface{}
+	var report map[string]any
 	err = json.Unmarshal(jsonBytes, &report)
 	require.NoError(t, err)
 
@@ -306,11 +306,11 @@ func TestGenerateConsoleReport_MultipleFailureCategories(t *testing.T) {
 		F1Score:        0.667,
 		Agreement:      0.5,
 		FailuresByCategory: map[string]int{
-			"control_flow_branch":   20,
-			"sanitizer_missed":      15,
-			"field_sensitivity":     10,
-			"container_operation":   3,
-			"string_formatting":     2,
+			"control_flow_branch": 20,
+			"sanitizer_missed":    15,
+			"field_sensitivity":   10,
+			"container_operation": 3,
+			"string_formatting":   2,
 		},
 		TopFailures:         []FailureExample{},
 		TotalProcessingTime: "10m",

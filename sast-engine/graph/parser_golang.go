@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"sync"
 
 	golangpkg "github.com/shivasurya/code-pathfinder/sast-engine/graph/golang"
@@ -304,7 +305,7 @@ func generateAnonName(currentContext *Node) string {
 	// Increment counter for this parent context
 	parentName := currentContext.Name
 	anonCounters[parentName]++
-	
+
 	// Format as "$anon_N"
 	return "$anon_" + string(rune(anonCounters[parentName]+'0'))
 }
@@ -336,7 +337,7 @@ func parseGoFuncLiteral(tsNode *sitter.Node, sourceCode []byte, graph *CodeGraph
 	}
 	setGoSourceLocation(node, tsNode, file)
 	graph.AddNode(node)
-	
+
 	// Return node to become currentContext for closure body traversal
 	return node
 }
@@ -470,14 +471,14 @@ func parseGoReturnStatement(tsNode *sitter.Node, sourceCode []byte, graph *CodeG
 
 // joinStrings joins a slice of strings with commas (helper for statement parsing).
 func joinStrings(strs []string) string {
-	result := ""
+	var result strings.Builder
 	for i, s := range strs {
 		if i > 0 {
-			result += ", "
+			result.WriteString(", ")
 		}
-		result += s
+		result.WriteString(s)
 	}
-	return result
+	return result.String()
 }
 
 // parseGoForStatement parses a Go for_statement into a CodeGraph node.

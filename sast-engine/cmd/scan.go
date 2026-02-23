@@ -73,7 +73,7 @@ Examples:
 		headRef, _ := cmd.Flags().GetString("head")
 
 		// Track scan started event (no PII, just metadata)
-		analytics.ReportEventWithProperties(analytics.ScanStarted, map[string]interface{}{
+		analytics.ReportEventWithProperties(analytics.ScanStarted, map[string]any{
 			"output_format":     outputFormat,
 			"has_local_rules":   rulesPath != "",
 			"has_remote_rules":  len(rulesetSpecs) > 0,
@@ -83,7 +83,7 @@ Examples:
 
 		// Validate that at least one rule source is provided
 		if len(rulesetSpecs) == 0 && rulesPath == "" {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
@@ -91,7 +91,7 @@ Examples:
 		}
 
 		if projectPath == "" {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "validation",
 				"phase":      "initialization",
 			})
@@ -126,7 +126,7 @@ Examples:
 		// Handle remote ruleset downloads and merge with local rules
 		finalRulesPath, tempDir, err := prepareRules(rulesPath, rulesetSpecs, refreshRules, logger)
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "rule_preparation",
 				"phase":      "initialization",
 			})
@@ -186,7 +186,7 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "empty_project",
 				"phase":      "graph_building",
 			})
@@ -235,7 +235,7 @@ Examples:
 		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
 		logger.FinishProgress()
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "callgraph_build",
 				"phase":      "graph_building",
 			})
@@ -272,7 +272,7 @@ Examples:
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
 		if err != nil {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "rule_loading",
 				"phase":      "rule_loading",
 			})
@@ -282,7 +282,7 @@ Examples:
 
 		// Validate that at least one type of rule was loaded
 		if len(rules) == 0 && len(containerDetections) == 0 {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]interface{}{
+			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
 				"error_type": "no_rules",
 				"phase":      "rule_loading",
 			})
@@ -426,19 +426,19 @@ Examples:
 			severityBreakdown[det.Rule.Severity]++
 		}
 
-		analytics.ReportEventWithProperties(analytics.ScanCompleted, map[string]interface{}{
-			"duration_ms":         time.Since(startTime).Milliseconds(),
-			"rules_count":         len(uniqueRules),
-			"findings_count":      len(allEnriched),
-			"diff_aware":          diffAware,
-			"diff_changed_files":  len(changedFiles),
-			"severity_critical": severityBreakdown["critical"],
-			"severity_high":     severityBreakdown["high"],
-			"severity_medium":   severityBreakdown["medium"],
-			"severity_low":      severityBreakdown["low"],
-			"output_format":     outputFormat,
-			"exit_code":         int(exitCode),
-			"had_errors":        scanErrors,
+		analytics.ReportEventWithProperties(analytics.ScanCompleted, map[string]any{
+			"duration_ms":        time.Since(startTime).Milliseconds(),
+			"rules_count":        len(uniqueRules),
+			"findings_count":     len(allEnriched),
+			"diff_aware":         diffAware,
+			"diff_changed_files": len(changedFiles),
+			"severity_critical":  severityBreakdown["critical"],
+			"severity_high":      severityBreakdown["high"],
+			"severity_medium":    severityBreakdown["medium"],
+			"severity_low":       severityBreakdown["low"],
+			"output_format":      outputFormat,
+			"exit_code":          int(exitCode),
+			"had_errors":         scanErrors,
 		})
 
 		if exitCode != output.ExitCodeSuccess {
@@ -601,14 +601,8 @@ func generateCodeSnippet(filePath string, lineNumber int, contextLines int) dsl.
 	}
 
 	// Calculate start and end lines (1-indexed)
-	startLine := lineNumber - contextLines
-	if startLine < 1 {
-		startLine = 1
-	}
-	endLine := lineNumber + contextLines
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
+	startLine := max(lineNumber-contextLines, 1)
+	endLine := min(lineNumber+contextLines, len(lines))
 
 	// Build snippet lines
 	var snippetLines []dsl.SnippetLine
@@ -677,9 +671,9 @@ func printDetections(rule dsl.RuleIR, detections []dsl.DataflowDetection) {
 func findRulesDirectory() string {
 	// Check common locations
 	candidates := []string{
-		"rules",           // Current directory
-		"../rules",        // Parent directory
-		"../../rules",     // Grandparent
+		"rules",       // Current directory
+		"../rules",    // Parent directory
+		"../../rules", // Grandparent
 		filepath.Join(os.Getenv("HOME"), ".local", "share", "code-pathfinder", "rules"),
 		"/usr/local/share/code-pathfinder/rules",
 		"/opt/code-pathfinder/rules",

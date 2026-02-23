@@ -341,7 +341,7 @@ func TestGracefulDegradation_GetStatusJSON(t *testing.T) {
 	assert.NotNil(t, status["progress"])
 	assert.NotNil(t, status["startedAt"])
 
-	progress := status["progress"].(map[string]interface{})
+	progress := status["progress"].(map[string]any)
 	assert.Equal(t, "parsing", progress["phase"])
 	assert.Equal(t, 10, progress["filesProcessed"])
 	assert.Equal(t, 50, progress["totalFiles"])
@@ -367,7 +367,7 @@ func TestGracefulDegradation_GetStatusJSON_Complete(t *testing.T) {
 	assert.NotNil(t, status["completedAt"])
 	assert.NotNil(t, status["stats"])
 
-	stats := status["stats"].(map[string]interface{})
+	stats := status["stats"].(map[string]any)
 	assert.Equal(t, 100, stats["functions"])
 	assert.Equal(t, 500, stats["callEdges"])
 }
@@ -429,7 +429,7 @@ func TestStatusTracker_ConcurrentAccess(t *testing.T) {
 
 	// Reader goroutine.
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_ = tracker.GetStatus()
 			_ = tracker.GetState()
 			_ = tracker.IsReady()
@@ -440,7 +440,7 @@ func TestStatusTracker_ConcurrentAccess(t *testing.T) {
 	// Writer goroutine.
 	go func() {
 		tracker.StartIndexing()
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			tracker.UpdateProgress(i, 50, "file.py")
 		}
 		tracker.CompleteIndexing(&IndexingStats{})

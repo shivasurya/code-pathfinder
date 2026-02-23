@@ -88,7 +88,7 @@ func TestImportMapCache_ConcurrentAccess(t *testing.T) {
 	results := make([]*core.ImportMap, numGoroutines)
 
 	// Multiple goroutines try to get/extract concurrently
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(index int) {
 			defer wg.Done()
 			importMap, err := cache.GetOrExtract(filePath, sourceCode, registry)
@@ -100,7 +100,7 @@ func TestImportMapCache_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	// All results should be non-nil
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		assert.NotNil(t, results[i])
 	}
 
@@ -119,7 +119,7 @@ func TestImportMapCache_ConcurrentPut(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// Multiple goroutines put different files concurrently
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(index int) {
 			defer wg.Done()
 			filePath := "/test/file" + string(rune('0'+index)) + ".py"
@@ -131,7 +131,7 @@ func TestImportMapCache_ConcurrentPut(t *testing.T) {
 	wg.Wait()
 
 	// All files should be in cache
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		filePath := "/test/file" + string(rune('0'+i)) + ".py"
 		importMap, ok := cache.Get(filePath)
 		assert.True(t, ok, "File %d should be in cache", i)

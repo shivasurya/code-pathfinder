@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 )
@@ -20,11 +21,11 @@ type DependencyGraph struct {
 
 // DependencyNode represents a node in the dependency graph.
 type DependencyNode struct {
-	Name       string                 // Service name or stage name
-	Type       string                 // "compose_service" or "dockerfile_stage"
-	File       string                 // Source file path
-	LineNumber uint32                 // Line number in source file
-	Metadata   map[string]interface{} // Additional metadata from Node
+	Name       string         // Service name or stage name
+	Type       string         // "compose_service" or "dockerfile_stage"
+	File       string         // Source file path
+	LineNumber uint32         // Line number in source file
+	Metadata   map[string]any // Additional metadata from Node
 }
 
 // NewDependencyGraph creates a new empty dependency graph.
@@ -49,10 +50,8 @@ func (g *DependencyGraph) AddEdge(from, to string) {
 	}
 
 	// Avoid duplicate edges
-	for _, existing := range g.Edges[from] {
-		if existing == to {
-			return
-		}
+	if slices.Contains(g.Edges[from], to) {
+		return
 	}
 
 	g.Edges[from] = append(g.Edges[from], to)
@@ -70,11 +69,8 @@ func (g *DependencyGraph) GetDependencies(name string) []string {
 func (g *DependencyGraph) GetDependents(name string) []string {
 	dependents := []string{}
 	for node, deps := range g.Edges {
-		for _, dep := range deps {
-			if dep == name {
-				dependents = append(dependents, node)
-				break
-			}
+		if slices.Contains(deps, name) {
+			dependents = append(dependents, node)
 		}
 	}
 	return dependents
@@ -102,7 +98,7 @@ func BuildComposeGraph(codeGraph *graph.CodeGraph) *DependencyGraph {
 
 		// Extract dependencies from Metadata
 		if node.Metadata != nil {
-			if deps, ok := node.Metadata["depends_on"].([]interface{}); ok {
+			if deps, ok := node.Metadata["depends_on"].([]any); ok {
 				for _, dep := range deps {
 					if depStr, ok := dep.(string); ok {
 						depGraph.AddEdge(node.Name, depStr)

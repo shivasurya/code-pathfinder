@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -38,16 +39,14 @@ func GenerateSha256(input string) string {
 
 // appendUnique appends a node to a slice only if it's not already present.
 func appendUnique(slice []*Node, node *Node) []*Node {
-	for _, n := range slice {
-		if n == node {
-			return slice
-		}
+	if slices.Contains(slice, node) {
+		return slice
 	}
 	return append(slice, node)
 }
 
 // FormatType formats various types to string representation.
-func FormatType(v interface{}) string {
+func FormatType(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
@@ -55,7 +54,7 @@ func FormatType(v interface{}) string {
 		return fmt.Sprintf("%d", val)
 	case float32, float64:
 		return fmt.Sprintf("%.2f", val)
-	case []interface{}:
+	case []any:
 		//nolint:all
 		jsonBytes, _ := json.Marshal(val)
 		return string(jsonBytes)
@@ -70,14 +69,14 @@ func EnableVerboseLogging() {
 }
 
 // Log logs a message if verbose logging is enabled.
-func Log(message string, args ...interface{}) {
+func Log(message string, args ...any) {
 	if verboseFlag {
 		log.Println(message, args)
 	}
 }
 
 // Fmt prints formatted output if verbose logging is enabled.
-func Fmt(format string, args ...interface{}) {
+func Fmt(format string, args ...any) {
 	if verboseFlag {
 		fmt.Printf(format, args...)
 	}
@@ -90,8 +89,8 @@ func IsGitHubActions() bool {
 
 // extractVisibilityModifier extracts visibility modifier from a string of modifiers.
 func extractVisibilityModifier(modifiers string) string {
-	words := strings.Fields(modifiers)
-	for _, word := range words {
+	words := strings.FieldsSeq(modifiers)
+	for word := range words {
 		switch word {
 		case "public", "private", "protected":
 			return word
@@ -242,13 +241,13 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	columnNumber := int(node.StartPoint().Column) + 1
 	// convert to string and merge
 	content += " " + strconv.Itoa(lineNumber) + ":" + strconv.Itoa(columnNumber)
-	
+
 	// Prefix method declarations to avoid ID collisions with invocations
 	prefix := ""
 	if node.Type() == "method_declaration" {
 		prefix = "method:"
 	}
-	
+
 	methodID = GenerateMethodID(prefix+methodName, parameters, filepath+"/"+content)
 	return methodName, methodID
 }

@@ -47,7 +47,7 @@ func TestDecodeCursor_InvalidJSON(t *testing.T) {
 }
 
 func TestExtractPaginationParams_Defaults(t *testing.T) {
-	args := map[string]interface{}{}
+	args := map[string]any{}
 	params, err := ExtractPaginationParams(args)
 
 	assert.Nil(t, err)
@@ -56,7 +56,7 @@ func TestExtractPaginationParams_Defaults(t *testing.T) {
 }
 
 func TestExtractPaginationParams_WithLimit(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": float64(25),
 	}
 	params, err := ExtractPaginationParams(args)
@@ -66,7 +66,7 @@ func TestExtractPaginationParams_WithLimit(t *testing.T) {
 }
 
 func TestExtractPaginationParams_LimitInt(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": 30,
 	}
 	params, err := ExtractPaginationParams(args)
@@ -76,7 +76,7 @@ func TestExtractPaginationParams_LimitInt(t *testing.T) {
 }
 
 func TestExtractPaginationParams_LimitCapped(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": float64(10000),
 	}
 	params, err := ExtractPaginationParams(args)
@@ -86,7 +86,7 @@ func TestExtractPaginationParams_LimitCapped(t *testing.T) {
 }
 
 func TestExtractPaginationParams_InvalidLimit(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": "not a number",
 	}
 	_, err := ExtractPaginationParams(args)
@@ -96,7 +96,7 @@ func TestExtractPaginationParams_InvalidLimit(t *testing.T) {
 }
 
 func TestExtractPaginationParams_NegativeLimit(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": float64(-5),
 	}
 	params, err := ExtractPaginationParams(args)
@@ -106,7 +106,7 @@ func TestExtractPaginationParams_NegativeLimit(t *testing.T) {
 }
 
 func TestExtractPaginationParams_ZeroLimit(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"limit": float64(0),
 	}
 	params, err := ExtractPaginationParams(args)
@@ -117,7 +117,7 @@ func TestExtractPaginationParams_ZeroLimit(t *testing.T) {
 
 func TestExtractPaginationParams_WithCursor(t *testing.T) {
 	cursor := EncodeCursor(100, "")
-	args := map[string]interface{}{
+	args := map[string]any{
 		"cursor": cursor,
 	}
 	params, err := ExtractPaginationParams(args)

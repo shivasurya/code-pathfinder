@@ -21,8 +21,8 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "web",
 		File:       "docker-compose.yml",
 		LineNumber: 5,
-		Metadata: map[string]interface{}{
-			"depends_on": []interface{}{"api", "redis"},
+		Metadata: map[string]any{
+			"depends_on": []any{"api", "redis"},
 		},
 	})
 
@@ -32,8 +32,8 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "api",
 		File:       "docker-compose.yml",
 		LineNumber: 12,
-		Metadata: map[string]interface{}{
-			"depends_on": []interface{}{"db"},
+		Metadata: map[string]any{
+			"depends_on": []any{"db"},
 		},
 	})
 
@@ -43,7 +43,7 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "db",
 		File:       "docker-compose.yml",
 		LineNumber: 20,
-		Metadata:   map[string]interface{}{},
+		Metadata:   map[string]any{},
 	})
 
 	codeGraph.AddNode(&graph.Node{
@@ -52,7 +52,7 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "redis",
 		File:       "docker-compose.yml",
 		LineNumber: 25,
-		Metadata:   map[string]interface{}{},
+		Metadata:   map[string]any{},
 	})
 
 	// Add Dockerfile stages
@@ -62,7 +62,7 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "FROM",
 		File:       "Dockerfile",
 		LineNumber: 1,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"stage_index": 0,
 			"stage_name":  "builder",
 		},
@@ -74,7 +74,7 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "FROM",
 		File:       "Dockerfile",
 		LineNumber: 10,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"stage_index": 1,
 		},
 	})
@@ -85,7 +85,7 @@ func setupDockerDependenciesTest() *Server {
 		Name:       "COPY",
 		File:       "Dockerfile",
 		LineNumber: 11,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"copy_from":   "builder",
 			"stage_index": 1,
 		},
@@ -99,7 +99,7 @@ func setupDockerDependenciesTest() *Server {
 func TestGetDockerDependencies_ComposeBasic(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type": "compose",
 		"name": "web",
 	}
@@ -128,7 +128,7 @@ func TestGetDockerDependencies_ComposeBasic(t *testing.T) {
 func TestGetDockerDependencies_ComposeUpstream(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "compose",
 		"name":      "web",
 		"direction": "upstream",
@@ -148,7 +148,7 @@ func TestGetDockerDependencies_ComposeUpstream(t *testing.T) {
 func TestGetDockerDependencies_ComposeDownstream(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "compose",
 		"name":      "db",
 		"direction": "downstream",
@@ -176,10 +176,10 @@ func TestGetDockerDependencies_ComposeMaxDepth(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
 	tests := []struct {
-		name          string
-		maxDepth      float64
-		expectedMin   int
-		expectedMax   int
+		name        string
+		maxDepth    float64
+		expectedMin int
+		expectedMax int
 	}{
 		{"Depth 1", 1.0, 1, 2}, // Direct dependencies only (api, redis)
 		{"Depth 2", 2.0, 2, 3}, // Up to 2 levels (api, redis, db)
@@ -187,7 +187,7 @@ func TestGetDockerDependencies_ComposeMaxDepth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := map[string]interface{}{
+			args := map[string]any{
 				"type":      "compose",
 				"name":      "web",
 				"direction": "upstream",
@@ -209,7 +209,7 @@ func TestGetDockerDependencies_ComposeMaxDepth(t *testing.T) {
 func TestGetDockerDependencies_DockerfileBasic(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "dockerfile",
 		"name":      "stage-1",
 		"file_path": "Dockerfile",
@@ -231,7 +231,7 @@ func TestGetDockerDependencies_DockerfileBasic(t *testing.T) {
 func TestGetDockerDependencies_DockerfileDownstream(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "dockerfile",
 		"name":      "builder",
 		"direction": "downstream",
@@ -250,7 +250,7 @@ func TestGetDockerDependencies_DockerfileDownstream(t *testing.T) {
 func TestGetDockerDependencies_DependencyChain(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type": "compose",
 		"name": "web",
 	}
@@ -269,7 +269,7 @@ func TestGetDockerDependencies_DependencyChain(t *testing.T) {
 func TestGetDockerDependencies_NonExistent(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type": "compose",
 		"name": "nonexistent",
 	}
@@ -288,14 +288,14 @@ func TestGetDockerDependencies_NonExistent(t *testing.T) {
 func TestGetDockerDependencies_MissingType(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"name": "web",
 	}
 
 	result, success := server.toolGetDockerDependencies(args)
 	assert.False(t, success)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal([]byte(result), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "error")
@@ -304,14 +304,14 @@ func TestGetDockerDependencies_MissingType(t *testing.T) {
 func TestGetDockerDependencies_MissingName(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type": "compose",
 	}
 
 	result, success := server.toolGetDockerDependencies(args)
 	assert.False(t, success)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal([]byte(result), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "error")
@@ -320,7 +320,7 @@ func TestGetDockerDependencies_MissingName(t *testing.T) {
 func TestGetDockerDependencies_InvalidType(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type": "invalid",
 		"name": "web",
 	}
@@ -328,7 +328,7 @@ func TestGetDockerDependencies_InvalidType(t *testing.T) {
 	result, success := server.toolGetDockerDependencies(args)
 	assert.False(t, success)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal([]byte(result), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "error")
@@ -337,7 +337,7 @@ func TestGetDockerDependencies_InvalidType(t *testing.T) {
 func TestGetDockerDependencies_InvalidDirection(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "compose",
 		"name":      "web",
 		"direction": "invalid",
@@ -346,7 +346,7 @@ func TestGetDockerDependencies_InvalidDirection(t *testing.T) {
 	result, success := server.toolGetDockerDependencies(args)
 	assert.False(t, success)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal([]byte(result), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "error")
@@ -355,7 +355,7 @@ func TestGetDockerDependencies_InvalidDirection(t *testing.T) {
 func TestGetDockerDependencies_FiltersApplied(t *testing.T) {
 	server := setupDockerDependenciesTest()
 
-	args := map[string]interface{}{
+	args := map[string]any{
 		"type":      "compose",
 		"name":      "web",
 		"file_path": "docker-compose.yml",

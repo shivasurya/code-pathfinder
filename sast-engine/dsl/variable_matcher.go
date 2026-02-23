@@ -79,13 +79,13 @@ func (e *VariableMatcherExecutor) matchesPattern(varName string) bool {
 		return strings.Contains(varName, substr)
 	}
 
-	if strings.HasPrefix(pattern, "*") {
-		suffix := strings.TrimPrefix(pattern, "*")
+	if after, ok := strings.CutPrefix(pattern, "*"); ok {
+		suffix := after
 		return strings.HasSuffix(varName, suffix)
 	}
 
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
+	if before, ok := strings.CutSuffix(pattern, "*"); ok {
+		prefix := before
 		return strings.HasPrefix(varName, prefix)
 	}
 

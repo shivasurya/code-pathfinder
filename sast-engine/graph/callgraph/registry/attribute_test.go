@@ -142,12 +142,12 @@ func TestGetAllClasses(t *testing.T) {
 
 func TestAttributeTypeInference(t *testing.T) {
 	tests := []struct {
-		name           string
-		attributeName  string
-		typeFQN        string
-		source         string
-		expectedConf   float64
-		assignedIn     string
+		name          string
+		attributeName string
+		typeFQN       string
+		source        string
+		expectedConf  float64
+		assignedIn    string
 	}{
 		{
 			name:          "Literal string assignment",
@@ -216,7 +216,7 @@ func TestThreadSafety(t *testing.T) {
 	// Simulate concurrent adds
 	done := make(chan bool, 10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(_ int) {
 			attr := &core.ClassAttribute{
 				Name: "attr",
@@ -233,7 +233,7 @@ func TestThreadSafety(t *testing.T) {
 	}
 
 	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
@@ -246,7 +246,7 @@ func TestMultipleAttributesPerClass(t *testing.T) {
 	registry := NewAttributeRegistry()
 
 	attributes := []struct {
-		name   string
+		name    string
 		typeFQN string
 	}{
 		{"name", "builtins.str"},

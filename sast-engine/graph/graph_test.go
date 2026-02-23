@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -244,13 +245,7 @@ func TestGetFiles(t *testing.T) {
 
 	// Check if nested file is included
 	nestedFile := filepath.Join(tempDir, "subdir", "file4.java")
-	found := false
-	for _, file := range files {
-		if file == nestedFile {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(files, nestedFile)
 	if !found {
 		t.Errorf("Nested Java file not found in results")
 	}
@@ -380,7 +375,7 @@ func TestFindNodesByTypeEmptyGraph(t *testing.T) {
 
 func TestFindNodesByTypeAllSameType(t *testing.T) {
 	graph := NewCodeGraph()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		graph.AddNode(&Node{ID: fmt.Sprintf("node%d", i), Type: "class"})
 	}
 
@@ -615,7 +610,7 @@ func TestInitializeWithLargeNumberOfFiles(t *testing.T) {
 
 	// Create a large number of test files
 	numFiles := 100
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		fileName := fmt.Sprintf("File%d.java", i)
 		content := fmt.Sprintf("public class File%d { }", i)
 		path := filepath.Join(tempDir, fileName)
@@ -920,7 +915,7 @@ func TestExtractMethodName(t *testing.T) {
 			if id == "" {
 				t.Error("Expected non-empty method ID")
 			}
-			
+
 			// Method declarations should have IDs prefixed with method:
 			if methodNode.Type() == "method_declaration" {
 				// The ID is a hash, but we can verify it was generated (non-empty)
@@ -1236,10 +1231,10 @@ func TestBuildGraphFromASTPythonClassDefinition(t *testing.T) {
 
 func TestBuildGraphFromASTPythonStatements(t *testing.T) {
 	tests := []struct {
-		name              string
-		sourceCode        string
-		expectedTypes     []string
-		minNodeCount      int
+		name          string
+		sourceCode    string
+		expectedTypes []string
+		minNodeCount  int
 	}{
 		{
 			name: "Function with return statement",
@@ -1325,10 +1320,10 @@ func TestBuildGraphFromASTPythonStatements(t *testing.T) {
 				"ContinueStmt":        true,
 				"YieldStmt":           true,
 			}
-			
+
 			for _, node := range graph.Nodes {
 				nodeTypes[node.Type] = true
-				
+
 				// Python-specific nodes should be marked as Python
 				if pythonSpecificTypes[node.Type] && !node.isPythonSourceFile {
 					t.Errorf("Node %s (type: %s) should have isPythonSourceFile=true", node.ID, node.Type)
