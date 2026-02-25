@@ -253,7 +253,8 @@ Examples:
 			if err != nil {
 				logger.Warning("Failed to build Go module registry: %v", err)
 			} else {
-				// Initialize Go type inference engine for Phase 2 type tracking
+				// Initialize Go stdlib loader and type inference engine
+				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
 				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)

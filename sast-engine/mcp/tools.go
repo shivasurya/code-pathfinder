@@ -1213,6 +1213,45 @@ func (s *Server) toolListModules() (string, bool) {
 	return string(bytes), false
 }
 
+// stdlibInfoForFQN returns Go stdlib metadata for a resolved FQN (e.g., "net/http.Get").
+// Returns nil when stdlib context is unavailable or the FQN is not a stdlib function.
+// Callers should guard on is_stdlib before calling this.
+func (s *Server) stdlibInfoForFQN(fqn string) map[string]interface{} {
+	if s.goModuleRegistry == nil || s.goModuleRegistry.StdlibLoader == nil {
+		return nil
+	}
+	dotIdx := strings.LastIndex(fqn, ".")
+	if dotIdx <= 0 {
+		return nil
+	}
+	importPath := fqn[:dotIdx]
+	funcName := fqn[dotIdx+1:]
+	if !s.goModuleRegistry.StdlibLoader.ValidateStdlibImport(importPath) {
+		return nil
+	}
+	info := map[string]interface{}{
+		"package": importPath,
+	}
+	fn, err := s.goModuleRegistry.StdlibLoader.GetFunction(importPath, funcName)
+	if err == nil && fn != nil {
+		if fn.Signature != "" {
+			info["signature"] = fn.Signature
+		}
+		if len(fn.Returns) > 0 {
+			returnTypes := make([]string, 0, len(fn.Returns))
+			for _, ret := range fn.Returns {
+				if ret.Type != "" {
+					returnTypes = append(returnTypes, ret.Type)
+				}
+			}
+			if len(returnTypes) > 0 {
+				info["return_types"] = returnTypes
+			}
+		}
+	}
+	return info
+}
+
 // toolGetCallers finds all callers of a function with pagination support.
 func (s *Server) toolGetCallers(args map[string]any) (string, bool) {
 	// Check if ready.
@@ -1267,6 +1306,9 @@ func (s *Server) toolGetCallers(args map[string]any) (string, bool) {
 			if cs.TargetFQN == targetFQN || cs.Target == getShortName(targetFQN) {
 				caller["call_line"] = cs.Location.Line
 				caller["call_column"] = cs.Location.Column
+				if cs.IsStdlib {
+					caller["is_stdlib"] = true
+				}
 				break
 			}
 		}
@@ -1341,6 +1383,7 @@ func (s *Server) toolGetCallees(args map[string]any) (string, bool) {
 			"target":    cs.Target,
 			"call_line": cs.Location.Line,
 			"resolved":  cs.Resolved,
+			"is_stdlib": cs.IsStdlib,
 		}
 
 		if cs.Resolved {
@@ -1351,6 +1394,13 @@ func (s *Server) toolGetCallees(args map[string]any) (string, bool) {
 			if targetNode := s.callGraph.Functions[cs.TargetFQN]; targetNode != nil {
 				callee["target_file"] = targetNode.File
 				callee["target_line"] = targetNode.LineNumber
+			}
+
+			// Add stdlib metadata when available.
+			if cs.IsStdlib {
+				if info := s.stdlibInfoForFQN(cs.TargetFQN); info != nil {
+					callee["stdlib_info"] = info
+				}
 			}
 		} else {
 			unresolvedCount++
@@ -1444,8 +1494,9 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 			}
 
 			// Add resolution info.
-			resolution := map[string]any{
-				"resolved": cs.Resolved,
+			resolution := map[string]interface{}{
+				"resolved":  cs.Resolved,
+				"is_stdlib": cs.IsStdlib,
 			}
 			if !cs.Resolved && cs.FailureReason != "" {
 				resolution["failure_reason"] = cs.FailureReason
@@ -1455,6 +1506,11 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 				resolution["inferred_type"] = cs.InferredType
 				resolution["type_confidence"] = cs.TypeConfidence
 				resolution["type_source"] = cs.TypeSource
+			}
+			if cs.IsStdlib {
+				if info := s.stdlibInfoForFQN(cs.TargetFQN); info != nil {
+					resolution["stdlib_info"] = info
+				}
 			}
 			callSite["resolution"] = resolution
 
