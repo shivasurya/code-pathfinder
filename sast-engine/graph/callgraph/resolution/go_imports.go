@@ -83,9 +83,6 @@ func BuildGoModuleRegistry(projectRoot string) (*core.GoModuleRegistry, error) {
 		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
 	}
 
-	// Step 4: Initialize stdlib packages
-	registry.StdlibPackages = goStdlibSet()
-
 	return registry, nil
 }
 
@@ -267,124 +264,90 @@ func parseGoMod(projectRoot string) (modulePath string, goVersion string, err er
 	return modulePath, goVersion, nil
 }
 
-// goStdlibSet returns a set of Go standard library packages for Go 1.21.
-// Phase 1: Hardcoded map as example.
-// Phase 2 (future): Dynamic JSON-based registry downloaded from CDN.
-func goStdlibSet() map[string]bool {
-	return map[string]bool{
-		// Core packages
-		"fmt": true, "os": true, "io": true, "errors": true,
-		"strings": true, "strconv": true, "bytes": true,
-		"unicode": true, "unicode/utf8": true, "bufio": true,
+// ============================================================================
+// GoImportResolver — dynamic stdlib import classification
+// ============================================================================
 
-		// Data structures
-		"container/heap": true, "container/list": true, "container/ring": true,
-		"sort": true, "math": true, "math/big": true, "math/rand": true,
-		"math/bits": true, "math/cmplx": true,
+// ImportType classifies a Go import path.
+type ImportType int
 
-		// Networking
-		"net": true, "net/http": true, "net/url": true, "net/http/httputil": true,
-		"net/http/cookiejar": true, "net/http/fcgi": true, "net/http/httptest": true,
-		"net/http/httptrace": true, "net/http/pprof": true,
-		"net/mail": true, "net/rpc": true, "net/rpc/jsonrpc": true,
-		"net/smtp": true, "net/textproto": true, "net/netip": true,
+const (
+	ImportUnknown    ImportType = iota
+	ImportStdlib                // Go standard library (e.g., "fmt", "net/http")
+	ImportThirdParty            // External module (e.g., "github.com/gorilla/mux")
+	ImportLocal                 // Same module (e.g., "github.com/myapp/handlers" or "./utils")
+)
 
-		// Encoding
-		"encoding": true, "encoding/json": true, "encoding/xml": true,
-		"encoding/base64": true, "encoding/hex": true, "encoding/csv": true,
-		"encoding/gob": true, "encoding/binary": true, "encoding/ascii85": true,
-		"encoding/asn1": true, "encoding/pem": true,
+// GoImportResolver classifies Go import paths as stdlib, third-party, or local.
+// It uses the registry's StdlibLoader for dynamic, version-aware stdlib detection,
+// falling back to a heuristic (no domain in path) when the loader is unavailable.
+//
+// Example:
+//
+//	resolver := NewGoImportResolver(registry)
+//	if resolver.isStdlibImport("net/http") { ... }
+//	kind := resolver.ClassifyImport("github.com/gorilla/mux")
+type GoImportResolver struct {
+	registry *core.GoModuleRegistry
+}
 
-		// Time
-		"time": true, "time/tzdata": true,
+// NewGoImportResolver creates a GoImportResolver backed by the given module registry.
+// registry may be nil; in that case all classification falls back to the heuristic.
+func NewGoImportResolver(registry *core.GoModuleRegistry) *GoImportResolver {
+	return &GoImportResolver{registry: registry}
+}
 
-		// File system
-		"path": true, "path/filepath": true, "io/fs": true, "io/ioutil": true,
-
-		// Compression
-		"compress/bzip2": true, "compress/flate": true, "compress/gzip": true,
-		"compress/lzw": true, "compress/zlib": true,
-
-		// Crypto
-		"crypto": true, "crypto/aes": true, "crypto/cipher": true,
-		"crypto/des": true, "crypto/dsa": true, "crypto/ecdsa": true,
-		"crypto/ed25519": true, "crypto/elliptic": true, "crypto/hmac": true,
-		"crypto/md5": true, "crypto/rand": true, "crypto/rc4": true,
-		"crypto/rsa": true, "crypto/sha1": true, "crypto/sha256": true,
-		"crypto/sha512": true, "crypto/subtle": true, "crypto/tls": true,
-		"crypto/x509": true, "crypto/x509/pkix": true,
-
-		// Hash
-		"hash": true, "hash/adler32": true, "hash/crc32": true,
-		"hash/crc64": true, "hash/fnv": true, "hash/maphash": true,
-
-		// Database
-		"database/sql": true, "database/sql/driver": true,
-
-		// Context and sync
-		"context": true, "sync": true, "sync/atomic": true,
-
-		// Reflection and unsafe
-		"reflect": true, "unsafe": true,
-
-		// Runtime
-		"runtime": true, "runtime/debug": true, "runtime/metrics": true,
-		"runtime/pprof": true, "runtime/trace": true, "runtime/cgo": true,
-
-		// Testing
-		"testing": true, "testing/fstest": true, "testing/iotest": true,
-		"testing/quick": true,
-
-		// Text processing
-		"text/scanner": true, "text/tabwriter": true, "text/template": true,
-		"text/template/parse": true, "regexp": true, "regexp/syntax": true,
-
-		// Image
-		"image": true, "image/color": true, "image/color/palette": true,
-		"image/draw": true, "image/gif": true, "image/jpeg": true,
-		"image/png": true,
-
-		// HTML
-		"html": true, "html/template": true,
-
-		// Archive
-		"archive/tar": true, "archive/zip": true,
-
-		// Index
-		"index/suffixarray": true,
-
-		// Go-specific
-		"go/ast": true, "go/build": true, "go/constant": true,
-		"go/doc": true, "go/format": true, "go/importer": true,
-		"go/parser": true, "go/printer": true, "go/scanner": true,
-		"go/token": true, "go/types": true, "go/doc/comment": true,
-		"go/build/constraint": true,
-
-		// Miscellaneous
-		"flag": true, "log": true, "log/syslog": true,
-		"mime": true, "mime/multipart": true,
-		"mime/quotedprintable": true, "plugin": true, "expvar": true,
-
-		// Embed
-		"embed": true,
-
-		// Slices and maps (Go 1.21+)
-		"slices": true, "maps": true,
-
-		// Cmp (Go 1.21+)
-		"cmp": true,
-
-		// Slog (Go 1.21+)
-		"log/slog": true,
-
-		// Debug
-		"debug/buildinfo": true, "debug/dwarf": true, "debug/elf": true,
-		"debug/gosym": true, "debug/macho": true, "debug/pe": true,
-		"debug/plan9obj": true,
-
-		// Internal utilities (exported in some cases)
-		"syscall": true, "internal/bytealg": true,
+// isStdlibImport reports whether importPath belongs to the Go standard library.
+// It uses StdlibLoader.ValidateStdlibImport when available, otherwise
+// delegates to the offline heuristic.
+func (r *GoImportResolver) isStdlibImport(importPath string) bool {
+	if r.registry != nil && r.registry.StdlibLoader != nil {
+		return r.registry.StdlibLoader.ValidateStdlibImport(importPath)
 	}
+	return r.isStdlibImportFallback(importPath)
+}
+
+// isStdlibImportFallback is the offline heuristic used when no StdlibLoader is
+// available. Stdlib packages never contain a "." (domain separator) in their
+// import path and are not prefixed with "internal/".
+//
+// Examples:
+//
+//	"fmt"          → true   (stdlib)
+//	"net/http"     → true   (stdlib)
+//	"github.com/x" → false  (has dot → third-party)
+//	"internal/foo" → false  (internal package)
+func (r *GoImportResolver) isStdlibImportFallback(importPath string) bool {
+	if strings.HasPrefix(importPath, "internal/") {
+		return false
+	}
+	return !strings.Contains(importPath, ".")
+}
+
+// ClassifyImport categorises a single import path.
+func (r *GoImportResolver) ClassifyImport(importPath string) ImportType {
+	if r.isStdlibImport(importPath) {
+		return ImportStdlib
+	}
+	// Relative imports are always local.
+	if strings.HasPrefix(importPath, ".") {
+		return ImportLocal
+	}
+	// Imports that share the current module's path are local.
+	if r.registry != nil && r.registry.ModulePath != "" &&
+		strings.HasPrefix(importPath, r.registry.ModulePath) {
+		return ImportLocal
+	}
+	return ImportThirdParty
+}
+
+// ResolveImports classifies each import path in the given slice.
+func (r *GoImportResolver) ResolveImports(imports []string) map[string]ImportType {
+	result := make(map[string]ImportType, len(imports))
+	for _, importPath := range imports {
+		result[importPath] = r.ClassifyImport(importPath)
+	}
+	return result
 }
 
 // shouldSkipGoDirectory returns true if the directory should be skipped during traversal.

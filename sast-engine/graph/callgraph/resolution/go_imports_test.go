@@ -1,6 +1,7 @@
 package resolution
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var errMockResolutionNotFound = errors.New("not found in mock")
 
 func TestBuildGoModuleRegistry(t *testing.T) {
 	tests := []struct {
@@ -76,12 +79,7 @@ func TestBuildGoModuleRegistry(t *testing.T) {
 				assert.True(t, ok, "Expected reverse mapping for %s", expectedImport)
 			}
 
-			// Verify stdlib packages loaded
-			assert.True(t, registry.StdlibPackages["fmt"])
-			assert.True(t, registry.StdlibPackages["net/http"])
-			assert.True(t, registry.StdlibPackages["encoding/json"])
-			assert.False(t, registry.StdlibPackages["nonexistent"])
-		})
+			})
 	}
 }
 
@@ -186,7 +184,7 @@ type User struct {
 				ModulePath:     "github.com/example/test",
 				DirToImport:    make(map[string]string),
 				ImportToDir:    make(map[string]string),
-				StdlibPackages: goStdlibSet(),
+				StdlibPackages: make(map[string]bool),
 			}
 
 			importMap, err := ExtractGoImports("/tmp/test.go", []byte(tt.sourceCode), registry)
@@ -220,36 +218,6 @@ func TestExtractLocalName(t *testing.T) {
 	}
 }
 
-func TestGoStdlibSet(t *testing.T) {
-	stdlib := goStdlibSet()
-
-	// Verify common packages
-	assert.True(t, stdlib["fmt"])
-	assert.True(t, stdlib["os"])
-	assert.True(t, stdlib["io"])
-	assert.True(t, stdlib["net/http"])
-	assert.True(t, stdlib["encoding/json"])
-	assert.True(t, stdlib["database/sql"])
-	assert.True(t, stdlib["context"])
-
-	// Verify Go 1.21+ packages
-	assert.True(t, stdlib["slices"])
-	assert.True(t, stdlib["maps"])
-	assert.True(t, stdlib["cmp"])
-	assert.True(t, stdlib["log/slog"])
-
-	// Verify crypto packages
-	assert.True(t, stdlib["crypto/sha256"])
-	assert.True(t, stdlib["crypto/tls"])
-
-	// Verify non-stdlib is not included
-	assert.False(t, stdlib["github.com/example/myapp"])
-	assert.False(t, stdlib["github.com/gorilla/mux"])
-	assert.False(t, stdlib["gopkg.in/yaml.v2"])
-
-	// Verify minimum count
-	assert.GreaterOrEqual(t, len(stdlib), 100, "Should have at least 100 stdlib packages")
-}
 
 func TestShouldSkipGoDirectory(t *testing.T) {
 	tests := []struct {
@@ -365,4 +333,169 @@ func TestGoModuleRegistryMethods(t *testing.T) {
 	dirPath, ok := registry.ImportToDir["github.com/example/test/handlers"]
 	assert.True(t, ok)
 	assert.Equal(t, "/project/handlers", dirPath)
+}
+
+// ============================================================================
+// mockResolutionStdlibLoader — in-package mock for GoImportResolver tests
+// ============================================================================
+
+type mockResolutionStdlibLoader struct {
+	packages map[string]bool
+}
+
+func (m *mockResolutionStdlibLoader) ValidateStdlibImport(importPath string) bool {
+	return m.packages[importPath]
+}
+
+func (m *mockResolutionStdlibLoader) GetFunction(_, _ string) (*core.GoStdlibFunction, error) {
+	return nil, errMockResolutionNotFound
+}
+
+func (m *mockResolutionStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
+	return nil, errMockResolutionNotFound
+}
+
+func (m *mockResolutionStdlibLoader) PackageCount() int {
+	return len(m.packages)
+}
+
+func newMockResolutionLoader(pkgs ...string) *mockResolutionStdlibLoader {
+	m := &mockResolutionStdlibLoader{packages: make(map[string]bool, len(pkgs))}
+	for _, p := range pkgs {
+		m.packages[p] = true
+	}
+	return m
+}
+
+// ============================================================================
+// TestGoImportResolver tests
+// ============================================================================
+
+func TestGoImportResolver_NilRegistry(t *testing.T) {
+	r := NewGoImportResolver(nil)
+	// Should not panic
+	assert.Equal(t, ImportThirdParty, r.ClassifyImport("github.com/gorilla/mux"))
+	assert.Equal(t, ImportStdlib, r.ClassifyImport("fmt"))
+	assert.Equal(t, ImportLocal, r.ClassifyImport("./utils"))
+}
+
+func TestGoImportResolver_isStdlibImportFallback(t *testing.T) {
+	r := NewGoImportResolver(nil)
+	tests := []struct {
+		importPath string
+		want       bool
+	}{
+		{"fmt", true},
+		{"os", true},
+		{"net/http", true},
+		{"encoding/json", true},
+		{"database/sql", true},
+		{"github.com/gorilla/mux", false}, // has dot
+		{"gopkg.in/yaml.v2", false},       // has dot
+		{"internal/foo", false},           // internal prefix
+		{"internal/trace", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.importPath, func(t *testing.T) {
+			got := r.isStdlibImportFallback(tt.importPath)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestGoImportResolver_isStdlibImport_WithLoader(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.StdlibLoader = newMockResolutionLoader("fmt", "net/http")
+	r := NewGoImportResolver(reg)
+
+	assert.True(t, r.isStdlibImport("fmt"))
+	assert.True(t, r.isStdlibImport("net/http"))
+	// "os" not in mock → false (loader is authoritative)
+	assert.False(t, r.isStdlibImport("os"))
+	assert.False(t, r.isStdlibImport("github.com/gorilla/mux"))
+}
+
+func TestGoImportResolver_isStdlibImport_NilLoader_FallsBackToHeuristic(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.StdlibLoader = nil // no loader → fallback
+	r := NewGoImportResolver(reg)
+
+	// Heuristic: no dot in path → stdlib
+	assert.True(t, r.isStdlibImport("fmt"))
+	assert.True(t, r.isStdlibImport("net/http"))
+	assert.False(t, r.isStdlibImport("github.com/gorilla/mux"))
+}
+
+func TestGoImportResolver_ClassifyImport_Stdlib(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/myapp"
+	reg.StdlibLoader = newMockResolutionLoader("fmt", "net/http", "encoding/json")
+	r := NewGoImportResolver(reg)
+
+	assert.Equal(t, ImportStdlib, r.ClassifyImport("fmt"))
+	assert.Equal(t, ImportStdlib, r.ClassifyImport("net/http"))
+	assert.Equal(t, ImportStdlib, r.ClassifyImport("encoding/json"))
+}
+
+func TestGoImportResolver_ClassifyImport_ThirdParty(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/myapp"
+	reg.StdlibLoader = newMockResolutionLoader("fmt")
+	r := NewGoImportResolver(reg)
+
+	assert.Equal(t, ImportThirdParty, r.ClassifyImport("github.com/gorilla/mux"))
+	assert.Equal(t, ImportThirdParty, r.ClassifyImport("gopkg.in/yaml.v2"))
+	assert.Equal(t, ImportThirdParty, r.ClassifyImport("github.com/lib/pq"))
+}
+
+func TestGoImportResolver_ClassifyImport_Local_RelativePath(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/myapp"
+	r := NewGoImportResolver(reg)
+
+	assert.Equal(t, ImportLocal, r.ClassifyImport("./utils"))
+	assert.Equal(t, ImportLocal, r.ClassifyImport("../models"))
+	assert.Equal(t, ImportLocal, r.ClassifyImport("."))
+}
+
+func TestGoImportResolver_ClassifyImport_Local_SameModule(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/myapp"
+	reg.StdlibLoader = newMockResolutionLoader("fmt")
+	r := NewGoImportResolver(reg)
+
+	assert.Equal(t, ImportLocal, r.ClassifyImport("github.com/example/myapp/handlers"))
+	assert.Equal(t, ImportLocal, r.ClassifyImport("github.com/example/myapp/utils/validation"))
+	// Same prefix but different module
+	assert.Equal(t, ImportThirdParty, r.ClassifyImport("github.com/example/otherapp/handlers"))
+}
+
+func TestGoImportResolver_ResolveImports(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/myapp"
+	reg.StdlibLoader = newMockResolutionLoader("fmt", "net/http")
+	r := NewGoImportResolver(reg)
+
+	imports := []string{
+		"fmt",
+		"net/http",
+		"github.com/gorilla/mux",
+		"github.com/example/myapp/handlers",
+		"./utils",
+	}
+
+	result := r.ResolveImports(imports)
+
+	assert.Equal(t, ImportStdlib, result["fmt"])
+	assert.Equal(t, ImportStdlib, result["net/http"])
+	assert.Equal(t, ImportThirdParty, result["github.com/gorilla/mux"])
+	assert.Equal(t, ImportLocal, result["github.com/example/myapp/handlers"])
+	assert.Equal(t, ImportLocal, result["./utils"])
+}
+
+func TestGoImportResolver_ResolveImports_Empty(t *testing.T) {
+	r := NewGoImportResolver(nil)
+	result := r.ResolveImports([]string{})
+	assert.Empty(t, result)
 }
