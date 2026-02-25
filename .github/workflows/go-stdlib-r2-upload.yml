@@ -33,7 +33,7 @@ jobs:
           go-version: '1.18'
           cache: false
       - name: Save Go 1.18 GOROOT
-        run: echo "GOROOT_1_18=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_18=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.19
         uses: actions/setup-go@v6
@@ -41,7 +41,7 @@ jobs:
           go-version: '1.19'
           cache: false
       - name: Save Go 1.19 GOROOT
-        run: echo "GOROOT_1_19=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_19=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.20
         uses: actions/setup-go@v6
@@ -49,7 +49,7 @@ jobs:
           go-version: '1.20'
           cache: false
       - name: Save Go 1.20 GOROOT
-        run: echo "GOROOT_1_20=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_20=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.21
         uses: actions/setup-go@v6
@@ -57,7 +57,7 @@ jobs:
           go-version: '1.21'
           cache: false
       - name: Save Go 1.21 GOROOT
-        run: echo "GOROOT_1_21=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_21=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.22
         uses: actions/setup-go@v6
@@ -65,7 +65,7 @@ jobs:
           go-version: '1.22'
           cache: false
       - name: Save Go 1.22 GOROOT
-        run: echo "GOROOT_1_22=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_22=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.23
         uses: actions/setup-go@v6
@@ -73,7 +73,7 @@ jobs:
           go-version: '1.23'
           cache: false
       - name: Save Go 1.23 GOROOT
-        run: echo "GOROOT_1_23=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_23=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.24
         uses: actions/setup-go@v6
@@ -81,7 +81,7 @@ jobs:
           go-version: '1.24'
           cache: false
       - name: Save Go 1.24 GOROOT
-        run: echo "GOROOT_1_24=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_24=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.25
         uses: actions/setup-go@v6
@@ -89,7 +89,7 @@ jobs:
           go-version: '1.25'
           cache: false
       - name: Save Go 1.25 GOROOT
-        run: echo "GOROOT_1_25=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_25=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       - name: Setup Go 1.26
         uses: actions/setup-go@v6
@@ -97,7 +97,7 @@ jobs:
           go-version: '1.26'
           cache: false
       - name: Save Go 1.26 GOROOT
-        run: echo "GOROOT_1_26=$GOROOT" >> "$GITHUB_ENV"
+        run: echo "GOROOT_1_26=$(go env GOROOT)" >> "$GITHUB_ENV"
 
       # The last setup-go call above leaves Go 1.26 as the active compiler,
       # which satisfies the module's `go 1.26.0` requirement in go.mod.
