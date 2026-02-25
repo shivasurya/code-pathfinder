@@ -25,6 +25,22 @@ type Server struct {
 	degradation      *GracefulDegradation
 	analytics        *Analytics
 	disableAnalytics bool
+
+	// Go-specific context for stdlib metadata in MCP tool responses.
+	// Set via SetGoContext after the Go call graph is built.
+	goVersion        string
+	goModuleRegistry *core.GoModuleRegistry
+}
+
+// SetGoContext stores the Go version and module registry so that MCP tool
+// responses can include stdlib metadata (is_stdlib, signature, return_type,
+// etc.) for Go standard library calls.
+//
+// Must be called after InitGoStdlibLoader has populated reg.StdlibLoader.
+// Safe to skip — tools degrade gracefully when goModuleRegistry is nil.
+func (s *Server) SetGoContext(version string, reg *core.GoModuleRegistry) {
+	s.goVersion = version
+	s.goModuleRegistry = reg
 }
 
 // NewServer creates a new MCP server with the given index data.
