@@ -490,6 +490,8 @@ func inferTypeFromRHS(
 
 // inferTypeFromFunctionCall infers type from a function call expression.
 // Looks up the function's return type in the TypeInferenceEngine.
+// Falls back to the stdlib registry when the engine has no entry (Pass 2a only
+// covers project-defined functions).
 func inferTypeFromFunctionCall(
 	callNode *sitter.Node,
 	sourceCode []byte,
@@ -523,8 +525,96 @@ func inferTypeFromFunctionCall(
 		return typeInfo
 	}
 
+	// Fallback: attempt stdlib lookup for cross-package stdlib calls.
+	// funcName is "importPath.FuncName" when the importMap resolved the qualifier,
+	// e.g., "net/http.NewRequest", "fmt.Sprintf".
+	if idx := strings.LastIndex(funcName, "."); idx > 0 {
+		importPath := funcName[:idx]
+		fnName := funcName[idx+1:]
+		if ti := inferTypeFromStdlibFunction(importPath, fnName, registry); ti != nil {
+			return ti
+		}
+	}
+
 	// Function not found or has no return type
 	return nil
+}
+
+// inferTypeFromStdlibFunction looks up the primary return type of a Go stdlib
+// function using the StdlibLoader attached to the registry.
+//
+// Parameters:
+//   - importPath: full stdlib import path (e.g., "net/http", "fmt")
+//   - funcName: exported function name (e.g., "NewRequest", "Sprintf")
+//   - registry: Go module registry (provides StdlibLoader)
+//
+// Returns nil when the loader is unavailable, the import path is not a stdlib
+// package, the function is not found, or there is no usable return type.
+func inferTypeFromStdlibFunction(importPath, funcName string, registry *core.GoModuleRegistry) *core.TypeInfo {
+	if registry.StdlibLoader == nil {
+		return nil
+	}
+	if !registry.StdlibLoader.ValidateStdlibImport(importPath) {
+		return nil
+	}
+	fn, err := registry.StdlibLoader.GetFunction(importPath, funcName)
+	if err != nil || fn == nil || len(fn.Returns) == 0 {
+		return nil
+	}
+	// Use the first non-error, non-empty return value.
+	for _, ret := range fn.Returns {
+		if ret.Type == "" || ret.Type == "error" {
+			continue
+		}
+		typeFQN := normalizeStdlibReturnType(ret.Type, importPath)
+		if typeFQN == "" {
+			continue
+		}
+		return &core.TypeInfo{
+			TypeFQN:    typeFQN,
+			Confidence: 0.9,
+			Source:     "stdlib_registry",
+		}
+	}
+	return nil
+}
+
+// normalizeStdlibReturnType converts a raw stdlib return type string into a TypeFQN.
+//
+// rawType is the type string as stored in the registry JSON (e.g., "*Request",
+// "string", "error", "io.Reader"). importPath is the package the function belongs
+// to, used to qualify unqualified type names.
+//
+// Examples:
+//   - "*Request",  "net/http"  → "net/http.Request"
+//   - "File",      "os"        → "os.File"
+//   - "string",    "fmt"       → "builtin.string"
+//   - "error",     "os"        → "builtin.error"
+//   - "io.Reader", "net/http"  → "io.Reader"
+//   - "[]byte",    "os"        → "builtin.byte"
+func normalizeStdlibReturnType(rawType, importPath string) string {
+	t := rawType
+	// Strip pointer and slice qualifiers.
+	t = strings.TrimPrefix(t, "*")
+	t = strings.TrimPrefix(t, "[]")
+	if t == "" {
+		return ""
+	}
+	// Handle builtin types.
+	switch t {
+	case "string", "int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+		"float32", "float64", "complex64", "complex128",
+		"bool", "byte", "rune", "error":
+		return "builtin." + t
+	}
+	// Cross-package reference (e.g., "io.Reader", "os.FileInfo"):
+	// leave as-is; the caller can resolve the package alias in a future pass.
+	if strings.Contains(t, ".") {
+		return t
+	}
+	// Unqualified type name — belongs to the function's own package.
+	return importPath + "." + t
 }
 
 // extractGoFunctionName extracts the function name from a function node.
