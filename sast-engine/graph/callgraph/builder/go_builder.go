@@ -146,6 +146,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	fmt.Fprintf(os.Stderr, "  Pass 4: Resolving call targets...\n")
 	totalCallSites := len(callSites)
 	resolvedCount := 0
+	stdlibCount := 0
 
 	for i, callSite := range callSites {
 		importMap := importMaps[callSite.CallerFile]
@@ -154,10 +155,13 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
+		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
 
 		if resolved {
 			resolvedCount++
+			if isStdlib {
+				stdlibCount++
+			}
 			// Add edge from caller to callee
 			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
 
@@ -170,6 +174,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				},
 				Resolved:  true,
 				TargetFQN: targetFQN,
+				IsStdlib:  isStdlib,
 			})
 		} else {
 			// Record unresolved call for diagnostics
@@ -198,6 +203,11 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		finalResolutionRate := float64(resolvedCount) / float64(totalCallSites) * 100
 		fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (100.0%%) - %.1f%% resolved\n",
 			totalCallSites, totalCallSites, finalResolutionRate)
+		if stdlibCount > 0 && resolvedCount > 0 {
+			stdlibRate := float64(stdlibCount) / float64(resolvedCount) * 100
+			fmt.Fprintf(os.Stderr, "    Stdlib calls: %d (%.1f%% of resolved)\n",
+				stdlibCount, stdlibRate)
+		}
 	}
 
 	return callGraph, nil
@@ -352,6 +362,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 // Returns:
 //   - targetFQN: the resolved fully qualified name
 //   - resolved: true if resolution succeeded
+//   - isStdlib: true when the target is a Go standard library function
 func resolveGoCallTarget(
 	callSite *CallSiteInternal,
 	importMap *core.GoImportMap,
@@ -359,15 +370,17 @@ func resolveGoCallTarget(
 	functionContext map[string][]*graph.Node,
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
-) (string, bool) {
+) (string, bool, bool) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
 		// Try import resolution first (existing pattern)
 		importPath, ok := importMap.Resolve(callSite.ObjectName)
 		if ok {
-			// Successfully resolved import path
+			// Successfully resolved import path; check if it is a stdlib package.
 			targetFQN := importPath + "." + callSite.FunctionName
-			return targetFQN, true
+			isStdlib := registry.StdlibLoader != nil &&
+				registry.StdlibLoader.ValidateStdlibImport(importPath)
+			return targetFQN, true, isStdlib
 		}
 
 		// Pattern 1b: Variable-based method resolution (PR-17)
@@ -390,14 +403,14 @@ func resolveGoCallTarget(
 					// Verify method exists in callGraph before returning
 					// This prevents false positives from unindexed methods
 					if callGraph.Functions[methodFQN] != nil {
-						return methodFQN, true
+						return methodFQN, true, false
 					}
 				}
 			}
 		}
 
 		// Import not found and variable not found - unresolved
-		return "", false
+		return "", false, false
 	}
 
 	// Pattern 2: Same-package call (simple function name)
@@ -407,17 +420,17 @@ func resolveGoCallTarget(
 		if isSameGoPackage(callSite.CallerFile, candidate.File) {
 			// Build FQN for this candidate
 			candidateFQN := buildGoFQN(candidate, nil, registry)
-			return candidateFQN, true
+			return candidateFQN, true, false
 		}
 	}
 
 	// Pattern 3: Builtin function
 	if isBuiltin(callSite.FunctionName) {
-		return "builtin." + callSite.FunctionName, true
+		return "builtin." + callSite.FunctionName, true, false
 	}
 
 	// Pattern 4: Unresolved
-	return "", false
+	return "", false, false
 }
 
 // buildGoFQN constructs a fully qualified name for a Go function, method, or closure.

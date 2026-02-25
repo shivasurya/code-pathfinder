@@ -30,6 +30,10 @@ type CallSite struct {
 	InferredType             string  // The inferred type FQN (e.g., "builtins.str", "test.User")
 	TypeConfidence           float32 // Confidence score of the type inference (0.0-1.0)
 	TypeSource               string  // How type was inferred (e.g., "literal", "return_type", "class_instantiation")
+
+	// IsStdlib is true when the resolved target is a Go standard library function.
+	// Set during Go call graph construction when StdlibLoader is available.
+	IsStdlib bool
 }
 
 // Resolution failure reason categories for diagnostics:

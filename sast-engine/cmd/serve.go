@@ -109,6 +109,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 				}
 				fmt.Fprintf(os.Stderr, "Go module: %s\n", goRegistry.ModulePath)
 
+				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
 				if err != nil {
