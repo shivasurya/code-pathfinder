@@ -1,5 +1,4 @@
-//go:build ignore
-// +build ignore
+//go:build cpf_generate_stdlib_registry
 
 // generate_go_stdlib_registry is a standalone tool that extracts the exported API
 // surface of Go standard library packages and writes versioned JSON registry files.

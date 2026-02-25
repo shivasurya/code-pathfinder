@@ -86,10 +86,10 @@ for version in "${GO_VERSIONS[@]}"; do
 
     # Step 1: generate
     echo "Step 1/3: Generating stdlib registry (GOROOT=$goroot)..."
-    # -tags ignore is required because the file carries //go:build ignore to
-    # exclude it from normal package builds; go run still respects that tag
-    # in Go 1.17+ unless we explicitly satisfy it via -tags.
-    (cd "$MODULE_DIR" && go run -tags ignore tools/generate_go_stdlib_registry.go \
+    # Use a unique build tag so we don't accidentally pick up //go:build ignore
+    # generator files from Go's own standard library (which would cause
+    # "found packages X and main" errors).
+    (cd "$MODULE_DIR" && go run -tags cpf_generate_stdlib_registry tools/generate_go_stdlib_registry.go \
         --go-version  "$version" \
         --goroot      "$goroot" \
         --output-dir  "$OUTPUT_DIR")
