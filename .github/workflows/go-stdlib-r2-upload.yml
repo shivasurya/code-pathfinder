@@ -3,6 +3,13 @@ name: Upload Go Stdlib Registries to R2
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - fix/go-stdlib-r2-goroot-capture
+    paths:
+      - '.github/workflows/go-stdlib-r2-upload.yml'
+      - 'sast-engine/tools/upload_go_stdlib_to_r2.sh'
+      - 'sast-engine/tools/generate_go_stdlib_registry.go'
   workflow_dispatch:
     inputs:
       force_upload:
