@@ -252,7 +252,9 @@ func Handler() {
 	require.True(t, ok, "resp should have a binding")
 	require.NotEmpty(t, bindings)
 	assert.Equal(t, "net/http.Response", bindings[0].Type.TypeFQN)
-	assert.Equal(t, "stdlib_registry", bindings[0].Type.Source)
+	// GetReturnType now resolves stdlib via the engine's stdlib fallback (Source: "stdlib",
+	// Confidence: 1.0) before the extraction-layer helper is reached.
+	assert.Equal(t, "stdlib", bindings[0].Type.Source)
 }
 
 func TestExtractGoVariables_StdlibNoLoader(t *testing.T) {

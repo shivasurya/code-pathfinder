@@ -1,6 +1,7 @@
 package resolution
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -8,6 +9,36 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
+
+// errNotFound is returned by mockStdlibLoader for unknown packages/functions.
+var errNotFound = errors.New("not found")
+
+// mockStdlibLoader implements core.GoStdlibLoader for testing without network access.
+type mockGoTypesStdlibLoader struct {
+	packages  map[string]bool
+	functions map[string]*core.GoStdlibFunction // key: "importPath.funcName"
+}
+
+func (m *mockGoTypesStdlibLoader) ValidateStdlibImport(importPath string) bool {
+	return m.packages[importPath]
+}
+
+func (m *mockGoTypesStdlibLoader) GetFunction(importPath, funcName string) (*core.GoStdlibFunction, error) {
+	key := importPath + "." + funcName
+	fn, ok := m.functions[key]
+	if !ok {
+		return nil, errNotFound
+	}
+	return fn, nil
+}
+
+func (m *mockGoTypesStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
+	return nil, errNotFound
+}
+
+func (m *mockGoTypesStdlibLoader) PackageCount() int {
+	return len(m.packages)
+}
 
 // ===== Engine Creation Tests =====
 
@@ -318,4 +349,295 @@ func TestGoTypeInferenceEngine_ConcurrentReads(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// =============================================================================
+// GetReturnType — stdlib fallback
+// =============================================================================
+
+func TestGetReturnType_StdlibFallback_SimpleFunction(t *testing.T) {
+	// fmt.Sprintf returns string → expect builtin.string with confidence 1.0
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"fmt": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"fmt.Sprintf": {
+					Name:    "Sprintf",
+					Returns: []*core.GoReturnValue{{Type: "string"}},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("fmt.Sprintf")
+
+	assert.True(t, ok)
+	assert.Equal(t, "builtin.string", info.TypeFQN)
+	assert.Equal(t, float32(1.0), info.Confidence)
+	assert.Equal(t, "stdlib", info.Source)
+}
+
+func TestGetReturnType_StdlibFallback_PointerReturn(t *testing.T) {
+	// net/http.Get returns (*Response, error) → expect net/http.Response
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"net/http": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"net/http.Get": {
+					Name: "Get",
+					Returns: []*core.GoReturnValue{
+						{Type: "*Response"},
+						{Type: "error"},
+					},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("net/http.Get")
+
+	assert.True(t, ok)
+	assert.Equal(t, "net/http.Response", info.TypeFQN)
+	assert.Equal(t, float32(1.0), info.Confidence)
+	assert.Equal(t, "stdlib", info.Source)
+}
+
+func TestGetReturnType_StdlibFallback_CrossPackageType(t *testing.T) {
+	// A function that returns io.Reader (cross-package qualified) → returned as-is.
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"bufio": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"bufio.NewReader": {
+					Name:    "NewReader",
+					Returns: []*core.GoReturnValue{{Type: "io.Reader"}},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("bufio.NewReader")
+
+	assert.True(t, ok)
+	assert.Equal(t, "io.Reader", info.TypeFQN)
+}
+
+func TestGetReturnType_StdlibFallback_ErrorOnlyReturn(t *testing.T) {
+	// os.Remove returns only error → no usable type, expect (nil, false)
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"os": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"os.Remove": {
+					Name:    "Remove",
+					Returns: []*core.GoReturnValue{{Type: "error"}},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("os.Remove")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_StdlibFallback_NoReturns(t *testing.T) {
+	// A void stdlib function → (nil, false)
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"fmt": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"fmt.Println": {
+					Name:    "Println",
+					Returns: []*core.GoReturnValue{},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("fmt.Println")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_StdlibFallback_FunctionNotFound(t *testing.T) {
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages:  map[string]bool{"fmt": true},
+			functions: map[string]*core.GoStdlibFunction{},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("fmt.NonExistent")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_StdlibFallback_NotStdlibPackage(t *testing.T) {
+	// Package is known to the loader but not in the stdlib set.
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages:  map[string]bool{"fmt": true}, // only "fmt" is stdlib
+			functions: map[string]*core.GoStdlibFunction{},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	// Third-party package — not in stdlib
+	info, ok := engine.GetReturnType("github.com/myapp/utils.GetUser")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_StdlibFallback_NilStdlibLoader(t *testing.T) {
+	// Registry present but StdlibLoader nil — must not panic, return (nil, false).
+	reg := &core.GoModuleRegistry{
+		ModulePath:   "myapp",
+		StdlibLoader: nil,
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("fmt.Sprintf")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_StdlibFallback_NoDotInFQN(t *testing.T) {
+	// Malformed FQN with no dot — must not panic.
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"fmt": true},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("nodot")
+
+	assert.False(t, ok)
+	assert.Nil(t, info)
+}
+
+func TestGetReturnType_LocalTakesPriorityOverStdlib(t *testing.T) {
+	// A locally-registered type for a stdlib FQN must win over the stdlib lookup.
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"fmt": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"fmt.Sprintf": {
+					Name:    "Sprintf",
+					Returns: []*core.GoReturnValue{{Type: "string"}},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	// Register a local override (e.g., from a parsed user wrapper).
+	local := &core.TypeInfo{TypeFQN: "myapp.CustomString", Confidence: 0.8, Source: "declaration"}
+	engine.AddReturnType("fmt.Sprintf", local)
+
+	info, ok := engine.GetReturnType("fmt.Sprintf")
+
+	assert.True(t, ok)
+	assert.Equal(t, "myapp.CustomString", info.TypeFQN, "local registration must win over stdlib")
+	assert.Equal(t, "declaration", info.Source)
+}
+
+// =============================================================================
+// stdlibNormalizeType
+// =============================================================================
+
+func TestStdlibNormalizeType_BuiltinString(t *testing.T) {
+	assert.Equal(t, "builtin.string", stdlibNormalizeType("string", "fmt"))
+}
+
+func TestStdlibNormalizeType_BuiltinError(t *testing.T) {
+	assert.Equal(t, "builtin.error", stdlibNormalizeType("error", "os"))
+}
+
+func TestStdlibNormalizeType_BuiltinInt(t *testing.T) {
+	assert.Equal(t, "builtin.int", stdlibNormalizeType("int", "math"))
+}
+
+func TestStdlibNormalizeType_BuiltinBool(t *testing.T) {
+	assert.Equal(t, "builtin.bool", stdlibNormalizeType("bool", "strings"))
+}
+
+func TestStdlibNormalizeType_BuiltinByte(t *testing.T) {
+	assert.Equal(t, "builtin.byte", stdlibNormalizeType("byte", "os"))
+}
+
+func TestStdlibNormalizeType_BuiltinRune(t *testing.T) {
+	assert.Equal(t, "builtin.rune", stdlibNormalizeType("rune", "unicode"))
+}
+
+func TestStdlibNormalizeType_PointerBuiltin(t *testing.T) {
+	assert.Equal(t, "builtin.int", stdlibNormalizeType("*int", "sync/atomic"))
+}
+
+func TestStdlibNormalizeType_PointerPackageType(t *testing.T) {
+	assert.Equal(t, "net/http.Request", stdlibNormalizeType("*Request", "net/http"))
+}
+
+func TestStdlibNormalizeType_SliceBuiltin(t *testing.T) {
+	assert.Equal(t, "builtin.byte", stdlibNormalizeType("[]byte", "os"))
+}
+
+func TestStdlibNormalizeType_UnqualifiedType(t *testing.T) {
+	assert.Equal(t, "os.File", stdlibNormalizeType("File", "os"))
+}
+
+func TestStdlibNormalizeType_CrossPackageType(t *testing.T) {
+	assert.Equal(t, "io.Reader", stdlibNormalizeType("io.Reader", "net/http"))
+}
+
+func TestStdlibNormalizeType_EmptyAfterStrip(t *testing.T) {
+	// "[]" stripped to "" — edge case.
+	assert.Equal(t, "", stdlibNormalizeType("[]", "fmt"))
+}
+
+func TestGetReturnType_StdlibFallback_EmptyTypeFQNSkipped(t *testing.T) {
+	// First return is "[]" (normalizes to ""), second is a real type.
+	// The loop must skip the empty one and use the second.
+	reg := &core.GoModuleRegistry{
+		StdlibLoader: &mockGoTypesStdlibLoader{
+			packages: map[string]bool{"os": true},
+			functions: map[string]*core.GoStdlibFunction{
+				"os.Weird": {
+					Name: "Weird",
+					Returns: []*core.GoReturnValue{
+						{Type: "[]"}, // normalizes to ""
+						{Type: "File"},
+					},
+				},
+			},
+		},
+	}
+	engine := NewGoTypeInferenceEngine(reg)
+
+	info, ok := engine.GetReturnType("os.Weird")
+
+	assert.True(t, ok)
+	assert.Equal(t, "os.File", info.TypeFQN)
+}
+
+func TestStdlibNormalizeType_AllNumericBuiltins(t *testing.T) {
+	for _, typ := range []string{
+		"int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+		"float32", "float64", "complex64", "complex128",
+	} {
+		assert.Equal(t, "builtin."+typ, stdlibNormalizeType(typ, "math"))
+	}
 }

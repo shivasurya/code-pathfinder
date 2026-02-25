@@ -2,6 +2,7 @@ package resolution
 
 import (
 	"maps"
+	"strings"
 	"sync"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -174,13 +175,58 @@ func (e *GoTypeInferenceEngine) GetAllScopes() map[string]*GoFunctionScope {
 
 // ===== Return Type Management =====
 
-// GetReturnType retrieves return type for a function (thread-safe read).
-// Returns (typeInfo, true) if found, (nil, false) otherwise.
+// GetReturnType retrieves the return type for a function (thread-safe read).
+//
+// Lookup order:
+//  1. Locally-registered return types (user-code declarations populated during parsing).
+//  2. Go stdlib registry — when the engine's Registry has a StdlibLoader, the FQN is
+//     split into an import path and function name and queried against the manifest.
+//     The first non-error, non-empty return type is returned with Confidence 1.0 and
+//     Source "stdlib".
+//
+// Returns (typeInfo, true) if a type was found, (nil, false) otherwise.
 func (e *GoTypeInferenceEngine) GetReturnType(functionFQN string) (*core.TypeInfo, bool) {
+	// 1. Local lookup (user code, previously-registered types).
 	e.typeMutex.RLock()
-	defer e.typeMutex.RUnlock()
 	typeInfo, ok := e.ReturnTypes[functionFQN]
-	return typeInfo, ok
+	e.typeMutex.RUnlock()
+	if ok {
+		return typeInfo, true
+	}
+
+	// 2. Stdlib fallback.
+	if e.Registry == nil || e.Registry.StdlibLoader == nil {
+		return nil, false
+	}
+	dotIdx := strings.LastIndex(functionFQN, ".")
+	if dotIdx <= 0 {
+		return nil, false
+	}
+	importPath := functionFQN[:dotIdx]
+	funcName := functionFQN[dotIdx+1:]
+
+	if !e.Registry.StdlibLoader.ValidateStdlibImport(importPath) {
+		return nil, false
+	}
+	fn, err := e.Registry.StdlibLoader.GetFunction(importPath, funcName)
+	if err != nil {
+		return nil, false
+	}
+	for _, ret := range fn.Returns {
+		if ret.Type == "" || ret.Type == "error" {
+			continue
+		}
+		typeFQN := stdlibNormalizeType(ret.Type, importPath)
+		if typeFQN == "" {
+			continue
+		}
+		return &core.TypeInfo{
+			TypeFQN:    typeFQN,
+			Confidence: 1.0,
+			Source:     "stdlib",
+		}, true
+	}
+	return nil, false
 }
 
 // AddReturnType stores return type for a function (thread-safe write).
@@ -211,4 +257,39 @@ func (e *GoTypeInferenceEngine) GetAllReturnTypes() map[string]*core.TypeInfo {
 	types := make(map[string]*core.TypeInfo)
 	maps.Copy(types, e.ReturnTypes)
 	return types
+}
+
+// stdlibNormalizeType converts a raw stdlib return-type string (as stored in the
+// registry manifest) into a fully-qualified TypeFQN.
+//
+// importPath is the package the function belongs to, used to qualify type names
+// that are local to that package.
+//
+// Examples:
+//
+//	"*Request",  "net/http"  → "net/http.Request"
+//	"File",      "os"        → "os.File"
+//	"string",    "fmt"       → "builtin.string"
+//	"error",     "os"        → "builtin.error"
+//	"io.Reader", "net/http"  → "io.Reader"
+//	"[]byte",    "os"        → "builtin.byte"
+func stdlibNormalizeType(rawType, importPath string) string {
+	t := strings.TrimPrefix(rawType, "*")
+	t = strings.TrimPrefix(t, "[]")
+	if t == "" {
+		return ""
+	}
+	switch t {
+	case "string", "int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+		"float32", "float64", "complex64", "complex128",
+		"bool", "byte", "rune", "error":
+		return "builtin." + t
+	}
+	// Cross-package reference already qualified (e.g., "io.Reader").
+	if strings.Contains(t, ".") {
+		return t
+	}
+	// Unqualified name — belongs to the function's own package.
+	return importPath + "." + t
 }
