@@ -352,8 +352,8 @@ func TestHandleInitialize(t *testing.T) {
 	result, ok := resp.Result.(InitializeResult)
 	require.True(t, ok)
 	assert.Equal(t, "2024-11-05", result.ProtocolVersion)
-	assert.Equal(t, "pathfinder", result.ServerInfo.Name)
-	assert.Equal(t, "0.1.0-poc", result.ServerInfo.Version)
+	assert.Equal(t, "dev.codepathfinder/pathfinder", result.ServerInfo.Name)
+	assert.Equal(t, "dev", result.ServerInfo.Version)
 	assert.NotNil(t, result.Capabilities.Tools)
 }
 

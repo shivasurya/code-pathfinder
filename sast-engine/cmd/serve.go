@@ -60,6 +60,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 
 	// Create server with empty index (will be populated by background indexing)
 	server := mcp.NewServerWithBackgroundIndexing(projectPath, pythonVersion, disableAnalytics)
+	server.SetVersion(Version)
 
 	// Start indexing in background goroutine
 	go func() {

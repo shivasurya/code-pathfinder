@@ -25,11 +25,18 @@ type Server struct {
 	degradation      *GracefulDegradation
 	analytics        *Analytics
 	disableAnalytics bool
+	version          string
 
 	// Go-specific context for stdlib metadata in MCP tool responses.
 	// Set via SetGoContext after the Go call graph is built.
 	goVersion        string
 	goModuleRegistry *core.GoModuleRegistry
+}
+
+// SetVersion sets the server version reported in MCP initialize responses.
+// Should be called with cmd.Version (injected via ldflags at build time).
+func (s *Server) SetVersion(version string) {
+	s.version = version
 }
 
 // SetGoContext stores the Go version and module registry so that MCP tool
@@ -244,11 +251,16 @@ func (s *Server) handleInitialize(req *JSONRPCRequest) *JSONRPCResponse {
 		s.analytics.ReportClientConnected(params.ClientInfo.Name, params.ClientInfo.Version)
 	}
 
+	version := s.version
+	if version == "" {
+		version = "dev"
+	}
+
 	return SuccessResponse(req.ID, InitializeResult{
 		ProtocolVersion: "2024-11-05",
 		ServerInfo: ServerInfo{
-			Name:    "pathfinder",
-			Version: "0.1.0-poc",
+			Name:    "dev.codepathfinder/pathfinder",
+			Version: version,
 		},
 		Capabilities: Capabilities{
 			Tools: &ToolsCapability{

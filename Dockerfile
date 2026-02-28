@@ -40,5 +40,6 @@ RUN chmod +x /usr/bin/pathfinder
 RUN chmod +x /usr/bin/entrypoint.sh
 
 LABEL maintainer="shiva@shivasurya.me"
+LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]

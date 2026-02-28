@@ -220,8 +220,8 @@ func TestInitializeResult_Serialization(t *testing.T) {
 	result := InitializeResult{
 		ProtocolVersion: "2024-11-05",
 		ServerInfo: ServerInfo{
-			Name:    "pathfinder",
-			Version: "0.1.0-poc",
+			Name:    "dev.codepathfinder/pathfinder",
+			Version: "1.3.7",
 		},
 		Capabilities: Capabilities{
 			Tools: &ToolsCapability{ListChanged: true},
