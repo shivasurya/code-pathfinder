@@ -24,7 +24,7 @@ Examples:
 
 __version__ = "1.3.6"
 
-from .matchers import calls, variable
+from .matchers import calls, calls_on, variable
 from .decorators import rule
 from .dataflow import flows
 from .propagation import propagates
@@ -34,6 +34,7 @@ from .logic import And, Or, Not
 
 __all__ = [
     "calls",
+    "calls_on",
     "variable",
     "rule",
     "flows",

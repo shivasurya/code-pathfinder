@@ -223,6 +223,89 @@ def calls(
     return CallMatcher(*patterns, match_position=match_position, match_name=match_name)
 
 
+class TypeConstrainedCallMatcher:
+    """
+    Matches method calls where the receiver's inferred type matches a constraint.
+
+    Unlike calls() which matches by function name only, calls_on() leverages
+    the type inference engine to filter by the receiver object's type.
+
+    Examples:
+        calls_on("Cursor", "execute")               # Short name match
+        calls_on("sqlite3.Cursor", "execute")        # Fully qualified match
+        calls_on("*Cursor", "execute")               # Wildcard prefix
+        calls_on("Cursor", "execute", fallback="none")  # Strict: no match without type info
+    """
+
+    def __init__(
+        self,
+        receiver_type: str,
+        method: str,
+        min_confidence: float = 0.5,
+        fallback: str = "name",
+    ):
+        if not receiver_type or not isinstance(receiver_type, str):
+            raise ValueError("calls_on() requires a non-empty receiver_type string")
+        if not method or not isinstance(method, str):
+            raise ValueError("calls_on() requires a non-empty method string")
+
+        self.receiver_type = receiver_type
+        self.method = method
+        self.min_confidence = min_confidence
+        self.fallback = fallback
+
+    def to_ir(self) -> dict:
+        return {
+            "type": IRType.TYPE_CONSTRAINED_CALL.value,
+            "receiverType": self.receiver_type,
+            "methodName": self.method,
+            "minConfidence": self.min_confidence,
+            "fallbackMode": self.fallback,
+        }
+
+    def __repr__(self) -> str:
+        return f'calls_on("{self.receiver_type}", "{self.method}")'
+
+
+def calls_on(
+    receiver_type: str,
+    method: str,
+    min_confidence: float = 0.5,
+    fallback: str = "name",
+) -> TypeConstrainedCallMatcher:
+    """
+    Create a type-constrained method call matcher.
+
+    Matches calls like obj.method() where obj's inferred type matches receiver_type.
+
+    Args:
+        receiver_type: Type pattern to match. Supports:
+            - Exact FQN: "sqlite3.Cursor"
+            - Short name: "Cursor" (matches any *.Cursor)
+            - Wildcard prefix: "*Cursor"
+            - Wildcard suffix: "sqlite3.*"
+        method: Method name to match (exact).
+        min_confidence: Minimum type inference confidence (0.0-1.0, default 0.5).
+        fallback: Behavior when type inference unavailable:
+            - "name": match by method name only (default)
+            - "none": skip (no match without type info)
+            - "warn": match but flag as low confidence
+
+    Returns:
+        TypeConstrainedCallMatcher instance
+
+    Examples:
+        >>> calls_on("Cursor", "execute")
+        calls_on("Cursor", "execute")
+
+        >>> calls_on("sqlite3.Cursor", "execute", fallback="none")
+        calls_on("sqlite3.Cursor", "execute")
+    """
+    return TypeConstrainedCallMatcher(
+        receiver_type, method, min_confidence=min_confidence, fallback=fallback
+    )
+
+
 def variable(pattern: str) -> VariableMatcher:
     """
     Create a matcher for variable references.

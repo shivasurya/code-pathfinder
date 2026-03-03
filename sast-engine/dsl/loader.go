@@ -386,6 +386,9 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 	case "call_matcher":
 		return l.executeCallMatcher(matcherMap, cg)
 
+	case "type_constrained_call":
+		return l.executeTypeConstrainedCall(matcherMap, cg)
+
 	case "variable_matcher":
 		return l.executeVariableMatcher(matcherMap, cg)
 
@@ -428,6 +431,45 @@ func (l *RuleLoader) executeCallMatcher(matcherMap map[string]any, cg *core.Call
 			SinkLine:    match.Line,
 			SinkCall:    match.CallSite.Target,
 			Confidence:  1.0,
+			Scope:       "local",
+		})
+	}
+
+	return detections, nil
+}
+
+func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	// Convert map to TypeConstrainedCallIR
+	jsonBytes, err := json.Marshal(matcherMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal type_constrained_call: %w", err)
+	}
+
+	var ir TypeConstrainedCallIR
+	if err := json.Unmarshal(jsonBytes, &ir); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal type_constrained_call: %w", err)
+	}
+
+	// Apply defaults
+	if ir.MinConfidence == 0 {
+		ir.MinConfidence = 0.5
+	}
+	if ir.FallbackMode == "" {
+		ir.FallbackMode = "name"
+	}
+
+	executor := NewTypeConstrainedCallExecutor(&ir, cg)
+	matches := executor.ExecuteWithContext()
+
+	// Convert to DataflowDetection for consistent return type
+	detections := []DataflowDetection{}
+	for _, match := range matches {
+		detections = append(detections, DataflowDetection{
+			FunctionFQN: match.FunctionFQN,
+			SourceLine:  match.Line,
+			SinkLine:    match.Line,
+			SinkCall:    match.CallSite.Target,
+			Confidence:  float64(match.CallSite.TypeConfidence),
 			Scope:       "local",
 		})
 	}

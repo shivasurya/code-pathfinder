@@ -9,7 +9,8 @@ const (
 	IRTypeDataflow        IRType = "dataflow"
 	IRTypeLogicAnd        IRType = "logic_and"
 	IRTypeLogicOr         IRType = "logic_or"
-	IRTypeLogicNot        IRType = "logic_not"
+	IRTypeLogicNot             IRType = "logic_not"
+	IRTypeTypeConstrainedCall  IRType = "type_constrained_call"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -63,6 +64,21 @@ type VariableMatcherIR struct {
 // GetType returns the IR type.
 func (v *VariableMatcherIR) GetType() IRType {
 	return IRTypeVariableMatcher
+}
+
+// TypeConstrainedCallIR represents a type-aware method call matcher.
+// Matches calls like obj.method() where obj's inferred type matches ReceiverType.
+type TypeConstrainedCallIR struct {
+	Type          string  `json:"type"`          // "type_constrained_call"
+	ReceiverType  string  `json:"receiverType"`  // "Cursor", "sqlite3.Cursor", "*Cursor"
+	MethodName    string  `json:"methodName"`    // "execute"
+	MinConfidence float64 `json:"minConfidence"` // Minimum type confidence threshold (default 0.5)
+	FallbackMode  string  `json:"fallbackMode"`  // "name" (match anyway), "none" (skip), "warn" (match + flag)
+}
+
+// GetType returns the IR type.
+func (tc *TypeConstrainedCallIR) GetType() IRType {
+	return IRTypeTypeConstrainedCall
 }
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
