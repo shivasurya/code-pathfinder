@@ -313,6 +313,101 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 	})
 }
 
+func TestRuleLoader_ExecuteTypeConstrainedCall(t *testing.T) {
+	cg := buildTypedCallGraphForLoader()
+
+	t.Run("executes type_constrained_call via loader", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":          "type_constrained_call",
+				"receiverType":  "Cursor",
+				"methodName":    "execute",
+				"minConfidence": 0.5,
+				"fallbackMode":  "none",
+			},
+		}
+
+		loader := NewRuleLoader("")
+		detections, err := loader.ExecuteRule(rule, cg)
+
+		require.NoError(t, err)
+		assert.Len(t, detections, 2, "should find 2 Cursor.execute matches")
+		for _, d := range detections {
+			assert.Contains(t, d.SinkCall, "execute")
+		}
+	})
+
+	t.Run("type_constrained_call with name fallback via loader", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":          "type_constrained_call",
+				"receiverType":  "Cursor",
+				"methodName":    "execute",
+				"minConfidence": 0.5,
+				"fallbackMode":  "name",
+			},
+		}
+
+		loader := NewRuleLoader("")
+		detections, err := loader.ExecuteRule(rule, cg)
+
+		require.NoError(t, err)
+		assert.Len(t, detections, 3, "name fallback should include untyped execute call")
+	})
+
+	t.Run("type_constrained_call with invalid IR returns error", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":         "type_constrained_call",
+				"receiverType": "",
+				"methodName":   "execute",
+			},
+		}
+
+		loader := NewRuleLoader("")
+		_, err := loader.ExecuteRule(rule, cg)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "receiverType must not be empty")
+	})
+}
+
+// buildTypedCallGraphForLoader creates a typed CallGraph for loader tests.
+func buildTypedCallGraphForLoader() *core.CallGraph {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:                   "cursor.execute",
+			Location:                 core.Location{File: "app.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "sqlite3.Cursor",
+			TypeConfidence:           0.95,
+		},
+		{
+			Target:                   "cursor.execute",
+			Location:                 core.Location{File: "app.py", Line: 15},
+			ResolvedViaTypeInference: true,
+			InferredType:             "sqlite3.Cursor",
+			TypeConfidence:           0.95,
+		},
+		{
+			Target:                   "task.execute",
+			Location:                 core.Location{File: "app.py", Line: 20},
+			ResolvedViaTypeInference: true,
+			InferredType:             "celery.Task",
+			TypeConfidence:           0.90,
+		},
+		{
+			Target:                   "unknown.execute",
+			Location:                 core.Location{File: "app.py", Line: 25},
+			ResolvedViaTypeInference: false,
+			InferredType:             "",
+			TypeConfidence:           0.0,
+		},
+	}
+	return cg
+}
+
 func TestRuleLoader_ExecuteLogic(t *testing.T) {
 	t.Run("logic operators return empty for now", func(t *testing.T) {
 		cg := core.NewCallGraph()
