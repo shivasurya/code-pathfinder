@@ -7,18 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// callMatcherMap creates a map[string]any from patterns (for DataflowIR with []any fields).
-func callMatcherMap(patterns ...string) map[string]any {
-	result := make([]any, len(patterns))
-	for i, s := range patterns {
-		result[i] = s
-	}
-	return map[string]any{
-		"type":     "call_matcher",
-		"patterns": result,
-	}
-}
-
 func TestDataflowExecutor_Local(t *testing.T) {
 	t.Run("finds functions with sources and sinks", func(t *testing.T) {
 		// Setup: Function with source and sink in same function

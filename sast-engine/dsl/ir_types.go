@@ -11,6 +11,8 @@ const (
 	IRTypeLogicOr             IRType = "logic_or"
 	IRTypeLogicNot            IRType = "logic_not"
 	IRTypeTypeConstrainedCall IRType = "type_constrained_call"
+	IRTypeSemanticSource     IRType = "semantic_source"
+	IRTypeSemanticSink       IRType = "semantic_sink"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -79,6 +81,32 @@ type TypeConstrainedCallIR struct {
 // GetType returns the IR type.
 func (tc *TypeConstrainedCallIR) GetType() IRType {
 	return IRTypeTypeConstrainedCall
+}
+
+// SemanticSourceIR represents a compact semantic source category.
+// The Go engine expands it server-side into TypeConstrainedCallIR/CallMatcherIR entries.
+type SemanticSourceIR struct {
+	Type      string `json:"type"`               // "semantic_source"
+	Category  string `json:"category"`            // "http_input", "http_params", etc.
+	Framework string `json:"framework,omitempty"` // "", "django", "flask" — empty = all
+}
+
+// GetType returns the IR type.
+func (s *SemanticSourceIR) GetType() IRType {
+	return IRTypeSemanticSource
+}
+
+// SemanticSinkIR represents a compact semantic sink category.
+// The Go engine expands it server-side into TypeConstrainedCallIR/CallMatcherIR entries.
+type SemanticSinkIR struct {
+	Type      string `json:"type"`               // "semantic_sink"
+	Category  string `json:"category"`            // "sql_execution", "command_execution", etc.
+	Framework string `json:"framework,omitempty"` // "", "django", "flask" — empty = all
+}
+
+// GetType returns the IR type.
+func (s *SemanticSinkIR) GetType() IRType {
+	return IRTypeSemanticSink
 }
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.

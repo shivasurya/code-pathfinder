@@ -251,6 +251,12 @@ func (e *DataflowExecutor) resolveMatcherToCallSites(matcherMap map[string]any) 
 	case "logic_not":
 		return e.resolveLogicNot(matcherMap)
 
+	case "semantic_source":
+		return e.resolveSemanticSource(matcherMap)
+
+	case "semantic_sink":
+		return e.resolveSemanticSink(matcherMap)
+
 	default:
 		log.Printf("WARNING: resolveMatcherToCallSites: unknown matcher type %q, skipping", matcherType)
 		return nil
@@ -436,4 +442,54 @@ func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []Cal
 	}
 
 	return functions
+}
+
+// resolveSemanticSource expands a semantic source category and resolves all expanded matchers.
+func (e *DataflowExecutor) resolveSemanticSource(matcherMap map[string]any) []CallSiteMatch {
+	category, _ := matcherMap["category"].(string)
+	framework, _ := matcherMap["framework"].(string)
+
+	expander := NewSemanticExpander()
+	expanded := expander.ExpandSource(category, framework)
+	if len(expanded) == 0 {
+		return nil
+	}
+
+	results := []CallSiteMatch{}
+	seen := map[string]bool{}
+	for _, m := range expanded {
+		for _, match := range e.resolveMatcherToCallSites(m) {
+			key := fmt.Sprintf("%s:%d", match.FunctionFQN, match.Line)
+			if !seen[key] {
+				seen[key] = true
+				results = append(results, match)
+			}
+		}
+	}
+	return results
+}
+
+// resolveSemanticSink expands a semantic sink category and resolves all expanded matchers.
+func (e *DataflowExecutor) resolveSemanticSink(matcherMap map[string]any) []CallSiteMatch {
+	category, _ := matcherMap["category"].(string)
+	framework, _ := matcherMap["framework"].(string)
+
+	expander := NewSemanticExpander()
+	expanded := expander.ExpandSink(category, framework)
+	if len(expanded) == 0 {
+		return nil
+	}
+
+	results := []CallSiteMatch{}
+	seen := map[string]bool{}
+	for _, m := range expanded {
+		for _, match := range e.resolveMatcherToCallSites(m) {
+			key := fmt.Sprintf("%s:%d", match.FunctionFQN, match.Line)
+			if !seen[key] {
+				seen[key] = true
+				results = append(results, match)
+			}
+		}
+	}
+	return results
 }

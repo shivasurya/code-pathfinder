@@ -97,16 +97,8 @@ func buildTypedDataflowCallGraph() *core.CallGraph {
 	return cg
 }
 
-// typeConstrainedMap creates a type_constrained_call matcher map.
-func typeConstrainedMap(receiverType, methodName string) map[string]any {
-	return map[string]any{
-		"type":         "type_constrained_call",
-		"receiverType": receiverType,
-		"methodName":   methodName,
-	}
-}
-
-// typeConstrainedMapFull creates a type_constrained_call matcher with all options.
+// typeConstrainedMapFull creates a type_constrained_call matcher with all options
+// (including minConfidence). Use the production typeConstrainedMap() for standard cases.
 func typeConstrainedMapFull(receiverType, methodName string, minConfidence float64, fallbackMode string) map[string]any {
 	return map[string]any{
 		"type":          "type_constrained_call",
@@ -122,7 +114,7 @@ func TestDataflowExecutor_TypeConstrainedSink_Local(t *testing.T) {
 		cg := buildTypedDataflowCallGraph()
 		ir := &DataflowIR{
 			Sources:    []any{callMatcherMap("request.GET")},
-			Sinks:      []any{typeConstrainedMap("Cursor", "execute")},
+			Sinks:      []any{typeConstrainedMap("Cursor", "execute", "name")},
 			Sanitizers: []any{},
 			Scope:      "local",
 		}
@@ -166,7 +158,7 @@ func TestDataflowExecutor_TypeConstrainedSink_Local(t *testing.T) {
 		cg := buildTypedDataflowCallGraph()
 		ir := &DataflowIR{
 			Sources:    []any{callMatcherMap("request.GET")},
-			Sinks:      []any{typeConstrainedMap("Cursor", "execute")},
+			Sinks:      []any{typeConstrainedMap("Cursor", "execute", "name")},
 			Sanitizers: []any{callMatcherMap("escape_html")},
 			Scope:      "local",
 		}
@@ -200,7 +192,7 @@ func TestDataflowExecutor_TypeConstrainedSink_Local(t *testing.T) {
 			Sources: []any{callMatcherMap("request.GET")},
 			Sinks: []any{
 				callMatcherMap("eval"),
-				typeConstrainedMap("Cursor", "execute"),
+				typeConstrainedMap("Cursor", "execute", "name"),
 			},
 			Sanitizers: []any{},
 			Scope:      "local",
@@ -225,7 +217,7 @@ func TestDataflowExecutor_TypeConstrainedSink_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []any{typeConstrainedMap("Request", "get")},
+			Sources:    []any{typeConstrainedMap("Request", "get", "name")},
 			Sinks:      []any{callMatcherMap("eval")},
 			Sanitizers: []any{},
 			Scope:      "local",
@@ -264,7 +256,7 @@ func TestDataflowExecutor_TypeConstrainedSink_Global(t *testing.T) {
 		cg := buildTypedDataflowCallGraph()
 		ir := &DataflowIR{
 			Sources:    []any{callMatcherMap("request.POST")},
-			Sinks:      []any{typeConstrainedMap("Cursor", "execute")},
+			Sinks:      []any{typeConstrainedMap("Cursor", "execute", "name")},
 			Sanitizers: []any{},
 			Scope:      "global",
 		}
@@ -305,7 +297,7 @@ func TestDataflowExecutor_LogicOperators(t *testing.T) {
 					"type": "logic_or",
 					"matchers": []any{
 						callMatcherMap("eval"),
-						typeConstrainedMap("Cursor", "execute"),
+						typeConstrainedMap("Cursor", "execute", "name"),
 					},
 				},
 			},
@@ -373,7 +365,7 @@ func TestDataflowExecutor_LogicOperators(t *testing.T) {
 								callMatcherMap("exec"),
 							},
 						},
-						typeConstrainedMap("Cursor", "execute"),
+						typeConstrainedMap("Cursor", "execute", "name"),
 					},
 				},
 			},
@@ -442,7 +434,7 @@ func TestResolveMatcherToCallSites(t *testing.T) {
 		ir := &DataflowIR{Scope: "local"}
 		executor := NewDataflowExecutor(ir, cg)
 
-		matches := executor.resolveMatcherToCallSites(typeConstrainedMap("Cursor", "execute"))
+		matches := executor.resolveMatcherToCallSites(typeConstrainedMap("Cursor", "execute", "name"))
 		assert.Len(t, matches, 1)
 		assert.Equal(t, "cursor.execute", matches[0].CallSite.Target)
 	})

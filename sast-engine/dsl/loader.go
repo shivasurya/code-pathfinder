@@ -398,6 +398,9 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 	case "logic_and", "logic_or", "logic_not":
 		return l.executeLogic(matcherType, matcherMap, cg)
 
+	case "semantic_source", "semantic_sink":
+		return l.executeSemanticMatcher(matcherType, matcherMap, cg)
+
 	// Container matchers - skip silently (handled by ContainerRuleExecutor)
 	case "missing_instruction", "instruction", "service_has", "service_missing", "any_of", "all_of", "none_of":
 		return []DataflowDetection{}, nil
@@ -627,4 +630,41 @@ func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *c
 	}
 
 	return detections, nil
+}
+
+func (l *RuleLoader) executeSemanticMatcher(matcherType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	category, _ := matcherMap["category"].(string)
+	framework, _ := matcherMap["framework"].(string)
+
+	expander := NewSemanticExpander()
+
+	var expanded []map[string]any
+	if matcherType == "semantic_source" {
+		expanded = expander.ExpandSource(category, framework)
+	} else {
+		expanded = expander.ExpandSink(category, framework)
+	}
+
+	if len(expanded) == 0 {
+		return []DataflowDetection{}, nil
+	}
+
+	// Execute each expanded matcher and collect results (like logic_or)
+	all := []DataflowDetection{}
+	seen := map[string]bool{}
+	for _, m := range expanded {
+		subRule := &RuleIR{Matcher: m}
+		results, err := l.ExecuteRule(subRule, cg)
+		if err != nil {
+			continue
+		}
+		for _, r := range results {
+			key := fmt.Sprintf("%s:%d:%d", r.FunctionFQN, r.SourceLine, r.SinkLine)
+			if !seen[key] {
+				seen[key] = true
+				all = append(all, r)
+			}
+		}
+	}
+	return all, nil
 }
