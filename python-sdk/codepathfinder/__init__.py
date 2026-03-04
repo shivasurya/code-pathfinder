@@ -31,6 +31,7 @@ from .propagation import propagates
 from .presets import PropagationPresets
 from .config import set_default_propagation, set_default_scope
 from .logic import And, Or, Not
+from . import sources
 
 __all__ = [
     "calls",
@@ -46,5 +47,6 @@ __all__ = [
     "And",
     "Or",
     "Not",
+    "sources",
     "__version__",
 ]
