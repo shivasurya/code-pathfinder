@@ -33,6 +33,7 @@ from .config import set_default_propagation, set_default_scope
 from .logic import And, Or, Not
 from . import sources
 from . import sinks
+from . import vulnerability
 
 __all__ = [
     "calls",
@@ -50,5 +51,6 @@ __all__ = [
     "Not",
     "sources",
     "sinks",
+    "vulnerability",
     "__version__",
 ]
