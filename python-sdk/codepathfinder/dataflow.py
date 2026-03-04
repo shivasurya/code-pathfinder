@@ -5,11 +5,32 @@ The flows() function is the core of OWASP Top 10 pattern detection.
 It describes how tainted data flows from sources to sinks.
 """
 
-from typing import List, Optional, Union
-from .matchers import CallMatcher
+from typing import Any, List, Optional
 from .propagation import PropagationPrimitive, create_propagation_list
 from .ir import IRType
 from .config import get_default_propagation, get_default_scope
+
+
+def _normalize_matchers(matchers: Any) -> list:
+    """Normalize matcher input to a list of matchers.
+
+    Accepts:
+    - Single matcher (any object with to_ir() method)
+    - List of matchers
+    - None -> empty list
+
+    Raises:
+        TypeError: If input is not a matcher or list of matchers.
+    """
+    if matchers is None:
+        return []
+    if isinstance(matchers, list):
+        return matchers
+    if hasattr(matchers, "to_ir"):
+        return [matchers]
+    raise TypeError(
+        f"Expected a matcher or list of matchers, got {type(matchers).__name__}"
+    )
 
 
 class DataflowMatcher:
@@ -33,9 +54,9 @@ class DataflowMatcher:
 
     def __init__(
         self,
-        from_sources: Union[CallMatcher, List[CallMatcher]],
-        to_sinks: Union[CallMatcher, List[CallMatcher]],
-        sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
+        from_sources: Any = None,
+        to_sinks: Any = None,
+        sanitized_by: Any = None,
         propagates_through: Optional[List[PropagationPrimitive]] = None,
         scope: Optional[str] = None,
     ):
@@ -65,25 +86,17 @@ class DataflowMatcher:
             )
         """
         # Validate sources
-        if isinstance(from_sources, CallMatcher):
-            from_sources = [from_sources]
-        if not from_sources:
+        self.sources = _normalize_matchers(from_sources)
+        if not self.sources:
             raise ValueError("flows() requires at least one source")
-        self.sources = from_sources
 
         # Validate sinks
-        if isinstance(to_sinks, CallMatcher):
-            to_sinks = [to_sinks]
-        if not to_sinks:
+        self.sinks = _normalize_matchers(to_sinks)
+        if not self.sinks:
             raise ValueError("flows() requires at least one sink")
-        self.sinks = to_sinks
 
         # Validate sanitizers
-        if sanitized_by is None:
-            sanitized_by = []
-        elif isinstance(sanitized_by, CallMatcher):
-            sanitized_by = [sanitized_by]
-        self.sanitizers = sanitized_by
+        self.sanitizers = _normalize_matchers(sanitized_by)
 
         # Validate propagation (use global default if not specified)
         if propagates_through is None:
@@ -141,9 +154,9 @@ class DataflowMatcher:
 
 # Public API
 def flows(
-    from_sources: Union[CallMatcher, List[CallMatcher]],
-    to_sinks: Union[CallMatcher, List[CallMatcher]],
-    sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
+    from_sources: Any = None,
+    to_sinks: Any = None,
+    sanitized_by: Any = None,
     propagates_through: Optional[List[PropagationPrimitive]] = None,
     scope: Optional[str] = None,
 ) -> DataflowMatcher:

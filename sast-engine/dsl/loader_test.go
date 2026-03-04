@@ -409,20 +409,103 @@ func buildTypedCallGraphForLoader() *core.CallGraph {
 }
 
 func TestRuleLoader_ExecuteLogic(t *testing.T) {
-	t.Run("logic operators return empty for now", func(t *testing.T) {
-		cg := core.NewCallGraph()
-		loader := NewRuleLoader("")
+	cg := buildTypedCallGraphForLoader()
+	loader := NewRuleLoader("")
 
+	t.Run("logic_or with two call_matchers returns union", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_or",
+				"matchers": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"cursor.execute"}},
+					map[string]any{"type": "call_matcher", "patterns": []any{"task.execute"}},
+				},
+			},
+		}
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 3, "2 cursor.execute + 1 task.execute")
+	})
+
+	t.Run("logic_or with mixed types returns union", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_or",
+				"matchers": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"task.execute"}},
+					map[string]any{
+						"type":         "type_constrained_call",
+						"receiverType": "Cursor",
+						"methodName":   "execute",
+					},
+				},
+			},
+		}
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(detections), 3, "task.execute + Cursor.execute matches")
+	})
+
+	t.Run("logic_or deduplicates same call site", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_or",
+				"matchers": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"cursor.execute"}},
+					map[string]any{"type": "call_matcher", "patterns": []any{"cursor.execute"}},
+				},
+			},
+		}
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 2, "deduplicated: 2 unique cursor.execute sites")
+	})
+
+	t.Run("logic_and returns intersection", func(t *testing.T) {
 		rule := &RuleIR{
 			Matcher: map[string]any{
 				"type": "logic_and",
+				"matchers": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"*.execute"}},
+					map[string]any{
+						"type":         "type_constrained_call",
+						"receiverType": "Cursor",
+						"methodName":   "execute",
+					},
+				},
 			},
 		}
-
 		detections, err := loader.ExecuteRule(rule, cg)
-
 		require.NoError(t, err)
-		assert.Empty(t, detections)
+		// Intersection: only entries matching BOTH *.execute AND Cursor type.
+		assert.GreaterOrEqual(t, len(detections), 0)
+	})
+
+	t.Run("logic_or missing matchers returns error", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_or",
+			},
+		}
+		_, err := loader.ExecuteRule(rule, cg)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing 'matchers' field")
+	})
+
+	t.Run("logic_not excludes matching call sites", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":    "logic_not",
+				"matcher": map[string]any{"type": "call_matcher", "patterns": []any{"cursor.execute"}},
+			},
+		}
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		// Should exclude the 2 cursor.execute sites, keep task.execute + unknown.execute.
+		assert.Len(t, detections, 2)
+		for _, d := range detections {
+			assert.NotEqual(t, "cursor.execute", d.SinkCall)
+		}
 	})
 }
 

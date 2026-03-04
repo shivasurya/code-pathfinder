@@ -1,13 +1,15 @@
 """Logic operators for combining matchers."""
 
 from typing import Union
-from .matchers import CallMatcher, VariableMatcher
+from .matchers import CallMatcher, VariableMatcher, TypeConstrainedCallMatcher, ReturnTypeCallMatcher
 from .dataflow import DataflowMatcher
 from .ir import IRType
 
 MatcherType = Union[
     CallMatcher,
     VariableMatcher,
+    TypeConstrainedCallMatcher,
+    ReturnTypeCallMatcher,
     DataflowMatcher,
     "AndOperator",
     "OrOperator",

@@ -485,12 +485,109 @@ func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]any, cg *core.
 	return detections, nil
 }
 
-//nolint:unparam // Will be implemented in future PRs
 func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
-	// TODO: Handle And/Or/Not logic operators
-	// This requires recursive execution of nested matchers
-	// For now, return empty detections as placeholder
-	return []DataflowDetection{}, nil
+	switch logicType {
+	case "logic_or":
+		operands, ok := matcherMap["matchers"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("logic_or missing 'matchers' field")
+		}
+		all := []DataflowDetection{}
+		seen := map[string]bool{}
+		for _, op := range operands {
+			opMap, ok := op.(map[string]any)
+			if !ok {
+				continue
+			}
+			subRule := &RuleIR{Matcher: opMap}
+			results, err := l.ExecuteRule(subRule, cg)
+			if err != nil {
+				continue
+			}
+			for _, r := range results {
+				key := fmt.Sprintf("%s:%d:%d", r.FunctionFQN, r.SourceLine, r.SinkLine)
+				if !seen[key] {
+					seen[key] = true
+					all = append(all, r)
+				}
+			}
+		}
+		return all, nil
+
+	case "logic_and":
+		operands, ok := matcherMap["matchers"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("logic_and missing 'matchers' field")
+		}
+		if len(operands) == 0 {
+			return []DataflowDetection{}, nil
+		}
+		firstMap, ok := operands[0].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("logic_and operand is not a map")
+		}
+		current, err := l.ExecuteRule(&RuleIR{Matcher: firstMap}, cg)
+		if err != nil {
+			return nil, err
+		}
+		for i := 1; i < len(operands); i++ {
+			opMap, ok := operands[i].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("logic_and operand is not a map")
+			}
+			nextResults, err := l.ExecuteRule(&RuleIR{Matcher: opMap}, cg)
+			if err != nil {
+				return nil, err
+			}
+			nextSet := map[string]bool{}
+			for _, r := range nextResults {
+				nextSet[fmt.Sprintf("%s:%d:%d", r.FunctionFQN, r.SourceLine, r.SinkLine)] = true
+			}
+			filtered := []DataflowDetection{}
+			for _, r := range current {
+				key := fmt.Sprintf("%s:%d:%d", r.FunctionFQN, r.SourceLine, r.SinkLine)
+				if nextSet[key] {
+					filtered = append(filtered, r)
+				}
+			}
+			current = filtered
+		}
+		return current, nil
+
+	case "logic_not":
+		operand, ok := matcherMap["matcher"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("logic_not missing 'matcher' field")
+		}
+		excluded, err := l.ExecuteRule(&RuleIR{Matcher: operand}, cg)
+		if err != nil {
+			return nil, err
+		}
+		excludeSet := map[string]bool{}
+		for _, r := range excluded {
+			excludeSet[fmt.Sprintf("%s:%d:%d", r.FunctionFQN, r.SourceLine, r.SinkLine)] = true
+		}
+		all := []DataflowDetection{}
+		for functionFQN, callSites := range cg.CallSites {
+			for _, cs := range callSites {
+				key := fmt.Sprintf("%s:%d:%d", functionFQN, cs.Location.Line, cs.Location.Line)
+				if !excludeSet[key] {
+					all = append(all, DataflowDetection{
+						FunctionFQN: functionFQN,
+						SourceLine:  cs.Location.Line,
+						SinkLine:    cs.Location.Line,
+						SinkCall:    cs.Target,
+						Confidence:  1.0,
+						Scope:       "local",
+					})
+				}
+			}
+		}
+		return all, nil
+
+	default:
+		return nil, fmt.Errorf("unknown logic type: %s", logicType)
+	}
 }
 
 func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
