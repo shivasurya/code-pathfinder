@@ -18,6 +18,8 @@ class IRType(Enum):
     LOGIC_AND = "logic_and"  # Coming in PR #5
     LOGIC_OR = "logic_or"  # Coming in PR #5
     LOGIC_NOT = "logic_not"  # Coming in PR #5
+    TYPE_CONSTRAINED_CALL = "type_constrained_call"
+    RETURN_TYPE_CALL = "return_type_call"
 
 
 class MatcherIR(Protocol):
@@ -102,6 +104,31 @@ def validate_ir(ir: Dict[str, Any]) -> bool:
             and isinstance(ir["propagation"], list)
             and "scope" in ir
             and ir["scope"] in ["local", "global"]
+        )
+
+    if ir_type == IRType.TYPE_CONSTRAINED_CALL:
+        return (
+            "receiverType" in ir
+            and isinstance(ir["receiverType"], str)
+            and len(ir["receiverType"]) > 0
+            and "methodName" in ir
+            and isinstance(ir["methodName"], str)
+            and len(ir["methodName"]) > 0
+            and "minConfidence" in ir
+            and isinstance(ir["minConfidence"], (int, float))
+            and 0.0 <= ir["minConfidence"] <= 1.0
+            and "fallbackMode" in ir
+            and ir["fallbackMode"] in ("name", "none", "warn")
+        )
+
+    if ir_type == IRType.RETURN_TYPE_CALL:
+        return (
+            "returnType" in ir
+            and isinstance(ir["returnType"], str)
+            and len(ir["returnType"]) > 0
+            and "minConfidence" in ir
+            and isinstance(ir["minConfidence"], (int, float))
+            and 0.0 <= ir["minConfidence"] <= 1.0
         )
 
     return True

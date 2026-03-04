@@ -241,3 +241,203 @@ def variable(pattern: str) -> VariableMatcher:
         variable("*_id")
     """
     return VariableMatcher(pattern)
+
+
+class TypeConstrainedCallMatcher:
+    """
+    Matches method calls on objects of a specific inferred type.
+
+    Examples:
+        calls_on("Cursor", "execute")              # Short name match
+        calls_on("sqlite3.Cursor", "execute")       # Fully qualified
+        calls_on("*Cursor", "execute")              # Wildcard prefix
+        calls_on("sqlite3.*", "execute")             # Wildcard suffix
+        calls_on("Cursor", "execute", fallback="none")  # No fallback
+        calls_on("Cursor", "execute", min_confidence=0.8)  # Higher confidence
+    """
+
+    def __init__(
+        self,
+        receiver_type: str,
+        method: str,
+        min_confidence: float = 0.5,
+        fallback: str = "name",
+    ):
+        """
+        Args:
+            receiver_type: Type name of the receiver object. Supports wildcards (*).
+            method: Method name to match (e.g., "execute").
+            min_confidence: Minimum type inference confidence (0.0-1.0).
+            fallback: Behavior when type info is unavailable:
+                - "name": match by method name only (default)
+                - "none": skip (no match)
+                - "warn": match but flag as low confidence
+
+        Raises:
+            ValueError: If receiver_type or method is empty, fallback is invalid,
+                       or min_confidence is out of range.
+        """
+        if not receiver_type or not isinstance(receiver_type, str):
+            raise ValueError("receiver_type must be a non-empty string")
+        if not method or not isinstance(method, str):
+            raise ValueError("method must be a non-empty string")
+        if fallback not in ("name", "none", "warn"):
+            raise ValueError(
+                f"fallback must be 'name', 'none', or 'warn', got '{fallback}'"
+            )
+        if not isinstance(min_confidence, (int, float)) or not (
+            0.0 <= min_confidence <= 1.0
+        ):
+            raise ValueError(
+                f"min_confidence must be 0.0-1.0, got {min_confidence}"
+            )
+
+        self.receiver_type = receiver_type
+        self.method = method
+        self.min_confidence = float(min_confidence)
+        self.fallback = fallback
+
+    def to_ir(self) -> dict:
+        """
+        Serialize to JSON IR for Go executor.
+
+        Returns:
+            {
+                "type": "type_constrained_call",
+                "receiverType": "Cursor",
+                "methodName": "execute",
+                "minConfidence": 0.5,
+                "fallbackMode": "name"
+            }
+
+        Note: JSON keys match Go struct tags in TypeConstrainedCallIR exactly.
+        """
+        return {
+            "type": IRType.TYPE_CONSTRAINED_CALL.value,
+            "receiverType": self.receiver_type,
+            "methodName": self.method,
+            "minConfidence": self.min_confidence,
+            "fallbackMode": self.fallback,
+        }
+
+    def __repr__(self) -> str:
+        return f'calls_on("{self.receiver_type}", "{self.method}")'
+
+
+def calls_on(
+    receiver_type: str,
+    method: str,
+    min_confidence: float = 0.5,
+    fallback: str = "name",
+) -> TypeConstrainedCallMatcher:
+    """
+    Create a matcher for method calls on objects of a specific type.
+
+    Args:
+        receiver_type: Type name to match. Supports:
+            - Exact: "sqlite3.Cursor"
+            - Short name: "Cursor" (matches "sqlite3.Cursor")
+            - Wildcard prefix: "*Cursor"
+            - Wildcard suffix: "sqlite3.*"
+        method: Method name to match (e.g., "execute")
+        min_confidence: Minimum type inference confidence (0.0-1.0)
+        fallback: Behavior when type info unavailable:
+            - "name": match by method name only (default)
+            - "none": skip (no match)
+            - "warn": match but flag as low confidence
+
+    Returns:
+        TypeConstrainedCallMatcher instance
+
+    Examples:
+        >>> calls_on("Cursor", "execute")
+        calls_on("Cursor", "execute")
+
+        >>> calls_on("sqlite3.Cursor", "execute", min_confidence=0.8)
+        calls_on("sqlite3.Cursor", "execute")
+
+        >>> calls_on("Cursor", "execute", fallback="none")
+        calls_on("Cursor", "execute")
+    """
+    return TypeConstrainedCallMatcher(receiver_type, method, min_confidence, fallback)
+
+
+class ReturnTypeCallMatcher:
+    """
+    Match functions that return a specific type.
+
+    NOTE: Go-side executor is deferred to a future stack. This matcher
+    will serialize valid IR but will not execute on the Go engine yet.
+    Use calls_on() for type-aware matching in the current release.
+
+    Examples:
+        calls_returning("str")                  # Functions returning str
+        calls_returning("List", min_confidence=0.8)  # Higher confidence
+    """
+
+    def __init__(self, return_type: str, min_confidence: float = 0.5):
+        """
+        Args:
+            return_type: Expected return type name.
+            min_confidence: Minimum confidence threshold (0.0-1.0).
+
+        Raises:
+            ValueError: If return_type is empty or min_confidence out of range.
+        """
+        if not return_type or not isinstance(return_type, str):
+            raise ValueError("return_type must be a non-empty string")
+        if not isinstance(min_confidence, (int, float)) or not (
+            0.0 <= min_confidence <= 1.0
+        ):
+            raise ValueError(
+                f"min_confidence must be 0.0-1.0, got {min_confidence}"
+            )
+
+        self.return_type = return_type
+        self.min_confidence = float(min_confidence)
+
+    def to_ir(self) -> dict:
+        """
+        Serialize to JSON IR.
+
+        Returns:
+            {
+                "type": "return_type_call",
+                "returnType": "str",
+                "minConfidence": 0.5
+            }
+        """
+        return {
+            "type": IRType.RETURN_TYPE_CALL.value,
+            "returnType": self.return_type,
+            "minConfidence": self.min_confidence,
+        }
+
+    def __repr__(self) -> str:
+        return f'calls_returning("{self.return_type}")'
+
+
+def calls_returning(
+    return_type: str, min_confidence: float = 0.5
+) -> ReturnTypeCallMatcher:
+    """
+    Match any function call that returns the specified type.
+
+    NOTE: Go-side executor deferred to a future stack. See calls_on()
+    for working type-aware matching in the current release.
+
+    Args:
+        return_type: Expected return type name.
+        min_confidence: Minimum confidence threshold (0.0-1.0).
+
+    Returns:
+        ReturnTypeCallMatcher instance
+
+    Examples:
+        >>> calls_returning("str")
+        calls_returning("str")
+
+        >>> calls_returning("List", min_confidence=0.8)
+        calls_returning("List")
+    """
+    return ReturnTypeCallMatcher(return_type, min_confidence)
