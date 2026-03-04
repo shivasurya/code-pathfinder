@@ -426,6 +426,88 @@ func TestRuleLoader_ExecuteLogic(t *testing.T) {
 	})
 }
 
+func TestRuleLoader_ExecuteDataflowWithTypedSink(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.handler"] = []core.CallSite{
+		{Target: "request.GET", Location: core.Location{File: "app.py", Line: 5}},
+		{
+			Target: "cursor.execute", InferredType: "sqlite3.Cursor",
+			TypeConfidence: 0.9, ResolvedViaTypeInference: true,
+			Location: core.Location{File: "app.py", Line: 10},
+		},
+	}
+
+	loader := NewRuleLoader("")
+
+	t.Run("dataflow with type_constrained_call sink via loader", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "dataflow",
+				"sources": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"request.GET"}},
+				},
+				"sinks": []any{
+					map[string]any{
+						"type":         "type_constrained_call",
+						"receiverType": "Cursor",
+						"methodName":   "execute",
+					},
+				},
+				"sanitizers": []any{},
+				"scope":      "local",
+			},
+		}
+
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 1)
+		assert.Equal(t, "app.handler", detections[0].FunctionFQN)
+		assert.Equal(t, 5, detections[0].SourceLine)
+		assert.Equal(t, 10, detections[0].SinkLine)
+	})
+
+	t.Run("dataflow with logic_or sink via loader", func(t *testing.T) {
+		cg2 := core.NewCallGraph()
+		cg2.CallSites["test.func"] = []core.CallSite{
+			{Target: "request.GET", Location: core.Location{File: "t.py", Line: 1}},
+			{Target: "eval", Location: core.Location{File: "t.py", Line: 5}},
+			{
+				Target: "cursor.execute", InferredType: "sqlite3.Cursor",
+				TypeConfidence: 0.9, ResolvedViaTypeInference: true,
+				Location: core.Location{File: "t.py", Line: 10},
+			},
+		}
+
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "dataflow",
+				"sources": []any{
+					map[string]any{"type": "call_matcher", "patterns": []any{"request.GET"}},
+				},
+				"sinks": []any{
+					map[string]any{
+						"type": "logic_or",
+						"matchers": []any{
+							map[string]any{"type": "call_matcher", "patterns": []any{"eval"}},
+							map[string]any{
+								"type":         "type_constrained_call",
+								"receiverType": "Cursor",
+								"methodName":   "execute",
+							},
+						},
+					},
+				},
+				"sanitizers": []any{},
+				"scope":      "local",
+			},
+		}
+
+		detections, err := loader.ExecuteRule(rule, cg2)
+		require.NoError(t, err)
+		assert.Len(t, detections, 2, "OR(eval, Cursor.execute) should find both")
+	})
+}
+
 func TestRuleLoader_LoadContainerRules(t *testing.T) {
 	t.Run("loads container rules from single file", func(t *testing.T) {
 		// Create test container rule file

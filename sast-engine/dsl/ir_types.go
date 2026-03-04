@@ -84,9 +84,9 @@ func (tc *TypeConstrainedCallIR) GetType() IRType {
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
 type DataflowIR struct {
 	Type        string          `json:"type"`        // "dataflow"
-	Sources     []CallMatcherIR `json:"sources"`     // Where taint originates
-	Sinks       []CallMatcherIR `json:"sinks"`       // Dangerous functions
-	Sanitizers  []CallMatcherIR `json:"sanitizers"`  // Taint-removing functions
+	Sources     []any           `json:"sources"`     // CallMatcherIR, TypeConstrainedCallIR, or logic_or/and/not maps
+	Sinks       []any           `json:"sinks"`       // CallMatcherIR, TypeConstrainedCallIR, or logic_or/and/not maps
+	Sanitizers  []any           `json:"sanitizers"`  // CallMatcherIR, TypeConstrainedCallIR, or logic_or/and/not maps
 	Propagation []PropagationIR `json:"propagation"` // How taint flows (for future use)
 	Scope       string          `json:"scope"`       // "local" or "global"
 }

@@ -7,6 +7,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// callMatcherMap creates a map[string]any from patterns (for DataflowIR with []any fields).
+func callMatcherMap(patterns ...string) map[string]any {
+	result := make([]any, len(patterns))
+	for i, s := range patterns {
+		result[i] = s
+	}
+	return map[string]any{
+		"type":     "call_matcher",
+		"patterns": result,
+	}
+}
+
 func TestDataflowExecutor_Local(t *testing.T) {
 	t.Run("finds functions with sources and sinks", func(t *testing.T) {
 		// Setup: Function with source and sink in same function
@@ -23,20 +35,17 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("eval")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
 		executor := NewDataflowExecutor(ir, cg)
 
 		// Test helper functions
-		sourcePatterns := executor.extractPatterns(ir.Sources)
-		sinkPatterns := executor.extractPatterns(ir.Sinks)
-
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
-		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		sourceCalls := executor.findMatchingCalls([]string{"request.GET"})
+		sinkCalls := executor.findMatchingCalls([]string{"eval"})
 
 		functions := executor.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
 
@@ -57,9 +66,9 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.POST"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.POST")},
+			Sinks:      []any{callMatcherMap("execute")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
@@ -94,9 +103,9 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
-			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_sql"}}},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("execute")},
+			Sanitizers: []any{callMatcherMap("escape_sql")},
 			Scope:      "local",
 		}
 
@@ -125,9 +134,9 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"execute"}}},
-			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_sql"}}},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("execute")},
+			Sanitizers: []any{callMatcherMap("escape_sql")},
 			Scope:      "local",
 		}
 
@@ -154,9 +163,9 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("eval")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
@@ -188,9 +197,9 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET", "request.POST"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval", "execute"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET", "request.POST")},
+			Sinks:      []any{callMatcherMap("eval", "execute")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
@@ -229,9 +238,9 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("eval")},
+			Sanitizers: []any{},
 			Scope:      "global",
 		}
 
@@ -265,9 +274,9 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("eval")},
+			Sanitizers: []any{},
 			Scope:      "global",
 		}
 
@@ -304,17 +313,16 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
-			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_sql"}}},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{callMatcherMap("eval")},
+			Sanitizers: []any{callMatcherMap("escape_sql")},
 			Scope:      "global",
 		}
 
 		executor := NewDataflowExecutor(ir, cg)
 
 		path := []string{"test.source", "test.sanitize", "test.sink"}
-		sanitizerPatterns := executor.extractPatterns(ir.Sanitizers)
-		sanitizerCalls := executor.findMatchingCalls(sanitizerPatterns)
+		sanitizerCalls := executor.findMatchingCalls([]string{"escape_sql"})
 
 		hasSanitizer := executor.pathHasSanitizer(path, sanitizerCalls)
 		assert.True(t, hasSanitizer)
@@ -348,9 +356,9 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.POST"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"render"}}},
-			Sanitizers: []CallMatcherIR{{Patterns: []string{"escape_html"}}},
+			Sources:    []any{callMatcherMap("request.POST")},
+			Sinks:      []any{callMatcherMap("render")},
+			Sanitizers: []any{callMatcherMap("escape_html")},
 			Scope:      "global",
 		}
 
@@ -403,8 +411,8 @@ func TestFindMatchingCalls_TargetFQN(t *testing.T) {
 		cg := core.NewCallGraph()
 		cg.CallSites["main.handler"] = []core.CallSite{
 			{
-				Target:    "FormValue",         // Simple method name
-				TargetFQN: "net/http.Request.FormValue", // Full FQN for Go
+				Target:    "FormValue",                    // Simple method name
+				TargetFQN: "net/http.Request.FormValue",   // Full FQN for Go
 				Location:  core.Location{File: "main.go", Line: 10},
 			},
 			{
@@ -415,23 +423,21 @@ func TestFindMatchingCalls_TargetFQN(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"net/http.Request.FormValue"}}},
-			Sinks:      []CallMatcherIR{{Patterns: []string{"database/sql.DB.Query"}}},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("net/http.Request.FormValue")},
+			Sinks:      []any{callMatcherMap("database/sql.DB.Query")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
 		executor := NewDataflowExecutor(ir, cg)
 
 		// Test that patterns match against TargetFQN
-		sourcePatterns := executor.extractPatterns(ir.Sources)
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		sourceCalls := executor.findMatchingCalls([]string{"net/http.Request.FormValue"})
 		assert.Len(t, sourceCalls, 1, "Should match net/http.Request.FormValue")
 		assert.Equal(t, "FormValue", sourceCalls[0].CallSite.Target)
 		assert.Equal(t, "net/http.Request.FormValue", sourceCalls[0].CallSite.TargetFQN)
 
-		sinkPatterns := executor.extractPatterns(ir.Sinks)
-		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		sinkCalls := executor.findMatchingCalls([]string{"database/sql.DB.Query"})
 		assert.Len(t, sinkCalls, 1, "Should match database/sql.DB.Query")
 		assert.Equal(t, "Query", sinkCalls[0].CallSite.Target)
 		assert.Equal(t, "database/sql.DB.Query", sinkCalls[0].CallSite.TargetFQN)
@@ -449,17 +455,16 @@ func TestFindMatchingCalls_TargetFQN(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
-			Sinks:      []CallMatcherIR{},
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("request.GET")},
+			Sinks:      []any{},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
 		executor := NewDataflowExecutor(ir, cg)
 
 		// Test that patterns match against Target when TargetFQN is empty
-		sourcePatterns := executor.extractPatterns(ir.Sources)
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		sourceCalls := executor.findMatchingCalls([]string{"request.GET"})
 		assert.Len(t, sourceCalls, 1, "Should match request.GET via Target field")
 		assert.Equal(t, "request.GET", sourceCalls[0].CallSite.Target)
 	})
@@ -481,21 +486,19 @@ func TestFindMatchingCalls_TargetFQN(t *testing.T) {
 		}
 
 		ir := &DataflowIR{
-			Sources:    []CallMatcherIR{{Patterns: []string{"*FormValue"}}}, // Wildcard pattern
-			Sinks:      []CallMatcherIR{{Patterns: []string{"*Query"}}},     // Wildcard pattern
-			Sanitizers: []CallMatcherIR{},
+			Sources:    []any{callMatcherMap("*FormValue")},
+			Sinks:      []any{callMatcherMap("*Query")},
+			Sanitizers: []any{},
 			Scope:      "local",
 		}
 
 		executor := NewDataflowExecutor(ir, cg)
 
 		// Test wildcard matching works with TargetFQN
-		sourcePatterns := executor.extractPatterns(ir.Sources)
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		sourceCalls := executor.findMatchingCalls([]string{"*FormValue"})
 		assert.Len(t, sourceCalls, 1, "Should match *FormValue against TargetFQN")
 
-		sinkPatterns := executor.extractPatterns(ir.Sinks)
-		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		sinkCalls := executor.findMatchingCalls([]string{"*Query"})
 		assert.Len(t, sinkCalls, 1, "Should match *Query against TargetFQN")
 	})
 }

@@ -56,14 +56,14 @@ func TestDataflowIR_GetType(t *testing.T) {
 	t.Run("returns correct IR type", func(t *testing.T) {
 		dataflow := &DataflowIR{
 			Type: "dataflow",
-			Sources: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"request.GET"}},
+			Sources: []any{
+				map[string]any{"type": "call_matcher", "patterns": []any{"request.GET"}},
 			},
-			Sinks: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"eval"}},
+			Sinks: []any{
+				map[string]any{"type": "call_matcher", "patterns": []any{"eval"}},
 			},
-			Sanitizers: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"escape"}},
+			Sanitizers: []any{
+				map[string]any{"type": "call_matcher", "patterns": []any{"escape"}},
 			},
 			Scope: "local",
 		}
@@ -74,13 +74,13 @@ func TestDataflowIR_GetType(t *testing.T) {
 	t.Run("works with global scope", func(t *testing.T) {
 		dataflow := &DataflowIR{
 			Type: "dataflow",
-			Sources: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"input"}},
+			Sources: []any{
+				map[string]any{"type": "call_matcher", "patterns": []any{"input"}},
 			},
-			Sinks: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"execute"}},
+			Sinks: []any{
+				map[string]any{"type": "call_matcher", "patterns": []any{"execute"}},
 			},
-			Sanitizers: []CallMatcherIR{},
+			Sanitizers: []any{},
 			Propagation: []PropagationIR{
 				{Type: "assignment", Metadata: map[string]any{"key": "value"}},
 			},
