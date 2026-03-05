@@ -184,3 +184,161 @@ func TestVDGBuild_SanitizerMarks(t *testing.T) {
 		t.Errorf("expected edge from x@1 to %s, got edges: %v", sanitizedKey, edges)
 	}
 }
+
+// --- Reachability Tests ---
+
+// TestVDGReachability_DirectFlow: x = source(); sink(x) -> 1 detection
+func TestVDGReachability_DirectFlow(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeCallStmt(2, "sink", []string{"x"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection, got %d", len(detections))
+	}
+	d := detections[0]
+	if d.SourceLine != 1 {
+		t.Errorf("expected SourceLine=1, got %d", d.SourceLine)
+	}
+	if d.SinkLine != 2 {
+		t.Errorf("expected SinkLine=2, got %d", d.SinkLine)
+	}
+	if d.SourceVar != "x" {
+		t.Errorf("expected SourceVar='x', got %q", d.SourceVar)
+	}
+	if d.SinkCall != "sink" {
+		t.Errorf("expected SinkCall='sink', got %q", d.SinkCall)
+	}
+}
+
+// TestVDGReachability_TransitiveFlow: x = source(); y = x; sink(y) -> 1 detection
+func TestVDGReachability_TransitiveFlow(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeAssignStmt(2, "y", "", []string{"x"}),
+		makeCallStmt(3, "sink", []string{"y"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection, got %d", len(detections))
+	}
+	d := detections[0]
+	if d.SourceLine != 1 {
+		t.Errorf("expected SourceLine=1, got %d", d.SourceLine)
+	}
+	if d.SinkLine != 3 {
+		t.Errorf("expected SinkLine=3, got %d", d.SinkLine)
+	}
+}
+
+// TestVDGReachability_FlowThroughCall: x = source(); y = transform(x); sink(y) -> 1 detection
+func TestVDGReachability_FlowThroughCall(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeAssignStmt(2, "y", "transform", []string{"x"}),
+		makeCallStmt(3, "sink", []string{"y"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection, got %d", len(detections))
+	}
+	d := detections[0]
+	if d.SourceLine != 1 {
+		t.Errorf("expected SourceLine=1, got %d", d.SourceLine)
+	}
+	if d.SinkLine != 3 {
+		t.Errorf("expected SinkLine=3, got %d", d.SinkLine)
+	}
+}
+
+// TestVDGReachability_SanitizerKills: x = source(); x = sanitize(x); sink(x) -> 0 detections
+func TestVDGReachability_SanitizerKills(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeAssignStmt(2, "x", "sanitize", []string{"x"}),
+		makeCallStmt(3, "sink", []string{"x"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, []string{"sanitize"})
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 0 {
+		t.Fatalf("expected 0 detections, got %d: %+v", len(detections), detections)
+	}
+}
+
+// TestVDGReachability_UnrelatedVariables: x = source(); sink(y) -> 0 detections
+func TestVDGReachability_UnrelatedVariables(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeCallStmt(2, "sink", []string{"y"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 0 {
+		t.Fatalf("expected 0 detections, got %d: %+v", len(detections), detections)
+	}
+}
+
+// TestVDGReachability_ReassignmentKills: x = source(); x = "safe"; sink(x) -> 0 detections
+func TestVDGReachability_ReassignmentKills(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeAssignStmt(2, "x", "", nil),
+		makeCallStmt(3, "sink", []string{"x"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 0 {
+		t.Fatalf("expected 0 detections, got %d: %+v", len(detections), detections)
+	}
+}
+
+// TestVDGReachability_MultiHopTransitive: x = source(); y = x; z = y; sink(z) -> 1 detection
+func TestVDGReachability_MultiHopTransitive(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", nil),
+		makeAssignStmt(2, "y", "", []string{"x"}),
+		makeAssignStmt(3, "z", "", []string{"y"}),
+		makeCallStmt(4, "sink", []string{"z"}),
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"source"}, []string{"sink"}, nil)
+	detections := g.FindTaintFlows(stmts, []string{"sink"})
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection, got %d", len(detections))
+	}
+	d := detections[0]
+	if d.SourceLine != 1 {
+		t.Errorf("expected SourceLine=1, got %d", d.SourceLine)
+	}
+	if d.SinkLine != 4 {
+		t.Errorf("expected SinkLine=4, got %d", d.SinkLine)
+	}
+	// Verify propagation path includes all hops
+	if len(d.PropagationPath) < 3 {
+		t.Errorf("expected propagation path with at least 3 entries, got %v", d.PropagationPath)
+	}
+}

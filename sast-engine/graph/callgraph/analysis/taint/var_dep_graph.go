@@ -2,9 +2,20 @@ package taint
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
+
+// TaintDetection represents a detected taint flow from source to sink.
+type TaintDetection struct {
+	SourceLine      uint32
+	SourceVar       string
+	SinkLine        uint32
+	SinkCall        string
+	PropagationPath []string
+	Confidence      float64
+}
 
 // VarDefSite represents a single definition of a variable at a specific line.
 type VarDefSite struct {
@@ -82,4 +93,144 @@ func matchesAnyPattern(callTarget string, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+// FindTaintFlows discovers taint flows from sources to sinks using BFS reachability.
+func (g *VarDepGraph) FindTaintFlows(statements []*core.Statement, sinks []string) []TaintDetection {
+	// Collect all taint source node keys
+	var sourceKeys []string
+	for key, node := range g.Nodes {
+		if node.IsTaintSrc {
+			sourceKeys = append(sourceKeys, key)
+		}
+	}
+
+	var detections []TaintDetection
+
+	// For each sink statement (Type==Call, matches sink patterns, Def=="")
+	for _, stmt := range statements {
+		if stmt.Type != core.StatementTypeCall || stmt.Def != "" {
+			continue
+		}
+		if !matchesAnyPattern(stmt.CallTarget, sinks) {
+			continue
+		}
+
+		for _, usedVar := range stmt.Uses {
+			defKey, found := g.LatestDefAt(usedVar, stmt.LineNumber)
+			if !found {
+				continue
+			}
+
+			for _, srcKey := range sourceKeys {
+				path := g.findPath(srcKey, defKey)
+				if path == nil {
+					continue
+				}
+				if g.pathContainsSanitizer(path) {
+					continue
+				}
+
+				srcNode := g.Nodes[srcKey]
+				detections = append(detections, TaintDetection{
+					SourceLine:      srcNode.Line,
+					SourceVar:       srcNode.VarName,
+					SinkLine:        stmt.LineNumber,
+					SinkCall:        stmt.CallTarget,
+					PropagationPath: g.pathToVarNames(path),
+					Confidence:      1.0,
+				})
+			}
+		}
+	}
+
+	return detections
+}
+
+// LatestDefAt finds the node with matching VarName and Line <= beforeLine,
+// with the highest Line value. Returns the node key and true, or ("", false).
+func (g *VarDepGraph) LatestDefAt(varName string, beforeLine uint32) (string, bool) {
+	var bestKey string
+	var bestLine uint32
+	found := false
+
+	for key, node := range g.Nodes {
+		if node.VarName == varName && node.Line <= beforeLine {
+			if !found || node.Line > bestLine {
+				bestKey = key
+				bestLine = node.Line
+				found = true
+			}
+		}
+	}
+
+	return bestKey, found
+}
+
+// findPath performs BFS from src to dst and returns the path as node keys, or nil if unreachable.
+func (g *VarDepGraph) findPath(src, dst string) []string {
+	if src == dst {
+		return []string{src}
+	}
+
+	visited := map[string]bool{src: true}
+	parent := map[string]string{}
+	queue := []string{src}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for _, neighbor := range g.Edges[current] {
+			if visited[neighbor] {
+				continue
+			}
+			visited[neighbor] = true
+			parent[neighbor] = current
+
+			if neighbor == dst {
+				// Reconstruct path
+				var path []string
+				for n := dst; n != src; n = parent[n] {
+					path = append(path, n)
+				}
+				path = append(path, src)
+				// Reverse
+				for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+					path[i], path[j] = path[j], path[i]
+				}
+				return path
+			}
+
+			queue = append(queue, neighbor)
+		}
+	}
+
+	return nil
+}
+
+// pathContainsSanitizer checks if any node on the path has IsSanitized == true.
+func (g *VarDepGraph) pathContainsSanitizer(path []string) bool {
+	for _, key := range path {
+		if node, ok := g.Nodes[key]; ok && node.IsSanitized {
+			return true
+		}
+	}
+	return false
+}
+
+// pathToVarNames extracts VarName from each node key.
+func (g *VarDepGraph) pathToVarNames(path []string) []string {
+	names := make([]string, len(path))
+	for i, key := range path {
+		// Node key format is "varname@line"
+		if node, ok := g.Nodes[key]; ok {
+			names[i] = node.VarName
+		} else {
+			// Fallback: parse from key
+			parts := strings.SplitN(key, "@", 2)
+			names[i] = parts[0]
+		}
+	}
+	return names
 }
