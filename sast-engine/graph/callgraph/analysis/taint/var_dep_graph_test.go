@@ -342,3 +342,52 @@ func TestVDGReachability_MultiHopTransitive(t *testing.T) {
 		t.Errorf("expected propagation path with at least 3 entries, got %v", d.PropagationPath)
 	}
 }
+
+// --- AnalyzeWithVDG Bridge Tests ---
+
+func TestAnalyzeWithVDG_ReturnsTaintSummary(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", []string{}),
+		makeAssignStmt(2, "y", "", []string{"x"}),
+		makeCallStmt(3, "sink", []string{"y"}),
+	}
+
+	summary := AnalyzeWithVDG("test.module.func", stmts, []string{"source"}, []string{"sink"}, nil)
+
+	if summary == nil {
+		t.Fatal("expected non-nil TaintSummary")
+	}
+	if summary.FunctionFQN != "test.module.func" {
+		t.Errorf("expected FunctionFQN = test.module.func, got %s", summary.FunctionFQN)
+	}
+	if len(summary.Detections) != 1 {
+		t.Fatalf("expected 1 detection, got %d", len(summary.Detections))
+	}
+	det := summary.Detections[0]
+	if det.SourceLine != 1 {
+		t.Errorf("expected SourceLine = 1, got %d", det.SourceLine)
+	}
+	if det.SinkLine != 3 {
+		t.Errorf("expected SinkLine = 3, got %d", det.SinkLine)
+	}
+	if det.SinkCall != "sink" {
+		t.Errorf("expected SinkCall = sink, got %s", det.SinkCall)
+	}
+	if len(det.PropagationPath) < 2 {
+		t.Errorf("expected propagation path with at least 2 entries, got %v", det.PropagationPath)
+	}
+}
+
+func TestAnalyzeWithVDG_NoDetectionWhenSanitized(t *testing.T) {
+	stmts := []*core.Statement{
+		makeAssignStmt(1, "x", "source", []string{}),
+		makeAssignStmt(2, "x", "sanitize", []string{"x"}),
+		makeCallStmt(3, "sink", []string{"x"}),
+	}
+
+	summary := AnalyzeWithVDG("test.func", stmts, []string{"source"}, []string{"sink"}, []string{"sanitize"})
+
+	if len(summary.Detections) != 0 {
+		t.Fatalf("expected 0 detections (sanitized), got %d", len(summary.Detections))
+	}
+}

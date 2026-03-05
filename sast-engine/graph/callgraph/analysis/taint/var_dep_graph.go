@@ -219,6 +219,42 @@ func (g *VarDepGraph) pathContainsSanitizer(path []string) bool {
 	return false
 }
 
+// AnalyzeWithVDG performs intra-procedural taint analysis using the Variable Dependency Graph.
+// Returns a TaintSummary compatible with the existing reporting pipeline.
+func AnalyzeWithVDG(
+	functionFQN string,
+	statements []*core.Statement,
+	sources []string,
+	sinks []string,
+	sanitizers []string,
+) *core.TaintSummary {
+	summary := core.NewTaintSummary(functionFQN)
+
+	vdg := NewVarDepGraph()
+	vdg.Build(statements, sources, sinks, sanitizers)
+
+	detections := vdg.FindTaintFlows(statements, sinks)
+
+	for _, det := range detections {
+		taintInfo := &core.TaintInfo{
+			SourceLine:      det.SourceLine,
+			SourceVar:       det.SourceVar,
+			SinkLine:        det.SinkLine,
+			SinkCall:        det.SinkCall,
+			PropagationPath: det.PropagationPath,
+			Confidence:      det.Confidence,
+		}
+		summary.AddDetection(taintInfo)
+		summary.AddTaintedVar(det.SourceVar, &core.TaintInfo{
+			SourceLine: det.SourceLine,
+			SourceVar:  det.SourceVar,
+			Confidence: det.Confidence,
+		})
+	}
+
+	return summary
+}
+
 // pathToVarNames extracts VarName from each node key.
 func (g *VarDepGraph) pathToVarNames(path []string) []string {
 	names := make([]string, len(path))
