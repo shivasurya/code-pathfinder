@@ -58,3 +58,6 @@ htmlcov/
 result.json
 scan.json
 dist/
+
+# worktrees
+.worktrees/
