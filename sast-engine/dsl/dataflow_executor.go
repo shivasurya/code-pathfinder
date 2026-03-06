@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -55,9 +56,27 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	sanTargets := e.extractTargetPatterns(sanitizerCalls)
 
 	for _, funcFQN := range candidateFunctions {
-		// Try VDG-based analysis if statements are available
-		if stmts, ok := e.CallGraph.Statements[funcFQN]; ok && len(stmts) > 0 {
-			summary := taint.AnalyzeWithVDG(funcFQN, stmts, srcTargets, sinkTargets, sanTargets)
+		var summary *core.TaintSummary
+
+		// Prefer CFG-aware analysis (extracts statements from control flow bodies)
+		if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+			if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+				if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+					if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+						summary = taint.AnalyzeWithCFG(funcFQN, cfGraph, blockStmts, srcTargets, sinkTargets, sanTargets)
+					}
+				}
+			}
+		}
+
+		// Fallback to flat VDG if CFG not available
+		if summary == nil {
+			if stmts, ok := e.CallGraph.Statements[funcFQN]; ok && len(stmts) > 0 {
+				summary = taint.AnalyzeWithVDG(funcFQN, stmts, srcTargets, sinkTargets, sanTargets)
+			}
+		}
+
+		if summary != nil {
 			for _, det := range summary.Detections {
 				detections = append(detections, DataflowDetection{
 					FunctionFQN: funcFQN,
@@ -71,7 +90,7 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 				})
 			}
 		} else {
-			// Fallback: existing line-number-based detection
+			// Last resort: existing line-number-based detection
 			for _, source := range sourceCalls {
 				for _, sink := range sinkCalls {
 					if source.FunctionFQN != funcFQN || sink.FunctionFQN != funcFQN {

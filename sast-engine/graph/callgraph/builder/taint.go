@@ -5,6 +5,7 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 )
@@ -66,6 +67,13 @@ func GenerateTaintSummaries(callGraph *core.CallGraph, codeGraph *graph.CodeGrap
 
 		// Store statements for demand-driven dataflow analysis
 		callGraph.Statements[funcFQN] = statements
+
+		// Build CFG for CFG-aware dataflow analysis
+		cfGraph, blockStmts, cfgErr := cfg.BuildCFGFromAST(funcFQN, functionNode, sourceCode)
+		if cfgErr == nil && cfGraph != nil {
+			callGraph.CFGs[funcFQN] = cfGraph
+			callGraph.CFGBlockStatements[funcFQN] = blockStmts
+		}
 
 		// Step 2: Build def-use chains
 		defUseChain := core.BuildDefUseChains(statements)
