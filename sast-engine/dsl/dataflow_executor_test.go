@@ -483,6 +483,122 @@ func TestDataflowExecutor_Global_MultiLevelSource(t *testing.T) {
 	}
 }
 
+func TestDataflowExecutor_Global_MultiLevelSink(t *testing.T) {
+	// 3-level sink chain: main() calls wrap_eval(data) which calls dangerous_eval(data) which calls eval(data)
+	// Source is direct: data = os.getenv(...)
+	cg := core.NewCallGraph()
+
+	cg.Edges["test.main"] = []string{"test.wrap_eval"}
+	cg.Edges["test.wrap_eval"] = []string{"test.dangerous_eval"}
+	cg.Edges["test.dangerous_eval"] = []string{}
+
+	cg.ReverseEdges["test.wrap_eval"] = []string{"test.main"}
+	cg.ReverseEdges["test.dangerous_eval"] = []string{"test.wrap_eval"}
+
+	// dangerous_eval(code): eval(code)
+	cg.Statements["test.dangerous_eval"] = []*core.Statement{
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "code"}, CallTarget: "eval", LineNumber: 2},
+	}
+	cg.CallSites["test.dangerous_eval"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "code", IsVariable: true, Position: 0}}},
+	}
+
+	// wrap_eval(data): dangerous_eval(data)
+	cg.Statements["test.wrap_eval"] = []*core.Statement{
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"dangerous_eval", "data"}, CallTarget: "dangerous_eval", LineNumber: 5},
+	}
+	cg.CallSites["test.wrap_eval"] = []core.CallSite{
+		{Target: "dangerous_eval", TargetFQN: "test.dangerous_eval", Location: core.Location{Line: 5}, Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}}},
+	}
+
+	// main(): x = os.getenv("X"); wrap_eval(x)
+	cg.Statements["test.main"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"os", "getenv"}, CallTarget: "os.getenv", LineNumber: 10},
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"wrap_eval", "x"}, CallTarget: "wrap_eval", LineNumber: 11},
+	}
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "os.getenv", TargetFQN: "os.getenv", Location: core.Location{Line: 10}},
+		{Target: "wrap_eval", TargetFQN: "test.wrap_eval", Location: core.Location{Line: 11}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Functions["test.main"] = nil
+	cg.Functions["test.wrap_eval"] = &graph.Node{MethodArgumentsValue: []string{"data"}}
+	cg.Functions["test.dangerous_eval"] = &graph.Node{MethodArgumentsValue: []string{"code"}}
+
+	ir := &DataflowIR{
+		Sources:    []CallMatcherIR{{Patterns: []string{"os.getenv"}}},
+		Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
+		Sanitizers: []CallMatcherIR{},
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.executeGlobal()
+
+	found := false
+	for _, d := range detections {
+		if d.FunctionFQN == "test.main" && d.SinkLine == 11 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Should detect 3-level sink chain: main -> wrap_eval -> dangerous_eval -> eval. Got detections: %+v", detections)
+	}
+}
+
+func TestDataflowExecutor_Global_SanitizerInChain(t *testing.T) {
+	// Source -> sanitizer_wrapper(data) -> eval(data)
+	// sanitizer_wrapper calls html.escape internally (IsSanitizer=true)
+	// Should NOT detect because sanitizer blocks the flow.
+	cg := core.NewCallGraph()
+
+	cg.Edges["test.main"] = []string{"test.sanitizer_wrapper"}
+	cg.Edges["test.sanitizer_wrapper"] = []string{}
+
+	cg.ReverseEdges["test.sanitizer_wrapper"] = []string{"test.main"}
+
+	// sanitizer_wrapper(data): result = html.escape(data); return result
+	cg.Statements["test.sanitizer_wrapper"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "result", Uses: []string{"html", "escape", "data"}, CallTarget: "html.escape", LineNumber: 2},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"result"}, LineNumber: 3},
+	}
+	cg.CallSites["test.sanitizer_wrapper"] = []core.CallSite{
+		{Target: "html.escape", TargetFQN: "html.escape", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}}},
+	}
+
+	// main(): x = os.getenv("X"); safe = sanitizer_wrapper(x); eval(safe)
+	cg.Statements["test.main"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"os", "getenv"}, CallTarget: "os.getenv", LineNumber: 10},
+		{Type: core.StatementTypeAssignment, Def: "safe", Uses: []string{"sanitizer_wrapper", "x"}, CallTarget: "sanitizer_wrapper", LineNumber: 11},
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "safe"}, CallTarget: "eval", LineNumber: 12},
+	}
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "os.getenv", TargetFQN: "os.getenv", Location: core.Location{Line: 10}},
+		{Target: "sanitizer_wrapper", TargetFQN: "test.sanitizer_wrapper", Location: core.Location{Line: 11}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+		{Target: "eval", TargetFQN: "builtins.eval", Location: core.Location{Line: 12}, Arguments: []core.Argument{{Value: "safe", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Functions["test.main"] = nil
+	cg.Functions["test.sanitizer_wrapper"] = &graph.Node{MethodArgumentsValue: []string{"data"}}
+
+	ir := &DataflowIR{
+		Sources:    []CallMatcherIR{{Patterns: []string{"os.getenv"}}},
+		Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
+		Sanitizers: []CallMatcherIR{{Patterns: []string{"html.escape"}}},
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.executeGlobal()
+
+	// Should NOT detect — sanitizer_wrapper sanitizes the data
+	for _, d := range detections {
+		if d.FunctionFQN == "test.main" && d.SinkLine == 12 && !d.Sanitized {
+			t.Errorf("Should not detect unsanitized flow through sanitizer_wrapper, got: %+v", d)
+		}
+	}
+}
+
 func TestDataflowExecutor_PatternMatching(t *testing.T) {
 	cg := core.NewCallGraph()
 	ir := &DataflowIR{}

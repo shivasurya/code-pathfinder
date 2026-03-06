@@ -178,26 +178,21 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	}
 
 	// Find all functions that might have inter-procedural flows:
-	// any function that has a sink OR calls a function that is a source
+	// any function that has a source, a sink, or transitively calls one.
 	candidateFunctions := make(map[string]bool)
 	for funcFQN := range sinkFunctions {
 		candidateFunctions[funcFQN] = true
 	}
-	// Also add callers of source-containing functions
 	for funcFQN := range sourceFunctions {
-		if callers, ok := e.CallGraph.ReverseEdges[funcFQN]; ok {
-			for _, caller := range callers {
-				candidateFunctions[caller] = true
-			}
-		}
+		candidateFunctions[funcFQN] = true
 	}
-	// And add callers of sink-containing functions (taint may enter via arguments)
+	// Transitively add callers of source-containing functions
+	for funcFQN := range sourceFunctions {
+		e.addTransitiveCallers(funcFQN, candidateFunctions)
+	}
+	// Transitively add callers of sink-containing functions (taint may enter via arguments)
 	for funcFQN := range sinkFunctions {
-		if callers, ok := e.CallGraph.ReverseEdges[funcFQN]; ok {
-			for _, caller := range callers {
-				candidateFunctions[caller] = true
-			}
-		}
+		e.addTransitiveCallers(funcFQN, candidateFunctions)
 	}
 
 	for funcFQN := range candidateFunctions {
@@ -228,9 +223,15 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 		}
 	}
 
-	// Also run local analysis for functions with both source and sink
+	// Also run local analysis for functions with both source and sink,
+	// but skip functions already analyzed inter-procedurally (they have
+	// summary-aware results that account for sanitizer wrappers etc.)
 	localDetections := e.executeLocal()
-	detections = append(detections, localDetections...)
+	for _, ld := range localDetections {
+		if !candidateFunctions[ld.FunctionFQN] {
+			detections = append(detections, ld)
+		}
+	}
 
 	return detections
 }
@@ -360,6 +361,28 @@ func (e *DataflowExecutor) getParamNames(funcFQN string, funcNode *graph.Node) [
 		}
 	}
 	return params
+}
+
+// addTransitiveCallers adds all transitive callers of funcFQN to the candidates set.
+func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[string]bool) {
+	visited := make(map[string]bool)
+	queue := []string{funcFQN}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if visited[current] {
+			continue
+		}
+		visited[current] = true
+		if callers, ok := e.CallGraph.ReverseEdges[current]; ok {
+			for _, caller := range callers {
+				candidates[caller] = true
+				if !visited[caller] {
+					queue = append(queue, caller)
+				}
+			}
+		}
+	}
 }
 
 // Helper: findPath - REUSES existing DFS logic from patterns.go.
