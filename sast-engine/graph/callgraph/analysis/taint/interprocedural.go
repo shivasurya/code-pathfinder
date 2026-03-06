@@ -278,73 +278,8 @@ func AnalyzeInterProcedural(
 	vdg := NewVarDepGraph()
 	vdg.Build(statements, sources, sinks, sanitizers)
 
-	// Enhance VDG with inter-procedural taint propagation:
-	// For each assignment `y = callee(x)`, if callee's summary says
-	// the return is tainted, mark y as a taint source.
-	for _, stmt := range statements {
-		if stmt.Def == "" || stmt.CallTarget == "" {
-			continue
-		}
-
-		// Find which function this call resolves to
-		calleeFQN := resolveCallTarget(stmt.CallTarget, callerFQN, callGraph)
-		if calleeFQN == "" {
-			continue
-		}
-
-		transferSummary, ok := transferSummaries[calleeFQN]
-		if !ok {
-			continue
-		}
-
-		defKey := nodeKey(stmt.Def, stmt.LineNumber)
-		node, exists := vdg.Nodes[defKey]
-		if !exists {
-			continue
-		}
-
-		// Case 1: Callee is itself a source (returns tainted data)
-		if transferSummary.ReturnTaintedBySource {
-			node.IsTaintSrc = true
-		}
-
-		// Case 2: Callee is a sanitizer
-		if transferSummary.IsSanitizer {
-			node.IsSanitized = true
-		}
-
-		// Case 3: Callee propagates taint from param to return
-		// Use call site Arguments for proper arg-to-param mapping
-		// (stmt.Uses includes function name parts, so argIdx doesn't match param index)
-		callSiteArgs := findCallSiteArgs(stmt, callerFQN, callGraph)
-		for paramIdx, arg := range callSiteArgs {
-			if !arg.IsVariable {
-				continue
-			}
-			argDefKey, found := vdg.LatestDefAt(arg.Value, stmt.LineNumber)
-			if !found {
-				continue
-			}
-
-			// Is this argument tainted? (reachable from a source)
-			argTainted := false
-			for srcKey, srcNode := range vdg.Nodes {
-				if srcNode.IsTaintSrc {
-					path := vdg.findPath(srcKey, argDefKey)
-					if path != nil && !vdg.pathContainsSanitizer(path) {
-						argTainted = true
-						break
-					}
-				}
-			}
-
-			if argTainted && transferSummary.ParamToReturn[paramIdx] {
-				// The callee propagates this tainted param to its return value.
-				// Mark the caller's def as a taint source.
-				node.IsTaintSrc = true
-			}
-		}
-	}
+	// Enhance VDG with inter-procedural taint propagation
+	EnhanceVDGWithCalleeSummaries(vdg, statements, callerFQN, callGraph, transferSummaries)
 
 	// Now find taint flows with the enhanced VDG (direct sinks)
 	detections := vdg.FindTaintFlows(statements, sinks)
@@ -416,6 +351,78 @@ func AnalyzeInterProcedural(
 	}
 
 	return result
+}
+
+// EnhanceVDGWithCalleeSummaries enhances a VDG with inter-procedural taint info.
+// For each assignment `y = callee(x)`, checks callee's transfer summary to determine:
+//   - If callee returns tainted data (ReturnTaintedBySource) → mark y as source
+//   - If callee is a sanitizer → mark y as sanitized
+//   - If tainted arg flows to callee return (ParamToReturn) → mark y as source
+func EnhanceVDGWithCalleeSummaries(
+	vdg *VarDepGraph,
+	statements []*core.Statement,
+	callerFQN string,
+	callGraph *core.CallGraph,
+	transferSummaries map[string]*TaintTransferSummary,
+) {
+	for _, stmt := range statements {
+		if stmt.Def == "" || stmt.CallTarget == "" {
+			continue
+		}
+
+		calleeFQN := resolveCallTarget(stmt.CallTarget, callerFQN, callGraph)
+		if calleeFQN == "" {
+			continue
+		}
+
+		transferSummary, ok := transferSummaries[calleeFQN]
+		if !ok {
+			continue
+		}
+
+		defKey := nodeKey(stmt.Def, stmt.LineNumber)
+		node, exists := vdg.Nodes[defKey]
+		if !exists {
+			continue
+		}
+
+		// Case 1: Callee is itself a source (returns tainted data)
+		if transferSummary.ReturnTaintedBySource {
+			node.IsTaintSrc = true
+		}
+
+		// Case 2: Callee is a sanitizer
+		if transferSummary.IsSanitizer {
+			node.IsSanitized = true
+		}
+
+		// Case 3: Callee propagates taint from param to return
+		callSiteArgs := findCallSiteArgs(stmt, callerFQN, callGraph)
+		for paramIdx, arg := range callSiteArgs {
+			if !arg.IsVariable {
+				continue
+			}
+			argDefKey, found := vdg.LatestDefAt(arg.Value, stmt.LineNumber)
+			if !found {
+				continue
+			}
+
+			argTainted := false
+			for srcKey, srcNode := range vdg.Nodes {
+				if srcNode.IsTaintSrc {
+					path := vdg.findPath(srcKey, argDefKey)
+					if path != nil && !vdg.pathContainsSanitizer(path) {
+						argTainted = true
+						break
+					}
+				}
+			}
+
+			if argTainted && transferSummary.ParamToReturn[paramIdx] {
+				node.IsTaintSrc = true
+			}
+		}
+	}
 }
 
 // findCallSiteArgs finds the matching call site for a statement and returns its arguments.

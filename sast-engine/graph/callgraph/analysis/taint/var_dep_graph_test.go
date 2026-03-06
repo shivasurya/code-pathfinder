@@ -393,6 +393,65 @@ func TestAnalyzeWithVDG_NoDetectionWhenSanitized(t *testing.T) {
 	}
 }
 
+// TestEnhanceVDGWithCalleeSummaries verifies the extracted helper
+// marks VDG nodes correctly based on callee transfer summaries.
+func TestEnhanceVDGWithCalleeSummaries(t *testing.T) {
+	// Scenario: x = get_input(); y = transform(x); sink(y)
+	// get_input has ReturnTaintedBySource=true
+	// transform has ParamToReturn[0]=true
+	stmts := []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"get_input"}, CallTarget: "get_input", LineNumber: 1},
+		{Type: core.StatementTypeAssignment, Def: "y", Uses: []string{"transform", "x"}, CallTarget: "transform", LineNumber: 2},
+		makeCallStmt(3, "sink", []string{"y"}),
+	}
+
+	vdg := NewVarDepGraph()
+	vdg.Build(stmts, []string{}, []string{"sink"}, []string{})
+
+	callerFQN := "test.main"
+	cg := core.NewCallGraph()
+	cg.CallSites[callerFQN] = []core.CallSite{
+		{Target: "get_input", TargetFQN: "test.get_input", Location: core.Location{Line: 1}},
+		{Target: "transform", TargetFQN: "test.transform", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+	}
+
+	summaries := map[string]*TaintTransferSummary{
+		"test.get_input": {
+			FunctionFQN:           "test.get_input",
+			ReturnTaintedBySource: true,
+			IsSource:              true,
+			ParamToReturn:         map[int]bool{},
+			ParamToSink:           map[int]bool{},
+		},
+		"test.transform": {
+			FunctionFQN:   "test.transform",
+			ParamNames:    []string{"data"},
+			ParamToReturn: map[int]bool{0: true},
+			ParamToSink:   map[int]bool{},
+		},
+	}
+
+	EnhanceVDGWithCalleeSummaries(vdg, stmts, callerFQN, cg, summaries)
+
+	// x@1 should be marked as taint source (get_input returns tainted data)
+	xNode := vdg.Nodes[nodeKey("x", 1)]
+	if xNode == nil {
+		t.Fatal("expected node x@1 to exist")
+	}
+	if !xNode.IsTaintSrc {
+		t.Error("expected x@1 to be marked as taint source (ReturnTaintedBySource)")
+	}
+
+	// y@2 should be marked as taint source (transform propagates tainted x to return)
+	yNode := vdg.Nodes[nodeKey("y", 2)]
+	if yNode == nil {
+		t.Fatal("expected node y@2 to exist")
+	}
+	if !yNode.IsTaintSrc {
+		t.Error("expected y@2 to be marked as taint source (ParamToReturn)")
+	}
+}
+
 // --- CFG-Aware Analysis Tests ---
 
 // Helper to build a simple CFG with blocks and statements for testing.
