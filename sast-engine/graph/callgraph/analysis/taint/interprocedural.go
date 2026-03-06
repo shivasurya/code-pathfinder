@@ -128,9 +128,9 @@ func BuildTaintTransferSummary(
 			}
 		}
 
-		// Check if param reaches any sink
+		// Check if param reaches any sink (any statement type with matching CallTarget)
 		for _, stmt := range statements {
-			if stmt.Type != core.StatementTypeCall || stmt.Def != "" {
+			if stmt.CallTarget == "" {
 				continue
 			}
 			if !matchesAnyPattern(stmt.CallTarget, sinks) {

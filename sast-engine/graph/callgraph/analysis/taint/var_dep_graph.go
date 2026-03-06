@@ -108,9 +108,11 @@ func (g *VarDepGraph) FindTaintFlows(statements []*core.Statement, sinks []strin
 
 	var detections []TaintDetection
 
-	// For each sink statement (Type==Call, matches sink patterns, Def=="")
+	// For each statement whose CallTarget matches a sink pattern.
+	// Sinks can appear in any statement type: bare calls (type=call, def=""),
+	// assignments (e.g., obj = pickle.loads(data)), or returns (e.g., return redirect(url)).
 	for _, stmt := range statements {
-		if stmt.Type != core.StatementTypeCall || stmt.Def != "" {
+		if stmt.CallTarget == "" {
 			continue
 		}
 		if !matchesAnyPattern(stmt.CallTarget, sinks) {

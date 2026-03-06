@@ -126,18 +126,24 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 }
 
 // extractTargetPatterns extracts unique call target names from matched call sites.
+// Also extracts the bare name (last segment) for dotted targets, since statement
+// CallTarget may use the bare name (e.g., "execute" vs callsite "cursor.execute").
 func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []string {
 	seen := map[string]bool{}
 	var patterns []string
-	for _, m := range matches {
-		target := m.CallSite.Target
-		if target != "" && !seen[target] {
-			seen[target] = true
-			patterns = append(patterns, target)
+	addPattern := func(p string) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			patterns = append(patterns, p)
 		}
-		if m.CallSite.TargetFQN != "" && !seen[m.CallSite.TargetFQN] {
-			seen[m.CallSite.TargetFQN] = true
-			patterns = append(patterns, m.CallSite.TargetFQN)
+	}
+	for _, m := range matches {
+		addPattern(m.CallSite.Target)
+		addPattern(m.CallSite.TargetFQN)
+		// Also add the bare name for dotted targets (e.g., "cursor.execute" → "execute")
+		if strings.Contains(m.CallSite.Target, ".") {
+			parts := strings.Split(m.CallSite.Target, ".")
+			addPattern(parts[len(parts)-1])
 		}
 	}
 	return patterns
