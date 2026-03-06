@@ -287,6 +287,58 @@ func BuildTaintTransferSummary(
 		}
 	}
 
+	// Handle direct return of callee whose summary says ReturnTaintedBySource:
+	// `return get_user_input()` where get_user_input is not a source pattern itself,
+	// but its transfer summary says it returns tainted data.
+	// Same pattern: type=return, def="", so VDG has no node.
+	if !summary.ReturnTaintedBySource && callGraph != nil && len(calleeSummaries) > 0 {
+		for _, retStmt := range returnStmts {
+			if retStmt.CallTarget == "" {
+				continue
+			}
+			calleeFQN := resolveCallTarget(retStmt.CallTarget, functionFQN, callGraph)
+			if calleeFQN == "" {
+				continue
+			}
+			if ts, ok := calleeSummaries[calleeFQN]; ok && ts.ReturnTaintedBySource {
+				summary.IsSource = true
+				summary.ReturnTaintedBySource = true
+				break
+			}
+		}
+	}
+
+	// Handle direct return of callee whose summary says IsSanitizer:
+	// `return sanitize(data)` where sanitize's summary says IsSanitizer=true.
+	if !summary.IsSanitizer && callGraph != nil && len(calleeSummaries) > 0 {
+		if len(returnStmts) > 0 {
+			allReturnsSanitized := true
+			for _, retStmt := range returnStmts {
+				if retStmt.CallTarget == "" {
+					allReturnsSanitized = false
+					break
+				}
+				calleeFQN := resolveCallTarget(retStmt.CallTarget, functionFQN, callGraph)
+				if calleeFQN == "" {
+					// Check if it matches a direct sanitizer pattern (already handled above)
+					if !matchesAnyPattern(retStmt.CallTarget, sanitizers) {
+						allReturnsSanitized = false
+						break
+					}
+					continue
+				}
+				if ts, ok := calleeSummaries[calleeFQN]; ok && ts.IsSanitizer {
+					continue
+				}
+				allReturnsSanitized = false
+				break
+			}
+			if allReturnsSanitized {
+				summary.IsSanitizer = true
+			}
+		}
+	}
+
 	return summary
 }
 
