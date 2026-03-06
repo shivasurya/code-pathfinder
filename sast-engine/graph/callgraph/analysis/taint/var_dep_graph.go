@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -253,6 +254,59 @@ func AnalyzeWithVDG(
 	}
 
 	return summary
+}
+
+// AnalyzeWithCFG performs CFG-aware intra-procedural taint analysis.
+// It flattens statements from all basic blocks in topological order,
+// then runs VDG analysis over the complete statement set.
+// This captures taint flows through control flow bodies (if/for/while/try/with)
+// that the flat ExtractStatements approach misses.
+func AnalyzeWithCFG(
+	functionFQN string,
+	cfGraph *cfg.ControlFlowGraph,
+	blockStmts cfg.BlockStatements,
+	sources []string,
+	sinks []string,
+	sanitizers []string,
+) *core.TaintSummary {
+	// Flatten block statements in topological order (BFS from entry)
+	allStatements := flattenBlockStatements(cfGraph, blockStmts)
+
+	// Use existing VDG analysis on the flattened statements
+	return AnalyzeWithVDG(functionFQN, allStatements, sources, sinks, sanitizers)
+}
+
+// flattenBlockStatements collects statements from all blocks in BFS order from entry.
+// This gives a reasonable approximation of execution order for the VDG.
+func flattenBlockStatements(cfGraph *cfg.ControlFlowGraph, blockStmts cfg.BlockStatements) []*core.Statement {
+	var result []*core.Statement
+	visited := make(map[string]bool)
+	queue := []string{cfGraph.EntryBlockID}
+	visited[cfGraph.EntryBlockID] = true
+
+	for len(queue) > 0 {
+		blockID := queue[0]
+		queue = queue[1:]
+
+		// Append this block's statements
+		if stmts, ok := blockStmts[blockID]; ok {
+			result = append(result, stmts...)
+		}
+
+		// Enqueue successors
+		block, ok := cfGraph.GetBlock(blockID)
+		if !ok {
+			continue
+		}
+		for _, succID := range block.Successors {
+			if !visited[succID] {
+				visited[succID] = true
+				queue = append(queue, succID)
+			}
+		}
+	}
+
+	return result
 }
 
 // pathToVarNames extracts VarName from each node key.
