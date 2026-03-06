@@ -246,12 +246,14 @@ func (e *DataflowExecutor) findMatchingCalls(patterns []string) []CallSiteMatch 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
 		for _, cs := range callSites {
 			for _, pattern := range patterns {
-				// Match against TargetFQN if available (Go), otherwise fall back to Target (Python/Java)
-				targetToMatch := cs.Target
-				if cs.TargetFQN != "" {
-					targetToMatch = cs.TargetFQN
+				// Try matching against both Target (short name) and TargetFQN (fully qualified).
+				// This handles cases like pattern "eval" matching Target "eval" even when
+				// TargetFQN is "builtins.eval", and pattern "os.getenv" matching TargetFQN.
+				matched := e.matchesPattern(cs.Target, pattern)
+				if !matched && cs.TargetFQN != "" {
+					matched = e.matchesPattern(cs.TargetFQN, pattern)
 				}
-				if e.matchesPattern(targetToMatch, pattern) {
+				if matched {
 					matches = append(matches, CallSiteMatch{
 						CallSite:    cs,
 						FunctionFQN: functionFQN,
