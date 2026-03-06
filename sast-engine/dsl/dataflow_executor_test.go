@@ -3,6 +3,7 @@ package dsl
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
@@ -245,24 +246,71 @@ func TestDataflowExecutor_Global(t *testing.T) {
 	})
 
 	t.Run("executes global analysis and finds cross-function flows", func(t *testing.T) {
-		// Setup: Source in func A, sink in func B, A calls B
+		// Setup: source_func calls get_input() (source) and passes result to sink_func (which calls eval)
 		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
-		cg.Edges["test.source_func"] = []string{"test.sink_func"}
+		cg.Edges["test.caller"] = []string{"test.get_input", "test.sink_func"}
+		cg.Edges["test.get_input"] = []string{}
+		cg.Edges["test.sink_func"] = []string{}
 
-		cg.CallSites["test.source_func"] = []core.CallSite{
+		cg.ReverseEdges = make(map[string][]string)
+		cg.ReverseEdges["test.get_input"] = []string{"test.caller"}
+		cg.ReverseEdges["test.sink_func"] = []string{"test.caller"}
+
+		cg.CallSites["test.caller"] = []core.CallSite{
+			{
+				Target:    "get_input",
+				TargetFQN: "test.get_input",
+				Location:  core.Location{Line: 10, File: "test.py"},
+				Resolved:  true,
+			},
+			{
+				Target:    "sink_func",
+				TargetFQN: "test.sink_func",
+				Location:  core.Location{Line: 12, File: "test.py"},
+				Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}},
+				Resolved:  true,
+			},
+		}
+
+		cg.CallSites["test.get_input"] = []core.CallSite{
 			{
 				Target:   "request.GET",
-				Location: core.Location{Line: 10, File: "test.py"},
+				Location: core.Location{Line: 5, File: "test.py"},
+				Resolved: true,
 			},
 		}
 
 		cg.CallSites["test.sink_func"] = []core.CallSite{
 			{
-				Target:   "eval",
-				Location: core.Location{Line: 20, File: "test.py"},
+				Target:    "eval",
+				Location:  core.Location{Line: 20, File: "test.py"},
+				Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}},
+				Resolved:  true,
 			},
 		}
+
+		// Statements for get_input: data = request.GET(...); return data
+		cg.Statements["test.get_input"] = []*core.Statement{
+			{Type: core.StatementTypeAssignment, Def: "data", Uses: []string{"request", "GET"}, CallTarget: "request.GET()", LineNumber: 5},
+			{Type: core.StatementTypeReturn, Def: "", Uses: []string{"data"}, CallTarget: "data", LineNumber: 6},
+		}
+
+		// Statements for sink_func: eval(data)
+		cg.Statements["test.sink_func"] = []*core.Statement{
+			{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "data"}, CallTarget: "eval", LineNumber: 20},
+		}
+
+		// Statements for caller: x = get_input(); sink_func(x)
+		cg.Statements["test.caller"] = []*core.Statement{
+			{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"get_input"}, CallTarget: "get_input()", LineNumber: 10},
+			{Type: core.StatementTypeCall, Def: "", Uses: []string{"sink_func", "x"}, CallTarget: "sink_func", LineNumber: 12},
+		}
+
+		// Register functions
+		cg.Functions["test.caller"] = nil
+		cg.Functions["test.get_input"] = nil
+		cg.Functions["test.sink_func"] = &graph.Node{MethodArgumentsValue: []string{"data"}}
 
 		ir := &DataflowIR{
 			Sources:    []CallMatcherIR{{Patterns: []string{"request.GET"}}},
@@ -278,13 +326,12 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		assert.NotEmpty(t, detections)
 		found := false
 		for _, d := range detections {
-			if d.FunctionFQN == "test.source_func" && d.Scope == "global" {
+			if d.FunctionFQN == "test.caller" && d.Scope == "global" {
 				found = true
 				assert.Equal(t, 10, d.SourceLine)
-				assert.Equal(t, 20, d.SinkLine)
-				assert.Equal(t, "eval", d.SinkCall)
+				assert.Equal(t, 12, d.SinkLine)
+				assert.Equal(t, "test.sink_func", d.SinkCall)
 				assert.False(t, d.Sanitized)
-				assert.Equal(t, 0.8, d.Confidence)
 			}
 		}
 		assert.True(t, found, "Should find cross-function detection")

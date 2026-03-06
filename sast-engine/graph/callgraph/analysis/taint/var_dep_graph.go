@@ -270,15 +270,15 @@ func AnalyzeWithCFG(
 	sanitizers []string,
 ) *core.TaintSummary {
 	// Flatten block statements in topological order (BFS from entry)
-	allStatements := flattenBlockStatements(cfGraph, blockStmts)
+	allStatements := FlattenBlockStatements(cfGraph, blockStmts)
 
 	// Use existing VDG analysis on the flattened statements
 	return AnalyzeWithVDG(functionFQN, allStatements, sources, sinks, sanitizers)
 }
 
-// flattenBlockStatements collects statements from all blocks in BFS order from entry.
+// FlattenBlockStatements collects statements from all blocks in BFS order from entry.
 // This gives a reasonable approximation of execution order for the VDG.
-func flattenBlockStatements(cfGraph *cfg.ControlFlowGraph, blockStmts cfg.BlockStatements) []*core.Statement {
+func FlattenBlockStatements(cfGraph *cfg.ControlFlowGraph, blockStmts cfg.BlockStatements) []*core.Statement {
 	var result []*core.Statement
 	visited := make(map[string]bool)
 	queue := []string{cfGraph.EntryBlockID}

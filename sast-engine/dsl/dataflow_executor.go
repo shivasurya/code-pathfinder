@@ -3,6 +3,7 @@ package dsl
 import (
 	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -143,15 +144,11 @@ func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []stri
 }
 
 // executeGlobal performs inter-procedural taint analysis.
-// REUSES existing findPath() from callgraph/patterns.go.
+// Uses summary-based approach: builds TaintTransferSummary per function,
+// then uses them to propagate taint across call boundaries in the VDG.
 func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
-	// First, run local analysis (all intra-procedural detections)
-	localDetections := e.executeLocal()
-	detections = append(detections, localDetections...)
-
-	// Then, find cross-function flows
 	sourcePatterns := e.extractPatterns(e.IR.Sources)
 	sinkPatterns := e.extractPatterns(e.IR.Sinks)
 	sanitizerPatterns := e.extractPatterns(e.IR.Sanitizers)
@@ -160,37 +157,159 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	sinkCalls := e.findMatchingCalls(sinkPatterns)
 	sanitizerCalls := e.findMatchingCalls(sanitizerPatterns)
 
-	// Check cross-function paths
-	for _, source := range sourceCalls {
-		for _, sink := range sinkCalls {
-			// Skip if same function (already handled by local analysis)
-			if source.FunctionFQN == sink.FunctionFQN {
-				continue
+	srcTargets := e.extractTargetPatterns(sourceCalls)
+	sinkTargets := e.extractTargetPatterns(sinkCalls)
+	sanTargets := e.extractTargetPatterns(sanitizerCalls)
+
+	// Phase 1: Build taint transfer summaries for all functions
+	transferSummaries := e.buildTransferSummaries(srcTargets, sinkTargets, sanTargets)
+
+	// Phase 2: Run inter-procedural analysis for each function that has sinks
+	// (not just functions with both sources AND sinks — sources may come from callees)
+	sinkFunctions := make(map[string]bool)
+	for _, sink := range sinkCalls {
+		sinkFunctions[sink.FunctionFQN] = true
+	}
+
+	// Also analyze functions that call source functions (taint enters via return value)
+	sourceFunctions := make(map[string]bool)
+	for _, src := range sourceCalls {
+		sourceFunctions[src.FunctionFQN] = true
+	}
+
+	// Find all functions that might have inter-procedural flows:
+	// any function that has a sink OR calls a function that is a source
+	candidateFunctions := make(map[string]bool)
+	for funcFQN := range sinkFunctions {
+		candidateFunctions[funcFQN] = true
+	}
+	// Also add callers of source-containing functions
+	for funcFQN := range sourceFunctions {
+		if callers, ok := e.CallGraph.ReverseEdges[funcFQN]; ok {
+			for _, caller := range callers {
+				candidateFunctions[caller] = true
 			}
-
-			// Call EXISTING findPath() logic
-			path := e.findPath(source.FunctionFQN, sink.FunctionFQN)
-			if len(path) > 1 {
-				// Check if sanitizer is on path
-				hasSanitizer := e.pathHasSanitizer(path, sanitizerCalls)
-
-				if !hasSanitizer {
-					detections = append(detections, DataflowDetection{
-						FunctionFQN: source.FunctionFQN,
-						SourceLine:  source.Line,
-						SinkLine:    sink.Line,
-						TaintedVar:  "", // Cross-function, no single var
-						SinkCall:    sink.CallSite.Target,
-						Confidence:  0.8, // Lower confidence for cross-function
-						Sanitized:   false,
-						Scope:       "global",
-					})
-				}
+		}
+	}
+	// And add callers of sink-containing functions (taint may enter via arguments)
+	for funcFQN := range sinkFunctions {
+		if callers, ok := e.CallGraph.ReverseEdges[funcFQN]; ok {
+			for _, caller := range callers {
+				candidateFunctions[caller] = true
 			}
 		}
 	}
 
+	for funcFQN := range candidateFunctions {
+		stmts := e.getStatementsForFunction(funcFQN)
+		if len(stmts) == 0 {
+			continue
+		}
+
+		summary := taint.AnalyzeInterProcedural(
+			funcFQN, stmts,
+			srcTargets, sinkTargets, sanTargets,
+			e.CallGraph, transferSummaries,
+		)
+
+		if summary != nil {
+			for _, det := range summary.Detections {
+				detections = append(detections, DataflowDetection{
+					FunctionFQN: funcFQN,
+					SourceLine:  int(det.SourceLine),
+					SinkLine:    int(det.SinkLine),
+					TaintedVar:  det.SourceVar,
+					SinkCall:    det.SinkCall,
+					Confidence:  det.Confidence * 0.9, // slight decay for inter-procedural
+					Sanitized:   det.Sanitized,
+					Scope:       "global",
+				})
+			}
+		}
+	}
+
+	// Also run local analysis for functions with both source and sink
+	localDetections := e.executeLocal()
+	detections = append(detections, localDetections...)
+
 	return detections
+}
+
+// buildTransferSummaries builds TaintTransferSummary for all functions in the call graph.
+func (e *DataflowExecutor) buildTransferSummaries(
+	sources, sinks, sanitizers []string,
+) map[string]*taint.TaintTransferSummary {
+	summaries := make(map[string]*taint.TaintTransferSummary)
+
+	for funcFQN, funcNode := range e.CallGraph.Functions {
+		stmts := e.getStatementsForFunction(funcFQN)
+		if len(stmts) == 0 {
+			continue
+		}
+
+		// Get parameter names from the function node
+		paramNames := e.getParamNames(funcFQN, funcNode)
+
+		// Build transfer summary (prefer CFG-aware)
+		var ts *taint.TaintTransferSummary
+		if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+			if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+				if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+					if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+						ts = taint.BuildTaintTransferSummaryWithCFG(
+							funcFQN, cfGraph, blockStmts,
+							paramNames, sources, sinks, sanitizers,
+						)
+					}
+				}
+			}
+		}
+		if ts == nil {
+			ts = taint.BuildTaintTransferSummary(
+				funcFQN, stmts, paramNames, sources, sinks, sanitizers,
+			)
+		}
+
+		summaries[funcFQN] = ts
+	}
+
+	return summaries
+}
+
+// getStatementsForFunction retrieves flattened statements for a function,
+// preferring CFG-flattened statements over raw statements.
+func (e *DataflowExecutor) getStatementsForFunction(funcFQN string) []*core.Statement {
+	// Try CFG-flattened statements first
+	if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+		if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+			if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+				if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+					return taint.FlattenBlockStatements(cfGraph, blockStmts)
+				}
+			}
+		}
+	}
+	// Fallback to flat statements
+	if stmts, ok := e.CallGraph.Statements[funcFQN]; ok {
+		return stmts
+	}
+	return nil
+}
+
+// getParamNames extracts parameter names from a function's graph.Node.
+func (e *DataflowExecutor) getParamNames(funcFQN string, funcNode *graph.Node) []string {
+	if funcNode == nil {
+		return nil
+	}
+	// MethodArgumentsValue contains parameter names like ["self", "data", "key"]
+	// Filter out "self" and "cls" for methods
+	var params []string
+	for _, p := range funcNode.MethodArgumentsValue {
+		if p != "self" && p != "cls" {
+			params = append(params, p)
+		}
+	}
+	return params
 }
 
 // Helper: findPath - REUSES existing DFS logic from patterns.go.
