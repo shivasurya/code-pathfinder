@@ -3,6 +3,7 @@ package dsl
 import (
 	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -29,60 +30,97 @@ func (e *DataflowExecutor) Execute() []DataflowDetection {
 }
 
 // executeLocal performs intra-procedural taint analysis.
-// NOTE: This is a simplified implementation that checks for taint flows
-// based on call site patterns rather than full dataflow analysis.
-// Full taint analysis integration requires re-running analysis with DSL patterns.
+// Uses VDG-based analysis when statements are available for a function,
+// with fallback to line-number-based detection otherwise.
 func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
-	// Convert IR patterns to strings
 	sourcePatterns := e.extractPatterns(e.IR.Sources)
 	sinkPatterns := e.extractPatterns(e.IR.Sinks)
 	sanitizerPatterns := e.extractPatterns(e.IR.Sanitizers)
 
-	// Find call sites matching sources and sinks
 	sourceCalls := e.findMatchingCalls(sourcePatterns)
 	sinkCalls := e.findMatchingCalls(sinkPatterns)
 	sanitizerCalls := e.findMatchingCalls(sanitizerPatterns)
 
-	// For local scope, check if source and sink are in the same function
-	for _, source := range sourceCalls {
-		for _, sink := range sinkCalls {
-			// Only detect within same function for local scope
-			if source.FunctionFQN != sink.FunctionFQN {
-				continue
-			}
+	candidateFunctions := e.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
 
-			// Check if there's a sanitizer in between (same function)
-			hasSanitizer := false
-			for _, sanitizer := range sanitizerCalls {
-				if sanitizer.FunctionFQN == source.FunctionFQN {
-					// If sanitizer is between source and sink, mark as sanitized
-					if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
-						(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
-						hasSanitizer = true
-						break
+	if len(candidateFunctions) == 0 {
+		return detections
+	}
+
+	// Extract target patterns for VDG matching
+	srcTargets := e.extractTargetPatterns(sourceCalls)
+	sinkTargets := e.extractTargetPatterns(sinkCalls)
+	sanTargets := e.extractTargetPatterns(sanitizerCalls)
+
+	for _, funcFQN := range candidateFunctions {
+		// Try VDG-based analysis if statements are available
+		if stmts, ok := e.CallGraph.Statements[funcFQN]; ok && len(stmts) > 0 {
+			summary := taint.AnalyzeWithVDG(funcFQN, stmts, srcTargets, sinkTargets, sanTargets)
+			for _, det := range summary.Detections {
+				detections = append(detections, DataflowDetection{
+					FunctionFQN: funcFQN,
+					SourceLine:  int(det.SourceLine),
+					SinkLine:    int(det.SinkLine),
+					TaintedVar:  det.SourceVar,
+					SinkCall:    det.SinkCall,
+					Confidence:  det.Confidence,
+					Sanitized:   det.Sanitized,
+					Scope:       "local",
+				})
+			}
+		} else {
+			// Fallback: existing line-number-based detection
+			for _, source := range sourceCalls {
+				for _, sink := range sinkCalls {
+					if source.FunctionFQN != funcFQN || sink.FunctionFQN != funcFQN {
+						continue
 					}
+					hasSanitizer := false
+					for _, sanitizer := range sanitizerCalls {
+						if sanitizer.FunctionFQN == funcFQN {
+							if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
+								(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
+								hasSanitizer = true
+								break
+							}
+						}
+					}
+					detections = append(detections, DataflowDetection{
+						FunctionFQN: funcFQN,
+						SourceLine:  source.Line,
+						SinkLine:    sink.Line,
+						TaintedVar:  "",
+						SinkCall:    sink.CallSite.Target,
+						Confidence:  0.7,
+						Sanitized:   hasSanitizer,
+						Scope:       "local",
+					})
 				}
 			}
-
-			// Create detection
-			detection := DataflowDetection{
-				FunctionFQN: source.FunctionFQN,
-				SourceLine:  source.Line,
-				SinkLine:    sink.Line,
-				TaintedVar:  "", // Not tracking variable names in this simplified version
-				SinkCall:    sink.CallSite.Target,
-				Confidence:  0.7, // Medium confidence for pattern-based detection
-				Sanitized:   hasSanitizer,
-				Scope:       "local",
-			}
-
-			detections = append(detections, detection)
 		}
 	}
 
 	return detections
+}
+
+// extractTargetPatterns extracts unique call target names from matched call sites.
+func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []string {
+	seen := map[string]bool{}
+	var patterns []string
+	for _, m := range matches {
+		target := m.CallSite.Target
+		if target != "" && !seen[target] {
+			seen[target] = true
+			patterns = append(patterns, target)
+		}
+		if m.CallSite.TargetFQN != "" && !seen[m.CallSite.TargetFQN] {
+			seen[m.CallSite.TargetFQN] = true
+			patterns = append(patterns, m.CallSite.TargetFQN)
+		}
+	}
+	return patterns
 }
 
 // executeGlobal performs inter-procedural taint analysis.

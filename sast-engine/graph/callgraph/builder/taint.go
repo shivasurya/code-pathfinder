@@ -64,6 +64,9 @@ func GenerateTaintSummaries(callGraph *core.CallGraph, codeGraph *graph.CodeGrap
 			continue
 		}
 
+		// Store statements for demand-driven dataflow analysis
+		callGraph.Statements[funcFQN] = statements
+
 		// Step 2: Build def-use chains
 		defUseChain := core.BuildDefUseChains(statements)
 
