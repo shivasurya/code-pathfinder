@@ -51,6 +51,8 @@ func BuildTaintTransferSummary(
 	sources []string,
 	sinks []string,
 	sanitizers []string,
+	callGraph *core.CallGraph,
+	calleeSummaries map[string]*TaintTransferSummary,
 ) *TaintTransferSummary {
 	summary := &TaintTransferSummary{
 		FunctionFQN:   functionFQN,
@@ -79,6 +81,11 @@ func BuildTaintTransferSummary(
 
 	// Build VDG from statements (this will create edges from params to other vars)
 	vdg.Build(statements, sources, sinks, sanitizers)
+
+	// Enhance VDG with callee summaries for transitive propagation
+	if callGraph != nil && len(calleeSummaries) > 0 {
+		EnhanceVDGWithCalleeSummaries(vdg, statements, functionFQN, callGraph, calleeSummaries)
+	}
 
 	// Find return statements and source nodes
 	var returnStmts []*core.Statement
@@ -142,6 +149,53 @@ func BuildTaintTransferSummary(
 			}
 			if summary.ParamToSink[i] {
 				break
+			}
+		}
+	}
+
+	// Check transitive ParamToSink: if param reaches a callee arg
+	// and callee has ParamToSink for that arg position, propagate.
+	if callGraph != nil && len(calleeSummaries) > 0 {
+		for i, paramName := range paramNames {
+			if summary.ParamToSink[i] {
+				continue // already found direct sink
+			}
+			paramKey := nodeKey(paramName, 0)
+			if _, exists := vdg.Nodes[paramKey]; !exists {
+				continue
+			}
+
+			for _, stmt := range statements {
+				if stmt.CallTarget == "" {
+					continue
+				}
+				calleeFQN := resolveCallTarget(stmt.CallTarget, functionFQN, callGraph)
+				if calleeFQN == "" {
+					continue
+				}
+				ts, ok := calleeSummaries[calleeFQN]
+				if !ok {
+					continue
+				}
+
+				callSiteArgs := findCallSiteArgs(stmt, functionFQN, callGraph)
+				for argIdx, arg := range callSiteArgs {
+					if !ts.ParamToSink[argIdx] || !arg.IsVariable {
+						continue
+					}
+					argDefKey, found := vdg.LatestDefAt(arg.Value, stmt.LineNumber)
+					if !found {
+						continue
+					}
+					path := vdg.findPath(paramKey, argDefKey)
+					if path != nil && !vdg.pathContainsSanitizer(path) {
+						summary.ParamToSink[i] = true
+						break
+					}
+				}
+				if summary.ParamToSink[i] {
+					break
+				}
 			}
 		}
 	}
@@ -245,9 +299,11 @@ func BuildTaintTransferSummaryWithCFG(
 	sources []string,
 	sinks []string,
 	sanitizers []string,
+	callGraph *core.CallGraph,
+	calleeSummaries map[string]*TaintTransferSummary,
 ) *TaintTransferSummary {
 	allStatements := FlattenBlockStatements(cfGraph, blockStmts)
-	return BuildTaintTransferSummary(functionFQN, allStatements, paramNames, sources, sinks, sanitizers)
+	return BuildTaintTransferSummary(functionFQN, allStatements, paramNames, sources, sinks, sanitizers, callGraph, calleeSummaries)
 }
 
 // AnalyzeInterProcedural performs inter-procedural taint analysis using

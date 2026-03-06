@@ -259,6 +259,7 @@ func (e *DataflowExecutor) buildTransferSummaries(
 						ts = taint.BuildTaintTransferSummaryWithCFG(
 							funcFQN, cfGraph, blockStmts,
 							paramNames, sources, sinks, sanitizers,
+							nil, nil,
 						)
 					}
 				}
@@ -267,6 +268,7 @@ func (e *DataflowExecutor) buildTransferSummaries(
 		if ts == nil {
 			ts = taint.BuildTaintTransferSummary(
 				funcFQN, stmts, paramNames, sources, sinks, sanitizers,
+				nil, nil,
 			)
 		}
 

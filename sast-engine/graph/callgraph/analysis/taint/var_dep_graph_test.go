@@ -452,6 +452,113 @@ func TestEnhanceVDGWithCalleeSummaries(t *testing.T) {
 	}
 }
 
+// --- Transitive Summary Propagation Tests ---
+
+func TestBuildTransferSummary_TransitiveSource(t *testing.T) {
+	// wrapper() calls get_input() which is a source. With callee summaries,
+	// wrapper.ReturnTaintedBySource should become true.
+	stmts := []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "result", Uses: []string{"get_input"}, CallTarget: "get_input", LineNumber: 2},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"result"}, LineNumber: 3},
+	}
+
+	callerFQN := "test.wrapper"
+	cg := core.NewCallGraph()
+	cg.CallSites[callerFQN] = []core.CallSite{
+		{Target: "get_input", TargetFQN: "test.get_input", Location: core.Location{Line: 2}},
+	}
+
+	calleeSummaries := map[string]*TaintTransferSummary{
+		"test.get_input": {
+			FunctionFQN:           "test.get_input",
+			ReturnTaintedBySource: true,
+			IsSource:              true,
+			ParamToReturn:         map[int]bool{},
+			ParamToSink:           map[int]bool{},
+		},
+	}
+
+	summary := BuildTaintTransferSummary(
+		callerFQN, stmts, []string{},
+		[]string{}, []string{}, []string{},
+		cg, calleeSummaries,
+	)
+
+	if !summary.ReturnTaintedBySource {
+		t.Error("expected wrapper to have ReturnTaintedBySource=true (transitive from get_input)")
+	}
+	if !summary.IsSource {
+		t.Error("expected wrapper to have IsSource=true (transitive from get_input)")
+	}
+}
+
+func TestBuildTransferSummary_TransitiveParamToSink(t *testing.T) {
+	// wrapper(data) calls dangerous_eval(data) which has ParamToSink[0]=true.
+	// wrapper.ParamToSink[0] should become true.
+	stmts := []*core.Statement{
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"dangerous_eval", "data"}, CallTarget: "dangerous_eval", LineNumber: 2},
+	}
+
+	callerFQN := "test.wrapper"
+	cg := core.NewCallGraph()
+	cg.CallSites[callerFQN] = []core.CallSite{
+		{Target: "dangerous_eval", TargetFQN: "test.dangerous_eval", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}}},
+	}
+
+	calleeSummaries := map[string]*TaintTransferSummary{
+		"test.dangerous_eval": {
+			FunctionFQN:   "test.dangerous_eval",
+			ParamNames:    []string{"code"},
+			ParamToReturn: map[int]bool{},
+			ParamToSink:   map[int]bool{0: true},
+		},
+	}
+
+	summary := BuildTaintTransferSummary(
+		callerFQN, stmts, []string{"data"},
+		[]string{}, []string{}, []string{},
+		cg, calleeSummaries,
+	)
+
+	if !summary.ParamToSink[0] {
+		t.Error("expected wrapper to have ParamToSink[0]=true (transitive from dangerous_eval)")
+	}
+}
+
+func TestBuildTransferSummary_TransitiveSanitizer(t *testing.T) {
+	// wrapper(data): result = sanitize(data); return result
+	// where sanitize.IsSanitizer=true
+	stmts := []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "result", Uses: []string{"sanitize", "data"}, CallTarget: "sanitize", LineNumber: 2},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"result"}, LineNumber: 3},
+	}
+
+	callerFQN := "test.wrapper"
+	cg := core.NewCallGraph()
+	cg.CallSites[callerFQN] = []core.CallSite{
+		{Target: "sanitize", TargetFQN: "test.sanitize", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}}},
+	}
+
+	calleeSummaries := map[string]*TaintTransferSummary{
+		"test.sanitize": {
+			FunctionFQN:   "test.sanitize",
+			IsSanitizer:   true,
+			ParamToReturn: map[int]bool{0: true},
+			ParamToSink:   map[int]bool{},
+		},
+	}
+
+	summary := BuildTaintTransferSummary(
+		callerFQN, stmts, []string{"data"},
+		[]string{}, []string{}, []string{},
+		cg, calleeSummaries,
+	)
+
+	if !summary.IsSanitizer {
+		t.Error("expected wrapper to have IsSanitizer=true (transitive from sanitize)")
+	}
+}
+
 // --- CFG-Aware Analysis Tests ---
 
 // Helper to build a simple CFG with blocks and statements for testing.
