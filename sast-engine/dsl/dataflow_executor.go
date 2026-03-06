@@ -235,47 +235,95 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	return detections
 }
 
-// buildTransferSummaries builds TaintTransferSummary for all functions in the call graph.
+// buildTransferSummaries builds TaintTransferSummary for all functions using
+// iterative fixpoint: each round uses the previous round's summaries to enhance
+// callee lookups. Converges when no summary changes or maxIterations reached.
 func (e *DataflowExecutor) buildTransferSummaries(
 	sources, sinks, sanitizers []string,
 ) map[string]*taint.TaintTransferSummary {
+	const maxIterations = 10
 	summaries := make(map[string]*taint.TaintTransferSummary)
 
-	for funcFQN, funcNode := range e.CallGraph.Functions {
-		stmts := e.getStatementsForFunction(funcFQN)
-		if len(stmts) == 0 {
-			continue
-		}
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		changed := false
+		newSummaries := make(map[string]*taint.TaintTransferSummary)
 
-		// Get parameter names from the function node
-		paramNames := e.getParamNames(funcFQN, funcNode)
+		for funcFQN, funcNode := range e.CallGraph.Functions {
+			stmts := e.getStatementsForFunction(funcFQN)
+			if len(stmts) == 0 {
+				continue
+			}
 
-		// Build transfer summary (prefer CFG-aware)
-		var ts *taint.TaintTransferSummary
-		if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
-			if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
-				if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
-					if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
-						ts = taint.BuildTaintTransferSummaryWithCFG(
-							funcFQN, cfGraph, blockStmts,
-							paramNames, sources, sinks, sanitizers,
-							nil, nil,
-						)
+			paramNames := e.getParamNames(funcFQN, funcNode)
+
+			var ts *taint.TaintTransferSummary
+			if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+				if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+					if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+						if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+							ts = taint.BuildTaintTransferSummaryWithCFG(
+								funcFQN, cfGraph, blockStmts,
+								paramNames, sources, sinks, sanitizers,
+								e.CallGraph, summaries,
+							)
+						}
 					}
 				}
 			}
-		}
-		if ts == nil {
-			ts = taint.BuildTaintTransferSummary(
-				funcFQN, stmts, paramNames, sources, sinks, sanitizers,
-				nil, nil,
-			)
+			if ts == nil {
+				ts = taint.BuildTaintTransferSummary(
+					funcFQN, stmts, paramNames, sources, sinks, sanitizers,
+					e.CallGraph, summaries,
+				)
+			}
+
+			newSummaries[funcFQN] = ts
+
+			if !summaryEqual(summaries[funcFQN], ts) {
+				changed = true
+			}
 		}
 
-		summaries[funcFQN] = ts
+		summaries = newSummaries
+
+		if !changed {
+			break
+		}
 	}
 
 	return summaries
+}
+
+// summaryEqual checks if two TaintTransferSummary values are equal.
+func summaryEqual(a, b *taint.TaintTransferSummary) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.IsSource != b.IsSource ||
+		a.IsSanitizer != b.IsSanitizer ||
+		a.ReturnTaintedBySource != b.ReturnTaintedBySource {
+		return false
+	}
+	if len(a.ParamToReturn) != len(b.ParamToReturn) {
+		return false
+	}
+	for k, v := range a.ParamToReturn {
+		if b.ParamToReturn[k] != v {
+			return false
+		}
+	}
+	if len(a.ParamToSink) != len(b.ParamToSink) {
+		return false
+	}
+	for k, v := range a.ParamToSink {
+		if b.ParamToSink[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // getStatementsForFunction retrieves flattened statements for a function,

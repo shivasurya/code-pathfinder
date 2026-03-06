@@ -415,6 +415,74 @@ func TestDataflowExecutor_Global(t *testing.T) {
 	})
 }
 
+func TestDataflowExecutor_Global_MultiLevelSource(t *testing.T) {
+	// 3-level chain: main() -> wrapper() -> get_input()
+	// get_input() calls os.getenv (source pattern)
+	// wrapper() calls get_input() and returns result
+	// main() calls wrapper() and passes to eval (sink)
+	cg := core.NewCallGraph()
+
+	cg.Edges["test.main"] = []string{"test.wrapper"}
+	cg.Edges["test.wrapper"] = []string{"test.get_input"}
+	cg.Edges["test.get_input"] = []string{}
+
+	cg.ReverseEdges["test.wrapper"] = []string{"test.main"}
+	cg.ReverseEdges["test.get_input"] = []string{"test.wrapper"}
+
+	// get_input(): data = os.getenv("X"); return data
+	cg.Statements["test.get_input"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "data", Uses: []string{"os", "getenv"}, CallTarget: "os.getenv", LineNumber: 2},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"data"}, LineNumber: 3},
+	}
+	cg.CallSites["test.get_input"] = []core.CallSite{
+		{Target: "os.getenv", TargetFQN: "os.getenv", Location: core.Location{Line: 2}},
+	}
+
+	// wrapper(): result = get_input(); return result
+	cg.Statements["test.wrapper"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "result", Uses: []string{"get_input"}, CallTarget: "get_input", LineNumber: 5},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"result"}, LineNumber: 6},
+	}
+	cg.CallSites["test.wrapper"] = []core.CallSite{
+		{Target: "get_input", TargetFQN: "test.get_input", Location: core.Location{Line: 5}},
+	}
+
+	// main(): x = wrapper(); eval(x)
+	cg.Statements["test.main"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"wrapper"}, CallTarget: "wrapper", LineNumber: 10},
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "x"}, CallTarget: "eval", LineNumber: 11},
+	}
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "wrapper", TargetFQN: "test.wrapper", Location: core.Location{Line: 10}},
+		{Target: "eval", TargetFQN: "builtins.eval", Location: core.Location{Line: 11}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Functions["test.get_input"] = nil
+	cg.Functions["test.wrapper"] = nil
+	cg.Functions["test.main"] = nil
+
+	ir := &DataflowIR{
+		Sources:    []CallMatcherIR{{Patterns: []string{"os.getenv"}}},
+		Sinks:      []CallMatcherIR{{Patterns: []string{"eval"}}},
+		Sanitizers: []CallMatcherIR{},
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.executeGlobal()
+
+	// Should detect: main() calls wrapper() (which wraps get_input source) -> eval()
+	found := false
+	for _, d := range detections {
+		if d.FunctionFQN == "test.main" && d.SinkLine == 11 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Should detect 3-level source chain: main -> wrapper -> get_input -> os.getenv. Got detections: %+v", detections)
+	}
+}
+
 func TestDataflowExecutor_PatternMatching(t *testing.T) {
 	cg := core.NewCallGraph()
 	ir := &DataflowIR{}
