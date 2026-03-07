@@ -26,7 +26,7 @@ class OpenAIClient extends HttpClient {
         model: options.model || this.defaultModel,
         messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
-        max_tokens: options.maxTokens || 2000,
+        max_completion_tokens: options.maxTokens || 2000,
         stream: false
       },
       {
@@ -64,7 +64,7 @@ class OpenAIClient extends HttpClient {
         model: options.model || this.defaultModel,
         messages: messages || [{ role: 'user', content: prompt }],
         temperature: options.temperature || 0,
-        max_tokens: options.maxTokens || 2000,
+        max_completion_tokens: options.maxTokens || 2000,
         stream: true
       },
       (chunk) => {
