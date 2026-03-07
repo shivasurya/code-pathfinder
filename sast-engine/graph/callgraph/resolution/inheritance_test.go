@@ -705,7 +705,7 @@ func TestPropagateParentParamTypes_SkipsArgsKwargs(t *testing.T) {
 	}
 }
 
-// Verify graceful fallback when parent class isn't in typeshed
+// Verify graceful fallback when parent class isn't in typeshed.
 func TestPropagateParentParamTypes_UserLandParent(t *testing.T) {
 	server := setupInheritanceServer()
 	defer server.Close()
@@ -732,5 +732,5 @@ func TestPropagateParentParamTypes_UserLandParent(t *testing.T) {
 	}
 }
 
-// Suppress unused import warning
+// Suppress unused import warning.
 var _ = fmt.Sprintf
