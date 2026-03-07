@@ -139,6 +139,17 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 		logger.Statistic("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
 	}
 
+	// PR #4: Load third-party type registry from CDN (non-fatal on failure)
+	thirdPartyLoader := cgregistry.NewThirdPartyRegistryRemote(
+		"https://assets.codepathfinder.dev/registries",
+	)
+	if err := thirdPartyLoader.LoadManifest(logger); err != nil {
+		logger.Warning("Failed to load third-party registry: %v", err)
+	} else {
+		typeEngine.ThirdPartyRemote = thirdPartyLoader
+		logger.Statistic("Third-party manifest: %d packages available", thirdPartyLoader.ModuleCount())
+	}
+
 	// Phase 1: Build class context map for class-qualified FQN generation
 	// This maps file locations to class names, allowing us to determine
 	// which class a method belongs to based on its byte range.
@@ -229,6 +240,11 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 	// Back-populate inferred return types to function nodes and detect void functions
 	populateInferredReturnTypes(callGraph, typeEngine, allFunctionsWithReturnValues, logger)
+
+	// PR #5: Pre-load third-party modules that appear in project imports.
+	// ImportMaps are populated during return type extraction above.
+	// Pre-fetching here avoids per-call-site CDN downloads during Pass 4.
+	preloadThirdPartyModules(typeEngine, logger)
 
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass - PARALLELIZED)
 	logger.Debug("Extracting variable assignments (parallel)...")
@@ -441,6 +457,54 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	callGraph.TypeEngine = typeEngine
 
 	return callGraph, nil
+}
+
+// preloadThirdPartyModules scans all collected ImportMaps and pre-fetches
+// third-party modules that appear in project imports. This avoids per-call-site
+// CDN downloads during call resolution (Pass 4).
+func preloadThirdPartyModules(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	// Collect unique top-level module names from all import maps
+	seen := make(map[string]bool)
+
+	typeEngine.ForEachImportMap(func(_ string, importMap *core.ImportMap) {
+		for _, fqn := range importMap.Imports {
+			// Extract top-level package name (e.g., "requests" from "requests.sessions")
+			topLevel := fqn
+			if idx := strings.Index(fqn, "."); idx > 0 {
+				topLevel = fqn[:idx]
+			}
+			if !seen[topLevel] && loader.HasModule(topLevel) {
+				seen[topLevel] = true
+			}
+		}
+	})
+
+	if len(seen) == 0 {
+		return
+	}
+
+	// Pre-fetch each matched module
+	var loaded int
+	for moduleName := range seen {
+		if _, err := loader.GetModule(moduleName, logger); err != nil {
+			logger.Warning("Failed to pre-load third-party module %s: %v", moduleName, err)
+		} else {
+			loaded++
+		}
+	}
+
+	if loaded > 0 {
+		logger.Statistic("Pre-loaded %d third-party modules from typeshed", loaded)
+	}
 }
 
 // IndexFunctions builds the Functions map in the call graph.
