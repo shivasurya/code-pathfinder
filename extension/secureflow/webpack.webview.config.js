@@ -17,15 +17,10 @@ const webviewConfig = (env, argv) => ({
     clean: false
   },
   resolve: {
-    alias: {
-      svelte: path.resolve(__dirname, 'node_modules', 'svelte', 'src', 'runtime'),
-      'svelte/internal': path.resolve(__dirname, 'node_modules', 'svelte', 'src', 'runtime', 'internal', 'index.js'),
-      'svelte/store': path.resolve(__dirname, 'node_modules', 'svelte', 'src', 'runtime', 'store', 'index.js'),
-      'svelte/internal/disclose-version': path.resolve(__dirname, 'node_modules', 'svelte', 'src', 'runtime', 'internal', 'disclose-version', 'index.js')
-    },
     extensions: ['.mjs', '.js', '.ts', '.svelte'],
     mainFields: ['svelte', 'browser', 'module', 'main'],
-    conditionNames: ['svelte', 'browser', 'import', 'default']
+    conditionNames: ['svelte', 'browser', 'import', 'default'],
+    exportsFields: ['exports']
   },
   module: {
     rules: [
