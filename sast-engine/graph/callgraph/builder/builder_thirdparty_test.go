@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
@@ -711,4 +712,164 @@ func TestValidateThirdPartyFQN_ReExportedFunction(t *testing.T) {
 	assert.True(t, validateThirdPartyFQN("requests.post", loader, logger))
 	assert.True(t, validateThirdPartyFQN("requests.Session", loader, logger))
 	assert.False(t, validateThirdPartyFQN("requests.nonexistent", loader, logger))
+}
+
+// setupDjangoThirdPartyServer creates a server with django-like class structure.
+// Classes are stored with sub-module paths (e.g., db.models.fields.related.ForeignKey).
+func setupDjangoThirdPartyServer(t *testing.T) (*httptest.Server, *registry.ThirdPartyRegistryRemote) {
+	t.Helper()
+
+	module := &core.StdlibModule{
+		Module: "django",
+		Functions: map[string]*core.StdlibFunction{
+			"urls.path": {ReturnType: "django.urls.URLPattern", Confidence: 0.95, Source: "typeshed"},
+			"urls.re_path": {ReturnType: "django.urls.URLPattern", Confidence: 0.95, Source: "typeshed"},
+			"conf.settings": {ReturnType: "django.conf.LazySettings", Confidence: 0.95, Source: "typeshed"},
+		},
+		Classes: map[string]*core.StdlibClass{
+			"db.models.fields.related.ForeignKey": {Type: "django.db.models.ForeignKey"},
+			"db.models.fields.CharField":          {Type: "django.db.models.CharField"},
+			"db.models.fields.IntegerField":       {Type: "django.db.models.IntegerField"},
+			"db.models.fields.DateTimeField":      {Type: "django.db.models.DateTimeField"},
+			"db.models.fields.TextField":          {Type: "django.db.models.TextField"},
+			"db.models.fields.BooleanField":       {Type: "django.db.models.BooleanField"},
+			"db.models.fields.json.JSONField":     {Type: "django.db.models.JSONField"},
+			"db.models.query.QuerySet":            {Type: "django.db.models.QuerySet"},
+			"db.models.Q":                         {Type: "django.db.models.Q"},
+		},
+		Constants:  map[string]*core.StdlibConstant{},
+		Attributes: map[string]*core.StdlibAttribute{},
+	}
+	moduleJSON, err := json.Marshal(module)
+	require.NoError(t, err)
+
+	checksum := "sha256:" + func() string {
+		h := sha256.Sum256(moduleJSON)
+		return hex.EncodeToString(h[:])
+	}()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/thirdparty/v1/manifest.json":
+			manifest := core.Manifest{
+				Modules: []*core.ModuleEntry{
+					{Name: "django", File: "django.json", Checksum: checksum},
+				},
+			}
+			json.NewEncoder(w).Encode(manifest) //nolint:errcheck
+		case "/thirdparty/v1/django.json":
+			w.Write(moduleJSON) //nolint:errcheck
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	loader := registry.NewThirdPartyRegistryRemote(server.URL)
+	require.NoError(t, loader.LoadManifest(output.NewLogger(output.VerbosityDefault)))
+
+	return server, loader
+}
+
+func TestValidateThirdPartyFQN_LastComponentSuffixMatch(t *testing.T) {
+	// django.db.models.ForeignKey → stored as db.models.fields.related.ForeignKey.
+	// Last component "ForeignKey" suffix match should find it.
+	server, loader := setupDjangoThirdPartyServer(t)
+	defer server.Close()
+	logger := output.NewLogger(output.VerbosityDefault)
+
+	// These FQNs don't exist as exact keys but match via last-component suffix.
+	assert.True(t, validateThirdPartyFQN("django.db.models.ForeignKey", loader, logger))
+	assert.True(t, validateThirdPartyFQN("django.db.models.CharField", loader, logger))
+	assert.True(t, validateThirdPartyFQN("django.db.models.IntegerField", loader, logger))
+	assert.True(t, validateThirdPartyFQN("django.db.models.JSONField", loader, logger))
+
+	// Direct key match still works.
+	assert.True(t, validateThirdPartyFQN("django.db.models.Q", loader, logger))
+
+	// Function suffix match.
+	assert.True(t, validateThirdPartyFQN("django.path", loader, logger))
+
+	// Non-existent class.
+	assert.False(t, validateThirdPartyFQN("django.db.models.NonExistent", loader, logger))
+}
+
+func TestResolveWithPrefixStripping(t *testing.T) {
+	registry := core.NewModuleRegistry()
+	registry.Modules["core.utils.params"] = "/project/core/utils/params.py"
+
+	cg := core.NewCallGraph()
+	cg.Functions["core.views.index"] = &graph.Node{Name: "index"}
+
+	tests := []struct {
+		name       string
+		fqn        string
+		expectFQN  string
+		expectOK   bool
+		useCG      bool
+	}{
+		{"strips to registry match", "label_studio.core.utils.params.get_env", "core.utils.params.get_env", true, false},
+		{"strips to callGraph match", "label_studio.core.views.index", "core.views.index", true, true},
+		{"no match", "totally.unknown.module.func", "totally.unknown.module.func", false, false},
+		{"single dot no strip", "module.func", "module.func", false, false},
+		{"no dots", "func", "func", false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var graph *core.CallGraph
+			if tt.useCG {
+				graph = cg
+			}
+			resultFQN, ok := resolveWithPrefixStripping(tt.fqn, registry, graph)
+			assert.Equal(t, tt.expectOK, ok)
+			assert.Equal(t, tt.expectFQN, resultFQN)
+		})
+	}
+}
+
+func TestCategorizeResolutionFailure(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    string
+		targetFQN string
+		expected  string
+	}{
+		{"orm objects.filter", "Task.objects.filter", "Task.objects.filter", "orm_pattern"},
+		{"orm .objects", "Task.objects", "Task.objects", "orm_pattern"},
+		{"orm .all", "qs.all", "qs.all", "orm_pattern"},
+		{"orm .count", "items.count", "items.count", "orm_pattern"},
+		{"super call", "super().save", "super().save", "super_call"},
+		{"super dot", "super.save", "super.save", "super_call"},
+		{"variable self", "self.save", "self.save", "variable_method"},
+		{"variable request", "request.GET", "request.GET", "variable_method"},
+		{"variable cls", "cls.save", "cls.save", "variable_method"},
+		{"variable data", "data.process", "data.process", "variable_method"},
+		{"attribute chain", "foo.bar", "foo.bar", "attribute_chain"},
+		{"not in imports", "some_func", "some_func", "not_in_imports"},
+		{"unknown dotted upper", "Module.Something", "Module.Something", "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Pass nil typeEngine to test non-registry paths.
+			result := categorizeResolutionFailure(tt.target, tt.targetFQN, nil)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestCategorizeResolutionFailure_WithRegistry(t *testing.T) {
+	server, loader := setupDjangoThirdPartyServer(t)
+	defer server.Close()
+
+	engine := resolution.NewTypeInferenceEngine(core.NewModuleRegistry())
+	engine.ThirdPartyRemote = loader
+
+	// Django FQN should be detected as external_framework via HasModule.
+	result := categorizeResolutionFailure("models.ForeignKey", "django.db.models.ForeignKey", engine)
+	assert.Equal(t, "external_framework", result)
+
+	// Unknown module should fall through to other heuristics.
+	result = categorizeResolutionFailure("foo.bar", "unknown_pkg.foo.bar", engine)
+	assert.Equal(t, "attribute_chain", result)
 }

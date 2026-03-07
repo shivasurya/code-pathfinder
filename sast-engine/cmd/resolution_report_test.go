@@ -357,3 +357,78 @@ func TestContainsString(t *testing.T) {
 	assert.False(t, containsString("hello", "world"))
 	assert.False(t, containsString("", "test"))
 }
+
+func TestPrintPerFileBreakdown(t *testing.T) {
+	stats := &resolutionStatistics{
+		UnresolvedByFile: map[string]int{
+			"app/views.py":  10,
+			"app/models.py": 5,
+			"app/utils.py":  3,
+		},
+	}
+
+	// Should not panic with valid data.
+	printPerFileBreakdown(stats, 2)
+
+	// Should not panic with empty data.
+	emptyStats := &resolutionStatistics{
+		UnresolvedByFile: map[string]int{},
+	}
+	printPerFileBreakdown(emptyStats, 5)
+}
+
+func TestExportUnresolvedCSV_InvalidPath(t *testing.T) {
+	stats := &resolutionStatistics{
+		UnresolvedDetails: []unresolvedDetail{
+			{File: "app.py", Line: 1, Target: "foo"},
+		},
+	}
+
+	err := exportUnresolvedCSV(stats, "/nonexistent/dir/file.csv")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create CSV file")
+}
+
+func TestAggregateResolutionStatistics_EmptyCallGraph(t *testing.T) {
+	cg := core.NewCallGraph()
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 0, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ResolvedCalls)
+	assert.Equal(t, 0, stats.UnresolvedCalls)
+	assert.Equal(t, 0, len(stats.UnresolvedDetails))
+}
+
+func TestAggregateResolutionStatistics_FailureReasonBreakdown(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:        "super().save",
+		Resolved:      false,
+		TargetFQN:     "super().save",
+		FailureReason: "super_call",
+	})
+
+	cg.AddCallSite("test.func2", core.CallSite{
+		Target:        "self.method",
+		Resolved:      false,
+		TargetFQN:     "self.method",
+		FailureReason: "variable_method",
+	})
+
+	cg.AddCallSite("test.func3", core.CallSite{
+		Target:        "foo.bar",
+		Resolved:      false,
+		TargetFQN:     "foo.bar",
+		FailureReason: "attribute_chain",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 3, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ResolvedCalls)
+	assert.Equal(t, 3, stats.UnresolvedCalls)
+	assert.Equal(t, 1, stats.FailuresByReason["super_call"])
+	assert.Equal(t, 1, stats.FailuresByReason["variable_method"])
+	assert.Equal(t, 1, stats.FailuresByReason["attribute_chain"])
+}
