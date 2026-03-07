@@ -351,6 +351,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
 	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
 
+	// PR #7: Resolve parent classes and propagate inherited parameter types
+	resolveParentClassInheritance(codeGraph, callGraph, registry, typeEngine, logger)
+
 	// Process each Python file in the project (fourth pass for call site resolution - PARALLELIZED)
 	logger.Debug("Resolving call sites (parallel)...")
 
@@ -946,6 +949,28 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		if attrResolved {
 			return attrFQN, true, attrType
 		}
+
+		// PR #7: Fallback — check parent class attributes via third-party registry
+		// For self.attr.method where attr isn't in child class, try parent classes
+		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil && codeGraph != nil {
+			attrParts := strings.Split(target, ".")
+			if len(attrParts) == 3 {
+				attrName := attrParts[1]
+				methodOnAttr := attrParts[2]
+				callerParts := strings.Split(callerFQN, ".")
+				if len(callerParts) >= 3 {
+					callerClassName := callerParts[len(callerParts)-2]
+					callerClassFQN := currentModule + "." + callerClassName
+					fqn, resolved, typeInfo := resolveInheritedSelfAttrMethod(
+						callerClassFQN, attrName, methodOnAttr,
+						codeGraph, registry, typeEngine, logger,
+					)
+					if resolved {
+						return fqn, true, typeInfo
+					}
+				}
+			}
+		}
 		// Attribute resolution attempted but failed - fall through
 	}
 
@@ -962,42 +987,66 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 			className := parts[len(parts)-2]
 			currentClassFQN := currentModule + "." + className
 
-			// Phase 3: Search for parent class in codeGraph
-			// Strategy: Look for class nodes and check their relationships
-			var parentClassFQN string
-
+			// PR #7: Find the class node and resolve parent via imports + third-party
 			if codeGraph != nil {
-				// Find the current class node
 				for _, node := range codeGraph.Nodes {
-					if node.Type == "class_definition" && node.File != "" {
-						// Build FQN for this class node
-						modulePath, ok := registry.FileToModule[node.File]
-						if ok {
-							nodeFQN := modulePath + "." + node.Name
-							if nodeFQN == currentClassFQN {
-								// Found current class node - check for parent info
-								// In Python parser, class inheritance might be stored in node metadata
-								// For now, try to find parent class by searching for classes in same module
-								// This is a heuristic approach for Phase 3
-								break
+					if node.Type != "class_definition" && node.Type != "dataclass" {
+						continue
+					}
+					if node.File == "" || len(node.Interface) == 0 {
+						continue
+					}
+					modulePath, ok := registry.FileToModule[node.File]
+					if !ok {
+						continue
+					}
+					nodeFQN := modulePath + "." + node.Name
+					if nodeFQN != currentClassFQN {
+						continue
+					}
+
+					// Found the class — resolve each parent and check for the method
+					for _, superClassName := range node.Interface {
+						parentFQN := resolution.ResolveParentClassFQN(
+							currentClassFQN, superClassName, node.File,
+							typeEngine, registry,
+						)
+						if parentFQN == "" {
+							continue
+						}
+
+						// Check userland first
+						parentMethodFQN := parentFQN + "." + methodName
+						if callGraph != nil && callGraph.Functions[parentMethodFQN] != nil {
+							return parentMethodFQN, true, nil
+						}
+
+						// Check third-party registry
+						if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+							if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+								tpModule, tpClass := splitModuleAndName(parentFQN)
+								if tpClass != "" && loader.HasModule(tpModule) {
+									method := findThirdPartyClassMethod(loader, tpModule, tpClass, methodName, logger)
+									if method != nil {
+										return parentFQN + "." + methodName, true, nil
+									}
+								}
 							}
 						}
 					}
+					break
 				}
 			}
 
-			// Heuristic fallback: Try common parent class names
-			// Look for Base*, Parent*, or classes ending with "Base"
-			if parentClassFQN == "" && callGraph != nil {
-				// Search Functions map for potential parent class methods
+			// Heuristic fallback: Try common parent class names (Base suffix)
+			if callGraph != nil {
 				parentMethodFQN := currentModule + "." + className + "Base." + methodName
 				if callGraph.Functions[parentMethodFQN] != nil {
 					return parentMethodFQN, true, nil
 				}
 			}
 
-			// If we can't find explicit parent, try resolving without class qualification
-			// This handles cases where super() calls might resolve to module-level functions
+			// Try module-level function as last resort
 			moduleFQN := currentModule + "." + methodName
 			if callGraph != nil && callGraph.Functions[moduleFQN] != nil {
 				return moduleFQN, true, nil
@@ -1487,6 +1536,175 @@ func findThirdPartyClassMethod(loader *cgregistry.ThirdPartyRegistryRemote, modu
 		return loader.GetClassMethod(moduleName, shortName, methodName, logger)
 	}
 	return nil
+}
+
+// resolveInheritedSelfAttrMethod resolves self.attr.method() when attr comes from a parent class.
+// For example, in a Django View subclass: self.request.GET.get("q") → request is from parent View.
+func resolveInheritedSelfAttrMethod(
+	classFQN string,
+	attrName string,
+	methodName string,
+	codeGraph *graph.CodeGraph,
+	registry *core.ModuleRegistry,
+	typeEngine *resolution.TypeInferenceEngine,
+	logger *output.Logger,
+) (string, bool, *core.TypeInfo) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return "", false, nil
+	}
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return "", false, nil
+	}
+
+	// Find the class node to get its parent classes
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "class_definition" && node.Type != "dataclass" {
+			continue
+		}
+		if len(node.Interface) == 0 || node.File == "" {
+			continue
+		}
+		modulePath, ok := registry.FileToModule[node.File]
+		if !ok {
+			continue
+		}
+		if modulePath+"."+node.Name != classFQN {
+			continue
+		}
+
+		// Try each parent class
+		for _, superClassName := range node.Interface {
+			parentFQN := resolution.ResolveParentClassFQN(
+				classFQN, superClassName, node.File, typeEngine, registry,
+			)
+			if parentFQN == "" {
+				continue
+			}
+
+			// Get the attribute type from the parent class
+			attrType := resolution.ResolveInheritedSelfAttribute(
+				parentFQN, attrName, typeEngine.ThirdPartyRemote, logger,
+			)
+			if attrType == nil || attrType.TypeFQN == "" {
+				continue
+			}
+
+			// Now resolve the method on the attribute type
+			attrTypeFQN := attrType.TypeFQN
+			attrModule, attrClass := splitModuleAndName(attrTypeFQN)
+			if attrClass != "" && loader.HasModule(attrModule) {
+				method := findThirdPartyClassMethod(loader, attrModule, attrClass, methodName, logger)
+				if method != nil {
+					resolvedFQN := attrTypeFQN + "." + methodName
+					return resolvedFQN, true, &core.TypeInfo{
+						TypeFQN:    attrTypeFQN,
+						Confidence: attrType.Confidence,
+						Source:     "parent_class_attribute",
+					}
+				}
+			}
+		}
+		break
+	}
+
+	return "", false, nil
+}
+
+// resolveParentClassInheritance iterates over class_definition nodes, resolves parent
+// class FQNs via imports, and propagates parameter types from parent methods to child overrides.
+// For example: class TestView(View) → resolves View to django.views.View → propagates
+// request: django.http.HttpRequest from View.get to TestView.get.
+func resolveParentClassInheritance(
+	codeGraph *graph.CodeGraph,
+	callGraph *core.CallGraph,
+	registry *core.ModuleRegistry,
+	typeEngine *resolution.TypeInferenceEngine,
+	logger *output.Logger,
+) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	classContext := buildClassContext(codeGraph)
+	_ = classContext
+
+	var resolved, total int
+
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "class_definition" && node.Type != "dataclass" {
+			continue
+		}
+		if len(node.Interface) == 0 {
+			continue
+		}
+
+		// Build class FQN
+		modulePath, ok := registry.FileToModule[node.File]
+		if !ok {
+			continue
+		}
+		classFQN := modulePath + "." + node.Name
+		total++
+
+		// Resolve each parent class
+		for _, superClassName := range node.Interface {
+			parentFQN := resolution.ResolveParentClassFQN(
+				classFQN, superClassName, node.File,
+				typeEngine, registry,
+			)
+			if parentFQN == "" {
+				continue
+			}
+
+			// Check if parent is in third-party registry
+			parentModule, parentClass := splitModuleAndName(parentFQN)
+			if parentClass == "" || !loader.HasModule(parentModule) {
+				continue
+			}
+
+			// Verify class exists in CDN (with re-export suffix matching)
+			cls := findThirdPartyClass(loader, parentModule, parentClass, logger)
+			if cls == nil {
+				continue
+			}
+
+			resolved++
+			logger.Debug("Resolved parent class: %s -> %s", classFQN+"."+superClassName, parentFQN)
+
+			// Propagate parameter types to all child methods that override parent methods
+			for childFQN, childNode := range callGraph.Functions {
+				// Check if this function belongs to the current class
+				if !strings.HasPrefix(childFQN, classFQN+".") {
+					continue
+				}
+				if childNode.Type != "method" && childNode.Type != "function_definition" &&
+					childNode.Type != "constructor" && childNode.Type != "special_method" {
+					continue
+				}
+
+				// Extract method name from FQN (last segment)
+				methodName := childFQN[len(classFQN)+1:]
+				if strings.Contains(methodName, ".") {
+					continue // Skip nested classes/methods
+				}
+
+				resolution.PropagateParentParamTypes(
+					childFQN, parentFQN, methodName,
+					typeEngine, typeEngine.ThirdPartyRemote, logger,
+				)
+			}
+		}
+	}
+
+	if total > 0 {
+		logger.Debug("Parent class resolution: %d/%d classes resolved via third-party", resolved, total)
+	}
 }
 
 // resolveThirdPartyVariableBindings resolves remaining call: placeholders using third-party registry.
