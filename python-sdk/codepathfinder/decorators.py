@@ -10,7 +10,6 @@ import sys
 from typing import Callable, Optional, List
 from .ir import serialize_ir
 
-
 # Global registry for auto-execution
 _rule_registry: List["Rule"] = []
 _auto_execute_enabled = False
