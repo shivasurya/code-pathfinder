@@ -1,8 +1,13 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph"
@@ -20,11 +25,12 @@ var resolutionReportCmd = &cobra.Command{
   - Overall resolution statistics (resolved vs unresolved)
   - Breakdown by failure category
   - Top unresolved patterns with occurrence counts
+  - Per-file unresolved call breakdown
 
-This helps identify why calls are not being resolved and prioritize
-improvements to the resolution logic.`,
+Use --csv to export unresolved calls with file, line, target, and reason.`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		projectInput := cmd.Flag("project").Value.String()
+		csvOutput := cmd.Flag("csv").Value.String()
 
 		if projectInput == "" {
 			fmt.Println("Error: --project flag is required")
@@ -45,7 +51,7 @@ improvements to the resolution logic.`,
 		fmt.Println("===============================================")
 
 		// Collect statistics
-		stats := aggregateResolutionStatistics(cg)
+		stats := aggregateResolutionStatistics(cg, projectInput)
 
 		// Print overall statistics
 		printOverallStatistics(stats)
@@ -67,12 +73,36 @@ improvements to the resolution logic.`,
 		printFailureBreakdown(stats)
 		fmt.Println()
 
+		// Print per-file breakdown
+		printPerFileBreakdown(stats, 15)
+		fmt.Println()
+
 		// Print top unresolved patterns
 		printTopUnresolvedPatterns(stats, 20)
 		fmt.Println()
 
 		fmt.Printf("Module registry: %d modules\n", len(registry.Modules))
+
+		// Export CSV if requested
+		if csvOutput != "" {
+			if err := exportUnresolvedCSV(stats, csvOutput); err != nil {
+				fmt.Printf("Error writing CSV: %v\n", err)
+			} else {
+				fmt.Printf("\nExported %d unresolved calls to %s\n", len(stats.UnresolvedDetails), csvOutput)
+			}
+		}
 	},
+}
+
+// unresolvedDetail captures full context for a single unresolved call site.
+type unresolvedDetail struct {
+	File          string // Relative file path
+	Line          int
+	Column        int
+	FunctionFQN   string // Containing function
+	Target        string // Call target as written
+	TargetFQN     string // Attempted FQN resolution
+	FailureReason string // Category
 }
 
 // resolutionStatistics holds aggregated statistics about call resolution.
@@ -80,10 +110,12 @@ type resolutionStatistics struct {
 	TotalCalls       int
 	ResolvedCalls    int
 	UnresolvedCalls  int
-	FailuresByReason map[string]int                // Category -> count
-	PatternCounts    map[string]int                // Target pattern -> count
-	FrameworkCounts  map[string]int                // Framework prefix -> count (for external_framework category)
-	UnresolvedByFQN  map[string]core.CallSite // For detailed inspection
+	FailuresByReason map[string]int            // Category -> count
+	PatternCounts    map[string]int            // Target pattern -> count
+	FrameworkCounts  map[string]int            // Framework prefix -> count (for external_framework category)
+	UnresolvedByFQN  map[string]core.CallSite  // For detailed inspection (legacy)
+	UnresolvedByFile map[string]int            // Relative file path -> count
+	UnresolvedDetails []unresolvedDetail       // Full per-call-site details
 
 	// Phase 2: Type inference statistics
 	TypeInferenceResolved  int            // Calls resolved via type inference
@@ -104,12 +136,13 @@ type resolutionStatistics struct {
 }
 
 // aggregateResolutionStatistics analyzes the call graph and collects statistics.
-func aggregateResolutionStatistics(cg *core.CallGraph) *resolutionStatistics {
+func aggregateResolutionStatistics(cg *core.CallGraph, projectRoot string) *resolutionStatistics {
 	stats := &resolutionStatistics{
 		FailuresByReason:       make(map[string]int),
 		PatternCounts:          make(map[string]int),
 		FrameworkCounts:        make(map[string]int),
 		UnresolvedByFQN:        make(map[string]core.CallSite),
+		UnresolvedByFile:       make(map[string]int),
 		TypesBySource:          make(map[string]int),
 		ConfidenceDistribution: make(map[string]int),
 		StdlibByModule:         make(map[string]int),
@@ -117,7 +150,7 @@ func aggregateResolutionStatistics(cg *core.CallGraph) *resolutionStatistics {
 	}
 
 	// Iterate through all call sites
-	for _, callSites := range cg.CallSites {
+	for functionFQN, callSites := range cg.CallSites {
 		for _, site := range callSites {
 			stats.TotalCalls++
 
@@ -184,19 +217,33 @@ func aggregateResolutionStatistics(cg *core.CallGraph) *resolutionStatistics {
 			} else {
 				stats.UnresolvedCalls++
 
-				// Count by failure reason
-				if site.FailureReason != "" {
-					stats.FailuresByReason[site.FailureReason]++
-				} else {
-					stats.FailuresByReason["uncategorized"]++
+				// Determine failure reason
+				reason := site.FailureReason
+				if reason == "" {
+					reason = "uncategorized"
 				}
+				stats.FailuresByReason[reason]++
 
 				// Count pattern occurrences
 				stats.PatternCounts[site.Target]++
 
+				// Track per-file
+				relFile := relativePath(site.Location.File, projectRoot)
+				stats.UnresolvedByFile[relFile]++
+
+				// Store full detail for CSV export
+				stats.UnresolvedDetails = append(stats.UnresolvedDetails, unresolvedDetail{
+					File:          relFile,
+					Line:          site.Location.Line,
+					Column:        site.Location.Column,
+					FunctionFQN:   functionFQN,
+					Target:        site.Target,
+					TargetFQN:     site.TargetFQN,
+					FailureReason: reason,
+				})
+
 				// For external frameworks, track which framework
 				if site.FailureReason == "external_framework" {
-					// Extract framework prefix (first component before dot)
 					for idx := 0; idx < len(site.TargetFQN); idx++ {
 						if site.TargetFQN[idx] == '.' {
 							framework := site.TargetFQN[:idx]
@@ -206,23 +253,38 @@ func aggregateResolutionStatistics(cg *core.CallGraph) *resolutionStatistics {
 					}
 				}
 
-				// Store for detailed inspection
+				// Store for detailed inspection (legacy)
 				stats.UnresolvedByFQN[site.TargetFQN] = site
 			}
 		}
 	}
 
+	// Sort unresolved details by file then line for stable output
+	sort.Slice(stats.UnresolvedDetails, func(i, j int) bool {
+		if stats.UnresolvedDetails[i].File != stats.UnresolvedDetails[j].File {
+			return stats.UnresolvedDetails[i].File < stats.UnresolvedDetails[j].File
+		}
+		return stats.UnresolvedDetails[i].Line < stats.UnresolvedDetails[j].Line
+	})
+
 	return stats
+}
+
+// relativePath computes a relative path from projectRoot, or returns the original on error.
+func relativePath(absPath, projectRoot string) string {
+	if absPath == "" || projectRoot == "" {
+		return absPath
+	}
+	rel, err := filepath.Rel(projectRoot, absPath)
+	if err != nil {
+		return absPath
+	}
+	return rel
 }
 
 // containsString checks if a string contains a substring.
 func containsString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }
 
 // printOverallStatistics prints the overall resolution statistics.
@@ -357,6 +419,34 @@ func printFailureBreakdown(stats *resolutionStatistics) {
 	}
 }
 
+// printPerFileBreakdown prints files with the most unresolved calls.
+func printPerFileBreakdown(stats *resolutionStatistics, topN int) {
+	if len(stats.UnresolvedByFile) == 0 {
+		return
+	}
+
+	fmt.Printf("Top %d Files with Unresolved Calls:\n", topN)
+
+	type fileCount struct {
+		file  string
+		count int
+	}
+	files := make([]fileCount, 0, len(stats.UnresolvedByFile))
+	for file, count := range stats.UnresolvedByFile {
+		files = append(files, fileCount{file, count})
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].count > files[j].count
+	})
+
+	for i, fc := range files {
+		if i >= topN {
+			break
+		}
+		fmt.Printf("  %2d. %-60s %d unresolved\n", i+1, fc.file, fc.count)
+	}
+}
+
 // printTopUnresolvedPatterns prints the most common unresolved patterns.
 func printTopUnresolvedPatterns(stats *resolutionStatistics, topN int) {
 	fmt.Printf("Top %d Unresolved Patterns:\n", topN)
@@ -381,6 +471,42 @@ func printTopUnresolvedPatterns(stats *resolutionStatistics, topN int) {
 		}
 		fmt.Printf("  %2d. %-40s %d occurrences\n", i+1, pc.pattern, pc.count)
 	}
+}
+
+// exportUnresolvedCSV writes all unresolved call sites to a CSV file.
+func exportUnresolvedCSV(stats *resolutionStatistics, outputPath string) error {
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	// Header
+	if err := w.Write([]string{
+		"file", "line", "column", "function", "target", "target_fqn", "reason",
+	}); err != nil {
+		return fmt.Errorf("failed to write CSV header: %w", err)
+	}
+
+	// Data rows (already sorted by file then line)
+	for _, d := range stats.UnresolvedDetails {
+		if err := w.Write([]string{
+			d.File,
+			strconv.Itoa(d.Line),
+			strconv.Itoa(d.Column),
+			d.FunctionFQN,
+			d.Target,
+			d.TargetFQN,
+			d.FailureReason,
+		}); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // percentage calculates the percentage of part out of total.
@@ -561,4 +687,5 @@ func init() {
 	rootCmd.AddCommand(resolutionReportCmd)
 	resolutionReportCmd.Flags().StringP("project", "p", "", "Project root directory")
 	resolutionReportCmd.MarkFlagRequired("project")
+	resolutionReportCmd.Flags().String("csv", "", "Export unresolved calls to CSV file (e.g., --csv unresolved.csv)")
 }

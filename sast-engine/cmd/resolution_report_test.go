@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -44,7 +46,7 @@ func TestAggregateResolutionStatistics(t *testing.T) {
 	})
 
 	// Aggregate statistics
-	stats := aggregateResolutionStatistics(cg)
+	stats := aggregateResolutionStatistics(cg, "/project")
 
 	// Validate overall counts
 	assert.Equal(t, 4, stats.TotalCalls)
@@ -63,6 +65,9 @@ func TestAggregateResolutionStatistics(t *testing.T) {
 
 	// Validate framework counts
 	assert.Equal(t, 1, stats.FrameworkCounts["django"])
+
+	// Validate unresolved details
+	assert.Equal(t, 3, len(stats.UnresolvedDetails))
 }
 
 func TestPercentage(t *testing.T) {
@@ -196,7 +201,7 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	})
 
 	// Aggregate statistics
-	stats := aggregateResolutionStatistics(cg)
+	stats := aggregateResolutionStatistics(cg, "/project")
 
 	// Validate overall counts
 	assert.Equal(t, 4, stats.TotalCalls)
@@ -217,4 +222,138 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	// Validate type breakdown
 	assert.Equal(t, 2, stats.StdlibByType["function"])
 	assert.Equal(t, 1, stats.StdlibByType["class"])
+}
+
+func TestRelativePath(t *testing.T) {
+	tests := []struct {
+		name        string
+		absPath     string
+		projectRoot string
+		expected    string
+	}{
+		{"normal", "/home/user/project/src/app.py", "/home/user/project", "src/app.py"},
+		{"same dir", "/home/user/project/app.py", "/home/user/project", "app.py"},
+		{"empty abs", "", "/home/user/project", ""},
+		{"empty root", "/home/user/project/app.py", "", "/home/user/project/app.py"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := relativePath(tt.absPath, tt.projectRoot)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestUnresolvedDetails(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "extend_schema",
+		Resolved:      false,
+		TargetFQN:     "extend_schema",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   42,
+			Column: 5,
+		},
+	})
+
+	cg.AddCallSite("myapp.views.detail", core.CallSite{
+		Target:        "get_env",
+		Resolved:      false,
+		TargetFQN:     "get_env",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/utils.py",
+			Line:   10,
+			Column: 12,
+		},
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 2, len(stats.UnresolvedDetails))
+	assert.Equal(t, 2, stats.UnresolvedCalls)
+
+	// Verify details are sorted by file then line
+	assert.Equal(t, "myapp/utils.py", stats.UnresolvedDetails[0].File)
+	assert.Equal(t, 10, stats.UnresolvedDetails[0].Line)
+	assert.Equal(t, "myapp/views.py", stats.UnresolvedDetails[1].File)
+	assert.Equal(t, 42, stats.UnresolvedDetails[1].Line)
+
+	// Verify per-file counts
+	assert.Equal(t, 1, stats.UnresolvedByFile["myapp/views.py"])
+	assert.Equal(t, 1, stats.UnresolvedByFile["myapp/utils.py"])
+}
+
+func TestExportUnresolvedCSV(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "extend_schema",
+		Resolved:      false,
+		TargetFQN:     "drf_spectacular.extend_schema",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   42,
+			Column: 5,
+		},
+	})
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "Response",
+		Resolved:      false,
+		TargetFQN:     "rest_framework.response.Response",
+		FailureReason: "external_framework",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   55,
+			Column: 12,
+		},
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	// Write CSV to temp file
+	tmpFile, err := os.CreateTemp("", "unresolved-*.csv")
+	assert.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	err = exportUnresolvedCSV(stats, tmpFile.Name())
+	assert.NoError(t, err)
+
+	// Read and verify CSV content
+	data, err := os.ReadFile(tmpFile.Name())
+	assert.NoError(t, err)
+
+	content := string(data)
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+
+	// Header + 2 data rows
+	assert.Equal(t, 3, len(lines))
+
+	// Verify header
+	assert.Equal(t, "file,line,column,function,target,target_fqn,reason", lines[0])
+
+	// Verify data rows contain expected fields
+	assert.Contains(t, lines[1], "myapp/views.py")
+	assert.Contains(t, lines[1], "42")
+	assert.Contains(t, lines[1], "extend_schema")
+	assert.Contains(t, lines[1], "not_in_imports")
+
+	assert.Contains(t, lines[2], "myapp/views.py")
+	assert.Contains(t, lines[2], "55")
+	assert.Contains(t, lines[2], "Response")
+	assert.Contains(t, lines[2], "external_framework")
+}
+
+func TestContainsString(t *testing.T) {
+	assert.True(t, containsString("builtins.str", "builtins."))
+	assert.True(t, containsString("hello world", "world"))
+	assert.False(t, containsString("hello", "world"))
+	assert.False(t, containsString("", "test"))
 }

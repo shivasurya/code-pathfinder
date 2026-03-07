@@ -416,7 +416,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 					// If resolution failed, categorize the failure reason
 					if !resolved {
-						callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+						callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN, typeEngine)
 					}
 
 					// CRITICAL: Lock callGraph modifications (shared state)
@@ -786,21 +786,25 @@ func findContainingFunction(location core.Location, functions []*graph.Node, mod
 //
 // Returns:
 //   - category string describing the failure reason
-func categorizeResolutionFailure(target, targetFQN string) string {
-	// Check for external frameworks (common patterns)
-	if strings.HasPrefix(targetFQN, "django.") ||
-		strings.HasPrefix(targetFQN, "rest_framework.") ||
-		strings.HasPrefix(targetFQN, "pytest.") ||
-		strings.HasPrefix(targetFQN, "unittest.") ||
-		strings.HasPrefix(targetFQN, "json.") ||
-		strings.HasPrefix(targetFQN, "logging.") ||
-		strings.HasPrefix(targetFQN, "os.") ||
-		strings.HasPrefix(targetFQN, "sys.") ||
-		strings.HasPrefix(targetFQN, "re.") ||
-		strings.HasPrefix(targetFQN, "pathlib.") ||
-		strings.HasPrefix(targetFQN, "collections.") ||
-		strings.HasPrefix(targetFQN, "datetime.") {
-		return "external_framework"
+func categorizeResolutionFailure(target, targetFQN string, typeEngine *resolution.TypeInferenceEngine) string {
+	// Check third-party registry dynamically (no hardcoded framework lists)
+	if typeEngine != nil && strings.Contains(targetFQN, ".") {
+		moduleName, _ := splitModuleAndName(targetFQN)
+		if typeEngine.ThirdPartyRemote != nil {
+			if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+				if loader.HasModule(moduleName) {
+					return "external_framework"
+				}
+			}
+		}
+		// Check stdlib registry dynamically
+		if typeEngine.StdlibRemote != nil {
+			if loader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+				if loader.HasModule(moduleName) {
+					return "stdlib_unresolved"
+				}
+			}
+		}
 	}
 
 	// Check for Django ORM patterns
@@ -1118,11 +1122,6 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
-			// Found in imports - return the FQN
-			// Check if it's a known framework
-			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
-				return fqn, true, nil
-			}
 			// Validate if it exists in registry
 			if validateFQN(fqn, registry) {
 				return fqn, true, nil
@@ -1142,6 +1141,16 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 						return fqn, true, nil
 					}
 				}
+			}
+			// Check callGraph.Functions directly (may differ from registry module keys)
+			if callGraph != nil && callGraph.Functions[fqn] != nil {
+				return fqn, true, nil
+			}
+			// Fix: strip leading package prefix and retry
+			// Import FQNs use full package path (e.g., label_studio.core.utils.params.get_env)
+			// but registry keys are relative to project root (e.g., core.utils.params.get_env)
+			if strippedFQN, ok := resolveWithPrefixStripping(fqn, registry, callGraph); ok {
+				return strippedFQN, true, nil
 			}
 			return fqn, false, nil
 		}
@@ -1282,10 +1291,6 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
-		// Check if it's a known framework
-		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
-			return fullFQN, true, nil
-		}
 		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
 		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true, nil
@@ -1308,6 +1313,14 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true, nil
+		}
+		// Check callGraph.Functions directly
+		if callGraph != nil && callGraph.Functions[fullFQN] != nil {
+			return fullFQN, true, nil
+		}
+		// Fix: strip leading package prefix and retry
+		if strippedFQN, ok := resolveWithPrefixStripping(fullFQN, registry, callGraph); ok {
+			return strippedFQN, true, nil
 		}
 		return fullFQN, false, nil
 	}
@@ -1458,6 +1471,7 @@ func splitModuleAndName(fqn string) (string, string) {
 // validateThirdPartyFQN checks if a fully qualified name exists in the third-party registry.
 // Checks functions, classes, and constants in the top-level module.
 // Handles Python re-exports: e.g., requests.get is stored as api.get in the CDN.
+// Also handles sub-module path mismatches via suffix matching and progressive stripping.
 func validateThirdPartyFQN(fqn string, loader *cgregistry.ThirdPartyRegistryRemote, logger *output.Logger) bool {
 	moduleName, name := splitModuleAndName(fqn)
 	if name == "" || !loader.HasModule(moduleName) {
@@ -1476,10 +1490,21 @@ func validateThirdPartyFQN(fqn string, loader *cgregistry.ThirdPartyRegistryRemo
 	if _, ok := module.Constants[name]; ok {
 		return true
 	}
-	// Suffix match for re-exported functions (e.g., requests.get → stored as api.get)
-	suffix := "." + name
+	// Extract the last component for suffix matching
+	// e.g., "db.models.ForeignKey" → lastComponent = "ForeignKey"
+	// This handles re-exports where django.db.models.ForeignKey is stored as db.models.fields.related.ForeignKey
+	lastComponent := name
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		lastComponent = name[idx+1:]
+	}
+	lastSuffix := "." + lastComponent
 	for funcName := range module.Functions {
-		if strings.HasSuffix(funcName, suffix) {
+		if funcName == lastComponent || strings.HasSuffix(funcName, lastSuffix) {
+			return true
+		}
+	}
+	for className := range module.Classes {
+		if className == lastComponent || strings.HasSuffix(className, lastSuffix) {
 			return true
 		}
 	}
@@ -1861,6 +1886,34 @@ func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
 	return false
 }
 
+// resolveWithPrefixStripping tries progressively stripping leading package components
+// from an FQN and re-checking against the registry and callGraph.Functions.
+//
+// This fixes the common mismatch where imports use the full package path
+// (e.g., "label_studio.core.utils.params.get_env") but the registry and callGraph
+// key modules relative to the project root (e.g., "core.utils.params.get_env").
+func resolveWithPrefixStripping(fqn string, registry *core.ModuleRegistry, callGraph *core.CallGraph) (string, bool) {
+	remaining := fqn
+	for {
+		idx := strings.Index(remaining, ".")
+		if idx < 0 {
+			break
+		}
+		remaining = remaining[idx+1:]
+		// Need at least one dot remaining (module.function)
+		if !strings.Contains(remaining, ".") {
+			break
+		}
+		if validateFQN(remaining, registry) {
+			return remaining, true
+		}
+		if callGraph != nil && callGraph.Functions[remaining] != nil {
+			return remaining, true
+		}
+	}
+	return fqn, false
+}
+
 // resolveCallTargetLegacy is the old resolution logic without type inference.
 // Used for backward compatibility with existing tests.
 func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
@@ -1887,11 +1940,6 @@ func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry 
 
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
-			// Found in imports - return the FQN
-			// Check if it's a known framework
-			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
-				return fqn, true
-			}
 			// Validate if it exists in registry
 			resolved := validateFQN(fqn, registry)
 			return fqn, resolved
@@ -1915,10 +1963,6 @@ func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry 
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
-		// Check if it's a known framework
-		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
-			return fullFQN, true
-		}
 		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
 		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true
