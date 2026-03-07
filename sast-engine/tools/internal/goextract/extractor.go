@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -539,10 +540,8 @@ func containsIota(expr ast.Expr) bool {
 	case *ast.UnaryExpr:
 		return containsIota(e.X)
 	case *ast.CallExpr:
-		for _, arg := range e.Args {
-			if containsIota(arg) {
-				return true
-			}
+		if slices.ContainsFunc(e.Args, containsIota) {
+			return true
 		}
 	case *ast.ParenExpr:
 		return containsIota(e.X)
@@ -728,10 +727,10 @@ func isDeprecated(doc *ast.CommentGroup) (bool, string) {
 	if doc == nil {
 		return false, ""
 	}
-	for _, line := range strings.Split(doc.Text(), "\n") {
+	for line := range strings.SplitSeq(doc.Text(), "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "Deprecated:") {
-			msg := strings.TrimSpace(strings.TrimPrefix(trimmed, "Deprecated:"))
+		if after, ok := strings.CutPrefix(trimmed, "Deprecated:"); ok {
+			msg := strings.TrimSpace(after)
 			return true, msg
 		}
 	}

@@ -249,13 +249,11 @@ func TestGetModule_Concurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			mod, err := r.GetModule("requests", newTestLogger())
 			assert.NoError(t, err)
 			assert.NotNil(t, mod)
-		}()
+		})
 	}
 	wg.Wait()
 

@@ -514,10 +514,8 @@ func TestGetPackage_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, goroutines)
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			pkg, err := remote.GetPackage("fmt")
 			if err != nil {
 				errs <- err
@@ -526,7 +524,7 @@ func TestGetPackage_ConcurrentAccess(t *testing.T) {
 			if pkg.ImportPath != "fmt" {
 				errs <- fmt.Errorf("unexpected import path: %s", pkg.ImportPath)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -551,7 +549,7 @@ func TestValidateStdlibImport_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make([]bool, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

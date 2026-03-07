@@ -655,8 +655,8 @@ func TestDiscoverPackages(t *testing.T) {
 
 	// internal packages must not be present.
 	for _, pkg := range pkgs {
-		parts := strings.Split(pkg, "/")
-		for _, part := range parts {
+		parts := strings.SplitSeq(pkg, "/")
+		for part := range parts {
 			assert.NotEqual(t, "internal", part, "package %q contains 'internal' component", pkg)
 			assert.NotEqual(t, "cmd", part, "package %q contains 'cmd' component", pkg)
 			assert.NotEqual(t, "testdata", part, "package %q contains 'testdata' component", pkg)

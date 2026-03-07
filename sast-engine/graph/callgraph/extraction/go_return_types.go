@@ -82,10 +82,9 @@ func ExtractGoReturnTypesWithProgress(
 	}
 
 	// Determine worker count (same as Python builder)
-	numWorkers := max(runtime.NumCPU()*3/4, 1)
-	if numWorkers > 8 {
-		numWorkers = 8 // Cap at 8 for diminishing returns
-	}
+	numWorkers := min(max(runtime.NumCPU()*3/4, 1),
+		// Cap at 8 for diminishing returns
+		8)
 
 	// Create job channel
 	jobChan := make(chan *FunctionJob, 100)

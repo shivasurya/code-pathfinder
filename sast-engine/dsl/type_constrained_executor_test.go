@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -27,12 +28,7 @@ func (m *mockInheritanceChecker) IsSubclassSimple(moduleName, className, parentF
 	if !ok {
 		return false
 	}
-	for _, ancestor := range info.mro {
-		if ancestor == parentFQN {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(info.mro, parentFQN)
 }
 
 func (m *mockInheritanceChecker) GetClassMRO(moduleName, className string) []string {

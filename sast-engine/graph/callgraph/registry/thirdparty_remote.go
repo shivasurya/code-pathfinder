@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -271,13 +272,7 @@ func (r *ThirdPartyRegistryRemote) IsSubclass(
 		return false
 	}
 
-	for _, ancestor := range cls.MRO {
-		if ancestor == parentFQN {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(cls.MRO, parentFQN)
 }
 
 // GetClassMRO returns the MRO list for a class, or nil if not found.
@@ -300,12 +295,7 @@ func (r *ThirdPartyRegistryRemote) GetClassMRO(moduleName, className string) []s
 // This is a convenience method for packages that cannot import output.
 func (r *ThirdPartyRegistryRemote) IsSubclassSimple(moduleName, className, parentFQN string) bool {
 	mro := r.GetClassMRO(moduleName, className)
-	for _, ancestor := range mro {
-		if ancestor == parentFQN {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(mro, parentFQN)
 }
 
 // ModuleCount returns the number of modules in the manifest.
