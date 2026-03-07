@@ -1198,6 +1198,50 @@ func TestAddImportMap_ThreadSafety(t *testing.T) {
 	}
 }
 
+// TestForEachImportMap iterates all stored ImportMaps.
+func TestForEachImportMap(t *testing.T) {
+	engine := NewTypeInferenceEngine(core.NewModuleRegistry())
+
+	// Add several ImportMaps
+	for _, name := range []string{"app", "utils", "views"} {
+		im := core.NewImportMap("/test/" + name + ".py")
+		im.AddImport("requests", "requests")
+		engine.AddImportMap(im.FilePath, im)
+	}
+
+	collected := make(map[string]bool)
+	engine.ForEachImportMap(func(filePath string, _ *core.ImportMap) {
+		collected[filePath] = true
+	})
+
+	assert.Len(t, collected, 3)
+	assert.True(t, collected["/test/app.py"])
+	assert.True(t, collected["/test/utils.py"])
+	assert.True(t, collected["/test/views.py"])
+}
+
+// TestForEachImportMap_Empty verifies no-op on empty ImportMaps.
+func TestForEachImportMap_Empty(t *testing.T) {
+	engine := NewTypeInferenceEngine(core.NewModuleRegistry())
+
+	called := false
+	engine.ForEachImportMap(func(_ string, _ *core.ImportMap) {
+		called = true
+	})
+
+	assert.False(t, called)
+}
+
+// TestThirdPartyRemoteField verifies the field exists and defaults to nil.
+func TestThirdPartyRemoteField(t *testing.T) {
+	engine := NewTypeInferenceEngine(core.NewModuleRegistry())
+	assert.Nil(t, engine.ThirdPartyRemote)
+
+	// Set it to verify the field is writable
+	engine.ThirdPartyRemote = "test"
+	assert.Equal(t, "test", engine.ThirdPartyRemote)
+}
+
 // TestGetModuleVariableType_Reassignment tests that two bindings for the same variable
 // return the correct type based on line number.
 func TestGetModuleVariableType_Reassignment(t *testing.T) {
