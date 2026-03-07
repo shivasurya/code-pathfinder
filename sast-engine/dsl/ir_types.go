@@ -4,12 +4,14 @@ package dsl
 type IRType string
 
 const (
-	IRTypeCallMatcher     IRType = "call_matcher"
-	IRTypeVariableMatcher IRType = "variable_matcher"
-	IRTypeDataflow        IRType = "dataflow"
-	IRTypeLogicAnd        IRType = "logic_and"
-	IRTypeLogicOr         IRType = "logic_or"
-	IRTypeLogicNot        IRType = "logic_not"
+	IRTypeCallMatcher              IRType = "call_matcher"
+	IRTypeVariableMatcher          IRType = "variable_matcher"
+	IRTypeDataflow                 IRType = "dataflow"
+	IRTypeLogicAnd                 IRType = "logic_and"
+	IRTypeLogicOr                  IRType = "logic_or"
+	IRTypeLogicNot                 IRType = "logic_not"
+	IRTypeTypeConstrainedCall      IRType = "type_constrained_call"
+	IRTypeTypeConstrainedAttribute IRType = "type_constrained_attribute"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -96,6 +98,40 @@ type DataflowDetection struct {
 	Confidence  float64 // 0.0-1.0 confidence score
 	Sanitized   bool    // Was sanitization detected?
 	Scope       string  // "local" or "global"
+}
+
+// TypeConstrainedCallIR represents type_constrained_call JSON IR.
+// Matches call sites where the receiver variable has a specific inferred type.
+//
+//nolint:tagliatelle // JSON tags match Python DSL format.
+type TypeConstrainedCallIR struct {
+	Type          string  `json:"type"`          // "type_constrained_call"
+	ReceiverType  string  `json:"receiverType"`  // e.g., "django.views.View"
+	MethodName    string  `json:"methodName"`    // e.g., "get"
+	MinConfidence float64 `json:"minConfidence"` // default 0.5
+	FallbackMode  string  `json:"fallbackMode"`  // "name", "none"
+}
+
+// GetType returns the IR type.
+func (t *TypeConstrainedCallIR) GetType() IRType {
+	return IRTypeTypeConstrainedCall
+}
+
+// TypeConstrainedAttributeIR represents type_constrained_attribute JSON IR.
+// Matches attribute access on variables with a specific inferred type.
+//
+//nolint:tagliatelle // JSON tags match Python DSL format.
+type TypeConstrainedAttributeIR struct {
+	Type          string  `json:"type"`          // "type_constrained_attribute"
+	ReceiverType  string  `json:"receiverType"`  // e.g., "django.http.HttpRequest"
+	AttributeName string  `json:"attributeName"` // e.g., "GET"
+	MinConfidence float64 `json:"minConfidence"` // default 0.5
+	FallbackMode  string  `json:"fallbackMode"`  // "name", "none"
+}
+
+// GetType returns the IR type.
+func (t *TypeConstrainedAttributeIR) GetType() IRType {
+	return IRTypeTypeConstrainedAttribute
 }
 
 // RuleIR represents a complete rule with metadata.
