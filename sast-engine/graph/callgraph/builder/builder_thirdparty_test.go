@@ -858,6 +858,59 @@ func TestCategorizeResolutionFailure(t *testing.T) {
 	}
 }
 
+func TestCategorizeResolutionFailure_WithStdlibRegistry(t *testing.T) {
+	// Create a StdlibRegistryRemote with a manifest containing "os".
+	stdlibLoader := registry.NewStdlibRegistryRemote("https://fake.cdn", "3.14")
+	stdlibLoader.Manifest = &core.Manifest{
+		Modules: []*core.ModuleEntry{
+			{Name: "os", File: "os.json", Checksum: "sha256:abc"},
+			{Name: "sys", File: "sys.json", Checksum: "sha256:def"},
+		},
+	}
+
+	engine := resolution.NewTypeInferenceEngine(core.NewModuleRegistry())
+	engine.StdlibRemote = stdlibLoader
+
+	// os.getcwd is in stdlib → should return "stdlib_unresolved".
+	result := categorizeResolutionFailure("os.getcwd", "os.getcwd", engine)
+	assert.Equal(t, "stdlib_unresolved", result)
+
+	// sys.argv is in stdlib → should return "stdlib_unresolved".
+	result = categorizeResolutionFailure("sys.argv", "sys.argv", engine)
+	assert.Equal(t, "stdlib_unresolved", result)
+
+	// unknown.func is not in any registry → falls through to heuristics.
+	result = categorizeResolutionFailure("unknown.func", "unknown.func", engine)
+	assert.Equal(t, "attribute_chain", result)
+}
+
+func TestGetOptimalWorkerCount(t *testing.T) {
+	// Basic test: should return a value between 2 and 16.
+	count := getOptimalWorkerCount()
+	assert.GreaterOrEqual(t, count, 2)
+	assert.LessOrEqual(t, count, 16)
+}
+
+func TestGetOptimalWorkerCount_EnvOverride(t *testing.T) {
+	t.Setenv("PATHFINDER_MAX_WORKERS", "8")
+	count := getOptimalWorkerCount()
+	assert.Equal(t, 8, count)
+}
+
+func TestGetOptimalWorkerCount_EnvOverrideCapped(t *testing.T) {
+	t.Setenv("PATHFINDER_MAX_WORKERS", "100")
+	count := getOptimalWorkerCount()
+	assert.Equal(t, 32, count)
+}
+
+func TestGetOptimalWorkerCount_EnvInvalid(t *testing.T) {
+	t.Setenv("PATHFINDER_MAX_WORKERS", "notanumber")
+	count := getOptimalWorkerCount()
+	// Should fall through to CPU-based calculation.
+	assert.GreaterOrEqual(t, count, 2)
+	assert.LessOrEqual(t, count, 16)
+}
+
 func TestCategorizeResolutionFailure_WithRegistry(t *testing.T) {
 	server, loader := setupDjangoThirdPartyServer(t)
 	defer server.Close()

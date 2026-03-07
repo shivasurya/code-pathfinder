@@ -399,6 +399,190 @@ func TestAggregateResolutionStatistics_EmptyCallGraph(t *testing.T) {
 	assert.Equal(t, 0, len(stats.UnresolvedDetails))
 }
 
+func TestPrintOverallStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		TotalCalls:      100,
+		ResolvedCalls:   80,
+		UnresolvedCalls: 20,
+	}
+	// Should not panic.
+	printOverallStatistics(stats)
+}
+
+func TestPrintTypeInferenceStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:         100,
+		TypeInferenceResolved: 30,
+		ResolvedByTraditional: 70,
+		BuiltinTypeResolved:   10,
+		ClassTypeResolved:     20,
+		ConfidenceSum:         27.0,
+		TypesBySource: map[string]int{
+			"annotation": 15,
+			"inference":  15,
+		},
+		ConfidenceDistribution: map[string]int{
+			"0.9-1.0 (high)":        20,
+			"0.7-0.9 (medium-high)": 8,
+			"0.5-0.7 (medium)":      2,
+		},
+	}
+	// Should not panic.
+	printTypeInferenceStatistics(stats)
+}
+
+func TestPrintStdlibStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:       100,
+		StdlibResolved:      50,
+		StdlibViaAnnotation: 10,
+		StdlibViaInference:  15,
+		StdlibViaBuiltin:    25,
+		StdlibByType: map[string]int{
+			"function": 30,
+			"class":    15,
+			"method":   5,
+		},
+		StdlibByModule: map[string]int{
+			"os":       20,
+			"sys":      10,
+			"json":     8,
+			"pathlib":  5,
+			"datetime": 4,
+			"re":       3,
+		},
+	}
+	// Should not panic.
+	printStdlibStatistics(stats)
+}
+
+func TestPrintStdlibStatistics_NoSources(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:  100,
+		StdlibResolved: 10,
+		StdlibByType:   map[string]int{"function": 10},
+		StdlibByModule: map[string]int{"os": 10},
+	}
+	// Should not panic even with zero source counts.
+	printStdlibStatistics(stats)
+}
+
+func TestPrintFailureBreakdown_WithFrameworks(t *testing.T) {
+	stats := &resolutionStatistics{
+		TotalCalls: 100,
+		FailuresByReason: map[string]int{
+			"external_framework": 20,
+			"variable_method":    10,
+			"not_in_imports":     5,
+		},
+		FrameworkCounts: map[string]int{
+			"django":         12,
+			"rest_framework": 5,
+			"celery":         3,
+		},
+	}
+	// Should print framework sub-breakdown without panic.
+	printFailureBreakdown(stats)
+}
+
+func TestPrintTopUnresolvedPatterns(t *testing.T) {
+	stats := &resolutionStatistics{
+		PatternCounts: map[string]int{
+			"self.save":          25,
+			"super().save":       15,
+			"response.json":     10,
+			"request.GET":        8,
+		},
+	}
+	// Should not panic.
+	printTopUnresolvedPatterns(stats, 3)
+}
+
+func TestPrintTopUnresolvedPatterns_Empty(t *testing.T) {
+	stats := &resolutionStatistics{
+		PatternCounts: map[string]int{},
+	}
+	// Should not panic with empty data.
+	printTopUnresolvedPatterns(stats, 5)
+}
+
+func TestAggregateResolutionStatistics_TypeInference(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Add type-inference resolved call
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:                   "response.json",
+		Resolved:                 true,
+		TargetFQN:                "requests.Response.json",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.95,
+		TypeSource:               "typeshed",
+		InferredType:             "requests.Response",
+	})
+
+	// Add type-inference with builtin type
+	cg.AddCallSite("test.func2", core.CallSite{
+		Target:                   "x.upper",
+		Resolved:                 true,
+		TargetFQN:                "builtins.str.upper",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.6,
+		TypeSource:               "annotation",
+		InferredType:             "builtins.str",
+	})
+
+	// Add low confidence
+	cg.AddCallSite("test.func3", core.CallSite{
+		Target:                   "y.method",
+		Resolved:                 true,
+		TargetFQN:                "myclass.method",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.3,
+		TypeSource:               "inference",
+		InferredType:             "myclass",
+	})
+
+	// Add medium-high confidence
+	cg.AddCallSite("test.func4", core.CallSite{
+		Target:                   "z.call",
+		Resolved:                 true,
+		TargetFQN:                "other.call",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.75,
+		TypeSource:               "typeshed",
+		InferredType:             "other",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 4, stats.TypeInferenceResolved)
+	assert.Equal(t, 0, stats.ResolvedByTraditional)
+	assert.Equal(t, 1, stats.BuiltinTypeResolved)
+	assert.Equal(t, 3, stats.ClassTypeResolved)
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.9-1.0 (high)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.7-0.9 (medium-high)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.5-0.7 (medium)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.0-0.5 (low)"])
+	assert.Equal(t, 2, stats.TypesBySource["typeshed"])
+	assert.Equal(t, 1, stats.TypesBySource["annotation"])
+	assert.Equal(t, 1, stats.TypesBySource["inference"])
+}
+
+func TestAggregateResolutionStatistics_UncategorizedFailure(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Add unresolved call with empty failure reason
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:        "mystery_call",
+		Resolved:      false,
+		TargetFQN:     "mystery_call",
+		FailureReason: "",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+	assert.Equal(t, 1, stats.FailuresByReason["uncategorized"])
+}
+
 func TestAggregateResolutionStatistics_FailureReasonBreakdown(t *testing.T) {
 	cg := core.NewCallGraph()
 
