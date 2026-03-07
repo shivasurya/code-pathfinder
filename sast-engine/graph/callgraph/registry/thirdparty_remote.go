@@ -280,6 +280,34 @@ func (r *ThirdPartyRegistryRemote) IsSubclass(
 	return false
 }
 
+// GetClassMRO returns the MRO list for a class, or nil if not found.
+// This is a logger-free convenience method for use by packages that cannot import output.
+func (r *ThirdPartyRegistryRemote) GetClassMRO(moduleName, className string) []string {
+	r.CacheMutex.RLock()
+	module, ok := r.ModuleCache[moduleName]
+	r.CacheMutex.RUnlock()
+	if !ok || module == nil {
+		return nil
+	}
+	cls := module.Classes[className]
+	if cls == nil {
+		return nil
+	}
+	return cls.MRO
+}
+
+// IsSubclassSimple checks if a class is a subclass of parentFQN without requiring a logger.
+// This is a convenience method for packages that cannot import output.
+func (r *ThirdPartyRegistryRemote) IsSubclassSimple(moduleName, className, parentFQN string) bool {
+	mro := r.GetClassMRO(moduleName, className)
+	for _, ancestor := range mro {
+		if ancestor == parentFQN {
+			return true
+		}
+	}
+	return false
+}
+
 // ModuleCount returns the number of modules in the manifest.
 func (r *ThirdPartyRegistryRemote) ModuleCount() int {
 	if r.Manifest == nil {

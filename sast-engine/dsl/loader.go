@@ -395,6 +395,12 @@ func (l *RuleLoader) ExecuteRule(rule *RuleIR, cg *core.CallGraph) ([]DataflowDe
 	case "logic_and", "logic_or", "logic_not":
 		return l.executeLogic(matcherType, matcherMap, cg)
 
+	case "type_constrained_call":
+		return l.executeTypeConstrainedCall(matcherMap, cg)
+
+	case "type_constrained_attribute":
+		return l.executeTypeConstrainedAttribute(matcherMap, cg)
+
 	// Container matchers - skip silently (handled by ContainerRuleExecutor)
 	case "missing_instruction", "instruction", "service_has", "service_missing", "any_of", "all_of", "none_of":
 		return []DataflowDetection{}, nil
@@ -480,6 +486,42 @@ func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]any, cg *core.
 	}
 
 	return detections, nil
+}
+
+func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	jsonBytes, err := json.Marshal(matcherMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal type_constrained_call: %w", err)
+	}
+
+	var ir TypeConstrainedCallIR
+	if err := json.Unmarshal(jsonBytes, &ir); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal type_constrained_call: %w", err)
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR:        &ir,
+		CallGraph: cg,
+	}
+	return executor.Execute(), nil
+}
+
+func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	jsonBytes, err := json.Marshal(matcherMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal type_constrained_attribute: %w", err)
+	}
+
+	var ir TypeConstrainedAttributeIR
+	if err := json.Unmarshal(jsonBytes, &ir); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal type_constrained_attribute: %w", err)
+	}
+
+	executor := &TypeConstrainedAttributeExecutor{
+		IR:        &ir,
+		CallGraph: cg,
+	}
+	return executor.Execute(), nil
 }
 
 //nolint:unparam // Will be implemented in future PRs
