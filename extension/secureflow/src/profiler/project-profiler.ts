@@ -84,7 +84,7 @@ export class ProjectProfiler {
     // Initialize workspace analyzer
     const selectedModel =
       this.settingsManager?.getSelectedAIModel() ||
-      'claude-sonnet-4-5-20250929';
+      'claude-sonnet-4-6';
     console.log('ProjectProfiler: Initializing with model:', selectedModel);
     this.workspaceAnalyzer = new WorkspaceAnalyzer({ selectedModel });
   }

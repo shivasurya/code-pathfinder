@@ -10,7 +10,7 @@
 
   // State
   let selectedProvider = 'auto';
-  let selectedModel = 'claude-sonnet-4-5-20250929';
+  let selectedModel = 'claude-sonnet-4-6';
   let customModelId = '';
   let apiKey = '';
   let showCustomModelInput = false;
@@ -38,7 +38,7 @@
 
       if (message.type === 'currentConfig') {
         apiKey = message.config.apiKey || '';
-        selectedModel = message.config.model || 'claude-sonnet-4-5-20250929';
+        selectedModel = message.config.model || 'claude-sonnet-4-6';
         selectedProvider = message.config.provider || 'auto';
 
         // Show custom model input if provider is openrouter or if model contains "/"

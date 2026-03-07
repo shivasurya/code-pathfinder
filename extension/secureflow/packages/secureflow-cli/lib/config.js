@@ -37,7 +37,7 @@ function loadConfig() {
   const fileCfg = readJsonSafe(CONFIG_FILE);
   const env = process.env;
 
-  const model = env.SECUREFLOW_MODEL || fileCfg.model || 'claude-sonnet-4-5-20250929';
+  const model = env.SECUREFLOW_MODEL || fileCfg.model || 'claude-sonnet-4-6';
   const explicitProvider = env.SECUREFLOW_PROVIDER || fileCfg.provider;
 
   const cfg = {
