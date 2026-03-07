@@ -719,6 +719,7 @@ def main() -> int:
         default="https://assets.codepathfinder.dev/registries/thirdparty/v1",
         help="CDN base URL for manifest",
     )
+    parser.add_argument("--no-mro", action="store_true", help="Skip MRO computation and inheritance flattening")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -754,6 +755,14 @@ def main() -> int:
     if not all_modules:
         logger.error("No modules converted")
         return 1
+
+    # Post-processing: MRO computation and inheritance flattening
+    if not args.no_mro:
+        from mro import flatten_inheritance
+
+        logger.info("Computing MRO and flattening inheritance for %d modules...", len(all_modules))
+        flatten_inheritance(all_modules)
+        logger.info("MRO computation complete")
 
     manifest = generate_manifest(args.output, all_modules, args.base_url)
     stats = manifest["statistics"]

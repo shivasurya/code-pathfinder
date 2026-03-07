@@ -52,6 +52,17 @@ jobs:
           cd sast-engine
           go test -p 2 -v ./... -coverprofile=coverage.out -covermode=atomic
 
+      - name: Install typeshed-converter dependencies
+        run: pip install -r sast-engine/tools/typeshed-converter/requirements.txt
+
+      - name: Run typeshed-converter tests
+        run: |
+          cd sast-engine/tools/typeshed-converter
+          python -m pytest test_convert.py test_mro.py -v \
+            --cov=convert --cov=mro \
+            --cov-report=term-missing \
+            --cov-fail-under=90
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
