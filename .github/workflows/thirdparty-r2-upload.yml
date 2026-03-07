@@ -1,13 +1,6 @@
 name: Upload Third-Party Registries to R2
 
 on:
-  push:
-    branches:
-      - shiva/typeshed-pr05-type-engine-wiring   # TODO: remove after testing
-    paths:
-      - '.github/workflows/thirdparty-r2-upload.yml'
-      - 'sast-engine/tools/upload_thirdparty_to_r2.sh'
-      - 'sast-engine/tools/typeshed-converter/**'
   release:
     types: [published]
   workflow_dispatch:
