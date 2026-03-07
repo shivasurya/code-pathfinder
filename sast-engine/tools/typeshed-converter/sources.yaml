@@ -1,0 +1,70 @@
+# Stub sources configuration for typeshed-converter
+#
+# Source types:
+#   typeshed  — Auto-discover packages under stubs/ directory
+#   pyi_repo  — External .pyi stub repository (e.g., django-stubs)
+#   pep561    — Python package with inline type annotations (py.typed)
+
+sources:
+  # ── Typeshed stubs (195 packages) ──────────────────────────────────────
+  - type: typeshed
+    path: ./typeshed/stubs
+
+  # ── External stub repos ────────────────────────────────────────────────
+  - type: pyi_repo
+    path: ./django-stubs/django-stubs
+    package: django
+    source_name: django-stubs
+
+  - type: pyi_repo
+    path: ./djangorestframework-stubs/rest_framework-stubs
+    package: rest_framework
+    source_name: djangorestframework-stubs
+
+  # ── PEP 561 packages (inline annotations) ──────────────────────────────
+  # These are installed via pip; path points to site-packages location.
+  # Use: pip show <pkg> | grep Location to find the path.
+
+  - type: pep561
+    package: flask
+    path: ./venv/lib/python3.12/site-packages/flask
+
+  - type: pep561
+    package: sqlalchemy
+    path: ./venv/lib/python3.12/site-packages/sqlalchemy
+
+  - type: pep561
+    package: fastapi
+    path: ./venv/lib/python3.12/site-packages/fastapi
+
+  - type: pep561
+    package: starlette
+    path: ./venv/lib/python3.12/site-packages/starlette
+
+  - type: pep561
+    package: pydantic
+    path: ./venv/lib/python3.12/site-packages/pydantic
+
+  - type: pep561
+    package: werkzeug
+    path: ./venv/lib/python3.12/site-packages/werkzeug
+
+  - type: pep561
+    package: jinja2
+    path: ./venv/lib/python3.12/site-packages/jinja2
+
+  - type: pep561
+    package: click
+    path: ./venv/lib/python3.12/site-packages/click
+
+  - type: pep561
+    package: httpx
+    path: ./venv/lib/python3.12/site-packages/httpx
+
+  - type: pep561
+    package: redis
+    path: ./venv/lib/python3.12/site-packages/redis
+
+  - type: pep561
+    package: celery
+    path: ./venv/lib/python3.12/site-packages/celery
