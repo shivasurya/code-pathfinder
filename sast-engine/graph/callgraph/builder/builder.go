@@ -304,6 +304,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
+	// PR #6: Resolve remaining call: placeholders using third-party type registry
+	// Must run AFTER UpdateVariableBindingsWithFunctionReturns (userland first).
+	resolveThirdPartyVariableBindings(typeEngine, logger)
+
 	// Phase 3 Task 12: Extract class attributes (third pass - PARALLELIZED)
 	logger.Debug("Extracting class attributes (parallel)...")
 
@@ -1071,8 +1075,26 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 				return fqn, true, nil
 			}
 			// Validate if it exists in registry
-			resolved := validateFQN(fqn, registry)
-			return fqn, resolved, nil
+			if validateFQN(fqn, registry) {
+				return fqn, true, nil
+			}
+			// Check stdlib for imported names (e.g., from os import getcwd)
+			if typeEngine != nil && typeEngine.StdlibRemote != nil {
+				if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+					if validateStdlibFQN(fqn, remoteLoader, logger) {
+						return fqn, true, nil
+					}
+				}
+			}
+			// Check third-party for imported names (e.g., from requests import Session)
+			if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+				if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+					if validateThirdPartyFQN(fqn, loader, logger) {
+						return fqn, true, nil
+					}
+				}
+			}
+			return fqn, false, nil
 		}
 
 		// Not in imports - might be in same module
@@ -1180,6 +1202,23 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 						}
 					}
 
+					// PR #6: Check third-party type registry for method on typed variable
+					if typeEngine.ThirdPartyRemote != nil {
+						if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+							tpModule, tpClass := splitModuleAndName(typeFQN)
+							if tpClass != "" && loader.HasModule(tpModule) {
+								method := findThirdPartyClassMethod(loader, tpModule, tpClass, rest, logger)
+								if method != nil {
+									return methodFQN, true, &core.TypeInfo{
+										TypeFQN:    typeFQN,
+										Confidence: binding.Type.Confidence,
+										Source:     "typeshed",
+									}
+								}
+							}
+						}
+					}
+
 					// Heuristic: If type has good confidence (>= 0.7), assume method exists
 					if binding.Type.Confidence >= 0.7 {
 						// Resolved via confidence heuristic - return with type info
@@ -1210,6 +1249,14 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 				}
 			}
 		}
+		// PR #6: Check third-party registry before user project registry
+		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+			if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+				if validateThirdPartyFQN(fullFQN, loader, logger) {
+					return fullFQN, true, nil
+				}
+			}
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true, nil
 		}
@@ -1234,6 +1281,15 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	if typeEngine != nil && typeEngine.StdlibRemote != nil {
 		if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
 			if validateStdlibFQN(target, remoteLoader, logger) {
+				return target, true, nil
+			}
+		}
+	}
+
+	// PR #6: Last resort - check third-party registry
+	if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+		if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+			if validateThirdPartyFQN(target, loader, logger) {
 				return target, true, nil
 			}
 		}
@@ -1333,6 +1389,209 @@ func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote
 	}
 
 	return false
+}
+
+// splitModuleAndName splits a fully qualified name at the first dot.
+// The first part is the top-level package name, the rest is the sub-path.
+//
+// Examples:
+//
+//	"requests.Response" -> ("requests", "Response")
+//	"django.http.HttpRequest" -> ("django", "http.HttpRequest")
+//	"requests" -> ("requests", "")
+func splitModuleAndName(fqn string) (string, string) {
+	if idx := strings.Index(fqn, "."); idx > 0 {
+		return fqn[:idx], fqn[idx+1:]
+	}
+	return fqn, ""
+}
+
+// validateThirdPartyFQN checks if a fully qualified name exists in the third-party registry.
+// Checks functions, classes, and constants in the top-level module.
+// Handles Python re-exports: e.g., requests.get is stored as api.get in the CDN.
+func validateThirdPartyFQN(fqn string, loader *cgregistry.ThirdPartyRegistryRemote, logger *output.Logger) bool {
+	moduleName, name := splitModuleAndName(fqn)
+	if name == "" || !loader.HasModule(moduleName) {
+		return false
+	}
+	module, err := loader.GetModule(moduleName, logger)
+	if err != nil || module == nil {
+		return false
+	}
+	if _, ok := module.Functions[name]; ok {
+		return true
+	}
+	if _, ok := module.Classes[name]; ok {
+		return true
+	}
+	if _, ok := module.Constants[name]; ok {
+		return true
+	}
+	// Suffix match for re-exported functions (e.g., requests.get → stored as api.get)
+	suffix := "." + name
+	for funcName := range module.Functions {
+		if strings.HasSuffix(funcName, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// findThirdPartyFunction looks up a function in the third-party registry.
+// Handles Python re-exports where functions are stored with sub-module paths.
+// E.g., requests.get is stored as api.get because it's defined in requests/api.pyi.
+func findThirdPartyFunction(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, funcName string, logger *output.Logger) *core.StdlibFunction {
+	fn := loader.GetFunction(moduleName, funcName, logger)
+	if fn != nil {
+		return fn
+	}
+	// Suffix match for re-exported functions
+	module, err := loader.GetModule(moduleName, logger)
+	if err != nil || module == nil {
+		return nil
+	}
+	suffix := "." + funcName
+	for name, f := range module.Functions {
+		if strings.HasSuffix(name, suffix) {
+			return f
+		}
+	}
+	return nil
+}
+
+// findThirdPartyClass looks up a class in the third-party registry.
+// Handles sub-module prefixed class names from return types.
+// E.g., return type "requests.api.Response" → class stored as "Response".
+func findThirdPartyClass(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, className string, logger *output.Logger) *core.StdlibClass {
+	cls := loader.GetClass(moduleName, className, logger)
+	if cls != nil {
+		return cls
+	}
+	// Strip sub-module prefix: "api.Response" → "Response"
+	if idx := strings.LastIndex(className, "."); idx >= 0 {
+		shortName := className[idx+1:]
+		return loader.GetClass(moduleName, shortName, logger)
+	}
+	return nil
+}
+
+// findThirdPartyClassMethod looks up a class method, handling sub-module prefixed class names.
+func findThirdPartyClassMethod(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, className, methodName string, logger *output.Logger) *core.StdlibFunction {
+	method := loader.GetClassMethod(moduleName, className, methodName, logger)
+	if method != nil {
+		return method
+	}
+	// Strip sub-module prefix from class name
+	if idx := strings.LastIndex(className, "."); idx >= 0 {
+		shortName := className[idx+1:]
+		return loader.GetClassMethod(moduleName, shortName, methodName, logger)
+	}
+	return nil
+}
+
+// resolveThirdPartyVariableBindings resolves remaining call: placeholders using third-party registry.
+// Must be called AFTER UpdateVariableBindingsWithFunctionReturns().
+// Runs in two phases:
+//
+//	Phase A: Module-level function/constructor calls (e.g., call:requests.get)
+//	Phase B: Instance method calls on variables resolved in Phase A (e.g., call:session.get)
+func resolveThirdPartyVariableBindings(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	// Phase A: Resolve direct module.function calls
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+				// Skip instance method calls (receiver is a variable) — handle in Phase B
+				parts := strings.SplitN(funcName, ".", 2)
+				if scope.GetVariable(parts[0]) != nil {
+					continue
+				}
+
+				moduleName, name := splitModuleAndName(funcName)
+				if !loader.HasModule(moduleName) {
+					continue
+				}
+
+				// Try as module-level function (e.g., requests.get → may be stored as api.get)
+				fn := findThirdPartyFunction(loader, moduleName, name, logger)
+				if fn != nil && fn.ReturnType != "" {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    fn.ReturnType,
+						Confidence: binding.Type.Confidence * fn.Confidence * 0.95,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = funcName
+					continue
+				}
+
+				// Try as constructor (e.g., requests.Session)
+				cls := findThirdPartyClass(loader, moduleName, name, logger)
+				if cls != nil {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    funcName,
+						Confidence: binding.Type.Confidence * 0.95,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = funcName
+					continue
+				}
+			}
+		}
+	}
+
+	// Phase B: Resolve instance method calls on variables resolved in Phase A
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+
+				parts := strings.SplitN(funcName, ".", 2)
+				receiver := parts[0]
+				methodName := parts[1]
+
+				receiverBinding := scope.GetVariable(receiver)
+				if receiverBinding == nil || receiverBinding.Type == nil ||
+					strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
+					continue
+				}
+
+				tpModule, tpClass := splitModuleAndName(receiverBinding.Type.TypeFQN)
+				if tpClass == "" || !loader.HasModule(tpModule) {
+					continue
+				}
+
+				method := findThirdPartyClassMethod(loader, tpModule, tpClass, methodName, logger)
+				if method != nil && method.ReturnType != "" {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    method.ReturnType,
+						Confidence: binding.Type.Confidence * method.Confidence * 0.9,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
+				}
+			}
+		}
+	}
 }
 
 // ValidateFQN checks if a fully qualified name exists in the registry.
