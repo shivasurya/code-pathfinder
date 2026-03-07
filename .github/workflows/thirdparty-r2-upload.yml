@@ -77,24 +77,22 @@ jobs:
           echo "Testing: $URL"
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
           if [ "$STATUS" = "200" ]; then
-            echo "  ✓ Third-party manifest is publicly accessible"
-
-            # Validate manifest JSON and show stats
+            echo "  Third-party manifest is publicly accessible"
             echo ""
             echo "Manifest contents:"
             curl -s "$URL" | python3 -c "
-import json, sys
-m = json.load(sys.stdin)
-s = m.get('statistics', {})
-print(f'  Schema version: {m.get(\"schema_version\", \"unknown\")}')
-print(f'  Modules:        {s.get(\"total_modules\", 0)}')
-print(f'  Functions:      {s.get(\"total_functions\", 0)}')
-print(f'  Classes:        {s.get(\"total_classes\", 0)}')
-print(f'  Constants:      {s.get(\"total_constants\", 0)}')
-print(f'  Attributes:     {s.get(\"total_attributes\", 0)}')
-"
+          import json, sys
+          m = json.load(sys.stdin)
+          s = m.get('statistics', {})
+          print('  Schema version:', m.get('schema_version', 'unknown'))
+          print('  Modules:       ', s.get('total_modules', 0))
+          print('  Functions:     ', s.get('total_functions', 0))
+          print('  Classes:       ', s.get('total_classes', 0))
+          print('  Constants:     ', s.get('total_constants', 0))
+          print('  Attributes:    ', s.get('total_attributes', 0))
+          "
           else
-            echo "  ✗ Third-party manifest returned HTTP $STATUS"
+            echo "  Third-party manifest returned HTTP $STATUS"
             exit 1
           fi
 
