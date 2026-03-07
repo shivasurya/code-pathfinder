@@ -82,10 +82,30 @@ type FunctionParam struct {
 }
 
 // StdlibClass represents a class in a stdlib module.
+//
+//nolint:tagliatelle // JSON tags match Python-generated registry format (snake_case).
 type StdlibClass struct {
-	Type      string                     `json:"type"`
-	Methods   map[string]*StdlibFunction `json:"methods"`
-	Docstring string                     `json:"docstring,omitempty"`
+	Type                string                       `json:"type"`
+	Methods             map[string]*StdlibFunction   `json:"methods"`
+	Docstring           string                       `json:"docstring,omitempty"`
+	Attributes          map[string]*StdlibAttribute  `json:"attributes,omitempty"`
+	Bases               []string                     `json:"bases,omitempty"`
+	MRO                 []string                     `json:"mro,omitempty"`
+	InheritedMethods    map[string]*InheritedMember  `json:"inherited_methods,omitempty"`
+	InheritedAttributes map[string]*InheritedMember  `json:"inherited_attributes,omitempty"`
+}
+
+// InheritedMember represents a method or attribute inherited from an ancestor class.
+//
+//nolint:tagliatelle // JSON tags match Python-generated registry format (snake_case).
+type InheritedMember struct {
+	ReturnType    string           `json:"return_type,omitempty"`
+	Type          string           `json:"type,omitempty"`
+	Confidence    float32          `json:"confidence"`
+	Params        []*FunctionParam `json:"params,omitempty"`
+	Source        string           `json:"source"`
+	Kind          string           `json:"kind,omitempty"`
+	InheritedFrom string           `json:"inherited_from"`
 }
 
 // StdlibConstant represents a module-level constant.
@@ -98,7 +118,7 @@ type StdlibConstant struct {
 	PlatformSpecific bool    `json:"platform_specific,omitempty"`
 }
 
-// StdlibAttribute represents a module-level attribute (os.environ, sys.modules, etc.).
+// StdlibAttribute represents a module-level or class-level attribute.
 //
 //nolint:tagliatelle // JSON tags match Python-generated registry format (snake_case).
 type StdlibAttribute struct {
@@ -106,6 +126,8 @@ type StdlibAttribute struct {
 	BehavesLike string  `json:"behaves_like,omitempty"`
 	Confidence  float32 `json:"confidence"`
 	Docstring   string  `json:"docstring,omitempty"`
+	Source      string  `json:"source,omitempty"`
+	Kind        string  `json:"kind,omitempty"` // "attribute" or "property"
 }
 
 // NewStdlibRegistry creates a new stdlib registry.
