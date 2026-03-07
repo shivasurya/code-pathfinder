@@ -48,11 +48,11 @@ secureflow config --show
 ```
 
 **Supported Models:**
-- **Anthropic Claude**: `claude-sonnet-4-5-20250929` (recommended), `claude-opus-4-1-20250805`, `claude-sonnet-4-20250514`, `claude-3-7-sonnet-20250219`, `claude-3-5-haiku-20241022`, ~~`claude-3-5-sonnet-20241022`~~ (deprecated)
-- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `o1`, `o1-mini`, `gpt-4.1-2025-04-14`, `o3-mini-2025-01-31`
-- **Google Gemini**: `gemini-2.5-pro`, `gemini-2.5-flash`
-- **xAI Grok**: `grok-4-fast-reasoning`
-- **OpenRouter**: Access 200+ models from multiple providers (use format: `provider/model` e.g., `anthropic/claude-3-5-sonnet`)
+- **Anthropic Claude**: `claude-sonnet-4-6` (recommended), `claude-opus-4-6`, `claude-haiku-4-5`, ~~`claude-sonnet-4-5-20250929`~~ (deprecated), ~~`claude-opus-4-5`~~ (deprecated)
+- **OpenAI**: `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.2`, `gpt-5.1`, `gpt-5-pro`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`
+- **Google Gemini**: `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-2.5-pro`, `gemini-2.5-flash`
+- **xAI Grok**: `grok-4-1-fast-reasoning`, `grok-4-fast-reasoning`
+- **OpenRouter**: `qwen/qwen3-coder-next`, `z-ai/glm-5`, `minimax/minimax-m2.5`, `moonshotai/kimi-k2.5`, `deepseek/deepseek-v3.2`
 - **Ollama**: `qwen3:4b`
 
 ### 3. Run Your First Scan
@@ -62,7 +62,7 @@ secureflow config --show
 secureflow scan
 
 # Scan specific project with Claude
-secureflow scan ./my-project --model claude-sonnet-4-5-20250929
+secureflow scan ./my-project --model claude-sonnet-4-6
 
 # Get project profile first
 secureflow profile ./my-project

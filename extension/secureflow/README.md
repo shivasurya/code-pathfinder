@@ -37,10 +37,11 @@ Configure your AI provider in VS Code settings:
 - `secureflow.APIKey`: Your API key for the selected provider
 
 **Supported Providers:**
-- **Anthropic Claude**: Claude Sonnet 4.5 (recommended)
-- **OpenAI**: GPT-4o, o1, and other OpenAI models
-- **Google Gemini**: Gemini 2.5 Pro or Flash models
-- **OpenRouter**: Access 200+ models from multiple providers through a single API
+- **Anthropic Claude**: Claude Sonnet 4.6 (recommended), Claude Opus 4.6, Claude Haiku 4.5
+- **OpenAI**: GPT-5.4, GPT-5.2, GPT-5, and other GPT-5 family models
+- **Google Gemini**: Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash
+- **xAI Grok**: Grok 4.1 Fast, Grok 4 Fast Reasoning
+- **OpenRouter**: Access 200+ models including Qwen3, GLM 5, MiniMax, Kimi, DeepSeek
 
 **Getting API Keys:**
 - Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)

@@ -86,7 +86,7 @@ class CLIFullScanCommand {
       const reviewPrompt = await loadPrompt('common/security-review-cli.txt');
 
       // Initialize token tracker
-      const model = this.selectedModel || config.model || 'claude-sonnet-4-5-20250929';
+      const model = this.selectedModel || config.model || 'claude-sonnet-4-6';
       this.tokenTracker = new TokenTracker(model);
 
       // Initialize AI client
@@ -186,7 +186,7 @@ class CLIFullScanCommand {
    * Create AI client based on configuration
    */
   _createAIClient(config) {
-    const model = this.selectedModel || config.model || 'claude-sonnet-4-5-20250929';
+    const model = this.selectedModel || config.model || 'claude-sonnet-4-6';
     const aiClient = AIClientFactory.getClient(model);
     
     // Create wrapper that matches our expected interface

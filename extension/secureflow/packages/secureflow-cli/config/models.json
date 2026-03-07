@@ -1,20 +1,46 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "version": "1.0.0",
-  "lastUpdated": "2025-10-18",
+  "lastUpdated": "2026-03-07",
   "models": [
+    {
+      "id": "gpt-5.4",
+      "provider": "openai",
+      "client": "OpenAIClient",
+      "displayName": "GPT-5.4",
+      "description": "Most capable model for complex professional work",
+      "year": 2026,
+      "contextWindow": 1050000,
+      "maxOutput": 128000,
+      "status": "available",
+      "recommended": false,
+      "order": 1
+    },
+    {
+      "id": "gpt-5.4-pro",
+      "provider": "openai",
+      "client": "OpenAIClient",
+      "displayName": "GPT-5.4 Pro",
+      "description": "Uses more compute for smarter, more precise responses on tough problems",
+      "year": 2026,
+      "contextWindow": 1050000,
+      "maxOutput": 128000,
+      "status": "available",
+      "recommended": false,
+      "order": 2
+    },
     {
       "id": "gpt-5.2",
       "provider": "openai",
       "client": "OpenAIClient",
       "displayName": "GPT-5.2",
-      "description": "Best model for coding and agentic tasks across industries",
+      "description": "Previous frontier model for professional work with configurable reasoning effort",
       "year": 2025,
       "contextWindow": 400000,
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 1
+      "order": 3
     },
     {
       "id": "gpt-5.1",
@@ -27,93 +53,67 @@
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 2
+      "order": 4
     },
     {
       "id": "gpt-5-pro",
       "provider": "openai",
       "client": "OpenAIClient",
       "displayName": "GPT-5 Pro",
-      "description": "Extended reasoning for most complex tasks",
+      "description": "Version of GPT-5 that produces smarter and more precise responses",
       "year": 2025,
       "contextWindow": 400000,
-      "maxOutput": 128000,
+      "maxOutput": 272000,
       "status": "available",
       "recommended": false,
-      "order": 3
+      "order": 5
     },
     {
       "id": "gpt-5",
       "provider": "openai",
       "client": "OpenAIClient",
       "displayName": "GPT-5",
-      "description": "Most advanced model for coding and agentic tasks",
+      "description": "Previous reasoning model for coding and agentic tasks",
       "year": 2025,
       "contextWindow": 400000,
       "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 4
+      "order": 6
     },
     {
       "id": "gpt-5-mini",
       "provider": "openai",
       "client": "OpenAIClient",
       "displayName": "GPT-5 Mini",
-      "description": "Faster, cost-efficient version",
+      "description": "Faster, cost-efficient version of GPT-5 for well-defined tasks",
       "year": 2025,
-      "contextWindow": 200000,
-      "maxOutput": 64000,
+      "contextWindow": 400000,
+      "maxOutput": 128000,
       "status": "available",
       "recommended": false,
-      "order": 5
+      "order": 7
     },
     {
       "id": "gpt-5-nano",
       "provider": "openai",
       "client": "OpenAIClient",
       "displayName": "GPT-5 Nano",
-      "description": "Fastest, most cost-efficient version",
+      "description": "Fastest, most cost-efficient version of GPT-5",
       "year": 2025,
-      "contextWindow": 128000,
-      "maxOutput": 32000,
-      "status": "available",
-      "recommended": false,
-      "order": 6
-    },
-    {
-      "id": "gemini-3-pro-preview",
-      "provider": "google",
-      "client": "GeminiClient",
-      "displayName": "Gemini 3 Pro",
-      "description": "Most advanced multimodal AI with thinking capabilities",
-      "year": 2025,
-      "contextWindow": 1048576,
-      "maxOutput": 65536,
-      "status": "available",
-      "recommended": false,
-      "order": 7
-    },
-    {
-      "id": "gemini-3-flash-preview",
-      "provider": "google",
-      "client": "GeminiClient",
-      "displayName": "Gemini 3 Flash",
-      "description": "Fast multimodal AI with thinking capabilities",
-      "year": 2025,
-      "contextWindow": 1048576,
-      "maxOutput": 65536,
+      "contextWindow": 400000,
+      "maxOutput": 128000,
       "status": "available",
       "recommended": false,
       "order": 8
     },
     {
-      "id": "gemini-2.5-pro",
+      "id": "gemini-3.1-pro-preview",
       "provider": "google",
       "client": "GeminiClient",
-      "displayName": "Gemini 2.5 Pro",
-      "description": "State-of-the-art thinking model",
-      "year": 2025,
+      "displayName": "Gemini 3.1 Pro",
+      "description": "Advanced intelligence with agentic and coding capabilities",
+      "year": 2026,
       "contextWindow": 1048576,
       "maxOutput": 65536,
       "status": "available",
@@ -121,44 +121,111 @@
       "order": 9
     },
     {
-      "id": "gemini-2.5-flash",
+      "id": "gemini-3-pro-preview",
       "provider": "google",
       "client": "GeminiClient",
-      "displayName": "Gemini 2.5 Flash",
-      "description": "Best price-performance with thinking",
+      "displayName": "Gemini 3 Pro",
+      "description": "Deprecated - shutting down March 9, 2026. Use Gemini 3.1 Pro instead",
+      "year": 2025,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
+      "status": "deprecated",
+      "recommended": false,
+      "order": 10
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 3 Flash",
+      "description": "Frontier-class performance at a fraction of the cost",
       "year": 2025,
       "contextWindow": 1048576,
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 10
+      "order": 11
     },
     {
-      "id": "claude-sonnet-4-5-20250929",
+      "id": "gemini-2.5-pro",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 2.5 Pro",
+      "description": "Advanced model for complex tasks with deep reasoning",
+      "year": 2025,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 12
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "provider": "google",
+      "client": "GeminiClient",
+      "displayName": "Gemini 2.5 Flash",
+      "description": "Best price-performance for reasoning tasks",
+      "year": 2025,
+      "contextWindow": 1048576,
+      "maxOutput": 65536,
+      "status": "available",
+      "recommended": false,
+      "order": 13
+    },
+    {
+      "id": "claude-opus-4-6",
       "provider": "anthropic",
       "client": "ClaudeClient",
-      "displayName": "Claude 4.5 Sonnet",
-      "description": "RECOMMENDED for complex agents",
+      "displayName": "Claude Opus 4.6",
+      "description": "Most intelligent model for building agents and code",
+      "year": 2025,
+      "contextWindow": 200000,
+      "contextWindowBeta": 1000000,
+      "maxOutput": 128000,
+      "status": "available",
+      "recommended": false,
+      "order": 14
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "client": "ClaudeClient",
+      "displayName": "Claude Sonnet 4.6",
+      "description": "RECOMMENDED - best combination of speed and intelligence",
       "year": 2025,
       "contextWindow": 200000,
       "contextWindowBeta": 1000000,
       "maxOutput": 64000,
       "status": "available",
       "recommended": true,
-      "order": 11
+      "order": 15
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929",
+      "provider": "anthropic",
+      "client": "ClaudeClient",
+      "displayName": "Claude 4.5 Sonnet",
+      "description": "Deprecated - superseded by Claude Sonnet 4.6",
+      "year": 2025,
+      "contextWindow": 200000,
+      "contextWindowBeta": 1000000,
+      "maxOutput": 64000,
+      "status": "deprecated",
+      "recommended": false,
+      "order": 16
     },
     {
       "id": "claude-opus-4-5",
       "provider": "anthropic",
       "client": "ClaudeClient",
       "displayName": "Claude 4.5 Opus",
-      "description": "Premium model combining maximum intelligence with practical performance",
+      "description": "Deprecated - superseded by Claude Opus 4.6",
       "year": 2025,
       "contextWindow": 200000,
       "maxOutput": 64000,
-      "status": "available",
+      "status": "deprecated",
       "recommended": false,
-      "order": 12
+      "order": 17
     },
     {
       "id": "claude-haiku-4-5",
@@ -171,7 +238,7 @@
       "maxOutput": 64000,
       "status": "available",
       "recommended": false,
-      "order": 13
+      "order": 18
     },
     {
       "id": "grok-4-1-fast-reasoning",
@@ -184,7 +251,7 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 14
+      "order": 19
     },
     {
       "id": "grok-4-fast-reasoning",
@@ -197,46 +264,59 @@
       "maxOutput": 65536,
       "status": "available",
       "recommended": false,
-      "order": 15
+      "order": 20
     },
     {
-      "id": "qwen/qwen3-coder",
+      "id": "qwen/qwen3-coder-next",
       "provider": "openrouter",
       "client": "OpenRouterClient",
-      "displayName": "Qwen3 Coder",
-      "description": "Specialized coding model via OpenRouter",
-      "year": 2024,
-      "contextWindow": 32768,
-      "maxOutput": 8192,
+      "displayName": "Qwen3 Coder Next",
+      "description": "Open-weight coding agent model optimized for long-horizon tasks via OpenRouter",
+      "year": 2026,
+      "contextWindow": 262144,
+      "maxOutput": 262144,
       "status": "available",
       "recommended": false,
-      "order": 16
+      "order": 21
     },
     {
-      "id": "z-ai/glm-4.7",
+      "id": "z-ai/glm-5",
       "provider": "openrouter",
       "client": "OpenRouterClient",
-      "displayName": "GLM 4.7",
-      "description": "High-performance AI model via OpenRouter",
-      "year": 2024,
-      "contextWindow": 128000,
-      "maxOutput": 8192,
+      "displayName": "GLM 5",
+      "description": "Flagship open-source model for complex systems design and agent workflows via OpenRouter",
+      "year": 2026,
+      "contextWindow": 202800,
+      "maxOutput": 202800,
       "status": "available",
       "recommended": false,
-      "order": 17
+      "order": 22
     },
     {
-      "id": "minimax/minimax-m2",
+      "id": "minimax/minimax-m2.5",
       "provider": "openrouter",
       "client": "OpenRouterClient",
-      "displayName": "MiniMax M2",
-      "description": "Compact high-efficiency model optimized for coding and agentic workflows",
-      "year": 2025,
+      "displayName": "MiniMax M2.5",
+      "description": "SOTA model for real-world productivity, coding agents and office workflows via OpenRouter",
+      "year": 2026,
       "contextWindow": 196608,
-      "maxOutput": 65536,
+      "maxOutput": 196608,
       "status": "available",
       "recommended": false,
-      "order": 18
+      "order": 23
+    },
+    {
+      "id": "moonshotai/kimi-k2.5",
+      "provider": "openrouter",
+      "client": "OpenRouterClient",
+      "displayName": "Kimi K2.5",
+      "description": "Native multimodal model with visual coding and agent swarm capabilities via OpenRouter",
+      "year": 2026,
+      "contextWindow": 262144,
+      "maxOutput": 262144,
+      "status": "available",
+      "recommended": false,
+      "order": 24
     },
     {
       "id": "deepseek/deepseek-v3.2",
@@ -246,10 +326,10 @@
       "description": "High computational efficiency with strong reasoning and agentic tool-use performance",
       "year": 2025,
       "contextWindow": 163840,
-      "maxOutput": 32768,
+      "maxOutput": 163840,
       "status": "available",
       "recommended": false,
-      "order": 19
+      "order": 25
     }
   ],
   "providerInfo": {

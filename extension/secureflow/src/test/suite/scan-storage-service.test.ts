@@ -44,7 +44,7 @@ suite('ScanStorageService Test Suite', () => {
         'Scan complete',
         'Found 1 issue',
         10,
-        'claude-sonnet-4-5-20250929'
+        'claude-sonnet-4-6'
       );
 
       assert.strictEqual(scan1.scanNumber, 1);
@@ -56,7 +56,7 @@ suite('ScanStorageService Test Suite', () => {
         'Clean scan',
         'No issues found',
         15,
-        'claude-sonnet-4-5-20250929'
+        'claude-sonnet-4-6'
       );
 
       assert.strictEqual(scan2.scanNumber, 2);
@@ -72,7 +72,7 @@ suite('ScanStorageService Test Suite', () => {
         'Profile scan',
         'Scan for specific profile',
         5,
-        'claude-sonnet-4-5-20250929',
+        'claude-sonnet-4-6',
         profileId
       );
 
@@ -138,7 +138,7 @@ suite('ScanStorageService Test Suite', () => {
         'Test scan',
         'Testing severity calculation',
         10,
-        'claude-sonnet-4-5-20250929'
+        'claude-sonnet-4-6'
       );
 
       // Verify all issues were stored

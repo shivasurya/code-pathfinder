@@ -27,7 +27,7 @@ class ApplicationProfile {
  */
 class WorkspaceAnalyzer {
   constructor(options = {}) {
-    this.selectedModel = options.selectedModel || 'claude-sonnet-4-5-20250929';
+    this.selectedModel = options.selectedModel || 'claude-sonnet-4-6';
     console.log('WorkspaceAnalyzer: Initializing with model:', this.selectedModel);
     this.aiClient = AIClientFactory.getClient(this.selectedModel);
     console.log('WorkspaceAnalyzer: Client type:', this.aiClient.constructor.name);
