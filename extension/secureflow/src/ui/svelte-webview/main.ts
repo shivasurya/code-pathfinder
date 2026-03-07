@@ -1,3 +1,4 @@
+import { mount } from 'svelte';
 import App from './App.svelte';
 
 // Declare global vscode API
@@ -8,7 +9,7 @@ declare global {
   }
 }
 
-const app = new App({
+const app = mount(App, {
   target: document.body
 });
 
