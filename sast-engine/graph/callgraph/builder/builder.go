@@ -46,14 +46,16 @@ func getOptimalWorkerCount() int {
 	cpuCount := runtime.NumCPU()
 
 	// Conservative approach: use 75% of cores, leave some for OS
-	workers := max(
+	workers := min(
 		// Apply bounds
-		int(float64(cpuCount)*0.75),
 		// Minimum parallelism
-		2)
-	if workers > 16 {
-		workers = 16 // Cap at 16 (memory/connection limits)
-	}
+		max(
+
+			int(float64(cpuCount)*0.75),
+
+			2),
+		// Cap at 16 (memory/connection limits)
+		16)
 
 	return workers
 }

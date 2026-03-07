@@ -256,22 +256,22 @@ func TestStdlibInfoForFQN_BlankReturnTypeSkipped(t *testing.T) {
 func TestToolGetCallees_IsStdlibField(t *testing.T) {
 	server := createGoTestServer()
 
-	resultStr, isError := server.toolGetCallees(map[string]interface{}{"function": "Handle"})
+	resultStr, isError := server.toolGetCallees(map[string]any{"function": "Handle"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callees, ok := result["callees"].([]interface{})
+	callees, ok := result["callees"].([]any)
 	require.True(t, ok)
 	require.Len(t, callees, 2)
 
 	// First callee is net/http.Get (stdlib).
-	first := callees[0].(map[string]interface{})
+	first := callees[0].(map[string]any)
 	assert.Equal(t, true, first["is_stdlib"])
 
 	// Second callee is myapp.util.Helper (not stdlib).
-	second := callees[1].(map[string]interface{})
+	second := callees[1].(map[string]any)
 	assert.Equal(t, false, second["is_stdlib"])
 }
 
@@ -291,17 +291,17 @@ func TestToolGetCallees_StdlibInfo_WithLoader(t *testing.T) {
 		},
 	})
 
-	resultStr, isError := server.toolGetCallees(map[string]interface{}{"function": "Handle"})
+	resultStr, isError := server.toolGetCallees(map[string]any{"function": "Handle"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callees := result["callees"].([]interface{})
-	first := callees[0].(map[string]interface{})
+	callees := result["callees"].([]any)
+	first := callees[0].(map[string]any)
 
 	assert.Equal(t, true, first["is_stdlib"])
-	stdlibInfo, ok := first["stdlib_info"].(map[string]interface{})
+	stdlibInfo, ok := first["stdlib_info"].(map[string]any)
 	require.True(t, ok, "stdlib_info should be present for stdlib callee")
 	assert.Equal(t, "net/http", stdlibInfo["package"])
 	assert.Contains(t, stdlibInfo["signature"], "Get")
@@ -312,14 +312,14 @@ func TestToolGetCallees_NoStdlibInfo_WhenNilLoader(t *testing.T) {
 	server := createGoTestServer()
 	// goModuleRegistry is nil — stdlib_info unavailable.
 
-	resultStr, isError := server.toolGetCallees(map[string]interface{}{"function": "Handle"})
+	resultStr, isError := server.toolGetCallees(map[string]any{"function": "Handle"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callees := result["callees"].([]interface{})
-	first := callees[0].(map[string]interface{})
+	callees := result["callees"].([]any)
+	first := callees[0].(map[string]any)
 
 	assert.Equal(t, true, first["is_stdlib"])
 	assert.NotContains(t, first, "stdlib_info")
@@ -331,14 +331,14 @@ func TestToolGetCallees_LocalCalleeNoStdlibInfo(t *testing.T) {
 		stdlibPkgs: map[string]bool{"net/http": true},
 	})
 
-	resultStr, isError := server.toolGetCallees(map[string]interface{}{"function": "Handle"})
+	resultStr, isError := server.toolGetCallees(map[string]any{"function": "Handle"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callees := result["callees"].([]interface{})
-	second := callees[1].(map[string]interface{})
+	callees := result["callees"].([]any)
+	second := callees[1].(map[string]any)
 
 	assert.Equal(t, false, second["is_stdlib"])
 	assert.NotContains(t, second, "stdlib_info")
@@ -354,11 +354,11 @@ func TestToolGetCallDetails_IsStdlib(t *testing.T) {
 	resultStr, isError := server.toolGetCallDetails("Handle", "Get")
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	cs := result["call_site"].(map[string]interface{})
-	resolution := cs["resolution"].(map[string]interface{})
+	cs := result["call_site"].(map[string]any)
+	resolution := cs["resolution"].(map[string]any)
 	assert.Equal(t, true, resolution["is_stdlib"])
 }
 
@@ -377,13 +377,13 @@ func TestToolGetCallDetails_StdlibInfo_WithLoader(t *testing.T) {
 	resultStr, isError := server.toolGetCallDetails("Handle", "Get")
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	cs := result["call_site"].(map[string]interface{})
-	resolution := cs["resolution"].(map[string]interface{})
+	cs := result["call_site"].(map[string]any)
+	resolution := cs["resolution"].(map[string]any)
 	assert.Equal(t, true, resolution["is_stdlib"])
-	stdlibInfo, ok := resolution["stdlib_info"].(map[string]interface{})
+	stdlibInfo, ok := resolution["stdlib_info"].(map[string]any)
 	require.True(t, ok, "stdlib_info should be present when loader available")
 	assert.Equal(t, "net/http", stdlibInfo["package"])
 }
@@ -397,11 +397,11 @@ func TestToolGetCallDetails_NotStdlib_NoStdlibInfo(t *testing.T) {
 	resultStr, isError := server.toolGetCallDetails("Handle", "Helper")
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	cs := result["call_site"].(map[string]interface{})
-	resolution := cs["resolution"].(map[string]interface{})
+	cs := result["call_site"].(map[string]any)
+	resolution := cs["resolution"].(map[string]any)
 	assert.Equal(t, false, resolution["is_stdlib"])
 	assert.NotContains(t, resolution, "stdlib_info")
 }
@@ -445,15 +445,15 @@ func TestToolGetCallers_IsStdlibOnCallSite(t *testing.T) {
 
 	server := NewServer("/proj", "", callGraph, moduleRegistry, nil, time.Second, false)
 
-	resultStr, isError := server.toolGetCallers(map[string]interface{}{"function": "Sub"})
+	resultStr, isError := server.toolGetCallers(map[string]any{"function": "Sub"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callers := result["callers"].([]interface{})
+	callers := result["callers"].([]any)
 	require.Len(t, callers, 1)
-	caller := callers[0].(map[string]interface{})
+	caller := callers[0].(map[string]any)
 	// Non-stdlib call site: is_stdlib key should NOT be present (only added when true).
 	assert.NotContains(t, caller, "is_stdlib")
 }
@@ -491,15 +491,15 @@ func TestToolGetCallers_IsStdlibTrueOnCallSite(t *testing.T) {
 
 	server := NewServer("/proj", "", callGraph, moduleRegistry, nil, time.Second, false)
 
-	resultStr, isError := server.toolGetCallers(map[string]interface{}{"function": "Target"})
+	resultStr, isError := server.toolGetCallers(map[string]any{"function": "Target"})
 	require.False(t, isError)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(resultStr), &result))
 
-	callers := result["callers"].([]interface{})
+	callers := result["callers"].([]any)
 	require.Len(t, callers, 1)
-	caller := callers[0].(map[string]interface{})
+	caller := callers[0].(map[string]any)
 	assert.Equal(t, true, caller["is_stdlib"])
 }
 
