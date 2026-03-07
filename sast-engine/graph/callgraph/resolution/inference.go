@@ -18,8 +18,9 @@ type TypeInferenceEngine struct {
 	Registry       *core.ModuleRegistry        // Module registry reference
 	Attributes     *registry.AttributeRegistry // Class attributes registry (Phase 3 Task 12)
 	StdlibRegistry *core.StdlibRegistry        // Python stdlib registry (PR #2)
-	StdlibRemote   any                         // Remote loader for lazy module loading (PR #3)
-	ImportMaps     map[string]*core.ImportMap  // File path -> ImportMap (P0 fix: for attribute placeholder resolution)
+	StdlibRemote     any                         // Remote loader for lazy module loading (PR #3)
+	ThirdPartyRemote any                         // Remote loader for third-party type registries (PR #4)
+	ImportMaps       map[string]*core.ImportMap  // File path -> ImportMap (P0 fix: for attribute placeholder resolution)
 	scopeMutex     sync.RWMutex                // Protects Scopes map for concurrent access
 	typeMutex      sync.RWMutex                // Protects ReturnTypes map for concurrent access
 	importMutex    sync.RWMutex                // Protects ImportMaps for concurrent access
@@ -99,6 +100,16 @@ func (te *TypeInferenceEngine) GetImportMap(filePath string) *core.ImportMap {
 	te.importMutex.RLock()
 	defer te.importMutex.RUnlock()
 	return te.ImportMaps[filePath]
+}
+
+// ForEachImportMap iterates over all stored ImportMaps, calling fn for each.
+// Thread-safe for concurrent reads.
+func (te *TypeInferenceEngine) ForEachImportMap(fn func(filePath string, importMap *core.ImportMap)) {
+	te.importMutex.RLock()
+	defer te.importMutex.RUnlock()
+	for filePath, importMap := range te.ImportMaps {
+		fn(filePath, importMap)
+	}
 }
 
 // GetReturnType retrieves a function's return type.
