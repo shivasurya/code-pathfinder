@@ -12,7 +12,8 @@ from .propagation import PropagationPrimitive, create_propagation_list
 from .ir import IRType
 from .config import get_default_propagation, get_default_scope
 
-# Union type for any matcher that can be used as source/sink/sanitizer
+# Union type for any matcher that can be used as source/sink/sanitizer.
+# Logic operators (Or/And/Not) are also valid matchers.
 AnyMatcher = Union[CallMatcher, MethodMatcher]
 
 
@@ -69,14 +70,14 @@ class DataflowMatcher:
             )
         """
         # Validate sources
-        if isinstance(from_sources, (CallMatcher, MethodMatcher)):
+        if not isinstance(from_sources, list):
             from_sources = [from_sources]
         if not from_sources:
             raise ValueError("flows() requires at least one source")
         self.sources = from_sources
 
         # Validate sinks
-        if isinstance(to_sinks, (CallMatcher, MethodMatcher)):
+        if not isinstance(to_sinks, list):
             to_sinks = [to_sinks]
         if not to_sinks:
             raise ValueError("flows() requires at least one sink")
@@ -85,7 +86,7 @@ class DataflowMatcher:
         # Validate sanitizers
         if sanitized_by is None:
             sanitized_by = []
-        elif isinstance(sanitized_by, (CallMatcher, MethodMatcher)):
+        elif not isinstance(sanitized_by, list):
             sanitized_by = [sanitized_by]
         self.sanitizers = sanitized_by
 
