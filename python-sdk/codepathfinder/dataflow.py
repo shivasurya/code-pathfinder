@@ -7,9 +7,13 @@ It describes how tainted data flows from sources to sinks.
 
 from typing import List, Optional, Union
 from .matchers import CallMatcher
+from .query_type import MethodMatcher
 from .propagation import PropagationPrimitive, create_propagation_list
 from .ir import IRType
 from .config import get_default_propagation, get_default_scope
+
+# Union type for any matcher that can be used as source/sink/sanitizer
+AnyMatcher = Union[CallMatcher, MethodMatcher]
 
 
 class DataflowMatcher:
@@ -33,9 +37,9 @@ class DataflowMatcher:
 
     def __init__(
         self,
-        from_sources: Union[CallMatcher, List[CallMatcher]],
-        to_sinks: Union[CallMatcher, List[CallMatcher]],
-        sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
+        from_sources: Union[AnyMatcher, List[AnyMatcher]],
+        to_sinks: Union[AnyMatcher, List[AnyMatcher]],
+        sanitized_by: Optional[Union[AnyMatcher, List[AnyMatcher]]] = None,
         propagates_through: Optional[List[PropagationPrimitive]] = None,
         scope: Optional[str] = None,
     ):
@@ -65,14 +69,14 @@ class DataflowMatcher:
             )
         """
         # Validate sources
-        if isinstance(from_sources, CallMatcher):
+        if isinstance(from_sources, (CallMatcher, MethodMatcher)):
             from_sources = [from_sources]
         if not from_sources:
             raise ValueError("flows() requires at least one source")
         self.sources = from_sources
 
         # Validate sinks
-        if isinstance(to_sinks, CallMatcher):
+        if isinstance(to_sinks, (CallMatcher, MethodMatcher)):
             to_sinks = [to_sinks]
         if not to_sinks:
             raise ValueError("flows() requires at least one sink")
@@ -81,7 +85,7 @@ class DataflowMatcher:
         # Validate sanitizers
         if sanitized_by is None:
             sanitized_by = []
-        elif isinstance(sanitized_by, CallMatcher):
+        elif isinstance(sanitized_by, (CallMatcher, MethodMatcher)):
             sanitized_by = [sanitized_by]
         self.sanitizers = sanitized_by
 
@@ -141,9 +145,9 @@ class DataflowMatcher:
 
 # Public API
 def flows(
-    from_sources: Union[CallMatcher, List[CallMatcher]],
-    to_sinks: Union[CallMatcher, List[CallMatcher]],
-    sanitized_by: Optional[Union[CallMatcher, List[CallMatcher]]] = None,
+    from_sources: Union[AnyMatcher, List[AnyMatcher]],
+    to_sinks: Union[AnyMatcher, List[AnyMatcher]],
+    sanitized_by: Optional[Union[AnyMatcher, List[AnyMatcher]]] = None,
     propagates_through: Optional[List[PropagationPrimitive]] = None,
     scope: Optional[str] = None,
 ) -> DataflowMatcher:
