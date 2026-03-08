@@ -27,10 +27,10 @@ type TypeConstrainedCallExecutor struct {
 //
 // Algorithm:
 //  1. Iterate all call sites
-//  2. For each resolved-via-type-inference call site:
-//     a. Check if method name matches IR.MethodName
-//     b. Check if inferred receiver type matches IR.ReceiverType (with inheritance)
-//  3. Return matching call sites as detections
+//  2. Check method name match (cheapest check)
+//  3. Check receiver type via type inference, FQN bridge, or fallback
+//  4. Check argument constraints if type matches
+//  5. Return matching call sites as detections
 func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	var detections []DataflowDetection
 	minConf := e.IR.MinConfidence
@@ -39,15 +39,21 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
-		for _, cs := range callSites {
-			if e.matchesCallSite(&cs, minConf) {
+		for i := range callSites {
+			cs := &callSites[i]
+			if e.matchesCallSite(cs, minConf) {
+				conf := float64(cs.TypeConfidence)
+				if conf == 0 {
+					conf = 0.7 // FQN bridge confidence
+				}
 				detections = append(detections, DataflowDetection{
-					FunctionFQN: functionFQN,
-					SourceLine:  cs.Location.Line,
-					SinkLine:    cs.Location.Line,
-					SinkCall:    cs.Target,
-					Confidence:  float64(cs.TypeConfidence),
-					Scope:       "local",
+					FunctionFQN:     functionFQN,
+					SourceLine:      cs.Location.Line,
+					SinkLine:        cs.Location.Line,
+					SinkCall:        cs.Target,
+					Confidence:      conf,
+					Scope:           "local",
+					MatchedCallSite: cs,
 				})
 			}
 		}
@@ -58,39 +64,94 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 
 // matchesCallSite checks if a call site matches the type-constrained pattern.
 func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf float64) bool {
-	// Check method name first (cheapest check)
+	// Step 1: Method name match (cheapest check)
 	if !e.matchesMethodName(cs.Target) {
 		return false
 	}
 
-	// If call was resolved via type inference, check type
+	// Step 2: Type inference match
 	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConf) {
-		return matchesReceiverType(cs.InferredType, e.IR.ReceiverType, e.ThirdPartyRemote)
+		if e.matchesAnyReceiverType(cs.InferredType) {
+			return e.matchesArgs(cs)
+		}
 	}
 
-	// Fallback behavior when no type info
+	// Step 2b: FQN-to-receiver bridge
+	if cs.TargetFQN != "" {
+		derivedReceiver := deriveReceiverFromFQN(cs.TargetFQN, cs.Target)
+		if derivedReceiver != "" && e.matchesAnyReceiverType(derivedReceiver) {
+			return e.matchesArgs(cs)
+		}
+	}
+
+	// Step 3: Fallback behavior
 	switch e.IR.FallbackMode {
-	case "none":
-		return false // Strict: require type info
 	case "name":
-		return true // Already matched by method name
+		return e.matchesArgs(cs)
 	default:
-		return false // Default to strict
+		return false
 	}
 }
 
-// matchesMethodName checks if the call target ends with the expected method name.
+// matchesMethodName checks if the call target ends with any expected method name.
 func (e *TypeConstrainedCallExecutor) matchesMethodName(target string) bool {
-	methodName := e.IR.MethodName
-	if methodName == "" {
+	methodNames := e.IR.GetEffectiveMethodNames()
+	if len(methodNames) == 0 {
 		return true // No method constraint
 	}
 
-	// Check if target is exactly the method name or ends with ".methodName"
-	if target == methodName {
-		return true
+	for _, methodName := range methodNames {
+		if target == methodName {
+			return true
+		}
+		if strings.HasSuffix(target, "."+methodName) {
+			return true
+		}
 	}
-	return strings.HasSuffix(target, "."+methodName)
+	return false
+}
+
+// matchesAnyReceiverType checks if an actual type matches any of the configured receiver types or patterns.
+func (e *TypeConstrainedCallExecutor) matchesAnyReceiverType(actual string) bool {
+	if actual == "" {
+		return false
+	}
+
+	// Check exact receiver types
+	for _, rt := range e.IR.GetEffectiveReceiverTypes() {
+		if matchesReceiverType(actual, rt, e.ThirdPartyRemote) {
+			return true
+		}
+	}
+
+	// Check wildcard receiver patterns
+	for _, rp := range e.IR.ReceiverPatterns {
+		if matchesReceiverType(actual, rp, e.ThirdPartyRemote) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesArgs checks argument constraints on a call site.
+func (e *TypeConstrainedCallExecutor) matchesArgs(cs *core.CallSite) bool {
+	return MatchesArguments(cs, e.IR.PositionalArgs, e.IR.KeywordArgs)
+}
+
+// deriveReceiverFromFQN extracts receiver module/class from TargetFQN.
+// Examples: "os.system" → "os", "pickle.loads" → "pickle".
+func deriveReceiverFromFQN(targetFQN, target string) string {
+	// Extract method name from target
+	methodName := target
+	if idx := strings.LastIndex(target, "."); idx >= 0 {
+		methodName = target[idx+1:]
+	}
+
+	if strings.HasSuffix(targetFQN, "."+methodName) {
+		return strings.TrimSuffix(targetFQN, "."+methodName)
+	}
+	return ""
 }
 
 // matchesReceiverType checks if an actual inferred type matches the expected pattern,

@@ -1,5 +1,7 @@
 package dsl
 
+import "github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+
 // IRType represents the type of IR node.
 type IRType string
 
@@ -29,6 +31,10 @@ type ArgumentConstraint struct {
 	// Wildcard enables pattern matching with * and ? in Value.
 	// Example: "0o7*" matches "0o777", "0o755", etc.
 	Wildcard bool `json:"wildcard"`
+
+	// Comparator specifies the comparison mode for the value.
+	// Supported: "lt", "gt", "lte", "gte", "regex", "missing", "" (exact/wildcard).
+	Comparator string `json:"comparator,omitempty"`
 }
 
 // CallMatcherIR represents call_matcher JSON IR.
@@ -90,14 +96,15 @@ type PropagationIR struct {
 
 // DataflowDetection represents a detected taint flow.
 type DataflowDetection struct {
-	FunctionFQN string  // Function containing the vulnerability
-	SourceLine  int     // Line where taint originates
-	SinkLine    int     // Line where taint reaches sink
-	TaintedVar  string  // Variable name that is tainted
-	SinkCall    string  // Sink function name
-	Confidence  float64 // 0.0-1.0 confidence score
-	Sanitized   bool    // Was sanitization detected?
-	Scope       string  // "local" or "global"
+	FunctionFQN     string          // Function containing the vulnerability
+	SourceLine      int             // Line where taint originates
+	SinkLine        int             // Line where taint reaches sink
+	TaintedVar      string          // Variable name that is tainted
+	SinkCall        string          // Sink function name
+	Confidence      float64         // 0.0-1.0 confidence score
+	Sanitized       bool            // Was sanitization detected?
+	Scope           string          // "local" or "global"
+	MatchedCallSite *core.CallSite  // Internal: matched call site for DataflowExecutor use
 }
 
 // TypeConstrainedCallIR represents type_constrained_call JSON IR.
@@ -105,11 +112,39 @@ type DataflowDetection struct {
 //
 //nolint:tagliatelle // JSON tags match Python DSL format.
 type TypeConstrainedCallIR struct {
-	Type          string  `json:"type"`          // "type_constrained_call"
-	ReceiverType  string  `json:"receiverType"`  // e.g., "django.views.View"
-	MethodName    string  `json:"methodName"`    // e.g., "get"
-	MinConfidence float64 `json:"minConfidence"` // default 0.5
-	FallbackMode  string  `json:"fallbackMode"`  // "name", "none"
+	Type             string  `json:"type"`                       // "type_constrained_call"
+	ReceiverType     string  `json:"receiverType,omitempty"`     // backward compat: single FQN
+	ReceiverTypes    []string `json:"receiverTypes,omitempty"`   // multiple exact FQNs
+	ReceiverPatterns []string `json:"receiverPatterns,omitempty"` // wildcard patterns
+	MatchSubclasses  bool    `json:"matchSubclasses"`            // MRO inheritance matching
+	MethodName       string  `json:"methodName,omitempty"`       // backward compat: single method
+	MethodNames      []string `json:"methodNames,omitempty"`     // multiple method names
+	MinConfidence    float64 `json:"minConfidence"`              // default 0.5
+	FallbackMode     string  `json:"fallbackMode"`               // "name", "none"
+
+	// Argument matching (reuses ArgumentConstraint)
+	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
+	KeywordArgs    map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
+}
+
+// GetEffectiveReceiverTypes returns the receiver types, merging legacy single field.
+func (t *TypeConstrainedCallIR) GetEffectiveReceiverTypes() []string {
+	types := make([]string, 0, len(t.ReceiverTypes)+1)
+	if t.ReceiverType != "" {
+		types = append(types, t.ReceiverType)
+	}
+	types = append(types, t.ReceiverTypes...)
+	return types
+}
+
+// GetEffectiveMethodNames returns the method names, merging legacy single field.
+func (t *TypeConstrainedCallIR) GetEffectiveMethodNames() []string {
+	names := make([]string, 0, len(t.MethodNames)+1)
+	if t.MethodName != "" {
+		names = append(names, t.MethodName)
+	}
+	names = append(names, t.MethodNames...)
+	return names
 }
 
 // GetType returns the IR type.
