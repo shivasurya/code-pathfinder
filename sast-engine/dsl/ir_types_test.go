@@ -55,38 +55,20 @@ func TestVariableMatcherIR_GetType(t *testing.T) {
 func TestDataflowIR_GetType(t *testing.T) {
 	t.Run("returns correct IR type", func(t *testing.T) {
 		dataflow := &DataflowIR{
-			Type: "dataflow",
-			Sources: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"request.GET"}},
-			},
-			Sinks: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"eval"}},
-			},
-			Sanitizers: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"escape"}},
-			},
+			Type:  "dataflow",
 			Scope: "local",
 		}
-
 		assert.Equal(t, IRTypeDataflow, dataflow.GetType())
 	})
 
 	t.Run("works with global scope", func(t *testing.T) {
 		dataflow := &DataflowIR{
 			Type: "dataflow",
-			Sources: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"input"}},
-			},
-			Sinks: []CallMatcherIR{
-				{Type: "call_matcher", Patterns: []string{"execute"}},
-			},
-			Sanitizers: []CallMatcherIR{},
 			Propagation: []PropagationIR{
 				{Type: "assignment", Metadata: map[string]any{"key": "value"}},
 			},
 			Scope: "global",
 		}
-
 		assert.Equal(t, IRTypeDataflow, dataflow.GetType())
 	})
 }

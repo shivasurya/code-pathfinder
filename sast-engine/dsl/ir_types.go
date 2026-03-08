@@ -1,6 +1,10 @@
 package dsl
 
-import "github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+import (
+	"encoding/json"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+)
 
 // IRType represents the type of IR node.
 type IRType string
@@ -74,13 +78,14 @@ func (v *VariableMatcherIR) GetType() IRType {
 }
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
+// Sources/Sinks/Sanitizers accept any matcher type (CallMatcherIR or TypeConstrainedCallIR).
 type DataflowIR struct {
-	Type        string          `json:"type"`        // "dataflow"
-	Sources     []CallMatcherIR `json:"sources"`     // Where taint originates
-	Sinks       []CallMatcherIR `json:"sinks"`       // Dangerous functions
-	Sanitizers  []CallMatcherIR `json:"sanitizers"`  // Taint-removing functions
-	Propagation []PropagationIR `json:"propagation"` // How taint flows (for future use)
-	Scope       string          `json:"scope"`       // "local" or "global"
+	Type        string            `json:"type"`        // "dataflow"
+	Sources     []json.RawMessage `json:"sources"`     // Any matcher IR
+	Sinks       []json.RawMessage `json:"sinks"`       // Any matcher IR
+	Sanitizers  []json.RawMessage `json:"sanitizers"`  // Any matcher IR
+	Propagation []PropagationIR   `json:"propagation"` // How taint flows (for future use)
+	Scope       string            `json:"scope"`       // "local" or "global"
 }
 
 // GetType returns the IR type.
