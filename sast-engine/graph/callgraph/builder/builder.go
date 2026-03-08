@@ -1283,6 +1283,36 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 						}
 					}
 
+					// Check stdlib type registry for method on typed variable.
+					if typeEngine.StdlibRemote != nil {
+						if stdlibLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+							stModule, stClass := splitModuleAndName(typeFQN)
+							if stClass != "" && stdlibLoader.HasModule(stModule) {
+								method := stdlibLoader.GetClassMethod(stModule, stClass, rest, logger)
+								if method != nil {
+									return methodFQN, true, &core.TypeInfo{
+										TypeFQN:    typeFQN,
+										Confidence: binding.Type.Confidence,
+										Source:     "stdlib",
+									}
+								}
+							}
+						}
+					}
+					// Fallback: check hardcoded stdlib method types.
+					{
+						stModule, stClass := splitModuleAndName(typeFQN)
+						if stClass != "" && cgregistry.HasKnownStdlibTypes(stModule) {
+							if cgregistry.GetKnownStdlibMethodReturnType(stModule, stClass, rest) != "" {
+								return methodFQN, true, &core.TypeInfo{
+									TypeFQN:    typeFQN,
+									Confidence: binding.Type.Confidence,
+									Source:     "stdlib-known",
+								}
+							}
+						}
+					}
+
 					// Heuristic: If type has good confidence (>= 0.7), assume method exists
 					if binding.Type.Confidence >= 0.7 {
 						// Resolved via confidence heuristic - return with type info
@@ -1911,11 +1941,11 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 					}
 				}
 
-				// Fallback: hardcoded return types
+				// Fallback: hardcoded return types (curated, high confidence).
 				if rt := cgregistry.GetKnownStdlibReturnType(moduleName, name); rt != "" {
 					scope.Variables[varName][i].Type = &core.TypeInfo{
 						TypeFQN:    rt,
-						Confidence: binding.Type.Confidence * 0.9,
+						Confidence: 0.9,
 						Source:     "stdlib-known",
 					}
 					scope.Variables[varName][i].AssignedFrom = funcName
@@ -1966,11 +1996,11 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 					}
 				}
 
-				// Fallback: hardcoded method return types
+				// Fallback: hardcoded method return types (curated, high confidence).
 				if rt := cgregistry.GetKnownStdlibMethodReturnType(rcvModule, rcvClass, methodName); rt != "" {
 					scope.Variables[varName][i].Type = &core.TypeInfo{
 						TypeFQN:    rt,
-						Confidence: binding.Type.Confidence * 0.85,
+						Confidence: 0.85,
 						Source:     "stdlib-known",
 					}
 					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
