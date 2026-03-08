@@ -257,6 +257,43 @@ func (r *StdlibRegistryRemote) GetClass(moduleName, className string, logger *ou
 	return module.Classes[className]
 }
 
+// GetClassMethod retrieves a class method, checking own methods first,
+// then inherited methods.
+//
+// Parameters:
+//   - moduleName: name of the module (e.g., "sqlite3")
+//   - className: name of the class (e.g., "Connection")
+//   - methodName: name of the method (e.g., "cursor")
+//   - logger: structured logger for diagnostics
+//
+// Returns:
+//   - StdlibFunction if found, nil otherwise
+func (r *StdlibRegistryRemote) GetClassMethod(moduleName, className, methodName string, logger *output.Logger) *core.StdlibFunction {
+	cls := r.GetClass(moduleName, className, logger)
+	if cls == nil {
+		return nil
+	}
+
+	// Check own methods first
+	if method, ok := cls.Methods[methodName]; ok {
+		return method
+	}
+
+	// Check inherited methods
+	if cls.InheritedMethods != nil {
+		if inherited, ok := cls.InheritedMethods[methodName]; ok {
+			return &core.StdlibFunction{
+				ReturnType: inherited.ReturnType,
+				Confidence: inherited.Confidence,
+				Params:     inherited.Params,
+				Source:     inherited.Source,
+			}
+		}
+	}
+
+	return nil
+}
+
 // ModuleCount returns the number of modules in the manifest.
 //
 // Returns:

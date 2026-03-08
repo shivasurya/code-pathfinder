@@ -567,6 +567,67 @@ func TestStdlibRegistryRemote_GetModule_InvalidJSON(t *testing.T) {
 	assert.Nil(t, module)
 }
 
+func TestStdlibRegistryRemote_GetClassMethod(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"sqlite3": {
+				Classes: map[string]*core.StdlibClass{
+					"Connection": {
+						Methods: map[string]*core.StdlibFunction{
+							"cursor": {ReturnType: "sqlite3.Cursor", Confidence: 0.9},
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := newTestLogger()
+
+	method := remote.GetClassMethod("sqlite3", "Connection", "cursor", logger)
+	assert.NotNil(t, method)
+	assert.Equal(t, "sqlite3.Cursor", method.ReturnType)
+
+	// Non-existent method
+	assert.Nil(t, remote.GetClassMethod("sqlite3", "Connection", "nonexistent", logger))
+
+	// Non-existent class
+	assert.Nil(t, remote.GetClassMethod("sqlite3", "NonExistent", "cursor", logger))
+
+	// Non-existent module
+	assert.Nil(t, remote.GetClassMethod("nonexistent", "Connection", "cursor", logger))
+}
+
+func TestStdlibRegistryRemote_GetClassMethod_Inherited(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"sqlite3": {
+				Classes: map[string]*core.StdlibClass{
+					"Connection": {
+						Methods: map[string]*core.StdlibFunction{
+							"cursor": {ReturnType: "sqlite3.Cursor", Confidence: 0.9},
+						},
+						InheritedMethods: map[string]*core.InheritedMember{
+							"close": {ReturnType: "None", Confidence: 0.8, Source: "object"},
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := newTestLogger()
+
+	// Inherited method should be found
+	method := remote.GetClassMethod("sqlite3", "Connection", "close", logger)
+	assert.NotNil(t, method)
+	assert.Equal(t, "None", method.ReturnType)
+	assert.Equal(t, float32(0.8), method.Confidence)
+
+	// Own method takes priority over inherited
+	own := remote.GetClassMethod("sqlite3", "Connection", "cursor", logger)
+	assert.NotNil(t, own)
+	assert.Equal(t, "sqlite3.Cursor", own.ReturnType)
+}
+
 func TestStdlibRegistryRemote_GetModule_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
