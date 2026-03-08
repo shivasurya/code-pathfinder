@@ -314,18 +314,121 @@ func TestRuleLoader_ExecuteRule(t *testing.T) {
 }
 
 func TestRuleLoader_ExecuteLogic(t *testing.T) {
-	t.Run("logic operators return empty for now", func(t *testing.T) {
-		cg := core.NewCallGraph()
-		loader := NewRuleLoader("")
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.test": {
+				{
+					Target:   "hashlib.md5",
+					Location: core.Location{File: "test.py", Line: 5},
+				},
+				{
+					Target:   "hashlib.sha1",
+					Location: core.Location{File: "test.py", Line: 10},
+				},
+				{
+					Target:   "hashlib.sha256",
+					Location: core.Location{File: "test.py", Line: 15},
+				},
+			},
+		},
+	}
+	loader := NewRuleLoader("")
 
+	t.Run("logic_or returns union of results", func(t *testing.T) {
 		rule := &RuleIR{
 			Matcher: map[string]any{
-				"type": "logic_and",
+				"type": "logic_or",
+				"matchers": []any{
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.md5"},
+						"wildcard": false,
+					},
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.sha1"},
+						"wildcard": false,
+					},
+				},
 			},
 		}
 
 		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 2)
+	})
 
+	t.Run("logic_and returns intersection", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_and",
+				"matchers": []any{
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.*"},
+						"wildcard": true,
+					},
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.md5"},
+						"wildcard": false,
+					},
+				},
+			},
+		}
+
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 1)
+		assert.Equal(t, "hashlib.md5", detections[0].SinkCall)
+	})
+
+	t.Run("logic_or deduplicates", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type": "logic_or",
+				"matchers": []any{
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.md5"},
+						"wildcard": false,
+					},
+					map[string]any{
+						"type":     "call_matcher",
+						"patterns": []any{"hashlib.md5"},
+						"wildcard": false,
+					},
+				},
+			},
+		}
+
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		assert.Len(t, detections, 1)
+	})
+
+	t.Run("logic_not returns error", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":    "logic_not",
+				"matcher": map[string]any{"type": "call_matcher", "patterns": []any{"x"}, "wildcard": false},
+			},
+		}
+
+		_, err := loader.ExecuteRule(rule, cg)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not yet implemented")
+	})
+
+	t.Run("logic_and with no matchers returns nil", func(t *testing.T) {
+		rule := &RuleIR{
+			Matcher: map[string]any{
+				"type":     "logic_and",
+				"matchers": []any{},
+			},
+		}
+
+		detections, err := loader.ExecuteRule(rule, cg)
 		require.NoError(t, err)
 		assert.Empty(t, detections)
 	})

@@ -524,10 +524,103 @@ func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, 
 	return executor.Execute(), nil
 }
 
-//nolint:unparam // Will be implemented in future PRs
 func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
-	// TODO: Handle And/Or/Not logic operators
-	// This requires recursive execution of nested matchers
-	// For now, return empty detections as placeholder
-	return []DataflowDetection{}, nil
+	switch logicType {
+	case "logic_or":
+		return l.executeLogicOr(matcherMap, cg)
+	case "logic_and":
+		return l.executeLogicAnd(matcherMap, cg)
+	case "logic_not":
+		return nil, fmt.Errorf("logic_not not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown logic type: %s", logicType)
+	}
+}
+
+func (l *RuleLoader) executeLogicOr(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	matchers, ok := matcherMap["matchers"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("logic_or requires 'matchers' array")
+	}
+
+	var all []DataflowDetection
+	for _, m := range matchers {
+		mMap, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		ruleIR := &RuleIR{Matcher: mMap}
+		dets, err := l.ExecuteRule(ruleIR, cg)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, dets...)
+	}
+	return deduplicateDetections(all), nil
+}
+
+func (l *RuleLoader) executeLogicAnd(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	matchers, ok := matcherMap["matchers"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("logic_and requires 'matchers' array")
+	}
+
+	if len(matchers) == 0 {
+		return nil, nil
+	}
+
+	// Execute first matcher
+	mMap, ok := matchers[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("matcher is not a map")
+	}
+	ruleIR := &RuleIR{Matcher: mMap}
+	result, err := l.ExecuteRule(ruleIR, cg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Intersect with remaining matchers
+	for _, m := range matchers[1:] {
+		mMap, ok = m.(map[string]any)
+		if !ok {
+			continue
+		}
+		ruleIR = &RuleIR{Matcher: mMap}
+		dets, err := l.ExecuteRule(ruleIR, cg)
+		if err != nil {
+			return nil, err
+		}
+		result = intersectDetections(result, dets)
+	}
+	return result, nil
+}
+
+func deduplicateDetections(dets []DataflowDetection) []DataflowDetection {
+	seen := make(map[string]bool)
+	var result []DataflowDetection
+	for _, d := range dets {
+		key := fmt.Sprintf("%s:%d:%d:%s", d.FunctionFQN, d.SourceLine, d.SinkLine, d.SinkCall)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func intersectDetections(a, b []DataflowDetection) []DataflowDetection {
+	bSet := make(map[string]bool)
+	for _, d := range b {
+		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
+		bSet[key] = true
+	}
+	var result []DataflowDetection
+	for _, d := range a {
+		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
+		if bSet[key] {
+			result = append(result, d)
+		}
+	}
+	return result
 }
