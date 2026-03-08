@@ -54,7 +54,7 @@ class MethodMatcher:
             "matchSubclasses": self.match_subclasses,
             "methodNames": self.method_names,
             "minConfidence": 0.5,
-            "fallbackMode": "none",
+            "fallbackMode": "name",
         }
         if self.positional_args:
             ir["positionalArgs"] = self.positional_args

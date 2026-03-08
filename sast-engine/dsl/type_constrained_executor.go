@@ -82,6 +82,12 @@ func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf
 		if derivedReceiver != "" && e.matchesAnyReceiverType(derivedReceiver) {
 			return e.matchesArgs(cs)
 		}
+
+		// Step 2c: FQN prefix match — check if TargetFQN starts with a receiver type.
+		// Handles cases like TargetFQN="flask.request.args.get" matching "flask.request".
+		if e.fqnPrefixMatchesReceiver(cs.TargetFQN) {
+			return e.matchesArgs(cs)
+		}
 	}
 
 	// Step 3: Fallback behavior
@@ -131,6 +137,38 @@ func (e *TypeConstrainedCallExecutor) matchesAnyReceiverType(actual string) bool
 		}
 	}
 
+	return false
+}
+
+// fqnPrefixMatchesReceiver checks if the TargetFQN starts with any configured receiver type.
+// This handles module-level proxies like flask.request (FQN "flask.request.args.get")
+// matching against receiver type "flask.request", and case-insensitive class name matching
+// where "flask.request" proxies "flask.Request".
+func (e *TypeConstrainedCallExecutor) fqnPrefixMatchesReceiver(targetFQN string) bool {
+	fqnLower := strings.ToLower(targetFQN)
+	for _, rt := range e.IR.GetEffectiveReceiverTypes() {
+		rtLower := strings.ToLower(rt)
+		if strings.HasPrefix(fqnLower, rtLower+".") {
+			return true
+		}
+	}
+	for _, rp := range e.IR.ReceiverPatterns {
+		if strings.Contains(rp, "*") && matchesFQNPrefixWildcard(targetFQN, rp) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesFQNPrefixWildcard checks if any prefix of the FQN matches a wildcard pattern.
+func matchesFQNPrefixWildcard(fqn, pattern string) bool {
+	parts := strings.Split(fqn, ".")
+	for i := len(parts) - 1; i > 0; i-- {
+		prefix := strings.Join(parts[:i], ".")
+		if matchesWildcardType(prefix, pattern) {
+			return true
+		}
+	}
 	return false
 }
 

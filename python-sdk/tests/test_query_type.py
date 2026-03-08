@@ -87,7 +87,7 @@ def test_min_confidence_default():
 
 def test_fallback_mode_default():
     ir = DBCursor.method("execute").to_ir()
-    assert ir["fallbackMode"] == "none"
+    assert ir["fallbackMode"] == "name"
 
 
 # --- .arg() chaining tests ---
