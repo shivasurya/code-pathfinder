@@ -310,6 +310,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Must run AFTER UpdateVariableBindingsWithFunctionReturns (userland first).
 	resolveThirdPartyVariableBindings(typeEngine, logger)
 
+	// Resolve remaining call: placeholders using stdlib type registry (CDN + hardcoded fallbacks)
+	// Must run AFTER resolveThirdPartyVariableBindings.
+	resolveStdlibVariableBindings(typeEngine, logger)
+
 	// Phase 3 Task 12: Extract class attributes (third pass - PARALLELIZED)
 	logger.Debug("Extracting class attributes (parallel)...")
 
@@ -1831,6 +1835,143 @@ func resolveThirdPartyVariableBindings(typeEngine *resolution.TypeInferenceEngin
 						TypeFQN:    method.ReturnType,
 						Confidence: binding.Type.Confidence * method.Confidence * 0.9,
 						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
+				}
+			}
+		}
+	}
+}
+
+// resolveStdlibVariableBindings resolves call: placeholders using the stdlib
+// type registry (CDN + hardcoded fallbacks). Mirrors resolveThirdPartyVariableBindings
+// but for Python standard library modules.
+//
+//	Phase A: Module-level function/constructor calls (e.g., call:sqlite3.connect)
+//	Phase B: Instance method calls on variables resolved in Phase A (e.g., call:conn.cursor)
+func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	var loader *cgregistry.StdlibRegistryRemote
+	if typeEngine.StdlibRemote != nil {
+		loader, _ = typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote)
+	}
+
+	// Helper: check if a module is known (CDN or hardcoded)
+	isKnownModule := func(moduleName string) bool {
+		if loader != nil && loader.HasModule(moduleName) {
+			return true
+		}
+		return cgregistry.HasKnownStdlibTypes(moduleName)
+	}
+
+	// Phase A: Resolve direct module.function calls
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+				// Skip instance method calls (receiver is a variable) — handle in Phase B
+				parts := strings.SplitN(funcName, ".", 2)
+				if scope.GetVariable(parts[0]) != nil {
+					continue
+				}
+
+				moduleName, name := splitModuleAndName(funcName)
+				if !isKnownModule(moduleName) {
+					continue
+				}
+
+				// Try CDN registry first: module-level function
+				if loader != nil {
+					fn := loader.GetFunction(moduleName, name, logger)
+					if fn != nil && fn.ReturnType != "" && fn.ReturnType != "unknown" {
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    fn.ReturnType,
+							Confidence: binding.Type.Confidence * fn.Confidence * 0.95,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = funcName
+						continue
+					}
+
+					// Try as constructor: class exists → type is the FQN itself
+					cls := loader.GetClass(moduleName, name, logger)
+					if cls != nil {
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    funcName,
+							Confidence: binding.Type.Confidence * 0.95,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = funcName
+						continue
+					}
+				}
+
+				// Fallback: hardcoded return types
+				if rt := cgregistry.GetKnownStdlibReturnType(moduleName, name); rt != "" {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    rt,
+						Confidence: binding.Type.Confidence * 0.9,
+						Source:     "stdlib-known",
+					}
+					scope.Variables[varName][i].AssignedFrom = funcName
+					continue
+				}
+			}
+		}
+	}
+
+	// Phase B: Resolve instance method calls on variables resolved in Phase A
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+
+				parts := strings.SplitN(funcName, ".", 2)
+				receiver := parts[0]
+				methodName := parts[1]
+
+				receiverBinding := scope.GetVariable(receiver)
+				if receiverBinding == nil || receiverBinding.Type == nil ||
+					strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
+					continue
+				}
+
+				rcvModule, rcvClass := splitModuleAndName(receiverBinding.Type.TypeFQN)
+				if rcvClass == "" || !isKnownModule(rcvModule) {
+					continue
+				}
+
+				// Try CDN registry first
+				if loader != nil {
+					method := loader.GetClassMethod(rcvModule, rcvClass, methodName, logger)
+					if method != nil && method.ReturnType != "" && method.ReturnType != "unknown" {
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    method.ReturnType,
+							Confidence: binding.Type.Confidence * method.Confidence * 0.9,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
+						continue
+					}
+				}
+
+				// Fallback: hardcoded method return types
+				if rt := cgregistry.GetKnownStdlibMethodReturnType(rcvModule, rcvClass, methodName); rt != "" {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    rt,
+						Confidence: binding.Type.Confidence * 0.85,
+						Source:     "stdlib-known",
 					}
 					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
 				}
