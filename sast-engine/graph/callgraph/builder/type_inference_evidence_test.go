@@ -15,7 +15,6 @@ import (
 // resolves the full chain: sqlite3.connect() → Connection → .cursor() → Cursor → .execute().
 // Requires CDN data regenerated with typeshed overlay (PR-00) for C builtin return types.
 func TestTypeInference_StdlibChaining(t *testing.T) {
-	t.Skip("Requires CDN data regenerated with typeshed overlay — sqlite3.connect() return type is 'unknown' in current CDN")
 	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
 	require.NoError(t, err)
 
