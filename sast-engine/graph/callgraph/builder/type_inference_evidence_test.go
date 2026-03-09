@@ -117,6 +117,7 @@ func TestTypeInference_StdlibChaining(t *testing.T) {
 // TestTypeInference_ThirdPartyChaining proves third-party return-type chaining
 // resolves: requests.get() → Response → .json() → dict.
 func TestTypeInference_ThirdPartyChaining(t *testing.T) {
+	t.Skip("Requires third-party CDN data (requests, flask) — skip until CDN is available in CI")
 	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
 	require.NoError(t, err)
 
