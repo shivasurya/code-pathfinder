@@ -1303,19 +1303,6 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 							}
 						}
 					}
-					// Fallback: check hardcoded stdlib method types.
-					{
-						stModule, stClass := splitModuleAndName(typeFQN)
-						if stClass != "" && cgregistry.HasKnownStdlibTypes(stModule) {
-							if cgregistry.GetKnownStdlibMethodReturnType(stModule, stClass, rest) != "" {
-								return methodFQN, true, &core.TypeInfo{
-									TypeFQN:    typeFQN,
-									Confidence: binding.Type.Confidence,
-									Source:     "stdlib-known",
-								}
-							}
-						}
-					}
 
 					// Heuristic: If type has good confidence (>= 0.7), assume method exists
 					if binding.Type.Confidence >= 0.7 {
@@ -1896,12 +1883,9 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 		loader, _ = typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote)
 	}
 
-	// Helper: check if a module is known (CDN or hardcoded)
+	// Helper: check if a module is known via CDN
 	isKnownModule := func(moduleName string) bool {
-		if loader != nil && loader.HasModule(moduleName) {
-			return true
-		}
-		return cgregistry.HasKnownStdlibTypes(moduleName)
+		return loader != nil && loader.HasModule(moduleName)
 	}
 
 	// Phase A: Resolve direct module.function calls
@@ -1952,16 +1936,6 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 					}
 				}
 
-				// Fallback: hardcoded return types (curated, high confidence).
-				if rt := cgregistry.GetKnownStdlibReturnType(moduleName, name); rt != "" {
-					scope.Variables[varName][i].Type = &core.TypeInfo{
-						TypeFQN:    rt,
-						Confidence: 0.9,
-						Source:     "stdlib-known",
-					}
-					scope.Variables[varName][i].AssignedFrom = funcName
-					continue
-				}
 			}
 		}
 	}
@@ -2014,15 +1988,6 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 					}
 				}
 
-				// Fallback: hardcoded method return types (curated, high confidence).
-				if rt := cgregistry.GetKnownStdlibMethodReturnType(rcvModule, rcvClass, methodName); rt != "" {
-					scope.Variables[varName][i].Type = &core.TypeInfo{
-						TypeFQN:    rt,
-						Confidence: 0.85,
-						Source:     "stdlib-known",
-					}
-					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
-				}
 			}
 		}
 	}

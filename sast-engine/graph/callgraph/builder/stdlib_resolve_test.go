@@ -171,8 +171,8 @@ func TestResolveStdlibVariableBindings_PhaseB(t *testing.T) {
 	assert.Equal(t, "stdlib", curBinding.Type.Source)
 }
 
-func TestResolveStdlibVariableBindings_Fallback(t *testing.T) {
-	// CDN has "unknown" return type; should fall back to hardcoded types
+func TestResolveStdlibVariableBindings_CDNUnknown_StaysUnresolved(t *testing.T) {
+	// CDN has "unknown" return type; no hardcoded fallback — stays unresolved
 	loader := newTestStdlibLoader(map[string]*core.StdlibModule{
 		"sqlite3": {
 			Module: "sqlite3",
@@ -204,13 +204,12 @@ func TestResolveStdlibVariableBindings_Fallback(t *testing.T) {
 
 	binding := scope.GetVariable("conn")
 	assert.NotNil(t, binding)
-	// Should fall back to hardcoded: sqlite3.connect → sqlite3.Connection
-	assert.Equal(t, "sqlite3.Connection", binding.Type.TypeFQN)
-	assert.Equal(t, "stdlib-known", binding.Type.Source)
+	// CDN returned "unknown", no hardcoded fallback — type stays as call: prefix
+	assert.Equal(t, "call:sqlite3.connect", binding.Type.TypeFQN)
 }
 
-func TestResolveStdlibVariableBindings_FallbackMethodReturnType(t *testing.T) {
-	// Phase B fallback: CDN method returns "unknown", fall back to hardcoded
+func TestResolveStdlibVariableBindings_CDNMethodUnknown_StaysUnresolved(t *testing.T) {
+	// Phase B: CDN method returns "unknown", no hardcoded fallback — stays unresolved
 	loader := newTestStdlibLoader(map[string]*core.StdlibModule{
 		"sqlite3": {
 			Module: "sqlite3",
@@ -259,12 +258,12 @@ func TestResolveStdlibVariableBindings_FallbackMethodReturnType(t *testing.T) {
 
 	curBinding := scope.GetVariable("cur")
 	assert.NotNil(t, curBinding)
-	assert.Equal(t, "sqlite3.Cursor", curBinding.Type.TypeFQN)
-	assert.Equal(t, "stdlib-known", curBinding.Type.Source)
+	// CDN method returned "unknown", no hardcoded fallback — stays unresolved
+	assert.Equal(t, "call:conn.cursor", curBinding.Type.TypeFQN)
 }
 
 func TestResolveStdlibVariableBindings_NilRemote(t *testing.T) {
-	// Should not panic when StdlibRemote is nil
+	// Should not panic when StdlibRemote is nil — type stays unresolved
 	typeEngine := resolution.NewTypeInferenceEngine(nil)
 	typeEngine.StdlibRemote = nil
 
@@ -279,14 +278,13 @@ func TestResolveStdlibVariableBindings_NilRemote(t *testing.T) {
 	})
 
 	logger := output.NewLogger(output.VerbosityDefault)
-	// Should not panic, should use hardcoded fallback only
+	// Should not panic; without CDN, type stays unresolved
 	resolveStdlibVariableBindings(typeEngine, logger)
 
 	binding := scope.GetVariable("conn")
 	assert.NotNil(t, binding)
-	// With nil remote, fallback to hardcoded types
-	assert.Equal(t, "sqlite3.Connection", binding.Type.TypeFQN)
-	assert.Equal(t, "stdlib-known", binding.Type.Source)
+	// Nil remote, no CDN data — type stays as call: prefix
+	assert.Equal(t, "call:sqlite3.connect", binding.Type.TypeFQN)
 }
 
 func TestResolveStdlibVariableBindings_NoKnownModule(t *testing.T) {

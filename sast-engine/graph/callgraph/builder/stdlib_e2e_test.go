@@ -16,8 +16,11 @@ import (
 //
 //	conn   = sqlite3.connect("test.db")   → type sqlite3.Connection
 //	cursor = conn.cursor()                → type sqlite3.Cursor
+//
+// Requires CDN data regenerated with typeshed overlay for C builtin return types.
 //	cursor.execute(...)                   → FQN contains "sqlite3"
 func TestStdlibReturnTypeChaining_EndToEnd(t *testing.T) {
+	t.Skip("Requires CDN data regenerated with typeshed overlay — sqlite3.connect() return type is 'unknown' in current CDN")
 	// Use absolute path to ensure graph.Initialize and BuildCallGraphFromPath
 	// use consistent file paths (module registry converts to absolute internally).
 	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
