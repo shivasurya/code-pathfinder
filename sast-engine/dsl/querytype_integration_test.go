@@ -542,7 +542,7 @@ func irToMap(v any) map[string]any {
 }
 
 // BUG-4: MatchMethod tracking in real rule — verifies each match path is labeled
-// Simulates: QueryType("SQLi", fqns=["sqlite3.Cursor"]).method("execute")
+// Simulates: QueryType("SQLi", fqns=["sqlite3.Cursor"]).method("execute").
 func TestQueryType_MatchMethod_RealRule_BUG4(t *testing.T) {
 	cg := core.NewCallGraph()
 
@@ -598,7 +598,7 @@ func TestQueryType_MatchMethod_RealRule_BUG4(t *testing.T) {
 }
 
 // BUG-6: Attribute executor FQN bridge — real rule test
-// Simulates: QueryType("UnsafeGET", fqns=["django.http.HttpRequest"]).attr("GET")
+// Simulates: QueryType("UnsafeGET", fqns=["django.http.HttpRequest"]).attr("GET").
 func TestQueryType_AttributeFQNBridge_RealRule_BUG6(t *testing.T) {
 	cg := core.NewCallGraph()
 
@@ -639,7 +639,7 @@ func TestQueryType_AttributeFQNBridge_RealRule_BUG6(t *testing.T) {
 
 // BUG-3: Stdlib MRO integration test — real rule targeting io.IOBase.read()
 // Simulates: QueryType("UnsafeRead", fqns=["io.IOBase"]).method("read")
-// Should match call sites where InferredType is io.FileIO (subclass of IOBase)
+// Should match call sites where InferredType is io.FileIO (subclass of IOBase).
 func TestQueryType_StdlibMRO_IOBase_RealRule_BUG3(t *testing.T) {
 	// Simulate stdlib with MRO data (future CDN state)
 	stdlibChecker := &mockInheritanceChecker{
