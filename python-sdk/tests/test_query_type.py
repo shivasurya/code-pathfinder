@@ -5,7 +5,6 @@ from codepathfinder import QueryType, Or, And, flows, calls
 from codepathfinder.qualifiers import lt, gt, lte, gte, regex, missing
 from codepathfinder.query_type import MethodMatcher
 
-
 # --- Test QueryType subclasses ---
 
 

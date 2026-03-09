@@ -17,7 +17,9 @@ from .ir import IRType
 class MethodMatcher:
     """Matcher for method calls on typed receivers. Returned by QueryType.method()."""
 
-    def __init__(self, receiver_types, receiver_patterns, match_subclasses, method_names):
+    def __init__(
+        self, receiver_types, receiver_patterns, match_subclasses, method_names
+    ):
         self.receiver_types = receiver_types
         self.receiver_patterns = receiver_patterns
         self.match_subclasses = match_subclasses
@@ -69,6 +71,10 @@ class MethodMatcher:
 
 class QueryTypeMeta(type):
     """Metaclass for QueryType that provides classmethod-style .method() without instantiation."""
+
+    fqns: list[str]
+    patterns: list[str]
+    match_subclasses: bool
 
     def method(cls, *method_names: str) -> MethodMatcher:
         """Select methods to match on this type.

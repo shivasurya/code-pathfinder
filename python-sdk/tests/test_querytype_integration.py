@@ -5,13 +5,11 @@ would consume. Validates the full path: Python DSL → IR → JSON.
 """
 
 import json
-import pytest
 
-from codepathfinder import QueryType, lt, gt, lte, gte, regex, missing
+from codepathfinder import QueryType, gt, regex, missing
 from codepathfinder.dataflow import flows
 from codepathfinder.logic import Or, And
 from codepathfinder.ir import IRType
-
 
 # --- QueryType definitions (as a user would write them) ---
 
@@ -63,7 +61,10 @@ class TestSQLInjectionRule:
         assert len(ir["sinks"]) == 1
         sink = ir["sinks"][0]
         assert sink["type"] == IRType.TYPE_CONSTRAINED_CALL.value
-        assert sink["receiverTypes"] == ["sqlite3.Cursor", "mysql.connector.cursor.MySQLCursor"]
+        assert sink["receiverTypes"] == [
+            "sqlite3.Cursor",
+            "mysql.connector.cursor.MySQLCursor",
+        ]
         assert sink["receiverPatterns"] == ["*Cursor"]
         assert sink["methodNames"] == ["execute"]
 
@@ -193,16 +194,15 @@ class TestComplexRuleComposition:
         ir = matcher.to_ir()
 
         assert ir["methodNames"] == ["execute", "executemany", "executescript"]
-        assert ir["receiverTypes"] == ["sqlite3.Cursor", "mysql.connector.cursor.MySQLCursor"]
+        assert ir["receiverTypes"] == [
+            "sqlite3.Cursor",
+            "mysql.connector.cursor.MySQLCursor",
+        ]
         assert ir["receiverPatterns"] == ["*Cursor"]
 
     def test_chained_arg_constraints(self):
         """Multiple .arg() calls chain correctly."""
-        matcher = (
-            OSModule.method("chmod")
-            .arg(0, "/tmp/*")
-            .arg(1, gt(0o644))
-        )
+        matcher = OSModule.method("chmod").arg(0, "/tmp/*").arg(1, gt(0o644))
         ir = matcher.to_ir()
 
         assert "0" in ir["positionalArgs"]
