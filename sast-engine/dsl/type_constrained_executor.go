@@ -41,7 +41,7 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	for functionFQN, callSites := range e.CallGraph.CallSites {
 		for i := range callSites {
 			cs := &callSites[i]
-			if e.matchesCallSite(cs, minConf) {
+			if matchMethod := e.matchesCallSite(cs, minConf); matchMethod != "" {
 				conf := float64(cs.TypeConfidence)
 				if conf == 0 {
 					conf = 0.7 // FQN bridge confidence
@@ -54,6 +54,7 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 					Confidence:      conf,
 					Scope:           "local",
 					MatchedCallSite: cs,
+					MatchMethod:     matchMethod,
 				})
 			}
 		}
@@ -63,16 +64,21 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 }
 
 // matchesCallSite checks if a call site matches the type-constrained pattern.
-func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf float64) bool {
+// Returns the match method string ("type_inference", "fqn_bridge", "fqn_prefix",
+// "name_fallback") or empty string if no match.
+func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf float64) string {
 	// Step 1: Method name match (cheapest check)
 	if !e.matchesMethodName(cs.Target) {
-		return false
+		return ""
 	}
 
 	// Step 2: Type inference match
 	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConf) {
 		if e.matchesAnyReceiverType(cs.InferredType) {
-			return e.matchesArgs(cs)
+			if e.matchesArgs(cs) {
+				return "type_inference"
+			}
+			return ""
 		}
 	}
 
@@ -80,22 +86,31 @@ func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf
 	if cs.TargetFQN != "" {
 		derivedReceiver := deriveReceiverFromFQN(cs.TargetFQN, cs.Target)
 		if derivedReceiver != "" && e.matchesAnyReceiverType(derivedReceiver) {
-			return e.matchesArgs(cs)
+			if e.matchesArgs(cs) {
+				return "fqn_bridge"
+			}
+			return ""
 		}
 
 		// Step 2c: FQN prefix match — check if TargetFQN starts with a receiver type.
 		// Handles cases like TargetFQN="flask.request.args.get" matching "flask.request".
 		if e.fqnPrefixMatchesReceiver(cs.TargetFQN) {
-			return e.matchesArgs(cs)
+			if e.matchesArgs(cs) {
+				return "fqn_prefix"
+			}
+			return ""
 		}
 	}
 
 	// Step 3: Fallback behavior
 	switch e.IR.FallbackMode {
 	case "name":
-		return e.matchesArgs(cs)
+		if e.matchesArgs(cs) {
+			return "name_fallback"
+		}
+		return ""
 	default:
-		return false
+		return ""
 	}
 }
 
@@ -175,6 +190,17 @@ func matchesFQNPrefixWildcard(fqn, pattern string) bool {
 // matchesArgs checks argument constraints on a call site.
 func (e *TypeConstrainedCallExecutor) matchesArgs(cs *core.CallSite) bool {
 	return MatchesArguments(cs, e.IR.PositionalArgs, e.IR.KeywordArgs)
+}
+
+// matchesAnyReceiverTypeList checks if actual matches any receiver type in the list.
+// Used by attribute executor which has a single receiverType stored as a list.
+func matchesAnyReceiverTypeList(actual string, receiverTypes []string, checker InheritanceChecker) bool {
+	for _, rt := range receiverTypes {
+		if matchesReceiverType(actual, rt, checker) {
+			return true
+		}
+	}
+	return false
 }
 
 // deriveReceiverFromFQN extracts receiver module/class from TargetFQN.
@@ -322,12 +348,31 @@ func (e *TypeConstrainedAttributeExecutor) matchesAttributeAccess(cs *core.CallS
 		return false
 	}
 
-	// If resolved via type inference, check the receiver type
+	receiverTypes := []string{e.IR.ReceiverType}
+
+	// Step 2: Type inference match
 	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConf) {
-		return matchesReceiverType(cs.InferredType, e.IR.ReceiverType, e.ThirdPartyRemote)
+		if matchesAnyReceiverTypeList(cs.InferredType, receiverTypes, e.ThirdPartyRemote) {
+			return true
+		}
 	}
 
-	// Fallback
+	// Step 2b: FQN-to-receiver bridge (ported from TypeConstrainedCallExecutor)
+	if cs.TargetFQN != "" {
+		derivedReceiver := deriveReceiverFromFQN(cs.TargetFQN, cs.Target)
+		if derivedReceiver != "" && matchesAnyReceiverTypeList(derivedReceiver, receiverTypes, e.ThirdPartyRemote) {
+			return true
+		}
+
+		// Step 2c: FQN prefix match
+		for _, rt := range receiverTypes {
+			if strings.HasPrefix(cs.TargetFQN, rt+".") || cs.TargetFQN == rt {
+				return true
+			}
+		}
+	}
+
+	// Step 3: Fallback
 	switch e.IR.FallbackMode {
 	case "name":
 		return true

@@ -500,8 +500,9 @@ func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *c
 	}
 
 	executor := &TypeConstrainedCallExecutor{
-		IR:        &ir,
-		CallGraph: cg,
+		IR:               &ir,
+		CallGraph:        cg,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
 }
@@ -518,8 +519,9 @@ func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, 
 	}
 
 	executor := &TypeConstrainedAttributeExecutor{
-		IR:        &ir,
-		CallGraph: cg,
+		IR:               &ir,
+		CallGraph:        cg,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
 }
@@ -594,6 +596,70 @@ func (l *RuleLoader) executeLogicAnd(matcherMap map[string]any, cg *core.CallGra
 		result = intersectDetections(result, dets)
 	}
 	return result, nil
+}
+
+// extractInheritanceChecker extracts InheritanceCheckers from a CallGraph's
+// ThirdPartyRemote and StdlibRemote fields, returning a composite checker
+// that queries both registries. Returns nil if neither is set.
+func extractInheritanceChecker(cg *core.CallGraph) InheritanceChecker {
+	if cg == nil {
+		return nil
+	}
+
+	var checkers []InheritanceChecker
+
+	if cg.ThirdPartyRemote != nil {
+		if checker, ok := cg.ThirdPartyRemote.(InheritanceChecker); ok {
+			checkers = append(checkers, checker)
+		}
+	}
+	if cg.StdlibRemote != nil {
+		if checker, ok := cg.StdlibRemote.(InheritanceChecker); ok {
+			checkers = append(checkers, checker)
+		}
+	}
+
+	switch len(checkers) {
+	case 0:
+		return nil
+	case 1:
+		return checkers[0]
+	default:
+		return &compositeInheritanceChecker{checkers: checkers}
+	}
+}
+
+// compositeInheritanceChecker delegates to multiple InheritanceChecker instances,
+// checking each in order until one matches (third-party, then stdlib).
+type compositeInheritanceChecker struct {
+	checkers []InheritanceChecker
+}
+
+func (c *compositeInheritanceChecker) HasModule(moduleName string) bool {
+	for _, ch := range c.checkers {
+		if ch.HasModule(moduleName) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compositeInheritanceChecker) IsSubclassSimple(moduleName, className, parentFQN string) bool {
+	for _, ch := range c.checkers {
+		if ch.HasModule(moduleName) && ch.IsSubclassSimple(moduleName, className, parentFQN) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compositeInheritanceChecker) GetClassMRO(moduleName, className string) []string {
+	for _, ch := range c.checkers {
+		if mro := ch.GetClassMRO(moduleName, className); len(mro) > 0 {
+			return mro
+		}
+	}
+	return nil
 }
 
 func deduplicateDetections(dets []DataflowDetection) []DataflowDetection {

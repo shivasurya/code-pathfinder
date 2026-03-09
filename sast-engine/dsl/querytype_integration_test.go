@@ -483,6 +483,55 @@ func filterByFQN(detections []DataflowDetection, fqn string) []DataflowDetection
 	return filtered
 }
 
+// TestQueryType_InheritanceViaDataflowExecutor_BUG1 proves BUG-1 fix works
+// through the DataflowExecutor path (used by flows() rules).
+// Before the fix, ThirdPartyRemote was nil in the executor, making MRO dead code.
+func TestQueryType_InheritanceViaDataflowExecutor_BUG1(t *testing.T) {
+	checker := newMockChecker()
+
+	cg := core.NewCallGraph()
+	// Source: request.args.get (generic call)
+	// Sink: self.get_queryset on a ListView (subclass of View)
+	cg.CallSites["myapp.views.MyListView.get"] = []core.CallSite{
+		{
+			Target:                   "request.args.get",
+			TargetFQN:               "flask.request.args.get",
+			Location:                 core.Location{File: "views.py", Line: 5},
+			ResolvedViaTypeInference: false,
+		},
+		{
+			Target:                   "self.get_queryset",
+			Location:                 core.Location{File: "views.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "django.views.generic.ListView", // subclass
+			TypeConfidence:           0.9,
+		},
+	}
+	cg.ThirdPartyRemote = checker // BUG-1 fix
+
+	// Sink rule: match any View subclass's get_queryset — uses inheritance
+	sinkIR := TypeConstrainedCallIR{
+		Type:          "type_constrained_call",
+		ReceiverType:  "django.views.View", // parent class
+		MethodName:    "get_queryset",
+		MinConfidence: 0.5,
+		FallbackMode:  "none", // strict — must match via type, not name fallback
+	}
+
+	// Execute via the loader path (same as production)
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: irToMap(sinkIR),
+	}
+
+	results, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	assert.Len(t, results, 1, "Should match ListView.get_queryset via MRO inheritance (BUG-1 fix)")
+	if len(results) > 0 {
+		assert.Equal(t, "myapp.views.MyListView.get", results[0].FunctionFQN)
+	}
+}
+
 // irToMap converts any struct to map[string]any via JSON round-trip.
 // This simulates how the loader receives matchers after JSON unmarshaling.
 func irToMap(v any) map[string]any {
@@ -490,4 +539,173 @@ func irToMap(v any) map[string]any {
 	var m map[string]any
 	json.Unmarshal(b, &m) //nolint:errcheck // test helper
 	return m
+}
+
+// BUG-4: MatchMethod tracking in real rule — verifies each match path is labeled
+// Simulates: QueryType("SQLi", fqns=["sqlite3.Cursor"]).method("execute")
+func TestQueryType_MatchMethod_RealRule_BUG4(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Call site matched via type inference
+	cg.CallSites["app.handler_typed"] = []core.CallSite{
+		{
+			Target:                   "cursor.execute",
+			Location:                 core.Location{File: "app.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "sqlite3.Cursor",
+			TypeConfidence:           0.9,
+		},
+	}
+	// Call site matched via FQN bridge
+	cg.CallSites["app.handler_fqn"] = []core.CallSite{
+		{
+			Target:    "cursor.execute",
+			TargetFQN: "sqlite3.Cursor.execute",
+			Location:  core.Location{File: "app.py", Line: 20},
+		},
+	}
+	// Call site with no type info — should NOT match with fallbackMode=none
+	cg.CallSites["app.handler_unresolved"] = []core.CallSite{
+		{
+			Target:   "something.execute",
+			Location: core.Location{File: "app.py", Line: 30},
+		},
+	}
+
+	sinkIR := TypeConstrainedCallIR{
+		Type:          "type_constrained_call",
+		ReceiverType:  "sqlite3.Cursor",
+		MethodName:    "execute",
+		MinConfidence: 0.5,
+		FallbackMode:  "none",
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{Matcher: irToMap(sinkIR)}
+	results, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+
+	// Should match typed + FQN but NOT unresolved (fallbackMode=none)
+	assert.Len(t, results, 2, "Should match 2 calls (type_inference + fqn_bridge), reject unresolved")
+
+	methods := make(map[string]string) // functionFQN → matchMethod
+	for _, r := range results {
+		methods[r.FunctionFQN] = r.MatchMethod
+	}
+	assert.Equal(t, "type_inference", methods["app.handler_typed"], "Typed call should be matched via type_inference")
+	assert.Equal(t, "fqn_bridge", methods["app.handler_fqn"], "FQN call should be matched via fqn_bridge")
+	assert.Empty(t, methods["app.handler_unresolved"], "Unresolved call should not match with fallbackMode=none")
+}
+
+// BUG-6: Attribute executor FQN bridge — real rule test
+// Simulates: QueryType("UnsafeGET", fqns=["django.http.HttpRequest"]).attr("GET")
+func TestQueryType_AttributeFQNBridge_RealRule_BUG6(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// FQN-resolved attribute access (no type inference)
+	cg.CallSites["myapp.views.index"] = []core.CallSite{
+		{
+			Target:    "request.GET",
+			TargetFQN: "django.http.HttpRequest.GET",
+			Location:  core.Location{File: "views.py", Line: 3},
+		},
+	}
+	// Type-inference resolved attribute access
+	cg.CallSites["myapp.views.detail"] = []core.CallSite{
+		{
+			Target:                   "request.GET",
+			Location:                 core.Location{File: "views.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "django.http.HttpRequest",
+			TypeConfidence:           0.95,
+		},
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type":          "type_constrained_attribute",
+			"receiverType":  "django.http.HttpRequest",
+			"attributeName": "GET",
+			"minConfidence": 0.5,
+			"fallbackMode":  "none",
+		},
+	}
+
+	results, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	assert.Len(t, results, 2, "Should match both FQN-resolved and type-inferred attribute access (BUG-6 fix)")
+}
+
+// BUG-3: Stdlib MRO integration test — real rule targeting io.IOBase.read()
+// Simulates: QueryType("UnsafeRead", fqns=["io.IOBase"]).method("read")
+// Should match call sites where InferredType is io.FileIO (subclass of IOBase)
+func TestQueryType_StdlibMRO_IOBase_RealRule_BUG3(t *testing.T) {
+	// Simulate stdlib with MRO data (future CDN state)
+	stdlibChecker := &mockInheritanceChecker{
+		modules: map[string]bool{"io": true},
+		classes: map[string]mockClassInfo{
+			"io.FileIO": {
+				mro: []string{"io.FileIO", "io.RawIOBase", "io.IOBase", "builtins.object"},
+			},
+			"io.BufferedReader": {
+				mro: []string{"io.BufferedReader", "io.BufferedIOBase", "io.IOBase", "builtins.object"},
+			},
+		},
+	}
+
+	cg := core.NewCallGraph()
+	// Function that opens a file and reads from it
+	cg.CallSites["app.process_file"] = []core.CallSite{
+		{
+			Target:                   "open",
+			TargetFQN:               "builtins.open",
+			Location:                 core.Location{File: "app.py", Line: 3},
+			ResolvedViaTypeInference: false,
+		},
+		{
+			Target:                   "f.read",
+			Location:                 core.Location{File: "app.py", Line: 4},
+			ResolvedViaTypeInference: true,
+			InferredType:             "io.FileIO",
+			TypeConfidence:           0.85,
+		},
+	}
+	// Function using BufferedReader
+	cg.CallSites["app.buffered_read"] = []core.CallSite{
+		{
+			Target:                   "br.read",
+			Location:                 core.Location{File: "app.py", Line: 12},
+			ResolvedViaTypeInference: true,
+			InferredType:             "io.BufferedReader",
+			TypeConfidence:           0.90,
+		},
+	}
+	cg.StdlibRemote = stdlibChecker
+
+	// This mirrors the Python SDK rule:
+	//   QueryType("UnsafeRead", fqns=["io.IOBase"]).method("read")
+	sinkIR := TypeConstrainedCallIR{
+		Type:          "type_constrained_call",
+		ReceiverType:  "io.IOBase",
+		MethodName:    "read",
+		MinConfidence: 0.5,
+		FallbackMode:  "none",
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{Matcher: irToMap(sinkIR)}
+	results, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+
+	// Should match BOTH FileIO.read and BufferedReader.read via MRO inheritance
+	assert.Len(t, results, 2, "Should match both FileIO and BufferedReader as subclasses of IOBase (BUG-3)")
+
+	// Verify both functions are found
+	fqns := make(map[string]bool)
+	for _, r := range results {
+		fqns[r.FunctionFQN] = true
+	}
+	assert.True(t, fqns["app.process_file"], "Should match FileIO.read in process_file")
+	assert.True(t, fqns["app.buffered_read"], "Should match BufferedReader.read in buffered_read")
 }

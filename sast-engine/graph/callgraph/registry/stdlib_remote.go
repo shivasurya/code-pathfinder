@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -321,4 +322,30 @@ func (r *StdlibRegistryRemote) ClearCache() {
 	r.CacheMutex.Lock()
 	defer r.CacheMutex.Unlock()
 	r.ModuleCache = make(map[string]*core.StdlibModule)
+}
+
+// GetClassMRO returns the MRO list for a stdlib class, or nil if not found.
+// Logger-free for use by packages that cannot import output.
+// NOTE: MRO data requires the CDN pipeline to populate bases/mro fields
+// in stdlib module JSON. Currently empty — will work once CDN is updated.
+func (r *StdlibRegistryRemote) GetClassMRO(moduleName, className string) []string {
+	r.CacheMutex.RLock()
+	module, ok := r.ModuleCache[moduleName]
+	r.CacheMutex.RUnlock()
+	if !ok || module == nil {
+		return nil
+	}
+	cls := module.Classes[className]
+	if cls == nil {
+		return nil
+	}
+	return cls.MRO
+}
+
+// IsSubclassSimple checks if a stdlib class is a subclass of parentFQN
+// using pre-computed MRO from the CDN data.
+// Logger-free for use by packages that cannot import output.
+func (r *StdlibRegistryRemote) IsSubclassSimple(moduleName, className, parentFQN string) bool {
+	mro := r.GetClassMRO(moduleName, className)
+	return slices.Contains(mro, parentFQN)
 }

@@ -147,8 +147,9 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 				continue
 			}
 			executor := &TypeConstrainedCallExecutor{
-				IR:        &ir,
-				CallGraph: e.CallGraph,
+				IR:               &ir,
+				CallGraph:        e.CallGraph,
+				ThirdPartyRemote: extractInheritanceChecker(e.CallGraph),
 			}
 			for _, det := range executor.Execute() {
 				cs := core.CallSite{

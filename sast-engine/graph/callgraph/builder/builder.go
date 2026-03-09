@@ -469,6 +469,10 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Store type engine for module variable type lookups in MCP tools
 	callGraph.TypeEngine = typeEngine
 
+	// Store registries for inheritance-aware matching in rule executors
+	callGraph.ThirdPartyRemote = typeEngine.ThirdPartyRemote
+	callGraph.StdlibRemote = typeEngine.StdlibRemote
+
 	return callGraph, nil
 }
 
@@ -1861,9 +1865,16 @@ func resolveThirdPartyVariableBindings(typeEngine *resolution.TypeInferenceEngin
 
 				method := findThirdPartyClassMethod(loader, tpModule, tpClass, methodName, logger)
 				if method != nil && method.ReturnType != "" {
+					// Use absolute confidence from CDN method data, clamped to
+					// min(binding, method)*0.9 floor. Avoids multiplicative chain
+					// decay that drops below the 0.7 heuristic threshold after 3 hops.
+					conf := method.Confidence * 0.9
+					if conf < 0.75 {
+						conf = 0.75
+					}
 					scope.Variables[varName][i].Type = &core.TypeInfo{
 						TypeFQN:    method.ReturnType,
-						Confidence: binding.Type.Confidence * method.Confidence * 0.9,
+						Confidence: conf,
 						Source:     "typeshed",
 					}
 					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
@@ -1986,9 +1997,16 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 				if loader != nil {
 					method := loader.GetClassMethod(rcvModule, rcvClass, methodName, logger)
 					if method != nil && method.ReturnType != "" && method.ReturnType != "unknown" {
+						// Use absolute confidence from CDN method data, matching
+						// the hardcoded path pattern (0.85). Avoids multiplicative
+						// chain decay below the 0.7 heuristic threshold.
+						conf := method.Confidence * 0.9
+						if conf < 0.75 {
+							conf = 0.75
+						}
 						scope.Variables[varName][i].Type = &core.TypeInfo{
 							TypeFQN:    method.ReturnType,
-							Confidence: binding.Type.Confidence * method.Confidence * 0.9,
+							Confidence: conf,
 							Source:     "stdlib",
 						}
 						scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName

@@ -110,6 +110,7 @@ type DataflowDetection struct {
 	Sanitized       bool            // Was sanitization detected?
 	Scope           string          // "local" or "global"
 	MatchedCallSite *core.CallSite  // Internal: matched call site for DataflowExecutor use
+	MatchMethod     string          // How the match was made: "type_inference", "fqn_bridge", "fqn_prefix", "name_fallback"
 }
 
 // TypeConstrainedCallIR represents type_constrained_call JSON IR.
