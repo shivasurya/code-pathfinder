@@ -428,3 +428,182 @@ func TestDataflowExecutor_BackwardCompat_ViaLoader(t *testing.T) {
 		assert.NotEmpty(t, detections)
 	})
 }
+
+// --- resolveMatchers edge cases ---
+
+func TestResolveMatchers_UnknownType(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["test.func"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{File: "test.py", Line: 5}},
+	}
+
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// Unknown matcher type should be silently skipped
+	unknownJSON, _ := json.Marshal(map[string]any{"type": "unknown_matcher", "patterns": []string{"eval"}})
+	matches := executor.resolveMatchers([]json.RawMessage{unknownJSON})
+	assert.Empty(t, matches, "Unknown matcher type should be skipped")
+}
+
+func TestResolveMatchers_InvalidJSON(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// Invalid JSON in raw message should be skipped (can't even peek type)
+	invalidJSON := json.RawMessage([]byte(`{not valid json`))
+	matches := executor.resolveMatchers([]json.RawMessage{invalidJSON})
+	assert.Empty(t, matches, "Invalid JSON should be skipped")
+}
+
+func TestResolveMatchers_MalformedCallMatcherBody(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// Type says call_matcher but patterns field is wrong type — unmarshal into
+	// CallMatcherIR will either produce zero-value Patterns or fail; should not panic.
+	malformedJSON := json.RawMessage([]byte(`{"type":"call_matcher","patterns":"not_an_array"}`))
+	matches := executor.resolveMatchers([]json.RawMessage{malformedJSON})
+	// Should either be empty (unmarshal error → skip) or produce no matches (empty patterns)
+	assert.True(t, len(matches) >= 0, "Should not panic on malformed call_matcher body")
+}
+
+// --- Execute() dispatch ---
+
+func TestExecute_DispatchesGlobalScope(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = make(map[string][]string)
+	cg.Edges["test.source"] = []string{"test.sink"}
+	cg.CallSites["test.source"] = []core.CallSite{
+		{Target: "request.GET", Location: core.Location{File: "test.py", Line: 5}},
+	}
+	cg.CallSites["test.sink"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{File: "test.py", Line: 20}},
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"request.GET"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// Execute with scope != "local" should call executeGlobal and find cross-function flow
+	foundGlobal := false
+	for _, d := range detections {
+		if d.Scope == "global" {
+			foundGlobal = true
+			break
+		}
+	}
+	assert.True(t, foundGlobal, "Execute with global scope should produce global detections")
+}
+
+// --- dfs() edge cases ---
+
+func TestDFS_SelfLoop(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = make(map[string][]string)
+	cg.Edges["test.loop"] = []string{"test.loop"}
+
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// Self-loop: findPath from A to A should return [A] immediately (short-circuit)
+	path := executor.findPath("test.loop", "test.loop")
+	assert.Equal(t, []string{"test.loop"}, path)
+}
+
+func TestDFS_NoPath(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = make(map[string][]string)
+	cg.Edges["test.a"] = []string{"test.b"}
+	// test.c is disconnected
+
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	path := executor.findPath("test.a", "test.c")
+	assert.Empty(t, path, "No path should exist between disconnected nodes")
+}
+
+func TestDFS_DiamondGraph(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = make(map[string][]string)
+	cg.Edges["test.a"] = []string{"test.b", "test.c"}
+	cg.Edges["test.b"] = []string{"test.d"}
+	cg.Edges["test.c"] = []string{"test.d"}
+
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	path := executor.findPath("test.a", "test.d")
+	assert.NotEmpty(t, path, "Should find a path in diamond graph")
+	assert.Equal(t, "test.a", path[0])
+	assert.Equal(t, "test.d", path[len(path)-1])
+	assert.True(t, len(path) == 3, "Path should be length 3 (A->B->D or A->C->D)")
+}
+
+// --- pathHasSanitizer edge cases ---
+
+func TestPathHasSanitizer_EmptyPath(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	sanitizers := []CallSiteMatch{
+		{FunctionFQN: "test.sanitize", Line: 10},
+	}
+
+	result := executor.pathHasSanitizer([]string{}, sanitizers)
+	assert.False(t, result, "Empty path should return false")
+}
+
+func TestPathHasSanitizer_EmptySanitizers(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	result := executor.pathHasSanitizer([]string{"test.a", "test.b"}, []CallSiteMatch{})
+	assert.False(t, result, "Empty sanitizers should return false")
+}
+
+// --- matchesPattern edge cases ---
+
+func TestMatchesPattern_BothWildcard(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// Pattern "*both*" should match substring in middle
+	assert.True(t, executor.matchesPattern("foo.both.bar", "*both*"))
+	assert.True(t, executor.matchesPattern("both", "*both*"))
+	assert.False(t, executor.matchesPattern("foo.other.bar", "*both*"))
+}
+
+func TestMatchesPattern_PrefixWildcard(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// "prefix*" should match targets starting with "prefix"
+	assert.True(t, executor.matchesPattern("prefix_value", "prefix*"))
+	assert.True(t, executor.matchesPattern("prefix", "prefix*"))
+	assert.False(t, executor.matchesPattern("not_prefix", "prefix*"))
+}
+
+func TestMatchesPattern_ExactNoWildcard(t *testing.T) {
+	cg := core.NewCallGraph()
+	ir := &DataflowIR{}
+	executor := NewDataflowExecutor(ir, cg)
+
+	// No wildcard: exact match only
+	assert.True(t, executor.matchesPattern("exact", "exact"))
+	assert.False(t, executor.matchesPattern("exact_more", "exact"))
+	assert.False(t, executor.matchesPattern("not_exact", "exact"))
+}

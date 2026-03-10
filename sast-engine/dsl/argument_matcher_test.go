@@ -513,3 +513,379 @@ func TestTypeConstrainedCallExecutor_ArgComparator_Lt_NoMatch(t *testing.T) {
 		t.Errorf("Expected 0 matches for key_size=4096 < 2048, got %d", len(results))
 	}
 }
+
+// --- parseTupleIndex tests ---
+
+func TestParseTupleIndex_Shared(t *testing.T) {
+	tests := []struct {
+		name         string
+		posStr       string
+		wantPos      int
+		wantTupleIdx int
+		wantIsTuple  bool
+		wantValid    bool
+	}{
+		{"simple position", "0", 0, 0, false, true},
+		{"simple position 3", "3", 3, 0, false, true},
+		{"tuple index", "0[1]", 0, 1, true, true},
+		{"tuple index pos2", "2[0]", 2, 0, true, true},
+		{"invalid non-numeric", "abc", 0, 0, false, false},
+		{"malformed open bracket only", "0[", 0, 0, false, true},
+		{"parse error in tuple index", "0[abc]", 0, 0, false, false},
+		{"malformed bracket with bad pos", "abc[", 0, 0, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pos, tupleIdx, isTuple, valid := parseTupleIndex(tt.posStr)
+			if pos != tt.wantPos || tupleIdx != tt.wantTupleIdx || isTuple != tt.wantIsTuple || valid != tt.wantValid {
+				t.Errorf("parseTupleIndex(%q) = (%d, %d, %v, %v), want (%d, %d, %v, %v)",
+					tt.posStr, pos, tupleIdx, isTuple, valid,
+					tt.wantPos, tt.wantTupleIdx, tt.wantIsTuple, tt.wantValid)
+			}
+		})
+	}
+}
+
+// --- extractTupleElement tests ---
+
+func TestExtractTupleElement_Shared(t *testing.T) {
+	tests := []struct {
+		name     string
+		tupleStr string
+		index    int
+		wantVal  string
+		wantOk   bool
+	}{
+		{"tuple index 0", `("0.0.0.0", 8080)`, 0, "0.0.0.0", true},
+		{"tuple index 1", `("0.0.0.0", 8080)`, 1, "8080", true},
+		{"index out of bounds", `("a", "b")`, 5, "", false},
+		{"empty tuple", `()`, 0, "", false},
+		{"not a tuple index 0", `plain_value`, 0, "plain_value", true},
+		{"not a tuple index 1", `plain_value`, 1, "", false},
+		{"list syntax", `["a", "b"]`, 0, "a", true},
+		{"list syntax index 1", `["a", "b"]`, 1, "b", true},
+		{"single element tuple", `("only")`, 0, "only", true},
+		{"whitespace around tuple", `  ("x", "y")  `, 0, "x", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, ok := extractTupleElement(tt.tupleStr, tt.index)
+			if val != tt.wantVal || ok != tt.wantOk {
+				t.Errorf("extractTupleElement(%q, %d) = (%q, %v), want (%q, %v)",
+					tt.tupleStr, tt.index, val, ok, tt.wantVal, tt.wantOk)
+			}
+		})
+	}
+}
+
+// --- MatchesPositionalArguments with tuple indexing ---
+
+func TestMatchesPositionalArguments_TupleIndex(t *testing.T) {
+	args := []core.Argument{
+		{Value: `("0.0.0.0", 8080)`, Position: 0},
+		{Value: `"hello"`, Position: 1},
+	}
+
+	// Match tuple element at position 0, index 1 (8080)
+	positional := map[string]ArgumentConstraint{
+		"0[1]": {Value: float64(8080)},
+	}
+	if !MatchesPositionalArguments(args, positional) {
+		t.Error("Expected tuple index 0[1] to match 8080")
+	}
+
+	// Match tuple element at position 0, index 0 ("0.0.0.0")
+	positional2 := map[string]ArgumentConstraint{
+		"0[0]": {Value: "0.0.0.0"},
+	}
+	if !MatchesPositionalArguments(args, positional2) {
+		t.Error("Expected tuple index 0[0] to match 0.0.0.0")
+	}
+
+	// Tuple index out of bounds
+	positional3 := map[string]ArgumentConstraint{
+		"0[5]": {Value: "anything"},
+	}
+	if MatchesPositionalArguments(args, positional3) {
+		t.Error("Expected tuple index out of bounds to fail")
+	}
+
+	// Invalid position string
+	positional4 := map[string]ArgumentConstraint{
+		"abc": {Value: "anything"},
+	}
+	if MatchesPositionalArguments(args, positional4) {
+		t.Error("Expected invalid position string to fail")
+	}
+
+	// Position out of bounds
+	positional5 := map[string]ArgumentConstraint{
+		"10": {Value: "anything"},
+	}
+	if MatchesPositionalArguments(args, positional5) {
+		t.Error("Expected position out of bounds to fail")
+	}
+}
+
+// --- CleanValue edge cases ---
+
+func TestCleanValue_Shared(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"double quoted", `"hello"`, "hello"},
+		{"single quoted", `'hello'`, "hello"},
+		{"no quotes", "hello", "hello"},
+		{"short string single char", "x", "x"},
+		{"empty string", "", ""},
+		{"whitespace", "  hello  ", "hello"},
+		{"mismatched quotes", `"hello'`, `"hello'`},
+		{"just quotes", `""`, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CleanValue(tt.input)
+			if got != tt.want {
+				t.Errorf("CleanValue(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- NormalizeValue edge cases ---
+
+func TestNormalizeValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"True to lowercase", "True", "true"},
+		{"FALSE to lowercase", "FALSE", "false"},
+		{"None to none", "None", "none"},
+		{"null to none", "null", "none"},
+		{"nil to none", "nil", "none"},
+		{"NULL to none", "NULL", "none"},
+		{"regular string unchanged", "MyValue", "MyValue"},
+		{"empty string", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeValue(tt.input)
+			if got != tt.want {
+				t.Errorf("NormalizeValue(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- compareNumeric edge cases ---
+
+func TestCompareNumeric(t *testing.T) {
+	lt := func(a, b float64) bool { return a < b }
+
+	tests := []struct {
+		name     string
+		actual   string
+		expected any
+		want     bool
+	}{
+		{"float actual", "3.14", float64(4.0), true},
+		{"non-numeric actual", "abc", float64(10), false},
+		{"expected as int", "5", int(10), true},
+		{"expected as int64", "5", int64(10), true},
+		{"expected as unsupported string type", "5", "10", false},
+		{"integer actual", "42", float64(100), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := compareNumeric(tt.actual, tt.expected, lt)
+			if got != tt.want {
+				t.Errorf("compareNumeric(%q, %v, lt) = %v, want %v",
+					tt.actual, tt.expected, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- matchesBooleanShared tests ---
+
+func TestMatchesBooleanShared(t *testing.T) {
+	tests := []struct {
+		name     string
+		actual   string
+		expected bool
+		want     bool
+	}{
+		{"1 for true", "1", true, true},
+		{"0 for false", "0", false, true},
+		{"false matches false", "false", false, true},
+		{"true matches true", "true", true, true},
+		{"True matches true", "True", true, true},
+		{"FALSE matches false", "FALSE", false, true},
+		{"0 does not match true", "0", true, false},
+		{"1 does not match false", "1", false, false},
+		{"random string not boolean", "yes", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesBooleanShared(tt.actual, tt.expected)
+			if got != tt.want {
+				t.Errorf("matchesBooleanShared(%q, %v) = %v, want %v",
+					tt.actual, tt.expected, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- matchesNumberShared tests ---
+
+func TestMatchesNumberShared(t *testing.T) {
+	tests := []struct {
+		name     string
+		actual   string
+		expected float64
+		want     bool
+	}{
+		{"float comparison", "3.14", 3.14, true},
+		{"int comparison", "42", 42.0, true},
+		{"non-numeric", "abc", 42.0, false},
+		{"octal", "0o777", 511.0, true},
+		{"hex", "0xFF", 255.0, true},
+		{"mismatch", "10", 20.0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesNumberShared(tt.actual, tt.expected)
+			if got != tt.want {
+				t.Errorf("matchesNumberShared(%q, %v) = %v, want %v",
+					tt.actual, tt.expected, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- matchesSingleValueShared tests ---
+
+func TestMatchesSingleValueShared(t *testing.T) {
+	tests := []struct {
+		name     string
+		actual   string
+		expected any
+		wildcard bool
+		want     bool
+	}{
+		{"nil matches None", "None", nil, false, true},
+		{"nil matches nil", "nil", nil, false, true},
+		{"nil matches null", "null", nil, false, true},
+		{"nil does not match other", "something", nil, false, false},
+		{"unsupported type returns false", "hello", struct{}{}, false, false},
+		{"wildcard string match", "hello_world", "hello*", true, true},
+		{"wildcard no match", "hello_world", "foo*", true, false},
+		{"exact string match", "hello", "hello", false, true},
+		{"exact string no match", "hello", "world", false, false},
+		{"bool true", "True", true, false, true},
+		{"float64 match", "42", float64(42), false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesSingleValueShared(tt.actual, tt.expected, tt.wildcard)
+			if got != tt.want {
+				t.Errorf("matchesSingleValueShared(%q, %v, %v) = %v, want %v",
+					tt.actual, tt.expected, tt.wildcard, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- wildcardMatchShared tests ---
+
+func TestWildcardMatchShared(t *testing.T) {
+	tests := []struct {
+		name    string
+		str     string
+		pattern string
+		want    bool
+	}{
+		{"question mark matching", "abc", "a?c", true},
+		{"question mark no match", "abcd", "a?c", false},
+		{"star in middle", "abcdef", "ab*ef", true},
+		{"star in middle no match", "abcdef", "ab*xy", false},
+		{"backtracking needed", "abcabcabd", "abc*abd", true},
+		{"backtracking fails", "abcabcabc", "abc*abd", false},
+		{"exact match no wildcards", "hello", "hello", true},
+		{"no match no wildcards", "hello", "world", false},
+		{"star matches empty", "abc", "abc*", true},
+		{"star matches everything", "anything", "*", true},
+		{"multiple stars", "abc", "a**c", true},
+		{"question at end", "ab", "a?", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wildcardMatchShared(tt.str, tt.pattern)
+			if got != tt.want {
+				t.Errorf("wildcardMatchShared(%q, %q) = %v, want %v",
+					tt.str, tt.pattern, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- MatchesArgumentValue with regex where Value is non-string ---
+
+func TestMatchesArgumentValue_RegexNonStringValue(t *testing.T) {
+	constraint := ArgumentConstraint{Value: 123, Comparator: "regex"}
+	if MatchesArgumentValue("anything", constraint) {
+		t.Error("Expected regex with non-string Value to return false")
+	}
+}
+
+// --- MatchesArgumentValue with nil expected ---
+
+func TestMatchesArgumentValue_NilExpected(t *testing.T) {
+	constraint := ArgumentConstraint{Value: nil}
+	if !MatchesArgumentValue("None", constraint) {
+		t.Error("Expected None to match nil constraint")
+	}
+	if !MatchesArgumentValue("null", constraint) {
+		t.Error("Expected null to match nil constraint")
+	}
+	if !MatchesArgumentValue("nil", constraint) {
+		t.Error("Expected nil to match nil constraint")
+	}
+	if MatchesArgumentValue("something", constraint) {
+		t.Error("Expected something to NOT match nil constraint")
+	}
+}
+
+// --- MatchesArgumentValue with unsupported type ---
+
+func TestMatchesArgumentValue_UnsupportedType(t *testing.T) {
+	constraint := ArgumentConstraint{Value: struct{ X int }{42}}
+	if MatchesArgumentValue("anything", constraint) {
+		t.Error("Expected unsupported type to return false")
+	}
+}
+
+// --- MatchesArgumentValue with wildcard ---
+
+func TestMatchesArgumentValue_Wildcard(t *testing.T) {
+	constraint := ArgumentConstraint{Value: "0.0.*", Wildcard: true}
+	if !MatchesArgumentValue("0.0.0.0", constraint) {
+		t.Error("Expected 0.0.0.0 to match wildcard 0.0.*")
+	}
+	if MatchesArgumentValue("1.2.3.4", constraint) {
+		t.Error("Expected 1.2.3.4 to NOT match wildcard 0.0.*")
+	}
+}

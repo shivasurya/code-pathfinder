@@ -593,6 +593,280 @@ func TestRuleLoader_LoadRulesFromFile_ContainerFormat(t *testing.T) {
 	})
 }
 
+// --- executeLogicOr edge cases ---
+
+func TestExecuteLogicOr_NonMapElement(t *testing.T) {
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.test": {
+				{Target: "hashlib.md5", Location: core.Location{File: "test.py", Line: 5}},
+			},
+		},
+	}
+	loader := NewRuleLoader("")
+
+	// One valid matcher plus a non-map element (string) — non-map should be skipped
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type": "logic_or",
+			"matchers": []any{
+				"not_a_map",
+				map[string]any{
+					"type":     "call_matcher",
+					"patterns": []any{"hashlib.md5"},
+					"wildcard": false,
+				},
+			},
+		},
+	}
+
+	detections, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	assert.Len(t, detections, 1, "Should skip non-map element and still find valid match")
+}
+
+func TestExecuteLogicAnd_FirstMatcherNonMap(t *testing.T) {
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.test": {
+				{Target: "hashlib.md5", Location: core.Location{File: "test.py", Line: 5}},
+			},
+		},
+	}
+	loader := NewRuleLoader("")
+
+	// First matcher is not a map — should error
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type": "logic_and",
+			"matchers": []any{
+				"not_a_map",
+				map[string]any{
+					"type":     "call_matcher",
+					"patterns": []any{"hashlib.md5"},
+					"wildcard": false,
+				},
+			},
+		},
+	}
+
+	_, err := loader.ExecuteRule(rule, cg)
+	assert.Error(t, err, "First matcher as non-map should cause error")
+	assert.Contains(t, err.Error(), "matcher is not a map")
+}
+
+func TestExecuteLogicAnd_SubsequentMatcherNonMap(t *testing.T) {
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.test": {
+				{Target: "hashlib.md5", Location: core.Location{File: "test.py", Line: 5}},
+			},
+		},
+	}
+	loader := NewRuleLoader("")
+
+	// First matcher valid, second is non-map — non-map should be skipped
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type": "logic_and",
+			"matchers": []any{
+				map[string]any{
+					"type":     "call_matcher",
+					"patterns": []any{"hashlib.md5"},
+					"wildcard": false,
+				},
+				"not_a_map",
+			},
+		},
+	}
+
+	detections, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	// The second matcher is skipped so no intersection happens with it;
+	// result should still contain the first matcher's detections.
+	assert.Len(t, detections, 1, "Should skip non-map subsequent matcher")
+}
+
+func TestExecuteLogicOr_ErrorPropagation(t *testing.T) {
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{},
+	}
+	loader := NewRuleLoader("")
+
+	// Inner matcher has an unknown type → ExecuteRule returns error → logic_or propagates it
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type": "logic_or",
+			"matchers": []any{
+				map[string]any{
+					"type": "totally_invalid_type",
+				},
+			},
+		},
+	}
+
+	_, err := loader.ExecuteRule(rule, cg)
+	assert.Error(t, err, "Error from inner matcher should propagate through logic_or")
+	assert.Contains(t, err.Error(), "unknown matcher type")
+}
+
+// --- Container matcher types return empty result ---
+
+func TestExecuteRule_ContainerMatcherTypes(t *testing.T) {
+	cg := core.NewCallGraph()
+	loader := NewRuleLoader("")
+
+	containerTypes := []string{
+		"missing_instruction",
+		"instruction",
+		"service_has",
+		"service_missing",
+		"any_of",
+		"all_of",
+		"none_of",
+	}
+
+	for _, matcherType := range containerTypes {
+		t.Run(matcherType, func(t *testing.T) {
+			rule := &RuleIR{
+				Matcher: map[string]any{
+					"type": matcherType,
+				},
+			}
+			detections, err := loader.ExecuteRule(rule, cg)
+			require.NoError(t, err)
+			assert.Empty(t, detections, "Container matcher %s should return empty result", matcherType)
+		})
+	}
+}
+
+// --- extractInheritanceChecker edge cases ---
+
+func TestExtractInheritanceChecker_NilCallGraph(t *testing.T) {
+	checker := extractInheritanceChecker(nil)
+	assert.Nil(t, checker, "nil callgraph should return nil checker")
+}
+
+func TestExtractInheritanceChecker_NoRemotes(t *testing.T) {
+	cg := core.NewCallGraph()
+	// ThirdPartyRemote and StdlibRemote are nil by default
+	checker := extractInheritanceChecker(cg)
+	assert.Nil(t, checker, "callgraph with no remotes should return nil checker")
+}
+
+// --- deduplicateDetections and intersectDetections ---
+
+func TestDeduplicateDetections(t *testing.T) {
+	dets := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval"},
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval"},
+		{FunctionFQN: "test.b", SourceLine: 2, SinkLine: 20, SinkCall: "exec"},
+	}
+
+	result := deduplicateDetections(dets)
+	assert.Len(t, result, 2, "Should remove duplicate detection")
+	assert.Equal(t, "test.a", result[0].FunctionFQN)
+	assert.Equal(t, "test.b", result[1].FunctionFQN)
+}
+
+func TestDeduplicateDetections_Empty(t *testing.T) {
+	result := deduplicateDetections([]DataflowDetection{})
+	assert.Empty(t, result)
+}
+
+func TestIntersectDetections(t *testing.T) {
+	a := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval"},
+		{FunctionFQN: "test.b", SourceLine: 2, SinkLine: 20, SinkCall: "exec"},
+		{FunctionFQN: "test.c", SourceLine: 3, SinkLine: 30, SinkCall: "system"},
+	}
+	b := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 15, SinkCall: "render"},
+		{FunctionFQN: "test.c", SourceLine: 3, SinkLine: 35, SinkCall: "output"},
+	}
+
+	result := intersectDetections(a, b)
+	assert.Len(t, result, 2, "Intersection should return detections present in both (by FunctionFQN:SourceLine)")
+	assert.Equal(t, "test.a", result[0].FunctionFQN)
+	assert.Equal(t, "test.c", result[1].FunctionFQN)
+}
+
+func TestIntersectDetections_NoOverlap(t *testing.T) {
+	a := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1},
+	}
+	b := []DataflowDetection{
+		{FunctionFQN: "test.b", SourceLine: 2},
+	}
+
+	result := intersectDetections(a, b)
+	assert.Empty(t, result, "No overlap should return empty")
+}
+
+// --- type_constrained_call via ExecuteRule ---
+
+func TestExecuteRule_TypeConstrainedCall_ViaLoader(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["myapp.views.index"] = []core.CallSite{
+		{
+			Target:                   "cursor.execute",
+			TargetFQN:                "sqlite3.Cursor.execute",
+			Location:                 core.Location{File: "views.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "sqlite3.Cursor",
+			TypeConfidence:           0.9,
+		},
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type":          "type_constrained_call",
+			"receiverTypes": []any{"sqlite3.Cursor"},
+			"methodNames":   []any{"execute"},
+			"minConfidence": 0.5,
+			"fallbackMode":  "none",
+		},
+	}
+
+	detections, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	assert.NotEmpty(t, detections, "Should find type_constrained_call match")
+	assert.Equal(t, "myapp.views.index", detections[0].FunctionFQN)
+}
+
+// --- type_constrained_attribute via ExecuteRule ---
+
+func TestExecuteRule_TypeConstrainedAttribute_ViaLoader(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["myapp.views.index"] = []core.CallSite{
+		{
+			Target:                   "request.GET",
+			TargetFQN:                "django.http.HttpRequest.GET",
+			Location:                 core.Location{File: "views.py", Line: 5},
+			ResolvedViaTypeInference: true,
+			InferredType:             "django.http.HttpRequest",
+			TypeConfidence:           0.9,
+		},
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type":          "type_constrained_attribute",
+			"receiverType":  "django.http.HttpRequest",
+			"attributeName": "GET",
+			"minConfidence": 0.5,
+			"fallbackMode":  "none",
+		},
+	}
+
+	detections, err := loader.ExecuteRule(rule, cg)
+	require.NoError(t, err)
+	assert.NotEmpty(t, detections, "Should find type_constrained_attribute match")
+	assert.Equal(t, "myapp.views.index", detections[0].FunctionFQN)
+}
+
 // Helper: Create temporary Python file for testing.
 func createTempPythonFile(t *testing.T, content string) string {
 	t.Helper()
