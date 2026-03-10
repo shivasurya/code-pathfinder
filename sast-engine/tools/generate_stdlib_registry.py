@@ -522,7 +522,7 @@ def apply_typeshed_overlay(result: Dict[str, Any], module_name: str, typeshed_pa
     for func_name, return_type in stub_data["functions"].items():
         if func_name in result["functions"]:
             func = result["functions"][func_name]
-            if func.get("return_type") == "unknown" or func.get("source") == "heuristic":
+            if func.get("return_type") == "unknown" or func.get("source") in ("heuristic", "docstring"):
                 func["return_type"] = return_type
                 func["confidence"] = 0.95
                 func["source"] = "typeshed"
