@@ -73,13 +73,15 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 			}
 
 			detection := DataflowDetection{
-				FunctionFQN: source.FunctionFQN,
-				SourceLine:  source.Line,
-				SinkLine:    sink.Line,
-				SinkCall:    sink.CallSite.Target,
-				Confidence:  e.Config.getLocalScopeConfidence(),
-				Sanitized:   hasSanitizer,
-				Scope:       "local",
+				FunctionFQN:  source.FunctionFQN,
+				SourceLine:   source.Line,
+				SourceColumn: source.CallSite.Location.Column,
+				SinkLine:     sink.Line,
+				SinkColumn:   sink.CallSite.Location.Column,
+				SinkCall:     sink.CallSite.Target,
+				Confidence:   e.Config.getLocalScopeConfidence(),
+				Sanitized:    hasSanitizer,
+				Scope:        "local",
 			}
 
 			detections = append(detections, detection)
@@ -144,13 +146,15 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 
 			if !hasSanitizer {
 				detections = append(detections, DataflowDetection{
-					FunctionFQN: source.FunctionFQN,
-					SourceLine:  source.Line,
-					SinkLine:    sink.Line,
-					SinkCall:    sink.CallSite.Target,
-					Confidence:  e.Config.getGlobalScopeConfidence(),
-					Sanitized:   false,
-					Scope:       "global",
+					FunctionFQN:  source.FunctionFQN,
+					SourceLine:   source.Line,
+					SourceColumn: source.CallSite.Location.Column,
+					SinkLine:     sink.Line,
+					SinkColumn:   sink.CallSite.Location.Column,
+					SinkCall:     sink.CallSite.Target,
+					Confidence:   e.Config.getGlobalScopeConfidence(),
+					Sanitized:    false,
+					Scope:        "global",
 				})
 			}
 		}
