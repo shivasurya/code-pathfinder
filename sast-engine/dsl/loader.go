@@ -154,7 +154,10 @@ func hasCodeAnalysisRuleDecorators(filePath string) bool {
 	}
 
 	fileContent := string(content)
-	// Check for rule decorator or codepathfinder imports
+	// NOTE: This string-based decorator detection is fragile — it could match
+	// @rule( inside comments or string literals. A proper AST-based parser
+	// is tracked as a separate tech spec. For now, this works for standard
+	// rule files where @rule appears at the top level.
 	return strings.Contains(fileContent, "@rule(") ||
 		strings.Contains(fileContent, "from codepathfinder import") ||
 		strings.Contains(fileContent, "import codepathfinder")
