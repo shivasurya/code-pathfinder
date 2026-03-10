@@ -557,7 +557,7 @@ func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, c
 	case "logic_and":
 		return l.executeLogicAnd(matcherMap, cg)
 	case "logic_not":
-		return nil, fmt.Errorf("logic_not not yet implemented")
+		return l.executeLogicNot(matcherMap, cg)
 	default:
 		return nil, fmt.Errorf("unknown logic type: %s", logicType)
 	}
@@ -619,6 +619,77 @@ func (l *RuleLoader) executeLogicAnd(matcherMap map[string]any, cg *core.CallGra
 		}
 		result = intersectDetections(result, dets)
 	}
+	return result, nil
+}
+
+// executeLogicNot implements Not(M1, M2, ...) semantics:
+// Universe = all call sites in CallGraph, Result = Universe - Union(M1, M2, ...).
+func (l *RuleLoader) executeLogicNot(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	if cg == nil || cg.CallSites == nil {
+		l.Diagnostics.Addf("warning", "logic_not", "CallGraph or CallSites is nil, returning empty")
+		return nil, nil
+	}
+
+	// Build universe: all (functionFQN, line) pairs from call graph.
+	type csKey struct {
+		FunctionFQN string
+		Line        int
+		Target      string
+	}
+	universe := make(map[csKey]bool)
+	var universeKeys []csKey
+	for funcFQN, callSites := range cg.CallSites {
+		for _, cs := range callSites {
+			key := csKey{funcFQN, cs.Location.Line, cs.Target}
+			if !universe[key] {
+				universe[key] = true
+				universeKeys = append(universeKeys, key)
+			}
+		}
+	}
+
+	// Execute nested matchers, collect matched keys.
+	matchers, ok := matcherMap["matchers"].([]any)
+	if !ok {
+		// No matchers array → return entire universe.
+		l.Diagnostics.Addf("warning", "logic_not", "no 'matchers' array, returning entire universe (%d call sites)", len(universeKeys))
+	}
+
+	matched := make(map[csKey]bool)
+	for _, m := range matchers {
+		mMap, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		ruleIR := &RuleIR{Matcher: mMap}
+		dets, err := l.ExecuteRule(ruleIR, cg)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range dets {
+			matched[csKey{d.FunctionFQN, d.SourceLine, d.SinkCall}] = true
+		}
+	}
+
+	// Subtract: universe - matched.
+	var result []DataflowDetection
+	for _, key := range universeKeys {
+		if !matched[key] {
+			result = append(result, DataflowDetection{
+				FunctionFQN: key.FunctionFQN,
+				SourceLine:  key.Line,
+				SinkLine:    key.Line,
+				SinkCall:    key.Target,
+				Confidence:  1.0,
+				MatchMethod: "logic_not",
+				Scope:       "local",
+			})
+		}
+	}
+
+	l.Diagnostics.Addf("debug", "logic_not",
+		"universe=%d, matched=%d, result=%d", len(universe), len(matched), len(result))
+
 	return result, nil
 }
 
