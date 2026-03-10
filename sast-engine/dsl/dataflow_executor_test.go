@@ -467,7 +467,8 @@ func TestResolveMatchers_MalformedCallMatcherBody(t *testing.T) {
 	malformedJSON := json.RawMessage([]byte(`{"type":"call_matcher","patterns":"not_an_array"}`))
 	matches := executor.resolveMatchers([]json.RawMessage{malformedJSON})
 	// Should either be empty (unmarshal error → skip) or produce no matches (empty patterns)
-	assert.True(t, len(matches) >= 0, "Should not panic on malformed call_matcher body")
+	// If we get here without panic, the test passes. Matches may be empty or not.
+	_ = matches
 }
 
 // --- Execute() dispatch ---
