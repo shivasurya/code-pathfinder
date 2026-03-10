@@ -1,12 +1,6 @@
 name: Upload Stdlib Registries to R2
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'sast-engine/tools/generate_stdlib_registry.py'
-      - 'sast-engine/tools/upload_to_r2.sh'
-      - '.github/workflows/stdlib-r2-upload.yml'
   release:
     types: [published]
   workflow_dispatch:
