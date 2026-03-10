@@ -20,6 +20,7 @@ type InheritanceChecker interface {
 type TypeConstrainedCallExecutor struct {
 	IR               *TypeConstrainedCallIR
 	CallGraph        *core.CallGraph
+	Config           *QueryTypeConfig
 	ThirdPartyRemote InheritanceChecker
 }
 
@@ -35,7 +36,7 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	var detections []DataflowDetection
 	minConf := e.IR.MinConfidence
 	if minConf <= 0 {
-		minConf = 0.5
+		minConf = e.Config.getDefaultMinConfidence()
 	}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
@@ -44,7 +45,7 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 			if matchMethod := e.matchesCallSite(cs, minConf); matchMethod != "" {
 				conf := float64(cs.TypeConfidence)
 				if conf == 0 {
-					conf = 0.7 // FQN bridge confidence
+					conf = e.Config.getFQNBridgeConfidence()
 				}
 				detections = append(detections, DataflowDetection{
 					FunctionFQN:     functionFQN,
@@ -303,6 +304,7 @@ func splitTypeModuleAndClass(fqn string) (string, string) {
 type TypeConstrainedAttributeExecutor struct {
 	IR               *TypeConstrainedAttributeIR
 	CallGraph        *core.CallGraph
+	Config           *QueryTypeConfig
 	ThirdPartyRemote InheritanceChecker
 }
 
@@ -314,7 +316,7 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 	var detections []DataflowDetection
 	minConf := e.IR.MinConfidence
 	if minConf <= 0 {
-		minConf = 0.5
+		minConf = e.Config.getDefaultMinConfidence()
 	}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {

@@ -11,6 +11,7 @@ import (
 type DataflowExecutor struct {
 	IR        *DataflowIR
 	CallGraph *core.CallGraph
+	Config    *QueryTypeConfig
 }
 
 // NewDataflowExecutor creates a new executor.
@@ -61,7 +62,7 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 				SourceLine:  source.Line,
 				SinkLine:    sink.Line,
 				SinkCall:    sink.CallSite.Target,
-				Confidence:  0.7,
+				Confidence:  e.Config.getLocalScopeConfidence(),
 				Sanitized:   hasSanitizer,
 				Scope:       "local",
 			}
@@ -100,7 +101,7 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 						SourceLine:  source.Line,
 						SinkLine:    sink.Line,
 						SinkCall:    sink.CallSite.Target,
-						Confidence:  0.8,
+						Confidence:  e.Config.getGlobalScopeConfidence(),
 						Sanitized:   false,
 						Scope:       "global",
 					})
@@ -149,6 +150,7 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 			executor := &TypeConstrainedCallExecutor{
 				IR:               &ir,
 				CallGraph:        e.CallGraph,
+				Config:           e.Config,
 				ThirdPartyRemote: extractInheritanceChecker(e.CallGraph),
 			}
 			for _, det := range executor.Execute() {

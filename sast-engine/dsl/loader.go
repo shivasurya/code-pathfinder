@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
@@ -23,7 +22,8 @@ type Logger interface {
 
 // RuleLoader loads Python DSL rules and executes them.
 type RuleLoader struct {
-	RulesPath string // Path to .py rules file or directory
+	RulesPath string           // Path to .py rules file or directory
+	Config    *QueryTypeConfig // Execution config (nil → defaults)
 }
 
 // NewRuleLoader creates a new rule loader.
@@ -64,7 +64,8 @@ func (l *RuleLoader) LoadRules(logger Logger) ([]RuleIR, error) {
 // loadRulesFromFile loads rules from a single Python file.
 func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR, error) {
 	// Create context with timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := l.Config.getExecutionTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "python3", filePath)
@@ -73,7 +74,7 @@ func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("Python rule execution timed out after 30s for file: %s", filePath)
+			return nil, fmt.Errorf("Python rule execution timed out after %s for file: %s", timeout, filePath)
 		}
 		return nil, fmt.Errorf("failed to execute Python rules from %s: %w", filePath, err)
 	}
@@ -295,7 +296,8 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 // Creates a temporary Python script to import and compile all rules, then executes it.
 func (l *RuleLoader) loadContainerRulesFromFile(rulesPath string, logger Logger) ([]byte, error) {
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := l.Config.getExecutionTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Create a temporary Python script that compiles rules from the given path
@@ -338,7 +340,7 @@ print(json.dumps(json_ir))
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("Python rule execution timed out after 30s")
+			return nil, fmt.Errorf("Python rule execution timed out after %s", timeout)
 		}
 		return nil, fmt.Errorf("failed to compile container rules: %w", err)
 	}
@@ -454,6 +456,7 @@ func (l *RuleLoader) executeDataflow(matcherMap map[string]any, cg *core.CallGra
 	}
 
 	executor := NewDataflowExecutor(&ir, cg)
+	executor.Config = l.Config
 	return executor.Execute(), nil
 }
 
@@ -502,6 +505,7 @@ func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *c
 	executor := &TypeConstrainedCallExecutor{
 		IR:               &ir,
 		CallGraph:        cg,
+		Config:           l.Config,
 		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
@@ -521,6 +525,7 @@ func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, 
 	executor := &TypeConstrainedAttributeExecutor{
 		IR:               &ir,
 		CallGraph:        cg,
+		Config:           l.Config,
 		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
