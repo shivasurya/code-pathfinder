@@ -782,6 +782,9 @@ def main():
     typeshed_path = None
     if args.typeshed_path:
         typeshed_path = Path(args.typeshed_path)
+        # Normalize: if user passed the typeshed root (containing stdlib/), append stdlib
+        if (typeshed_path / "stdlib").exists():
+            typeshed_path = typeshed_path / "stdlib"
         if not typeshed_path.exists():
             print(f"Warning: Specified typeshed path does not exist: {typeshed_path}", file=sys.stderr)
             typeshed_path = None
