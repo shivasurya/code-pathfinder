@@ -72,6 +72,10 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 				}
 			}
 
+			if hasSanitizer {
+				continue
+			}
+
 			detection := DataflowDetection{
 				FunctionFQN:  source.FunctionFQN,
 				SourceLine:   source.Line,
@@ -80,7 +84,7 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 				SinkColumn:   sink.CallSite.Location.Column,
 				SinkCall:     sink.CallSite.Target,
 				Confidence:   e.Config.getLocalScopeConfidence(),
-				Sanitized:    hasSanitizer,
+				Sanitized:    false,
 				Scope:        "local",
 			}
 
