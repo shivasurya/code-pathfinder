@@ -25,6 +25,11 @@ func NewDataflowExecutor(ir *DataflowIR, cg *core.CallGraph) *DataflowExecutor {
 
 // Execute routes to local or global analysis based on scope.
 func (e *DataflowExecutor) Execute() []DataflowDetection {
+	if e.CallGraph == nil {
+		e.Diagnostics.Addf("error", "dataflow", "DataflowExecutor: CallGraph is nil")
+		return nil
+	}
+
 	if e.IR.Scope == "local" {
 		return e.executeLocal()
 	}

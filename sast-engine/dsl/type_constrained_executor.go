@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"math"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -34,6 +35,15 @@ type TypeConstrainedCallExecutor struct {
 //  4. Check argument constraints if type matches
 //  5. Return matching call sites as detections
 func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
+	if e.CallGraph == nil {
+		e.Diagnostics.Addf("error", "executor", "TypeConstrainedCallExecutor: CallGraph is nil")
+		return nil
+	}
+	if e.CallGraph.CallSites == nil {
+		e.Diagnostics.Addf("warning", "executor", "TypeConstrainedCallExecutor: CallSites map is nil, treating as empty")
+		return nil
+	}
+
 	var detections []DataflowDetection
 	minConf := e.IR.MinConfidence
 	if minConf <= 0 {
@@ -43,8 +53,12 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	for functionFQN, callSites := range e.CallGraph.CallSites {
 		for i := range callSites {
 			cs := &callSites[i]
+			if cs.Target == "" {
+				e.Diagnostics.Addf("debug", "executor", "skipping call site with empty Target in %s", functionFQN)
+				continue
+			}
 			if matchMethod := e.matchesCallSite(cs, minConf); matchMethod != "" {
-				conf := float64(cs.TypeConfidence)
+				conf := clampTypeConfidence(float64(cs.TypeConfidence), e.Diagnostics)
 				if conf == 0 {
 					conf = e.Config.getFQNBridgeConfidence()
 				}
@@ -104,10 +118,12 @@ func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf
 		}
 	}
 
-	// Step 3: Fallback behavior
+	// Step 3: Fallback behavior.
 	switch e.IR.FallbackMode {
 	case "name":
 		if e.matchesArgs(cs) {
+			e.Diagnostics.Addf("warning", "type_match",
+				"call site %s — matched via name_fallback, no type info available", cs.Target)
 			return "name_fallback"
 		}
 		return ""
@@ -230,11 +246,14 @@ func deriveReceiverFromFQN(targetFQN, target string) string {
 //  3. Wildcard: "*Cursor", "sqlite3.*"
 //  4. Inheritance: IsSubclass via MRO (requires CDN data)
 func matchesReceiverType(actual, pattern string, thirdPartyRemote InheritanceChecker) bool {
+	actual = strings.TrimSpace(actual)
+	pattern = strings.TrimSpace(pattern)
+
 	if actual == "" || pattern == "" {
 		return false
 	}
 
-	// 1. Exact FQN match
+	// 1. Exact FQN match.
 	if actual == pattern {
 		return true
 	}
@@ -292,6 +311,23 @@ func matchesWildcardType(actual, pattern string) bool {
 	return actual == pattern
 }
 
+// clampTypeConfidence clamps a float64 confidence to [0.0, 1.0], emitting a diagnostic for out-of-range values.
+func clampTypeConfidence(val float64, dc *DiagnosticCollector) float64 {
+	if math.IsNaN(val) || math.IsInf(val, 0) {
+		dc.Addf("warning", "executor", "TypeConfidence is NaN/Inf, clamping to 0.0")
+		return 0.0
+	}
+	if val < 0.0 {
+		dc.Addf("warning", "executor", "TypeConfidence %f is negative, clamping to 0.0", val)
+		return 0.0
+	}
+	if val > 1.0 {
+		dc.Addf("warning", "executor", "TypeConfidence %f exceeds 1.0, clamping to 1.0", val)
+		return 1.0
+	}
+	return val
+}
+
 // splitTypeModuleAndClass splits "django.views.View" into module="django", class="views.View".
 func splitTypeModuleAndClass(fqn string) (string, string) {
 	if idx := strings.Index(fqn, "."); idx > 0 {
@@ -315,6 +351,15 @@ type TypeConstrainedAttributeExecutor struct {
 // Looks for call targets like "self.attr" or "var.attr" where the variable's
 // inferred type matches ReceiverType and the attribute matches AttributeName.
 func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
+	if e.CallGraph == nil {
+		e.Diagnostics.Addf("error", "executor", "TypeConstrainedAttributeExecutor: CallGraph is nil")
+		return nil
+	}
+	if e.CallGraph.CallSites == nil {
+		e.Diagnostics.Addf("warning", "executor", "TypeConstrainedAttributeExecutor: CallSites map is nil, treating as empty")
+		return nil
+	}
+
 	var detections []DataflowDetection
 	minConf := e.IR.MinConfidence
 	if minConf <= 0 {
