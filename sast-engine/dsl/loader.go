@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
@@ -23,7 +22,8 @@ type Logger interface {
 
 // RuleLoader loads Python DSL rules and executes them.
 type RuleLoader struct {
-	RulesPath string // Path to .py rules file or directory
+	RulesPath string           // Path to .py rules file or directory
+	Config    *QueryTypeConfig // Execution config (nil → defaults)
 }
 
 // NewRuleLoader creates a new rule loader.
@@ -64,7 +64,8 @@ func (l *RuleLoader) LoadRules(logger Logger) ([]RuleIR, error) {
 // loadRulesFromFile loads rules from a single Python file.
 func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR, error) {
 	// Create context with timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := l.Config.getExecutionTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "python3", filePath)
@@ -73,7 +74,7 @@ func (l *RuleLoader) loadRulesFromFile(filePath string, logger Logger) ([]RuleIR
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("Python rule execution timed out after 30s for file: %s", filePath)
+			return nil, fmt.Errorf("Python rule execution timed out after %s for file: %s", timeout, filePath)
 		}
 		return nil, fmt.Errorf("failed to execute Python rules from %s: %w", filePath, err)
 	}
@@ -295,7 +296,8 @@ func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 // Creates a temporary Python script to import and compile all rules, then executes it.
 func (l *RuleLoader) loadContainerRulesFromFile(rulesPath string, logger Logger) ([]byte, error) {
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := l.Config.getExecutionTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Create a temporary Python script that compiles rules from the given path
@@ -338,7 +340,7 @@ print(json.dumps(json_ir))
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("Python rule execution timed out after 30s")
+			return nil, fmt.Errorf("Python rule execution timed out after %s", timeout)
 		}
 		return nil, fmt.Errorf("failed to compile container rules: %w", err)
 	}
@@ -454,6 +456,7 @@ func (l *RuleLoader) executeDataflow(matcherMap map[string]any, cg *core.CallGra
 	}
 
 	executor := NewDataflowExecutor(&ir, cg)
+	executor.Config = l.Config
 	return executor.Execute(), nil
 }
 
@@ -500,8 +503,10 @@ func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *c
 	}
 
 	executor := &TypeConstrainedCallExecutor{
-		IR:        &ir,
-		CallGraph: cg,
+		IR:               &ir,
+		CallGraph:        cg,
+		Config:           l.Config,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
 }
@@ -518,16 +523,175 @@ func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, 
 	}
 
 	executor := &TypeConstrainedAttributeExecutor{
-		IR:        &ir,
-		CallGraph: cg,
+		IR:               &ir,
+		CallGraph:        cg,
+		Config:           l.Config,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
 	}
 	return executor.Execute(), nil
 }
 
-//nolint:unparam // Will be implemented in future PRs
 func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
-	// TODO: Handle And/Or/Not logic operators
-	// This requires recursive execution of nested matchers
-	// For now, return empty detections as placeholder
-	return []DataflowDetection{}, nil
+	switch logicType {
+	case "logic_or":
+		return l.executeLogicOr(matcherMap, cg)
+	case "logic_and":
+		return l.executeLogicAnd(matcherMap, cg)
+	case "logic_not":
+		return nil, fmt.Errorf("logic_not not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown logic type: %s", logicType)
+	}
+}
+
+func (l *RuleLoader) executeLogicOr(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	matchers, ok := matcherMap["matchers"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("logic_or requires 'matchers' array")
+	}
+
+	var all []DataflowDetection
+	for _, m := range matchers {
+		mMap, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		ruleIR := &RuleIR{Matcher: mMap}
+		dets, err := l.ExecuteRule(ruleIR, cg)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, dets...)
+	}
+	return deduplicateDetections(all), nil
+}
+
+func (l *RuleLoader) executeLogicAnd(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
+	matchers, ok := matcherMap["matchers"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("logic_and requires 'matchers' array")
+	}
+
+	if len(matchers) == 0 {
+		return nil, nil
+	}
+
+	// Execute first matcher
+	mMap, ok := matchers[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("matcher is not a map")
+	}
+	ruleIR := &RuleIR{Matcher: mMap}
+	result, err := l.ExecuteRule(ruleIR, cg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Intersect with remaining matchers
+	for _, m := range matchers[1:] {
+		mMap, ok = m.(map[string]any)
+		if !ok {
+			continue
+		}
+		ruleIR = &RuleIR{Matcher: mMap}
+		dets, err := l.ExecuteRule(ruleIR, cg)
+		if err != nil {
+			return nil, err
+		}
+		result = intersectDetections(result, dets)
+	}
+	return result, nil
+}
+
+// extractInheritanceChecker extracts InheritanceCheckers from a CallGraph's
+// ThirdPartyRemote and StdlibRemote fields, returning a composite checker
+// that queries both registries. Returns nil if neither is set.
+func extractInheritanceChecker(cg *core.CallGraph) InheritanceChecker {
+	if cg == nil {
+		return nil
+	}
+
+	var checkers []InheritanceChecker
+
+	if cg.ThirdPartyRemote != nil {
+		if checker, ok := cg.ThirdPartyRemote.(InheritanceChecker); ok {
+			checkers = append(checkers, checker)
+		}
+	}
+	if cg.StdlibRemote != nil {
+		if checker, ok := cg.StdlibRemote.(InheritanceChecker); ok {
+			checkers = append(checkers, checker)
+		}
+	}
+
+	switch len(checkers) {
+	case 0:
+		return nil
+	case 1:
+		return checkers[0]
+	default:
+		return &compositeInheritanceChecker{checkers: checkers}
+	}
+}
+
+// compositeInheritanceChecker delegates to multiple InheritanceChecker instances,
+// checking each in order until one matches (third-party, then stdlib).
+type compositeInheritanceChecker struct {
+	checkers []InheritanceChecker
+}
+
+func (c *compositeInheritanceChecker) HasModule(moduleName string) bool {
+	for _, ch := range c.checkers {
+		if ch.HasModule(moduleName) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compositeInheritanceChecker) IsSubclassSimple(moduleName, className, parentFQN string) bool {
+	for _, ch := range c.checkers {
+		if ch.HasModule(moduleName) && ch.IsSubclassSimple(moduleName, className, parentFQN) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compositeInheritanceChecker) GetClassMRO(moduleName, className string) []string {
+	for _, ch := range c.checkers {
+		if mro := ch.GetClassMRO(moduleName, className); len(mro) > 0 {
+			return mro
+		}
+	}
+	return nil
+}
+
+func deduplicateDetections(dets []DataflowDetection) []DataflowDetection {
+	seen := make(map[string]bool)
+	var result []DataflowDetection
+	for _, d := range dets {
+		key := fmt.Sprintf("%s:%d:%d:%s", d.FunctionFQN, d.SourceLine, d.SinkLine, d.SinkCall)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func intersectDetections(a, b []DataflowDetection) []DataflowDetection {
+	bSet := make(map[string]bool)
+	for _, d := range b {
+		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
+		bSet[key] = true
+	}
+	var result []DataflowDetection
+	for _, d := range a {
+		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
+		if bSet[key] {
+			result = append(result, d)
+		}
+	}
+	return result
 }

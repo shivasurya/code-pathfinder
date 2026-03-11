@@ -567,6 +567,270 @@ func TestStdlibRegistryRemote_GetModule_InvalidJSON(t *testing.T) {
 	assert.Nil(t, module)
 }
 
+func TestStdlibRegistryRemote_GetClassMethod(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"sqlite3": {
+				Classes: map[string]*core.StdlibClass{
+					"Connection": {
+						Methods: map[string]*core.StdlibFunction{
+							"cursor": {ReturnType: "sqlite3.Cursor", Confidence: 0.9},
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := newTestLogger()
+
+	method := remote.GetClassMethod("sqlite3", "Connection", "cursor", logger)
+	assert.NotNil(t, method)
+	assert.Equal(t, "sqlite3.Cursor", method.ReturnType)
+
+	// Non-existent method
+	assert.Nil(t, remote.GetClassMethod("sqlite3", "Connection", "nonexistent", logger))
+
+	// Non-existent class
+	assert.Nil(t, remote.GetClassMethod("sqlite3", "NonExistent", "cursor", logger))
+
+	// Non-existent module
+	assert.Nil(t, remote.GetClassMethod("nonexistent", "Connection", "cursor", logger))
+}
+
+func TestStdlibRegistryRemote_GetClassMethod_Inherited(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"sqlite3": {
+				Classes: map[string]*core.StdlibClass{
+					"Connection": {
+						Methods: map[string]*core.StdlibFunction{
+							"cursor": {ReturnType: "sqlite3.Cursor", Confidence: 0.9},
+						},
+						InheritedMethods: map[string]*core.InheritedMember{
+							"close": {ReturnType: "None", Confidence: 0.8, Source: "object"},
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := newTestLogger()
+
+	// Inherited method should be found
+	method := remote.GetClassMethod("sqlite3", "Connection", "close", logger)
+	assert.NotNil(t, method)
+	assert.Equal(t, "None", method.ReturnType)
+	assert.Equal(t, float32(0.8), method.Confidence)
+
+	// Own method takes priority over inherited
+	own := remote.GetClassMethod("sqlite3", "Connection", "cursor", logger)
+	assert.NotNil(t, own)
+	assert.Equal(t, "sqlite3.Cursor", own.ReturnType)
+}
+
+func TestStdlibRegistryRemote_VerifyChecksum_EdgeCases(t *testing.T) {
+	remote := NewStdlibRegistryRemote("https://example.com", "3.14")
+
+	tests := []struct {
+		name     string
+		data     []byte
+		checksum string
+		expected bool
+	}{
+		{
+			name:     "invalid format no sha256 prefix",
+			data:     []byte(`{"test": "data"}`),
+			checksum: "40b61fe1b15af0a4d5402735b26343e8cf8a045f4d81710e6108a21d91eaf366",
+			expected: false,
+		},
+		{
+			name:     "uppercase hex is rejected (case sensitive)",
+			data:     []byte(`{"test": "data"}`),
+			checksum: "sha256:40B61FE1B15AF0A4D5402735B26343E8CF8A045F4D81710E6108A21D91EAF366",
+			expected: false,
+		},
+		{
+			name:     "empty data with correct hash",
+			data:     []byte{},
+			checksum: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := remote.verifyChecksum(tt.data, tt.checksum)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestStdlibRegistryRemote_GetClassMRO(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"collections": {
+				Classes: map[string]*core.StdlibClass{
+					"OrderedDict": {
+						MRO: []string{"collections.OrderedDict", "builtins.dict", "builtins.object"},
+					},
+					"EmptyMRO": {
+						MRO: []string{},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		module     string
+		class      string
+		expected   []string
+		expectNil  bool
+	}{
+		{
+			name:     "module in cache with MRO",
+			module:   "collections",
+			class:    "OrderedDict",
+			expected: []string{"collections.OrderedDict", "builtins.dict", "builtins.object"},
+		},
+		{
+			name:      "module in cache class not found",
+			module:    "collections",
+			class:     "NonExistent",
+			expectNil: true,
+		},
+		{
+			name:      "module not in cache",
+			module:    "nonexistent",
+			class:     "SomeClass",
+			expectNil: true,
+		},
+		{
+			name:     "class has empty MRO",
+			module:   "collections",
+			class:    "EmptyMRO",
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := remote.GetClassMRO(tt.module, tt.class)
+			if tt.expectNil {
+				assert.Nil(t, result)
+			} else {
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestStdlibRegistryRemote_IsSubclassSimple(t *testing.T) {
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"collections": {
+				Classes: map[string]*core.StdlibClass{
+					"OrderedDict": {
+						MRO: []string{"collections.OrderedDict", "builtins.dict", "builtins.object"},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		module    string
+		class     string
+		parentFQN string
+		expected  bool
+	}{
+		{
+			name:      "class is subclass",
+			module:    "collections",
+			class:     "OrderedDict",
+			parentFQN: "builtins.dict",
+			expected:  true,
+		},
+		{
+			name:      "class is not subclass",
+			module:    "collections",
+			class:     "OrderedDict",
+			parentFQN: "builtins.list",
+			expected:  false,
+		},
+		{
+			name:      "module not in cache",
+			module:    "nonexistent",
+			class:     "SomeClass",
+			parentFQN: "builtins.object",
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := remote.IsSubclassSimple(tt.module, tt.class, tt.parentFQN)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestStdlibRegistryRemote_GetModule_HTTP500(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+			manifest := core.Manifest{
+				SchemaVersion: "1.0.0",
+				Modules: []*core.ModuleEntry{
+					{Name: "os", File: "os.json", Checksum: "sha256:abc"},
+				},
+			}
+			manifestJSON, _ := json.Marshal(manifest)
+			w.Write(manifestJSON)
+		} else if r.URL.Path == "/python3.14/stdlib/v1/os.json" {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	remote := NewStdlibRegistryRemote(server.URL, "3.14")
+	err := remote.LoadManifest(newTestLogger())
+	require.NoError(t, err)
+
+	module, err := remote.GetModule("os", newTestLogger())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "module download failed with status: 500")
+	assert.Nil(t, module)
+}
+
+func TestStdlibRegistryRemote_GetModule_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {
+			manifest := core.Manifest{
+				SchemaVersion: "1.0.0",
+				Modules: []*core.ModuleEntry{
+					{Name: "os", File: "os.json", Checksum: "sha256:abc"},
+				},
+			}
+			manifestJSON, _ := json.Marshal(manifest)
+			w.Write(manifestJSON)
+		}
+	}))
+
+	remote := NewStdlibRegistryRemote(server.URL, "3.14")
+	err := remote.LoadManifest(newTestLogger())
+	require.NoError(t, err)
+
+	// Close server to simulate connection error
+	server.Close()
+
+	module, err := remote.GetModule("os", newTestLogger())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to download module os")
+	assert.Nil(t, module)
+}
+
 func TestStdlibRegistryRemote_GetModule_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/python3.14/stdlib/v1/manifest.json" {

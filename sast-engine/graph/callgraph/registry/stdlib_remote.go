@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -257,6 +258,43 @@ func (r *StdlibRegistryRemote) GetClass(moduleName, className string, logger *ou
 	return module.Classes[className]
 }
 
+// GetClassMethod retrieves a class method, checking own methods first,
+// then inherited methods.
+//
+// Parameters:
+//   - moduleName: name of the module (e.g., "sqlite3")
+//   - className: name of the class (e.g., "Connection")
+//   - methodName: name of the method (e.g., "cursor")
+//   - logger: structured logger for diagnostics
+//
+// Returns:
+//   - StdlibFunction if found, nil otherwise
+func (r *StdlibRegistryRemote) GetClassMethod(moduleName, className, methodName string, logger *output.Logger) *core.StdlibFunction {
+	cls := r.GetClass(moduleName, className, logger)
+	if cls == nil {
+		return nil
+	}
+
+	// Check own methods first
+	if method, ok := cls.Methods[methodName]; ok {
+		return method
+	}
+
+	// Check inherited methods
+	if cls.InheritedMethods != nil {
+		if inherited, ok := cls.InheritedMethods[methodName]; ok {
+			return &core.StdlibFunction{
+				ReturnType: inherited.ReturnType,
+				Confidence: inherited.Confidence,
+				Params:     inherited.Params,
+				Source:     inherited.Source,
+			}
+		}
+	}
+
+	return nil
+}
+
 // ModuleCount returns the number of modules in the manifest.
 //
 // Returns:
@@ -284,4 +322,30 @@ func (r *StdlibRegistryRemote) ClearCache() {
 	r.CacheMutex.Lock()
 	defer r.CacheMutex.Unlock()
 	r.ModuleCache = make(map[string]*core.StdlibModule)
+}
+
+// GetClassMRO returns the MRO list for a stdlib class, or nil if not found.
+// Logger-free for use by packages that cannot import output.
+// NOTE: MRO data requires the CDN pipeline to populate bases/mro fields
+// in stdlib module JSON. Currently empty — will work once CDN is updated.
+func (r *StdlibRegistryRemote) GetClassMRO(moduleName, className string) []string {
+	r.CacheMutex.RLock()
+	module, ok := r.ModuleCache[moduleName]
+	r.CacheMutex.RUnlock()
+	if !ok || module == nil {
+		return nil
+	}
+	cls := module.Classes[className]
+	if cls == nil {
+		return nil
+	}
+	return cls.MRO
+}
+
+// IsSubclassSimple checks if a stdlib class is a subclass of parentFQN
+// using pre-computed MRO from the CDN data.
+// Logger-free for use by packages that cannot import output.
+func (r *StdlibRegistryRemote) IsSubclassSimple(moduleName, className, parentFQN string) bool {
+	mro := r.GetClassMRO(moduleName, className)
+	return slices.Contains(mro, parentFQN)
 }

@@ -60,6 +60,15 @@ jobs:
           python3.13 --version
           python3.14 --version
 
+      - name: Install mypy (for typeshed stubs)
+        run: |
+          echo "Installing mypy for typeshed type stubs..."
+          for version in 3.9 3.10 3.11 3.12 3.13 3.14; do
+            if command -v python${version} &> /dev/null; then
+              python${version} -m pip install --quiet mypy || echo "Warning: mypy install failed for Python $version"
+            fi
+          done
+
       - name: Install AWS CLI
         run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"

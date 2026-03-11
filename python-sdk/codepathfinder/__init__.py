@@ -31,6 +31,8 @@ from .propagation import propagates
 from .presets import PropagationPresets
 from .config import set_default_propagation, set_default_scope
 from .logic import And, Or, Not
+from .query_type import QueryType
+from .qualifiers import lt, gt, lte, gte, regex, missing
 
 __all__ = [
     "calls",
@@ -44,5 +46,12 @@ __all__ = [
     "And",
     "Or",
     "Not",
+    "QueryType",
+    "lt",
+    "gt",
+    "lte",
+    "gte",
+    "regex",
+    "missing",
     "__version__",
 ]

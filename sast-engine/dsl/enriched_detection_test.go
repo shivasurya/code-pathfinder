@@ -38,9 +38,11 @@ func TestEnrichedDetection_ConfidenceLevel(t *testing.T) {
 		expected   string
 	}{
 		{"high confidence 0.9", 0.9, "high"},
-		{"high confidence 0.8", 0.8, "high"},
+		{"high confidence 0.8 (boundary)", 0.8, "high"},
+		{"medium confidence 0.79", 0.79, "medium"},
 		{"medium confidence 0.7", 0.7, "medium"},
-		{"medium confidence 0.5", 0.5, "medium"},
+		{"medium confidence 0.5 (boundary)", 0.5, "medium"},
+		{"low confidence 0.49", 0.49, "low"},
 		{"low confidence 0.4", 0.4, "low"},
 		{"low confidence 0.0", 0.0, "low"},
 	}

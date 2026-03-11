@@ -613,6 +613,91 @@ func TestExecuteRule_TypeConstrainedCall(t *testing.T) {
 	}
 }
 
+// TestExecuteRule_TypeConstrainedCall_InheritanceViaLoader tests that MRO-based
+// inheritance matching works when going through the RuleLoader path.
+// This was BUG-1: ThirdPartyRemote was never passed to the executor, making
+// inheritance matching dead code in production.
+func TestExecuteRule_TypeConstrainedCall_InheritanceViaLoader(t *testing.T) {
+	checker := newMockChecker()
+
+	// Call site has InferredType="django.views.generic.ListView"
+	// Rule targets "django.views.View" — should match via MRO inheritance
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.views.MyListView.get": {
+				{
+					Target:                   "self.get_queryset",
+					Location:                 core.Location{File: "views.py", Line: 15},
+					ResolvedViaTypeInference: true,
+					InferredType:             "django.views.generic.ListView",
+					TypeConfidence:           0.90,
+				},
+			},
+		},
+		ThirdPartyRemote: checker, // BUG-1 fix: stored on CallGraph
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type":          "type_constrained_call",
+			"receiverType":  "django.views.View", // parent class
+			"methodName":    "get_queryset",
+			"minConfidence": 0.5,
+			"fallbackMode":  "none", // no fallback — must match via inheritance
+		},
+	}
+
+	results, err := loader.ExecuteRule(rule, cg)
+	if err != nil {
+		t.Fatalf("ExecuteRule failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 inheritance match via RuleLoader path, got %d (BUG-1 not fixed)", len(results))
+	}
+}
+
+// TestExecuteRule_TypeConstrainedCall_InheritanceViaLoader_NoMatch verifies that
+// inheritance matching correctly rejects non-subclass types.
+func TestExecuteRule_TypeConstrainedCall_InheritanceViaLoader_NoMatch(t *testing.T) {
+	checker := newMockChecker()
+
+	// Call site has InferredType="flask.views.MethodView" — NOT a django subclass
+	cg := &core.CallGraph{
+		CallSites: map[string][]core.CallSite{
+			"myapp.views.FlaskView.get": {
+				{
+					Target:                   "self.get_queryset",
+					Location:                 core.Location{File: "views.py", Line: 15},
+					ResolvedViaTypeInference: true,
+					InferredType:             "flask.views.MethodView",
+					TypeConfidence:           0.90,
+				},
+			},
+		},
+		ThirdPartyRemote: checker,
+	}
+
+	loader := NewRuleLoader("")
+	rule := &RuleIR{
+		Matcher: map[string]any{
+			"type":          "type_constrained_call",
+			"receiverType":  "django.views.View",
+			"methodName":    "get_queryset",
+			"minConfidence": 0.5,
+			"fallbackMode":  "none",
+		},
+	}
+
+	results, err := loader.ExecuteRule(rule, cg)
+	if err != nil {
+		t.Fatalf("ExecuteRule failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("Expected 0 results (flask.views.MethodView is not a django subclass), got %d", len(results))
+	}
+}
+
 func TestExecuteRule_TypeConstrainedAttribute(t *testing.T) {
 	cg := &core.CallGraph{
 		CallSites: map[string][]core.CallSite{
@@ -644,5 +729,459 @@ func TestExecuteRule_TypeConstrainedAttribute(t *testing.T) {
 	}
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result, got %d", len(results))
+	}
+}
+
+// BUG-6 Tests: Attribute executor FQN bridge
+
+func TestAttributeExecutor_FQNBridge(t *testing.T) {
+	// Attribute access resolved via FQN (no type inference)
+	cg := core.NewCallGraph()
+	cg.CallSites["app.view"] = []core.CallSite{
+		{
+			Target:    "request.GET",
+			TargetFQN: "django.http.HttpRequest.GET",
+			Location:  core.Location{File: "views.py", Line: 5},
+			// NOT resolved via type inference
+		},
+	}
+
+	executor := &TypeConstrainedAttributeExecutor{
+		IR: &TypeConstrainedAttributeIR{
+			ReceiverType:  "django.http.HttpRequest",
+			AttributeName: "GET",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 match via FQN bridge, got %d (BUG-6)", len(results))
+	}
+}
+
+func TestAttributeExecutor_FQNPrefix(t *testing.T) {
+	// Attribute access where FQN prefix matches receiver
+	cg := core.NewCallGraph()
+	cg.CallSites["app.view"] = []core.CallSite{
+		{
+			Target:    "request.GET",
+			TargetFQN: "django.http.HttpRequest.GET",
+			Location:  core.Location{File: "views.py", Line: 5},
+		},
+	}
+
+	executor := &TypeConstrainedAttributeExecutor{
+		IR: &TypeConstrainedAttributeIR{
+			ReceiverType:  "django.http.HttpRequest",
+			AttributeName: "GET",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 match via FQN prefix, got %d (BUG-6)", len(results))
+	}
+}
+
+func TestAttributeExecutor_NoFQN_NoTypeInference_Rejects(t *testing.T) {
+	// No FQN, no type inference, fallback=none → should NOT match
+	cg := core.NewCallGraph()
+	cg.CallSites["app.view"] = []core.CallSite{
+		{
+			Target:   "request.GET",
+			Location: core.Location{File: "views.py", Line: 5},
+		},
+	}
+
+	executor := &TypeConstrainedAttributeExecutor{
+		IR: &TypeConstrainedAttributeIR{
+			ReceiverType:  "django.http.HttpRequest",
+			AttributeName: "GET",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 0 {
+		t.Errorf("Expected 0 matches with no FQN/type info and fallback=none, got %d", len(results))
+	}
+}
+
+// BUG-4 Tests: MatchMethod tracking
+
+func TestMatchMethod_TypeInference(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:                   "cursor.execute",
+			Location:                 core.Location{File: "app.py", Line: 5},
+			ResolvedViaTypeInference: true,
+			InferredType:             "sqlite3.Cursor",
+			TypeConfidence:           0.9,
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "sqlite3.Cursor",
+			MethodName:    "execute",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+	if results[0].MatchMethod != "type_inference" {
+		t.Errorf("Expected MatchMethod=type_inference, got %q", results[0].MatchMethod)
+	}
+}
+
+func TestMatchMethod_FQNBridge(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:    "cursor.execute",
+			TargetFQN: "sqlite3.Cursor.execute",
+			Location:  core.Location{File: "app.py", Line: 5},
+			// NOT resolved via type inference — uses FQN bridge
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "sqlite3.Cursor",
+			MethodName:    "execute",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+	if results[0].MatchMethod != "fqn_bridge" {
+		t.Errorf("Expected MatchMethod=fqn_bridge, got %q", results[0].MatchMethod)
+	}
+}
+
+func TestMatchMethod_FQNPrefix(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:    "request.args.get",
+			TargetFQN: "flask.request.args.get",
+			Location:  core.Location{File: "app.py", Line: 5},
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "flask.request",
+			MethodName:    "get",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+	if results[0].MatchMethod != "fqn_prefix" {
+		t.Errorf("Expected MatchMethod=fqn_prefix, got %q", results[0].MatchMethod)
+	}
+}
+
+func TestMatchMethod_NameFallback(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:   "something.execute",
+			Location: core.Location{File: "app.py", Line: 5},
+			// No type inference, no FQN — falls back to name
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "sqlite3.Cursor",
+			MethodName:    "execute",
+			MinConfidence: 0.5,
+			FallbackMode:  "name",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result via fallback, got %d", len(results))
+	}
+	if results[0].MatchMethod != "name_fallback" {
+		t.Errorf("Expected MatchMethod=name_fallback, got %q (BUG-4)", results[0].MatchMethod)
+	}
+}
+
+func TestMatchMethod_NoneRejectsFallback(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:   "something.execute",
+			Location: core.Location{File: "app.py", Line: 5},
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "sqlite3.Cursor",
+			MethodName:    "execute",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results with fallbackMode=none, got %d", len(results))
+	}
+}
+
+// BUG-7 Tests: Userland FQN format sensitivity
+
+func TestBUG7_FQNPrefixMismatch_Demonstrated(t *testing.T) {
+	// Demonstrates the FQN prefix mismatch between import-style and file-discovery-style FQNs.
+	// Rule uses import-style FQN, call site has file-discovery-style (stripped) FQN.
+	cg := core.NewCallGraph()
+	cg.CallSites["core.utils.helper"] = []core.CallSite{
+		{
+			Target:    "obj.method",
+			TargetFQN: "core.utils.MyClass.method", // stripped by resolveWithPrefixStripping
+			Location:  core.Location{File: "core/utils.py", Line: 5},
+		},
+	}
+
+	// Rule with FULL import path — won't match stripped FQN
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "label_studio.core.utils.MyClass", // full import path
+			MethodName:    "method",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	// This SHOULD match but currently DOESN'T because:
+	// - FQN bridge: derives "core.utils.MyClass" from TargetFQN, doesn't match "label_studio.core.utils.MyClass"
+	// - FQN prefix: "core.utils.MyClass.method" doesn't start with "label_studio.core.utils.MyClass"
+	if len(results) != 0 {
+		t.Log("BUG-7: Unexpectedly matched — prefix stripping may have been applied elsewhere")
+	} else {
+		t.Log("BUG-7 CONFIRMED: Full import path doesn't match stripped FQN (known edge case for mono-repo projects)")
+	}
+}
+
+func TestBUG7_StrippedFQN_WorksWithStrippedRule(t *testing.T) {
+	// When rule uses the SAME stripped FQN format as the call site, it works fine.
+	cg := core.NewCallGraph()
+	cg.CallSites["core.utils.helper"] = []core.CallSite{
+		{
+			Target:    "obj.method",
+			TargetFQN: "core.utils.MyClass.method",
+			Location:  core.Location{File: "core/utils.py", Line: 5},
+		},
+	}
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			ReceiverType:  "core.utils.MyClass", // matches stripped FQN
+			MethodName:    "method",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph: cg,
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Errorf("Expected 1 match when rule uses stripped FQN, got %d", len(results))
+	}
+}
+
+// BUG-3 Tests: Stdlib MRO/Inheritance Support
+
+func TestCompositeInheritanceChecker_BothRegistries(t *testing.T) {
+	// Simulate third-party checker (django)
+	thirdParty := newMockChecker()
+
+	// Simulate stdlib checker (io module with MRO data)
+	stdlib := &mockInheritanceChecker{
+		modules: map[string]bool{
+			"io": true,
+		},
+		classes: map[string]mockClassInfo{
+			"io.FileIO": {
+				mro: []string{"io.FileIO", "io.RawIOBase", "io.IOBase", "builtins.object"},
+			},
+			"io.BufferedReader": {
+				mro: []string{"io.BufferedReader", "io.BufferedIOBase", "io.IOBase", "builtins.object"},
+			},
+		},
+	}
+
+	composite := &compositeInheritanceChecker{checkers: []InheritanceChecker{thirdParty, stdlib}}
+
+	// Third-party module check
+	if !composite.HasModule("django") {
+		t.Error("Should find django module via third-party checker")
+	}
+	// Stdlib module check
+	if !composite.HasModule("io") {
+		t.Error("Should find io module via stdlib checker")
+	}
+	// Unknown module
+	if composite.HasModule("nonexistent") {
+		t.Error("Should not find nonexistent module")
+	}
+
+	// Third-party subclass check
+	if !composite.IsSubclassSimple("django", "views.generic.ListView", "django.views.View") {
+		t.Error("Should detect ListView as subclass of View via third-party")
+	}
+	// Stdlib subclass check
+	if !composite.IsSubclassSimple("io", "FileIO", "io.IOBase") {
+		t.Error("Should detect FileIO as subclass of IOBase via stdlib")
+	}
+	if !composite.IsSubclassSimple("io", "BufferedReader", "io.IOBase") {
+		t.Error("Should detect BufferedReader as subclass of IOBase via stdlib")
+	}
+
+	// Stdlib MRO retrieval
+	mro := composite.GetClassMRO("io", "FileIO")
+	if len(mro) != 4 {
+		t.Errorf("Expected 4-entry MRO for FileIO, got %d", len(mro))
+	}
+}
+
+func TestStdlibMRO_MatchesReceiverType_ViaComposite(t *testing.T) {
+	// Rule targets io.IOBase, call site has InferredType=io.FileIO
+	// Should match via MRO inheritance through stdlib checker
+
+	stdlib := &mockInheritanceChecker{
+		modules: map[string]bool{"io": true},
+		classes: map[string]mockClassInfo{
+			"io.FileIO": {
+				mro: []string{"io.FileIO", "io.RawIOBase", "io.IOBase", "builtins.object"},
+			},
+		},
+	}
+	composite := &compositeInheritanceChecker{checkers: []InheritanceChecker{stdlib}}
+
+	// matchesReceiverType should find io.FileIO is a subclass of io.IOBase
+	if !matchesReceiverType("io.FileIO", "io.IOBase", composite) {
+		t.Error("io.FileIO should match io.IOBase via MRO inheritance (BUG-3 fix)")
+	}
+}
+
+func TestStdlibMRO_E2E_TypeConstrainedCall(t *testing.T) {
+	// End-to-end: rule for io.IOBase.read() should match call site with InferredType=io.FileIO
+
+	stdlib := &mockInheritanceChecker{
+		modules: map[string]bool{"io": true},
+		classes: map[string]mockClassInfo{
+			"io.FileIO": {
+				mro: []string{"io.FileIO", "io.RawIOBase", "io.IOBase", "builtins.object"},
+			},
+		},
+	}
+
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:                   "f.read",
+			Location:                 core.Location{File: "app.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "io.FileIO",
+			TypeConfidence:           0.90,
+		},
+	}
+	// Store stdlib checker — simulates CDN with MRO data populated
+	cg.StdlibRemote = stdlib
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			Type:          "type_constrained_call",
+			ReceiverType:  "io.IOBase",
+			MethodName:    "read",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph:        cg,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
+	}
+
+	results := executor.Execute()
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 match for io.IOBase.read() via FileIO inheritance, got %d (BUG-3)", len(results))
+	}
+	if results[0].SinkCall != "f.read" {
+		t.Errorf("Expected SinkCall=f.read, got %s", results[0].SinkCall)
+	}
+}
+
+func TestStdlibMRO_EmptyMRO_NoFalsePositive(t *testing.T) {
+	// When CDN doesn't populate MRO (current state), no false matches
+
+	stdlib := &mockInheritanceChecker{
+		modules: map[string]bool{"io": true},
+		classes: map[string]mockClassInfo{
+			// FileIO exists but has EMPTY MRO (current CDN state)
+			"io.FileIO": {mro: []string{}},
+		},
+	}
+
+	cg := core.NewCallGraph()
+	cg.CallSites["app.main"] = []core.CallSite{
+		{
+			Target:                   "f.read",
+			Location:                 core.Location{File: "app.py", Line: 10},
+			ResolvedViaTypeInference: true,
+			InferredType:             "io.FileIO",
+			TypeConfidence:           0.90,
+		},
+	}
+	cg.StdlibRemote = stdlib
+
+	executor := &TypeConstrainedCallExecutor{
+		IR: &TypeConstrainedCallIR{
+			Type:          "type_constrained_call",
+			ReceiverType:  "io.IOBase",
+			MethodName:    "read",
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		},
+		CallGraph:        cg,
+		ThirdPartyRemote: extractInheritanceChecker(cg),
+	}
+
+	results := executor.Execute()
+	if len(results) != 0 {
+		t.Errorf("Expected 0 matches when MRO is empty (current CDN state), got %d", len(results))
 	}
 }
