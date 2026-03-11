@@ -238,32 +238,8 @@ func TestDataflowExecutor_Global(t *testing.T) {
 	})
 }
 
-func TestDataflowExecutor_PatternMatching(t *testing.T) {
-	cg := core.NewCallGraph()
-	ir := &DataflowIR{}
-	executor := NewDataflowExecutor(ir, cg)
-
-	t.Run("exact match", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("eval", "eval"))
-		assert.False(t, executor.matchesPattern("eval", "exec"))
-	})
-
-	t.Run("wildcard prefix", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("request.GET", "request.*"))
-		assert.True(t, executor.matchesPattern("request.POST", "request.*"))
-		assert.False(t, executor.matchesPattern("utils.sanitize", "request.*"))
-	})
-
-	t.Run("wildcard suffix", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("user_input", "*_input"))
-		assert.True(t, executor.matchesPattern("admin_input", "*_input"))
-		assert.False(t, executor.matchesPattern("user_data", "*_input"))
-	})
-
-	t.Run("wildcard match all", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("anything", "*"))
-	})
-}
+// matchesPattern tests removed — the method was dead code on DataflowExecutor
+// and has been deleted. Pattern matching is still tested via CallMatcherExecutor.
 
 // --- Polymorphic matcher tests ---
 
@@ -574,37 +550,4 @@ func TestPathHasSanitizer_EmptySanitizers(t *testing.T) {
 	assert.False(t, result, "Empty sanitizers should return false")
 }
 
-// --- matchesPattern edge cases ---
-
-func TestMatchesPattern_BothWildcard(t *testing.T) {
-	cg := core.NewCallGraph()
-	ir := &DataflowIR{}
-	executor := NewDataflowExecutor(ir, cg)
-
-	// Pattern "*both*" should match substring in middle
-	assert.True(t, executor.matchesPattern("foo.both.bar", "*both*"))
-	assert.True(t, executor.matchesPattern("both", "*both*"))
-	assert.False(t, executor.matchesPattern("foo.other.bar", "*both*"))
-}
-
-func TestMatchesPattern_PrefixWildcard(t *testing.T) {
-	cg := core.NewCallGraph()
-	ir := &DataflowIR{}
-	executor := NewDataflowExecutor(ir, cg)
-
-	// "prefix*" should match targets starting with "prefix"
-	assert.True(t, executor.matchesPattern("prefix_value", "prefix*"))
-	assert.True(t, executor.matchesPattern("prefix", "prefix*"))
-	assert.False(t, executor.matchesPattern("not_prefix", "prefix*"))
-}
-
-func TestMatchesPattern_ExactNoWildcard(t *testing.T) {
-	cg := core.NewCallGraph()
-	ir := &DataflowIR{}
-	executor := NewDataflowExecutor(ir, cg)
-
-	// No wildcard: exact match only
-	assert.True(t, executor.matchesPattern("exact", "exact"))
-	assert.False(t, executor.matchesPattern("exact_more", "exact"))
-	assert.False(t, executor.matchesPattern("not_exact", "exact"))
-}
+// matchesPattern edge case tests removed — dead code deleted from DataflowExecutor.
