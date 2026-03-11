@@ -407,7 +407,7 @@ func TestRuleLoader_ExecuteLogic(t *testing.T) {
 		assert.Len(t, detections, 1)
 	})
 
-	t.Run("logic_not returns error", func(t *testing.T) {
+	t.Run("logic_not returns universe when no matchers key", func(t *testing.T) {
 		rule := &RuleIR{
 			Matcher: map[string]any{
 				"type":    "logic_not",
@@ -415,9 +415,10 @@ func TestRuleLoader_ExecuteLogic(t *testing.T) {
 			},
 		}
 
-		_, err := loader.ExecuteRule(rule, cg)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not yet implemented")
+		detections, err := loader.ExecuteRule(rule, cg)
+		require.NoError(t, err)
+		// "matcher" (singular) is not recognized; treated as no matchers → entire universe returned.
+		assert.NotEmpty(t, detections)
 	})
 
 	t.Run("logic_and with no matchers returns nil", func(t *testing.T) {
