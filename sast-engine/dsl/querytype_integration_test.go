@@ -373,9 +373,7 @@ func TestQueryType_DataflowViaLoader_FullPath(t *testing.T) {
 	detections, err := loader.ExecuteRule(rule, cg)
 	require.NoError(t, err)
 
-	require.Len(t, detections, 1)
-	assert.Equal(t, "views.search", detections[0].FunctionFQN)
-	assert.True(t, detections[0].Sanitized, "Sanitizer between source and sink should be detected")
+	assert.Empty(t, detections, "Sanitized flow should be filtered out, not reported")
 }
 
 // TestQueryType_ReceiverPatterns_Wildcard tests wildcard receiver patterns.

@@ -66,7 +66,7 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		assert.False(t, detections[0].Sanitized)
 	})
 
-	t.Run("detects sanitizer between source and sink", func(t *testing.T) {
+	t.Run("sanitizer between source and sink filters detection", func(t *testing.T) {
 		cg := core.NewCallGraph()
 		cg.CallSites["test.safe"] = []core.CallSite{
 			{Target: "request.GET", Location: core.Location{File: "test.py", Line: 5}},
@@ -84,8 +84,7 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		executor := NewDataflowExecutor(ir, cg)
 		detections := executor.executeLocal()
 
-		assert.Len(t, detections, 1)
-		assert.True(t, detections[0].Sanitized, "Should detect sanitizer between source and sink")
+		assert.Empty(t, detections, "Sanitized flow should be filtered out, not reported")
 	})
 
 	t.Run("ignores cross-function flows in local scope", func(t *testing.T) {
@@ -548,6 +547,115 @@ func TestPathHasSanitizer_EmptySanitizers(t *testing.T) {
 
 	result := executor.pathHasSanitizer([]string{"test.a", "test.b"}, []CallSiteMatch{})
 	assert.False(t, result, "Empty sanitizers should return false")
+}
+
+// --- Type-constrained sanitizer test ---
+
+func TestDataflowExecutor_SanitizerWorksWithTypeConstrainedSink(t *testing.T) {
+	t.Run("sanitizer blocks flow to type_constrained_call sink", func(t *testing.T) {
+		// Simulates: input() → int() → cursor.execute()
+		// Where cursor.execute is matched via type inference (type_constrained_call).
+		// The int() sanitizer at line 8 should block the flow from input() at line 5
+		// to cursor.execute at line 15. The sanitized detection should be filtered out.
+		cg := core.NewCallGraph()
+		cg.CallSites["app.sanitized_sql"] = []core.CallSite{
+			{
+				Target:   "input",
+				Location: core.Location{File: "app.py", Line: 5, Column: 10},
+			},
+			{
+				Target:   "int",
+				Location: core.Location{File: "app.py", Line: 8, Column: 14},
+			},
+			{
+				Target:                   "cursor.execute",
+				TargetFQN:                "sqlite3.Cursor.execute",
+				Location:                 core.Location{File: "app.py", Line: 15, Column: 4},
+				ResolvedViaTypeInference: true,
+				InferredType:             "sqlite3.Cursor",
+				TypeConfidence:           0.9,
+			},
+		}
+
+		// Source: call_matcher for input()
+		sourceJSON, _ := json.Marshal(CallMatcherIR{
+			Type:     "call_matcher",
+			Patterns: []string{"input"},
+		})
+
+		// Sink: type_constrained_call for sqlite3.Cursor.execute
+		sinkJSON, _ := json.Marshal(TypeConstrainedCallIR{
+			Type:          "type_constrained_call",
+			ReceiverTypes: []string{"sqlite3.Cursor"},
+			MethodNames:   []string{"execute"},
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		})
+
+		// Sanitizer: call_matcher for int()
+		sanitizerJSON, _ := json.Marshal(CallMatcherIR{
+			Type:     "call_matcher",
+			Patterns: []string{"int"},
+		})
+
+		ir := &DataflowIR{
+			Sources:    []json.RawMessage{sourceJSON},
+			Sinks:      []json.RawMessage{sinkJSON},
+			Sanitizers: []json.RawMessage{sanitizerJSON},
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.Execute()
+
+		assert.Empty(t, detections,
+			"Sanitized flow should be filtered out — int() between input() and cursor.execute()")
+	})
+
+	t.Run("unsanitized flow to type_constrained_call sink is NOT marked sanitized", func(t *testing.T) {
+		// Simulates: input() → cursor.execute() (no sanitizer)
+		cg := core.NewCallGraph()
+		cg.CallSites["app.unsafe_sql"] = []core.CallSite{
+			{
+				Target:   "input",
+				Location: core.Location{File: "app.py", Line: 5, Column: 10},
+			},
+			{
+				Target:                   "cursor.execute",
+				TargetFQN:                "sqlite3.Cursor.execute",
+				Location:                 core.Location{File: "app.py", Line: 12, Column: 4},
+				ResolvedViaTypeInference: true,
+				InferredType:             "sqlite3.Cursor",
+				TypeConfidence:           0.9,
+			},
+		}
+
+		sourceJSON, _ := json.Marshal(CallMatcherIR{
+			Type:     "call_matcher",
+			Patterns: []string{"input"},
+		})
+		sinkJSON, _ := json.Marshal(TypeConstrainedCallIR{
+			Type:          "type_constrained_call",
+			ReceiverTypes: []string{"sqlite3.Cursor"},
+			MethodNames:   []string{"execute"},
+			MinConfidence: 0.5,
+			FallbackMode:  "none",
+		})
+
+		ir := &DataflowIR{
+			Sources:    []json.RawMessage{sourceJSON},
+			Sinks:      []json.RawMessage{sinkJSON},
+			Sanitizers: emptyRawMessages(),
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+		detections := executor.Execute()
+
+		assert.Len(t, detections, 1, "Should produce exactly one detection")
+		assert.False(t, detections[0].Sanitized,
+			"Detection should NOT be marked as Sanitized when no sanitizer exists")
+	})
 }
 
 // matchesPattern edge case tests removed — dead code deleted from DataflowExecutor.
