@@ -65,7 +65,9 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 				detections = append(detections, DataflowDetection{
 					FunctionFQN:     functionFQN,
 					SourceLine:      cs.Location.Line,
+					SourceColumn:    cs.Location.Column,
 					SinkLine:        cs.Location.Line,
+					SinkColumn:      cs.Location.Column,
 					SinkCall:        cs.Target,
 					Confidence:      conf,
 					Scope:           "local",
@@ -370,12 +372,14 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 		for _, cs := range callSites {
 			if e.matchesAttributeAccess(&cs, minConf) {
 				detections = append(detections, DataflowDetection{
-					FunctionFQN: functionFQN,
-					SourceLine:  cs.Location.Line,
-					SinkLine:    cs.Location.Line,
-					SinkCall:    cs.Target,
-					Confidence:  float64(cs.TypeConfidence),
-					Scope:       "local",
+					FunctionFQN:  functionFQN,
+					SourceLine:   cs.Location.Line,
+					SourceColumn: cs.Location.Column,
+					SinkLine:     cs.Location.Line,
+					SinkColumn:   cs.Location.Column,
+					SinkCall:     cs.Target,
+					Confidence:   float64(cs.TypeConfidence),
+					Scope:        "local",
 				})
 			}
 		}

@@ -103,7 +103,9 @@ type PropagationIR struct {
 type DataflowDetection struct {
 	FunctionFQN     string          // Function containing the vulnerability
 	SourceLine      int             // Line where taint originates
+	SourceColumn    int             // Column where taint originates
 	SinkLine        int             // Line where taint reaches sink
+	SinkColumn      int             // Column where taint reaches sink
 	TaintedVar      string          // Variable name that is tainted
 	SinkCall        string          // Sink function name
 	Confidence      float64         // 0.0-1.0 confidence score

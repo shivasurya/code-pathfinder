@@ -432,12 +432,14 @@ func (l *RuleLoader) executeCallMatcher(matcherMap map[string]any, cg *core.Call
 	detections := []DataflowDetection{}
 	for _, match := range matches {
 		detections = append(detections, DataflowDetection{
-			FunctionFQN: match.FunctionFQN,
-			SourceLine:  match.Line,
-			SinkLine:    match.Line,
-			SinkCall:    match.CallSite.Target,
-			Confidence:  1.0,
-			Scope:       "local",
+			FunctionFQN:  match.FunctionFQN,
+			SourceLine:   match.Line,
+			SourceColumn: match.CallSite.Location.Column,
+			SinkLine:     match.Line,
+			SinkColumn:   match.CallSite.Location.Column,
+			SinkCall:     match.CallSite.Target,
+			Confidence:   1.0,
+			Scope:        "local",
 		})
 	}
 
@@ -757,29 +759,39 @@ func (c *compositeInheritanceChecker) GetClassMRO(moduleName, className string) 
 	return nil
 }
 
+func dedupKey(d DataflowDetection) string {
+	return fmt.Sprintf("%s:%d:%d:%d:%d:%s:%s",
+		d.FunctionFQN, d.SourceLine, d.SourceColumn, d.SinkLine, d.SinkColumn, d.SinkCall, d.MatchMethod)
+}
+
 func deduplicateDetections(dets []DataflowDetection) []DataflowDetection {
-	seen := make(map[string]bool)
-	var result []DataflowDetection
+	best := make(map[string]DataflowDetection)
 	for _, d := range dets {
-		key := fmt.Sprintf("%s:%d:%d:%s", d.FunctionFQN, d.SourceLine, d.SinkLine, d.SinkCall)
-		if !seen[key] {
-			seen[key] = true
-			result = append(result, d)
+		key := dedupKey(d)
+		if existing, ok := best[key]; !ok || d.Confidence > existing.Confidence {
+			best[key] = d
 		}
 	}
+	result := make([]DataflowDetection, 0, len(best))
+	for _, d := range best {
+		result = append(result, d)
+	}
 	return result
+}
+
+func intersectKey(d DataflowDetection) string {
+	return fmt.Sprintf("%s:%d:%d:%d:%d",
+		d.FunctionFQN, d.SourceLine, d.SourceColumn, d.SinkLine, d.SinkColumn)
 }
 
 func intersectDetections(a, b []DataflowDetection) []DataflowDetection {
 	bSet := make(map[string]bool)
 	for _, d := range b {
-		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
-		bSet[key] = true
+		bSet[intersectKey(d)] = true
 	}
 	var result []DataflowDetection
 	for _, d := range a {
-		key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
-		if bSet[key] {
+		if bSet[intersectKey(d)] {
 			result = append(result, d)
 		}
 	}

@@ -766,8 +766,12 @@ func TestDeduplicateDetections(t *testing.T) {
 
 	result := deduplicateDetections(dets)
 	assert.Len(t, result, 2, "Should remove duplicate detection")
-	assert.Equal(t, "test.a", result[0].FunctionFQN)
-	assert.Equal(t, "test.b", result[1].FunctionFQN)
+	fqns := map[string]bool{}
+	for _, d := range result {
+		fqns[d.FunctionFQN] = true
+	}
+	assert.True(t, fqns["test.a"])
+	assert.True(t, fqns["test.b"])
 }
 
 func TestDeduplicateDetections_Empty(t *testing.T) {
@@ -776,20 +780,25 @@ func TestDeduplicateDetections_Empty(t *testing.T) {
 }
 
 func TestIntersectDetections(t *testing.T) {
+	// Intersection now keys on FunctionFQN:SourceLine:SourceColumn:SinkLine:SinkColumn.
 	a := []DataflowDetection{
 		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval"},
 		{FunctionFQN: "test.b", SourceLine: 2, SinkLine: 20, SinkCall: "exec"},
 		{FunctionFQN: "test.c", SourceLine: 3, SinkLine: 30, SinkCall: "system"},
 	}
 	b := []DataflowDetection{
-		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 15, SinkCall: "render"},
-		{FunctionFQN: "test.c", SourceLine: 3, SinkLine: 35, SinkCall: "output"},
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "render"},
+		{FunctionFQN: "test.c", SourceLine: 3, SinkLine: 30, SinkCall: "output"},
 	}
 
 	result := intersectDetections(a, b)
-	assert.Len(t, result, 2, "Intersection should return detections present in both (by FunctionFQN:SourceLine)")
-	assert.Equal(t, "test.a", result[0].FunctionFQN)
-	assert.Equal(t, "test.c", result[1].FunctionFQN)
+	assert.Len(t, result, 2, "Intersection should return detections present in both (by full key)")
+	fqns := map[string]bool{}
+	for _, d := range result {
+		fqns[d.FunctionFQN] = true
+	}
+	assert.True(t, fqns["test.a"])
+	assert.True(t, fqns["test.c"])
 }
 
 func TestIntersectDetections_NoOverlap(t *testing.T) {
@@ -802,6 +811,52 @@ func TestIntersectDetections_NoOverlap(t *testing.T) {
 
 	result := intersectDetections(a, b)
 	assert.Empty(t, result, "No overlap should return empty")
+}
+
+func TestDedup_DifferentMatchMethod_BothKept(t *testing.T) {
+	dets := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SourceColumn: 5, SinkLine: 10, SinkColumn: 8, SinkCall: "eval", MatchMethod: "type_inference", Confidence: 0.9},
+		{FunctionFQN: "test.a", SourceLine: 1, SourceColumn: 5, SinkLine: 10, SinkColumn: 8, SinkCall: "eval", MatchMethod: "fqn_bridge", Confidence: 0.7},
+	}
+
+	result := deduplicateDetections(dets)
+	assert.Len(t, result, 2, "Different MatchMethod → different dedup keys → both kept")
+}
+
+func TestDedup_SameMatchMethod_HighestConfidence(t *testing.T) {
+	dets := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval", MatchMethod: "type_inference", Confidence: 0.5},
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval", MatchMethod: "type_inference", Confidence: 0.9},
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10, SinkCall: "eval", MatchMethod: "type_inference", Confidence: 0.3},
+	}
+
+	result := deduplicateDetections(dets)
+	require.Len(t, result, 1, "Same key → single entry")
+	assert.Equal(t, 0.9, result[0].Confidence, "Highest confidence wins")
+}
+
+func TestDedup_ColumnDisambiguates(t *testing.T) {
+	dets := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SourceColumn: 5, SinkLine: 10, SinkColumn: 8, SinkCall: "eval"},
+		{FunctionFQN: "test.a", SourceLine: 1, SourceColumn: 20, SinkLine: 10, SinkColumn: 8, SinkCall: "eval"},
+	}
+
+	result := deduplicateDetections(dets)
+	assert.Len(t, result, 2, "Different SourceColumn → different dedup keys → both kept")
+}
+
+func TestIntersect_IncludesSinkLine(t *testing.T) {
+	a := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10},
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 20},
+	}
+	b := []DataflowDetection{
+		{FunctionFQN: "test.a", SourceLine: 1, SinkLine: 10},
+	}
+
+	result := intersectDetections(a, b)
+	assert.Len(t, result, 1, "Different SinkLine → different intersection keys")
+	assert.Equal(t, 10, result[0].SinkLine)
 }
 
 // --- type_constrained_call via ExecuteRule ---
