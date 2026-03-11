@@ -9,9 +9,10 @@ import (
 
 // DataflowExecutor wraps existing taint analysis functions.
 type DataflowExecutor struct {
-	IR        *DataflowIR
-	CallGraph *core.CallGraph
-	Config    *QueryTypeConfig
+	IR          *DataflowIR
+	CallGraph   *core.CallGraph
+	Config      *QueryTypeConfig
+	Diagnostics *DiagnosticCollector
 }
 
 // NewDataflowExecutor creates a new executor.

@@ -22,8 +22,9 @@ type Logger interface {
 
 // RuleLoader loads Python DSL rules and executes them.
 type RuleLoader struct {
-	RulesPath string           // Path to .py rules file or directory
-	Config    *QueryTypeConfig // Execution config (nil → defaults)
+	RulesPath   string               // Path to .py rules file or directory
+	Config      *QueryTypeConfig     // Execution config (nil → defaults)
+	Diagnostics *DiagnosticCollector  // Optional diagnostic collector (nil → no diagnostics)
 }
 
 // NewRuleLoader creates a new rule loader.
@@ -444,7 +445,7 @@ func (l *RuleLoader) executeCallMatcher(matcherMap map[string]any, cg *core.Call
 }
 
 func (l *RuleLoader) executeDataflow(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
-	// Convert map to DataflowIR
+	// Convert map to DataflowIR.
 	jsonBytes, err := json.Marshal(matcherMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal dataflow: %w", err)
@@ -455,9 +456,15 @@ func (l *RuleLoader) executeDataflow(matcherMap map[string]any, cg *core.CallGra
 		return nil, fmt.Errorf("failed to unmarshal dataflow: %w", err)
 	}
 
+	if err := validateDataflowIR(&ir, l.Diagnostics); err != nil {
+		l.Diagnostics.Addf("skip", "ir_validation", "skipping dataflow: %v", err)
+		return []DataflowDetection{}, nil
+	}
+
 	executor := NewDataflowExecutor(&ir, cg)
 	executor.Config = l.Config
-	return executor.Execute(), nil
+	executor.Diagnostics = l.Diagnostics
+	return safeExecute(executor.Execute, l.Diagnostics), nil
 }
 
 func (l *RuleLoader) executeVariableMatcher(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
@@ -502,13 +509,19 @@ func (l *RuleLoader) executeTypeConstrainedCall(matcherMap map[string]any, cg *c
 		return nil, fmt.Errorf("failed to unmarshal type_constrained_call: %w", err)
 	}
 
+	if err := validateTypeConstrainedCallIR(&ir, l.Diagnostics); err != nil {
+		l.Diagnostics.Addf("skip", "ir_validation", "skipping type_constrained_call: %v", err)
+		return []DataflowDetection{}, nil
+	}
+
 	executor := &TypeConstrainedCallExecutor{
 		IR:               &ir,
 		CallGraph:        cg,
 		Config:           l.Config,
 		ThirdPartyRemote: extractInheritanceChecker(cg),
+		Diagnostics:      l.Diagnostics,
 	}
-	return executor.Execute(), nil
+	return safeExecute(executor.Execute, l.Diagnostics), nil
 }
 
 func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {
@@ -522,13 +535,19 @@ func (l *RuleLoader) executeTypeConstrainedAttribute(matcherMap map[string]any, 
 		return nil, fmt.Errorf("failed to unmarshal type_constrained_attribute: %w", err)
 	}
 
+	if err := validateTypeConstrainedAttributeIR(&ir, l.Diagnostics); err != nil {
+		l.Diagnostics.Addf("skip", "ir_validation", "skipping type_constrained_attribute: %v", err)
+		return []DataflowDetection{}, nil
+	}
+
 	executor := &TypeConstrainedAttributeExecutor{
 		IR:               &ir,
 		CallGraph:        cg,
 		Config:           l.Config,
 		ThirdPartyRemote: extractInheritanceChecker(cg),
+		Diagnostics:      l.Diagnostics,
 	}
-	return executor.Execute(), nil
+	return safeExecute(executor.Execute, l.Diagnostics), nil
 }
 
 func (l *RuleLoader) executeLogic(logicType string, matcherMap map[string]any, cg *core.CallGraph) ([]DataflowDetection, error) {

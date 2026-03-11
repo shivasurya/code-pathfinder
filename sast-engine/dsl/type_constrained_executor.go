@@ -22,6 +22,7 @@ type TypeConstrainedCallExecutor struct {
 	CallGraph        *core.CallGraph
 	Config           *QueryTypeConfig
 	ThirdPartyRemote InheritanceChecker
+	Diagnostics      *DiagnosticCollector
 }
 
 // Execute finds all call sites matching the type-constrained pattern.
@@ -306,6 +307,7 @@ type TypeConstrainedAttributeExecutor struct {
 	CallGraph        *core.CallGraph
 	Config           *QueryTypeConfig
 	ThirdPartyRemote InheritanceChecker
+	Diagnostics      *DiagnosticCollector
 }
 
 // Execute finds call sites matching typed attribute access patterns.
