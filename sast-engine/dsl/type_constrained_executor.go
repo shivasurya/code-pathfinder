@@ -45,9 +45,9 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 	}
 
 	var detections []DataflowDetection
-	minConf := e.IR.MinConfidence
-	if minConf <= 0 {
-		minConf = e.Config.getDefaultMinConfidence()
+	minConfidence := e.IR.MinConfidence
+	if minConfidence <= 0 {
+		minConfidence = e.Config.getDefaultMinConfidence()
 	}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
@@ -57,7 +57,7 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 				e.Diagnostics.Addf("debug", "executor", "skipping call site with empty Target in %s", functionFQN)
 				continue
 			}
-			if matchMethod := e.matchesCallSite(cs, minConf); matchMethod != "" {
+			if matchMethod := e.matchesCallSite(cs, minConfidence); matchMethod != "" {
 				conf := clampTypeConfidence(float64(cs.TypeConfidence), e.Diagnostics)
 				if conf == 0 {
 					conf = e.Config.getFQNBridgeConfidence()
@@ -84,14 +84,14 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 // matchesCallSite checks if a call site matches the type-constrained pattern.
 // Returns the match method string ("type_inference", "fqn_bridge", "fqn_prefix",
 // "name_fallback") or empty string if no match.
-func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConf float64) string {
+func (e *TypeConstrainedCallExecutor) matchesCallSite(cs *core.CallSite, minConfidence float64) string {
 	// Step 1: Method name match (cheapest check)
 	if !e.matchesMethodName(cs.Target) {
 		return ""
 	}
 
 	// Step 2: Type inference match
-	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConf) {
+	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConfidence) {
 		if e.matchesAnyReceiverType(cs.InferredType) {
 			if e.matchesArgs(cs) {
 				return "type_inference"
@@ -363,14 +363,14 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 	}
 
 	var detections []DataflowDetection
-	minConf := e.IR.MinConfidence
-	if minConf <= 0 {
-		minConf = e.Config.getDefaultMinConfidence()
+	minConfidence := e.IR.MinConfidence
+	if minConfidence <= 0 {
+		minConfidence = e.Config.getDefaultMinConfidence()
 	}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
 		for _, cs := range callSites {
-			if e.matchesAttributeAccess(&cs, minConf) {
+			if e.matchesAttributeAccess(&cs, minConfidence) {
 				detections = append(detections, DataflowDetection{
 					FunctionFQN:  functionFQN,
 					SourceLine:   cs.Location.Line,
@@ -389,7 +389,7 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 }
 
 // matchesAttributeAccess checks if a call site represents a typed attribute access.
-func (e *TypeConstrainedAttributeExecutor) matchesAttributeAccess(cs *core.CallSite, minConf float64) bool {
+func (e *TypeConstrainedAttributeExecutor) matchesAttributeAccess(cs *core.CallSite, minConfidence float64) bool {
 	// Check if target contains the attribute name
 	attrName := e.IR.AttributeName
 	if attrName == "" {
@@ -404,7 +404,7 @@ func (e *TypeConstrainedAttributeExecutor) matchesAttributeAccess(cs *core.CallS
 	receiverTypes := []string{e.IR.ReceiverType}
 
 	// Step 2: Type inference match
-	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConf) {
+	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConfidence) {
 		if matchesAnyReceiverTypeList(cs.InferredType, receiverTypes, e.ThirdPartyRemote) {
 			return true
 		}
