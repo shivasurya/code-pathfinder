@@ -21,8 +21,10 @@ type DataflowExecutor struct {
 // NewDataflowExecutor creates a new executor.
 func NewDataflowExecutor(ir *DataflowIR, cg *core.CallGraph) *DataflowExecutor {
 	return &DataflowExecutor{
-		IR:        ir,
-		CallGraph: cg,
+		IR:          ir,
+		CallGraph:   cg,
+		Config:      DefaultConfig(),
+		Diagnostics: NewDiagnosticCollector(),
 	}
 }
 
