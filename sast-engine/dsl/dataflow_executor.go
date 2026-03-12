@@ -41,11 +41,13 @@ func (e *DataflowExecutor) Execute() []DataflowDetection {
 	return e.executeGlobal()
 }
 
-// executeLocal performs intra-procedural taint analysis.
+// executeLocal performs intra-procedural taint analysis with 3-tier fallback:
+// Tier 1: CFG-aware VDG (highest confidence) — uses control flow graph + variable dependency graph
+// Tier 2: Flat VDG — uses variable dependency graph without CFG
+// Tier 3: Line-number proximity (legacy fallback) — when no statements available.
 func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
-	// Resolve matchers polymorphically.
 	sourceCalls := e.resolveMatchers(e.IR.Sources)
 	if len(sourceCalls) == 0 {
 		e.Diagnostics.Addf("debug", "dataflow", "0 sources found, skipping local analysis")
@@ -60,45 +62,123 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 
 	sanitizerCalls := e.resolveMatchers(e.IR.Sanitizers)
 
-	// For local scope, check if source and sink are in the same function.
+	sourcePatterns := e.extractTargetPatterns(sourceCalls)
+	sinkPatterns := e.extractTargetPatterns(sinkCalls)
+	sanitizerPatterns := e.extractTargetPatterns(sanitizerCalls)
+
+	candidateFuncs := e.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
+
+	for _, funcFQN := range candidateFuncs {
+		stmts := e.getStatementsForFunction(funcFQN)
+		if len(stmts) == 0 {
+			// Tier 3: Legacy line-number proximity (no statements available)
+			e.executeLocalLegacy(funcFQN, sourceCalls, sinkCalls, sanitizerCalls, &detections)
+			continue
+		}
+
+		// Tier 1: CFG-aware VDG
+		analysisMethod := "flat_vdg"
+		var summary *core.TaintSummary
+
+		if raw, exists := e.CallGraph.CFGs[funcFQN]; exists {
+			if cfGraph, ok := raw.(*cfg.ControlFlowGraph); ok {
+				if rawBS, bsExists := e.CallGraph.CFGBlockStatements[funcFQN]; bsExists {
+					if blockStmts, bsOK := rawBS.(cfg.BlockStatements); bsOK && len(blockStmts) > 0 {
+						summary = taint.AnalyzeWithCFG(funcFQN, cfGraph, blockStmts,
+							sourcePatterns, sinkPatterns, sanitizerPatterns)
+						analysisMethod = "cfg_vdg"
+					}
+				}
+			}
+		}
+
+		// Tier 2: Flat VDG (if Tier 1 found no detections)
+		if summary == nil || !summary.HasDetections() {
+			summary = taint.AnalyzeWithVDG(funcFQN, stmts,
+				sourcePatterns, sinkPatterns, sanitizerPatterns)
+			analysisMethod = "flat_vdg"
+		}
+
+		if summary != nil {
+			for _, det := range summary.Detections {
+				detections = append(detections, DataflowDetection{
+					FunctionFQN: funcFQN,
+					SourceLine:  int(det.SourceLine),
+					SinkLine:    int(det.SinkLine),
+					TaintedVar:  det.SourceVar,
+					SinkCall:    det.SinkCall,
+					Confidence:  e.confidenceForMethod(analysisMethod),
+					Sanitized:   false,
+					Scope:       "local",
+					MatchMethod: analysisMethod,
+				})
+			}
+		}
+	}
+
+	return detections
+}
+
+// confidenceForMethod returns the confidence score for a given analysis method.
+func (e *DataflowExecutor) confidenceForMethod(method string) float64 {
+	switch method {
+	case "cfg_vdg":
+		return 0.95
+	case "flat_vdg":
+		return 0.85
+	case "interprocedural_vdg":
+		return 0.80
+	case "line_proximity":
+		return 0.50
+	default:
+		return 0.60
+	}
+}
+
+// executeLocalLegacy performs line-number proximity analysis (Tier 3 fallback).
+// Used when no statements are available for a function.
+func (e *DataflowExecutor) executeLocalLegacy(
+	funcFQN string,
+	sourceCalls, sinkCalls, sanitizerCalls []CallSiteMatch,
+	detections *[]DataflowDetection,
+) {
 	for _, source := range sourceCalls {
+		if source.FunctionFQN != funcFQN {
+			continue
+		}
 		for _, sink := range sinkCalls {
-			if source.FunctionFQN != sink.FunctionFQN {
+			if sink.FunctionFQN != funcFQN {
 				continue
 			}
 
 			hasSanitizer := false
-			for _, sanitizer := range sanitizerCalls {
-				if sanitizer.FunctionFQN == source.FunctionFQN {
-					if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
-						(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
+			for _, san := range sanitizerCalls {
+				if san.FunctionFQN == funcFQN {
+					if (san.Line > source.Line && san.Line < sink.Line) ||
+						(san.Line > sink.Line && san.Line < source.Line) {
 						hasSanitizer = true
 						break
 					}
 				}
 			}
-
 			if hasSanitizer {
 				continue
 			}
 
-			detection := DataflowDetection{
-				FunctionFQN:  source.FunctionFQN,
+			*detections = append(*detections, DataflowDetection{
+				FunctionFQN:  funcFQN,
 				SourceLine:   source.Line,
 				SourceColumn: source.CallSite.Location.Column,
 				SinkLine:     sink.Line,
 				SinkColumn:   sink.CallSite.Location.Column,
 				SinkCall:     sink.CallSite.Target,
-				Confidence:   e.Config.getLocalScopeConfidence(),
+				Confidence:   0.50,
 				Sanitized:    false,
 				Scope:        "local",
-			}
-
-			detections = append(detections, detection)
+				MatchMethod:  "line_proximity",
+			})
 		}
 	}
-
-	return detections
 }
 
 // executeGlobal performs inter-procedural taint analysis.

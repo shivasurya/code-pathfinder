@@ -204,3 +204,92 @@ func TestNewDataflowExecutor_InitializesDefaults(t *testing.T) {
 		t.Error("CallGraph should be set")
 	}
 }
+
+func TestConfidenceForMethod(t *testing.T) {
+	executor := NewDataflowExecutor(&DataflowIR{}, core.NewCallGraph())
+
+	tests := []struct {
+		method   string
+		expected float64
+	}{
+		{"cfg_vdg", 0.95},
+		{"flat_vdg", 0.85},
+		{"interprocedural_vdg", 0.80},
+		{"line_proximity", 0.50},
+		{"unknown", 0.60},
+	}
+
+	for _, tc := range tests {
+		got := executor.confidenceForMethod(tc.method)
+		if got != tc.expected {
+			t.Errorf("confidenceForMethod(%q) = %v, want %v", tc.method, got, tc.expected)
+		}
+	}
+}
+
+func TestExecuteLocal_LegacyFallback(t *testing.T) {
+	// No Statements populated → should fall back to line_proximity
+	cg := core.NewCallGraph()
+	cg.CallSites["test.handler"] = []core.CallSite{
+		{Target: "os.getenv", Location: core.Location{Line: 1}},
+		{Target: "eval", Location: core.Location{Line: 5}},
+	}
+	// Intentionally NOT setting cg.Statements
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"os.getenv"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.executeLocal()
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection from legacy fallback, got %d", len(detections))
+	}
+	if detections[0].MatchMethod != "line_proximity" {
+		t.Errorf("expected MatchMethod 'line_proximity', got %q", detections[0].MatchMethod)
+	}
+	if detections[0].Confidence != 0.50 {
+		t.Errorf("expected Confidence 0.50, got %v", detections[0].Confidence)
+	}
+}
+
+func TestExecuteLocal_VDGAnalysis(t *testing.T) {
+	// With Statements populated → should use VDG
+	funcFQN := "test.module.handler"
+	cg := core.NewCallGraph()
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "os.getenv", Location: core.Location{Line: 1}},
+		{Target: "eval", Location: core.Location{Line: 2}},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(1, "x", "os.getenv", []string{}),
+		makeTestCallStmt(2, "eval", []string{"x"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"os.getenv"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.executeLocal()
+
+	if len(detections) != 1 {
+		t.Fatalf("expected 1 detection from VDG, got %d", len(detections))
+	}
+	if detections[0].MatchMethod != "flat_vdg" {
+		t.Errorf("expected MatchMethod 'flat_vdg', got %q", detections[0].MatchMethod)
+	}
+	if detections[0].Confidence != 0.85 {
+		t.Errorf("expected Confidence 0.85, got %v", detections[0].Confidence)
+	}
+	if detections[0].TaintedVar == "" {
+		t.Error("expected TaintedVar to be set")
+	}
+}
