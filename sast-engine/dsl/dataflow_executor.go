@@ -324,7 +324,7 @@ func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSite
 // extractTargetPatterns extracts unique call target names from matched call sites.
 // Also extracts the bare name (last segment) for dotted targets, since statement
 // CallTarget may use the bare name (e.g., "execute" vs callsite "cursor.execute").
-func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []string {
+func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []string { //nolint:unused // wired in PR-04
 	seen := map[string]bool{}
 	var patterns []string
 	addPattern := func(p string) {
@@ -457,7 +457,7 @@ func (e *DataflowExecutor) getStatementsForFunction(funcFQN string) []*core.Stat
 }
 
 // getParamNames extracts parameter names from a function's graph.Node.
-func (e *DataflowExecutor) getParamNames(funcFQN string, funcNode *graph.Node) []string {
+func (e *DataflowExecutor) getParamNames(_ string, funcNode *graph.Node) []string {
 	if funcNode == nil {
 		return nil
 	}
@@ -473,7 +473,7 @@ func (e *DataflowExecutor) getParamNames(funcFQN string, funcNode *graph.Node) [
 }
 
 // addTransitiveCallers adds all transitive callers of funcFQN to the candidates set.
-func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[string]bool) {
+func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[string]bool) { //nolint:unused // wired in PR-05
 	visited := make(map[string]bool)
 	queue := []string{funcFQN}
 	for len(queue) > 0 {

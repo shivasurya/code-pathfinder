@@ -135,7 +135,7 @@ func (b *cfgBuilder) processBody(bodyNode *sitter.Node, currentBlockID string) s
 }
 
 // processIf handles if/elif/else statements.
-// Creates: condition block -> true branch, false branch -> merge block
+// Creates: condition block -> true branch, false branch -> merge block.
 func (b *cfgBuilder) processIf(ifNode, stmtNode *sitter.Node, predBlockID string) string {
 	// Create condition block
 	condBlockID := b.newBlockID("if_cond")
@@ -147,7 +147,7 @@ func (b *cfgBuilder) processIf(ifNode, stmtNode *sitter.Node, predBlockID string
 	if condNode != nil {
 		condStmt := &core.Statement{
 			Type:       core.StatementTypeIf,
-			LineNumber: uint32(stmtNode.StartPoint().Row + 1),
+			LineNumber: stmtNode.StartPoint().Row + 1,
 			Uses:       extractIdentifiers(condNode, b.sourceCode),
 		}
 		b.appendStmt(condBlockID, condStmt)
@@ -212,7 +212,7 @@ func (b *cfgBuilder) processIf(ifNode, stmtNode *sitter.Node, predBlockID string
 }
 
 // processFor handles for-loop statements.
-// Creates: loop header -> loop body -> (back edge to header), after-loop block
+// Creates: loop header -> loop body -> (back edge to header), after-loop block.
 func (b *cfgBuilder) processFor(forNode, stmtNode *sitter.Node, predBlockID string) string {
 	headerBlockID := b.newBlockID("for_header")
 	b.addBlock(headerBlockID, BlockTypeLoop)
@@ -224,11 +224,11 @@ func (b *cfgBuilder) processFor(forNode, stmtNode *sitter.Node, predBlockID stri
 	if leftNode != nil {
 		headerStmt := &core.Statement{
 			Type:       core.StatementTypeFor,
-			LineNumber: uint32(stmtNode.StartPoint().Row + 1),
+			LineNumber: stmtNode.StartPoint().Row + 1,
 			Uses:       []string{},
 		}
 		if leftNode.Type() == "identifier" {
-			headerStmt.Def = string(leftNode.Content(b.sourceCode))
+			headerStmt.Def = leftNode.Content(b.sourceCode)
 		}
 		if rightNode != nil {
 			headerStmt.Uses = extractIdentifiers(rightNode, b.sourceCode)
@@ -273,7 +273,7 @@ func (b *cfgBuilder) processWhile(whileNode, stmtNode *sitter.Node, predBlockID 
 	if condNode != nil {
 		condStmt := &core.Statement{
 			Type:       core.StatementTypeWhile,
-			LineNumber: uint32(stmtNode.StartPoint().Row + 1),
+			LineNumber: stmtNode.StartPoint().Row + 1,
 			Uses:       extractIdentifiers(condNode, b.sourceCode),
 		}
 		b.appendStmt(headerBlockID, condStmt)
@@ -306,7 +306,7 @@ func (b *cfgBuilder) processWhile(whileNode, stmtNode *sitter.Node, predBlockID 
 }
 
 // processTry handles try/except/finally statements.
-func (b *cfgBuilder) processTry(tryNode, stmtNode *sitter.Node, predBlockID string) string {
+func (b *cfgBuilder) processTry(tryNode, _ *sitter.Node, predBlockID string) string {
 	// Try block
 	tryBlockID := b.newBlockID("try")
 	b.addBlock(tryBlockID, BlockTypeTry)
@@ -351,8 +351,8 @@ func (b *cfgBuilder) processTry(tryNode, stmtNode *sitter.Node, predBlockID stri
 					if aliasNode != nil {
 						excStmt := &core.Statement{
 							Type:       core.StatementTypeAssignment,
-							LineNumber: uint32(child.StartPoint().Row + 1),
-							Def:        string(aliasNode.Content(b.sourceCode)),
+							LineNumber: child.StartPoint().Row + 1,
+							Def:        aliasNode.Content(b.sourceCode),
 							Uses:       []string{},
 						}
 						b.appendStmt(catchBlockID, excStmt)
@@ -471,13 +471,13 @@ func (b *cfgBuilder) processWith(withNode, stmtNode *sitter.Node, predBlockID st
 					if aliasNode != nil {
 						withStmt := &core.Statement{
 							Type:       core.StatementTypeWith,
-							LineNumber: uint32(stmtNode.StartPoint().Row + 1),
-							Def:        string(aliasNode.Content(b.sourceCode)),
+							LineNumber: stmtNode.StartPoint().Row + 1,
+							Def:        aliasNode.Content(b.sourceCode),
 							Uses:       []string{},
 						}
 						if valueNode != nil {
 							withStmt.Uses = extractIdentifiers(valueNode, b.sourceCode)
-							withStmt.CallTarget = string(valueNode.Content(b.sourceCode))
+							withStmt.CallTarget = valueNode.Content(b.sourceCode)
 						}
 						b.appendStmt(predBlockID, withStmt)
 					}
@@ -518,7 +518,7 @@ func (b *cfgBuilder) extractStatement(actualNode, stmtNode *sitter.Node) *core.S
 	}
 
 	if stmt != nil {
-		stmt.LineNumber = uint32(stmtNode.StartPoint().Row + 1)
+		stmt.LineNumber = stmtNode.StartPoint().Row + 1
 	}
 	return stmt
 }
@@ -538,7 +538,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 
 	switch leftNode.Type() {
 	case "identifier":
-		name := string(leftNode.Content(sourceCode))
+		name := leftNode.Content(sourceCode)
 		if !isKeyword(name) {
 			stmt.Def = name
 		}
@@ -547,7 +547,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 		return nil
 	}
 
-	stmt.CallTarget = string(rightNode.Content(sourceCode))
+	stmt.CallTarget = rightNode.Content(sourceCode)
 
 	if rightNode.Type() == "call" {
 		callStmt := extractCall(rightNode, sourceCode)
@@ -575,7 +575,7 @@ func extractAugmentedAssignment(node *sitter.Node, sourceCode []byte) *core.Stat
 	}
 
 	if leftNode.Type() == "identifier" {
-		name := string(leftNode.Content(sourceCode))
+		name := leftNode.Content(sourceCode)
 		if !isKeyword(name) {
 			stmt.Def = name
 			stmt.Uses = append(stmt.Uses, name)
@@ -628,7 +628,7 @@ func extractReturn(node *sitter.Node, sourceCode []byte) *core.Statement {
 		if child == nil || child.Type() == "return" {
 			continue
 		}
-		stmt.CallTarget = string(child.Content(sourceCode))
+		stmt.CallTarget = child.Content(sourceCode)
 		stmt.Uses = append(stmt.Uses, extractIdentifiers(child, sourceCode)...)
 	}
 
@@ -643,15 +643,15 @@ func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) string {
 
 	switch functionNode.Type() {
 	case "identifier":
-		return string(functionNode.Content(sourceCode))
+		return functionNode.Content(sourceCode)
 	case "attribute":
 		attrNode := functionNode.ChildByFieldName("attribute")
 		if attrNode != nil {
-			return string(attrNode.Content(sourceCode))
+			return attrNode.Content(sourceCode)
 		}
-		return string(functionNode.Content(sourceCode))
+		return functionNode.Content(sourceCode)
 	default:
-		return string(functionNode.Content(sourceCode))
+		return functionNode.Content(sourceCode)
 	}
 }
 
@@ -670,7 +670,7 @@ func extractIdentifiers(node *sitter.Node, sourceCode []byte) []string {
 			return
 		}
 		if n.Type() == "identifier" {
-			name := string(n.Content(sourceCode))
+			name := n.Content(sourceCode)
 			if !isKeyword(name) && !seen[name] {
 				seen[name] = true
 				identifiers = append(identifiers, name)
