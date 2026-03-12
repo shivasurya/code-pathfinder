@@ -162,7 +162,7 @@ func TestVDGIntegration_Case4_SanitizerKills(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case5_UnrelatedVars tests: x = source(); sink(y) -> NO DETECT
+// TestVDGIntegration_Case5_UnrelatedVars tests: x = source(); sink(y) -> NO DETECT.
 func TestVDGIntegration_Case5_UnrelatedVars(t *testing.T) {
 
 	funcFQN := "test.module.case_unrelated"
@@ -191,7 +191,7 @@ func TestVDGIntegration_Case5_UnrelatedVars(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case6_ReassignmentKills tests: x = source(); x = "safe"; sink(x) -> NO DETECT
+// TestVDGIntegration_Case6_ReassignmentKills tests: x = source(); x = "safe"; sink(x) -> NO DETECT.
 func TestVDGIntegration_Case6_ReassignmentKills(t *testing.T) {
 
 	funcFQN := "test.module.case_reassign"

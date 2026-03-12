@@ -44,7 +44,7 @@ func (e *DataflowExecutor) Execute() []DataflowDetection {
 // executeLocal performs intra-procedural taint analysis with 3-tier fallback:
 // Tier 1: CFG-aware VDG (highest confidence) — uses control flow graph + variable dependency graph
 // Tier 2: Flat VDG — uses variable dependency graph without CFG
-// Tier 3: Line-number proximity (legacy fallback) — when no statements available
+// Tier 3: Line-number proximity (legacy fallback) — when no statements available.
 func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
