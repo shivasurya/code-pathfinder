@@ -182,14 +182,16 @@ func (e *DataflowExecutor) executeLocalLegacy(
 }
 
 // executeGlobal performs inter-procedural taint analysis.
-// Uses BFS memoization: precomputes reachability from each source once,
-// then checks sink reachability in O(1) per pair.
+// Uses VDG transfer summaries to verify data actually flows across function
+// boundaries, not just that functions are call-graph reachable.
 func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
+	// Step 1: Local analysis first.
 	localDetections := e.executeLocal()
 	detections = append(detections, localDetections...)
 
+	// Step 2: Resolve all matchers.
 	sourceCalls := e.resolveMatchers(e.IR.Sources)
 	if len(sourceCalls) == 0 {
 		e.Diagnostics.Addf("debug", "dataflow", "0 sources found, skipping global analysis")
@@ -204,17 +206,22 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 
 	sanitizerCalls := e.resolveMatchers(e.IR.Sanitizers)
 
-	// Build sanitizer FQN set for O(1) lookup.
+	sourcePatterns := e.extractTargetPatterns(sourceCalls)
+	sinkPatterns := e.extractTargetPatterns(sinkCalls)
+	sanitizerPatterns := e.extractTargetPatterns(sanitizerCalls)
+
+	// Step 3: Build transfer summaries via fixpoint.
+	summaries := e.buildTransferSummaries(sourcePatterns, sinkPatterns, sanitizerPatterns)
+
+	// Step 4: Check source→sink via BFS reachability + summary confirmation.
 	sanitizerSet := make(map[string]bool, len(sanitizerCalls))
 	for _, san := range sanitizerCalls {
 		sanitizerSet[san.FunctionFQN] = true
 	}
 
-	// Memoize BFS reachability per unique source FQN.
 	reachabilityCache := make(map[string]map[string]bool)
 
 	for _, source := range sourceCalls {
-		// Compute BFS reachability once per unique source function.
 		reachable, cached := reachabilityCache[source.FunctionFQN]
 		if !cached {
 			reachable = e.bfsReachable(source.FunctionFQN)
@@ -225,32 +232,117 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 			if source.FunctionFQN == sink.FunctionFQN {
 				continue
 			}
-
 			if !reachable[sink.FunctionFQN] {
 				continue
 			}
 
-			// Use findPath for sanitizer path check (need actual path nodes).
-			path := e.findPath(source.FunctionFQN, sink.FunctionFQN)
-			hasSanitizer := e.pathHasSanitizerSet(path, sanitizerSet)
-
-			if !hasSanitizer {
-				detections = append(detections, DataflowDetection{
-					FunctionFQN:  source.FunctionFQN,
-					SourceLine:   source.Line,
-					SourceColumn: source.CallSite.Location.Column,
-					SinkLine:     sink.Line,
-					SinkColumn:   sink.CallSite.Location.Column,
-					SinkCall:     sink.CallSite.Target,
-					Confidence:   e.Config.getGlobalScopeConfidence(),
-					Sanitized:    false,
-					Scope:        "global",
-				})
+			// Summary-based flow confirmation: verify data actually propagates.
+			if !e.summaryConfirmsFlow(source, sink, summaries) {
+				continue
 			}
+
+			path := e.findPath(source.FunctionFQN, sink.FunctionFQN)
+			if e.pathHasSanitizerSet(path, sanitizerSet) {
+				continue
+			}
+
+			detections = append(detections, DataflowDetection{
+				FunctionFQN:  source.FunctionFQN,
+				SourceLine:   source.Line,
+				SourceColumn: source.CallSite.Location.Column,
+				SinkLine:     sink.Line,
+				SinkColumn:   sink.CallSite.Location.Column,
+				SinkCall:     sink.CallSite.Target,
+				Confidence:   e.confidenceForMethod("interprocedural_vdg"),
+				Sanitized:    false,
+				Scope:        "global",
+				MatchMethod:  "interprocedural_vdg",
+			})
 		}
 	}
 
 	return detections
+}
+
+// summaryConfirmsFlow checks whether VDG transfer summaries confirm that
+// taint from a source function actually propagates to a sink function.
+// It walks the call path and verifies that at least one parameter chain
+// carries taint from source through intermediaries to sink.
+func (e *DataflowExecutor) summaryConfirmsFlow(
+	source, sink CallSiteMatch,
+	summaries map[string]*taint.TaintTransferSummary,
+) bool {
+	path := e.findPath(source.FunctionFQN, sink.FunctionFQN)
+	if len(path) < 2 {
+		return false
+	}
+
+	// Check if source function has IsSource or ReturnTaintedBySource.
+	sourceSummary := summaries[source.FunctionFQN]
+	if sourceSummary == nil {
+		// No summary available — fall back to accepting the flow.
+		return true
+	}
+
+	// Source function must produce tainted output.
+	if !sourceSummary.IsSource && !sourceSummary.ReturnTaintedBySource {
+		// Check if any param flows to return (could be caller-provided taint).
+		hasParamToReturn := false
+		for _, flows := range sourceSummary.ParamToReturn {
+			if flows {
+				hasParamToReturn = true
+				break
+			}
+		}
+		if !hasParamToReturn {
+			return false
+		}
+	}
+
+	// For direct source→sink (path length 2), check sink summary.
+	sinkSummary := summaries[sink.FunctionFQN]
+	if sinkSummary != nil {
+		// Sink function must consume tainted input (any param to sink).
+		hasParamToSink := false
+		for _, flows := range sinkSummary.ParamToSink {
+			if flows {
+				hasParamToSink = true
+				break
+			}
+		}
+		// If sink has no ParamToSink but is known to have a sink call,
+		// still accept (sink pattern matching already confirmed it).
+		if len(sinkSummary.ParamToSink) > 0 && !hasParamToSink {
+			return false
+		}
+	}
+
+	// For multi-hop paths, verify intermediaries propagate taint.
+	for i := 1; i < len(path)-1; i++ {
+		midSummary := summaries[path[i]]
+		if midSummary == nil {
+			continue // No summary, optimistically assume propagation.
+		}
+		if midSummary.IsSanitizer {
+			return false // Sanitizer on path kills flow.
+		}
+		// Check that at least one param flows to return.
+		hasFlow := false
+		for _, flows := range midSummary.ParamToReturn {
+			if flows {
+				hasFlow = true
+				break
+			}
+		}
+		if midSummary.IsSource || midSummary.ReturnTaintedBySource {
+			hasFlow = true
+		}
+		if !hasFlow {
+			return false
+		}
+	}
+
+	return true
 }
 
 // bfsReachable computes the set of all functions reachable from startFQN
