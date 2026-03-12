@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
@@ -571,4 +572,702 @@ func TestTypeConstrainedCall_SummaryConfirmsFlow_Integration(t *testing.T) {
 
 	assert.True(t, executor.summaryConfirmsFlow(source, sink, summaries),
 		"flow should be confirmed: view_func IsSource → db_func ParamToSink[0]")
+}
+
+// ============================================================================
+// Part 2: Edge Case Tests — Known VDG Limitations
+// ============================================================================
+
+// TestEdgeCase_DictConstructionOverApprox verifies that dict construction flows are
+// detected at variable level. VDG tracks d@2 depends on tainted@1.
+func TestEdgeCase_DictConstructionOverApprox(t *testing.T) {
+	funcFQN := "test.edge.dict_construct"
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "tainted", "input", []string{}),
+			makeTestAssignStmt(2, "d", "", []string{"tainted"}),
+			makeTestCallStmt(3, "sink", []string{"d"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 3}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// VDG sees d depends on tainted, sink uses d → detection.
+	// Field-level sensitivity is future work.
+	assert.Len(t, detections, 1, "VDG over-approximates dict construction (acceptable)")
+}
+
+// TestEdgeCase_TupleUnpacking verifies VDG behavior when tuple unpacking is modeled
+// as a single assignment. VDG sees a single def, not individual elements.
+func TestEdgeCase_TupleUnpacking(t *testing.T) {
+	funcFQN := "test.edge.tuple_unpack"
+	// a, b = func_returning_tuple() — modeled as a single assignment to "a".
+	// VDG can't distinguish individual tuple elements.
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "a", "get_tuple", []string{}),
+			makeTestCallStmt(2, "sink", []string{"a"}),
+		},
+		[]core.CallSite{
+			{Target: "get_tuple", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 2}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get_tuple"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// If tree-sitter models tuple unpacking as a single def, VDG detects flow.
+	assert.Len(t, detections, 1, "tuple unpacking modeled as single def → over-approximation")
+}
+
+// TestEdgeCase_AttributeAccess verifies VDG behavior with dotted attribute access.
+// obj.attr = tainted; sink(obj.attr) — depends on whether VDG tracks dotted names.
+func TestEdgeCase_AttributeAccess(t *testing.T) {
+	funcFQN := "test.edge.attr_access"
+	// obj.attr = tainted modeled as separate statements.
+	// VDG doesn't link "obj.attr" def to "obj.attr" use since it's not a simple variable.
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "tainted", "input", []string{}),
+			makeTestAssignStmt(2, "obj.attr", "", []string{"tainted"}),
+			makeTestCallStmt(3, "sink", []string{"obj.attr"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 3}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// VDG may or may not track dotted attribute names as variables.
+	if len(detections) > 0 {
+		t.Log("VDG tracks obj.attr as variable — over-approximation (acceptable)")
+	} else {
+		t.Log("VDG does NOT track obj.attr — attribute access not modeled")
+	}
+}
+
+// TestEdgeCase_StarArgs verifies VDG behavior with *args parameter indexing.
+// args[0] is not linked to caller arguments in inter-procedural analysis.
+func TestEdgeCase_StarArgs(t *testing.T) {
+	funcCaller := "test.edge.star_caller"
+	funcCallee := "test.edge.star_callee"
+
+	cg := core.NewCallGraph()
+	cg.CallSites[funcCaller] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 1}},
+	}
+	cg.CallSites[funcCallee] = []core.CallSite{
+		{Target: "sink", Location: core.Location{Line: 5}},
+	}
+	cg.Edges = map[string][]string{funcCaller: {funcCallee}}
+	cg.Statements[funcCaller] = []*core.Statement{
+		makeTestAssignStmt(1, "x", "input", []string{}),
+	}
+	cg.Statements[funcCallee] = []*core.Statement{
+		// def f(*args): sink(args[0]) — args[0] not linked to param.
+		makeTestCallStmt(5, "sink", []string{"args"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// *args indexing is a known limitation.
+	// Global analysis may still detect via optimistic summary (no ParamToSink blocks it).
+	globalUnsanitized := 0
+	for _, d := range detections {
+		if d.Scope == "global" && !d.Sanitized {
+			globalUnsanitized++
+		}
+	}
+	t.Logf("*args inter-procedural detections=%d (may detect via optimistic summary)", globalUnsanitized)
+}
+
+// TestEdgeCase_TernaryExpression verifies that VDG treats both ternary branches
+// as reaching the same variable (over-approximation, no path sensitivity).
+func TestEdgeCase_TernaryExpression(t *testing.T) {
+	funcFQN := "test.edge.ternary"
+	// x = tainted if cond else safe; sink(x)
+	// VDG: x@2 depends on tainted@1 (both branches collapsed).
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "tainted", "input", []string{}),
+			makeTestAssignStmt(2, "x", "", []string{"tainted"}),
+			makeTestCallStmt(3, "sink", []string{"x"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 3}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// Over-approximation — VDG cannot distinguish ternary branches.
+	assert.Len(t, detections, 1, "ternary over-approximation — both branches reach x")
+}
+
+// TestEdgeCase_DelStatement verifies that reassignment kills taint via LatestDef
+// even when del statement is not explicitly modeled.
+func TestEdgeCase_DelStatement(t *testing.T) {
+	funcFQN := "test.edge.del_stmt"
+	// x = input(); del x; x = "safe"; sink(x)
+	// VDG: x@3="safe" kills x@1=input via LatestDef. sink uses x@3.
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "x", "input", []string{}),
+			// del x not modeled as a statement in VDG.
+			makeTestAssignStmt(3, "x", "\"safe\"", []string{}),
+			makeTestCallStmt(4, "sink", []string{"x"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 4}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// del is not modeled, but reassignment x="safe" kills x@1 via LatestDef.
+	assert.Empty(t, detections, "reassignment kills taint even without del modeling")
+}
+
+// TestEdgeCase_ClassHierarchy verifies that local analysis works without class hierarchy
+// resolution. CHA affects inter-procedural resolution of inherited methods.
+func TestEdgeCase_ClassHierarchy(t *testing.T) {
+	funcFQN := "test.edge.class_hier"
+	// Direct call within same function — no CHA needed for local analysis.
+	// The limitation affects inter-procedural resolution.
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "data", "input", []string{}),
+			makeTestCallStmt(2, "sink", []string{"data"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sink", Location: core.Location{Line: 2}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// For local scope, CHA is not needed — direct calls work.
+	assert.Len(t, detections, 1, "local analysis works without CHA")
+	t.Log("CHA limitation only affects inter-procedural resolution of inherited methods")
+}
+
+// TestEdgeCase_Lambda verifies that lambda bodies are not analyzed as separate
+// functions, so f = lambda x: sink(x); f(tainted) has no flow.
+func TestEdgeCase_Lambda(t *testing.T) {
+	funcCaller := "test.edge.lambda_caller"
+	funcLambda := "test.edge.<lambda>"
+
+	cg := core.NewCallGraph()
+	// Lambda not in call graph — it's an anonymous function.
+	cg.CallSites[funcCaller] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 1}},
+	}
+	// No call sites or statements for lambda body.
+	cg.Statements[funcCaller] = []*core.Statement{
+		makeTestAssignStmt(1, "tainted", "input", []string{}),
+		makeTestAssignStmt(2, "f", "", []string{}), // f = lambda ...
+	}
+	// No edge to lambda since it's not resolved.
+	_ = funcLambda
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sink"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// Lambda bodies not analyzed — no sink found anywhere.
+	assert.Empty(t, detections, "lambda bodies not analyzed — no detection")
+}
+
+// ============================================================================
+// Part 3: V4 Regression Tests — ANY FAILURE IS A REGRESSION
+// ============================================================================
+
+// TestRegression_V4_OneFile_DirectFlow: x = input(); eval(x) → 1 detection.
+func TestRegression_V4_OneFile_DirectFlow(t *testing.T) {
+	funcFQN := "test.regression.direct"
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "x", "input", []string{}),
+			makeTestCallStmt(2, "eval", []string{"x"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "eval", Location: core.Location{Line: 2}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	require.Len(t, detections, 1, "R1: 1-file direct flow MUST detect")
+	assert.Equal(t, "flat_vdg", detections[0].MatchMethod)
+	assert.GreaterOrEqual(t, detections[0].Confidence, 0.85)
+}
+
+// TestRegression_V4_OneFile_Sanitized: input() → sanitize() → eval() → 0 detections.
+func TestRegression_V4_OneFile_Sanitized(t *testing.T) {
+	funcFQN := "test.regression.sanitized"
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "x", "input", []string{}),
+			makeTestAssignStmt(2, "x", "sanitize", []string{"x"}),
+			makeTestCallStmt(3, "eval", []string{"x"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "sanitize", Location: core.Location{Line: 2}},
+			{Target: "eval", Location: core.Location{Line: 3}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sanitize"}}),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	unsanitized := 0
+	for _, d := range detections {
+		if !d.Sanitized {
+			unsanitized++
+		}
+	}
+	assert.Equal(t, 0, unsanitized, "R2: sanitized flow MUST NOT produce unsanitized detections")
+}
+
+// TestRegression_V4_OneFile_NoFlow: x = input(); y = "safe"; eval(y) → 0 detections.
+func TestRegression_V4_OneFile_NoFlow(t *testing.T) {
+	funcFQN := "test.regression.noflow"
+	cg := setupTestCallGraph(funcFQN,
+		[]*core.Statement{
+			makeTestAssignStmt(1, "x", "input", []string{}),
+			makeTestAssignStmt(2, "y", "\"safe\"", []string{}),
+			makeTestCallStmt(3, "eval", []string{"y"}),
+		},
+		[]core.CallSite{
+			{Target: "input", Location: core.Location{Line: 1}},
+			{Target: "eval", Location: core.Location{Line: 3}},
+		},
+	)
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Empty(t, detections, "R3: no-flow MUST NOT detect (y is unrelated to x)")
+}
+
+// TestRegression_V4_TwoFile_CrossModule: source in func A, sink in func B, A→B edge.
+func TestRegression_V4_TwoFile_CrossModule(t *testing.T) {
+	funcA := "module_a.get_input"
+	funcB := "module_b.run_query"
+
+	cg := core.NewCallGraph()
+	cg.CallSites[funcA] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 2}},
+	}
+	cg.CallSites[funcB] = []core.CallSite{
+		{Target: "eval", Location: core.Location{Line: 5}},
+	}
+	cg.Edges = map[string][]string{funcA: {funcB}}
+	cg.Statements[funcA] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "input", []string{}),
+	}
+	cg.Statements[funcB] = []*core.Statement{
+		makeTestCallStmt(5, "eval", []string{"data"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	globalCount := 0
+	for _, d := range detections {
+		if d.Scope == "global" {
+			globalCount++
+		}
+	}
+	assert.GreaterOrEqual(t, globalCount, 1, "R4: 2-file cross-module MUST detect globally")
+}
+
+// TestRegression_V4_TwoFile_Sanitized: source→sanitizer→sink across 2 files → 0 detections.
+func TestRegression_V4_TwoFile_Sanitized(t *testing.T) {
+	funcA := "module_a.get_input_safe"
+	funcB := "module_b.safe_run"
+
+	cg := core.NewCallGraph()
+	cg.CallSites[funcA] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 2}},
+	}
+	cg.CallSites[funcB] = []core.CallSite{
+		{Target: "sanitize", Location: core.Location{Line: 5}},
+		{Target: "eval", Location: core.Location{Line: 7}},
+	}
+	cg.Edges = map[string][]string{funcA: {funcB}}
+	cg.Statements[funcA] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "input", []string{}),
+	}
+	cg.Statements[funcB] = []*core.Statement{
+		makeTestAssignStmt(5, "clean", "sanitize", []string{"data"}),
+		makeTestCallStmt(7, "eval", []string{"clean"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sanitize"}}),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	unsanitizedGlobal := 0
+	for _, d := range detections {
+		if d.Scope == "global" && !d.Sanitized {
+			unsanitizedGlobal++
+		}
+	}
+	assert.Equal(t, 0, unsanitizedGlobal, "R5: 2-file sanitized MUST NOT detect globally")
+}
+
+// TestRegression_V4_ThreeFile_MultiHop: A→B→C with taint flowing through all 3.
+func TestRegression_V4_ThreeFile_MultiHop(t *testing.T) {
+	funcA := "module_a.source_func"
+	funcB := "module_b.relay_func"
+	funcC := "module_c.sink_func"
+
+	cg := core.NewCallGraph()
+	cg.CallSites[funcA] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 2}},
+	}
+	cg.CallSites[funcB] = []core.CallSite{}
+	cg.CallSites[funcC] = []core.CallSite{
+		{Target: "eval", Location: core.Location{Line: 8}},
+	}
+	cg.Edges = map[string][]string{
+		funcA: {funcB},
+		funcB: {funcC},
+	}
+	cg.Statements[funcA] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "input", []string{}),
+	}
+	cg.Statements[funcB] = []*core.Statement{
+		// relay: receives data, passes it along.
+		makeTestAssignStmt(5, "y", "", []string{"data"}),
+	}
+	cg.Statements[funcC] = []*core.Statement{
+		makeTestCallStmt(8, "eval", []string{"data"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	globalCount := 0
+	for _, d := range detections {
+		if d.Scope == "global" {
+			globalCount++
+		}
+	}
+	assert.GreaterOrEqual(t, globalCount, 1, "R6: 3-file multi-hop MUST detect globally")
+}
+
+// buildTenFunctionChain creates a 10-function call chain for regression testing.
+// func_01 (source) → func_02 → ... → func_10 (sink).
+// If sanitizerAt > 0, adds a sanitizer call site at that function index.
+func buildTenFunctionChain(sanitizerAt int) *core.CallGraph {
+	cg := core.NewCallGraph()
+	funcs := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		funcs[i] = fmt.Sprintf("chain.func_%02d", i+1)
+	}
+
+	// Source at func_01.
+	cg.CallSites[funcs[0]] = []core.CallSite{
+		{Target: "input", Location: core.Location{Line: 2}},
+	}
+	cg.Statements[funcs[0]] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "input", []string{}),
+	}
+
+	// Intermediaries func_02 through func_09.
+	for i := 1; i < 9; i++ {
+		callSites := []core.CallSite{}
+		stmts := []*core.Statement{
+			makeTestAssignStmt(uint32(2), "y", "", []string{"data"}),
+		}
+		if sanitizerAt == i+1 {
+			callSites = append(callSites, core.CallSite{
+				Target: "sanitize_sql", Location: core.Location{Line: 3},
+			})
+			stmts = append(stmts, &core.Statement{
+				Type:       core.StatementTypeAssignment,
+				LineNumber: 3,
+				Def:        "y",
+				CallTarget: "sanitize_sql",
+				Uses:       []string{"y"},
+			})
+		}
+		cg.CallSites[funcs[i]] = callSites
+		cg.Statements[funcs[i]] = stmts
+	}
+
+	// Sink at func_10.
+	cg.CallSites[funcs[9]] = []core.CallSite{
+		{Target: "cursor.execute", Location: core.Location{Line: 5}},
+	}
+	cg.Statements[funcs[9]] = []*core.Statement{
+		makeTestCallStmt(5, "cursor.execute", []string{"data"}),
+	}
+
+	// Build chain edges: func_01 → func_02 → ... → func_10.
+	cg.Edges = make(map[string][]string)
+	for i := 0; i < 9; i++ {
+		cg.Edges[funcs[i]] = []string{funcs[i+1]}
+	}
+
+	return cg
+}
+
+// TestRegression_V4_TenFile_Chain: 10-function chain, source at 1, sink at 10.
+func TestRegression_V4_TenFile_Chain(t *testing.T) {
+	cg := buildTenFunctionChain(0) // No sanitizer.
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"cursor.execute"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	globalCount := 0
+	for _, d := range detections {
+		if d.Scope == "global" {
+			globalCount++
+		}
+	}
+	assert.GreaterOrEqual(t, globalCount, 1, "R7: 10-file chain MUST detect globally")
+}
+
+// TestRegression_V4_TenFile_Sanitized: 10-function chain with sanitizer at func_02.
+func TestRegression_V4_TenFile_Sanitized(t *testing.T) {
+	cg := buildTenFunctionChain(2) // Sanitizer at func_02.
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"input"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"cursor.execute"}}),
+		Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sanitize_sql"}}),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	unsanitizedGlobal := 0
+	for _, d := range detections {
+		if d.Scope == "global" && !d.Sanitized {
+			unsanitizedGlobal++
+		}
+	}
+	assert.Equal(t, 0, unsanitizedGlobal, "R8: 10-file chain with sanitizer at func_02 MUST NOT detect")
+}
+
+// ============================================================================
+// Part 4: QueryType 10-File Chain Tests
+// ============================================================================
+
+// TestQueryType_TenFile_TypeConstrainedSource: 10-file chain with type_constrained_call source.
+func TestQueryType_TenFile_TypeConstrainedSource(t *testing.T) {
+	cg := buildTenFunctionChain(0)
+
+	// Override func_01 to have a type_constrained_call source instead of plain input().
+	cg.CallSites["chain.func_01"] = []core.CallSite{
+		{
+			Target:                   "get",
+			TargetFQN:                "rest_framework.request.Request.query_params.get",
+			Location:                 core.Location{Line: 2},
+			InferredType:             "rest_framework.request.Request",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.85,
+		},
+	}
+	cg.Statements["chain.func_01"] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "get", []string{}),
+	}
+
+	ir := &DataflowIR{
+		Sources: []json.RawMessage{
+			mustMarshal(TypeConstrainedCallIR{
+				Type:          "type_constrained_call",
+				ReceiverType:  "rest_framework.request.Request",
+				MethodName:    "get",
+				MinConfidence: 0.5,
+				FallbackMode:  "name",
+			}),
+		},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"cursor.execute"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	globalCount := 0
+	for _, d := range detections {
+		if d.Scope == "global" {
+			globalCount++
+		}
+	}
+	assert.GreaterOrEqual(t, globalCount, 1, "Q1: 10-file chain with type_constrained_call source MUST detect")
+}
+
+// TestQueryType_TenFile_TypeConstrainedSource_Sanitized: same chain with sanitizer at func_02.
+func TestQueryType_TenFile_TypeConstrainedSource_Sanitized(t *testing.T) {
+	cg := buildTenFunctionChain(2) // Sanitizer at func_02.
+
+	// Override func_01 for type_constrained_call source.
+	cg.CallSites["chain.func_01"] = []core.CallSite{
+		{
+			Target:                   "get",
+			TargetFQN:                "rest_framework.request.Request.query_params.get",
+			Location:                 core.Location{Line: 2},
+			InferredType:             "rest_framework.request.Request",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.85,
+		},
+	}
+	cg.Statements["chain.func_01"] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "get", []string{}),
+	}
+
+	ir := &DataflowIR{
+		Sources: []json.RawMessage{
+			mustMarshal(TypeConstrainedCallIR{
+				Type:          "type_constrained_call",
+				ReceiverType:  "rest_framework.request.Request",
+				MethodName:    "get",
+				MinConfidence: 0.5,
+				FallbackMode:  "name",
+			}),
+		},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"cursor.execute"}}),
+		Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"sanitize_sql"}}),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	unsanitizedGlobal := 0
+	for _, d := range detections {
+		if d.Scope == "global" && !d.Sanitized {
+			unsanitizedGlobal++
+		}
+	}
+	assert.Equal(t, 0, unsanitizedGlobal, "Q2: 10-file chain with sanitizer MUST NOT detect")
 }
