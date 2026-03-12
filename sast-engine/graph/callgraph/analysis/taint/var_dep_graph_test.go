@@ -17,7 +17,7 @@ func makeAssignStmt(line uint32, def string, callTarget string, uses []string) *
 	}
 }
 
-func makeCallStmt(line uint32, callTarget string, uses []string) *core.Statement {
+func makeCallStmt(line uint32, callTarget string, uses []string) *core.Statement { //nolint:unparam // callTarget varies in CFG tests
 	return &core.Statement{
 		Type:       core.StatementTypeCall,
 		LineNumber: line,
@@ -28,7 +28,7 @@ func makeCallStmt(line uint32, callTarget string, uses []string) *core.Statement
 }
 
 // TestVDGBuild_DirectFlow verifies that x = source() creates a taint source node.
-// Scenario: x = source(); sink(x)
+// Scenario: x = source(); sink(x).
 func TestVDGBuild_DirectFlow(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -61,7 +61,7 @@ func TestVDGBuild_DirectFlow(t *testing.T) {
 }
 
 // TestVDGBuild_TransitiveFlow verifies edges through transitive assignments.
-// Scenario: x = source(); y = x; sink(y)
+// Scenario: x = source(); y = x; sink(y).
 func TestVDGBuild_TransitiveFlow(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -102,7 +102,7 @@ func TestVDGBuild_TransitiveFlow(t *testing.T) {
 }
 
 // TestVDGBuild_ReassignmentKills verifies that reassignment updates LatestDef.
-// Scenario: x = source(); x = "safe"; sink(x)
+// Scenario: x = source(); x = "safe"; sink(x).
 func TestVDGBuild_ReassignmentKills(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -139,7 +139,7 @@ func TestVDGBuild_ReassignmentKills(t *testing.T) {
 }
 
 // TestVDGBuild_SanitizerMarks verifies that sanitizer calls mark nodes.
-// Scenario: x = source(); x = sanitize(x); sink(x)
+// Scenario: x = source(); x = sanitize(x); sink(x).
 func TestVDGBuild_SanitizerMarks(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -188,7 +188,7 @@ func TestVDGBuild_SanitizerMarks(t *testing.T) {
 
 // --- Reachability Tests ---
 
-// TestVDGReachability_DirectFlow: x = source(); sink(x) -> 1 detection
+// TestVDGReachability_DirectFlow verifies: x = source(); sink(x) -> 1 detection.
 func TestVDGReachability_DirectFlow(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -217,7 +217,7 @@ func TestVDGReachability_DirectFlow(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_TransitiveFlow: x = source(); y = x; sink(y) -> 1 detection
+// TestVDGReachability_TransitiveFlow verifies: x = source(); y = x; sink(y) -> 1 detection.
 func TestVDGReachability_TransitiveFlow(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -241,7 +241,7 @@ func TestVDGReachability_TransitiveFlow(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_FlowThroughCall: x = source(); y = transform(x); sink(y) -> 1 detection
+// TestVDGReachability_FlowThroughCall verifies: x = source(); y = transform(x); sink(y) -> 1 detection.
 func TestVDGReachability_FlowThroughCall(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -265,7 +265,7 @@ func TestVDGReachability_FlowThroughCall(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_SanitizerKills: x = source(); x = sanitize(x); sink(x) -> 0 detections
+// TestVDGReachability_SanitizerKills verifies: x = source(); x = sanitize(x); sink(x) -> 0 detections.
 func TestVDGReachability_SanitizerKills(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -282,7 +282,7 @@ func TestVDGReachability_SanitizerKills(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_UnrelatedVariables: x = source(); sink(y) -> 0 detections
+// TestVDGReachability_UnrelatedVariables verifies: x = source(); sink(y) -> 0 detections.
 func TestVDGReachability_UnrelatedVariables(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -298,7 +298,7 @@ func TestVDGReachability_UnrelatedVariables(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_ReassignmentKills: x = source(); x = "safe"; sink(x) -> 0 detections
+// TestVDGReachability_ReassignmentKills verifies: x = source(); x = "safe"; sink(x) -> 0 detections.
 func TestVDGReachability_ReassignmentKills(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),
@@ -315,7 +315,7 @@ func TestVDGReachability_ReassignmentKills(t *testing.T) {
 	}
 }
 
-// TestVDGReachability_MultiHopTransitive: x = source(); y = x; z = y; sink(z) -> 1 detection
+// TestVDGReachability_MultiHopTransitive verifies: x = source(); y = x; z = y; sink(z) -> 1 detection.
 func TestVDGReachability_MultiHopTransitive(t *testing.T) {
 	stmts := []*core.Statement{
 		makeAssignStmt(1, "x", "source", nil),

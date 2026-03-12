@@ -19,7 +19,7 @@ func makeTestAssignStmt(line uint32, def string, callTarget string, uses []strin
 }
 
 // makeTestCallStmt creates a standalone call statement for testing.
-func makeTestCallStmt(line uint32, callTarget string, uses []string) *core.Statement {
+func makeTestCallStmt(line uint32, callTarget string, uses []string) *core.Statement { //nolint:unparam // callTarget varies in other test files
 	return &core.Statement{
 		Type:       core.StatementTypeCall,
 		LineNumber: line,
@@ -37,7 +37,7 @@ func setupTestCallGraph(funcFQN string, stmts []*core.Statement, callSites []cor
 	return cg
 }
 
-// TestVDGIntegration_Case1_DirectFlow tests: x = source(); sink(x) -> DETECT
+// TestVDGIntegration_Case1_DirectFlow tests: x = source(); sink(x) -> DETECT.
 func TestVDGIntegration_Case1_DirectFlow(t *testing.T) {
 	funcFQN := "test.module.case_direct"
 	stmts := []*core.Statement{
@@ -68,7 +68,7 @@ func TestVDGIntegration_Case1_DirectFlow(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case2_TransitiveFlow tests: x = source(); y = x; sink(y) -> DETECT
+// TestVDGIntegration_Case2_TransitiveFlow tests: x = source(); y = x; sink(y) -> DETECT.
 func TestVDGIntegration_Case2_TransitiveFlow(t *testing.T) {
 	funcFQN := "test.module.case_transitive"
 	stmts := []*core.Statement{
@@ -97,7 +97,7 @@ func TestVDGIntegration_Case2_TransitiveFlow(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case3_FlowThroughCall tests: x = source(); y = transform(x); sink(y) -> DETECT
+// TestVDGIntegration_Case3_FlowThroughCall tests: x = source(); y = transform(x); sink(y) -> DETECT.
 func TestVDGIntegration_Case3_FlowThroughCall(t *testing.T) {
 	funcFQN := "test.module.case_call"
 	stmts := []*core.Statement{
@@ -126,7 +126,7 @@ func TestVDGIntegration_Case3_FlowThroughCall(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case4_SanitizerKills tests: x = source(); x = sanitize(x); sink(x) -> NO DETECT
+// TestVDGIntegration_Case4_SanitizerKills tests: x = source(); x = sanitize(x); sink(x) -> NO DETECT.
 func TestVDGIntegration_Case4_SanitizerKills(t *testing.T) {
 	funcFQN := "test.module.case_sanitizer"
 	stmts := []*core.Statement{
@@ -225,7 +225,7 @@ func TestVDGIntegration_Case6_ReassignmentKills(t *testing.T) {
 	}
 }
 
-// TestVDGIntegration_Case7_MultiHop tests: x = source(); y = x; z = y; sink(z) -> DETECT
+// TestVDGIntegration_Case7_MultiHop tests: x = source(); y = x; z = y; sink(z) -> DETECT.
 func TestVDGIntegration_Case7_MultiHop(t *testing.T) {
 	funcFQN := "test.module.case_multihop"
 	stmts := []*core.Statement{
