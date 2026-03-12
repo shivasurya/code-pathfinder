@@ -2,7 +2,11 @@ package dsl
 
 import (
 	"encoding/json"
+	"strings"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -311,5 +315,264 @@ func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSite
 	return false
 }
 
+// ============================================================================
+// VDG-specific functions (from demand-driven-dataflow branch)
+// These are used by VDG tests and will be wired into executeLocal/executeGlobal
+// in PR-04 and PR-05. Kept here to maintain zero test failures across all PRs.
+// ============================================================================
 
+// extractTargetPatterns extracts unique call target names from matched call sites.
+// Also extracts the bare name (last segment) for dotted targets, since statement
+// CallTarget may use the bare name (e.g., "execute" vs callsite "cursor.execute").
+func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []string {
+	seen := map[string]bool{}
+	var patterns []string
+	addPattern := func(p string) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			patterns = append(patterns, p)
+		}
+	}
+	for _, m := range matches {
+		addPattern(m.CallSite.Target)
+		addPattern(m.CallSite.TargetFQN)
+		// Also add the bare name for dotted targets (e.g., "cursor.execute" → "execute")
+		if strings.Contains(m.CallSite.Target, ".") {
+			parts := strings.Split(m.CallSite.Target, ".")
+			addPattern(parts[len(parts)-1])
+		}
+	}
+	return patterns
+}
+
+// buildTransferSummaries builds TaintTransferSummary for all functions using
+// iterative fixpoint: each round uses the previous round's summaries to enhance
+// callee lookups. Converges when no summary changes or maxIterations reached.
+func (e *DataflowExecutor) buildTransferSummaries(
+	sources, sinks, sanitizers []string,
+) map[string]*taint.TaintTransferSummary {
+	const maxIterations = 10
+	summaries := make(map[string]*taint.TaintTransferSummary)
+
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		changed := false
+		newSummaries := make(map[string]*taint.TaintTransferSummary)
+
+		for funcFQN, funcNode := range e.CallGraph.Functions {
+			stmts := e.getStatementsForFunction(funcFQN)
+			if len(stmts) == 0 {
+				continue
+			}
+
+			paramNames := e.getParamNames(funcFQN, funcNode)
+
+			var ts *taint.TaintTransferSummary
+			if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+				if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+					if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+						if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+							ts = taint.BuildTaintTransferSummaryWithCFG(
+								funcFQN, cfGraph, blockStmts,
+								paramNames, sources, sinks, sanitizers,
+								e.CallGraph, summaries,
+							)
+						}
+					}
+				}
+			}
+			if ts == nil {
+				ts = taint.BuildTaintTransferSummary(
+					funcFQN, stmts, paramNames, sources, sinks, sanitizers,
+					e.CallGraph, summaries,
+				)
+			}
+
+			newSummaries[funcFQN] = ts
+
+			if !summaryEqual(summaries[funcFQN], ts) {
+				changed = true
+			}
+		}
+
+		summaries = newSummaries
+
+		if !changed {
+			break
+		}
+	}
+
+	return summaries
+}
+
+// summaryEqual checks if two TaintTransferSummary values are equal.
+func summaryEqual(a, b *taint.TaintTransferSummary) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.IsSource != b.IsSource ||
+		a.IsSanitizer != b.IsSanitizer ||
+		a.ReturnTaintedBySource != b.ReturnTaintedBySource {
+		return false
+	}
+	if len(a.ParamToReturn) != len(b.ParamToReturn) {
+		return false
+	}
+	for k, v := range a.ParamToReturn {
+		if b.ParamToReturn[k] != v {
+			return false
+		}
+	}
+	if len(a.ParamToSink) != len(b.ParamToSink) {
+		return false
+	}
+	for k, v := range a.ParamToSink {
+		if b.ParamToSink[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// getStatementsForFunction retrieves flattened statements for a function,
+// preferring CFG-flattened statements over raw statements.
+func (e *DataflowExecutor) getStatementsForFunction(funcFQN string) []*core.Statement {
+	// Try CFG-flattened statements first
+	if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
+		if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
+			if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
+				if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
+					return taint.FlattenBlockStatements(cfGraph, blockStmts)
+				}
+			}
+		}
+	}
+	// Fallback to flat statements
+	if stmts, ok := e.CallGraph.Statements[funcFQN]; ok {
+		return stmts
+	}
+	return nil
+}
+
+// getParamNames extracts parameter names from a function's graph.Node.
+func (e *DataflowExecutor) getParamNames(funcFQN string, funcNode *graph.Node) []string {
+	if funcNode == nil {
+		return nil
+	}
+	// MethodArgumentsValue contains parameter names like ["self", "data", "key"]
+	// Filter out "self" and "cls" for methods
+	var params []string
+	for _, p := range funcNode.MethodArgumentsValue {
+		if p != "self" && p != "cls" {
+			params = append(params, p)
+		}
+	}
+	return params
+}
+
+// addTransitiveCallers adds all transitive callers of funcFQN to the candidates set.
+func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[string]bool) {
+	visited := make(map[string]bool)
+	queue := []string{funcFQN}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if visited[current] {
+			continue
+		}
+		visited[current] = true
+		if callers, ok := e.CallGraph.ReverseEdges[current]; ok {
+			for _, caller := range callers {
+				candidates[caller] = true
+				if !visited[caller] {
+					queue = append(queue, caller)
+				}
+			}
+		}
+	}
+}
+
+// extractPatterns extracts string patterns from CallMatcherIR list.
+// Used by VDG tests that construct matchers directly.
+func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
+	patterns := make([]string, 0, len(matchers))
+	for _, matcher := range matchers {
+		patterns = append(patterns, matcher.Patterns...)
+	}
+	return patterns
+}
+
+// findMatchingCalls finds call sites matching the given string patterns.
+func (e *DataflowExecutor) findMatchingCalls(patterns []string) []CallSiteMatch {
+	matches := []CallSiteMatch{}
+
+	for functionFQN, callSites := range e.CallGraph.CallSites {
+		for _, cs := range callSites {
+			for _, pattern := range patterns {
+				matched := e.matchesPattern(cs.Target, pattern)
+				if !matched && cs.TargetFQN != "" {
+					matched = e.matchesPattern(cs.TargetFQN, pattern)
+				}
+				if matched {
+					matches = append(matches, CallSiteMatch{
+						CallSite:    cs,
+						FunctionFQN: functionFQN,
+						Line:        cs.Location.Line,
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return matches
+}
+
+// matchesPattern performs wildcard pattern matching on call targets.
+func (e *DataflowExecutor) matchesPattern(target, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+
+	if strings.Contains(pattern, "*") {
+		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
+			substr := strings.Trim(pattern, "*")
+			return strings.Contains(target, substr)
+		}
+		if after, ok := strings.CutPrefix(pattern, "*"); ok {
+			suffix := after
+			return strings.HasSuffix(target, suffix)
+		}
+		if before, ok := strings.CutSuffix(pattern, "*"); ok {
+			prefix := before
+			return strings.HasPrefix(target, prefix)
+		}
+	}
+
+	return target == pattern
+}
+
+// findFunctionsWithSourcesAndSinks finds functions that have both sources and sinks.
+func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []CallSiteMatch) []string {
+	sourceMap := make(map[string]bool)
+	for _, s := range sources {
+		sourceMap[s.FunctionFQN] = true
+	}
+
+	sinkMap := make(map[string]bool)
+	for _, s := range sinks {
+		sinkMap[s.FunctionFQN] = true
+	}
+
+	functions := []string{}
+	for funcFQN := range sourceMap {
+		if sinkMap[funcFQN] {
+			functions = append(functions, funcFQN)
+		}
+	}
+
+	return functions
+}
 

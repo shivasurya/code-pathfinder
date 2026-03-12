@@ -111,6 +111,19 @@ type CallGraph struct {
 	// Value: TaintSummary with taint flow information
 	Summaries map[string]*TaintSummary
 
+	// Statements stores extracted statements per function FQN for demand-driven dataflow analysis.
+	// Populated during call graph Pass 5 (taint summary generation).
+	Statements map[string][]*Statement
+
+	// CFGs stores control flow graphs per function FQN for CFG-aware dataflow analysis.
+	// Populated during call graph Pass 5 (taint summary generation).
+	// Key: function FQN, Value: opaque interface to avoid import cycle with cfg package.
+	CFGs map[string]any
+
+	// CFGBlockStatements stores statements organized by basic block for CFG-aware analysis.
+	// Key: function FQN, Value: opaque interface (cfg.BlockStatements) to avoid import cycle.
+	CFGBlockStatements map[string]any
+
 	// Attribute registry for class attributes and instance variables
 	// Populated during call graph construction (Phase 3: Extract Class Attributes)
 	// Enables symbol search to find class fields and properties
@@ -149,6 +162,9 @@ func NewCallGraph() *CallGraph {
 		Functions:    make(map[string]*graph.Node),
 		Parameters:   make(map[string]*ParameterSymbol),
 		Summaries:    make(map[string]*TaintSummary),
+		Statements:         make(map[string][]*Statement),
+		CFGs:               make(map[string]any),
+		CFGBlockStatements: make(map[string]any),
 	}
 }
 

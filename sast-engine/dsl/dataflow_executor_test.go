@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
@@ -659,3 +660,427 @@ func TestDataflowExecutor_SanitizerWorksWithTypeConstrainedSink(t *testing.T) {
 }
 
 // matchesPattern edge case tests removed — dead code deleted from DataflowExecutor.
+
+// ============================================================================
+// VDG-specific tests (from demand-driven-dataflow branch)
+// These test VDG helper functions and inter-procedural analysis.
+// Updated to use toRawMessages() for DataflowIR construction.
+// ============================================================================
+
+func TestDataflowExecutor_VDG_Local(t *testing.T) {
+	t.Run("finds functions with sources and sinks", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.CallSites["test.vulnerable"] = []core.CallSite{
+			{
+				Target:   "request.GET",
+				Location: core.Location{File: "test.py", Line: 10},
+			},
+			{
+				Target:   "eval",
+				Location: core.Location{File: "test.py", Line: 15},
+			},
+		}
+
+		ir := &DataflowIR{
+			Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"request.GET"}}),
+			Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+			Sanitizers: emptyRawMessages(),
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+
+		// Test VDG helper functions using direct CallMatcherIR
+		sourceMatchers := []CallMatcherIR{{Patterns: []string{"request.GET"}}}
+		sinkMatchers := []CallMatcherIR{{Patterns: []string{"eval"}}}
+
+		sourcePatterns := executor.extractPatterns(sourceMatchers)
+		sinkPatterns := executor.extractPatterns(sinkMatchers)
+
+		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+
+		functions := executor.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
+
+		assert.Contains(t, functions, "test.vulnerable")
+		_ = ir // ir used for executor construction
+	})
+
+	t.Run("handles multiple sources and sinks in same function via VDG helpers", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.CallSites["test.multi"] = []core.CallSite{
+			{
+				Target:   "request.GET",
+				Location: core.Location{File: "test.py", Line: 5},
+			},
+			{
+				Target:   "request.POST",
+				Location: core.Location{File: "test.py", Line: 7},
+			},
+			{
+				Target:   "eval",
+				Location: core.Location{File: "test.py", Line: 10},
+			},
+			{
+				Target:   "execute",
+				Location: core.Location{File: "test.py", Line: 15},
+			},
+		}
+
+		sourceMatchers := []CallMatcherIR{{Patterns: []string{"request.GET", "request.POST"}}}
+		sinkMatchers := []CallMatcherIR{{Patterns: []string{"eval", "execute"}}}
+
+		ir := &DataflowIR{
+			Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"request.GET", "request.POST"}}),
+			Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval", "execute"}}),
+			Sanitizers: emptyRawMessages(),
+			Scope:      "local",
+		}
+
+		executor := NewDataflowExecutor(ir, cg)
+
+		sourcePatterns := executor.extractPatterns(sourceMatchers)
+		sinkPatterns := executor.extractPatterns(sinkMatchers)
+		sourceCalls := executor.findMatchingCalls(sourcePatterns)
+		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+
+		// Should find 2 sources * 2 sinks = 4 combinations
+		assert.Len(t, sourceCalls, 2)
+		assert.Len(t, sinkCalls, 2)
+
+		functions := executor.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
+		assert.Contains(t, functions, "test.multi")
+		_ = ir
+	})
+}
+
+func TestDataflowExecutor_VDG_Global(t *testing.T) {
+	t.Run("detects cross-function flow via path finding", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.Edges = make(map[string][]string)
+		cg.Edges["test.get_input"] = []string{"test.process"}
+
+		cg.CallSites["test.get_input"] = []core.CallSite{
+			{
+				Target:   "request.GET",
+				Location: core.Location{Line: 10},
+			},
+			{
+				Target:    "process",
+				TargetFQN: "test.process",
+				Location:  core.Location{Line: 12},
+			},
+		}
+
+		cg.CallSites["test.process"] = []core.CallSite{
+			{
+				Target:   "eval",
+				Location: core.Location{Line: 20},
+			},
+		}
+
+		executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+
+		// Test path finding
+		path := executor.findPath("test.get_input", "test.process")
+		assert.NotEmpty(t, path)
+		assert.Contains(t, path, "test.get_input")
+		assert.Contains(t, path, "test.process")
+	})
+
+	t.Run("detects sanitizer on path via VDG helpers", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.Edges = make(map[string][]string)
+		cg.Edges["test.source"] = []string{"test.sanitize"}
+		cg.Edges["test.sanitize"] = []string{"test.sink"}
+
+		cg.CallSites["test.sanitize"] = []core.CallSite{
+			{
+				Target:   "escape_sql",
+				Location: core.Location{Line: 15},
+			},
+		}
+
+		executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+
+		path := []string{"test.source", "test.sanitize", "test.sink"}
+		sanitizerMatchers := []CallMatcherIR{{Patterns: []string{"escape_sql"}}}
+		sanitizerPatterns := executor.extractPatterns(sanitizerMatchers)
+		sanitizerCalls := executor.findMatchingCalls(sanitizerPatterns)
+
+		hasSanitizer := executor.pathHasSanitizer(path, sanitizerCalls)
+		assert.True(t, hasSanitizer)
+	})
+
+	t.Run("inter-procedural with transfer summaries", func(t *testing.T) {
+		cg := core.NewCallGraph()
+
+		cg.Edges["test.caller"] = []string{"test.get_input", "test.sink_func"}
+		cg.Edges["test.get_input"] = []string{}
+		cg.Edges["test.sink_func"] = []string{}
+
+		cg.ReverseEdges = make(map[string][]string)
+		cg.ReverseEdges["test.get_input"] = []string{"test.caller"}
+		cg.ReverseEdges["test.sink_func"] = []string{"test.caller"}
+
+		cg.CallSites["test.caller"] = []core.CallSite{
+			{
+				Target:    "get_input",
+				TargetFQN: "test.get_input",
+				Location:  core.Location{Line: 10, File: "test.py"},
+				Resolved:  true,
+			},
+			{
+				Target:    "sink_func",
+				TargetFQN: "test.sink_func",
+				Location:  core.Location{Line: 12, File: "test.py"},
+				Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}},
+				Resolved:  true,
+			},
+		}
+
+		cg.CallSites["test.get_input"] = []core.CallSite{
+			{
+				Target:   "request.GET",
+				Location: core.Location{Line: 5, File: "test.py"},
+				Resolved: true,
+			},
+		}
+
+		cg.CallSites["test.sink_func"] = []core.CallSite{
+			{
+				Target:    "eval",
+				Location:  core.Location{Line: 20, File: "test.py"},
+				Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}},
+				Resolved:  true,
+			},
+		}
+
+		cg.Statements["test.get_input"] = []*core.Statement{
+			{Type: core.StatementTypeAssignment, Def: "data", Uses: []string{"request", "GET"}, CallTarget: "request.GET()", LineNumber: 5},
+			{Type: core.StatementTypeReturn, Def: "", Uses: []string{"data"}, CallTarget: "data", LineNumber: 6},
+		}
+
+		cg.Statements["test.sink_func"] = []*core.Statement{
+			{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "data"}, CallTarget: "eval", LineNumber: 20},
+		}
+
+		cg.Statements["test.caller"] = []*core.Statement{
+			{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"get_input"}, CallTarget: "get_input()", LineNumber: 10},
+			{Type: core.StatementTypeCall, Def: "", Uses: []string{"sink_func", "x"}, CallTarget: "sink_func", LineNumber: 12},
+		}
+
+		cg.Functions["test.caller"] = nil
+		cg.Functions["test.get_input"] = nil
+		cg.Functions["test.sink_func"] = &graph.Node{MethodArgumentsValue: []string{"data"}}
+
+		executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+
+		// Test buildTransferSummaries
+		summaries := executor.buildTransferSummaries(
+			[]string{"request.GET"},
+			[]string{"eval"},
+			[]string{},
+		)
+
+		assert.NotNil(t, summaries)
+		// sink_func should have ParamToSink[0]=true
+		if sinkSummary, ok := summaries["test.sink_func"]; ok {
+			assert.True(t, sinkSummary.ParamToSink[0], "sink_func param 0 should reach sink")
+		}
+	})
+}
+
+func TestDataflowExecutor_VDG_Global_MultiLevelSource(t *testing.T) {
+	// 3-level chain: main() -> wrapper() -> get_input()
+	cg := core.NewCallGraph()
+
+	cg.Edges["test.main"] = []string{"test.wrapper"}
+	cg.Edges["test.wrapper"] = []string{"test.get_input"}
+	cg.Edges["test.get_input"] = []string{}
+
+	cg.ReverseEdges["test.wrapper"] = []string{"test.main"}
+	cg.ReverseEdges["test.get_input"] = []string{"test.wrapper"}
+
+	cg.Statements["test.get_input"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "data", Uses: []string{"os", "getenv"}, CallTarget: "os.getenv", LineNumber: 2},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"data"}, LineNumber: 3},
+	}
+	cg.CallSites["test.get_input"] = []core.CallSite{
+		{Target: "os.getenv", TargetFQN: "os.getenv", Location: core.Location{Line: 2}},
+	}
+
+	cg.Statements["test.wrapper"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "result", Uses: []string{"get_input"}, CallTarget: "get_input", LineNumber: 5},
+		{Type: core.StatementTypeReturn, Def: "", Uses: []string{"result"}, LineNumber: 6},
+	}
+	cg.CallSites["test.wrapper"] = []core.CallSite{
+		{Target: "get_input", TargetFQN: "test.get_input", Location: core.Location{Line: 5}},
+	}
+
+	cg.Statements["test.main"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"wrapper"}, CallTarget: "wrapper", LineNumber: 10},
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "x"}, CallTarget: "eval", LineNumber: 11},
+	}
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "wrapper", TargetFQN: "test.wrapper", Location: core.Location{Line: 10}},
+		{Target: "eval", TargetFQN: "builtins.eval", Location: core.Location{Line: 11}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Functions["test.get_input"] = nil
+	cg.Functions["test.wrapper"] = nil
+	cg.Functions["test.main"] = nil
+
+	executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+
+	// Verify transfer summaries propagate through chain
+	summaries := executor.buildTransferSummaries(
+		[]string{"os.getenv"},
+		[]string{"eval"},
+		[]string{},
+	)
+	assert.NotNil(t, summaries)
+
+	// get_input should be IsSource (it calls os.getenv and returns result)
+	if s, ok := summaries["test.get_input"]; ok {
+		assert.True(t, s.ReturnTaintedBySource, "get_input should return tainted data")
+	}
+}
+
+func TestDataflowExecutor_VDG_Global_MultiLevelSink(t *testing.T) {
+	// 3-level sink chain: main() -> wrap_eval() -> dangerous_eval() -> eval()
+	cg := core.NewCallGraph()
+
+	cg.Edges["test.main"] = []string{"test.wrap_eval"}
+	cg.Edges["test.wrap_eval"] = []string{"test.dangerous_eval"}
+	cg.Edges["test.dangerous_eval"] = []string{}
+
+	cg.ReverseEdges["test.wrap_eval"] = []string{"test.main"}
+	cg.ReverseEdges["test.dangerous_eval"] = []string{"test.wrap_eval"}
+
+	cg.Statements["test.dangerous_eval"] = []*core.Statement{
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"eval", "code"}, CallTarget: "eval", LineNumber: 2},
+	}
+	cg.CallSites["test.dangerous_eval"] = []core.CallSite{
+		{Target: "eval", Location: core.Location{Line: 2}, Arguments: []core.Argument{{Value: "code", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Statements["test.wrap_eval"] = []*core.Statement{
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"dangerous_eval", "data"}, CallTarget: "dangerous_eval", LineNumber: 5},
+	}
+	cg.CallSites["test.wrap_eval"] = []core.CallSite{
+		{Target: "dangerous_eval", TargetFQN: "test.dangerous_eval", Location: core.Location{Line: 5}, Arguments: []core.Argument{{Value: "data", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Statements["test.main"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", Uses: []string{"os", "getenv"}, CallTarget: "os.getenv", LineNumber: 10},
+		{Type: core.StatementTypeCall, Def: "", Uses: []string{"wrap_eval", "x"}, CallTarget: "wrap_eval", LineNumber: 11},
+	}
+	cg.CallSites["test.main"] = []core.CallSite{
+		{Target: "os.getenv", TargetFQN: "os.getenv", Location: core.Location{Line: 10}},
+		{Target: "wrap_eval", TargetFQN: "test.wrap_eval", Location: core.Location{Line: 11}, Arguments: []core.Argument{{Value: "x", IsVariable: true, Position: 0}}},
+	}
+
+	cg.Functions["test.main"] = nil
+	cg.Functions["test.wrap_eval"] = &graph.Node{MethodArgumentsValue: []string{"data"}}
+	cg.Functions["test.dangerous_eval"] = &graph.Node{MethodArgumentsValue: []string{"code"}}
+
+	executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+
+	summaries := executor.buildTransferSummaries(
+		[]string{"os.getenv"},
+		[]string{"eval"},
+		[]string{},
+	)
+
+	// dangerous_eval should have ParamToSink[0]=true
+	if s, ok := summaries["test.dangerous_eval"]; ok {
+		assert.True(t, s.ParamToSink[0], "dangerous_eval param 0 should reach eval sink")
+	}
+}
+
+func TestDataflowExecutor_VDG_PatternMatching(t *testing.T) {
+	cg := core.NewCallGraph()
+	executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+	t.Run("exact match", func(t *testing.T) {
+		assert.True(t, executor.matchesPattern("eval", "eval"))
+		assert.False(t, executor.matchesPattern("eval", "exec"))
+	})
+
+	t.Run("wildcard prefix", func(t *testing.T) {
+		assert.True(t, executor.matchesPattern("request.GET", "request.*"))
+		assert.True(t, executor.matchesPattern("request.POST", "request.*"))
+		assert.False(t, executor.matchesPattern("utils.sanitize", "request.*"))
+	})
+
+	t.Run("wildcard suffix", func(t *testing.T) {
+		assert.True(t, executor.matchesPattern("user_input", "*_input"))
+		assert.True(t, executor.matchesPattern("admin_input", "*_input"))
+		assert.False(t, executor.matchesPattern("user_data", "*_input"))
+	})
+
+	t.Run("wildcard match all", func(t *testing.T) {
+		assert.True(t, executor.matchesPattern("anything", "*"))
+	})
+}
+
+func TestDataflowExecutor_VDG_FindMatchingCalls_TargetFQN(t *testing.T) {
+	t.Run("matches against TargetFQN when available", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.CallSites["main.handler"] = []core.CallSite{
+			{
+				Target:    "FormValue",
+				TargetFQN: "net/http.Request.FormValue",
+				Location:  core.Location{File: "main.go", Line: 10},
+			},
+			{
+				Target:    "Query",
+				TargetFQN: "database/sql.DB.Query",
+				Location:  core.Location{File: "main.go", Line: 15},
+			},
+		}
+
+		executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+		sourceCalls := executor.findMatchingCalls([]string{"net/http.Request.FormValue"})
+		assert.Len(t, sourceCalls, 1, "Should match net/http.Request.FormValue")
+		assert.Equal(t, "FormValue", sourceCalls[0].CallSite.Target)
+
+		sinkCalls := executor.findMatchingCalls([]string{"database/sql.DB.Query"})
+		assert.Len(t, sinkCalls, 1, "Should match database/sql.DB.Query")
+		assert.Equal(t, "Query", sinkCalls[0].CallSite.Target)
+	})
+
+	t.Run("falls back to Target when TargetFQN is empty", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.CallSites["app.views.index"] = []core.CallSite{
+			{
+				Target:    "request.GET",
+				TargetFQN: "",
+				Location:  core.Location{File: "views.py", Line: 20},
+			},
+		}
+
+		executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+		sourceCalls := executor.findMatchingCalls([]string{"request.GET"})
+		assert.Len(t, sourceCalls, 1, "Should match request.GET via Target field")
+	})
+
+	t.Run("wildcard patterns work with TargetFQN", func(t *testing.T) {
+		cg := core.NewCallGraph()
+		cg.CallSites["main.handler"] = []core.CallSite{
+			{
+				Target:    "FormValue",
+				TargetFQN: "net/http.Request.FormValue",
+				Location:  core.Location{File: "main.go", Line: 10},
+			},
+		}
+
+		executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+		sourceCalls := executor.findMatchingCalls([]string{"*FormValue"})
+		assert.Len(t, sourceCalls, 1, "Should match *FormValue against TargetFQN")
+	})
+}
