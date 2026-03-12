@@ -3,6 +3,7 @@ package dsl
 import (
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
@@ -291,5 +292,131 @@ func TestExecuteLocal_VDGAnalysis(t *testing.T) {
 	}
 	if detections[0].TaintedVar == "" {
 		t.Error("expected TaintedVar to be set")
+	}
+}
+
+func TestSummaryConfirmsFlow_SourceIsSource(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = map[string][]string{
+		"source_func": {"sink_func"},
+	}
+
+	executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+	source := CallSiteMatch{FunctionFQN: "source_func", Line: 1}
+	sink := CallSiteMatch{FunctionFQN: "sink_func", Line: 5}
+
+	summaries := map[string]*taint.TaintTransferSummary{
+		"source_func": {
+			FunctionFQN:          "source_func",
+			IsSource:             true,
+			ParamToReturn:        map[int]bool{},
+			ParamToSink:          map[int]bool{},
+			ReturnTaintedBySource: true,
+		},
+		"sink_func": {
+			FunctionFQN:   "sink_func",
+			ParamToReturn: map[int]bool{},
+			ParamToSink:   map[int]bool{0: true},
+		},
+	}
+
+	if !executor.summaryConfirmsFlow(source, sink, summaries) {
+		t.Error("expected flow to be confirmed when source IsSource")
+	}
+}
+
+func TestSummaryConfirmsFlow_NoFlow(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = map[string][]string{
+		"safe_func": {"sink_func"},
+	}
+
+	executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+	source := CallSiteMatch{FunctionFQN: "safe_func", Line: 1}
+	sink := CallSiteMatch{FunctionFQN: "sink_func", Line: 5}
+
+	summaries := map[string]*taint.TaintTransferSummary{
+		"safe_func": {
+			FunctionFQN:   "safe_func",
+			IsSource:      false,
+			ParamToReturn: map[int]bool{},
+			ParamToSink:   map[int]bool{},
+		},
+		"sink_func": {
+			FunctionFQN:   "sink_func",
+			ParamToReturn: map[int]bool{},
+			ParamToSink:   map[int]bool{0: true},
+		},
+	}
+
+	if executor.summaryConfirmsFlow(source, sink, summaries) {
+		t.Error("expected flow NOT confirmed when source has no IsSource and no ParamToReturn")
+	}
+}
+
+func TestSummaryConfirmsFlow_MissingSummary(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Edges = map[string][]string{
+		"unknown_func": {"sink_func"},
+	}
+
+	executor := NewDataflowExecutor(&DataflowIR{}, cg)
+
+	source := CallSiteMatch{FunctionFQN: "unknown_func", Line: 1}
+	sink := CallSiteMatch{FunctionFQN: "sink_func", Line: 5}
+
+	// No summaries available — should fall back to accepting flow.
+	summaries := map[string]*taint.TaintTransferSummary{}
+
+	if !executor.summaryConfirmsFlow(source, sink, summaries) {
+		t.Error("expected flow accepted when no summary available (optimistic)")
+	}
+}
+
+func TestExecuteGlobal_WithSummaries(t *testing.T) {
+	cg := core.NewCallGraph()
+	funcA := "module.get_input"
+	funcB := "module.run_query"
+
+	cg.CallSites[funcA] = []core.CallSite{
+		{Target: "os.getenv", Location: core.Location{Line: 2}},
+	}
+	cg.CallSites[funcB] = []core.CallSite{
+		{Target: "eval", Location: core.Location{Line: 5}},
+	}
+	cg.Edges = map[string][]string{
+		funcA: {funcB},
+	}
+	cg.Statements[funcA] = []*core.Statement{
+		makeTestAssignStmt(2, "x", "os.getenv", []string{}),
+	}
+	cg.Statements[funcB] = []*core.Statement{
+		makeTestCallStmt(5, "eval", []string{"data"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"os.getenv"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// Should find at least one global detection.
+	globalCount := 0
+	for _, d := range detections {
+		if d.Scope == "global" {
+			globalCount++
+			if d.MatchMethod != "interprocedural_vdg" {
+				t.Errorf("expected MatchMethod 'interprocedural_vdg', got %q", d.MatchMethod)
+			}
+		}
+	}
+	if globalCount == 0 {
+		t.Error("expected at least 1 global detection")
 	}
 }
