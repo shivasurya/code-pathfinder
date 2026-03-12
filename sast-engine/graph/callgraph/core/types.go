@@ -138,6 +138,18 @@ type CallGraph struct {
 	// Stores return types and variable bindings extracted during call graph construction
 	// *resolution.GoTypeInferenceEngine (interface to avoid import cycle)
 	GoTypeEngine GoTypeProvider
+
+	// Third-party type registry for inheritance-aware matching (MRO lookups).
+	// Populated during call graph construction.
+	// *registry.ThirdPartyRegistryRemote (stored as any to avoid import cycle)
+	// Implements dsl.InheritanceChecker interface.
+	ThirdPartyRemote any
+
+	// Stdlib type registry for inheritance-aware matching (MRO lookups).
+	// Populated during call graph construction.
+	// *registry.StdlibRegistryRemote (stored as any to avoid import cycle)
+	// Implements dsl.InheritanceChecker interface.
+	StdlibRemote any
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.

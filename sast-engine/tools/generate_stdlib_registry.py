@@ -20,12 +20,14 @@ Usage:
 """
 
 import argparse
+import ast
 import hashlib
 import importlib
 import inspect
 import json
 import os
 import pkgutil
+import re
 import sys
 import sysconfig
 from datetime import datetime, timezone
@@ -119,6 +121,224 @@ def infer_from_docstring(func) -> str:
     return "unknown"
 
 
+def find_typeshed_path() -> Optional[Path]:
+    """Find the typeshed stdlib stubs directory.
+
+    Searches in order:
+    1. Bundled typeshed in mypy installation
+    2. typeshed-client package
+    3. System typeshed (e.g., /usr/lib/python3/typeshed)
+    4. Local typeshed checkout specified by TYPESHED_PATH env var
+    """
+    # Check env var first
+    env_path = os.environ.get("TYPESHED_PATH")
+    if env_path:
+        p = Path(env_path) / "stdlib"
+        if p.exists():
+            return p
+
+    # Check mypy's bundled typeshed
+    try:
+        import mypy.typeshed  # type: ignore
+        p = Path(mypy.typeshed.__path__[0]) / "stdlib"
+        if p.exists():
+            return p
+    except (ImportError, AttributeError):
+        pass
+
+    # Check common system locations
+    for candidate in [
+        Path("/usr/lib/python3/typeshed/stdlib"),
+        Path("/usr/share/typeshed/stdlib"),
+        Path(sys.prefix) / "lib" / "typeshed" / "stdlib",
+    ]:
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
+_stub_parse_stack: set = set()  # Recursion guard for cross-module stub resolution
+
+def parse_typeshed_stub(module_name: str, typeshed_path: Optional[Path]) -> Dict[str, Dict[str, str]]:
+    """Parse a typeshed .pyi stub file to extract return types and class bases.
+
+    Returns a dict like:
+    {
+        "functions": {"func_name": "return.Type", ...},
+        "classes": {
+            "ClassName": {
+                "__bases__": ["BaseClass1", "BaseClass2"],
+                "method_name": "return.Type",
+                ...
+            }
+        }
+    }
+    """
+    result: Dict[str, Any] = {"functions": {}, "classes": {}}
+
+    if typeshed_path is None:
+        return result
+
+    # Recursion guard: prevent infinite loops in cross-module stub resolution
+    if module_name in _stub_parse_stack:
+        return result
+    _stub_parse_stack.add(module_name)
+
+    # Find the stub file
+    # Module can be a package (os/__init__.pyi) or a simple module (json.pyi)
+    parts = module_name.split(".")
+    candidates = [
+        typeshed_path / (module_name.replace(".", "/") + ".pyi"),
+        typeshed_path / module_name.replace(".", "/") / "__init__.pyi",
+    ]
+    # For top-level like "sqlite3", also check VERSIONS file subdir
+    if len(parts) == 1:
+        candidates.append(typeshed_path / parts[0] / "__init__.pyi")
+        candidates.append(typeshed_path / (parts[0] + ".pyi"))
+
+    stub_path = None
+    for c in candidates:
+        if c.exists():
+            stub_path = c
+            break
+
+    if stub_path is None:
+        return result
+
+    try:
+        source = stub_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(stub_path))
+    except (SyntaxError, UnicodeDecodeError):
+        return result
+
+    def resolve_annotation(node) -> str:
+        """Convert an AST annotation node to a string type name."""
+        if node is None:
+            return "unknown"
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, str):
+                return node.value
+            return str(node.value)
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            parts = []
+            current = node
+            while isinstance(current, ast.Attribute):
+                parts.append(current.attr)
+                current = current.value
+            if isinstance(current, ast.Name):
+                parts.append(current.id)
+            return ".".join(reversed(parts))
+        if isinstance(node, ast.Subscript):
+            # e.g., List[str], Optional[int]
+            base = resolve_annotation(node.value)
+            return base  # Strip generics for now — we want the base type
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            # Union type (X | Y) — take first
+            return resolve_annotation(node.left)
+        return "unknown"
+
+    def is_typevar(type_name: str) -> bool:
+        """Check if a type name looks like a TypeVar (e.g., _CursorT, _T)."""
+        return (type_name.startswith("_") and len(type_name) > 1
+                and type_name[1:2].isupper() and "." not in type_name)
+
+    def qualify_type(type_name: str) -> str:
+        """Qualify a short type name with its module if known."""
+        builtin_types = {"str", "int", "float", "bool", "list", "dict", "tuple", "set",
+                         "bytes", "bytearray", "None", "type", "object", "complex",
+                         "frozenset", "memoryview", "range", "slice", "property"}
+        if type_name in builtin_types:
+            if type_name == "None":
+                return "builtins.NoneType"
+            return f"builtins.{type_name}"
+        # Normalize internal module prefixes (e.g., _socket.socket -> socket.socket)
+        if "." in type_name:
+            parts = type_name.split(".", 1)
+            if parts[0].startswith("_") and not parts[0].startswith("__"):
+                type_name = parts[0].lstrip("_") + "." + parts[1]
+        # If it looks like a simple class name within same module, qualify it
+        if "." not in type_name and type_name[0:1].isupper():
+            return f"{module_name}.{type_name}"
+        return type_name
+
+    # First pass: collect import aliases (e.g., from _hashlib import openssl_md5 as md5)
+    # Maps alias_name -> (source_module, original_name)
+    import_aliases: Dict[str, tuple] = {}
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            src_module = node.module
+            for alias in node.names:
+                if alias.asname:
+                    import_aliases[alias.asname] = (src_module, alias.name)
+
+    def process_node(node):
+        """Process a single AST node (function, class, or if-block)."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            ret = resolve_annotation(node.returns)
+            if ret != "unknown" and not is_typevar(ret):
+                # Keep first definition (don't overwrite overloads)
+                if node.name not in result["functions"]:
+                    result["functions"][node.name] = qualify_type(ret)
+
+        elif isinstance(node, ast.ClassDef):
+            class_info: Dict[str, str] = {}
+
+            # Extract bases
+            bases = []
+            for base in node.bases:
+                base_name = resolve_annotation(base)
+                if base_name != "unknown":
+                    bases.append(qualify_type(base_name))
+            if bases:
+                class_info["__bases__"] = bases  # type: ignore
+
+            # Extract method return types (keep first non-TypeVar for overloads)
+            for item in ast.iter_child_nodes(node):
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    ret = resolve_annotation(item.returns)
+                    if item.name not in class_info and ret != "unknown" and not is_typevar(ret):
+                        class_info[item.name] = qualify_type(ret)
+                # Recurse into if-blocks inside classes too
+                elif isinstance(item, ast.If):
+                    for sub in item.body + item.orelse:
+                        if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            ret = resolve_annotation(sub.returns)
+                            if sub.name not in class_info and ret != "unknown" and not is_typevar(ret):
+                                class_info[sub.name] = qualify_type(ret)
+
+            result["classes"][node.name] = class_info
+
+        elif isinstance(node, ast.If):
+            # Recurse into if/else blocks (handles `if sys.version_info >= ...`)
+            for sub in node.body + node.orelse:
+                process_node(sub)
+
+    # Process top-level definitions
+    for node in ast.iter_child_nodes(tree):
+        process_node(node)
+
+    # Second pass: resolve import aliases by parsing the source module's stub
+    # e.g., "from _hashlib import openssl_md5 as md5" → parse _hashlib.pyi → openssl_md5() -> HASH
+    for alias_name, (src_module, original_name) in import_aliases.items():
+        if alias_name not in result["functions"]:
+            # Parse the source module's stub to find the original function's return type
+            src_stub = parse_typeshed_stub(src_module, typeshed_path)
+            if original_name in src_stub.get("functions", {}):
+                ret_type = src_stub["functions"][original_name]
+                # Normalize the return type module prefix
+                if "." in ret_type:
+                    parts = ret_type.split(".", 1)
+                    if parts[0].startswith("_") and not parts[0].startswith("__"):
+                        ret_type = parts[0].lstrip("_") + "." + parts[1]
+                result["functions"][alias_name] = ret_type
+
+    _stub_parse_stack.discard(module_name)
+    return result
+
+
 def introspect_function(func) -> Dict[str, Any]:
     """Extract function signature and return type."""
     result = {
@@ -166,18 +386,55 @@ def introspect_function(func) -> Dict[str, Any]:
     return result
 
 
-def introspect_class(cls) -> Dict[str, Any]:
-    """Extract class methods and their signatures."""
+def introspect_class(cls, module_name: str = "") -> Dict[str, Any]:
+    """Extract class methods, bases, MRO, and their signatures."""
     result = {
         "type": "class",
-        "methods": {}
+        "methods": {},
+        "bases": [],
+        "mro": []
     }
+
+    # Extract base classes (fully qualified names)
+    try:
+        for base in cls.__bases__:
+            if base is object:
+                result["bases"].append("object")
+            else:
+                base_module = getattr(base, "__module__", "")
+                base_name = getattr(base, "__qualname__", getattr(base, "__name__", str(base)))
+                # Normalize internal modules (e.g., _io -> io)
+                if base_module.startswith("_") and not base_module.startswith("__"):
+                    base_module = base_module.lstrip("_")
+                if base_module and base_module != "builtins":
+                    result["bases"].append(f"{base_module}.{base_name}")
+                else:
+                    result["bases"].append(base_name)
+    except Exception:
+        pass
+
+    # Extract MRO (method resolution order)
+    try:
+        for mro_cls in cls.__mro__:
+            mro_module = getattr(mro_cls, "__module__", "")
+            mro_name = getattr(mro_cls, "__qualname__", getattr(mro_cls, "__name__", str(mro_cls)))
+            # Normalize internal modules
+            if mro_module.startswith("_") and not mro_module.startswith("__"):
+                mro_module = mro_module.lstrip("_")
+            if mro_module and mro_module != "builtins":
+                result["mro"].append(f"{mro_module}.{mro_name}")
+            elif mro_cls is object:
+                result["mro"].append("object")
+            else:
+                result["mro"].append(mro_name)
+    except Exception:
+        pass
 
     # Add docstring
     if cls.__doc__:
         result["docstring"] = clean_docstring(cls.__doc__)
 
-    # Extract methods
+    # Extract methods (including builtin methods that may not be functions)
     for name in dir(cls):
         # Skip private methods except important ones
         if name.startswith("_") and name not in ["__init__", "__call__", "__enter__", "__exit__", "__iter__", "__next__"]:
@@ -185,7 +442,7 @@ def introspect_class(cls) -> Dict[str, Any]:
 
         try:
             attr = getattr(cls, name)
-            if inspect.ismethod(attr) or inspect.isfunction(attr):
+            if inspect.ismethod(attr) or inspect.isfunction(attr) or inspect.ismethoddescriptor(attr) or inspect.isbuiltin(attr):
                 result["methods"][name] = introspect_function(attr)
         except Exception:
             # Skip problematic methods
@@ -248,8 +505,64 @@ def introspect_attribute(obj: Any) -> Dict[str, Any]:
     return result
 
 
-def introspect_module(module_name: str) -> Optional[Dict[str, Any]]:
-    """Generic introspection for ANY stdlib module."""
+def apply_typeshed_overlay(result: Dict[str, Any], module_name: str, typeshed_path: Optional[Path], verbose: bool = False) -> None:
+    """Overlay typeshed stub data onto introspected module data.
+
+    Patches in return types for functions/methods where runtime introspection
+    returned "unknown" (common for C builtins like sqlite3, hashlib).
+    Also patches in class bases from stubs when runtime bases use internal names.
+    """
+    stub_data = parse_typeshed_stub(module_name, typeshed_path)
+    if not stub_data["functions"] and not stub_data["classes"]:
+        return
+
+    patched = 0
+
+    # Patch function return types
+    for func_name, return_type in stub_data["functions"].items():
+        if func_name in result["functions"]:
+            func = result["functions"][func_name]
+            if func.get("return_type") == "unknown" or func.get("source") in ("heuristic", "docstring"):
+                func["return_type"] = return_type
+                func["confidence"] = 0.95
+                func["source"] = "typeshed"
+                patched += 1
+
+    # Patch class method return types and bases
+    for class_name, class_info in stub_data["classes"].items():
+        if class_name not in result["classes"]:
+            continue
+
+        cls_result = result["classes"][class_name]
+
+        # Patch bases from typeshed if they provide better qualified names
+        stub_bases = class_info.get("__bases__")
+        if stub_bases:
+            # Prefer typeshed bases — they have proper public names (e.g., io.TextIOBase vs io._TextIOBase)
+            cls_result["bases"] = list(stub_bases)
+
+        # Patch method return types
+        for method_name, return_type in class_info.items():
+            if method_name.startswith("__") and method_name != "__init__":
+                continue
+            if method_name in cls_result.get("methods", {}):
+                method = cls_result["methods"][method_name]
+                if method.get("return_type") == "unknown" or method.get("source") in ("heuristic", "docstring"):
+                    method["return_type"] = return_type
+                    method["confidence"] = 0.95
+                    method["source"] = "typeshed"
+                    patched += 1
+
+    if verbose and patched > 0:
+        print(f"  [typeshed] Patched {patched} return types for {module_name}")
+
+
+def introspect_module(module_name: str, typeshed_path: Optional[Path] = None, verbose: bool = False) -> Optional[Dict[str, Any]]:
+    """Generic introspection for ANY stdlib module.
+
+    Combines runtime introspection with typeshed stub data for complete
+    type information including return types for C builtins and class MRO.
+    """
     try:
         module = importlib.import_module(module_name)
     except Exception as e:
@@ -283,7 +596,7 @@ def introspect_module(module_name: str) -> Optional[Dict[str, Any]]:
             if inspect.isfunction(obj) or inspect.isbuiltin(obj):
                 result["functions"][name] = introspect_function(obj)
             elif inspect.isclass(obj):
-                result["classes"][name] = introspect_class(obj)
+                result["classes"][name] = introspect_class(obj, module_name)
             elif isinstance(obj, (str, int, float, bool, tuple)):
                 result["constants"][name] = introspect_constant(obj)
             else:
@@ -293,6 +606,10 @@ def introspect_module(module_name: str) -> Optional[Dict[str, Any]]:
         except Exception as e:
             # Log but don't fail on individual members
             print(f"Warning: Failed to introspect {module_name}.{name}: {e}", file=sys.stderr)
+
+    # Apply typeshed overlay for C builtins missing return types
+    if typeshed_path:
+        apply_typeshed_overlay(result, module_name, typeshed_path, verbose)
 
     return result
 
@@ -448,12 +765,37 @@ def main():
         help="Enable verbose logging"
     )
 
+    parser.add_argument(
+        "--typeshed-path",
+        type=str,
+        help="Path to typeshed stdlib stubs directory (auto-detected if not specified)"
+    )
+
     args = parser.parse_args()
 
     # Check Python version
     if sys.version_info < (3, 9):
         print(f"Error: Python 3.9 or higher is required. Current version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", file=sys.stderr)
         return 1
+
+    # Find typeshed path
+    typeshed_path = None
+    if args.typeshed_path:
+        typeshed_path = Path(args.typeshed_path)
+        # Normalize: if user passed the typeshed root (containing stdlib/), append stdlib
+        if (typeshed_path / "stdlib").exists():
+            typeshed_path = typeshed_path / "stdlib"
+        if not typeshed_path.exists():
+            print(f"Warning: Specified typeshed path does not exist: {typeshed_path}", file=sys.stderr)
+            typeshed_path = None
+    else:
+        typeshed_path = find_typeshed_path()
+
+    if typeshed_path:
+        print(f"Using typeshed stubs from: {typeshed_path}")
+    else:
+        print("Warning: No typeshed stubs found. C builtin return types may be incomplete.", file=sys.stderr)
+        print("  Install mypy (pip install mypy) or set TYPESHED_PATH environment variable.", file=sys.stderr)
 
     # Determine which modules to generate
     if args.all:
@@ -480,8 +822,8 @@ def main():
         if args.verbose:
             print(f"[{i}/{len(modules)}] Processing {module_name}...", flush=True)
 
-        # Introspect module
-        data = introspect_module(module_name)
+        # Introspect module with typeshed overlay
+        data = introspect_module(module_name, typeshed_path, args.verbose)
 
         if data is None:
             failed.append(module_name)
@@ -534,9 +876,11 @@ def main():
     WINDOWS_ONLY_MODULES = {'msvcrt', 'nt', 'winreg', 'winsound', '_winapi', 'msilib'}
     UNIX_SPECIFIC_MODULES = {'nis', 'grp', 'pwd', 'resource', 'syslog', 'termios', 'tty'}
     MACOS_SPECIFIC_MODULES = {'_scproxy'}
-    # Modules that may not be available in all builds
+    # Modules that may not be available in all builds or require display server
     OPTIONAL_MODULES = {'readline', 'dbm', 'gdbm', 'ossaudiodev', 'spwd'}
-    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES | UNIX_SPECIFIC_MODULES | MACOS_SPECIFIC_MODULES | OPTIONAL_MODULES
+    GUI_MODULES = {'tkinter', 'turtle', 'turtledemo', 'idlelib'}
+    DEPRECATED_MODULES = {'lib2to3'}
+    PLATFORM_SPECIFIC_MODULES = WINDOWS_ONLY_MODULES | UNIX_SPECIFIC_MODULES | MACOS_SPECIFIC_MODULES | OPTIONAL_MODULES | GUI_MODULES | DEPRECATED_MODULES
 
     # Check if any non-platform-specific modules failed
     unexpected_failures = [m for m in failed if m not in PLATFORM_SPECIFIC_MODULES]

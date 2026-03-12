@@ -1216,7 +1216,7 @@ func (s *Server) toolListModules() (string, bool) {
 // stdlibInfoForFQN returns Go stdlib metadata for a resolved FQN (e.g., "net/http.Get").
 // Returns nil when stdlib context is unavailable or the FQN is not a stdlib function.
 // Callers should guard on is_stdlib before calling this.
-func (s *Server) stdlibInfoForFQN(fqn string) map[string]interface{} {
+func (s *Server) stdlibInfoForFQN(fqn string) map[string]any {
 	if s.goModuleRegistry == nil || s.goModuleRegistry.StdlibLoader == nil {
 		return nil
 	}
@@ -1229,7 +1229,7 @@ func (s *Server) stdlibInfoForFQN(fqn string) map[string]interface{} {
 	if !s.goModuleRegistry.StdlibLoader.ValidateStdlibImport(importPath) {
 		return nil
 	}
-	info := map[string]interface{}{
+	info := map[string]any{
 		"package": importPath,
 	}
 	fn, err := s.goModuleRegistry.StdlibLoader.GetFunction(importPath, funcName)
@@ -1494,7 +1494,7 @@ func (s *Server) toolGetCallDetails(callerName, calleeName string) (string, bool
 			}
 
 			// Add resolution info.
-			resolution := map[string]interface{}{
+			resolution := map[string]any{
 				"resolved":  cs.Resolved,
 				"is_stdlib": cs.IsStdlib,
 			}

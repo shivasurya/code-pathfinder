@@ -1,15 +1,23 @@
 package dsl
 
+import (
+	"encoding/json"
+
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+)
+
 // IRType represents the type of IR node.
 type IRType string
 
 const (
-	IRTypeCallMatcher     IRType = "call_matcher"
-	IRTypeVariableMatcher IRType = "variable_matcher"
-	IRTypeDataflow        IRType = "dataflow"
-	IRTypeLogicAnd        IRType = "logic_and"
-	IRTypeLogicOr         IRType = "logic_or"
-	IRTypeLogicNot        IRType = "logic_not"
+	IRTypeCallMatcher              IRType = "call_matcher"
+	IRTypeVariableMatcher          IRType = "variable_matcher"
+	IRTypeDataflow                 IRType = "dataflow"
+	IRTypeLogicAnd                 IRType = "logic_and"
+	IRTypeLogicOr                  IRType = "logic_or"
+	IRTypeLogicNot                 IRType = "logic_not"
+	IRTypeTypeConstrainedCall      IRType = "type_constrained_call"
+	IRTypeTypeConstrainedAttribute IRType = "type_constrained_attribute"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -27,6 +35,10 @@ type ArgumentConstraint struct {
 	// Wildcard enables pattern matching with * and ? in Value.
 	// Example: "0o7*" matches "0o777", "0o755", etc.
 	Wildcard bool `json:"wildcard"`
+
+	// Comparator specifies the comparison mode for the value.
+	// Supported: "lt", "gt", "lte", "gte", "regex", "missing", "" (exact/wildcard).
+	Comparator string `json:"comparator,omitempty"`
 }
 
 // CallMatcherIR represents call_matcher JSON IR.
@@ -66,13 +78,14 @@ func (v *VariableMatcherIR) GetType() IRType {
 }
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
+// Sources/Sinks/Sanitizers accept any matcher type (CallMatcherIR or TypeConstrainedCallIR).
 type DataflowIR struct {
-	Type        string          `json:"type"`        // "dataflow"
-	Sources     []CallMatcherIR `json:"sources"`     // Where taint originates
-	Sinks       []CallMatcherIR `json:"sinks"`       // Dangerous functions
-	Sanitizers  []CallMatcherIR `json:"sanitizers"`  // Taint-removing functions
-	Propagation []PropagationIR `json:"propagation"` // How taint flows (for future use)
-	Scope       string          `json:"scope"`       // "local" or "global"
+	Type        string            `json:"type"`        // "dataflow"
+	Sources     []json.RawMessage `json:"sources"`     // Any matcher IR
+	Sinks       []json.RawMessage `json:"sinks"`       // Any matcher IR
+	Sanitizers  []json.RawMessage `json:"sanitizers"`  // Any matcher IR
+	Propagation []PropagationIR   `json:"propagation"` // How taint flows (for future use)
+	Scope       string            `json:"scope"`       // "local" or "global"
 }
 
 // GetType returns the IR type.
@@ -88,14 +101,80 @@ type PropagationIR struct {
 
 // DataflowDetection represents a detected taint flow.
 type DataflowDetection struct {
-	FunctionFQN string  // Function containing the vulnerability
-	SourceLine  int     // Line where taint originates
-	SinkLine    int     // Line where taint reaches sink
-	TaintedVar  string  // Variable name that is tainted
-	SinkCall    string  // Sink function name
-	Confidence  float64 // 0.0-1.0 confidence score
-	Sanitized   bool    // Was sanitization detected?
-	Scope       string  // "local" or "global"
+	FunctionFQN     string          // Function containing the vulnerability
+	SourceLine      int             // Line where taint originates
+	SourceColumn    int             // Column where taint originates
+	SinkLine        int             // Line where taint reaches sink
+	SinkColumn      int             // Column where taint reaches sink
+	TaintedVar      string          // Variable name that is tainted
+	SinkCall        string          // Sink function name
+	Confidence      float64         // 0.0-1.0 confidence score
+	Sanitized       bool            // Was sanitization detected?
+	Scope           string          // "local" or "global"
+	MatchedCallSite *core.CallSite  // Internal: matched call site for DataflowExecutor use
+	MatchMethod     string          // How the match was made: "type_inference", "fqn_bridge", "fqn_prefix", "name_fallback"
+}
+
+// TypeConstrainedCallIR represents type_constrained_call JSON IR.
+// Matches call sites where the receiver variable has a specific inferred type.
+//
+//nolint:tagliatelle // JSON tags match Python DSL format.
+type TypeConstrainedCallIR struct {
+	Type             string  `json:"type"`                       // "type_constrained_call"
+	ReceiverType     string  `json:"receiverType,omitempty"`     // backward compat: single FQN
+	ReceiverTypes    []string `json:"receiverTypes,omitempty"`   // multiple exact FQNs
+	ReceiverPatterns []string `json:"receiverPatterns,omitempty"` // wildcard patterns
+	MatchSubclasses  bool    `json:"matchSubclasses"`            // MRO inheritance matching
+	MethodName       string  `json:"methodName,omitempty"`       // backward compat: single method
+	MethodNames      []string `json:"methodNames,omitempty"`     // multiple method names
+	MinConfidence    float64 `json:"minConfidence"`              // default 0.5
+	FallbackMode     string  `json:"fallbackMode"`               // "name", "none"
+
+	// Argument matching (reuses ArgumentConstraint)
+	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
+	KeywordArgs    map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
+}
+
+// GetEffectiveReceiverTypes returns the receiver types, merging legacy single field.
+func (t *TypeConstrainedCallIR) GetEffectiveReceiverTypes() []string {
+	types := make([]string, 0, len(t.ReceiverTypes)+1)
+	if t.ReceiverType != "" {
+		types = append(types, t.ReceiverType)
+	}
+	types = append(types, t.ReceiverTypes...)
+	return types
+}
+
+// GetEffectiveMethodNames returns the method names, merging legacy single field.
+func (t *TypeConstrainedCallIR) GetEffectiveMethodNames() []string {
+	names := make([]string, 0, len(t.MethodNames)+1)
+	if t.MethodName != "" {
+		names = append(names, t.MethodName)
+	}
+	names = append(names, t.MethodNames...)
+	return names
+}
+
+// GetType returns the IR type.
+func (t *TypeConstrainedCallIR) GetType() IRType {
+	return IRTypeTypeConstrainedCall
+}
+
+// TypeConstrainedAttributeIR represents type_constrained_attribute JSON IR.
+// Matches attribute access on variables with a specific inferred type.
+//
+//nolint:tagliatelle // JSON tags match Python DSL format.
+type TypeConstrainedAttributeIR struct {
+	Type          string  `json:"type"`          // "type_constrained_attribute"
+	ReceiverType  string  `json:"receiverType"`  // e.g., "django.http.HttpRequest"
+	AttributeName string  `json:"attributeName"` // e.g., "GET"
+	MinConfidence float64 `json:"minConfidence"` // default 0.5
+	FallbackMode  string  `json:"fallbackMode"`  // "name", "none"
+}
+
+// GetType returns the IR type.
+func (t *TypeConstrainedAttributeIR) GetType() IRType {
+	return IRTypeTypeConstrainedAttribute
 }
 
 // RuleIR represents a complete rule with metadata.

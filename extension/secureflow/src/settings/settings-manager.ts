@@ -43,7 +43,7 @@ export class SettingsManager {
    */
   public getSelectedAIModel(): string {
     const config = vscode.workspace.getConfiguration('secureflow');
-    return config.get<string>('AIModel') || 'claude-sonnet-4-5-20250929';
+    return config.get<string>('AIModel') || 'claude-sonnet-4-6';
   }
 
   /**

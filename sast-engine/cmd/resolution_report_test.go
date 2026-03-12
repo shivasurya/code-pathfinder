@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
@@ -44,7 +46,7 @@ func TestAggregateResolutionStatistics(t *testing.T) {
 	})
 
 	// Aggregate statistics
-	stats := aggregateResolutionStatistics(cg)
+	stats := aggregateResolutionStatistics(cg, "/project")
 
 	// Validate overall counts
 	assert.Equal(t, 4, stats.TotalCalls)
@@ -63,6 +65,9 @@ func TestAggregateResolutionStatistics(t *testing.T) {
 
 	// Validate framework counts
 	assert.Equal(t, 1, stats.FrameworkCounts["django"])
+
+	// Validate unresolved details
+	assert.Equal(t, 3, len(stats.UnresolvedDetails))
 }
 
 func TestPercentage(t *testing.T) {
@@ -196,7 +201,7 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	})
 
 	// Aggregate statistics
-	stats := aggregateResolutionStatistics(cg)
+	stats := aggregateResolutionStatistics(cg, "/project")
 
 	// Validate overall counts
 	assert.Equal(t, 4, stats.TotalCalls)
@@ -217,4 +222,397 @@ func TestAggregateResolutionStatistics_WithStdlib(t *testing.T) {
 	// Validate type breakdown
 	assert.Equal(t, 2, stats.StdlibByType["function"])
 	assert.Equal(t, 1, stats.StdlibByType["class"])
+}
+
+func TestRelativePath(t *testing.T) {
+	tests := []struct {
+		name        string
+		absPath     string
+		projectRoot string
+		expected    string
+	}{
+		{"normal", "/home/user/project/src/app.py", "/home/user/project", "src/app.py"},
+		{"same dir", "/home/user/project/app.py", "/home/user/project", "app.py"},
+		{"empty abs", "", "/home/user/project", ""},
+		{"empty root", "/home/user/project/app.py", "", "/home/user/project/app.py"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := relativePath(tt.absPath, tt.projectRoot)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestUnresolvedDetails(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "extend_schema",
+		Resolved:      false,
+		TargetFQN:     "extend_schema",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   42,
+			Column: 5,
+		},
+	})
+
+	cg.AddCallSite("myapp.views.detail", core.CallSite{
+		Target:        "get_env",
+		Resolved:      false,
+		TargetFQN:     "get_env",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/utils.py",
+			Line:   10,
+			Column: 12,
+		},
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 2, len(stats.UnresolvedDetails))
+	assert.Equal(t, 2, stats.UnresolvedCalls)
+
+	// Verify details are sorted by file then line
+	assert.Equal(t, "myapp/utils.py", stats.UnresolvedDetails[0].File)
+	assert.Equal(t, 10, stats.UnresolvedDetails[0].Line)
+	assert.Equal(t, "myapp/views.py", stats.UnresolvedDetails[1].File)
+	assert.Equal(t, 42, stats.UnresolvedDetails[1].Line)
+
+	// Verify per-file counts
+	assert.Equal(t, 1, stats.UnresolvedByFile["myapp/views.py"])
+	assert.Equal(t, 1, stats.UnresolvedByFile["myapp/utils.py"])
+}
+
+func TestExportUnresolvedCSV(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "extend_schema",
+		Resolved:      false,
+		TargetFQN:     "drf_spectacular.extend_schema",
+		FailureReason: "not_in_imports",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   42,
+			Column: 5,
+		},
+	})
+
+	cg.AddCallSite("myapp.views.index", core.CallSite{
+		Target:        "Response",
+		Resolved:      false,
+		TargetFQN:     "rest_framework.response.Response",
+		FailureReason: "external_framework",
+		Location: core.Location{
+			File:   "/project/myapp/views.py",
+			Line:   55,
+			Column: 12,
+		},
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	// Write CSV to temp file
+	tmpFile, err := os.CreateTemp("", "unresolved-*.csv")
+	assert.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	err = exportUnresolvedCSV(stats, tmpFile.Name())
+	assert.NoError(t, err)
+
+	// Read and verify CSV content
+	data, err := os.ReadFile(tmpFile.Name())
+	assert.NoError(t, err)
+
+	content := string(data)
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+
+	// Header + 2 data rows
+	assert.Equal(t, 3, len(lines))
+
+	// Verify header
+	assert.Equal(t, "file,line,column,function,target,target_fqn,reason", lines[0])
+
+	// Verify data rows contain expected fields
+	assert.Contains(t, lines[1], "myapp/views.py")
+	assert.Contains(t, lines[1], "42")
+	assert.Contains(t, lines[1], "extend_schema")
+	assert.Contains(t, lines[1], "not_in_imports")
+
+	assert.Contains(t, lines[2], "myapp/views.py")
+	assert.Contains(t, lines[2], "55")
+	assert.Contains(t, lines[2], "Response")
+	assert.Contains(t, lines[2], "external_framework")
+}
+
+func TestContainsString(t *testing.T) {
+	assert.True(t, containsString("builtins.str", "builtins."))
+	assert.True(t, containsString("hello world", "world"))
+	assert.False(t, containsString("hello", "world"))
+	assert.False(t, containsString("", "test"))
+}
+
+func TestPrintPerFileBreakdown(t *testing.T) {
+	stats := &resolutionStatistics{
+		UnresolvedByFile: map[string]int{
+			"app/views.py":  10,
+			"app/models.py": 5,
+			"app/utils.py":  3,
+		},
+	}
+
+	// Should not panic with valid data.
+	printPerFileBreakdown(stats, 2)
+
+	// Should not panic with empty data.
+	emptyStats := &resolutionStatistics{
+		UnresolvedByFile: map[string]int{},
+	}
+	printPerFileBreakdown(emptyStats, 5)
+}
+
+func TestExportUnresolvedCSV_InvalidPath(t *testing.T) {
+	stats := &resolutionStatistics{
+		UnresolvedDetails: []unresolvedDetail{
+			{File: "app.py", Line: 1, Target: "foo"},
+		},
+	}
+
+	err := exportUnresolvedCSV(stats, "/nonexistent/dir/file.csv")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create CSV file")
+}
+
+func TestAggregateResolutionStatistics_EmptyCallGraph(t *testing.T) {
+	cg := core.NewCallGraph()
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 0, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ResolvedCalls)
+	assert.Equal(t, 0, stats.UnresolvedCalls)
+	assert.Equal(t, 0, len(stats.UnresolvedDetails))
+}
+
+func TestPrintOverallStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		TotalCalls:      100,
+		ResolvedCalls:   80,
+		UnresolvedCalls: 20,
+	}
+	// Should not panic.
+	printOverallStatistics(stats)
+}
+
+func TestPrintTypeInferenceStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:         100,
+		TypeInferenceResolved: 30,
+		ResolvedByTraditional: 70,
+		BuiltinTypeResolved:   10,
+		ClassTypeResolved:     20,
+		ConfidenceSum:         27.0,
+		TypesBySource: map[string]int{
+			"annotation": 15,
+			"inference":  15,
+		},
+		ConfidenceDistribution: map[string]int{
+			"0.9-1.0 (high)":        20,
+			"0.7-0.9 (medium-high)": 8,
+			"0.5-0.7 (medium)":      2,
+		},
+	}
+	// Should not panic.
+	printTypeInferenceStatistics(stats)
+}
+
+func TestPrintStdlibStatistics(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:       100,
+		StdlibResolved:      50,
+		StdlibViaAnnotation: 10,
+		StdlibViaInference:  15,
+		StdlibViaBuiltin:    25,
+		StdlibByType: map[string]int{
+			"function": 30,
+			"class":    15,
+			"method":   5,
+		},
+		StdlibByModule: map[string]int{
+			"os":       20,
+			"sys":      10,
+			"json":     8,
+			"pathlib":  5,
+			"datetime": 4,
+			"re":       3,
+		},
+	}
+	// Should not panic.
+	printStdlibStatistics(stats)
+}
+
+func TestPrintStdlibStatistics_NoSources(t *testing.T) {
+	stats := &resolutionStatistics{
+		ResolvedCalls:  100,
+		StdlibResolved: 10,
+		StdlibByType:   map[string]int{"function": 10},
+		StdlibByModule: map[string]int{"os": 10},
+	}
+	// Should not panic even with zero source counts.
+	printStdlibStatistics(stats)
+}
+
+func TestPrintFailureBreakdown_WithFrameworks(t *testing.T) {
+	stats := &resolutionStatistics{
+		TotalCalls: 100,
+		FailuresByReason: map[string]int{
+			"external_framework": 20,
+			"variable_method":    10,
+			"not_in_imports":     5,
+		},
+		FrameworkCounts: map[string]int{
+			"django":         12,
+			"rest_framework": 5,
+			"celery":         3,
+		},
+	}
+	// Should print framework sub-breakdown without panic.
+	printFailureBreakdown(stats)
+}
+
+func TestPrintTopUnresolvedPatterns(t *testing.T) {
+	stats := &resolutionStatistics{
+		PatternCounts: map[string]int{
+			"self.save":          25,
+			"super().save":       15,
+			"response.json":     10,
+			"request.GET":        8,
+		},
+	}
+	// Should not panic.
+	printTopUnresolvedPatterns(stats, 3)
+}
+
+func TestPrintTopUnresolvedPatterns_Empty(t *testing.T) {
+	stats := &resolutionStatistics{
+		PatternCounts: map[string]int{},
+	}
+	// Should not panic with empty data.
+	printTopUnresolvedPatterns(stats, 5)
+}
+
+func TestAggregateResolutionStatistics_TypeInference(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Add type-inference resolved call
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:                   "response.json",
+		Resolved:                 true,
+		TargetFQN:                "requests.Response.json",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.95,
+		TypeSource:               "typeshed",
+		InferredType:             "requests.Response",
+	})
+
+	// Add type-inference with builtin type
+	cg.AddCallSite("test.func2", core.CallSite{
+		Target:                   "x.upper",
+		Resolved:                 true,
+		TargetFQN:                "builtins.str.upper",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.6,
+		TypeSource:               "annotation",
+		InferredType:             "builtins.str",
+	})
+
+	// Add low confidence
+	cg.AddCallSite("test.func3", core.CallSite{
+		Target:                   "y.method",
+		Resolved:                 true,
+		TargetFQN:                "myclass.method",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.3,
+		TypeSource:               "inference",
+		InferredType:             "myclass",
+	})
+
+	// Add medium-high confidence
+	cg.AddCallSite("test.func4", core.CallSite{
+		Target:                   "z.call",
+		Resolved:                 true,
+		TargetFQN:                "other.call",
+		ResolvedViaTypeInference: true,
+		TypeConfidence:           0.75,
+		TypeSource:               "typeshed",
+		InferredType:             "other",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 4, stats.TypeInferenceResolved)
+	assert.Equal(t, 0, stats.ResolvedByTraditional)
+	assert.Equal(t, 1, stats.BuiltinTypeResolved)
+	assert.Equal(t, 3, stats.ClassTypeResolved)
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.9-1.0 (high)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.7-0.9 (medium-high)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.5-0.7 (medium)"])
+	assert.Equal(t, 1, stats.ConfidenceDistribution["0.0-0.5 (low)"])
+	assert.Equal(t, 2, stats.TypesBySource["typeshed"])
+	assert.Equal(t, 1, stats.TypesBySource["annotation"])
+	assert.Equal(t, 1, stats.TypesBySource["inference"])
+}
+
+func TestAggregateResolutionStatistics_UncategorizedFailure(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Add unresolved call with empty failure reason
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:        "mystery_call",
+		Resolved:      false,
+		TargetFQN:     "mystery_call",
+		FailureReason: "",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+	assert.Equal(t, 1, stats.FailuresByReason["uncategorized"])
+}
+
+func TestAggregateResolutionStatistics_FailureReasonBreakdown(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	cg.AddCallSite("test.func1", core.CallSite{
+		Target:        "super().save",
+		Resolved:      false,
+		TargetFQN:     "super().save",
+		FailureReason: "super_call",
+	})
+
+	cg.AddCallSite("test.func2", core.CallSite{
+		Target:        "self.method",
+		Resolved:      false,
+		TargetFQN:     "self.method",
+		FailureReason: "variable_method",
+	})
+
+	cg.AddCallSite("test.func3", core.CallSite{
+		Target:        "foo.bar",
+		Resolved:      false,
+		TargetFQN:     "foo.bar",
+		FailureReason: "attribute_chain",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 3, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ResolvedCalls)
+	assert.Equal(t, 3, stats.UnresolvedCalls)
+	assert.Equal(t, 1, stats.FailuresByReason["super_call"])
+	assert.Equal(t, 1, stats.FailuresByReason["variable_method"])
+	assert.Equal(t, 1, stats.FailuresByReason["attribute_chain"])
 }

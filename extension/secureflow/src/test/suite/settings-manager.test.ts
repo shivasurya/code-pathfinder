@@ -68,7 +68,7 @@ suite('SettingsManager Test Suite', () => {
 
   suite('Model Configuration', () => {
     test('should get selected AI model from configuration', () => {
-      const testModel = 'claude-sonnet-4-5-20250929';
+      const testModel = 'claude-sonnet-4-6';
 
       // Mock workspace configuration
       const mockConfig = {
@@ -98,7 +98,7 @@ suite('SettingsManager Test Suite', () => {
       vscode.workspace.getConfiguration = () => mockConfig;
 
       const retrieved = settingsManager.getSelectedAIModel();
-      assert.strictEqual(retrieved, 'claude-sonnet-4-5-20250929');
+      assert.strictEqual(retrieved, 'claude-sonnet-4-6');
     });
 
     test('should retrieve OpenRouter model format', () => {

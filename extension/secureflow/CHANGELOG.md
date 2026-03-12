@@ -1,5 +1,37 @@
 # SecureFlow Changelog
 
+## Version 0.0.19 - March 7, 2026
+
+### What's New
+
+- **Next-Gen AI Models**: Added latest flagship models from all major providers
+  - **GPT-5.4 & GPT-5.4 Pro**: OpenAI's most capable models (1.05M context, 128K output)
+  - **Claude Opus 4.6**: Anthropic's most intelligent model for agents and code (200K context, 128K output, 1M beta)
+  - **Claude Sonnet 4.6**: New recommended default — best combination of speed and intelligence (200K context, 64K output, 1M beta)
+  - **Gemini 3.1 Pro Preview**: Google's latest with advanced agentic and coding capabilities (1M context)
+- **Updated OpenRouter Models**: Upgraded to latest versions of open-source models
+  - Qwen3 Coder → **Qwen3 Coder Next** (262K context/output)
+  - GLM 4.7 → **GLM 5** (202K context/output)
+  - MiniMax M2 → **MiniMax M2.5** (196K context/output)
+  - Added **Kimi K2.5** — multimodal model with visual coding capabilities (262K context/output)
+- **xAI Grok Models**: Added to model-context-limits configuration for full parity
+
+### Improvements
+
+- **Default Model Updated**: Changed default from deprecated Claude Sonnet 4.5 to Claude Sonnet 4.6 across all components
+- **Spec Accuracy Fixes**: Corrected pre-existing specification errors verified against official docs
+  - GPT-5 Mini: contextWindow 200K→400K, maxOutput 64K→128K
+  - GPT-5 Pro: maxOutput 128K→272K
+  - GPT-5 Nano: contextWindow 128K→400K, maxOutput 32K→128K
+  - OpenRouter model maxOutput values corrected to match official specs
+- **Updated Documentation**: Refreshed README and CLI README with current model listings
+
+### Deprecated
+
+- **Claude Sonnet 4.5** (`claude-sonnet-4-5-20250929`): Superseded by Claude Sonnet 4.6
+- **Claude Opus 4.5** (`claude-opus-4-5`): Superseded by Claude Opus 4.6
+- **Gemini 3 Pro** (`gemini-3-pro-preview`): Shutting down March 9, 2026 — use Gemini 3.1 Pro instead
+
 ## Version 0.0.18 - December 27, 2025
 
 ### What's New

@@ -18,6 +18,7 @@ class IRType(Enum):
     LOGIC_AND = "logic_and"  # Coming in PR #5
     LOGIC_OR = "logic_or"  # Coming in PR #5
     LOGIC_NOT = "logic_not"  # Coming in PR #5
+    TYPE_CONSTRAINED_CALL = "type_constrained_call"
 
 
 class MatcherIR(Protocol):

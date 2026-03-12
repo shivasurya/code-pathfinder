@@ -46,14 +46,16 @@ func getOptimalWorkerCount() int {
 	cpuCount := runtime.NumCPU()
 
 	// Conservative approach: use 75% of cores, leave some for OS
-	workers := max(
+	workers := min(
 		// Apply bounds
-		int(float64(cpuCount)*0.75),
 		// Minimum parallelism
-		2)
-	if workers > 16 {
-		workers = 16 // Cap at 16 (memory/connection limits)
-	}
+		max(
+
+			int(float64(cpuCount)*0.75),
+
+			2),
+		// Cap at 16 (memory/connection limits)
+		16)
 
 	return workers
 }
@@ -137,6 +139,17 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 		typeEngine.StdlibRemote = remoteLoader
 
 		logger.Statistic("Loaded stdlib manifest from CDN: %d modules available", remoteLoader.ModuleCount())
+	}
+
+	// PR #4: Load third-party type registry from CDN (non-fatal on failure)
+	thirdPartyLoader := cgregistry.NewThirdPartyRegistryRemote(
+		"https://assets.codepathfinder.dev/registries",
+	)
+	if err := thirdPartyLoader.LoadManifest(logger); err != nil {
+		logger.Warning("Failed to load third-party registry: %v", err)
+	} else {
+		typeEngine.ThirdPartyRemote = thirdPartyLoader
+		logger.Statistic("Third-party manifest: %d packages available", thirdPartyLoader.ModuleCount())
 	}
 
 	// Phase 1: Build class context map for class-qualified FQN generation
@@ -230,6 +243,11 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Back-populate inferred return types to function nodes and detect void functions
 	populateInferredReturnTypes(callGraph, typeEngine, allFunctionsWithReturnValues, logger)
 
+	// PR #5: Pre-load third-party modules that appear in project imports.
+	// ImportMaps are populated during return type extraction above.
+	// Pre-fetching here avoids per-call-site CDN downloads during Pass 4.
+	preloadThirdPartyModules(typeEngine, logger)
+
 	// Phase 2 Task 8: Extract ALL variable assignments BEFORE resolving calls (second pass - PARALLELIZED)
 	logger.Debug("Extracting variable assignments (parallel)...")
 
@@ -288,6 +306,14 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// This MUST happen before we start resolving call sites!
 	typeEngine.UpdateVariableBindingsWithFunctionReturns()
 
+	// PR #6: Resolve remaining call: placeholders using third-party type registry
+	// Must run AFTER UpdateVariableBindingsWithFunctionReturns (userland first).
+	resolveThirdPartyVariableBindings(typeEngine, logger)
+
+	// Resolve remaining call: placeholders using stdlib type registry (CDN + hardcoded fallbacks)
+	// Must run AFTER resolveThirdPartyVariableBindings.
+	resolveStdlibVariableBindings(typeEngine, logger)
+
 	// Phase 3 Task 12: Extract class attributes (third pass - PARALLELIZED)
 	logger.Debug("Extracting class attributes (parallel)...")
 
@@ -330,6 +356,9 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 	// Phase 3 Task 12: Resolve placeholder types in attributes (Pass 3)
 	resolution.ResolveAttributePlaceholders(typeEngine.Attributes, typeEngine, registry, codeGraph)
+
+	// PR #7: Resolve parent classes and propagate inherited parameter types
+	resolveParentClassInheritance(codeGraph, callGraph, registry, typeEngine, logger)
 
 	// Process each Python file in the project (fourth pass for call site resolution - PARALLELIZED)
 	logger.Debug("Resolving call sites (parallel)...")
@@ -393,7 +422,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 
 					// If resolution failed, categorize the failure reason
 					if !resolved {
-						callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN)
+						callSite.FailureReason = categorizeResolutionFailure(callSite.Target, targetFQN, typeEngine)
 					}
 
 					// CRITICAL: Lock callGraph modifications (shared state)
@@ -440,7 +469,59 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Store type engine for module variable type lookups in MCP tools
 	callGraph.TypeEngine = typeEngine
 
+	// Store registries for inheritance-aware matching in rule executors
+	callGraph.ThirdPartyRemote = typeEngine.ThirdPartyRemote
+	callGraph.StdlibRemote = typeEngine.StdlibRemote
+
 	return callGraph, nil
+}
+
+// preloadThirdPartyModules scans all collected ImportMaps and pre-fetches
+// third-party modules that appear in project imports. This avoids per-call-site
+// CDN downloads during call resolution (Pass 4).
+func preloadThirdPartyModules(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	// Collect unique top-level module names from all import maps
+	seen := make(map[string]bool)
+
+	typeEngine.ForEachImportMap(func(_ string, importMap *core.ImportMap) {
+		for _, fqn := range importMap.Imports {
+			// Extract top-level package name (e.g., "requests" from "requests.sessions")
+			topLevel := fqn
+			if idx := strings.Index(fqn, "."); idx > 0 {
+				topLevel = fqn[:idx]
+			}
+			if !seen[topLevel] && loader.HasModule(topLevel) {
+				seen[topLevel] = true
+			}
+		}
+	})
+
+	if len(seen) == 0 {
+		return
+	}
+
+	// Pre-fetch each matched module
+	var loaded int
+	for moduleName := range seen {
+		if _, err := loader.GetModule(moduleName, logger); err != nil {
+			logger.Warning("Failed to pre-load third-party module %s: %v", moduleName, err)
+		} else {
+			loaded++
+		}
+	}
+
+	if loaded > 0 {
+		logger.Statistic("Pre-loaded %d third-party modules from typeshed", loaded)
+	}
 }
 
 // IndexFunctions builds the Functions map in the call graph.
@@ -715,21 +796,25 @@ func findContainingFunction(location core.Location, functions []*graph.Node, mod
 //
 // Returns:
 //   - category string describing the failure reason
-func categorizeResolutionFailure(target, targetFQN string) string {
-	// Check for external frameworks (common patterns)
-	if strings.HasPrefix(targetFQN, "django.") ||
-		strings.HasPrefix(targetFQN, "rest_framework.") ||
-		strings.HasPrefix(targetFQN, "pytest.") ||
-		strings.HasPrefix(targetFQN, "unittest.") ||
-		strings.HasPrefix(targetFQN, "json.") ||
-		strings.HasPrefix(targetFQN, "logging.") ||
-		strings.HasPrefix(targetFQN, "os.") ||
-		strings.HasPrefix(targetFQN, "sys.") ||
-		strings.HasPrefix(targetFQN, "re.") ||
-		strings.HasPrefix(targetFQN, "pathlib.") ||
-		strings.HasPrefix(targetFQN, "collections.") ||
-		strings.HasPrefix(targetFQN, "datetime.") {
-		return "external_framework"
+func categorizeResolutionFailure(target, targetFQN string, typeEngine *resolution.TypeInferenceEngine) string {
+	// Check third-party registry dynamically (no hardcoded framework lists)
+	if typeEngine != nil && strings.Contains(targetFQN, ".") {
+		moduleName, _ := splitModuleAndName(targetFQN)
+		if typeEngine.ThirdPartyRemote != nil {
+			if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+				if loader.HasModule(moduleName) {
+					return "external_framework"
+				}
+			}
+		}
+		// Check stdlib registry dynamically
+		if typeEngine.StdlibRemote != nil {
+			if loader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+				if loader.HasModule(moduleName) {
+					return "stdlib_unresolved"
+				}
+			}
+		}
 	}
 
 	// Check for Django ORM patterns
@@ -878,6 +963,28 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		if attrResolved {
 			return attrFQN, true, attrType
 		}
+
+		// PR #7: Fallback — check parent class attributes via third-party registry
+		// For self.attr.method where attr isn't in child class, try parent classes
+		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil && codeGraph != nil {
+			attrParts := strings.Split(target, ".")
+			if len(attrParts) == 3 {
+				attrName := attrParts[1]
+				methodOnAttr := attrParts[2]
+				callerParts := strings.Split(callerFQN, ".")
+				if len(callerParts) >= 3 {
+					callerClassName := callerParts[len(callerParts)-2]
+					callerClassFQN := currentModule + "." + callerClassName
+					fqn, resolved, typeInfo := resolveInheritedSelfAttrMethod(
+						callerClassFQN, attrName, methodOnAttr,
+						codeGraph, registry, typeEngine, logger,
+					)
+					if resolved {
+						return fqn, true, typeInfo
+					}
+				}
+			}
+		}
 		// Attribute resolution attempted but failed - fall through
 	}
 
@@ -894,42 +1001,66 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 			className := parts[len(parts)-2]
 			currentClassFQN := currentModule + "." + className
 
-			// Phase 3: Search for parent class in codeGraph
-			// Strategy: Look for class nodes and check their relationships
-			var parentClassFQN string
-
+			// PR #7: Find the class node and resolve parent via imports + third-party
 			if codeGraph != nil {
-				// Find the current class node
 				for _, node := range codeGraph.Nodes {
-					if node.Type == "class_definition" && node.File != "" {
-						// Build FQN for this class node
-						modulePath, ok := registry.FileToModule[node.File]
-						if ok {
-							nodeFQN := modulePath + "." + node.Name
-							if nodeFQN == currentClassFQN {
-								// Found current class node - check for parent info
-								// In Python parser, class inheritance might be stored in node metadata
-								// For now, try to find parent class by searching for classes in same module
-								// This is a heuristic approach for Phase 3
-								break
+					if node.Type != "class_definition" && node.Type != "dataclass" {
+						continue
+					}
+					if node.File == "" || len(node.Interface) == 0 {
+						continue
+					}
+					modulePath, ok := registry.FileToModule[node.File]
+					if !ok {
+						continue
+					}
+					nodeFQN := modulePath + "." + node.Name
+					if nodeFQN != currentClassFQN {
+						continue
+					}
+
+					// Found the class — resolve each parent and check for the method
+					for _, superClassName := range node.Interface {
+						parentFQN := resolution.ResolveParentClassFQN(
+							currentClassFQN, superClassName, node.File,
+							typeEngine, registry,
+						)
+						if parentFQN == "" {
+							continue
+						}
+
+						// Check userland first
+						parentMethodFQN := parentFQN + "." + methodName
+						if callGraph != nil && callGraph.Functions[parentMethodFQN] != nil {
+							return parentMethodFQN, true, nil
+						}
+
+						// Check third-party registry
+						if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+							if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+								tpModule, tpClass := splitModuleAndName(parentFQN)
+								if tpClass != "" && loader.HasModule(tpModule) {
+									method := findThirdPartyClassMethod(loader, tpModule, tpClass, methodName, logger)
+									if method != nil {
+										return parentFQN + "." + methodName, true, nil
+									}
+								}
 							}
 						}
 					}
+					break
 				}
 			}
 
-			// Heuristic fallback: Try common parent class names
-			// Look for Base*, Parent*, or classes ending with "Base"
-			if parentClassFQN == "" && callGraph != nil {
-				// Search Functions map for potential parent class methods
+			// Heuristic fallback: Try common parent class names (Base suffix)
+			if callGraph != nil {
 				parentMethodFQN := currentModule + "." + className + "Base." + methodName
 				if callGraph.Functions[parentMethodFQN] != nil {
 					return parentMethodFQN, true, nil
 				}
 			}
 
-			// If we can't find explicit parent, try resolving without class qualification
-			// This handles cases where super() calls might resolve to module-level functions
+			// Try module-level function as last resort
 			moduleFQN := currentModule + "." + methodName
 			if callGraph != nil && callGraph.Functions[moduleFQN] != nil {
 				return moduleFQN, true, nil
@@ -1001,14 +1132,37 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
-			// Found in imports - return the FQN
-			// Check if it's a known framework
-			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
+			// Validate if it exists in registry
+			if validateFQN(fqn, registry) {
 				return fqn, true, nil
 			}
-			// Validate if it exists in registry
-			resolved := validateFQN(fqn, registry)
-			return fqn, resolved, nil
+			// Check stdlib for imported names (e.g., from os import getcwd)
+			if typeEngine != nil && typeEngine.StdlibRemote != nil {
+				if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+					if validateStdlibFQN(fqn, remoteLoader, logger) {
+						return fqn, true, nil
+					}
+				}
+			}
+			// Check third-party for imported names (e.g., from requests import Session)
+			if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+				if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+					if validateThirdPartyFQN(fqn, loader, logger) {
+						return fqn, true, nil
+					}
+				}
+			}
+			// Check callGraph.Functions directly (may differ from registry module keys)
+			if callGraph != nil && callGraph.Functions[fqn] != nil {
+				return fqn, true, nil
+			}
+			// Fix: strip leading package prefix and retry
+			// Import FQNs use full package path (e.g., label_studio.core.utils.params.get_env)
+			// but registry keys are relative to project root (e.g., core.utils.params.get_env)
+			if strippedFQN, ok := resolveWithPrefixStripping(fqn, registry, callGraph); ok {
+				return strippedFQN, true, nil
+			}
+			return fqn, false, nil
 		}
 
 		// Not in imports - might be in same module
@@ -1116,6 +1270,40 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 						}
 					}
 
+					// PR #6: Check third-party type registry for method on typed variable
+					if typeEngine.ThirdPartyRemote != nil {
+						if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+							tpModule, tpClass := splitModuleAndName(typeFQN)
+							if tpClass != "" && loader.HasModule(tpModule) {
+								method := findThirdPartyClassMethod(loader, tpModule, tpClass, rest, logger)
+								if method != nil {
+									return methodFQN, true, &core.TypeInfo{
+										TypeFQN:    typeFQN,
+										Confidence: binding.Type.Confidence,
+										Source:     "typeshed",
+									}
+								}
+							}
+						}
+					}
+
+					// Check stdlib type registry for method on typed variable.
+					if typeEngine.StdlibRemote != nil {
+						if stdlibLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
+							stModule, stClass := splitModuleAndName(typeFQN)
+							if stClass != "" && stdlibLoader.HasModule(stModule) {
+								method := stdlibLoader.GetClassMethod(stModule, stClass, rest, logger)
+								if method != nil {
+									return methodFQN, true, &core.TypeInfo{
+										TypeFQN:    typeFQN,
+										Confidence: binding.Type.Confidence,
+										Source:     "stdlib",
+									}
+								}
+							}
+						}
+					}
+
 					// Heuristic: If type has good confidence (>= 0.7), assume method exists
 					if binding.Type.Confidence >= 0.7 {
 						// Resolved via confidence heuristic - return with type info
@@ -1130,10 +1318,6 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
-		// Check if it's a known framework
-		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
-			return fullFQN, true, nil
-		}
 		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
 		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true, nil
@@ -1146,8 +1330,24 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 				}
 			}
 		}
+		// PR #6: Check third-party registry before user project registry
+		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+			if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+				if validateThirdPartyFQN(fullFQN, loader, logger) {
+					return fullFQN, true, nil
+				}
+			}
+		}
 		if validateFQN(fullFQN, registry) {
 			return fullFQN, true, nil
+		}
+		// Check callGraph.Functions directly
+		if callGraph != nil && callGraph.Functions[fullFQN] != nil {
+			return fullFQN, true, nil
+		}
+		// Fix: strip leading package prefix and retry
+		if strippedFQN, ok := resolveWithPrefixStripping(fullFQN, registry, callGraph); ok {
+			return strippedFQN, true, nil
 		}
 		return fullFQN, false, nil
 	}
@@ -1170,6 +1370,15 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 	if typeEngine != nil && typeEngine.StdlibRemote != nil {
 		if remoteLoader, ok := typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote); ok {
 			if validateStdlibFQN(target, remoteLoader, logger) {
+				return target, true, nil
+			}
+		}
+	}
+
+	// PR #6: Last resort - check third-party registry
+	if typeEngine != nil && typeEngine.ThirdPartyRemote != nil {
+		if loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote); ok {
+			if validateThirdPartyFQN(target, loader, logger) {
 				return target, true, nil
 			}
 		}
@@ -1271,6 +1480,519 @@ func validateStdlibFQN(fqn string, remoteLoader *cgregistry.StdlibRegistryRemote
 	return false
 }
 
+// splitModuleAndName splits a fully qualified name at the first dot.
+// The first part is the top-level package name, the rest is the sub-path.
+//
+// Examples:
+//
+//	"requests.Response" -> ("requests", "Response")
+//	"django.http.HttpRequest" -> ("django", "http.HttpRequest")
+//	"requests" -> ("requests", "")
+func splitModuleAndName(fqn string) (string, string) {
+	if idx := strings.Index(fqn, "."); idx > 0 {
+		return fqn[:idx], fqn[idx+1:]
+	}
+	return fqn, ""
+}
+
+// validateThirdPartyFQN checks if a fully qualified name exists in the third-party registry.
+// Checks functions, classes, and constants in the top-level module.
+// Handles Python re-exports: e.g., requests.get is stored as api.get in the CDN.
+// Also handles sub-module path mismatches via suffix matching and progressive stripping.
+func validateThirdPartyFQN(fqn string, loader *cgregistry.ThirdPartyRegistryRemote, logger *output.Logger) bool {
+	moduleName, name := splitModuleAndName(fqn)
+	if name == "" || !loader.HasModule(moduleName) {
+		return false
+	}
+	module, err := loader.GetModule(moduleName, logger)
+	if err != nil || module == nil {
+		return false
+	}
+	if _, ok := module.Functions[name]; ok {
+		return true
+	}
+	if _, ok := module.Classes[name]; ok {
+		return true
+	}
+	if _, ok := module.Constants[name]; ok {
+		return true
+	}
+	// Extract the last component for suffix matching
+	// e.g., "db.models.ForeignKey" → lastComponent = "ForeignKey"
+	// This handles re-exports where django.db.models.ForeignKey is stored as db.models.fields.related.ForeignKey
+	lastComponent := name
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		lastComponent = name[idx+1:]
+	}
+	lastSuffix := "." + lastComponent
+	for funcName := range module.Functions {
+		if funcName == lastComponent || strings.HasSuffix(funcName, lastSuffix) {
+			return true
+		}
+	}
+	for className := range module.Classes {
+		if className == lastComponent || strings.HasSuffix(className, lastSuffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// findThirdPartyFunction looks up a function in the third-party registry.
+// Handles Python re-exports where functions are stored with sub-module paths.
+// E.g., requests.get is stored as api.get because it's defined in requests/api.pyi.
+func findThirdPartyFunction(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, funcName string, logger *output.Logger) *core.StdlibFunction {
+	fn := loader.GetFunction(moduleName, funcName, logger)
+	if fn != nil {
+		return fn
+	}
+	// Suffix match for re-exported functions
+	module, err := loader.GetModule(moduleName, logger)
+	if err != nil || module == nil {
+		return nil
+	}
+	suffix := "." + funcName
+	for name, f := range module.Functions {
+		if strings.HasSuffix(name, suffix) {
+			return f
+		}
+	}
+	return nil
+}
+
+// findThirdPartyClass looks up a class in the third-party registry.
+// Handles sub-module prefixed class names from return types.
+// E.g., return type "requests.api.Response" → class stored as "Response".
+func findThirdPartyClass(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, className string, logger *output.Logger) *core.StdlibClass {
+	cls := loader.GetClass(moduleName, className, logger)
+	if cls != nil {
+		return cls
+	}
+	// Strip sub-module prefix: "api.Response" → "Response"
+	if idx := strings.LastIndex(className, "."); idx >= 0 {
+		shortName := className[idx+1:]
+		return loader.GetClass(moduleName, shortName, logger)
+	}
+	return nil
+}
+
+// findThirdPartyClassMethod looks up a class method, handling sub-module prefixed class names.
+func findThirdPartyClassMethod(loader *cgregistry.ThirdPartyRegistryRemote, moduleName, className, methodName string, logger *output.Logger) *core.StdlibFunction {
+	method := loader.GetClassMethod(moduleName, className, methodName, logger)
+	if method != nil {
+		return method
+	}
+	// Strip sub-module prefix from class name
+	if idx := strings.LastIndex(className, "."); idx >= 0 {
+		shortName := className[idx+1:]
+		return loader.GetClassMethod(moduleName, shortName, methodName, logger)
+	}
+	return nil
+}
+
+// resolveInheritedSelfAttrMethod resolves self.attr.method() when attr comes from a parent class.
+// For example, in a Django View subclass: self.request.GET.get("q") → request is from parent View.
+func resolveInheritedSelfAttrMethod(
+	classFQN string,
+	attrName string,
+	methodName string,
+	codeGraph *graph.CodeGraph,
+	registry *core.ModuleRegistry,
+	typeEngine *resolution.TypeInferenceEngine,
+	logger *output.Logger,
+) (string, bool, *core.TypeInfo) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return "", false, nil
+	}
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return "", false, nil
+	}
+
+	// Find the class node to get its parent classes
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "class_definition" && node.Type != "dataclass" {
+			continue
+		}
+		if len(node.Interface) == 0 || node.File == "" {
+			continue
+		}
+		modulePath, ok := registry.FileToModule[node.File]
+		if !ok {
+			continue
+		}
+		if modulePath+"."+node.Name != classFQN {
+			continue
+		}
+
+		// Try each parent class
+		for _, superClassName := range node.Interface {
+			parentFQN := resolution.ResolveParentClassFQN(
+				classFQN, superClassName, node.File, typeEngine, registry,
+			)
+			if parentFQN == "" {
+				continue
+			}
+
+			// Get the attribute type from the parent class
+			attrType := resolution.ResolveInheritedSelfAttribute(
+				parentFQN, attrName, typeEngine.ThirdPartyRemote, logger,
+			)
+			if attrType == nil || attrType.TypeFQN == "" {
+				continue
+			}
+
+			// Now resolve the method on the attribute type
+			attrTypeFQN := attrType.TypeFQN
+			attrModule, attrClass := splitModuleAndName(attrTypeFQN)
+			if attrClass != "" && loader.HasModule(attrModule) {
+				method := findThirdPartyClassMethod(loader, attrModule, attrClass, methodName, logger)
+				if method != nil {
+					resolvedFQN := attrTypeFQN + "." + methodName
+					return resolvedFQN, true, &core.TypeInfo{
+						TypeFQN:    attrTypeFQN,
+						Confidence: attrType.Confidence,
+						Source:     "parent_class_attribute",
+					}
+				}
+			}
+		}
+		break
+	}
+
+	return "", false, nil
+}
+
+// resolveParentClassInheritance iterates over class_definition nodes, resolves parent
+// class FQNs via imports, and propagates parameter types from parent methods to child overrides.
+// For example: class TestView(View) → resolves View to django.views.View → propagates
+// request: django.http.HttpRequest from View.get to TestView.get.
+func resolveParentClassInheritance(
+	codeGraph *graph.CodeGraph,
+	callGraph *core.CallGraph,
+	registry *core.ModuleRegistry,
+	typeEngine *resolution.TypeInferenceEngine,
+	logger *output.Logger,
+) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	classContext := buildClassContext(codeGraph)
+	_ = classContext
+
+	var resolved, total int
+
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "class_definition" && node.Type != "dataclass" {
+			continue
+		}
+		if len(node.Interface) == 0 {
+			continue
+		}
+
+		// Build class FQN
+		modulePath, ok := registry.FileToModule[node.File]
+		if !ok {
+			continue
+		}
+		classFQN := modulePath + "." + node.Name
+		total++
+
+		// Resolve each parent class
+		for _, superClassName := range node.Interface {
+			parentFQN := resolution.ResolveParentClassFQN(
+				classFQN, superClassName, node.File,
+				typeEngine, registry,
+			)
+			if parentFQN == "" {
+				continue
+			}
+
+			// Check if parent is in third-party registry
+			parentModule, parentClass := splitModuleAndName(parentFQN)
+			if parentClass == "" || !loader.HasModule(parentModule) {
+				continue
+			}
+
+			// Verify class exists in CDN (with re-export suffix matching)
+			cls := findThirdPartyClass(loader, parentModule, parentClass, logger)
+			if cls == nil {
+				continue
+			}
+
+			resolved++
+			logger.Debug("Resolved parent class: %s -> %s", classFQN+"."+superClassName, parentFQN)
+
+			// Propagate parameter types to all child methods that override parent methods
+			for childFQN, childNode := range callGraph.Functions {
+				// Check if this function belongs to the current class
+				if !strings.HasPrefix(childFQN, classFQN+".") {
+					continue
+				}
+				if childNode.Type != "method" && childNode.Type != "function_definition" &&
+					childNode.Type != "constructor" && childNode.Type != "special_method" {
+					continue
+				}
+
+				// Extract method name from FQN (last segment)
+				methodName := childFQN[len(classFQN)+1:]
+				if strings.Contains(methodName, ".") {
+					continue // Skip nested classes/methods
+				}
+
+				resolution.PropagateParentParamTypes(
+					childFQN, parentFQN, methodName,
+					typeEngine, typeEngine.ThirdPartyRemote, logger,
+				)
+			}
+		}
+	}
+
+	if total > 0 {
+		logger.Debug("Parent class resolution: %d/%d classes resolved via third-party", resolved, total)
+	}
+}
+
+// resolveThirdPartyVariableBindings resolves remaining call: placeholders using third-party registry.
+// Must be called AFTER UpdateVariableBindingsWithFunctionReturns().
+// Runs in two phases:
+//
+//	Phase A: Module-level function/constructor calls (e.g., call:requests.get)
+//	Phase B: Instance method calls on variables resolved in Phase A (e.g., call:session.get)
+func resolveThirdPartyVariableBindings(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	if typeEngine.ThirdPartyRemote == nil {
+		return
+	}
+	loader, ok := typeEngine.ThirdPartyRemote.(*cgregistry.ThirdPartyRegistryRemote)
+	if !ok || loader == nil {
+		return
+	}
+
+	// Phase A: Resolve direct module.function calls
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+				// Skip instance method calls (receiver is a variable) — handle in Phase B
+				parts := strings.SplitN(funcName, ".", 2)
+				if scope.GetVariable(parts[0]) != nil {
+					continue
+				}
+
+				moduleName, name := splitModuleAndName(funcName)
+				if !loader.HasModule(moduleName) {
+					continue
+				}
+
+				// Try as module-level function (e.g., requests.get → may be stored as api.get)
+				fn := findThirdPartyFunction(loader, moduleName, name, logger)
+				if fn != nil && fn.ReturnType != "" {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    fn.ReturnType,
+						Confidence: binding.Type.Confidence * fn.Confidence * 0.95,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = funcName
+					continue
+				}
+
+				// Try as constructor (e.g., requests.Session)
+				cls := findThirdPartyClass(loader, moduleName, name, logger)
+				if cls != nil {
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    funcName,
+						Confidence: binding.Type.Confidence * 0.95,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = funcName
+					continue
+				}
+			}
+		}
+	}
+
+	// Phase B: Resolve instance method calls on variables resolved in Phase A
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+
+				parts := strings.SplitN(funcName, ".", 2)
+				receiver := parts[0]
+				methodName := parts[1]
+
+				receiverBinding := scope.GetVariable(receiver)
+				if receiverBinding == nil || receiverBinding.Type == nil ||
+					strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
+					continue
+				}
+
+				tpModule, tpClass := splitModuleAndName(receiverBinding.Type.TypeFQN)
+				if tpClass == "" || !loader.HasModule(tpModule) {
+					continue
+				}
+
+				method := findThirdPartyClassMethod(loader, tpModule, tpClass, methodName, logger)
+				if method != nil && method.ReturnType != "" {
+					// Use absolute confidence from CDN method data, clamped to
+					// min(binding, method)*0.9 floor. Avoids multiplicative chain
+					// decay that drops below the 0.7 heuristic threshold after 3 hops.
+					conf := method.Confidence * 0.9
+					if conf < 0.75 {
+						conf = 0.75
+					}
+					scope.Variables[varName][i].Type = &core.TypeInfo{
+						TypeFQN:    method.ReturnType,
+						Confidence: conf,
+						Source:     "typeshed",
+					}
+					scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
+				}
+			}
+		}
+	}
+}
+
+// resolveStdlibVariableBindings resolves call: placeholders using the stdlib
+// type registry (CDN + hardcoded fallbacks). Mirrors resolveThirdPartyVariableBindings
+// but for Python standard library modules.
+//
+//	Phase A: Module-level function/constructor calls (e.g., call:sqlite3.connect)
+//	Phase B: Instance method calls on variables resolved in Phase A (e.g., call:conn.cursor)
+func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, logger *output.Logger) {
+	var loader *cgregistry.StdlibRegistryRemote
+	if typeEngine.StdlibRemote != nil {
+		loader, _ = typeEngine.StdlibRemote.(*cgregistry.StdlibRegistryRemote)
+	}
+
+	// Helper: check if a module is known via CDN
+	isKnownModule := func(moduleName string) bool {
+		return loader != nil && loader.HasModule(moduleName)
+	}
+
+	// Phase A: Resolve direct module.function calls
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+				// Skip instance method calls (receiver is a variable) — handle in Phase B
+				parts := strings.SplitN(funcName, ".", 2)
+				if scope.GetVariable(parts[0]) != nil {
+					continue
+				}
+
+				moduleName, name := splitModuleAndName(funcName)
+				if !isKnownModule(moduleName) {
+					continue
+				}
+
+				// Try CDN registry first: module-level function
+				if loader != nil {
+					fn := loader.GetFunction(moduleName, name, logger)
+					if fn != nil && fn.ReturnType != "" && fn.ReturnType != "unknown" {
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    fn.ReturnType,
+							Confidence: binding.Type.Confidence * fn.Confidence * 0.95,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = funcName
+						continue
+					}
+
+					// Try as constructor: class exists → type is the FQN itself
+					cls := loader.GetClass(moduleName, name, logger)
+					if cls != nil {
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    funcName,
+							Confidence: binding.Type.Confidence * 0.95,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = funcName
+						continue
+					}
+				}
+
+			}
+		}
+	}
+
+	// Phase B: Resolve instance method calls on variables resolved in Phase A
+	for _, scope := range typeEngine.Scopes {
+		for varName, bindings := range scope.Variables {
+			for i, binding := range bindings {
+				if binding == nil || binding.Type == nil || !strings.HasPrefix(binding.Type.TypeFQN, "call:") {
+					continue
+				}
+				funcName := strings.TrimPrefix(binding.Type.TypeFQN, "call:")
+				if !strings.Contains(funcName, ".") {
+					continue
+				}
+
+				parts := strings.SplitN(funcName, ".", 2)
+				receiver := parts[0]
+				methodName := parts[1]
+
+				receiverBinding := scope.GetVariable(receiver)
+				if receiverBinding == nil || receiverBinding.Type == nil ||
+					strings.HasPrefix(receiverBinding.Type.TypeFQN, "call:") {
+					continue
+				}
+
+				rcvModule, rcvClass := splitModuleAndName(receiverBinding.Type.TypeFQN)
+				if rcvClass == "" || !isKnownModule(rcvModule) {
+					continue
+				}
+
+				// Try CDN registry first
+				if loader != nil {
+					method := loader.GetClassMethod(rcvModule, rcvClass, methodName, logger)
+					if method != nil && method.ReturnType != "" && method.ReturnType != "unknown" {
+						// Use absolute confidence from CDN method data, matching
+						// the hardcoded path pattern (0.85). Avoids multiplicative
+						// chain decay below the 0.7 heuristic threshold.
+						conf := method.Confidence * 0.9
+						if conf < 0.75 {
+							conf = 0.75
+						}
+						scope.Variables[varName][i].Type = &core.TypeInfo{
+							TypeFQN:    method.ReturnType,
+							Confidence: conf,
+							Source:     "stdlib",
+						}
+						scope.Variables[varName][i].AssignedFrom = receiverBinding.Type.TypeFQN + "." + methodName
+						continue
+					}
+				}
+
+			}
+		}
+	}
+}
+
 // ValidateFQN checks if a fully qualified name exists in the registry.
 // Handles both module names and function names within modules.
 //
@@ -1320,6 +2042,34 @@ func validateFQN(fqn string, registry *core.ModuleRegistry) bool {
 	return false
 }
 
+// resolveWithPrefixStripping tries progressively stripping leading package components
+// from an FQN and re-checking against the registry and callGraph.Functions.
+//
+// This fixes the common mismatch where imports use the full package path
+// (e.g., "label_studio.core.utils.params.get_env") but the registry and callGraph
+// key modules relative to the project root (e.g., "core.utils.params.get_env").
+func resolveWithPrefixStripping(fqn string, registry *core.ModuleRegistry, callGraph *core.CallGraph) (string, bool) {
+	remaining := fqn
+	for {
+		idx := strings.Index(remaining, ".")
+		if idx < 0 {
+			break
+		}
+		remaining = remaining[idx+1:]
+		// Need at least one dot remaining (module.function)
+		if !strings.Contains(remaining, ".") {
+			break
+		}
+		if validateFQN(remaining, registry) {
+			return remaining, true
+		}
+		if callGraph != nil && callGraph.Functions[remaining] != nil {
+			return remaining, true
+		}
+	}
+	return fqn, false
+}
+
 // resolveCallTargetLegacy is the old resolution logic without type inference.
 // Used for backward compatibility with existing tests.
 func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry *core.ModuleRegistry, currentModule string, codeGraph *graph.CodeGraph) (string, bool) {
@@ -1346,11 +2096,6 @@ func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry 
 
 		// Try to resolve through imports
 		if fqn, ok := importMap.Resolve(target); ok {
-			// Found in imports - return the FQN
-			// Check if it's a known framework
-			if isKnown, _ := core.IsKnownFramework(fqn); isKnown {
-				return fqn, true
-			}
 			// Validate if it exists in registry
 			resolved := validateFQN(fqn, registry)
 			return fqn, resolved
@@ -1374,10 +2119,6 @@ func resolveCallTargetLegacy(target string, importMap *core.ImportMap, registry 
 	// Try to resolve base through imports
 	if baseFQN, ok := importMap.Resolve(base); ok {
 		fullFQN := baseFQN + "." + rest
-		// Check if it's a known framework
-		if isKnown, _ := core.IsKnownFramework(fullFQN); isKnown {
-			return fullFQN, true
-		}
 		// Check if it's an ORM pattern (before validateFQN, since ORM methods don't exist in source)
 		if ormFQN, resolved := resolution.ResolveORMCall(target, currentModule, registry, codeGraph); resolved {
 			return ormFQN, true

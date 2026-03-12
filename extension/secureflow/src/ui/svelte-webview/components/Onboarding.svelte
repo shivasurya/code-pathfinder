@@ -10,7 +10,7 @@
 
   // State
   let selectedProvider = 'auto';
-  let selectedModel = 'claude-sonnet-4-5-20250929';
+  let selectedModel = 'claude-sonnet-4-6';
   let customModelId = '';
   let apiKey = '';
   let showCustomModelInput = false;

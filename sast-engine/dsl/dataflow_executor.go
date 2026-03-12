@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -11,8 +12,10 @@ import (
 
 // DataflowExecutor wraps existing taint analysis functions.
 type DataflowExecutor struct {
-	IR        *DataflowIR
-	CallGraph *core.CallGraph
+	IR          *DataflowIR
+	CallGraph   *core.CallGraph
+	Config      *QueryTypeConfig
+	Diagnostics *DiagnosticCollector
 }
 
 // NewDataflowExecutor creates a new executor.
@@ -25,6 +28,11 @@ func NewDataflowExecutor(ir *DataflowIR, cg *core.CallGraph) *DataflowExecutor {
 
 // Execute routes to local or global analysis based on scope.
 func (e *DataflowExecutor) Execute() []DataflowDetection {
+	if e.CallGraph == nil {
+		e.Diagnostics.Addf("error", "dataflow", "DataflowExecutor: CallGraph is nil")
+		return nil
+	}
+
 	if e.IR.Scope == "local" {
 		return e.executeLocal()
 	}
@@ -32,98 +40,286 @@ func (e *DataflowExecutor) Execute() []DataflowDetection {
 }
 
 // executeLocal performs intra-procedural taint analysis.
-// Uses VDG-based analysis when statements are available for a function,
-// with fallback to line-number-based detection otherwise.
 func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 	detections := []DataflowDetection{}
 
-	sourcePatterns := e.extractPatterns(e.IR.Sources)
-	sinkPatterns := e.extractPatterns(e.IR.Sinks)
-	sanitizerPatterns := e.extractPatterns(e.IR.Sanitizers)
-
-	sourceCalls := e.findMatchingCalls(sourcePatterns)
-	sinkCalls := e.findMatchingCalls(sinkPatterns)
-	sanitizerCalls := e.findMatchingCalls(sanitizerPatterns)
-
-	candidateFunctions := e.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
-
-	if len(candidateFunctions) == 0 {
+	// Resolve matchers polymorphically.
+	sourceCalls := e.resolveMatchers(e.IR.Sources)
+	if len(sourceCalls) == 0 {
+		e.Diagnostics.Addf("debug", "dataflow", "0 sources found, skipping local analysis")
 		return detections
 	}
 
-	// Extract target patterns for VDG matching
-	srcTargets := e.extractTargetPatterns(sourceCalls)
-	sinkTargets := e.extractTargetPatterns(sinkCalls)
-	sanTargets := e.extractTargetPatterns(sanitizerCalls)
+	sinkCalls := e.resolveMatchers(e.IR.Sinks)
+	if len(sinkCalls) == 0 {
+		e.Diagnostics.Addf("debug", "dataflow", "0 sinks found, skipping local analysis")
+		return detections
+	}
 
-	for _, funcFQN := range candidateFunctions {
-		var summary *core.TaintSummary
+	sanitizerCalls := e.resolveMatchers(e.IR.Sanitizers)
 
-		// Prefer CFG-aware analysis (extracts statements from control flow bodies)
-		if cfgRaw, ok := e.CallGraph.CFGs[funcFQN]; ok {
-			if cfGraph, ok := cfgRaw.(*cfg.ControlFlowGraph); ok {
-				if bsRaw, ok := e.CallGraph.CFGBlockStatements[funcFQN]; ok {
-					if blockStmts, ok := bsRaw.(cfg.BlockStatements); ok {
-						summary = taint.AnalyzeWithCFG(funcFQN, cfGraph, blockStmts, srcTargets, sinkTargets, sanTargets)
+	// For local scope, check if source and sink are in the same function.
+	for _, source := range sourceCalls {
+		for _, sink := range sinkCalls {
+			if source.FunctionFQN != sink.FunctionFQN {
+				continue
+			}
+
+			hasSanitizer := false
+			for _, sanitizer := range sanitizerCalls {
+				if sanitizer.FunctionFQN == source.FunctionFQN {
+					if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
+						(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
+						hasSanitizer = true
+						break
 					}
 				}
 			}
-		}
 
-		// Fallback to flat VDG if CFG not available
-		if summary == nil {
-			if stmts, ok := e.CallGraph.Statements[funcFQN]; ok && len(stmts) > 0 {
-				summary = taint.AnalyzeWithVDG(funcFQN, stmts, srcTargets, sinkTargets, sanTargets)
+			if hasSanitizer {
+				continue
 			}
+
+			detection := DataflowDetection{
+				FunctionFQN:  source.FunctionFQN,
+				SourceLine:   source.Line,
+				SourceColumn: source.CallSite.Location.Column,
+				SinkLine:     sink.Line,
+				SinkColumn:   sink.CallSite.Location.Column,
+				SinkCall:     sink.CallSite.Target,
+				Confidence:   e.Config.getLocalScopeConfidence(),
+				Sanitized:    false,
+				Scope:        "local",
+			}
+
+			detections = append(detections, detection)
+		}
+	}
+
+	return detections
+}
+
+// executeGlobal performs inter-procedural taint analysis.
+// Uses BFS memoization: precomputes reachability from each source once,
+// then checks sink reachability in O(1) per pair.
+func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
+	detections := []DataflowDetection{}
+
+	localDetections := e.executeLocal()
+	detections = append(detections, localDetections...)
+
+	sourceCalls := e.resolveMatchers(e.IR.Sources)
+	if len(sourceCalls) == 0 {
+		e.Diagnostics.Addf("debug", "dataflow", "0 sources found, skipping global analysis")
+		return detections
+	}
+
+	sinkCalls := e.resolveMatchers(e.IR.Sinks)
+	if len(sinkCalls) == 0 {
+		e.Diagnostics.Addf("debug", "dataflow", "0 sinks found, skipping global analysis")
+		return detections
+	}
+
+	sanitizerCalls := e.resolveMatchers(e.IR.Sanitizers)
+
+	// Build sanitizer FQN set for O(1) lookup.
+	sanitizerSet := make(map[string]bool, len(sanitizerCalls))
+	for _, san := range sanitizerCalls {
+		sanitizerSet[san.FunctionFQN] = true
+	}
+
+	// Memoize BFS reachability per unique source FQN.
+	reachabilityCache := make(map[string]map[string]bool)
+
+	for _, source := range sourceCalls {
+		// Compute BFS reachability once per unique source function.
+		reachable, cached := reachabilityCache[source.FunctionFQN]
+		if !cached {
+			reachable = e.bfsReachable(source.FunctionFQN)
+			reachabilityCache[source.FunctionFQN] = reachable
 		}
 
-		if summary != nil {
-			for _, det := range summary.Detections {
+		for _, sink := range sinkCalls {
+			if source.FunctionFQN == sink.FunctionFQN {
+				continue
+			}
+
+			if !reachable[sink.FunctionFQN] {
+				continue
+			}
+
+			// Use findPath for sanitizer path check (need actual path nodes).
+			path := e.findPath(source.FunctionFQN, sink.FunctionFQN)
+			hasSanitizer := e.pathHasSanitizerSet(path, sanitizerSet)
+
+			if !hasSanitizer {
 				detections = append(detections, DataflowDetection{
-					FunctionFQN: funcFQN,
-					SourceLine:  int(det.SourceLine),
-					SinkLine:    int(det.SinkLine),
-					TaintedVar:  det.SourceVar,
-					SinkCall:    det.SinkCall,
-					Confidence:  det.Confidence,
-					Sanitized:   det.Sanitized,
-					Scope:       "local",
+					FunctionFQN:  source.FunctionFQN,
+					SourceLine:   source.Line,
+					SourceColumn: source.CallSite.Location.Column,
+					SinkLine:     sink.Line,
+					SinkColumn:   sink.CallSite.Location.Column,
+					SinkCall:     sink.CallSite.Target,
+					Confidence:   e.Config.getGlobalScopeConfidence(),
+					Sanitized:    false,
+					Scope:        "global",
 				})
-			}
-		} else {
-			// Last resort: existing line-number-based detection
-			for _, source := range sourceCalls {
-				for _, sink := range sinkCalls {
-					if source.FunctionFQN != funcFQN || sink.FunctionFQN != funcFQN {
-						continue
-					}
-					hasSanitizer := false
-					for _, sanitizer := range sanitizerCalls {
-						if sanitizer.FunctionFQN == funcFQN {
-							if (sanitizer.Line > source.Line && sanitizer.Line < sink.Line) ||
-								(sanitizer.Line > sink.Line && sanitizer.Line < source.Line) {
-								hasSanitizer = true
-								break
-							}
-						}
-					}
-					detections = append(detections, DataflowDetection{
-						FunctionFQN: funcFQN,
-						SourceLine:  source.Line,
-						SinkLine:    sink.Line,
-						TaintedVar:  "",
-						SinkCall:    sink.CallSite.Target,
-						Confidence:  0.7,
-						Sanitized:   hasSanitizer,
-						Scope:       "local",
-					})
-				}
 			}
 		}
 	}
 
 	return detections
 }
+
+// bfsReachable computes the set of all functions reachable from startFQN
+// via the call graph edges using breadth-first search.
+func (e *DataflowExecutor) bfsReachable(startFQN string) map[string]bool {
+	visited := map[string]bool{startFQN: true}
+	queue := []string{startFQN}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, callee := range e.CallGraph.Edges[current] {
+			if !visited[callee] {
+				visited[callee] = true
+				queue = append(queue, callee)
+			}
+		}
+	}
+	return visited
+}
+
+// pathHasSanitizerSet checks if any function on the path is in the sanitizer set.
+func (e *DataflowExecutor) pathHasSanitizerSet(path []string, sanitizerSet map[string]bool) bool {
+	for _, pathFunc := range path {
+		if sanitizerSet[pathFunc] {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveMatchers dispatches raw JSON matchers to the appropriate executor.
+// Supports both CallMatcherIR and TypeConstrainedCallIR.
+func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []CallSiteMatch {
+	var allMatches []CallSiteMatch
+
+	for _, raw := range rawMatchers {
+		// Peek at "type" field to determine matcher type.
+		var peek struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &peek); err != nil {
+			continue
+		}
+
+		switch peek.Type {
+		case "call_matcher":
+			var ir CallMatcherIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			executor := NewCallMatcherExecutor(&ir, e.CallGraph)
+			for _, match := range executor.ExecuteWithContext() {
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    match.CallSite,
+					FunctionFQN: match.FunctionFQN,
+					Line:        match.Line,
+				})
+			}
+
+		case "type_constrained_call":
+			var ir TypeConstrainedCallIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			executor := &TypeConstrainedCallExecutor{
+				IR:               &ir,
+				CallGraph:        e.CallGraph,
+				Config:           e.Config,
+				ThirdPartyRemote: extractInheritanceChecker(e.CallGraph),
+			}
+			for _, det := range executor.Execute() {
+				cs := core.CallSite{
+					Target:   det.SinkCall,
+					Location: core.Location{Line: det.SourceLine},
+				}
+				if det.MatchedCallSite != nil {
+					cs = *det.MatchedCallSite
+				}
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    cs,
+					FunctionFQN: det.FunctionFQN,
+					Line:        det.SourceLine,
+				})
+			}
+		}
+	}
+
+	return allMatches
+}
+
+// CallSiteMatch represents a matched call site.
+type CallSiteMatch struct {
+	CallSite    core.CallSite
+	FunctionFQN string
+	Line        int
+}
+
+// findPath uses DFS to find a path between two functions.
+func (e *DataflowExecutor) findPath(from, to string) []string {
+	if from == to {
+		return []string{from}
+	}
+
+	visited := make(map[string]bool)
+	path := []string{}
+
+	if e.dfs(from, to, visited, &path) {
+		return path
+	}
+
+	return []string{}
+}
+
+func (e *DataflowExecutor) dfs(current, target string, visited map[string]bool, path *[]string) bool {
+	*path = append(*path, current)
+
+	if current == target {
+		return true
+	}
+
+	visited[current] = true
+
+	for _, callee := range e.CallGraph.Edges[current] {
+		if !visited[callee] {
+			if e.dfs(callee, target, visited, path) {
+				return true
+			}
+		}
+	}
+
+	*path = (*path)[:len(*path)-1]
+	return false
+}
+
+// pathHasSanitizer checks if any sanitizer function is on the path.
+func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSiteMatch) bool {
+	for _, pathFunc := range path {
+		for _, san := range sanitizers {
+			if pathFunc == san.FunctionFQN {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ============================================================================
+// VDG-specific functions (from demand-driven-dataflow branch)
+// These are used by VDG tests and will be wired into executeLocal/executeGlobal
+// in PR-04 and PR-05. Kept here to maintain zero test failures across all PRs.
+// ============================================================================
 
 // extractTargetPatterns extracts unique call target names from matched call sites.
 // Also extracts the bare name (last segment) for dotted targets, since statement
@@ -147,99 +343,6 @@ func (e *DataflowExecutor) extractTargetPatterns(matches []CallSiteMatch) []stri
 		}
 	}
 	return patterns
-}
-
-// executeGlobal performs inter-procedural taint analysis.
-// Uses summary-based approach: builds TaintTransferSummary per function,
-// then uses them to propagate taint across call boundaries in the VDG.
-func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
-	detections := []DataflowDetection{}
-
-	sourcePatterns := e.extractPatterns(e.IR.Sources)
-	sinkPatterns := e.extractPatterns(e.IR.Sinks)
-	sanitizerPatterns := e.extractPatterns(e.IR.Sanitizers)
-
-	sourceCalls := e.findMatchingCalls(sourcePatterns)
-	sinkCalls := e.findMatchingCalls(sinkPatterns)
-	sanitizerCalls := e.findMatchingCalls(sanitizerPatterns)
-
-	srcTargets := e.extractTargetPatterns(sourceCalls)
-	sinkTargets := e.extractTargetPatterns(sinkCalls)
-	sanTargets := e.extractTargetPatterns(sanitizerCalls)
-
-	// Phase 1: Build taint transfer summaries for all functions
-	transferSummaries := e.buildTransferSummaries(srcTargets, sinkTargets, sanTargets)
-
-	// Phase 2: Run inter-procedural analysis for each function that has sinks
-	// (not just functions with both sources AND sinks — sources may come from callees)
-	sinkFunctions := make(map[string]bool)
-	for _, sink := range sinkCalls {
-		sinkFunctions[sink.FunctionFQN] = true
-	}
-
-	// Also analyze functions that call source functions (taint enters via return value)
-	sourceFunctions := make(map[string]bool)
-	for _, src := range sourceCalls {
-		sourceFunctions[src.FunctionFQN] = true
-	}
-
-	// Find all functions that might have inter-procedural flows:
-	// any function that has a source, a sink, or transitively calls one.
-	candidateFunctions := make(map[string]bool)
-	for funcFQN := range sinkFunctions {
-		candidateFunctions[funcFQN] = true
-	}
-	for funcFQN := range sourceFunctions {
-		candidateFunctions[funcFQN] = true
-	}
-	// Transitively add callers of source-containing functions
-	for funcFQN := range sourceFunctions {
-		e.addTransitiveCallers(funcFQN, candidateFunctions)
-	}
-	// Transitively add callers of sink-containing functions (taint may enter via arguments)
-	for funcFQN := range sinkFunctions {
-		e.addTransitiveCallers(funcFQN, candidateFunctions)
-	}
-
-	for funcFQN := range candidateFunctions {
-		stmts := e.getStatementsForFunction(funcFQN)
-		if len(stmts) == 0 {
-			continue
-		}
-
-		summary := taint.AnalyzeInterProcedural(
-			funcFQN, stmts,
-			srcTargets, sinkTargets, sanTargets,
-			e.CallGraph, transferSummaries,
-		)
-
-		if summary != nil {
-			for _, det := range summary.Detections {
-				detections = append(detections, DataflowDetection{
-					FunctionFQN: funcFQN,
-					SourceLine:  int(det.SourceLine),
-					SinkLine:    int(det.SinkLine),
-					TaintedVar:  det.SourceVar,
-					SinkCall:    det.SinkCall,
-					Confidence:  det.Confidence * 0.9, // slight decay for inter-procedural
-					Sanitized:   det.Sanitized,
-					Scope:       "global",
-				})
-			}
-		}
-	}
-
-	// Also run local analysis for functions with both source and sink,
-	// but skip functions already analyzed inter-procedurally (they have
-	// summary-aware results that account for sanitizer wrappers etc.)
-	localDetections := e.executeLocal()
-	for _, ld := range localDetections {
-		if !candidateFunctions[ld.FunctionFQN] {
-			detections = append(detections, ld)
-		}
-	}
-
-	return detections
 }
 
 // buildTransferSummaries builds TaintTransferSummary for all functions using
@@ -391,56 +494,8 @@ func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[s
 	}
 }
 
-// Helper: findPath - REUSES existing DFS logic from patterns.go.
-func (e *DataflowExecutor) findPath(from, to string) []string {
-	if from == to {
-		return []string{from}
-	}
-
-	visited := make(map[string]bool)
-	path := []string{}
-
-	if e.dfs(from, to, visited, &path) {
-		return path
-	}
-
-	return []string{}
-}
-
-func (e *DataflowExecutor) dfs(current, target string, visited map[string]bool, path *[]string) bool {
-	*path = append(*path, current)
-
-	if current == target {
-		return true
-	}
-
-	visited[current] = true
-
-	for _, callee := range e.CallGraph.Edges[current] {
-		if !visited[callee] {
-			if e.dfs(callee, target, visited, path) {
-				return true
-			}
-		}
-	}
-
-	*path = (*path)[:len(*path)-1]
-	return false
-}
-
-// Helper: Check if sanitizer is on path.
-func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSiteMatch) bool {
-	for _, pathFunc := range path {
-		for _, san := range sanitizers {
-			if pathFunc == san.FunctionFQN {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Helper: Extract patterns from CallMatcherIR list.
+// extractPatterns extracts string patterns from CallMatcherIR list.
+// Used by VDG tests that construct matchers directly.
 func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
 	patterns := make([]string, 0, len(matchers))
 	for _, matcher := range matchers {
@@ -449,23 +504,13 @@ func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
 	return patterns
 }
 
-// CallSiteMatch represents a matched call site.
-type CallSiteMatch struct {
-	CallSite    core.CallSite
-	FunctionFQN string
-	Line        int
-}
-
-// Helper: Find call sites matching patterns.
+// findMatchingCalls finds call sites matching the given string patterns.
 func (e *DataflowExecutor) findMatchingCalls(patterns []string) []CallSiteMatch {
 	matches := []CallSiteMatch{}
 
 	for functionFQN, callSites := range e.CallGraph.CallSites {
 		for _, cs := range callSites {
 			for _, pattern := range patterns {
-				// Try matching against both Target (short name) and TargetFQN (fully qualified).
-				// This handles cases like pattern "eval" matching Target "eval" even when
-				// TargetFQN is "builtins.eval", and pattern "os.getenv" matching TargetFQN.
 				matched := e.matchesPattern(cs.Target, pattern)
 				if !matched && cs.TargetFQN != "" {
 					matched = e.matchesPattern(cs.TargetFQN, pattern)
@@ -485,7 +530,7 @@ func (e *DataflowExecutor) findMatchingCalls(patterns []string) []CallSiteMatch 
 	return matches
 }
 
-// Helper: Wildcard pattern matching.
+// matchesPattern performs wildcard pattern matching on call targets.
 func (e *DataflowExecutor) matchesPattern(target, pattern string) bool {
 	if pattern == "*" {
 		return true
@@ -509,7 +554,7 @@ func (e *DataflowExecutor) matchesPattern(target, pattern string) bool {
 	return target == pattern
 }
 
-// Helper: Find functions that have both sources and sinks (candidates for local analysis).
+// findFunctionsWithSourcesAndSinks finds functions that have both sources and sinks.
 func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []CallSiteMatch) []string {
 	sourceMap := make(map[string]bool)
 	for _, s := range sources {
@@ -530,3 +575,4 @@ func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []Cal
 
 	return functions
 }
+

@@ -52,9 +52,22 @@ for version in "${PYTHON_VERSIONS[@]}"; do
         continue
     fi
 
-    echo "Step 1/3: Generating stdlib registry..."
+    echo "Step 1/3: Generating stdlib registry (with typeshed overlay)..."
+
+    # Determine typeshed path from mypy installation
+    TYPESHED_PATH=$(python${version} -c "import mypy; import os; print(os.path.join(os.path.dirname(mypy.__file__), 'typeshed'))" 2>/dev/null || echo "")
+
+    TYPESHED_ARG=""
+    if [ -n "$TYPESHED_PATH" ] && [ -d "$TYPESHED_PATH" ]; then
+        echo "  Using typeshed at: $TYPESHED_PATH"
+        TYPESHED_ARG="--typeshed-path $TYPESHED_PATH"
+    else
+        echo "  Warning: typeshed not found, generating without type stub overlay"
+    fi
+
     python${version} "$SCRIPT_DIR/generate_stdlib_registry.py" --all \
         --output-dir "$OUTPUT_DIR" \
+        $TYPESHED_ARG \
         --verbose
 
     echo ""

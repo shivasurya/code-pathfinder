@@ -1,0 +1,101 @@
+name: Upload Third-Party Registries to R2
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      force_upload:
+        description: 'Force upload even if not a release'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  upload-thirdparty-registries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Generate and upload third-party registries
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          cd sast-engine/tools
+          chmod +x upload_thirdparty_to_r2.sh
+          ./upload_thirdparty_to_r2.sh
+
+      - name: Verify uploads in R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          echo "Verifying uploaded files in R2..."
+          aws s3 ls "s3://code-pathfinder-assets/registries/thirdparty/v1/manifest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            || echo "Warning: manifest.json not found"
+
+          echo ""
+          echo "Listing all uploaded files..."
+          aws s3 ls "s3://code-pathfinder-assets/registries/thirdparty/v1/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --summarize --human-readable
+
+      - name: Test public accessibility
+        run: |
+          echo "Testing public CDN URL..."
+          URL="https://assets.codepathfinder.dev/registries/thirdparty/v1/manifest.json"
+          echo "Testing: $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          if [ "$STATUS" = "200" ]; then
+            echo "  Third-party manifest is publicly accessible"
+            echo ""
+            echo "Manifest contents:"
+            curl -s "$URL" | python3 -c "
+          import json, sys
+          m = json.load(sys.stdin)
+          s = m.get('statistics', {})
+          print('  Schema version:', m.get('schema_version', 'unknown'))
+          print('  Modules:       ', s.get('total_modules', 0))
+          print('  Functions:     ', s.get('total_functions', 0))
+          print('  Classes:       ', s.get('total_classes', 0))
+          print('  Constants:     ', s.get('total_constants', 0))
+          print('  Attributes:    ', s.get('total_attributes', 0))
+          "
+          else
+            echo "  Third-party manifest returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "Third-Party Registry Upload Complete"
+          echo "========================================="
+          echo ""
+          echo "Registry available at:"
+          echo "  https://assets.codepathfinder.dev/registries/thirdparty/v1/manifest.json"
+          echo ""
+          echo "This will be used by code-pathfinder for third-party Python type inference."

@@ -60,7 +60,7 @@ class CLIProjectProfiler {
     this.maxTraversalDepth = 4;
 
     // Initialize workspace analyzer
-    const selectedModel = options.selectedModel || 'claude-sonnet-4-5-20250929';
+    const selectedModel = options.selectedModel || 'claude-sonnet-4-6';
     this.workspaceAnalyzer = new WorkspaceAnalyzer({ selectedModel });
   }
 

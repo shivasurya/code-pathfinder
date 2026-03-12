@@ -3,12 +3,14 @@
 from typing import Union
 from .matchers import CallMatcher, VariableMatcher
 from .dataflow import DataflowMatcher
+from .query_type import MethodMatcher
 from .ir import IRType
 
 MatcherType = Union[
     CallMatcher,
     VariableMatcher,
     DataflowMatcher,
+    MethodMatcher,
     "AndOperator",
     "OrOperator",
     "NotOperator",

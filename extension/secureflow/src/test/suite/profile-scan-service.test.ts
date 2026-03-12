@@ -83,7 +83,7 @@ suite('ProfileScanService Test Suite', () => {
     test('should detect OpenRouter provider from model ID', () => {
       // OpenRouter models have format: provider/model
       const openRouterModel = 'anthropic/claude-3-5-sonnet';
-      const directModel = 'claude-sonnet-4-5-20250929';
+      const directModel = 'claude-sonnet-4-6';
 
       assert.ok(openRouterModel.includes('/'), 'OpenRouter model should contain /');
       assert.ok(!directModel.includes('/'), 'Direct model should not contain /');

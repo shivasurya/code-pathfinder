@@ -38,7 +38,7 @@ console.log('🚀 Generating model configuration files...\n');
 // 1. Generate TypeScript Type Definitions
 // ============================================================================
 function generateTypeScriptTypes() {
-  const modelIds = activeModels.map(m => `  | '${m.id}'`).join('\n');
+  const modelIds = models.map(m => `  | '${m.id}'`).join('\n');
   
   const content = `/**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
@@ -79,7 +79,7 @@ export interface ProviderInfo {
 // 2. Generate JavaScript Type Definitions (JSDoc)
 // ============================================================================
 function generateJavaScriptTypes() {
-  const modelIds = activeModels.map(m => `'${m.id}'`).join(' | ');
+  const modelIds = models.map(m => `'${m.id}'`).join(' | ');
   
   const content = `/**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
@@ -243,7 +243,7 @@ module.exports = {
 function generateExtensionConfig() {
   const modelsArray = JSON.stringify(models, null, 2);
   const providerInfo = JSON.stringify(modelsConfig.providerInfo, null, 2);
-  const modelIds = activeModels.map(m => `  | '${m.id}'`).join('\n');
+  const modelIds = models.map(m => `  | '${m.id}'`).join('\n');
 
   const content = `/**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
