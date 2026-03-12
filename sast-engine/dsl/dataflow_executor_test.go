@@ -527,27 +527,25 @@ func TestDFS_DiamondGraph(t *testing.T) {
 	assert.True(t, len(path) == 3, "Path should be length 3 (A->B->D or A->C->D)")
 }
 
-// --- pathHasSanitizer edge cases ---
+// --- pathHasSanitizerSet edge cases ---
 
-func TestPathHasSanitizer_EmptyPath(t *testing.T) {
+func TestPathHasSanitizerSet_EmptyPath(t *testing.T) {
 	cg := core.NewCallGraph()
 	ir := &DataflowIR{}
 	executor := NewDataflowExecutor(ir, cg)
 
-	sanitizers := []CallSiteMatch{
-		{FunctionFQN: "test.sanitize", Line: 10},
-	}
+	sanitizerSet := map[string]bool{"test.sanitize": true}
 
-	result := executor.pathHasSanitizer([]string{}, sanitizers)
+	result := executor.pathHasSanitizerSet([]string{}, sanitizerSet)
 	assert.False(t, result, "Empty path should return false")
 }
 
-func TestPathHasSanitizer_EmptySanitizers(t *testing.T) {
+func TestPathHasSanitizerSet_EmptySanitizers(t *testing.T) {
 	cg := core.NewCallGraph()
 	ir := &DataflowIR{}
 	executor := NewDataflowExecutor(ir, cg)
 
-	result := executor.pathHasSanitizer([]string{"test.a", "test.b"}, []CallSiteMatch{})
+	result := executor.pathHasSanitizerSet([]string{"test.a", "test.b"}, map[string]bool{})
 	assert.False(t, result, "Empty sanitizers should return false")
 }
 
@@ -691,23 +689,15 @@ func TestDataflowExecutor_VDG_Local(t *testing.T) {
 
 		executor := NewDataflowExecutor(ir, cg)
 
-		// Test VDG helper functions using direct CallMatcherIR
-		sourceMatchers := []CallMatcherIR{{Patterns: []string{"request.GET"}}}
-		sinkMatchers := []CallMatcherIR{{Patterns: []string{"eval"}}}
-
-		sourcePatterns := executor.extractPatterns(sourceMatchers)
-		sinkPatterns := executor.extractPatterns(sinkMatchers)
-
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
-		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		sourceCalls := executor.resolveMatchers(ir.Sources)
+		sinkCalls := executor.resolveMatchers(ir.Sinks)
 
 		functions := executor.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
 
 		assert.Contains(t, functions, "test.vulnerable")
-		_ = ir // ir used for executor construction
 	})
 
-	t.Run("handles multiple sources and sinks in same function via VDG helpers", func(t *testing.T) {
+	t.Run("handles multiple sources and sinks in same function via resolveMatchers", func(t *testing.T) {
 		cg := core.NewCallGraph()
 		cg.CallSites["test.multi"] = []core.CallSite{
 			{
@@ -728,9 +718,6 @@ func TestDataflowExecutor_VDG_Local(t *testing.T) {
 			},
 		}
 
-		sourceMatchers := []CallMatcherIR{{Patterns: []string{"request.GET", "request.POST"}}}
-		sinkMatchers := []CallMatcherIR{{Patterns: []string{"eval", "execute"}}}
-
 		ir := &DataflowIR{
 			Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"request.GET", "request.POST"}}),
 			Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval", "execute"}}),
@@ -740,18 +727,14 @@ func TestDataflowExecutor_VDG_Local(t *testing.T) {
 
 		executor := NewDataflowExecutor(ir, cg)
 
-		sourcePatterns := executor.extractPatterns(sourceMatchers)
-		sinkPatterns := executor.extractPatterns(sinkMatchers)
-		sourceCalls := executor.findMatchingCalls(sourcePatterns)
-		sinkCalls := executor.findMatchingCalls(sinkPatterns)
+		sourceCalls := executor.resolveMatchers(ir.Sources)
+		sinkCalls := executor.resolveMatchers(ir.Sinks)
 
-		// Should find 2 sources * 2 sinks = 4 combinations
 		assert.Len(t, sourceCalls, 2)
 		assert.Len(t, sinkCalls, 2)
 
 		functions := executor.findFunctionsWithSourcesAndSinks(sourceCalls, sinkCalls)
 		assert.Contains(t, functions, "test.multi")
-		_ = ir
 	})
 }
 
@@ -789,7 +772,7 @@ func TestDataflowExecutor_VDG_Global(t *testing.T) {
 		assert.Contains(t, path, "test.process")
 	})
 
-	t.Run("detects sanitizer on path via VDG helpers", func(t *testing.T) {
+	t.Run("detects sanitizer on path via pathHasSanitizerSet", func(t *testing.T) {
 		cg := core.NewCallGraph()
 		cg.Edges = make(map[string][]string)
 		cg.Edges["test.source"] = []string{"test.sanitize"}
@@ -802,14 +785,22 @@ func TestDataflowExecutor_VDG_Global(t *testing.T) {
 			},
 		}
 
-		executor := NewDataflowExecutor(&DataflowIR{Scope: "global"}, cg)
+		ir := &DataflowIR{
+			Sources:    emptyRawMessages(),
+			Sinks:      emptyRawMessages(),
+			Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"escape_sql"}}),
+			Scope:      "global",
+		}
+		executor := NewDataflowExecutor(ir, cg)
+
+		sanitizerCalls := executor.resolveMatchers(ir.Sanitizers)
+		sanitizerSet := make(map[string]bool, len(sanitizerCalls))
+		for _, san := range sanitizerCalls {
+			sanitizerSet[san.FunctionFQN] = true
+		}
 
 		path := []string{"test.source", "test.sanitize", "test.sink"}
-		sanitizerMatchers := []CallMatcherIR{{Patterns: []string{"escape_sql"}}}
-		sanitizerPatterns := executor.extractPatterns(sanitizerMatchers)
-		sanitizerCalls := executor.findMatchingCalls(sanitizerPatterns)
-
-		hasSanitizer := executor.pathHasSanitizer(path, sanitizerCalls)
+		hasSanitizer := executor.pathHasSanitizerSet(path, sanitizerSet)
 		assert.True(t, hasSanitizer)
 	})
 
@@ -1000,88 +991,6 @@ func TestDataflowExecutor_VDG_Global_MultiLevelSink(t *testing.T) {
 	}
 }
 
-func TestDataflowExecutor_VDG_PatternMatching(t *testing.T) {
-	cg := core.NewCallGraph()
-	executor := NewDataflowExecutor(&DataflowIR{}, cg)
-
-	t.Run("exact match", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("eval", "eval"))
-		assert.False(t, executor.matchesPattern("eval", "exec"))
-	})
-
-	t.Run("wildcard prefix", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("request.GET", "request.*"))
-		assert.True(t, executor.matchesPattern("request.POST", "request.*"))
-		assert.False(t, executor.matchesPattern("utils.sanitize", "request.*"))
-	})
-
-	t.Run("wildcard suffix", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("user_input", "*_input"))
-		assert.True(t, executor.matchesPattern("admin_input", "*_input"))
-		assert.False(t, executor.matchesPattern("user_data", "*_input"))
-	})
-
-	t.Run("wildcard match all", func(t *testing.T) {
-		assert.True(t, executor.matchesPattern("anything", "*"))
-	})
-}
-
-func TestDataflowExecutor_VDG_FindMatchingCalls_TargetFQN(t *testing.T) {
-	t.Run("matches against TargetFQN when available", func(t *testing.T) {
-		cg := core.NewCallGraph()
-		cg.CallSites["main.handler"] = []core.CallSite{
-			{
-				Target:    "FormValue",
-				TargetFQN: "net/http.Request.FormValue",
-				Location:  core.Location{File: "main.go", Line: 10},
-			},
-			{
-				Target:    "Query",
-				TargetFQN: "database/sql.DB.Query",
-				Location:  core.Location{File: "main.go", Line: 15},
-			},
-		}
-
-		executor := NewDataflowExecutor(&DataflowIR{}, cg)
-
-		sourceCalls := executor.findMatchingCalls([]string{"net/http.Request.FormValue"})
-		assert.Len(t, sourceCalls, 1, "Should match net/http.Request.FormValue")
-		assert.Equal(t, "FormValue", sourceCalls[0].CallSite.Target)
-
-		sinkCalls := executor.findMatchingCalls([]string{"database/sql.DB.Query"})
-		assert.Len(t, sinkCalls, 1, "Should match database/sql.DB.Query")
-		assert.Equal(t, "Query", sinkCalls[0].CallSite.Target)
-	})
-
-	t.Run("falls back to Target when TargetFQN is empty", func(t *testing.T) {
-		cg := core.NewCallGraph()
-		cg.CallSites["app.views.index"] = []core.CallSite{
-			{
-				Target:    "request.GET",
-				TargetFQN: "",
-				Location:  core.Location{File: "views.py", Line: 20},
-			},
-		}
-
-		executor := NewDataflowExecutor(&DataflowIR{}, cg)
-
-		sourceCalls := executor.findMatchingCalls([]string{"request.GET"})
-		assert.Len(t, sourceCalls, 1, "Should match request.GET via Target field")
-	})
-
-	t.Run("wildcard patterns work with TargetFQN", func(t *testing.T) {
-		cg := core.NewCallGraph()
-		cg.CallSites["main.handler"] = []core.CallSite{
-			{
-				Target:    "FormValue",
-				TargetFQN: "net/http.Request.FormValue",
-				Location:  core.Location{File: "main.go", Line: 10},
-			},
-		}
-
-		executor := NewDataflowExecutor(&DataflowIR{}, cg)
-
-		sourceCalls := executor.findMatchingCalls([]string{"*FormValue"})
-		assert.Len(t, sourceCalls, 1, "Should match *FormValue against TargetFQN")
-	})
-}
+// matchesPattern and findMatchingCalls tests removed — these dead methods
+// were deleted from DataflowExecutor. Pattern matching is tested via
+// CallMatcherExecutor tests; resolveMatchers is tested in bridge_test.go.

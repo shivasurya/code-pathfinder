@@ -477,17 +477,6 @@ func (e *DataflowExecutor) dfs(current, target string, visited map[string]bool, 
 	return false
 }
 
-// pathHasSanitizer checks if any sanitizer function is on the path.
-func (e *DataflowExecutor) pathHasSanitizer(path []string, sanitizers []CallSiteMatch) bool {
-	for _, pathFunc := range path {
-		for _, san := range sanitizers {
-			if pathFunc == san.FunctionFQN {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // ============================================================================
 // VDG-specific functions (from demand-driven-dataflow branch)
@@ -668,65 +657,6 @@ func (e *DataflowExecutor) addTransitiveCallers(funcFQN string, candidates map[s
 	}
 }
 
-// extractPatterns extracts string patterns from CallMatcherIR list.
-// Used by VDG tests that construct matchers directly.
-func (e *DataflowExecutor) extractPatterns(matchers []CallMatcherIR) []string {
-	patterns := make([]string, 0, len(matchers))
-	for _, matcher := range matchers {
-		patterns = append(patterns, matcher.Patterns...)
-	}
-	return patterns
-}
-
-// findMatchingCalls finds call sites matching the given string patterns.
-func (e *DataflowExecutor) findMatchingCalls(patterns []string) []CallSiteMatch {
-	matches := []CallSiteMatch{}
-
-	for functionFQN, callSites := range e.CallGraph.CallSites {
-		for _, cs := range callSites {
-			for _, pattern := range patterns {
-				matched := e.matchesPattern(cs.Target, pattern)
-				if !matched && cs.TargetFQN != "" {
-					matched = e.matchesPattern(cs.TargetFQN, pattern)
-				}
-				if matched {
-					matches = append(matches, CallSiteMatch{
-						CallSite:    cs,
-						FunctionFQN: functionFQN,
-						Line:        cs.Location.Line,
-					})
-					break
-				}
-			}
-		}
-	}
-
-	return matches
-}
-
-// matchesPattern performs wildcard pattern matching on call targets.
-func (e *DataflowExecutor) matchesPattern(target, pattern string) bool {
-	if pattern == "*" {
-		return true
-	}
-
-	if strings.Contains(pattern, "*") {
-		if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
-			substr := strings.Trim(pattern, "*")
-			return strings.Contains(target, substr)
-		}
-		if after, ok := strings.CutPrefix(pattern, "*"); ok {
-			suffix := after
-			return strings.HasSuffix(target, suffix)
-		}
-		if before, ok := strings.CutSuffix(pattern, "*"); ok {
-			prefix := before
-			return strings.HasPrefix(target, prefix)
-		}
-	}
-
-	return target == pattern
-}
 
 // findFunctionsWithSourcesAndSinks finds functions that have both sources and sinks.
 func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []CallSiteMatch) []string {
