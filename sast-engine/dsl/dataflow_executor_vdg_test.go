@@ -163,9 +163,7 @@ func TestVDGIntegration_Case4_SanitizerKills(t *testing.T) {
 }
 
 // TestVDGIntegration_Case5_UnrelatedVars tests: x = source(); sink(y) -> NO DETECT
-// Skip: requires VDG variable tracking (PR-04). Line-proximity executor detects this as a false positive.
 func TestVDGIntegration_Case5_UnrelatedVars(t *testing.T) {
-	t.Skip("Requires VDG variable tracking (PR-04): line-proximity cannot distinguish unrelated variables")
 
 	funcFQN := "test.module.case_unrelated"
 	stmts := []*core.Statement{
@@ -194,9 +192,7 @@ func TestVDGIntegration_Case5_UnrelatedVars(t *testing.T) {
 }
 
 // TestVDGIntegration_Case6_ReassignmentKills tests: x = source(); x = "safe"; sink(x) -> NO DETECT
-// Skip: requires VDG variable tracking (PR-04). Line-proximity executor cannot track reassignment.
 func TestVDGIntegration_Case6_ReassignmentKills(t *testing.T) {
-	t.Skip("Requires VDG variable tracking (PR-04): line-proximity cannot track reassignment kills")
 
 	funcFQN := "test.module.case_reassign"
 	stmts := []*core.Statement{
@@ -331,7 +327,6 @@ func TestVDGIntegration_Scorecard(t *testing.T) {
 				{Target: "eval", Location: core.Location{Line: 2}},
 			},
 			expectDetected: false,
-			skip:           "Requires VDG variable tracking (PR-04)",
 		},
 		{
 			name: "6. Reassignment kills taint",
@@ -345,7 +340,6 @@ func TestVDGIntegration_Scorecard(t *testing.T) {
 				{Target: "eval", Location: core.Location{Line: 3}},
 			},
 			expectDetected: false,
-			skip:           "Requires VDG variable tracking (PR-04)",
 		},
 		{
 			name: "7. Multi-hop transitive flow",

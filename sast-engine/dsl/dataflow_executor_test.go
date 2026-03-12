@@ -63,7 +63,8 @@ func TestDataflowExecutor_Local(t *testing.T) {
 		assert.Equal(t, 10, detections[0].SinkLine)
 		assert.Equal(t, "execute", detections[0].SinkCall)
 		assert.Equal(t, "local", detections[0].Scope)
-		assert.Equal(t, 0.7, detections[0].Confidence)
+		assert.Equal(t, 0.50, detections[0].Confidence)
+		assert.Equal(t, "line_proximity", detections[0].MatchMethod)
 		assert.False(t, detections[0].Sanitized)
 	})
 
