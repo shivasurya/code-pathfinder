@@ -14,6 +14,7 @@ type TaintDetection struct {
 	SourceVar       string
 	SinkLine        uint32
 	SinkCall        string
+	SinkVar         string // Variable at the sink call site (the argument that carries taint)
 	PropagationPath []string
 	Confidence      float64
 }
@@ -140,6 +141,7 @@ func (g *VarDepGraph) FindTaintFlows(statements []*core.Statement, sinks []strin
 					SourceVar:       srcNode.VarName,
 					SinkLine:        stmt.LineNumber,
 					SinkCall:        stmt.CallTarget,
+					SinkVar:         usedVar,
 					PropagationPath: g.pathToVarNames(path),
 					Confidence:      1.0,
 				})
