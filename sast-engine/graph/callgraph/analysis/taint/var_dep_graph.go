@@ -246,6 +246,7 @@ func AnalyzeWithVDG(
 			SourceVar:       det.SourceVar,
 			SinkLine:        det.SinkLine,
 			SinkCall:        det.SinkCall,
+			SinkVar:         det.SinkVar,
 			PropagationPath: det.PropagationPath,
 			Confidence:      det.Confidence,
 		}
