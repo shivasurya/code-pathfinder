@@ -265,3 +265,93 @@ def test_full_sql_injection_rule_ir():
     sink = ir["sinks"][0]
     assert sink["receiverTypes"] == ["sqlite3.Cursor", "psycopg2.extensions.cursor"]
     assert sink["methodNames"] == ["execute", "executemany"]
+
+
+# --- Parameter Targeting Tests ---
+
+
+def test_where_positional():
+    """where() is the new name for arg() — filters by argument value."""
+    ir = DBCursor.method("execute").where(0, "SELECT 1").to_ir()
+    assert "positionalArgs" in ir
+    assert ir["positionalArgs"]["0"]["value"] == "SELECT 1"
+    assert ir["positionalArgs"]["0"]["wildcard"] is False
+
+
+def test_where_keyword():
+    """where() with string key targets keyword arguments."""
+    ir = DBCursor.method("execute").where("timeout", 30).to_ir()
+    assert "keywordArgs" in ir
+    assert ir["keywordArgs"]["timeout"]["value"] == 30
+
+
+def test_where_is_arg_alias():
+    """arg() and where() produce identical IR."""
+    ir_where = DBCursor.method("execute").where(0, "SELECT 1").to_ir()
+    ir_arg = DBCursor.method("execute").arg(0, "SELECT 1").to_ir()
+    assert ir_where == ir_arg
+
+
+def test_tracks_positional():
+    """.tracks(0) adds trackedParams with index."""
+    ir = DBCursor.method("execute").tracks(0).to_ir()
+    assert "trackedParams" in ir
+    assert ir["trackedParams"] == [{"index": 0}]
+
+
+def test_tracks_by_name():
+    """.tracks("query") adds trackedParams with name."""
+    ir = DBCursor.method("execute").tracks("query").to_ir()
+    assert "trackedParams" in ir
+    assert ir["trackedParams"] == [{"name": "query"}]
+
+
+def test_tracks_return():
+    """.tracks("return") adds trackedParams with return flag."""
+    ir = WebRequest.method("get").tracks("return").to_ir()
+    assert "trackedParams" in ir
+    assert ir["trackedParams"] == [{"return": True}]
+
+
+def test_tracks_multiple():
+    """.tracks(0, 1) adds multiple tracked params."""
+    ir = DBCursor.method("execute").tracks(0, 1).to_ir()
+    assert "trackedParams" in ir
+    assert len(ir["trackedParams"]) == 2
+    assert ir["trackedParams"][0] == {"index": 0}
+    assert ir["trackedParams"][1] == {"index": 1}
+
+
+def test_tracks_combined_with_where():
+    """.where() and .tracks() are orthogonal and composable."""
+    ir = DBCursor.method("execute").where("timeout", 30).tracks(0).to_ir()
+    assert "keywordArgs" in ir
+    assert ir["keywordArgs"]["timeout"]["value"] == 30
+    assert "trackedParams" in ir
+    assert ir["trackedParams"] == [{"index": 0}]
+
+
+def test_no_tracks_no_field():
+    """Without .tracks(), trackedParams is absent from IR."""
+    ir = DBCursor.method("execute").to_ir()
+    assert "trackedParams" not in ir
+
+
+def test_tracks_invalid_type():
+    """tracks() rejects invalid types."""
+    with pytest.raises(TypeError):
+        DBCursor.method("execute").tracks(3.14)
+
+
+def test_tracks_on_call_matcher():
+    """.tracks() works on CallMatcher (calls() function) too."""
+    ir = calls("eval").tracks(0).to_ir()
+    assert ir["type"] == "call_matcher"
+    assert "trackedParams" in ir
+    assert ir["trackedParams"] == [{"index": 0}]
+
+
+def test_call_matcher_no_tracks():
+    """CallMatcher without tracks() has no trackedParams in IR."""
+    ir = calls("eval").to_ir()
+    assert "trackedParams" not in ir
