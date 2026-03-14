@@ -435,9 +435,10 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 
 // CallSiteMatch represents a matched call site.
 type CallSiteMatch struct {
-	CallSite    core.CallSite
-	FunctionFQN string
-	Line        int
+	CallSite      core.CallSite
+	FunctionFQN   string
+	Line          int
+	TrackedParams []TrackedParam // Which parameters are taint-sensitive (from matcher IR)
 }
 
 // findPath uses DFS to find a path between two functions.
