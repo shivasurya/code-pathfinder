@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
@@ -101,7 +102,21 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 
 		if summary != nil {
 			for _, det := range summary.Detections {
-				detections = append(detections, DataflowDetection{
+				// Find the sink match for this detection's sink line
+				var matchedSink *CallSiteMatch
+				for i, sm := range sinkCalls {
+					if sm.Line == int(det.SinkLine) {
+						matchedSink = &sinkCalls[i]
+						break
+					}
+				}
+
+				// Filter by tracked parameter constraints
+				if matchedSink != nil && !e.matchesTrackedParams(det, *matchedSink) {
+					continue
+				}
+
+				detection := DataflowDetection{
 					FunctionFQN: funcFQN,
 					SourceLine:  int(det.SourceLine),
 					SinkLine:    int(det.SinkLine),
@@ -111,7 +126,11 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 					Sanitized:   false,
 					Scope:       "local",
 					MatchMethod: analysisMethod,
-				})
+				}
+				if matchedSink != nil {
+					detection.SinkParamIndex = e.resolveParamIndex(det, *matchedSink)
+				}
+				detections = append(detections, detection)
 			}
 		}
 	}
@@ -302,14 +321,32 @@ func (e *DataflowExecutor) summaryConfirmsFlow(
 	// For direct source→sink (path length 2), check sink summary.
 	sinkSummary := summaries[sink.FunctionFQN]
 	if sinkSummary != nil {
-		// Sink function must consume tainted input (any param to sink).
 		hasParamToSink := false
-		for _, flows := range sinkSummary.ParamToSink {
-			if flows {
-				hasParamToSink = true
-				break
+
+		// Resolve tracked params to positional indices using summary's param names
+		trackedIndices := e.resolveTrackedParamIndices(
+			sink.TrackedParams,
+			sinkSummary.ParamNames,
+		)
+
+		if trackedIndices == nil {
+			// No tracked params — current behavior: any param reaching sink counts
+			for _, flows := range sinkSummary.ParamToSink {
+				if flows {
+					hasParamToSink = true
+					break
+				}
+			}
+		} else {
+			// Only check tracked parameter indices
+			for idx := range trackedIndices {
+				if sinkSummary.ParamToSink[idx] {
+					hasParamToSink = true
+					break
+				}
 			}
 		}
+
 		// If sink has no ParamToSink but is known to have a sink call,
 		// still accept (sink pattern matching already confirmed it).
 		if len(sinkSummary.ParamToSink) > 0 && !hasParamToSink {
@@ -396,9 +433,10 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 			executor := NewCallMatcherExecutor(&ir, e.CallGraph)
 			for _, match := range executor.ExecuteWithContext() {
 				allMatches = append(allMatches, CallSiteMatch{
-					CallSite:    match.CallSite,
-					FunctionFQN: match.FunctionFQN,
-					Line:        match.Line,
+					CallSite:      match.CallSite,
+					FunctionFQN:   match.FunctionFQN,
+					Line:          match.Line,
+					TrackedParams: ir.TrackedParams,
 				})
 			}
 
@@ -420,11 +458,23 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 				}
 				if det.MatchedCallSite != nil {
 					cs = *det.MatchedCallSite
+				} else if len(ir.TrackedParams) > 0 {
+					// When TrackedParams are set, we need the actual CallSite
+					// with Arguments populated for parameter matching.
+					if css, ok := e.CallGraph.CallSites[det.FunctionFQN]; ok {
+						for i, candidate := range css {
+							if candidate.Location.Line == det.SourceLine {
+								cs = css[i]
+								break
+							}
+						}
+					}
 				}
 				allMatches = append(allMatches, CallSiteMatch{
-					CallSite:    cs,
-					FunctionFQN: det.FunctionFQN,
-					Line:        det.SourceLine,
+					CallSite:      cs,
+					FunctionFQN:   det.FunctionFQN,
+					Line:          det.SourceLine,
+					TrackedParams: ir.TrackedParams,
 				})
 			}
 		}
@@ -439,6 +489,131 @@ type CallSiteMatch struct {
 	FunctionFQN   string
 	Line          int
 	TrackedParams []TrackedParam // Which parameters are taint-sensitive (from matcher IR)
+}
+
+// findCallSiteAtLine returns the CallSite at the given line within a function,
+// or nil if not found.
+func (e *DataflowExecutor) findCallSiteAtLine(funcFQN string, line uint32) *core.CallSite {
+	callSites := e.CallGraph.CallSites[funcFQN]
+	for i, cs := range callSites {
+		if cs.Location.Line == int(line) {
+			return &callSites[i]
+		}
+	}
+	return nil
+}
+
+// resolveTrackedParamIndices converts TrackedParams into a set of positional indices.
+// Name-based params are resolved via paramNames (from TaintTransferSummary or CallGraph).
+// Returns nil if no non-return TrackedParams (means "all params are sensitive").
+func (e *DataflowExecutor) resolveTrackedParamIndices(
+	tracked []TrackedParam,
+	paramNames []string,
+) map[int]bool {
+	if len(tracked) == 0 {
+		return nil
+	}
+
+	indices := make(map[int]bool)
+	hasNonReturnParam := false
+	for _, tp := range tracked {
+		if tp.Return {
+			continue
+		}
+		hasNonReturnParam = true
+		if tp.Index != nil {
+			indices[*tp.Index] = true
+		}
+		if tp.Name != "" {
+			for i, name := range paramNames {
+				if name == tp.Name {
+					indices[i] = true
+				}
+			}
+		}
+	}
+	if !hasNonReturnParam {
+		return nil
+	}
+	return indices
+}
+
+// getParamNamesForFQN returns the ordered parameter names for a function,
+// looked up from the CallGraph.Parameters map. Filters out "self" and "cls".
+// Returns nil if the function's parameters are not known.
+func (e *DataflowExecutor) getParamNamesForFQN(funcFQN string) []string {
+	var params []*core.ParameterSymbol
+	prefix := funcFQN + "."
+	for key, ps := range e.CallGraph.Parameters {
+		if strings.HasPrefix(key, prefix) && ps.ParentFQN == funcFQN {
+			params = append(params, ps)
+		}
+	}
+	if len(params) == 0 {
+		return nil
+	}
+	sort.Slice(params, func(i, j int) bool {
+		return params[i].Line < params[j].Line
+	})
+	var names []string
+	for _, p := range params {
+		if p.Name != "self" && p.Name != "cls" {
+			names = append(names, p.Name)
+		}
+	}
+	return names
+}
+
+// matchesTrackedParams checks if a taint detection's sink usage matches
+// the tracked parameter constraints. Uses det.SinkVar (the variable at the
+// sink call site, NOT det.SourceVar which is the variable at the taint source).
+func (e *DataflowExecutor) matchesTrackedParams(
+	det *core.TaintInfo,
+	sinkMatch CallSiteMatch,
+) bool {
+	if len(sinkMatch.TrackedParams) == 0 {
+		return true
+	}
+
+	sinkCS := e.findCallSiteAtLine(sinkMatch.FunctionFQN, det.SinkLine)
+	if sinkCS == nil {
+		return true // Can't resolve — accept conservatively
+	}
+
+	var paramNames []string
+	if sinkCS.TargetFQN != "" {
+		paramNames = e.getParamNamesForFQN(sinkCS.TargetFQN)
+	}
+	trackedIndices := e.resolveTrackedParamIndices(sinkMatch.TrackedParams, paramNames)
+	if trackedIndices == nil {
+		return true
+	}
+
+	for _, arg := range sinkCS.Arguments {
+		if trackedIndices[arg.Position] && arg.IsVariable && arg.Value == det.SinkVar {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveParamIndex determines the positional index of the tainted parameter
+// at the sink call site. Returns nil if it cannot be determined.
+func (e *DataflowExecutor) resolveParamIndex(
+	det *core.TaintInfo,
+	sinkMatch CallSiteMatch,
+) *int {
+	sinkCS := e.findCallSiteAtLine(sinkMatch.FunctionFQN, det.SinkLine)
+	if sinkCS == nil {
+		return nil
+	}
+	for _, arg := range sinkCS.Arguments {
+		if arg.IsVariable && arg.Value == det.SinkVar {
+			idx := arg.Position
+			return &idx
+		}
+	}
+	return nil
 }
 
 // findPath uses DFS to find a path between two functions.
