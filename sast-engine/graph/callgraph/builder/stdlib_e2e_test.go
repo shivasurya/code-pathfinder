@@ -22,7 +22,7 @@ import (
 func TestStdlibReturnTypeChaining_EndToEnd(t *testing.T) {
 	// Use absolute path to ensure graph.Initialize and BuildCallGraphFromPath
 	// use consistent file paths (module registry converts to absolute internally).
-	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
+	projectPath, err := filepath.Abs("../../../test-fixtures/python/stdlib_chaining")
 	require.NoError(t, err)
 
 	// Build code graph from the fixture
