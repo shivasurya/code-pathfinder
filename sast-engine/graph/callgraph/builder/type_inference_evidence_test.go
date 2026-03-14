@@ -15,7 +15,7 @@ import (
 // resolves the full chain: sqlite3.connect() → Connection → .cursor() → Cursor → .execute().
 // Requires CDN data regenerated with typeshed overlay (PR-00) for C builtin return types.
 func TestTypeInference_StdlibChaining(t *testing.T) {
-	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
+	projectPath, err := filepath.Abs("../../../test-fixtures/python/stdlib_chaining")
 	require.NoError(t, err)
 
 	codeGraph := graph.Initialize(projectPath, nil)
@@ -117,7 +117,7 @@ func TestTypeInference_StdlibChaining(t *testing.T) {
 // resolves: requests.get() → Response → .json() → dict.
 func TestTypeInference_ThirdPartyChaining(t *testing.T) {
 	t.Skip("Requires third-party CDN data (requests, flask) — skip until CDN is available in CI")
-	projectPath, err := filepath.Abs("../../../../test-fixtures/querytype-poc")
+	projectPath, err := filepath.Abs("../../../test-fixtures/python/stdlib_chaining")
 	require.NoError(t, err)
 
 	codeGraph := graph.Initialize(projectPath, nil)
