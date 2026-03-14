@@ -15,6 +15,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// newTestRequest creates an *http.Request with context.Background() to satisfy noctx.
+func newTestRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), method, target, body)
+	require.NoError(t, err)
+	return req
+}
+
+// newTestRequestWithContext creates an *http.Request with the given context.
+func newTestRequestWithContext(ctx context.Context, t *testing.T, method, target string, body io.Reader) *http.Request {
+	t.Helper()
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
+	require.NoError(t, err)
+	return req
+}
+
 func TestDefaultHTTPConfig(t *testing.T) {
 	config := DefaultHTTPConfig()
 
@@ -65,7 +81,7 @@ func TestHTTPServer_ServeHTTP_Initialize(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(request)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req := newTestRequest(t, http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -99,7 +115,7 @@ func TestHTTPServer_ServeHTTP_ToolsCall(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(request)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req := newTestRequest(t,http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -117,7 +133,7 @@ func TestHTTPServer_ServeHTTP_MethodNotAllowed(t *testing.T) {
 
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
-			req := httptest.NewRequest(method, "/", nil)
+			req := newTestRequest(t,method, "/", nil)
 			rec := httptest.NewRecorder()
 			httpServer.ServeHTTP(rec, req)
 
@@ -131,7 +147,7 @@ func TestHTTPServer_ServeHTTP_WrongContentType(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{}"))
+	req := newTestRequest(t,http.MethodPost, "/", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "text/plain")
 
 	rec := httptest.NewRecorder()
@@ -145,7 +161,7 @@ func TestHTTPServer_ServeHTTP_InvalidJSON(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not json"))
+	req := newTestRequest(t,http.MethodPost, "/", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -165,7 +181,7 @@ func TestHTTPServer_ServeHTTP_CORS(t *testing.T) {
 	httpServer := NewHTTPServer(mcpServer, nil)
 
 	t.Run("preflight request", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodOptions, "/", nil)
+		req := newTestRequest(t,http.MethodOptions, "/", nil)
 		req.Header.Set("Origin", "http://example.com")
 
 		rec := httptest.NewRecorder()
@@ -180,7 +196,7 @@ func TestHTTPServer_ServeHTTP_CORS(t *testing.T) {
 		request := JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "ping"}
 		body, _ := json.Marshal(request)
 
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req := newTestRequest(t,http.MethodPost, "/", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "http://example.com")
 
@@ -200,7 +216,7 @@ func TestHTTPServer_ServeHTTP_CORSAllowedOrigins(t *testing.T) {
 	httpServer := NewHTTPServer(mcpServer, config)
 
 	t.Run("allowed origin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodOptions, "/", nil)
+		req := newTestRequest(t,http.MethodOptions, "/", nil)
 		req.Header.Set("Origin", "http://allowed.com")
 
 		rec := httptest.NewRecorder()
@@ -210,7 +226,7 @@ func TestHTTPServer_ServeHTTP_CORSAllowedOrigins(t *testing.T) {
 	})
 
 	t.Run("disallowed origin", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodOptions, "/", nil)
+		req := newTestRequest(t,http.MethodOptions, "/", nil)
 		req.Header.Set("Origin", "http://notallowed.com")
 
 		rec := httptest.NewRecorder()
@@ -224,7 +240,7 @@ func TestHTTPServer_HealthHandler(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := newTestRequest(t,http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
 	httpServer.healthHandler(rec, req)
@@ -242,7 +258,7 @@ func TestHTTPServer_HealthHandler_Preflight(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
+	req := newTestRequest(t,http.MethodOptions, "/health", nil)
 	rec := httptest.NewRecorder()
 
 	httpServer.healthHandler(rec, req)
@@ -397,7 +413,7 @@ func TestHTTPServer_Integration(t *testing.T) {
 	}
 	body, _ := json.Marshal(request)
 
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req := newTestRequest(t,http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -419,7 +435,7 @@ func TestHTTPServer_LargeRequest(t *testing.T) {
 	}
 	body, _ := json.Marshal(request)
 
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req := newTestRequest(t,http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -438,7 +454,7 @@ func TestHTTPServer_ReadBodyError(t *testing.T) {
 	mcpServer := createTestServer()
 	httpServer := NewHTTPServer(mcpServer, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/", &errorReader{})
+	req := newTestRequest(t,http.MethodPost, "/", &errorReader{})
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -455,7 +471,7 @@ func TestHTTPServer_NoOriginHeader(t *testing.T) {
 	request := JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: "ping"}
 	body, _ := json.Marshal(request)
 
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req := newTestRequest(t,http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	// No Origin header set.
 
@@ -525,7 +541,7 @@ func TestSSEServer_ServeSSE(t *testing.T) {
 
 	// Create a request with a cancellable context.
 	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
+	req := newTestRequestWithContext(ctx, t, http.MethodGet, "/sse", nil)
 	req.Header.Set("Origin", "http://example.com")
 
 	rec := httptest.NewRecorder()
@@ -571,7 +587,7 @@ func TestSSEServer_ServeSSE_NoFlusher(t *testing.T) {
 	httpServer := NewHTTPServer(mcpServer, nil)
 	sseServer := NewSSEServer(httpServer)
 
-	req := httptest.NewRequest(http.MethodGet, "/sse", nil)
+	req := newTestRequest(t,http.MethodGet, "/sse", nil)
 
 	// Use a writer that doesn't implement Flusher.
 	rec := httptest.NewRecorder()
