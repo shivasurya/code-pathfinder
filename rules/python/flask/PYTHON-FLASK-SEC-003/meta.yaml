@@ -148,39 +148,64 @@ compliance:
   - standard: SANS Top 25
     requirement: "Insecure Interaction Between Components"
 
-# FAQ (drives SEO)
+# FAQ (SEO-optimized for target personas)
 faq:
-  - question: What is SQL injection in Flask?
+  - question: How does this rule detect SQL injection across multiple Python files?
     answer: |
-      SQL injection occurs when user-supplied input is inserted directly into a SQL query
-      string without proper sanitization or parameterization. In Flask applications, this
-      typically happens when request.args.get() or request.form.get() values are concatenated
-      into SQL strings passed to cursor.execute(). Attackers can inject malicious SQL fragments
-      to read, modify, or delete data.
-  - question: How do I prevent SQL injection in Flask?
+      Code Pathfinder uses inter-procedural taint analysis to track user input across function
+      calls and file boundaries. If a Flask route in app.py receives request.args.get('id') and
+      passes it to a database helper in db.py that calls cursor.execute(), the full data flow is
+      traced and flagged. This catches the real-world pattern where routes, services, and data
+      layers live in separate files — not just toy single-file examples.
+
+  - question: How do I run this rule in my CI/CD pipeline?
     answer: |
-      Use parameterized queries with placeholder syntax: cursor.execute("SELECT * FROM users
-      WHERE name = ?", (username,)). The database driver handles escaping automatically.
-      Alternatively, use an ORM like SQLAlchemy which generates parameterized queries by default.
-      Never construct SQL strings using string concatenation, f-strings, or .format() with
-      user input.
-  - question: Does this rule detect cross-file SQL injection?
+      Add Code Pathfinder to your CI workflow and run:
+      pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-003 --project .
+      It outputs SARIF, JSON, or CSV and can post inline review comments directly on GitHub
+      pull requests. The scan runs in seconds and requires no database or runtime — it analyzes
+      source code statically.
+
+  - question: Does this rule produce false positives on parameterized queries?
     answer: |
-      Yes. This rule uses inter-procedural taint analysis (scope=global) to track tainted data
-      across function and file boundaries. For example, if user input is received in app.py and
-      passed through a function call to a database query in db.py, Code Pathfinder traces the
-      full data flow and detects the vulnerability.
-  - question: Why does this rule use .tracks(0)?
+      No. This rule uses .tracks(0) parameter targeting, which means it only flags taint
+      reaching the first argument of cursor.execute() — the SQL query string. The second
+      argument (the parameter tuple in cursor.execute(sql, (params,))) is correctly recognized
+      as the safe parameterization mechanism and is excluded from analysis. This eliminates
+      the most common source of false positives in SQL injection detection.
+
+  - question: Which database drivers and ORMs does this rule support?
     answer: |
-      The .tracks(0) parameter targeting tells the analysis engine that only the first argument
-      to cursor.execute() is security-sensitive. In parameterized queries like
-      cursor.execute(sql, (params,)), the second argument is the safe parameter tuple. Without
-      .tracks(0), passing user input as the parameter tuple would trigger a false positive.
-  - question: What databases does this rule cover?
+      This rule covers SQLite (sqlite3), MySQL (mysql-connector-python, PyMySQL), and
+      PostgreSQL (psycopg2) through type-aware QueryType matching. The wildcard pattern
+      *Cursor matches any cursor-like object across database drivers. For ORM-based queries,
+      see the companion rules PYTHON-DJANGO-SEC-002 (Django ORM .raw()) and
+      PYTHON-DJANGO-SEC-003 (Django ORM .extra()).
+
+  - question: What compliance standards require SQL injection testing?
     answer: |
-      This rule covers SQLite (sqlite3.Cursor), MySQL (mysql.connector, PyMySQL), and
-      PostgreSQL (psycopg2) through type-aware matching. The QueryType pattern *Cursor also
-      matches any cursor-like object, providing broad coverage across database drivers.
+      SQL injection testing is required or recommended by PCI DSS v4.0 (Requirement 6.2.4),
+      OWASP Top 10 (A03:2021 Injection), NIST SP 800-53 (SI-10), SOC 2 Type II (CC6.1),
+      ISO 27001 (A.14.2.5), and the EU Cyber Resilience Act. CWE-89 is ranked #3 in the
+      2023 CWE Top 25 Most Dangerous Software Weaknesses. Running this rule as part of your
+      SAST pipeline provides auditable evidence of injection testing for compliance reviews.
+
+  - question: Can I customize this rule for my project's specific sources and sinks?
+    answer: |
+      Yes. The rule is written in Code Pathfinder's Python DSL — you can fork it and modify
+      the from_sources list to add your project's custom input methods, add framework-specific
+      sinks to to_sinks, or add your validation functions to sanitized_by. The rule file is
+      a standard Python file that you can version-control alongside your application code.
+
+  - question: How is this different from grep or regex-based SQL injection detection?
+    answer: |
+      Grep-based tools match patterns in source code text — they cannot determine whether
+      user input actually reaches a SQL query. Code Pathfinder performs data flow analysis,
+      tracing variables from HTTP request sources through assignments, function calls, and
+      file boundaries to database sinks. It understands that sanitized input (passed through
+      escape functions) is safe, and that parameterized queries are not vulnerable. This
+      produces far fewer false positives while catching real vulnerabilities that pattern
+      matching misses entirely.
 
 # Similar Rules
 similar_rules:
