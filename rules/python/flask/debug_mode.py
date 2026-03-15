@@ -370,5 +370,9 @@ def detect_flask_debug_mode():
         app = Flask(__name__)
         app.run(debug=True)  # Detected!
     """
-    # Use wildcard pattern to match any object's run method with debug=True
-    return calls("*.run", match_name={"debug": True})
+    from codepathfinder import QueryType
+
+    class FlaskApp(QueryType):
+        fqns = ["flask"]
+
+    return FlaskApp.method("run").where("debug", True)

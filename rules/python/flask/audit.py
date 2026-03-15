@@ -196,6 +196,10 @@ from rules.python_decorators import python_rule
 from codepathfinder import calls, Or, QueryType
 
 
+class FlaskApp(QueryType):
+    fqns = ["flask"]
+
+
 class FlaskCORS(QueryType):
     fqns = ["flask_cors"]
 
@@ -216,7 +220,7 @@ class HashidsModule(QueryType):
 )
 def detect_flask_bind_all():
     """Detects app.run(host='0.0.0.0')."""
-    return calls("*.run", match_name={"host": "0.0.0.0"})
+    return FlaskApp.method("run").where("host", "0.0.0.0")
 
 
 @python_rule(
