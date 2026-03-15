@@ -192,7 +192,7 @@ faq:
 
   - question: Can I customize this rule for my project's specific sources and sinks?
     answer: |
-      Yes. The rule is written in Code Pathfinder's Python DSL — you can fork it and modify
+      Yes. The rule is written in Code Pathfinder's Python SDK — you can fork it and modify
       the from_sources list to add your project's custom input methods, add framework-specific
       sinks to to_sinks, or add your validation functions to sanitized_by. The rule file is
       a standard Python file that you can version-control alongside your application code.
