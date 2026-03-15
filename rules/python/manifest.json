@@ -1,28 +1,63 @@
 {
   "category": "python",
   "language": "Python",
-  "description": "Security rules for Python applications including Django, Flask, and common vulnerabilities",
+  "description": "150+ security rules for Python applications covering Django, Flask, Pyramid, AWS Lambda, cryptography, JWT, and core language vulnerabilities",
   "bundles": {
     "deserialization": {
       "name": "Python Deserialization Security",
-      "description": "Unsafe deserialization vulnerabilities (PYTHON-DESER-001: pickle.loads RCE)",
-      "severity_filter": ["CRITICAL"],
+      "description": "Unsafe deserialization vulnerabilities including pickle, PyYAML, jsonpickle, marshal, shelve, and dill (CWE-502)",
+      "severity_filter": ["CRITICAL", "HIGH"],
       "recommended": true,
       "tags": ["security", "deserialization", "rce", "cwe-502", "owasp-a08"]
     },
     "django": {
       "name": "Django Security Rules",
-      "description": "Django framework security (PYTHON-DJANGO-001: SQL injection in cursor.execute)",
-      "severity_filter": ["CRITICAL"],
+      "description": "28 Django framework security rules covering SQL injection, command injection, code injection, XSS, SSRF, path traversal, CSRF, email injection, and insecure deserialization",
+      "severity_filter": ["CRITICAL", "HIGH", "MEDIUM"],
       "recommended": true,
-      "tags": ["security", "django", "sql-injection", "framework", "cwe-89", "owasp-a03"]
+      "tags": ["security", "django", "framework", "sql-injection", "xss", "command-injection", "cwe-89", "cwe-79", "cwe-78", "owasp-a03"]
     },
     "flask": {
       "name": "Flask Security Rules",
-      "description": "Flask framework security (PYTHON-FLASK-001: Debug mode enabled)",
-      "severity_filter": ["HIGH"],
+      "description": "29 Flask framework security rules covering SQL injection, command injection, code injection, XSS, SSRF, SSTI, path traversal, open redirect, CSV injection, deserialization, and configuration audit",
+      "severity_filter": ["CRITICAL", "HIGH", "MEDIUM"],
       "recommended": true,
-      "tags": ["security", "flask", "debug-mode", "framework", "cwe-489", "owasp-a05"]
+      "tags": ["security", "flask", "framework", "sql-injection", "xss", "ssti", "command-injection", "cwe-89", "cwe-79", "cwe-78", "owasp-a03"]
+    },
+    "lang": {
+      "name": "Python Core Language Security",
+      "description": "57 rules for Python core language vulnerabilities including dangerous eval/exec, OS command injection, subprocess shell injection, insecure hashing, SSL/TLS misconfigurations, XML External Entity injection, SQL injection, insecure transport, and network security",
+      "severity_filter": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "recommended": true,
+      "tags": ["security", "python", "core", "eval", "exec", "subprocess", "pickle", "ssl", "sql-injection", "xxe", "cwe-78", "cwe-89", "cwe-95", "cwe-502", "cwe-327", "owasp-a03"]
+    },
+    "cryptography": {
+      "name": "Cryptography Security Rules",
+      "description": "23 rules detecting insecure cipher algorithms (RC4, Blowfish, DES), weak hash functions (MD5, SHA1), insufficient key sizes (RSA, DSA, EC), and unauthenticated cipher modes (ECB, CBC without HMAC)",
+      "severity_filter": ["HIGH", "MEDIUM", "LOW"],
+      "recommended": true,
+      "tags": ["security", "cryptography", "cipher", "hash", "key-size", "cwe-327", "cwe-326", "owasp-a02"]
+    },
+    "jwt": {
+      "name": "JWT Security Rules",
+      "description": "5 rules detecting JWT vulnerabilities including hardcoded secrets, none algorithm attacks, unverified signature decoding, and credential exposure in JWT payloads",
+      "severity_filter": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "recommended": true,
+      "tags": ["security", "jwt", "authentication", "cwe-327", "cwe-522", "cwe-287", "owasp-a02", "owasp-a07"]
+    },
+    "aws_lambda": {
+      "name": "AWS Lambda Security Rules",
+      "description": "17 rules for serverless security covering command injection via event data, SQL injection across database drivers (MySQL, PostgreSQL, pymssql, PyMySQL, SQLAlchemy), XSS in API Gateway responses, and code injection",
+      "severity_filter": ["CRITICAL", "HIGH", "MEDIUM"],
+      "recommended": true,
+      "tags": ["security", "aws", "lambda", "serverless", "command-injection", "sql-injection", "cwe-78", "cwe-89", "owasp-a03"]
+    },
+    "pyramid": {
+      "name": "Pyramid Security Rules",
+      "description": "3 rules for Pyramid framework covering CSRF protection bypass, direct response XSS, and SQLAlchemy SQL injection",
+      "severity_filter": ["CRITICAL", "HIGH"],
+      "recommended": true,
+      "tags": ["security", "pyramid", "framework", "csrf", "xss", "sql-injection", "cwe-352", "cwe-79", "cwe-89"]
     }
   }
 }
