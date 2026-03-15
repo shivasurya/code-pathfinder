@@ -35,8 +35,8 @@ tags:
   - cross-file
   - inter-procedural
   - taint-analysis
-  - cwe-89
-  - owasp-a03
+  - CWE-89
+  - OWASP-A03
 
 # Author
 author:
