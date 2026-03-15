@@ -41,22 +41,22 @@ can decrypt entire messages by observing error responses from the decryption end
 VULNERABLE EXAMPLE:
 ```python
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
-# VULNERABLE: ECB mode leaks plaintext patterns
-cipher = Cipher(algorithms.AES(key), modes.ECB())
-encryptor = cipher.encryptor()
-ct = encryptor.update(plaintext) + encryptor.finalize()
+# SEC-030: ECB mode
+key = b'\x00' * 32
+ecb_cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
 
-# VULNERABLE: CBC without HMAC (no integrity protection)
-cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-encryptor = cipher.encryptor()
-ct = encryptor.update(plaintext) + encryptor.finalize()
-# Attacker can flip bits in ciphertext without detection!
+# SEC-031: CBC mode (unauthenticated - audit)
+iv = b'\x00' * 16
+cbc_cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
 
-# VULNERABLE: PyCryptodome AES in ECB mode
+# SEC-031: CTR mode (unauthenticated - audit)
+ctr_cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+
+# SEC-032: AES in PyCryptodome (audit)
 from Crypto.Cipher import AES
-cipher = AES.new(key, AES.MODE_ECB)
-ct = cipher.encrypt(plaintext)
+aes_cbc = AES.new(key, AES.MODE_CBC, iv)
 ```
 
 SECURE EXAMPLE:

@@ -37,23 +37,26 @@ files, causing extended downtime.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import JsonResponse
 import os
 import subprocess
 
-def ping_host(request):
-    # VULNERABLE: User input concatenated into shell command
-    host = request.GET.get('host')
-    output = os.system("ping -c 3 " + host)
-    # Attack: ?host=8.8.8.8; cat /etc/passwd
-    return JsonResponse({'result': output})
 
-def run_tool(request):
-    # VULNERABLE: User input passed to subprocess with shell=True
-    filename = request.POST.get('filename')
-    result = subprocess.check_output("file " + filename, shell=True)
-    # Attack: filename=test.txt; rm -rf /
-    return JsonResponse({'result': result.decode()})
+# SEC-010: os.system with request data
+def vulnerable_os_system(request):
+    filename = request.GET.get('file')
+    os.system(f"cat {filename}")
+
+
+# SEC-011: subprocess with request data
+def vulnerable_subprocess(request):
+    cmd = request.POST.get('command')
+    subprocess.call(cmd, shell=True)
+
+
+def vulnerable_subprocess_popen(request):
+    host = request.GET.get('host')
+    proc = subprocess.Popen(f"ping {host}", shell=True)
+    return proc.communicate()
 ```
 
 SECURE EXAMPLE:

@@ -41,19 +41,19 @@ VULNERABLE EXAMPLE:
 ```python
 from django.contrib.auth.models import User
 
-def reset_password(request):
-    # VULNERABLE: POST.get defaults to empty string if 'password' is missing
-    password = request.POST.get('password')  # Returns '' if missing
-    user = User.objects.get(id=request.user.id)
-    user.set_password(password)  # Empty string = no password!
+
+# SEC-080: set_password with empty string
+def reset_password_empty(user):
+    user.set_password("")
     user.save()
 
-def create_user(request):
-    # VULNERABLE: Explicitly setting empty password
-    user = User.objects.create_user(
-        username=request.POST.get('username'),
-        password='',  # Empty password - account has no protection
-    )
+
+# SEC-081: POST data flowing to set_password
+def change_password(request):
+    password = request.POST.get('password')
+    user = User.objects.get(id=1)
+    user.set_password(password)
+    user.save()
 ```
 
 SECURE EXAMPLE:

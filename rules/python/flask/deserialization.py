@@ -55,19 +55,17 @@ import yaml
 
 app = Flask(__name__)
 
-@app.route('/api/import', methods=['POST'])
-def import_data():
-    data = request.get_data()
-    # VULNERABLE: Untrusted data deserialized with pickle
+@app.route('/load', methods=['POST'])
+def load_data():
+    data = request.data
     obj = pickle.loads(data)
-    return {'imported': str(obj)}
+    return str(obj)
 
-@app.route('/api/config', methods=['POST'])
-def load_config():
-    config_yaml = request.form.get('config')
-    # VULNERABLE: yaml.load() with default Loader allows code execution
-    config = yaml.load(config_yaml)
-    return {'config': config}
+@app.route('/yaml_load', methods=['POST'])
+def yaml_load_data():
+    raw = request.data
+    obj = yaml.load(raw)
+    return str(obj)
 ```
 
 SECURE EXAMPLE:

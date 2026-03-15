@@ -55,30 +55,18 @@ SECURITY IMPLICATIONS:
 VULNERABLE EXAMPLE:
 ```python
 from flask import Flask, request
-import csv, io, requests
+import csv
+import io
 
 app = Flask(__name__)
 
 @app.route('/export')
 def export_csv():
     name = request.args.get('name')
-    writer = csv.writer(io.StringIO())
-    # VULNERABLE: User input written to CSV without sanitization
-    writer.writerow([name, 'data'])  # name could be "=CMD('calc')"
-
-@app.route('/convert')
-def convert():
-    value = request.args.get('value')
-    # VULNERABLE: float() accepts "nan" and "inf"
-    num = float(value)  # float("nan") = NaN
-    return {'result': num}
-
-@app.route('/proxy')
-def proxy():
-    host = request.args.get('host')
-    # VULNERABLE: User controls URL host
-    response = requests.get(f'http://{host}/api/data')
-    return response.text
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([name, "data"])
+    return output.getvalue()
 ```
 
 SECURE EXAMPLE:

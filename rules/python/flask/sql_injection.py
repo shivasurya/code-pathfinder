@@ -43,27 +43,26 @@ from db import query_user
 
 app = Flask(__name__)
 
+
 @app.route('/user')
 def get_user():
     username = request.args.get('username')
-    result = query_user(username)  # Tainted data crosses file boundary
+    result = query_user(username)
     return str(result)
 
 # --- file: db.py ---
 import sqlite3
 
+
 def get_connection():
     return sqlite3.connect('app.db')
+
 
 def query_user(name):
     conn = get_connection()
     cursor = conn.cursor()
-    # VULNERABLE: Tainted 'name' from app.py flows into raw SQL
     cursor.execute("SELECT * FROM users WHERE name = '" + name + "'")
     return cursor.fetchall()
-
-# Attack: GET /user?username=' OR 1=1 --
-# Taint flows: request.args.get() → query_user(username) → cursor.execute(name)
 ```
 
 SECURE EXAMPLE:

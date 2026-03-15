@@ -43,28 +43,24 @@ not intended to be user-accessible.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import JsonResponse
+# SEC-020: eval with request data
+def vulnerable_eval(request):
+    expr = request.GET.get('expr')
+    result = eval(expr)
+    return result
 
-def calculate(request):
-    # VULNERABLE: User input passed directly to eval()
-    expression = request.GET.get('expr')
-    result = eval(expression)
-    # Attack: ?expr=__import__('os').system('rm -rf /')
-    return JsonResponse({'result': result})
 
-def run_code(request):
-    # VULNERABLE: User input passed to exec()
+# SEC-021: exec with request data
+def vulnerable_exec(request):
     code = request.POST.get('code')
     exec(code)
-    # Attack: code=import socket; s=socket.socket()... (reverse shell)
-    return JsonResponse({'status': 'done'})
 
-def dispatch(request):
-    # VULNERABLE: User input indexes globals()
-    action = request.GET.get('action')
-    result = globals()[action]()
-    # Attack: ?action=admin_delete_all_users
-    return JsonResponse({'result': result})
+
+# SEC-022: globals misuse
+def vulnerable_globals(request):
+    func_name = request.GET.get('func')
+    func = globals().get(func_name)
+    return func()
 ```
 
 SECURE EXAMPLE:

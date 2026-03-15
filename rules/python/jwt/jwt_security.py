@@ -53,22 +53,22 @@ VULNERABLE EXAMPLE:
 ```python
 import jwt
 
-# VULNERABLE: Hardcoded secret
-SECRET = "my-super-secret-key"
-token = jwt.encode({"user_id": 123, "role": "admin"}, SECRET, algorithm="HS256")
+# SEC-001: hardcoded secret + SEC-004: encode audit
+token = jwt.encode({"user": "admin"}, "my_secret_key", algorithm="HS256")
 
-# VULNERABLE: None algorithm allows token forgery
-token = jwt.encode({"user_id": 123}, key="", algorithm="none")
+# SEC-002: none algorithm (encode)
+unsafe_token = jwt.encode({"user": "admin"}, "", algorithm="none")
 
-# VULNERABLE: Decoding without verification
-payload = jwt.decode(token, options={"verify_signature": False})
+# SEC-002: none algorithm (decode)
+payload = jwt.decode(token, "", algorithms=["none"])
 
-# VULNERABLE: Sensitive data in payload
-token = jwt.encode({
-    "user_id": 123,
-    "password": "s3cret",  # Visible to anyone!
-    "ssn": "123-45-6789"
-}, SECRET, algorithm="HS256")
+# SEC-003: unverified decode
+data = jwt.decode(token, "secret", options={"verify_signature": False})
+
+# SEC-005: request data to jwt.encode (flow)
+def create_token(request):
+    user_data = request.args.get('user')
+    return jwt.encode({"sub": user_data}, "key", algorithm="HS256")
 ```
 
 SECURE EXAMPLE:

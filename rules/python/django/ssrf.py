@@ -39,22 +39,22 @@ sensitive data, then relay it through the SSRF to external servers they control.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import JsonResponse
 import requests
+import urllib.request
 
-def fetch_url(request):
-    # VULNERABLE: User-controlled URL passed directly to requests.get()
+
+# SEC-030: SSRF via requests
+def vulnerable_ssrf_requests(request):
     url = request.GET.get('url')
-    response = requests.get(url)
-    # Attack: ?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
-    return JsonResponse({'content': response.text})
+    resp = requests.get(url)
+    return resp.text
 
-def proxy_request(request):
-    # VULNERABLE: User controls the target of server-side request
-    target = request.POST.get('target')
-    resp = requests.post(target, json=request.POST.get('data'))
-    # Attack: target=http://internal-admin:8080/admin/delete_all
-    return JsonResponse({'result': resp.json()})
+
+# SEC-031: SSRF via urllib
+def vulnerable_ssrf_urllib(request):
+    url = request.POST.get('target')
+    resp = urllib.request.urlopen(url)
+    return resp.read()
 ```
 
 SECURE EXAMPLE:

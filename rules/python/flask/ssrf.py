@@ -38,20 +38,26 @@ and Memcached.
 
 VULNERABLE EXAMPLE:
 ```python
+# --- file: app.py ---
 from flask import Flask, request
-import requests
+from services import fetch_remote_data
 
 app = Flask(__name__)
 
-@app.route('/fetch')
-def fetch_url():
-    url = request.args.get('url')
-    # VULNERABLE: User controls the outbound request URL
-    response = requests.get(url)
-    return response.text
 
-# Attack: GET /fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
-# Attack: GET /fetch?url=http://localhost:6379/INFO
+@app.route('/proxy')
+def proxy():
+    url = request.args.get('url')
+    data = fetch_remote_data(url)
+    return data
+
+# --- file: services.py ---
+import requests as http_requests
+
+
+def fetch_remote_data(endpoint):
+    resp = http_requests.get(endpoint)
+    return resp.text
 ```
 
 SECURE EXAMPLE:

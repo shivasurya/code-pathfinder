@@ -38,19 +38,24 @@ which can execute arbitrary code if the connection source is untrusted.
 
 VULNERABLE EXAMPLE:
 ```python
-import socket, paramiko
-# Service exposed on all interfaces
-sock = socket.socket()
-sock.bind(("0.0.0.0", 8080))  # Accessible from external networks
-# SSH without host key verification (MITM vulnerable)
+import socket
+import paramiko
+import multiprocessing.connection
+
+# SEC-070: bind to all interfaces
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(("0.0.0.0", 8080))
+
+# SEC-071: paramiko implicit trust
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(host)
-# Unsanitized remote command execution
-client.exec_command(f"ls {user_input}")
-# Pickle deserialization from network
-conn = multiprocessing.connection.Client(("remote", 6000))
-data = conn.recv()  # Deserializes with pickle
+
+# SEC-072: paramiko exec_command
+stdin, stdout, stderr = client.exec_command("ls -la")
+
+# SEC-073: multiprocessing recv
+conn = multiprocessing.connection.Connection(1)
+data = conn.recv()
 ```
 
 SECURE EXAMPLE:

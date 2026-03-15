@@ -43,27 +43,29 @@ network, access cloud metadata endpoints, or interact with adjacent services.
 
 VULNERABLE EXAMPLE:
 ```python
+# --- file: app.py ---
 from flask import Flask, request
-import os, subprocess
+from utils import run_diagnostic
 
 app = Flask(__name__)
 
-@app.route('/ping')
-def ping_host():
+
+@app.route('/diag')
+def diagnostics():
     host = request.args.get('host')
-    # VULNERABLE: User input directly in os.system()
-    os.system('ping -c 3 ' + host)
-    return 'Ping sent'
+    output = run_diagnostic(host)
+    return output
 
-@app.route('/lookup')
-def dns_lookup():
-    domain = request.args.get('domain')
-    # VULNERABLE: User input in subprocess with shell=True
-    result = subprocess.check_output('nslookup ' + domain, shell=True)
-    return result
+# --- file: utils.py ---
+import os
+import subprocess
 
-# Attack: GET /ping?host=8.8.8.8;+cat+/etc/passwd
-# Attack: GET /lookup?domain=example.com;+whoami
+
+def run_diagnostic(target):
+    cmd = "ping -c 3 " + target
+    os.system(cmd)
+    result = subprocess.check_output(cmd, shell=True)
+    return result.decode()
 ```
 
 SECURE EXAMPLE:

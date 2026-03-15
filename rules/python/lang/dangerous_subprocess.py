@@ -36,10 +36,26 @@ Python code strings, enabling code injection if the string is user-controlled.
 VULNERABLE EXAMPLE:
 ```python
 import subprocess
-user_cmd = request.form["command"]
-subprocess.call(user_cmd, shell=True)             # Full shell injection
-subprocess.Popen(f"grep {user_input} log", shell=True)  # Shell injection
-await asyncio.create_subprocess_shell(user_cmd)    # Async shell injection
+import asyncio
+
+# SEC-020: subprocess calls
+subprocess.call(["ls", "-la"])
+subprocess.check_output("whoami", shell=True)
+subprocess.Popen("cat /etc/passwd", shell=True)
+subprocess.run("echo hello", shell=True)
+
+# SEC-021: subprocess with shell=True
+subprocess.call("rm -rf /tmp/*", shell=True)
+subprocess.run("ls", shell=True)
+
+# SEC-022: asyncio shell
+async def run_cmd():
+    proc = await asyncio.create_subprocess_shell("ls -la")
+    await proc.communicate()
+
+# SEC-023: subinterpreters
+import _xxsubinterpreters
+_xxsubinterpreters.run_string("print('hello')")
 ```
 
 SECURE EXAMPLE:

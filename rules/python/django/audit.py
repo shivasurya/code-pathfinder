@@ -50,31 +50,35 @@ severe vulnerability classes, often leading to complete server compromise.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
 import pickle
 import yaml
+from django.views.decorators.csrf import csrf_exempt
 
-def set_preferences(request):
-    # VULNERABLE: Cookie set without security flags
-    response = HttpResponse("Preferences saved")
-    response.set_cookie('session_id', request.session.session_key)
-    # Missing: secure=True, httponly=True, samesite='Lax'
+
+# SEC-070: insecure cookies
+def set_insecure_cookie(request):
+    response = HttpResponse("OK")
+    response.set_cookie("session_id", "abc123")
     return response
 
-@csrf_exempt  # VULNERABLE: CSRF protection disabled
-def transfer_funds(request):
-    amount = request.POST.get('amount')
-    recipient = request.POST.get('recipient')
-    # Attacker can trigger this from any website
-    perform_transfer(request.user, recipient, amount)
-    return HttpResponse("Transfer complete")
 
+# SEC-071: CSRF exempt
 @csrf_exempt
-def load_data(request):
-    # VULNERABLE: Request body deserialized with pickle
-    data = pickle.loads(request.body)  # RCE!
-    return HttpResponse(str(data))
+def unprotected_view(request):
+    return HttpResponse("No CSRF check")
+
+
+# SEC-072: insecure deserialization
+def vulnerable_pickle(request):
+    data = request.POST.get('data')
+    obj = pickle.loads(data)
+    return obj
+
+
+def vulnerable_yaml(request):
+    content = request.POST.get('config')
+    obj = yaml.load(content)
+    return obj
 ```
 
 SECURE EXAMPLE:

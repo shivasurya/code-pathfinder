@@ -48,20 +48,27 @@ VULNERABLE EXAMPLE:
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 
-# VULNERABLE: MD5 for integrity checking
+# SEC-010: MD5 in cryptography lib
 digest = hashes.Hash(hashes.MD5(), backend=default_backend())
-digest.update(document_bytes)
-checksum = digest.finalize()
 
-# VULNERABLE: SHA-1 for digital signatures
+# SEC-011: SHA1 in cryptography lib
+digest_sha1 = hashes.Hash(hashes.SHA1(), backend=default_backend())
+
+# SEC-012: MD5 in PyCryptodome
+from Crypto.Hash import MD5
+h_md5 = MD5.new(b"data")
+
+# SEC-013: MD4 in PyCryptodome
+from Crypto.Hash import MD4
+h_md4 = MD4.new(b"data")
+
+# SEC-014: MD2 in PyCryptodome
+from Crypto.Hash import MD2
+h_md2 = MD2.new(b"data")
+
+# SEC-015: SHA1 in PyCryptodome
 from Crypto.Hash import SHA
-h = SHA.new()
-h.update(b"data to sign")
-hash_value = h.hexdigest()
-
-# VULNERABLE: MD5 for password storage
-import hashlib
-password_hash = hashlib.md5(password.encode()).hexdigest()
+h_sha = SHA.new(b"data")
 ```
 
 SECURE EXAMPLE:

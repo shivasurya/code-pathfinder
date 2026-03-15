@@ -39,19 +39,26 @@ to arbitrary code execution -- complete server compromise.
 
 VULNERABLE EXAMPLE:
 ```python
-from flask import Flask, request, render_template_string
+# --- file: app.py ---
+from flask import Flask, request
+from renderer import render_greeting
 
 app = Flask(__name__)
 
-@app.route('/hello')
-def hello():
-    name = request.args.get('name', 'World')
-    # VULNERABLE: User input embedded in template string
-    template = '<h1>Hello, ' + name + '!</h1>'
-    return render_template_string(template)
 
-# Attack: GET /hello?name={{config.SECRET_KEY}}
-# Attack: GET /hello?name={{''.__class__.__mro__[1].__subclasses__()[408]('id',shell=True,stdout=-1).communicate()}}
+@app.route('/greet')
+def greet():
+    name = request.args.get('name')
+    html = render_greeting(name)
+    return html
+
+# --- file: renderer.py ---
+from flask import render_template_string
+
+
+def render_greeting(username):
+    template = "<h1>Hello " + username + "</h1>"
+    return render_template_string(template)
 ```
 
 SECURE EXAMPLE:

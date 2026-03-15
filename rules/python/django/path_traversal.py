@@ -39,23 +39,22 @@ files to inject malicious content served to all users.
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import HttpResponse, FileResponse
 import os
 
-def download_file(request):
-    # VULNERABLE: User input used directly in file path
-    filename = request.GET.get('file')
-    filepath = os.path.join('/var/www/uploads/', filename)
-    with open(filepath, 'rb') as f:
-        return HttpResponse(f.read(), content_type='application/octet-stream')
-    # Attack: ?file=../../../etc/passwd reads system password file
 
-def read_template(request):
-    # VULNERABLE: No path validation
-    template = request.GET.get('template')
-    with open('/app/templates/' + template) as f:
-        return HttpResponse(f.read())
-    # Attack: ?template=../../settings.py reads Django settings
+# SEC-040: path traversal via open
+def vulnerable_open(request):
+    filename = request.GET.get('file')
+    with open(filename) as f:
+        return f.read()
+
+
+# SEC-041: path traversal via os.path.join
+def vulnerable_path_join(request):
+    user_path = request.GET.get('path')
+    full_path = os.path.join('/uploads', user_path)
+    with open(full_path) as f:
+        return f.read()
 ```
 
 SECURE EXAMPLE:

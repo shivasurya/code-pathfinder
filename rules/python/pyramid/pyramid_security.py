@@ -48,24 +48,29 @@ VULNERABLE EXAMPLE:
 from pyramid.config import Configurator
 from pyramid.response import Response
 
-# VULNERABLE: CSRF protection disabled globally
+
+# SEC-001: CSRF disabled
 config = Configurator()
 config.set_default_csrf_options(require_csrf=False)
 
-# VULNERABLE: XSS via direct response
-@view_config(route_name='greet')
-def greet(request):
-    name = request.params.get('name', '')
-    return Response(f'<h1>Hello, {name}!</h1>')  # XSS!
 
-# VULNERABLE: SQL injection via string formatting
-@view_config(route_name='search')
-def search(request):
-    query = request.params.get('q', '')
-    results = DBSession.query(User).filter(
-        f"name LIKE '%{query}%'"  # SQL injection!
-    ).all()
-    return {'results': results}
+# SEC-002: Direct response XSS
+def vulnerable_view(request):
+    name = request.params.get('name')
+    return Response(f"Hello {name}")
+
+
+# SEC-003: SQLAlchemy SQL injection
+def vulnerable_query(request):
+    search = request.params.get('q')
+    results = session.query(User).filter(f"name = '{search}'")
+    return results
+
+
+def vulnerable_order(request):
+    sort_col = request.params.get('sort')
+    results = session.query(Item).order_by(sort_col)
+    return results
 ```
 
 SECURE EXAMPLE:

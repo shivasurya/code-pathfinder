@@ -48,21 +48,17 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-@app.route('/calculate')
-def calculate():
-    expression = request.args.get('expr')
-    # VULNERABLE: User input directly evaluated
-    result = eval(expression)
-    return {'result': result}
+@app.route('/calc')
+def calculator():
+    expr = request.args.get('expr')
+    result = eval(expr)
+    return str(result)
 
-@app.route('/run')
+@app.route('/run_code')
 def run_code():
     code = request.form.get('code')
-    # VULNERABLE: User input directly executed
     exec(code)
-    return 'Executed'
-
-# Attack: GET /calculate?expr=__import__('os').system('whoami')
+    return "executed"
 ```
 
 SECURE EXAMPLE:

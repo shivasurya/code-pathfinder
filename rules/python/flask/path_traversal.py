@@ -42,15 +42,11 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-@app.route('/download')
-def download_file():
+@app.route('/read')
+def read_file():
     filename = request.args.get('file')
-    # VULNERABLE: User controls the file path
-    with open('/uploads/' + filename, 'r') as f:
-        return f.read()
-
-# Attack: GET /download?file=../../../etc/passwd
-# Reads /uploads/../../../etc/passwd = /etc/passwd
+    content = open(filename, 'r').read()
+    return content
 ```
 
 SECURE EXAMPLE:
