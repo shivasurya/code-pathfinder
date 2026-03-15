@@ -37,22 +37,33 @@ with xp_cmdshell), SQL injection can escalate to operating system command execut
 
 VULNERABLE EXAMPLE:
 ```python
+# --- file: app.py ---
 from flask import Flask, request
-import sqlite3
+from db import query_user
 
 app = Flask(__name__)
 
-@app.route('/users/search')
-def search_users():
+@app.route('/user')
+def get_user():
     username = request.args.get('username')
-    conn = sqlite3.connect('app.db')
-    cursor = conn.cursor()
-    # VULNERABLE: User input directly in SQL string
-    cursor.execute("SELECT * FROM users WHERE name = '" + username + "'")
-    return {'results': cursor.fetchall()}
+    result = query_user(username)  # Tainted data crosses file boundary
+    return str(result)
 
-# Attack: GET /users/search?username=' OR 1=1 --
-# Returns all users in the database
+# --- file: db.py ---
+import sqlite3
+
+def get_connection():
+    return sqlite3.connect('app.db')
+
+def query_user(name):
+    conn = get_connection()
+    cursor = conn.cursor()
+    # VULNERABLE: Tainted 'name' from app.py flows into raw SQL
+    cursor.execute("SELECT * FROM users WHERE name = '" + name + "'")
+    return cursor.fetchall()
+
+# Attack: GET /user?username=' OR 1=1 --
+# Taint flows: request.args.get() → query_user(username) → cursor.execute(name)
 ```
 
 SECURE EXAMPLE:
