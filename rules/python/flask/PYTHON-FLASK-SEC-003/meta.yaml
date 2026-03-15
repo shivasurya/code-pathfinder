@@ -1,0 +1,196 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-003
+name: Flask SQL Injection via Tainted String
+short_description: Detects user input flowing to raw SQL execution without parameterized queries in Flask applications.
+
+# Classification
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - sql-injection
+  - database
+  - parameterized-queries
+  - cursor-execute
+  - sqlite
+  - mysql
+  - postgresql
+  - pymysql
+  - psycopg2
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - cwe-89
+  - owasp-a03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Flask applications where user-controlled
+  input from HTTP request parameters flows into raw SQL query execution without parameterized
+  queries. When user input is concatenated or interpolated directly into SQL strings and passed
+  to database cursor execute methods, attackers can manipulate query logic to extract, modify,
+  or destroy data.
+
+  SQL injection remains the most prevalent and dangerous web application vulnerability,
+  consistently ranking in the OWASP Top 10 and CWE Top 25 most dangerous software weaknesses.
+  In Flask applications, this commonly occurs when developers construct SQL queries using string
+  concatenation or f-strings with data obtained from request.args, request.form, or
+  request.get_json(), then pass the resulting string to cursor.execute().
+
+  Code Pathfinder detects this vulnerability using inter-procedural taint analysis with
+  parameter-level precision. The .tracks(0) constraint ensures only the first argument to
+  execute() (the SQL query string) is flagged — the second argument (parameter tuple) is
+  correctly recognized as the safe parameterization mechanism, eliminating false positives.
+
+message: "User input flows to SQL execution without parameterization. Use parameterized queries."
+
+security_implications:
+  - title: Data Exfiltration
+    description: |
+      Attackers can use UNION-based injection, blind injection, or out-of-band techniques to
+      extract entire database contents including credentials, personal data, and business secrets.
+      A single vulnerable endpoint can expose every table in the database.
+  - title: Authentication Bypass
+    description: |
+      Login forms vulnerable to SQL injection allow attackers to bypass authentication entirely
+      by injecting conditions that always evaluate to true (e.g., ' OR 1=1 --). This grants
+      unauthorized access to any user account including administrators.
+  - title: Data Manipulation
+    description: |
+      INSERT, UPDATE, and DELETE statements can be injected to modify or destroy records, corrupt
+      referential integrity, plant backdoor accounts, or alter financial transactions.
+  - title: Remote Code Execution
+    description: |
+      On certain database systems (PostgreSQL with COPY, MySQL with INTO OUTFILE, MSSQL with
+      xp_cmdshell), SQL injection can escalate to operating system command execution, giving
+      attackers full control of the server.
+
+secure_example: |
+  from flask import Flask, request
+  import sqlite3
+
+  app = Flask(__name__)
+
+  @app.route('/users/search')
+  def search_users():
+      username = request.args.get('username')
+      conn = sqlite3.connect('app.db')
+      cursor = conn.cursor()
+      # SAFE: Parameterized query prevents injection
+      cursor.execute("SELECT * FROM users WHERE name = ?", (username,))
+      return {'results': cursor.fetchall()}
+
+  # Alternative: Use an ORM like SQLAlchemy
+  from sqlalchemy import select
+  result = db.session.execute(select(User).filter_by(name=username))
+
+recommendations:
+  - Use parameterized queries with placeholders (?, %s, :param) instead of string concatenation
+  - Use an ORM like SQLAlchemy or Flask-SQLAlchemy instead of raw SQL
+  - Apply input validation and type checking before database operations
+  - Use stored procedures with parameterized inputs for complex queries
+  - Implement least-privilege database accounts that cannot DROP or ALTER tables
+  - Enable SQL query logging to detect injection attempts in production
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis (scope=global) tracking data from Flask
+  request sources (request.args.get, request.form.get, request.values.get, request.get_json,
+  request.cookies.get, request.headers.get) to database cursor execute/executemany sinks.
+  The .tracks(0) parameter targeting ensures only the SQL query argument (position 0) is
+  considered — parameterized tuple arguments at position 1 are correctly excluded.
+  Recognized sanitizers include escape() and escape_string() functions.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+  - title: Flask-SQLAlchemy Documentation
+    url: https://flask-sqlalchemy.palletsprojects.com/
+  - title: SQLite3 Parameterized Queries
+    url: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4: Software engineering techniques prevent injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: SANS Top 25
+    requirement: "Insecure Interaction Between Components"
+
+# FAQ (drives SEO)
+faq:
+  - question: What is SQL injection in Flask?
+    answer: |
+      SQL injection occurs when user-supplied input is inserted directly into a SQL query
+      string without proper sanitization or parameterization. In Flask applications, this
+      typically happens when request.args.get() or request.form.get() values are concatenated
+      into SQL strings passed to cursor.execute(). Attackers can inject malicious SQL fragments
+      to read, modify, or delete data.
+  - question: How do I prevent SQL injection in Flask?
+    answer: |
+      Use parameterized queries with placeholder syntax: cursor.execute("SELECT * FROM users
+      WHERE name = ?", (username,)). The database driver handles escaping automatically.
+      Alternatively, use an ORM like SQLAlchemy which generates parameterized queries by default.
+      Never construct SQL strings using string concatenation, f-strings, or .format() with
+      user input.
+  - question: Does this rule detect cross-file SQL injection?
+    answer: |
+      Yes. This rule uses inter-procedural taint analysis (scope=global) to track tainted data
+      across function and file boundaries. For example, if user input is received in app.py and
+      passed through a function call to a database query in db.py, Code Pathfinder traces the
+      full data flow and detects the vulnerability.
+  - question: Why does this rule use .tracks(0)?
+    answer: |
+      The .tracks(0) parameter targeting tells the analysis engine that only the first argument
+      to cursor.execute() is security-sensitive. In parameterized queries like
+      cursor.execute(sql, (params,)), the second argument is the safe parameter tuple. Without
+      .tracks(0), passing user input as the parameter tuple would trigger a false positive.
+  - question: What databases does this rule cover?
+    answer: |
+      This rule covers SQLite (sqlite3.Cursor), MySQL (mysql.connector, PyMySQL), and
+      PostgreSQL (psycopg2) through type-aware matching. The QueryType pattern *Cursor also
+      matches any cursor-like object, providing broad coverage across database drivers.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-LANG-SEC-080
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
