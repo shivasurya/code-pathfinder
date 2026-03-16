@@ -1,0 +1,52 @@
+id: DOCKER-BP-029
+name: Avoid yum update
+short_description: Avoid 'yum update' in Dockerfiles. Use specific base image versions for reproducible
+  builds.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-029
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- yum
+- package-manager
+- centos
+- rhel
+- update
+- reproducibility
+- best-practice
+- anti-pattern
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of ''yum update'' in Dockerfiles. Running system updates in Docker builds
+
+  creates unpredictable, non-reproducible images and can introduce breaking changes or
+
+  security vulnerabilities.'
+message: Avoid 'yum update' in Dockerfiles. Use specific base image versions for reproducible builds.
+secure_example: 'FROM centos:8  # Specific version
+
+  RUN yum install -y httpd-2.4.37-43.module_el8.5.0
+
+  # Or install latest from specific base image
+
+  RUN yum install -y httpd'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3005
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

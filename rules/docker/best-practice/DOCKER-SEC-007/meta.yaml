@@ -1,0 +1,81 @@
+id: DOCKER-SEC-007
+name: Sudo Usage in Dockerfile
+short_description: 'Dockerfile uses ''sudo'' in RUN instructions. This is unnecessary during '
+severity: MEDIUM
+category: security
+language: docker
+ruleset: docker/DOCKER-SEC-007
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker
+- dockerfile
+- sudo
+- security
+- privilege-escalation
+- anti-pattern
+- best-practice
+- user
+- root
+- unnecessary
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects the use of ''sudo'' in RUN instructions within a Dockerfile.
+
+  Using sudo in Docker containers is an anti-pattern that indicates confusion about
+
+  Docker''s privilege model and can introduce security vulnerabilities.'
+message: 'Dockerfile uses ''sudo'' in RUN instructions. This is unnecessary during '
+secure_example: "FROM ubuntu:latest\n\n# Install packages without sudo (we're already root)\nRUN apt-get\
+  \ update && apt-get install -y nginx \\\\\n    && apt-get clean\n\n# Create non-root user\nRUN useradd\
+  \ -r -s /bin/false appuser\n\n# Switch to non-root for runtime\nUSER appuser\n\n# Run application as\
+  \ non-root\nCMD [\"nginx\", \"-g\", \"daemon off;\"]"
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: ''
+- title: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
+  url: ''
+- title: Docker Security Best Practices
+  url: ''
+- title: CVE-2021-3156 (sudo vulnerability)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Unnecessary Complexity
+  description: Docker containers already run commands as root by default during build time, making sudo
+    redundant and confusing.
+- title: False Sense of Security
+  description: Developers may assume sudo provides security isolation, when in reality it adds no protection
+    in a container context.
+- title: Privilege Escalation Path
+  description: If sudo is installed and configured in the final image, it provides an easy privilege escalation
+    mechanism if an attacker gains access.
+- title: Attack Surface
+  description: 'sudo binary itself has had security vulnerabilities (CVE-2021-3156 "Baron Samedit") that
+    can be exploited if present in the container. WHY SUDO DOESN''T MAKE SENSE IN DOCKER:
+
+    ```dockerfile
+
+    # WRONG: Redundant sudo during build (already root)
+
+    RUN sudo apt-get update # CORRECT: Just run the command (build runs as root)
+
+    RUN apt-get update # WRONG: Using sudo to run as different user
+
+    RUN sudo -u appuser /app/script.sh # CORRECT: Use USER instruction instead
+
+    USER appuser
+
+    RUN /app/script.sh
+
+    ```'

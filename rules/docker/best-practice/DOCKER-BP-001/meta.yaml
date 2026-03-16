@@ -1,0 +1,76 @@
+id: DOCKER-BP-001
+name: Base Image Uses :latest Tag
+short_description: Base image uses ':latest' tag or no tag (defaults to latest). This makes builds non-reproducible.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-001
+cwe:
+- id: CWE-1188
+  name: CWE 1188
+  url: https://cwe.mitre.org/data/definitions/1188.html
+tags:
+- docker
+- dockerfile
+- from
+- image
+- tag
+- version
+- latest
+- reproducibility
+- best-practice
+- supply-chain
+- immutability
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects FROM instructions using the :latest tag (or no tag, which defaults
+
+  to :latest). Using unversioned or latest-tagged base images makes builds non-reproducible
+
+  and can introduce unexpected breaking changes or security vulnerabilities when the
+
+  upstream image is updated.'
+message: Base image uses ':latest' tag or no tag (defaults to latest). This makes builds non-reproducible.
+secure_example: '# Good: Pin specific version
+
+  FROM ubuntu:22.04
+
+
+  # Better: Use digest for cryptographic verification
+
+  FROM ubuntu:22.04@sha256:b6b83d3c331794420340093eb706a6f152d9c1fa51b262d9bf34594887c2c7ac
+
+
+  # Good: Pin Python minor version
+
+  FROM python:3.11.7-slim-bookworm
+
+
+  # Good: Pin Node.js with specific base
+
+  FROM node:18.19.0-alpine3.19
+
+
+  # Multi-stage with pinned versions
+
+  FROM maven:3.9.6-eclipse-temurin-17 AS builder
+
+  FROM eclipse-temurin:17.0.10_7-jre-alpine'
+recommendations: []
+detection_scope: ''
+references:
+- title: 'Docker Best Practices: Image Tagging'
+  url: ''
+- title: '12-Factor App: Dependencies'
+  url: ''
+- title: 'NIST SP 800-190: Container Image Integrity'
+  url: ''
+- title: 'CIS Docker Benchmark: Section 4.1'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

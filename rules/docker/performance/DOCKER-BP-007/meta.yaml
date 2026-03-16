@@ -1,0 +1,54 @@
+id: DOCKER-BP-007
+name: apk add Without --no-cache
+short_description: apk add without --no-cache. Package cache remains in image, increasing size by 2-5
+  MB.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-007
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- apk
+- package-manager
+- alpine
+- cache
+- optimization
+- image-size
+- best-practice
+- linux
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects RUN instructions using Alpine Linux''s `apk add` command without
+
+  the `--no-cache` flag. Alpine''s package manager caches downloaded packages in
+
+  `/var/cache/apk/`, which unnecessarily increases Docker image size. The --no-cache
+
+  flag prevents caching, keeping images minimal.'
+message: apk add without --no-cache. Package cache remains in image, increasing size by 2-5 MB.
+secure_example: "FROM alpine:3.19\n\n# Good: No cache retained\nRUN apk add --no-cache \\\n    nginx \\\
+  \n    curl \\\n    ca-certificates\n\n# Even better: Pin versions\nRUN apk add --no-cache \\\n    nginx=1.24.0-r15\
+  \ \\\n    curl=8.4.0-r0 \\\n    ca-certificates=20230506-r0"
+recommendations: []
+detection_scope: ''
+references:
+- title: Alpine Linux Package Management
+  url: ''
+- title: 'Docker Official Images: Alpine Best Practices'
+  url: ''
+- title: 'Alpine Linux Wiki: Package Management'
+  url: ''
+- title: Docker Multi-Stage Builds with Alpine
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,47 @@
+id: DOCKER-BP-011
+name: Prefer COPY Over ADD
+short_description: Use COPY instead of ADD for simple file operations. ADD has implicit behavior that
+  can be surprising.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-011
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- copy
+- add
+- file-operations
+- best-practice
+- transparency
+- predictability
+- anti-pattern
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of ADD instruction when COPY would suffice. ADD has implicit behavior
+
+  (auto-extraction of tar archives, URL downloading) that can be surprising and
+
+  create security risks.'
+message: Use COPY instead of ADD for simple file operations. ADD has implicit behavior that can be surprising.
+secure_example: 'COPY app.tar.gz /app/  # ✅ Just copies the file
+
+  RUN tar xzf /app/app.tar.gz  # ✅ Explicit extraction'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3020
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

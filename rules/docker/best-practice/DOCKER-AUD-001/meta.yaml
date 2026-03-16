@@ -1,0 +1,61 @@
+id: DOCKER-AUD-001
+name: Dockerfile Source Not Pinned
+short_description: FROM instruction without digest pinning. Consider using @sha256:... for immutable builds.
+severity: LOW
+category: audit
+language: docker
+ruleset: docker/DOCKER-AUD-001
+cwe:
+- id: CWE-1188
+  name: CWE 1188
+  url: https://cwe.mitre.org/data/definitions/1188.html
+tags:
+- docker
+- dockerfile
+- from
+- digest
+- sha256
+- immutability
+- supply-chain
+- reproducibility
+- audit
+- security
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects FROM instructions without digest pinning (@sha256:...).
+
+  Tags are mutable and can be updated to point to different images, while
+
+  digests are immutable references to specific image layers.'
+message: FROM instruction without digest pinning. Consider using @sha256:... for immutable builds.
+secure_example: '# Good: Digest pinning ensures immutable reference
+
+  FROM nginx:1.24.0@sha256:a4f34e6fb432af40bc594a0f1e5178598f6ca0f1ea6b3c6e7c5e5e8c3f9d6e1a
+
+
+  # Can combine readable tag with immutable digest
+
+  FROM ubuntu:22.04@sha256:b6b83d3c331794420340093eb706a6f152d9c1fa51b262d9bf34594887c2c7ac
+
+
+  # For multi-stage builds
+
+  FROM node:18@sha256:abc123... AS builder
+
+  FROM nginx:alpine@sha256:def456... AS runtime'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Content Trust
+  url: ''
+- title: hadolint DL3026
+  url: ''
+- title: Supply Chain Security Best Practices
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

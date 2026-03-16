@@ -1,0 +1,51 @@
+id: DOCKER-BP-013
+name: Missing dnf clean all
+short_description: RUN uses 'dnf install' without 'dnf clean all'. This increases image size.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-013
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- dnf
+- package-manager
+- fedora
+- rhel
+- cache
+- cleanup
+- image-size
+- optimization
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects ''dnf install'' commands without subsequent ''dnf clean all''.
+
+  Package manager caches unnecessarily increase image size by storing package metadata
+
+  and repository information that is not needed at runtime.'
+message: RUN uses 'dnf install' without 'dnf clean all'. This increases image size.
+secure_example: 'FROM fedora:38
+
+
+  # Good: Cleans cache in same layer
+
+  RUN dnf install -y nginx && dnf clean all'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3038
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

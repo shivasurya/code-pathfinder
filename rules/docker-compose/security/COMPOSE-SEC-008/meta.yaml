@@ -1,0 +1,50 @@
+id: COMPOSE-SEC-008
+name: Dangerous Capability Added
+short_description: Service adds dangerous capability. These capabilities can be used for container escape
+  or privilege escalation.
+severity: HIGH
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-008
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker-compose
+- compose
+- capabilities
+- cap-add
+- security
+- privilege-escalation
+- container-escape
+- linux
+- kernel
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects services that add dangerous Linux capabilities via `cap_add`.
+
+  Linux capabilities divide root privileges into distinct units. Some capabilities
+
+  are extremely powerful and can be used for container escape or privilege escalation.
+
+  This rule flags the most dangerous ones.'
+message: Service adds dangerous capability. These capabilities can be used for container escape or privilege
+  escalation.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: ''
+- title: Linux Capabilities man page
+  url: ''
+- title: Docker Security Best Practices
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

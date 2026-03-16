@@ -1,0 +1,7 @@
+version: '3'
+services:
+  web:
+    image: nginx
+    # Missing no-new-privileges - VULNERABLE
+    # Attacker can exploit setuid binaries
+    user: www-data

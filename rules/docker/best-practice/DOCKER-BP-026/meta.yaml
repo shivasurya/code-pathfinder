@@ -1,0 +1,39 @@
+id: DOCKER-BP-026
+name: Missing -y flag for dnf
+short_description: dnf install without -y flag. Add -y for non-interactive builds.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-026
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- dnf
+- package-manager
+- fedora
+- rhel
+- automation
+- ci-cd
+- build
+- best-practice
+- non-interactive
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: dnf install without -y flag. Add -y for non-interactive builds.
+message: dnf install without -y flag. Add -y for non-interactive builds.
+secure_example: "FROM fedora:39\n\n# Good: Using -y flag for non-interactive installation\nRUN dnf install\
+  \ -y nginx && \\\n    dnf clean all && \\\n    rm -rf /var/cache/dnf"
+recommendations: []
+detection_scope: ''
+references: []
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

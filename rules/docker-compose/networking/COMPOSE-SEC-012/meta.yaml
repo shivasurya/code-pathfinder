@@ -1,0 +1,76 @@
+id: COMPOSE-SEC-012
+name: SELinux Separation Disabled
+short_description: 'Service has ''label:disable'' in security_opt, which disables SELinux mandatory '
+severity: MEDIUM
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-012
+cwe:
+- id: CWE-732
+  name: Incorrect Permission Assignment for Critical Resource
+  url: https://cwe.mitre.org/data/definitions/732.html
+tags:
+- docker-compose
+- compose
+- selinux
+- security
+- mac
+- mandatory-access-control
+- isolation
+- hardening
+- rhel
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects docker-compose services that explicitly disable SELinux separation
+
+  by setting `security_opt: - label:disable`. SELinux provides mandatory access control
+
+  (MAC) that acts as an additional security layer beyond traditional discretionary access
+
+  control, significantly limiting the impact of container compromises.'
+message: 'Service has ''label:disable'' in security_opt, which disables SELinux mandatory '
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
+  url: ''
+- title: https://www.redhat.com/en/topics/linux/what-is-selinux
+  url: ''
+- title: https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label
+  url: ''
+- title: 'SELinux Project: https://selinuxproject.org/'
+  url: ''
+- title: OWASP A05:2021 - Security Misconfiguration
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Container Escape Prevention
+  description: SELinux confines containers even if they run as root, preventing access to host resources.
+- title: Lateral Movement Blocking
+  description: Prevents compromised containers from accessing other containers' files and networks.
+- title: Host Protection
+  description: Restricts container processes from interacting with the host system, even with root privileges.
+- title: Zero-Day Mitigation
+  description: 'Provides protection against unknown vulnerabilities by enforcing mandatory access controls.
+    Real-world impact without SELinux:
+
+    ```bash
+
+    # Container running as root with label:disable
+
+    # Attacker exploits vulnerability to get shell # Without SELinux, can access host filesystem
+
+    ls /var/lib/docker/volumes  # Can see other containers'' data
+
+    cat /etc/shadow             # Can read host files # With SELinux, all of above would be denied:
+
+    # Permission denied (SELinux MAC blocks access)
+
+    ```'

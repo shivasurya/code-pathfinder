@@ -1,0 +1,56 @@
+id: DOCKER-BP-022
+name: Missing HEALTHCHECK Instruction
+short_description: No HEALTHCHECK instruction. Container health cannot be monitored by orchestrators,
+  reducing reliability and observability.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-022
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- healthcheck
+- monitoring
+- observability
+- orchestration
+- kubernetes
+- reliability
+- best-practice
+- availability
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects Dockerfiles that do not include a HEALTHCHECK instruction.
+
+  Health checks allow Docker, Kubernetes, and other orchestrators to monitor
+
+  container health and automatically restart or replace failing containers,
+
+  improving application availability and resilience.'
+message: No HEALTHCHECK instruction. Container health cannot be monitored by orchestrators, reducing reliability
+  and observability.
+secure_example: "FROM python:3.11-slim\n\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir\
+  \ -r requirements.txt\n\nCOPY . .\n\n# Health check: Test HTTP endpoint every 30s\nHEALTHCHECK --interval=30s\
+  \ --timeout=3s --start-period=5s --retries=3 \\\n  CMD curl --fail http://localhost:8000/health || exit\
+  \ 1\n\nCMD [\"python\", \"app.py\"]"
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker HEALTHCHECK documentation
+  url: ''
+- title: Kubernetes Liveness and Readiness Probes
+  url: ''
+- title: '12-Factor App: Admin Processes'
+  url: ''
+- title: Production-Ready Health Checks (Microsoft)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

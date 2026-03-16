@@ -1,0 +1,48 @@
+id: DOCKER-BP-006
+name: Avoid apt-get upgrade
+short_description: Avoid apt-get upgrade in Dockerfiles. Use specific base image versions instead.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-006
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- apt-get
+- upgrade
+- package-manager
+- ubuntu
+- debian
+- reproducibility
+- best-practice
+- anti-pattern
+- build
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of `apt-get upgrade` or `apt-get dist-upgrade` in Dockerfiles.
+
+  Running system upgrades in Docker builds creates unpredictable, non-reproducible images
+
+  and can introduce breaking changes or security vulnerabilities.'
+message: Avoid apt-get upgrade in Dockerfiles. Use specific base image versions instead.
+secure_example: 'FROM ubuntu:22.04  # Specific version
+
+  RUN apt-get update && apt-get install -y nginx=1.18.0-0ubuntu1'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3005
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

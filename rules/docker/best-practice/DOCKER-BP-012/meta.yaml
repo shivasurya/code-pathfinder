@@ -1,0 +1,53 @@
+id: DOCKER-BP-012
+name: Missing yum clean all
+short_description: RUN instruction uses 'yum install' without 'yum clean all'. This leaves package cache
+  and increases image size.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-012
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- yum
+- package-manager
+- centos
+- rhel
+- cache
+- cleanup
+- image-size
+- optimization
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects ''yum install'' commands without subsequent ''yum clean all''.
+
+  Package manager caches unnecessarily increase image size by storing package metadata
+
+  and repository information that is not needed at runtime.'
+message: RUN instruction uses 'yum install' without 'yum clean all'. This leaves package cache and increases
+  image size.
+secure_example: 'FROM centos:8
+
+
+  # Good: Cleans cache in same layer
+
+  RUN yum install -y nginx && yum clean all'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3038
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

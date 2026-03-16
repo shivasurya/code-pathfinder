@@ -1,0 +1,40 @@
+id: DOCKER-COR-002
+name: Invalid Port Number
+short_description: EXPOSE instruction has invalid port number. Valid ports are 1-65535.
+severity: HIGH
+category: correctness
+language: docker
+ruleset: docker/DOCKER-COR-002
+cwe:
+- id: CWE-20
+  name: CWE 20
+  url: https://cwe.mitre.org/data/definitions/20.html
+tags:
+- docker
+- dockerfile
+- port
+- expose
+- validation
+- input-validation
+- correctness
+- networking
+- configuration
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects EXPOSE instructions with invalid port numbers.
+
+  Valid ports are 1-65535.'
+message: EXPOSE instruction has invalid port number. Valid ports are 1-65535.
+secure_example: 'EXPOSE 8080
+
+  EXPOSE 443'
+recommendations: []
+detection_scope: ''
+references: []
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

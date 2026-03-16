@@ -1,0 +1,47 @@
+id: DOCKER-BP-014
+name: Remove apt Package Lists
+short_description: apt-get install without removing /var/lib/apt/lists/*. This wastes image space.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-014
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- apt-get
+- package-manager
+- ubuntu
+- debian
+- cache
+- cleanup
+- image-size
+- optimization
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects ''apt-get install'' without removing /var/lib/apt/lists/*.
+
+  Package lists contain repository metadata that is not needed at runtime and wastes space.
+
+  This is specific to Debian/Ubuntu based images.'
+message: apt-get install without removing /var/lib/apt/lists/*. This wastes image space.
+secure_example: "FROM ubuntu:22.04\n\n# Good: Removes package lists in same layer\nRUN apt-get update\
+  \ && apt-get install -y nginx \\\\\n    && rm -rf /var/lib/apt/lists/*"
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: hadolint DL3009
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,8 @@
+version: '3'
+services:
+  web:
+    image: nginx
+    user: www-data
+    security_opt:
+      - no-new-privileges:true  # SECURE
+    # Process cannot gain additional privileges

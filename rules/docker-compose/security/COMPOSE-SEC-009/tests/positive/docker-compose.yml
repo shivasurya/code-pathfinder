@@ -1,0 +1,4 @@
+services:
+  monitor:
+    image: monitoring-tool
+    pid: host  # DANGEROUS - Can see and signal all host processes

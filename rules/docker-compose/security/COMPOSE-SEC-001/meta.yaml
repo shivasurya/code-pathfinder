@@ -1,0 +1,55 @@
+id: COMPOSE-SEC-001
+name: Service Running in Privileged Mode
+short_description: Service is running in privileged mode. This grants container equivalent of root capabilities
+  on the host machine. Can lead to container escapes and privilege escalation.
+severity: CRITICAL
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-001
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker-compose
+- compose
+- service
+- privileged
+- security
+- privilege-escalation
+- container-escape
+- capabilities
+- critical
+- host-access
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects docker-compose services configured with `privileged: true`.
+
+  Privileged mode disables almost all container security features, granting the
+
+  container nearly all capabilities of the host machine. This is equivalent to
+
+  running as root on the host and can lead to complete host compromise.'
+message: Service is running in privileged mode. This grants container equivalent of root capabilities
+  on the host machine. Can lead to container escapes and privilege escalation.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: ''
+- title: 'CIS Docker Benchmark: Section 5.4'
+  url: ''
+- title: Docker Security Best Practices
+  url: ''
+- title: Linux Capabilities man page
+  url: ''
+- title: 'NIST SP 800-190: Container Security Guide'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

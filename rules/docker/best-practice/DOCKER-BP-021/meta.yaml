@@ -1,0 +1,41 @@
+id: DOCKER-BP-021
+name: Missing -y flag for apt-get
+short_description: apt-get install without -y flag. Add -y or --yes for non-interactive builds.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-021
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- apt-get
+- package-manager
+- automation
+- ci-cd
+- build
+- ubuntu
+- debian
+- best-practice
+- non-interactive
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: apt-get install without -y flag. Add -y or --yes for non-interactive builds.
+message: apt-get install without -y flag. Add -y or --yes for non-interactive builds.
+secure_example: "FROM ubuntu:22.04\n\n# Good: Using -y flag for non-interactive installation\nRUN apt-get\
+  \ update && \\\n    apt-get install -y nginx curl && \\\n    rm -rf /var/lib/apt/lists/*\n\n# Alternative:\
+  \ Using --yes flag\nRUN apt-get update && \\\n    apt-get install --yes \\\n        nginx \\\n     \
+  \   curl \\\n        ca-certificates && \\\n    rm -rf /var/lib/apt/lists/*"
+recommendations: []
+detection_scope: ''
+references: []
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

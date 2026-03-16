@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  # CRITICAL SECURITY ISSUE
+  docker_runner:
+    image: gitlab/gitlab-runner:latest
+    privileged: true  # DANGEROUS!
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

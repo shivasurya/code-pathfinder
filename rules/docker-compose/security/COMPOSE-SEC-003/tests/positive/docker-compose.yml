@@ -1,0 +1,6 @@
+version: '3.8'
+services:
+  app:
+    image: myapp
+    security_opt:
+      - seccomp:unconfined  # DANGEROUS - Allows all syscalls
