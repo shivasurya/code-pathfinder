@@ -38,18 +38,18 @@ secure_example: "from pyramid.config import Configurator\nfrom pyramid.response 
   \ * FROM users WHERE name LIKE :q\").bindparams(q=f'%{query}%')\n    return {'results': results}"
 recommendations: []
 references:
-- title: 'CWE-352: Cross-Site Request Forgery (https://cwe.mitre.org/data/definitions/352.html)'
-  url: ''
-- title: 'CWE-79: Cross-Site Scripting (https://cwe.mitre.org/data/definitions/79.html)'
-  url: ''
-- title: 'CWE-89: SQL Injection (https://cwe.mitre.org/data/definitions/89.html)'
-  url: ''
-- title: Pyramid Security Documentation (https://docs.pylonsproject.org/projects/pyramid/en/latest/narr/security.html)
-  url: ''
-- title: OWASP CSRF Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
-  url: ''
-- title: OWASP SQL Injection Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
-  url: ''
+- title: 'CWE-352: Cross-Site Request Forgery ('
+  url: https://cwe.mitre.org/data/definitions/352.html)
+- title: 'CWE-79: Cross-Site Scripting ('
+  url: https://cwe.mitre.org/data/definitions/79.html)
+- title: 'CWE-89: SQL Injection ('
+  url: https://cwe.mitre.org/data/definitions/89.html)
+- title: Pyramid Security Documentation (
+  url: https://docs.pylonsproject.org/projects/pyramid/en/latest/narr/security.html)
+- title: OWASP CSRF Prevention Cheat Sheet (
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+- title: OWASP SQL Injection Prevention Cheat Sheet (
+  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
 compliance: []
 faq: []
 similar_rules: []

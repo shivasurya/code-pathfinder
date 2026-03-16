@@ -41,20 +41,20 @@ secure_example: "# Use defusedxml for safe XML parsing\nimport defusedxml.Elemen
   \ in \"=+-@\":\n        return \"'\" + value  # Prefix with single quote\n    return value"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/611.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/96.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/1236.html
-  url: ''
-- title: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
-  url: ''
-- title: https://pypi.org/project/defusedxml/
-  url: ''
-- title: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
-  url: ''
-- title: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
-  url: ''
+- title: CWE-611
+  url: https://cwe.mitre.org/data/definitions/611.html
+- title: CWE-96
+  url: https://cwe.mitre.org/data/definitions/96.html
+- title: CWE-1236
+  url: https://cwe.mitre.org/data/definitions/1236.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+- title: pypi.org
+  url: https://pypi.org/project/defusedxml/
+- title: 'Python docs: xml - xml-vulnerabilities'
+  url: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
+- title: OWASP XML External Entity Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
 compliance: []
 faq: []
 similar_rules: []

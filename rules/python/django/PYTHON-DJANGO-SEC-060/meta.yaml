@@ -53,16 +53,16 @@ secure_example: "from django.core.mail import send_mail\nfrom django.utils.html 
   \        ['admin@example.com'],\n        html_message=html_content,\n    )"
 recommendations: []
 references:
-- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
-  url: ''
-- title: 'OWASP XSS: https://owasp.org/www-community/attacks/xss/'
-  url: ''
-- title: 'Django send_mail: https://docs.djangoproject.com/en/stable/topics/email/#send-mail'
-  url: ''
-- title: 'Django EmailMessage: https://docs.djangoproject.com/en/stable/topics/email/#emailmessage-objects'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-79
+  url: https://cwe.mitre.org/data/definitions/79.html
+- title: OWASP XSS
+  url: https://owasp.org/www-community/attacks/xss/
+- title: Django send_mail
+  url: https://docs.djangoproject.com/en/stable/topics/email/#send-mail
+- title: Django EmailMessage
+  url: https://docs.djangoproject.com/en/stable/topics/email/#emailmessage-objects
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

@@ -51,16 +51,16 @@ secure_example: 'import requests, ftplib
   ssh.connect("server.example.com", username="user", key_filename="key.pem")'
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/319.html
-  url: ''
-- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-  url: ''
-- title: https://docs.python.org/3/library/ftplib.html#ftplib.FTP_TLS
-  url: ''
-- title: https://docs.python.org/3/library/http.client.html#http.client.HTTPSConnection
-  url: ''
-- title: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-  url: ''
+- title: CWE-319
+  url: https://cwe.mitre.org/data/definitions/319.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+- title: 'Python docs: ftplib - ftplib.FTP_TLS'
+  url: https://docs.python.org/3/library/ftplib.html#ftplib.FTP_TLS
+- title: 'Python docs: http.client - http.client.HTTPSConnection'
+  url: https://docs.python.org/3/library/http.client.html#http.client.HTTPSConnection
+- title: requests.readthedocs.io
+  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
 compliance: []
 faq: []
 similar_rules: []

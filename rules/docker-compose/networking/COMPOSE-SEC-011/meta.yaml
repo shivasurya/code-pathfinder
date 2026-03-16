@@ -33,15 +33,15 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
-  url: ''
-- title: https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt
-  url: ''
-- title: https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/
-  url: ''
-- title: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/732.html
+- title: www.kernel.org
+  url: https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt
+- title: raesene.github.io
+  url: https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/
+- title: OWASP Docker Security Cheat Sheet#rule-4-add-no-new-privileges-flag
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag
 - title: OWASP A05:2021 - Security Misconfiguration
-  url: ''
+  url: https://owasp.org/www-project-top-ten/
 compliance: []
 faq: []
 similar_rules: []

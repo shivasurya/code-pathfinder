@@ -35,15 +35,15 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
-  url: ''
-- title: https://www.redhat.com/en/topics/linux/what-is-selinux
-  url: ''
-- title: https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label
-  url: ''
-- title: 'SELinux Project: https://selinuxproject.org/'
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/732.html
+- title: www.redhat.com
+  url: https://www.redhat.com/en/topics/linux/what-is-selinux
+- title: docs.docker.com
+  url: https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label
+- title: SELinux Project
+  url: https://selinuxproject.org/
 - title: OWASP A05:2021 - Security Misconfiguration
-  url: ''
+  url: https://owasp.org/www-project-top-ten/
 compliance: []
 faq: []
 similar_rules: []

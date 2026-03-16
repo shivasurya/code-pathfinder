@@ -45,14 +45,14 @@ secure_example: "from django.http import JsonResponse\nimport requests\nfrom url
   \ timeout=5)\n    return JsonResponse({'content': response.text})"
 recommendations: []
 references:
-- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
-  url: ''
-- title: 'OWASP SSRF: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery'
-  url: ''
-- title: 'OWASP SSRF Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-918
+  url: https://cwe.mitre.org/data/definitions/918.html
+- title: OWASP SSRF
+  url: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery
+- title: OWASP SSRF Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

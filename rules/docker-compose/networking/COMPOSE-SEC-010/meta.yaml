@@ -36,7 +36,7 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/250.html
 - title: Docker IPC Namespace Documentation
   url: ''
 - title: System V IPC man pages

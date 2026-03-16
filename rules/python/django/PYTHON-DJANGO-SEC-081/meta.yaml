@@ -45,14 +45,14 @@ secure_example: "from django.contrib.auth.models import User\nfrom django.core.e
   \        password=password,\n    )"
 recommendations: []
 references:
-- title: 'CWE-521: https://cwe.mitre.org/data/definitions/521.html'
-  url: ''
-- title: 'OWASP Authentication Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html'
-  url: ''
-- title: 'Django Password Management: https://docs.djangoproject.com/en/stable/topics/auth/passwords/'
-  url: ''
-- title: 'Django Password Validation: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators'
-  url: ''
+- title: CWE-521
+  url: https://cwe.mitre.org/data/definitions/521.html
+- title: OWASP Authentication Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- title: Django Password Management
+  url: https://docs.djangoproject.com/en/stable/topics/auth/passwords/
+- title: Django Password Validation
+  url: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
 compliance: []
 faq: []
 similar_rules: []

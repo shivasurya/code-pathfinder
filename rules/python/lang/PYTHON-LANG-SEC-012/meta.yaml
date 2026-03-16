@@ -41,18 +41,18 @@ secure_example: 'import subprocess
   subprocess.run(f"ls {shlex.quote(user_input)}", shell=True, check=True)'
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/78.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/506.html
-  url: ''
-- title: https://owasp.org/Top10/A03_2021-Injection/
-  url: ''
-- title: https://docs.python.org/3/library/os.html#os.system
-  url: ''
-- title: https://docs.python.org/3/library/subprocess.html
-  url: ''
-- title: https://docs.python.org/3/library/shlex.html#shlex.quote
-  url: ''
+- title: CWE-78
+  url: https://cwe.mitre.org/data/definitions/78.html
+- title: CWE-506
+  url: https://cwe.mitre.org/data/definitions/506.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A03_2021-Injection/
+- title: 'Python docs: os - os.system'
+  url: https://docs.python.org/3/library/os.html#os.system
+- title: 'Python docs: subprocess'
+  url: https://docs.python.org/3/library/subprocess.html
+- title: 'Python docs: shlex - shlex.quote'
+  url: https://docs.python.org/3/library/shlex.html#shlex.quote
 compliance: []
 faq: []
 similar_rules: []

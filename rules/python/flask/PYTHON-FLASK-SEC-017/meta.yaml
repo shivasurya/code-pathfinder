@@ -38,30 +38,30 @@ message: send_from_directory() with user input. Use werkzeug.utils.secure_filena
 secure_example: ''
 recommendations: []
 references:
-- title: 'CWE-200: https://cwe.mitre.org/data/definitions/200.html'
-  url: ''
-- title: 'CWE-942: https://cwe.mitre.org/data/definitions/942.html'
-  url: ''
-- title: 'CWE-614: https://cwe.mitre.org/data/definitions/614.html'
-  url: ''
-- title: 'CWE-352: https://cwe.mitre.org/data/definitions/352.html'
-  url: ''
-- title: 'CWE-330: https://cwe.mitre.org/data/definitions/330.html'
-  url: ''
-- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
-  url: ''
-- title: 'Flask Security Considerations: https://flask.palletsprojects.com/en/latest/security/'
-  url: ''
-- title: 'Flask-CORS Documentation: https://flask-cors.readthedocs.io/'
-  url: ''
-- title: 'Flask-WTF CSRF: https://flask-wtf.readthedocs.io/en/latest/csrf/'
-  url: ''
-- title: 'Hashids Cryptanalysis: http://carnage.github.io/2015/08/cryptanalysis-of-hashids'
-  url: ''
-- title: 'OWASP Secure Cookie Attributes: https://owasp.org/www-community/controls/SecureCookieAttribute'
-  url: ''
-- title: 'Jinja2 Autoescaping: https://jinja.palletsprojects.com/en/latest/api/#autoescaping'
-  url: ''
+- title: CWE-200
+  url: https://cwe.mitre.org/data/definitions/200.html
+- title: CWE-942
+  url: https://cwe.mitre.org/data/definitions/942.html
+- title: CWE-614
+  url: https://cwe.mitre.org/data/definitions/614.html
+- title: CWE-352
+  url: https://cwe.mitre.org/data/definitions/352.html
+- title: CWE-330
+  url: https://cwe.mitre.org/data/definitions/330.html
+- title: CWE-79
+  url: https://cwe.mitre.org/data/definitions/79.html
+- title: Flask Security Considerations
+  url: https://flask.palletsprojects.com/en/latest/security/
+- title: Flask-CORS Documentation
+  url: https://flask-cors.readthedocs.io/
+- title: Flask-WTF CSRF
+  url: https://flask-wtf.readthedocs.io/en/latest/csrf/
+- title: Hashids Cryptanalysis
+  url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
+- title: OWASP Secure Cookie Attributes
+  url: https://owasp.org/www-community/controls/SecureCookieAttribute
+- title: Jinja2 Autoescaping
+  url: https://jinja.palletsprojects.com/en/latest/api/#autoescaping
 compliance: []
 faq: []
 similar_rules: []

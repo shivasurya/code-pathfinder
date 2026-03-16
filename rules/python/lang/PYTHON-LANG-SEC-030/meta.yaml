@@ -48,16 +48,16 @@ secure_example: 'import hashlib
   sig_hash = hashlib.sha3_256(document).hexdigest()'
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/327.html
-  url: ''
-- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-  url: ''
-- title: https://docs.python.org/3/library/hashlib.html
-  url: ''
-- title: https://shattered.io/ (SHA-1 collision demonstration)
-  url: ''
-- title: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
-  url: ''
+- title: CWE-327
+  url: https://cwe.mitre.org/data/definitions/327.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+- title: 'Python docs: hashlib'
+  url: https://docs.python.org/3/library/hashlib.html
+- title: shattered.io
+  url: https://shattered.io/ (SHA-1 collision demonstration)
+- title: csrc.nist.gov
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
 compliance: []
 faq: []
 similar_rules: []

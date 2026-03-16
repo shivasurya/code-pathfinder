@@ -40,14 +40,14 @@ secure_example: "from django.http import JsonResponse\nimport subprocess\nimport
   \ filename], capture_output=True, text=True)\n    return JsonResponse({'result': result.stdout})"
 recommendations: []
 references:
-- title: 'CWE-78: https://cwe.mitre.org/data/definitions/78.html'
-  url: ''
-- title: 'OWASP Command Injection: https://owasp.org/www-community/attacks/Command_Injection'
-  url: ''
-- title: 'Python subprocess documentation: https://docs.python.org/3/library/subprocess.html'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-78
+  url: https://cwe.mitre.org/data/definitions/78.html
+- title: OWASP Command Injection
+  url: https://owasp.org/www-community/attacks/Command_Injection
+- title: Python subprocess documentation
+  url: https://docs.python.org/3/library/subprocess.html
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

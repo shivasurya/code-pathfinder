@@ -47,14 +47,14 @@ secure_example: "from flask import Flask, request, redirect, url_for\nfrom urlli
   \ redirect(next_url)\n    return redirect(url_for('index'))  # Default to known safe route"
 recommendations: []
 references:
-- title: 'CWE-601: https://cwe.mitre.org/data/definitions/601.html'
-  url: ''
-- title: 'OWASP Unvalidated Redirects: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html'
-  url: ''
-- title: 'Flask redirect(): https://flask.palletsprojects.com/en/latest/api/#flask.redirect'
-  url: ''
-- title: 'Flask url_for(): https://flask.palletsprojects.com/en/latest/api/#flask.url_for'
-  url: ''
+- title: CWE-601
+  url: https://cwe.mitre.org/data/definitions/601.html
+- title: OWASP Unvalidated Redirects
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+- title: Flask redirect()
+  url: https://flask.palletsprojects.com/en/latest/api/#flask.redirect
+- title: Flask url_for()
+  url: https://flask.palletsprojects.com/en/latest/api/#flask.url_for
 compliance: []
 faq: []
 similar_rules: []

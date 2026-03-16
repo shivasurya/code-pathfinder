@@ -45,14 +45,14 @@ secure_example: "from flask import Flask, request, abort\nfrom werkzeug.utils im
   \ open(filepath, 'r') as f:\n        return f.read()"
 recommendations: []
 references:
-- title: 'CWE-22: https://cwe.mitre.org/data/definitions/22.html'
-  url: ''
-- title: 'OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal'
-  url: ''
-- title: 'Werkzeug secure_filename: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.secure_filename'
-  url: ''
-- title: 'Flask File Uploads: https://flask.palletsprojects.com/en/latest/patterns/fileuploads/'
-  url: ''
+- title: CWE-22
+  url: https://cwe.mitre.org/data/definitions/22.html
+- title: OWASP Path Traversal
+  url: https://owasp.org/www-community/attacks/Path_Traversal
+- title: Werkzeug secure_filename
+  url: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.secure_filename
+- title: Flask File Uploads
+  url: https://flask.palletsprojects.com/en/latest/patterns/fileuploads/
 compliance: []
 faq: []
 similar_rules: []

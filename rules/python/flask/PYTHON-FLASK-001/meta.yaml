@@ -39,18 +39,18 @@ secure_example: "import os\nfrom flask import Flask, request\n\napp = Flask(__na
   \ set it at all (defaults to False)\n    app.run()  # debug=False is the default"
 recommendations: []
 references:
-- title: 'CWE-489: Active Debug Code (https://cwe.mitre.org/data/definitions/489.html)'
-  url: ''
+- title: 'CWE-489: Active Debug Code ('
+  url: https://cwe.mitre.org/data/definitions/489.html)
 - title: 'CVE-2015-5306: Werkzeug Debug PIN Bypass'
   url: ''
 - title: OWASP A05:2021 - Security Misconfiguration
-  url: ''
-- title: 'Flask Security Docs: https://flask.palletsprojects.com/en/stable/security/'
-  url: ''
-- title: 'Werkzeug Documentation: https://werkzeug.palletsprojects.com/'
-  url: ''
-- title: 'Production Flask Deployment: https://flask.palletsprojects.com/en/stable/deploying/'
-  url: ''
+  url: https://owasp.org/www-project-top-ten/
+- title: Flask Security Docs
+  url: https://flask.palletsprojects.com/en/stable/security/
+- title: Werkzeug Documentation
+  url: https://werkzeug.palletsprojects.com/
+- title: Production Flask Deployment
+  url: https://flask.palletsprojects.com/en/stable/deploying/
 compliance: []
 faq: []
 similar_rules: []

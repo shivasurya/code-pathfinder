@@ -37,11 +37,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
-  url: ''
-- title: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/250.html
+- title: docs.docker.com
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
 - title: Docker Security Best Practices
-  url: ''
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: CVE-2021-3156 (sudo vulnerability)
   url: ''
 compliance: []

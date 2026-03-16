@@ -46,20 +46,20 @@ secure_example: "from django.http import HttpResponse, JsonResponse\nfrom django
   \ data})"
 recommendations: []
 references:
-- title: 'CWE-502: https://cwe.mitre.org/data/definitions/502.html'
-  url: ''
-- title: 'CWE-352: https://cwe.mitre.org/data/definitions/352.html'
-  url: ''
-- title: 'CWE-614: https://cwe.mitre.org/data/definitions/614.html'
-  url: ''
-- title: 'OWASP CSRF: https://owasp.org/www-community/attacks/csrf'
-  url: ''
-- title: 'Django CSRF Protection: https://docs.djangoproject.com/en/stable/ref/csrf/'
-  url: ''
-- title: 'Django Cookie Security: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-502
+  url: https://cwe.mitre.org/data/definitions/502.html
+- title: CWE-352
+  url: https://cwe.mitre.org/data/definitions/352.html
+- title: CWE-614
+  url: https://cwe.mitre.org/data/definitions/614.html
+- title: OWASP CSRF
+  url: https://owasp.org/www-community/attacks/csrf
+- title: Django CSRF Protection
+  url: https://docs.djangoproject.com/en/stable/ref/csrf/
+- title: Django Cookie Security
+  url: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

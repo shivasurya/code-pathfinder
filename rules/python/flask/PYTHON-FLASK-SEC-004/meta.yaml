@@ -38,14 +38,14 @@ secure_example: "from flask import Flask, request\nimport ast\nimport json\n\nap
   \ use json.loads()"
 recommendations: []
 references:
-- title: 'CWE-95: https://cwe.mitre.org/data/definitions/95.html'
-  url: ''
-- title: 'Python eval() Security: https://nedbatchelder.com/blog/201206/eval_really_is_dangerous.html'
-  url: ''
-- title: 'Python ast.literal_eval: https://docs.python.org/3/library/ast.html#ast.literal_eval'
-  url: ''
-- title: 'OWASP Code Injection: https://owasp.org/www-community/attacks/Code_Injection'
-  url: ''
+- title: CWE-95
+  url: https://cwe.mitre.org/data/definitions/95.html
+- title: Python eval() Security
+  url: https://nedbatchelder.com/blog/201206/eval_really_is_dangerous.html
+- title: Python ast.literal_eval
+  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+- title: OWASP Code Injection
+  url: https://owasp.org/www-community/attacks/Code_Injection
 compliance: []
 faq: []
 similar_rules: []

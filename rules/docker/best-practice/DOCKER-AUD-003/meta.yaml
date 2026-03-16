@@ -45,7 +45,7 @@ references:
 - title: 'CIS Docker Benchmark: Section 4.5'
   url: ''
 - title: OWASP Docker Security Cheat Sheet
-  url: ''
+  url: https://owasp.org/www-project-top-ten/
 - title: 'RFC 6335: Internet Assigned Numbers Authority (IANA)'
   url: ''
 compliance: []

@@ -37,14 +37,14 @@ secure_example: "from flask import Flask, request\nimport subprocess\nimport shl
   \    return result"
 recommendations: []
 references:
-- title: 'CWE-78: https://cwe.mitre.org/data/definitions/78.html'
-  url: ''
-- title: 'OWASP Command Injection: https://owasp.org/www-community/attacks/Command_Injection'
-  url: ''
-- title: 'Python subprocess documentation: https://docs.python.org/3/library/subprocess.html'
-  url: ''
-- title: 'Python shlex.quote: https://docs.python.org/3/library/shlex.html#shlex.quote'
-  url: ''
+- title: CWE-78
+  url: https://cwe.mitre.org/data/definitions/78.html
+- title: OWASP Command Injection
+  url: https://owasp.org/www-community/attacks/Command_Injection
+- title: Python subprocess documentation
+  url: https://docs.python.org/3/library/subprocess.html
+- title: Python shlex.quote
+  url: https://docs.python.org/3/library/shlex.html#shlex.quote
 compliance: []
 faq: []
 similar_rules: []

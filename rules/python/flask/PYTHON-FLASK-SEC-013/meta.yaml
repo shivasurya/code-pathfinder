@@ -42,16 +42,16 @@ secure_example: "from flask import Flask, request\nimport json\nimport yaml\n\na
   \    return {'config': config}"
 recommendations: []
 references:
-- title: 'CWE-502: https://cwe.mitre.org/data/definitions/502.html'
-  url: ''
-- title: 'OWASP Deserialization Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html'
-  url: ''
-- title: 'Python Pickle Security Warning: https://docs.python.org/3/library/pickle.html'
-  url: ''
-- title: 'PyYAML Security: https://pyyaml.org/wiki/PyYAMLDocumentation'
-  url: ''
-- title: 'OWASP A08:2021: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/'
-  url: ''
+- title: CWE-502
+  url: https://cwe.mitre.org/data/definitions/502.html
+- title: OWASP Deserialization Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+- title: Python Pickle Security Warning
+  url: https://docs.python.org/3/library/pickle.html
+- title: PyYAML Security
+  url: https://pyyaml.org/wiki/PyYAMLDocumentation
+- title: OWASP A08:2021
+  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
 compliance: []
 faq: []
 similar_rules: []

@@ -48,14 +48,14 @@ secure_example: "from flask import Flask, request\nfrom urllib.parse import urlp
   \ = requests.get(safe_url)\n    return response.text"
 recommendations: []
 references:
-- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
-  url: ''
-- title: 'OWASP SSRF: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery'
-  url: ''
-- title: 'OWASP SSRF Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
-  url: ''
-- title: 'Cloud SSRF Exploitation: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery'
-  url: ''
+- title: CWE-918
+  url: https://cwe.mitre.org/data/definitions/918.html
+- title: OWASP SSRF
+  url: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery
+- title: OWASP SSRF Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+- title: Cloud SSRF Exploitation
+  url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery
 compliance: []
 faq: []
 similar_rules: []

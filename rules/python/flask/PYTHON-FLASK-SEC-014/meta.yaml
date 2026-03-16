@@ -50,16 +50,16 @@ secure_example: "from flask import Flask, request, render_template, render_templ
   \ render_template_string('<h1>Hello, {{ name }}!</h1>', name=name)"
 recommendations: []
 references:
-- title: 'CWE-96: https://cwe.mitre.org/data/definitions/96.html'
-  url: ''
-- title: 'Flask Jinja2 SSTI: https://nvisium.com/blog/2016/03/09/exploring-ssti-in-flask-jinja2.html'
-  url: ''
-- title: 'Jinja2 SSTI Cheat Sheet: https://pequalsnp-team.github.io/cheatsheet/flask-jinja2-ssti'
-  url: ''
-- title: 'Jinja2 Sandbox: https://jinja.palletsprojects.com/en/latest/sandbox/'
-  url: ''
-- title: 'Flask render_template_string: https://flask.palletsprojects.com/en/latest/api/#flask.render_template_string'
-  url: ''
+- title: CWE-96
+  url: https://cwe.mitre.org/data/definitions/96.html
+- title: Flask Jinja2 SSTI
+  url: https://nvisium.com/blog/2016/03/09/exploring-ssti-in-flask-jinja2.html
+- title: Jinja2 SSTI Cheat Sheet
+  url: https://pequalsnp-team.github.io/cheatsheet/flask-jinja2-ssti
+- title: Jinja2 Sandbox
+  url: https://jinja.palletsprojects.com/en/latest/sandbox/
+- title: Flask render_template_string
+  url: https://flask.palletsprojects.com/en/latest/api/#flask.render_template_string
 compliance: []
 faq: []
 similar_rules: []

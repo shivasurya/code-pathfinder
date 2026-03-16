@@ -36,16 +36,16 @@ secure_example: "import json, yaml\n# Use JSON for data interchange (no code exe
   \ ValueError(\"Tampered data\")"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/502.html
-  url: ''
-- title: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-  url: ''
-- title: https://docs.python.org/3/library/pickle.html#restricting-globals
-  url: ''
-- title: https://pyyaml.org/wiki/PyYAMLDocumentation
-  url: ''
-- title: https://docs.python.org/3/library/marshal.html
-  url: ''
+- title: CWE-502
+  url: https://cwe.mitre.org/data/definitions/502.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+- title: 'Python docs: pickle - restricting-globals'
+  url: https://docs.python.org/3/library/pickle.html#restricting-globals
+- title: pyyaml.org
+  url: https://pyyaml.org/wiki/PyYAMLDocumentation
+- title: 'Python docs: marshal'
+  url: https://docs.python.org/3/library/marshal.html
 compliance: []
 faq: []
 similar_rules: []

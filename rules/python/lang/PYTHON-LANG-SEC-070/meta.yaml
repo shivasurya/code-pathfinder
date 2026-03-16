@@ -36,20 +36,20 @@ secure_example: "import socket, paramiko\n# Bind to localhost only for internal 
   # Use authenticated Pipe() for multiprocessing\nparent_conn, child_conn = multiprocessing.Pipe()"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/322.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/200.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/502.html
-  url: ''
-- title: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
-  url: ''
-- title: https://docs.paramiko.org/en/stable/api/client.html
-  url: ''
-- title: https://docs.python.org/3/library/multiprocessing.html#multiprocessing.connection.Connection
-  url: ''
-- title: https://docs.python.org/3/library/socket.html#socket.socket.bind
-  url: ''
+- title: CWE-322
+  url: https://cwe.mitre.org/data/definitions/322.html
+- title: CWE-200
+  url: https://cwe.mitre.org/data/definitions/200.html
+- title: CWE-502
+  url: https://cwe.mitre.org/data/definitions/502.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+- title: docs.paramiko.org
+  url: https://docs.paramiko.org/en/stable/api/client.html
+- title: 'Python docs: multiprocessing - multiprocessing.connection.Connection'
+  url: https://docs.python.org/3/library/multiprocessing.html#multiprocessing.connection.Connection
+- title: 'Python docs: socket - socket.socket.bind'
+  url: https://docs.python.org/3/library/socket.html#socket.socket.bind
 compliance: []
 faq: []
 similar_rules: []

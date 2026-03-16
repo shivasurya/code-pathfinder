@@ -42,11 +42,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/250.html
 - title: 'NIST SP 800-190: Application Container Security Guide'
-  url: ''
+  url: https://csrc.nist.gov/publications
 - title: Docker Security Best Practices
-  url: ''
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: Principle of Least Privilege (PoLP)
   url: ''
 compliance: []

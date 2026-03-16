@@ -40,13 +40,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-538: Insertion of Sensitive Information into Externally-Accessible File'
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/538.html
 - title: Docker BuildKit Secret Mounts
-  url: ''
+  url: https://docs.docker.com/build/building/secrets/
 - title: OWASP Docker Security Cheat Sheet
-  url: ''
+  url: https://owasp.org/www-project-top-ten/
 - title: 'NIST SP 800-190: Application Container Security Guide'
-  url: ''
+  url: https://csrc.nist.gov/publications
 compliance: []
 faq: []
 similar_rules: []

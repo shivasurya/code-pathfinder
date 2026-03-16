@@ -51,18 +51,18 @@ secure_example: 'import psycopg2
   cursor.execute(query, (user_id,))'
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/89.html
-  url: ''
-- title: https://owasp.org/Top10/A03_2021-Injection/
-  url: ''
-- title: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
-  url: ''
-- title: https://magicstack.github.io/asyncpg/current/usage.html
-  url: ''
-- title: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
-  url: ''
-- title: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-  url: ''
+- title: CWE-89
+  url: https://cwe.mitre.org/data/definitions/89.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A03_2021-Injection/
+- title: www.psycopg.org
+  url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
+- title: magicstack.github.io
+  url: https://magicstack.github.io/asyncpg/current/usage.html
+- title: 'Python docs: sqlite3 - sqlite3-placeholders'
+  url: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
+- title: OWASP SQL Injection Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
 compliance: []
 faq: []
 similar_rules: []

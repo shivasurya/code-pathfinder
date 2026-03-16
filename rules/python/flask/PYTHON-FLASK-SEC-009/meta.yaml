@@ -33,18 +33,18 @@ secure_example: "from flask import Flask, request\nimport csv, io, requests, mat
   \ 403\n    response = requests.get(f'https://{host}/api/data')\n    return response.text"
 recommendations: []
 references:
-- title: 'CWE-1236: https://cwe.mitre.org/data/definitions/1236.html'
-  url: ''
-- title: 'CWE-704: https://cwe.mitre.org/data/definitions/704.html'
-  url: ''
-- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
-  url: ''
-- title: 'OWASP CSV Injection: https://owasp.org/www-community/attacks/CSV_Injection'
-  url: ''
-- title: 'OWASP SSRF Prevention: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
-  url: ''
-- title: 'defusedcsv library: https://github.com/raphaelm/defusedcsv'
-  url: ''
+- title: CWE-1236
+  url: https://cwe.mitre.org/data/definitions/1236.html
+- title: CWE-704
+  url: https://cwe.mitre.org/data/definitions/704.html
+- title: CWE-918
+  url: https://cwe.mitre.org/data/definitions/918.html
+- title: OWASP CSV Injection
+  url: https://owasp.org/www-community/attacks/CSV_Injection
+- title: OWASP SSRF Prevention
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+- title: defusedcsv library
+  url: https://github.com/raphaelm/defusedcsv
 compliance: []
 faq: []
 similar_rules: []

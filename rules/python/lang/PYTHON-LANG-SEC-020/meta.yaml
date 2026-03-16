@@ -36,16 +36,16 @@ secure_example: "import subprocess\n# Pass arguments as a list (no shell interpr
   \ \"grep\", \"wc\"}\nif cmd not in ALLOWED_COMMANDS:\n    raise ValueError(\"Command not allowed\")"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/78.html
-  url: ''
-- title: https://owasp.org/Top10/A03_2021-Injection/
-  url: ''
-- title: https://docs.python.org/3/library/subprocess.html#security-considerations
-  url: ''
-- title: https://docs.python.org/3/library/asyncio-subprocess.html
-  url: ''
-- title: https://docs.python.org/3/library/shlex.html#shlex.split
-  url: ''
+- title: CWE-78
+  url: https://cwe.mitre.org/data/definitions/78.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A03_2021-Injection/
+- title: 'Python docs: subprocess - security-considerations'
+  url: https://docs.python.org/3/library/subprocess.html#security-considerations
+- title: 'Python docs: asyncio-subprocess'
+  url: https://docs.python.org/3/library/asyncio-subprocess.html
+- title: 'Python docs: shlex - shlex.split'
+  url: https://docs.python.org/3/library/shlex.html#shlex.split
 compliance: []
 faq: []
 similar_rules: []

@@ -44,16 +44,16 @@ secure_example: "from django.http import HttpResponse\nfrom django.utils.html im
   \   return render(request, 'comment.html', {'comment': clean_comment})"
 recommendations: []
 references:
-- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
-  url: ''
-- title: 'OWASP XSS: https://owasp.org/www-community/attacks/xss/'
-  url: ''
-- title: 'OWASP XSS Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html'
-  url: ''
-- title: 'Django auto-escaping: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-scripting-xss-protection'
-  url: ''
+- title: CWE-79
+  url: https://cwe.mitre.org/data/definitions/79.html
+- title: OWASP XSS
+  url: https://owasp.org/www-community/attacks/xss/
+- title: OWASP XSS Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+- title: Django auto-escaping
+  url: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-scripting-xss-protection
 compliance: []
 faq: []
 similar_rules: []

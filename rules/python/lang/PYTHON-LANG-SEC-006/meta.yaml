@@ -33,18 +33,18 @@ secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nre
   }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/95.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/96.html
-  url: ''
-- title: https://owasp.org/Top10/A03_2021-Injection/
-  url: ''
-- title: https://docs.python.org/3/library/functions.html#eval
-  url: ''
-- title: https://docs.python.org/3/library/ast.html#ast.literal_eval
-  url: ''
-- title: https://docs.python.org/3/library/code.html
-  url: ''
+- title: CWE-95
+  url: https://cwe.mitre.org/data/definitions/95.html
+- title: CWE-96
+  url: https://cwe.mitre.org/data/definitions/96.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A03_2021-Injection/
+- title: 'Python docs: functions - eval'
+  url: https://docs.python.org/3/library/functions.html#eval
+- title: 'Python docs: ast - ast.literal_eval'
+  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+- title: 'Python docs: code'
+  url: https://docs.python.org/3/library/code.html
 compliance: []
 faq: []
 similar_rules: []

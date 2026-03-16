@@ -56,18 +56,18 @@ secure_example: 'import ssl, requests
   conn = http.client.HTTPSConnection("api.example.com")'
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/295.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/326.html
-  url: ''
-- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-  url: ''
-- title: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
-  url: ''
-- title: https://docs.python.org/3/library/ssl.html#ssl-security
-  url: ''
-- title: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-  url: ''
+- title: CWE-295
+  url: https://cwe.mitre.org/data/definitions/295.html
+- title: CWE-326
+  url: https://cwe.mitre.org/data/definitions/326.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+- title: 'Python docs: ssl - ssl.create_default_context'
+  url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
+- title: 'Python docs: ssl - ssl-security'
+  url: https://docs.python.org/3/library/ssl.html#ssl-security
+- title: requests.readthedocs.io
+  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
 compliance: []
 faq: []
 similar_rules: []

@@ -48,16 +48,16 @@ secure_example: "from django.http import JsonResponse\nimport ast\nimport operat
   \ 'Unknown action'}, status=400)\n    return handler(request)"
 recommendations: []
 references:
-- title: 'CWE-95: https://cwe.mitre.org/data/definitions/95.html'
-  url: ''
-- title: 'CWE-96: https://cwe.mitre.org/data/definitions/96.html'
-  url: ''
-- title: 'OWASP Code Injection: https://owasp.org/www-community/attacks/Code_Injection'
-  url: ''
-- title: 'Python ast.literal_eval: https://docs.python.org/3/library/ast.html#ast.literal_eval'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-95
+  url: https://cwe.mitre.org/data/definitions/95.html
+- title: CWE-96
+  url: https://cwe.mitre.org/data/definitions/96.html
+- title: OWASP Code Injection
+  url: https://owasp.org/www-community/attacks/Code_Injection
+- title: Python ast.literal_eval
+  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

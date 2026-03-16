@@ -42,24 +42,24 @@ secure_example: "import uuid, os, re\n# Use uuid4 for cryptographically random U
   logging.info(f\"User {user} logged in successfully\")"
 recommendations: []
 references:
-- title: https://cwe.mitre.org/data/definitions/330.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/732.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/259.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/1333.html
-  url: ''
-- title: https://cwe.mitre.org/data/definitions/532.html
-  url: ''
-- title: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
-  url: ''
-- title: https://docs.python.org/3/library/uuid.html
-  url: ''
-- title: https://docs.python.org/3/library/os.html#os.chmod
-  url: ''
-- title: https://www.landh.tech/blog/20230811-sandwich-attack/
-  url: ''
+- title: CWE-330
+  url: https://cwe.mitre.org/data/definitions/330.html
+- title: CWE-732
+  url: https://cwe.mitre.org/data/definitions/732.html
+- title: CWE-259
+  url: https://cwe.mitre.org/data/definitions/259.html
+- title: CWE-1333
+  url: https://cwe.mitre.org/data/definitions/1333.html
+- title: CWE-532
+  url: https://cwe.mitre.org/data/definitions/532.html
+- title: OWASP Top 10
+  url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- title: 'Python docs: uuid'
+  url: https://docs.python.org/3/library/uuid.html
+- title: 'Python docs: os - os.chmod'
+  url: https://docs.python.org/3/library/os.html#os.chmod
+- title: www.landh.tech
+  url: https://www.landh.tech/blog/20230811-sandwich-attack/
 compliance: []
 faq: []
 similar_rules: []

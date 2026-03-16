@@ -36,7 +36,7 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
-  url: ''
+  url: https://cwe.mitre.org/data/definitions/250.html
 - title: Docker Network Drivers Documentation
   url: ''
 - title: 'CIS Docker Benchmark: Section 5.10'

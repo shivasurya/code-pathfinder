@@ -42,14 +42,14 @@ secure_example: "from django.http import HttpResponse, FileResponse, Http404\nim
   \ = os.path.join('/app/templates/', template)\n    with open(filepath) as f:\n        return HttpResponse(f.read())"
 recommendations: []
 references:
-- title: 'CWE-22: https://cwe.mitre.org/data/definitions/22.html'
-  url: ''
-- title: 'OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal'
-  url: ''
-- title: 'Python os.path documentation: https://docs.python.org/3/library/os.path.html'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
-  url: ''
+- title: CWE-22
+  url: https://cwe.mitre.org/data/definitions/22.html
+- title: OWASP Path Traversal
+  url: https://owasp.org/www-community/attacks/Path_Traversal
+- title: Python os.path documentation
+  url: https://docs.python.org/3/library/os.path.html
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/
 compliance: []
 faq: []
 similar_rules: []

@@ -31,16 +31,16 @@ secure_example: "from flask import Flask, request, render_template\nfrom markups
   \ {safe_name}!</h1>'"
 recommendations: []
 references:
-- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
-  url: ''
-- title: 'OWASP XSS: https://owasp.org/www-community/attacks/xss/'
-  url: ''
-- title: 'OWASP XSS Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html'
-  url: ''
-- title: 'Flask Security Considerations: https://flask.palletsprojects.com/en/latest/security/'
-  url: ''
-- title: 'MarkupSafe: https://markupsafe.palletsprojects.com/'
-  url: ''
+- title: CWE-79
+  url: https://cwe.mitre.org/data/definitions/79.html
+- title: OWASP XSS
+  url: https://owasp.org/www-community/attacks/xss/
+- title: OWASP XSS Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html
+- title: Flask Security Considerations
+  url: https://flask.palletsprojects.com/en/latest/security/
+- title: MarkupSafe
+  url: https://markupsafe.palletsprojects.com/
 compliance: []
 faq: []
 similar_rules: []

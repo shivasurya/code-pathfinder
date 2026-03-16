@@ -42,14 +42,14 @@ secure_example: "from django.http import JsonResponse\nfrom django.db import con
   \ list(orders)})"
 recommendations: []
 references:
-- title: 'CWE-89: https://cwe.mitre.org/data/definitions/89.html'
-  url: ''
-- title: 'OWASP SQL Injection: https://owasp.org/www-community/attacks/SQL_Injection'
-  url: ''
-- title: 'Django Raw SQL: https://docs.djangoproject.com/en/stable/topics/db/sql/'
-  url: ''
-- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection'
-  url: ''
+- title: CWE-89
+  url: https://cwe.mitre.org/data/definitions/89.html
+- title: OWASP SQL Injection
+  url: https://owasp.org/www-community/attacks/SQL_Injection
+- title: Django Raw SQL
+  url: https://docs.djangoproject.com/en/stable/topics/db/sql/
+- title: Django Security
+  url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
 compliance: []
 faq: []
 similar_rules: []
