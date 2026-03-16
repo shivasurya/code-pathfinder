@@ -1,6 +1,5 @@
 import os
 
-
 # SEC-040: path traversal via open
 def vulnerable_open(request):
     filename = request.GET.get('file')

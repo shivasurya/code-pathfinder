@@ -1,6 +1,5 @@
 from flask import Flask, request
-import csv
-import io
+import csv, io
 
 app = Flask(__name__)
 

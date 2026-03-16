@@ -1,16 +1,6 @@
-import requests
-import urllib.request
+from urllib.request import urlopen
 
-
-# SEC-030: SSRF via requests
-def vulnerable_ssrf_requests(request):
+def fetch_url(request):
     url = request.GET.get('url')
-    resp = requests.get(url)
-    return resp.text
-
-
-# SEC-031: SSRF via urllib
-def vulnerable_ssrf_urllib(request):
-    url = request.POST.get('target')
-    resp = urllib.request.urlopen(url)
+    resp = urlopen(url)
     return resp.read()
