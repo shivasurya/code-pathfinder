@@ -3,6 +3,11 @@ from codepathfinder import calls, flows, QueryType
 from codepathfinder.presets import PropagationPresets
 
 
+class FlaskRequest(QueryType):
+    fqns = ["flask"]
+    patterns = ["*request"]
+
+
 class DBCursor(QueryType):
     fqns = ["sqlite3.Cursor", "mysql.connector.cursor.MySQLCursor",
             "psycopg2.extensions.cursor", "pymysql.cursors.Cursor"]
@@ -24,12 +29,8 @@ def detect_flask_sql_injection():
     """Detects Flask request data flowing to SQL execution."""
     return flows(
         from_sources=[
-            calls("request.args.get"),
-            calls("request.form.get"),
-            calls("request.values.get"),
-            calls("request.get_json"),
-            calls("request.cookies.get"),
-            calls("request.headers.get"),
+            FlaskRequest.method("get", "args", "form", "values",
+                                "get_json", "cookies", "headers"),
         ],
         to_sinks=[
             DBCursor.method("execute", "executemany").tracks(0),
