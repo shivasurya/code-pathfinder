@@ -1,7 +1,7 @@
 # Rule Identity
 id: PYTHON-FLASK-SEC-003
 name: Flask SQL Injection via Tainted String
-short_description: Detects user input flowing to raw SQL execution without parameterized queries in Flask applications.
+short_description: Finds user input reaching raw SQL queries in Flask apps where parameterized queries should be used instead.
 
 # Classification
 severity: CRITICAL
@@ -45,45 +45,43 @@ author:
 
 # Content
 description: |
-  This rule detects SQL injection vulnerabilities in Flask applications where user-controlled
-  input from HTTP request parameters flows into raw SQL query execution without parameterized
-  queries. When user input is concatenated or interpolated directly into SQL strings and passed
-  to database cursor execute methods, attackers can manipulate query logic to extract, modify,
-  or destroy data.
+  This rule catches a specific pattern: user input from Flask request parameters
+  (request.args, request.form, request.get_json) gets concatenated or f-stringed
+  into a SQL query, then passed to cursor.execute(). The fix is straightforward --
+  use parameterized queries instead of string building.
 
-  SQL injection remains the most prevalent and dangerous web application vulnerability,
-  consistently ranking in the OWASP Top 10 and CWE Top 25 most dangerous software weaknesses.
-  In Flask applications, this commonly occurs when developers construct SQL queries using string
-  concatenation or f-strings with data obtained from request.args, request.form, or
-  request.get_json(), then pass the resulting string to cursor.execute().
-
-  Code Pathfinder detects this vulnerability using inter-procedural taint analysis with
-  parameter-level precision. The .tracks(0) constraint ensures only the first argument to
-  execute() (the SQL query string) is flagged — the second argument (parameter tuple) is
-  correctly recognized as the safe parameterization mechanism, eliminating false positives.
+  What makes this rule different from a simple grep for "execute" is that it actually
+  traces data flow. If the user input arrives in app.py, gets assigned to a variable,
+  passed through a function call into db.py, and ends up in cursor.execute() three
+  hops later -- Code Pathfinder follows that chain and flags it. It also knows the
+  difference between cursor.execute(query_string) (dangerous, argument position 0)
+  and cursor.execute(sql, (params,)) (safe, the tuple at position 1 is the
+  parameterization mechanism). That distinction alone eliminates a class of false
+  positives that trips up most static analysis tools.
 
 message: "User input flows to SQL execution without parameterization. Use parameterized queries."
 
 security_implications:
   - title: Data Exfiltration
     description: |
-      Attackers can use UNION-based injection, blind injection, or out-of-band techniques to
-      extract entire database contents including credentials, personal data, and business secrets.
-      A single vulnerable endpoint can expose every table in the database.
+      An attacker can read your entire database. UNION-based injection pulls data
+      from other tables. Blind injection extracts it one bit at a time. Either way,
+      one vulnerable endpoint is enough to leak every row in every table.
   - title: Authentication Bypass
     description: |
-      Login forms vulnerable to SQL injection allow attackers to bypass authentication entirely
-      by injecting conditions that always evaluate to true (e.g., ' OR 1=1 --). This grants
-      unauthorized access to any user account including administrators.
+      The classic ' OR 1=1 -- in a login form. The query returns all users, the app
+      logs in as the first one (usually admin). No brute force needed, no credentials
+      required.
   - title: Data Manipulation
     description: |
-      INSERT, UPDATE, and DELETE statements can be injected to modify or destroy records, corrupt
-      referential integrity, plant backdoor accounts, or alter financial transactions.
+      Injected INSERT, UPDATE, or DELETE statements can modify records, create backdoor
+      accounts, or corrupt data. In financial applications, this means altered
+      transactions.
   - title: Remote Code Execution
     description: |
-      On certain database systems (PostgreSQL with COPY, MySQL with INTO OUTFILE, MSSQL with
-      xp_cmdshell), SQL injection can escalate to operating system command execution, giving
-      attackers full control of the server.
+      Some databases let you run OS commands: PostgreSQL has COPY, MySQL has
+      INTO OUTFILE, MSSQL has xp_cmdshell. SQL injection on these systems can
+      escalate to full server compromise.
 
 secure_example: |
   from flask import Flask, request
@@ -96,29 +94,29 @@ secure_example: |
       username = request.args.get('username')
       conn = sqlite3.connect('app.db')
       cursor = conn.cursor()
-      # SAFE: Parameterized query prevents injection
+      # SAFE: Parameterized query -- the database driver handles escaping
       cursor.execute("SELECT * FROM users WHERE name = ?", (username,))
       return {'results': cursor.fetchall()}
 
-  # Alternative: Use an ORM like SQLAlchemy
+  # Or just use SQLAlchemy
   from sqlalchemy import select
   result = db.session.execute(select(User).filter_by(name=username))
 
 recommendations:
-  - Use parameterized queries with placeholders (?, %s, :param) instead of string concatenation
-  - Use an ORM like SQLAlchemy or Flask-SQLAlchemy instead of raw SQL
-  - Apply input validation and type checking before database operations
-  - Use stored procedures with parameterized inputs for complex queries
-  - Implement least-privilege database accounts that cannot DROP or ALTER tables
-  - Enable SQL query logging to detect injection attempts in production
+  - Use parameterized queries -- cursor.execute("SELECT * FROM users WHERE name = ?", (username,)) -- not string concatenation
+  - Switch to an ORM like SQLAlchemy if you're writing raw SQL frequently
+  - Validate and type-check input before it reaches the database layer
+  - Run database accounts with least privilege so a compromised query can't DROP tables
+  - Log SQL queries in production to catch injection attempts early
 
 detection_scope: |
-  This rule performs inter-procedural taint analysis (scope=global) tracking data from Flask
-  request sources (request.args.get, request.form.get, request.values.get, request.get_json,
-  request.cookies.get, request.headers.get) to database cursor execute/executemany sinks.
-  The .tracks(0) parameter targeting ensures only the SQL query argument (position 0) is
-  considered — parameterized tuple arguments at position 1 are correctly excluded.
-  Recognized sanitizers include escape() and escape_string() functions.
+  This rule traces data across files (scope=global). It starts from Flask request
+  methods -- request.args.get, request.form.get, request.values.get, request.get_json,
+  request.cookies.get, request.headers.get -- and follows variables through assignments
+  and function calls until they reach cursor.execute() or cursor.executemany().
+  The .tracks(0) setting means only the SQL string argument (position 0) triggers a
+  finding. The parameter tuple at position 1 is ignored. Flows through escape() or
+  escape_string() are treated as sanitized and excluded.
 
 # References
 references:
@@ -142,70 +140,64 @@ compliance:
   - standard: OWASP Top 10
     requirement: "A03:2021 - Injection"
   - standard: PCI DSS v4.0
-    requirement: "Requirement 6.2.4: Software engineering techniques prevent injection attacks"
+    requirement: "Requirement 6.2.4 -- prevent injection attacks"
   - standard: NIST SP 800-53
     requirement: "SI-10: Information Input Validation"
   - standard: SANS Top 25
     requirement: "Insecure Interaction Between Components"
 
-# FAQ (SEO-optimized for target personas)
+# FAQ
 faq:
   - question: How does this rule detect SQL injection across multiple Python files?
     answer: |
-      Code Pathfinder uses inter-procedural taint analysis to track user input across function
-      calls and file boundaries. If a Flask route in app.py receives request.args.get('id') and
-      passes it to a database helper in db.py that calls cursor.execute(), the full data flow is
-      traced and flagged. This catches the real-world pattern where routes, services, and data
-      layers live in separate files — not just toy single-file examples.
+      It follows the data. If a Flask route in app.py calls request.args.get('id'),
+      passes that value to a helper function in db.py, and that function sticks it into
+      cursor.execute() via string concatenation -- Code Pathfinder traces the full chain
+      and flags it. Most real codebases split routes, services, and database code into
+      separate files. This rule handles that.
 
-  - question: How do I run this rule in my CI/CD pipeline?
+  - question: How do I run this rule in CI/CD?
     answer: |
-      Add Code Pathfinder to your CI workflow and run:
-      pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-003 --project .
-      It outputs SARIF, JSON, or CSV and can post inline review comments directly on GitHub
-      pull requests. The scan runs in seconds and requires no database or runtime — it analyzes
-      source code statically.
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-003 --project .
+      It outputs SARIF, JSON, or CSV. If you're on GitHub, it can post inline review
+      comments directly on pull requests pointing to the exact lines. No dashboard
+      needed, no SARIF viewer -- just comments on the PR.
 
-  - question: Does this rule produce false positives on parameterized queries?
+  - question: Does this rule flag parameterized queries as vulnerable?
     answer: |
-      No. This rule uses .tracks(0) parameter targeting, which means it only flags taint
-      reaching the first argument of cursor.execute() — the SQL query string. The second
-      argument (the parameter tuple in cursor.execute(sql, (params,))) is correctly recognized
-      as the safe parameterization mechanism and is excluded from analysis. This eliminates
-      the most common source of false positives in SQL injection detection.
+      No. The .tracks(0) setting tells the engine that only the first argument to
+      cursor.execute() matters -- that's the SQL string. The second argument is the
+      parameter tuple (the safe one). So cursor.execute(sql, (user_input,)) won't
+      trigger a finding even though user_input is tainted. This is the most common
+      false positive in SQL injection scanning and this rule avoids it.
 
-  - question: Which database drivers and ORMs does this rule support?
+  - question: Which database drivers does this rule cover?
     answer: |
-      This rule covers SQLite (sqlite3), MySQL (mysql-connector-python, PyMySQL), and
-      PostgreSQL (psycopg2) through type-aware QueryType matching. The wildcard pattern
-      *Cursor matches any cursor-like object across database drivers. For ORM-based queries,
-      see the companion rules PYTHON-DJANGO-SEC-002 (Django ORM .raw()) and
-      PYTHON-DJANGO-SEC-003 (Django ORM .extra()).
+      SQLite (sqlite3), MySQL (mysql-connector-python, PyMySQL), and PostgreSQL
+      (psycopg2). The QueryType pattern *Cursor also catches cursor objects from
+      other drivers that follow the DB-API 2.0 convention. For Django ORM-specific
+      patterns like .raw() and .extra(), see PYTHON-DJANGO-SEC-002 and SEC-003.
 
   - question: What compliance standards require SQL injection testing?
     answer: |
-      SQL injection testing is required or recommended by PCI DSS v4.0 (Requirement 6.2.4),
-      OWASP Top 10 (A03:2021 Injection), NIST SP 800-53 (SI-10), SOC 2 Type II (CC6.1),
-      ISO 27001 (A.14.2.5), and the EU Cyber Resilience Act. CWE-89 is ranked #3 in the
-      2023 CWE Top 25 Most Dangerous Software Weaknesses. Running this rule as part of your
-      SAST pipeline provides auditable evidence of injection testing for compliance reviews.
+      PCI DSS v4.0 (Requirement 6.2.4), OWASP Top 10 (A03:2021), NIST SP 800-53
+      (SI-10), SOC 2 Type II (CC6.1), ISO 27001 (A.14.2.5), and the EU Cyber
+      Resilience Act all require or recommend it. CWE-89 is #3 in the 2023 CWE Top 25.
+      Running this rule in CI gives you auditable evidence for compliance reviews.
 
-  - question: Can I customize this rule for my project's specific sources and sinks?
+  - question: Can I add my own sources or sinks to this rule?
     answer: |
-      Yes. The rule is written in Code Pathfinder's Python SDK — you can fork it and modify
-      the from_sources list to add your project's custom input methods, add framework-specific
-      sinks to to_sinks, or add your validation functions to sanitized_by. The rule file is
-      a standard Python file that you can version-control alongside your application code.
+      Yes. The rule file is plain Python. Fork it and add your custom input methods to
+      from_sources, your database functions to to_sinks, or your validation logic to
+      sanitized_by. You can version-control the modified rule alongside your app code.
 
-  - question: How is this different from grep or regex-based SQL injection detection?
+  - question: How is this different from grep-based SQL injection detection?
     answer: |
-      Grep-based tools match patterns in source code text — they cannot determine whether
-      user input actually reaches a SQL query. Code Pathfinder performs data flow analysis,
-      tracing variables from HTTP request sources through assignments, function calls, and
-      file boundaries to database sinks. It understands that sanitized input (passed through
-      escape functions) is safe, and that parameterized queries are not vulnerable. This
-      produces far fewer false positives while catching real vulnerabilities that pattern
-      matching misses entirely.
+      Grep finds the word "execute" in your codebase. Code Pathfinder determines whether
+      user-controlled data actually reaches that execute call. It follows variables through
+      assignments, function calls, and file boundaries. It knows that escaped input is safe
+      and that parameterized queries aren't vulnerable. Grep can't do any of that -- it
+      either misses real bugs or drowns you in false positives.
 
 # Similar Rules
 similar_rules:
