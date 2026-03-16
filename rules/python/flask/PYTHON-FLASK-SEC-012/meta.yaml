@@ -13,8 +13,8 @@ tags:
 - python
 - flask
 - open-redirect
-- owasp-a01
-- cwe-601
+- OWASP-A01
+- CWE-601
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

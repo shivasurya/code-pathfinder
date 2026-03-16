@@ -16,8 +16,8 @@ tags:
 - pickle
 - rce
 - untrusted-data
-- owasp-a08
-- cwe-502
+- OWASP-A08
+- CWE-502
 - remote-code-execution
 - critical
 - security

@@ -14,7 +14,7 @@ tags:
 - paramiko
 - ssh
 - command-execution
-- cwe-78
+- CWE-78
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

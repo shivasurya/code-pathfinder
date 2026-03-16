@@ -14,8 +14,8 @@ tags:
 - xml
 - xxe
 - defusedxml
-- owasp-a05
-- cwe-611
+- OWASP-A05
+- CWE-611
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -15,7 +15,7 @@ tags:
 - jinja2
 - xss
 - audit
-- cwe-79
+- CWE-79
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

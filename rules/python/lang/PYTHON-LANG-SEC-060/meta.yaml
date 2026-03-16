@@ -14,7 +14,7 @@ tags:
 - requests
 - http
 - insecure-transport
-- cwe-319
+- CWE-319
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -15,8 +15,8 @@ tags:
 - code-injection
 - eval
 - rce
-- owasp-a03
-- cwe-95
+- OWASP-A03
+- CWE-95
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

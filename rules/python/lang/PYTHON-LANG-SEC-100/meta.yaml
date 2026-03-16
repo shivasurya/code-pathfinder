@@ -15,7 +15,7 @@ tags:
 - uuid
 - mac-address
 - insufficiently-random
-- cwe-330
+- CWE-330
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

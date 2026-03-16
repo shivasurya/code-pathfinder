@@ -16,8 +16,8 @@ tags:
 - ssti
 - template-injection
 - rce
-- owasp-a03
-- cwe-96
+- OWASP-A03
+- CWE-96
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

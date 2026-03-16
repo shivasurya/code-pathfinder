@@ -13,7 +13,7 @@ tags:
 - python
 - xmlrpc
 - xxe
-- cwe-611
+- CWE-611
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

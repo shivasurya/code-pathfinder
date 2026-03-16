@@ -14,8 +14,8 @@ tags:
 - sha1
 - weak-hash
 - cryptography
-- owasp-a02
-- cwe-327
+- OWASP-A02
+- CWE-327
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -15,7 +15,7 @@ tags:
 - ssh
 - host-key
 - mitm
-- cwe-322
+- CWE-322
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

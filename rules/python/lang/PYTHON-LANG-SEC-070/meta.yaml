@@ -14,7 +14,7 @@ tags:
 - socket
 - bind
 - network
-- cwe-200
+- CWE-200
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

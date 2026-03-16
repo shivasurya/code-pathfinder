@@ -14,8 +14,8 @@ tags:
 - django
 - password
 - default
-- owasp-a07
-- cwe-521
+- OWASP-A07
+- CWE-521
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

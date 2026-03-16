@@ -14,7 +14,7 @@ tags:
 - pg8000
 - sql-injection
 - database
-- cwe-89
+- CWE-89
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

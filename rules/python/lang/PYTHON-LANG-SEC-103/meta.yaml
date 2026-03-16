@@ -14,7 +14,7 @@ tags:
 - regex
 - redos
 - denial-of-service
-- cwe-1333
+- CWE-1333
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

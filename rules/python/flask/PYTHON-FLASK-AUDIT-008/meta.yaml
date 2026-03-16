@@ -16,7 +16,7 @@ tags:
 - template
 - ssti
 - audit
-- cwe-96
+- CWE-96
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

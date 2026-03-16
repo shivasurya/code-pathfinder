@@ -14,7 +14,7 @@ tags:
 - flask
 - csrf
 - wtf
-- cwe-352
+- CWE-352
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

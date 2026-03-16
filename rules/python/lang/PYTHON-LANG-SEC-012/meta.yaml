@@ -13,8 +13,8 @@ tags:
 - python
 - os-spawn
 - process-spawn
-- owasp-a03
-- cwe-78
+- OWASP-A03
+- CWE-78
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

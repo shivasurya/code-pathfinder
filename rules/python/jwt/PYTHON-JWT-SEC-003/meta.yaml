@@ -14,8 +14,8 @@ tags:
 - jwt
 - unverified
 - authentication
-- owasp-a07
-- cwe-287
+- OWASP-A07
+- CWE-287
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

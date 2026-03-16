@@ -14,7 +14,7 @@ tags:
 - md5
 - password
 - weak-hash
-- cwe-327
+- CWE-327
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

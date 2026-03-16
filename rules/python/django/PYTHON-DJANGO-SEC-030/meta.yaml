@@ -14,8 +14,8 @@ tags:
 - django
 - ssrf
 - requests
-- owasp-a10
-- cwe-918
+- OWASP-A10
+- CWE-918
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

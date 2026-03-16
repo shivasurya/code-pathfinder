@@ -14,8 +14,8 @@ tags:
 - jwt
 - hardcoded-secret
 - credentials
-- owasp-a02
-- cwe-522
+- OWASP-A02
+- CWE-522
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

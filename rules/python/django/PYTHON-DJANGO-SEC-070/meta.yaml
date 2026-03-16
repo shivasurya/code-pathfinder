@@ -14,8 +14,8 @@ tags:
 - django
 - cookies
 - security
-- owasp-a05
-- cwe-614
+- OWASP-A05
+- CWE-614
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -13,7 +13,7 @@ tags:
 - python
 - weak-hash
 - hashlib-new
-- cwe-327
+- CWE-327
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

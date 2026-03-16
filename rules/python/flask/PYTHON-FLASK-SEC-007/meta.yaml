@@ -14,8 +14,8 @@ tags:
 - flask
 - path-traversal
 - file-access
-- owasp-a01
-- cwe-22
+- OWASP-A01
+- CWE-22
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

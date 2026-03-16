@@ -13,7 +13,7 @@ tags:
 - python
 - subinterpreters
 - code-execution
-- cwe-95
+- CWE-95
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

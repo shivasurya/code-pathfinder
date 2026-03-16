@@ -15,7 +15,7 @@ tags:
 - sql-injection
 - raw-sql
 - audit
-- cwe-89
+- CWE-89
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

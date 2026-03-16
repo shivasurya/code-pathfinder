@@ -16,8 +16,8 @@ tags:
 - debug-mode
 - configuration
 - information-disclosure
-- owasp-a05
-- cwe-489
+- OWASP-A05
+- CWE-489
 - production
 - werkzeug
 - security

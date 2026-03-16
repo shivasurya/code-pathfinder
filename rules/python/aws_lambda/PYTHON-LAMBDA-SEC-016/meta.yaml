@@ -15,8 +15,8 @@ tags:
 - lambda
 - dynamodb
 - nosql-injection
-- owasp-a03
-- cwe-943
+- OWASP-A03
+- CWE-943
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

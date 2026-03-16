@@ -15,7 +15,7 @@ tags:
 - markup
 - xss
 - audit
-- cwe-79
+- CWE-79
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

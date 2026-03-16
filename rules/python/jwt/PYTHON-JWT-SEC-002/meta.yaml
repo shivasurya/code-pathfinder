@@ -14,8 +14,8 @@ tags:
 - jwt
 - none-algorithm
 - weak-crypto
-- owasp-a02
-- cwe-327
+- OWASP-A02
+- CWE-327
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

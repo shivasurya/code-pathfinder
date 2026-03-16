@@ -16,8 +16,8 @@ tags:
 - pickle
 - yaml
 - rce
-- owasp-a08
-- cwe-502
+- OWASP-A08
+- CWE-502
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -13,7 +13,7 @@ tags:
 - python
 - file-permissions
 - chmod
-- cwe-732
+- CWE-732
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

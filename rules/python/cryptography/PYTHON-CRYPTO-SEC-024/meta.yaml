@@ -15,7 +15,7 @@ tags:
 - dsa
 - key-size
 - audit
-- cwe-326
+- CWE-326
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

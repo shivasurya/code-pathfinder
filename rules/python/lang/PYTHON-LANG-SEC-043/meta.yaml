@@ -15,7 +15,7 @@ tags:
 - yaml
 - deserialization
 - rce
-- cwe-502
+- CWE-502
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

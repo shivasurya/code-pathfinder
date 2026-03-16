@@ -13,7 +13,7 @@ tags:
 - python
 - flask
 - csv-injection
-- cwe-1236
+- CWE-1236
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

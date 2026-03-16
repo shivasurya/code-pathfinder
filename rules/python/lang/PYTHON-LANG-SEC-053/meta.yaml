@@ -14,7 +14,7 @@ tags:
 - ssl
 - cert-validation
 - mitm
-- cwe-295
+- CWE-295
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

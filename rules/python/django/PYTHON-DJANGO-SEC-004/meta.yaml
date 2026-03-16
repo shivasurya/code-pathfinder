@@ -14,8 +14,8 @@ tags:
 - django
 - sql-injection
 - rawsql
-- owasp-a03
-- cwe-89
+- OWASP-A03
+- CWE-89
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -13,7 +13,7 @@ tags:
 - python
 - marshal
 - deserialization
-- cwe-502
+- CWE-502
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

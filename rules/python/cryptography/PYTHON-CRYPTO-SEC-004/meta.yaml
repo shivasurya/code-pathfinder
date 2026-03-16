@@ -14,7 +14,7 @@ tags:
 - pycryptodome
 - rc2
 - weak-cipher
-- cwe-327
+- CWE-327
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

@@ -13,7 +13,7 @@ tags:
 - python
 - wildcard
 - command-injection
-- cwe-78
+- CWE-78
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya

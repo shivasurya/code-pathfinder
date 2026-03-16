@@ -13,7 +13,7 @@ tags:
 - python
 - reverse-shell
 - backdoor
-- cwe-506
+- CWE-506
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
