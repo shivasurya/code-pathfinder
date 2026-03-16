@@ -1,7 +1,7 @@
 id: PYTHON-CRYPTO-SEC-023
-name: RSA Key Generation (PyCryptodome, Audit)
-short_description: RSA key generation detected. Ensure bits >= 3072.
-severity: MEDIUM
+name: Insufficient RSA Key Size (PyCryptodome)
+short_description: RSA key size is less than 3072 bits. PyCryptodome recommends 3072+ bit keys.
+severity: HIGH
 category: cryptography
 language: python
 ruleset: python/PYTHON-CRYPTO-SEC-023
@@ -19,21 +19,10 @@ tags:
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules audit asymmetric key generation operations across Python cryptographic libraries
-
-  (`cryptography` and `PyCryptodome`) to flag instances where key sizes may be insufficient.
-
-  They detect RSA, DSA, and Elliptic Curve key generation calls so developers can verify that
-
-  key sizes meet current security standards.
-
-
-  These are audit-level rules: they flag key generation for manual review rather than
-
-  definitively identifying a vulnerability, since the key size parameter requires value analysis
-
-  to determine if it is adequate.'
-message: RSA key generation detected. Ensure bits >= 3072.
+description: Detects RSA key generation with bits less than 3072 in PyCryptodome. The PyCryptodome documentation
+  recommends 3072-bit minimum for new applications, aligning with NIST recommendations for protection
+  beyond 2030.
+message: RSA key size is less than 3072 bits. PyCryptodome recommends 3072+ bit keys.
 secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec\nfrom cryptography.hazmat.backends\
   \ import default_backend\n\n# SECURE: RSA-3072 or higher\nprivate_key = rsa.generate_private_key(\n\
   \    public_exponent=65537,\n    key_size=3072,\n    backend=default_backend()\n)\n\n# SECURE: DSA-2048\

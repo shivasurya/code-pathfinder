@@ -1,7 +1,7 @@
 id: PYTHON-CRYPTO-SEC-020
-name: RSA Key Generation (Audit)
-short_description: RSA key generation detected. Ensure key_size >= 2048 bits.
-severity: MEDIUM
+name: Insufficient RSA Key Size
+short_description: RSA key size is less than 2048 bits. Use at least 2048-bit keys (3072+ recommended).
+severity: HIGH
 category: cryptography
 language: python
 ruleset: python/PYTHON-CRYPTO-SEC-020
@@ -19,21 +19,11 @@ tags:
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules audit asymmetric key generation operations across Python cryptographic libraries
-
-  (`cryptography` and `PyCryptodome`) to flag instances where key sizes may be insufficient.
-
-  They detect RSA, DSA, and Elliptic Curve key generation calls so developers can verify that
-
-  key sizes meet current security standards.
-
-
-  These are audit-level rules: they flag key generation for manual review rather than
-
-  definitively identifying a vulnerability, since the key size parameter requires value analysis
-
-  to determine if it is adequate.'
-message: RSA key generation detected. Ensure key_size >= 2048 bits.
+description: Detects RSA key generation with key_size less than 2048 bits in the cryptography library.
+  RSA keys shorter than 2048 bits can be factored with sufficient computing resources. NIST deprecated
+  1024-bit RSA in 2013 and recommends 2048-bit minimum, with 3072+ for data that needs protection beyond
+  2030.
+message: RSA key size is less than 2048 bits. Use at least 2048-bit keys (3072+ recommended).
 secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec\nfrom cryptography.hazmat.backends\
   \ import default_backend\n\n# SECURE: RSA-3072 or higher\nprivate_key = rsa.generate_private_key(\n\
   \    public_exponent=65537,\n    key_size=3072,\n    backend=default_backend()\n)\n\n# SECURE: DSA-2048\
