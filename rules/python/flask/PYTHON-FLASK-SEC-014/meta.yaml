@@ -52,8 +52,6 @@ recommendations: []
 references:
 - title: CWE-96
   url: https://cwe.mitre.org/data/definitions/96.html
-- title: Flask Jinja2 SSTI
-  url: https://nvisium.com/blog/2016/03/09/exploring-ssti-in-flask-jinja2.html
 - title: Jinja2 SSTI Cheat Sheet
   url: https://pequalsnp-team.github.io/cheatsheet/flask-jinja2-ssti
 - title: Jinja2 Sandbox

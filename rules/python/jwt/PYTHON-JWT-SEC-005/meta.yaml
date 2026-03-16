@@ -47,8 +47,6 @@ references:
   url: https://tools.ietf.org/html/rfc8725
 - title: OWASP JWT Cheat Sheet
   url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
-- title: Auth0 JWT Handbook
-  url: https://auth0.com/resources/ebooks/jwt-handbook
 compliance: []
 faq: []
 similar_rules: []
