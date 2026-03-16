@@ -1,0 +1,70 @@
+id: PYTHON-DJANGO-SEC-022
+name: Django Globals Misuse Code Execution
+short_description: User input used to index globals(). This allows arbitrary code execution.
+severity: HIGH
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-022
+cwe:
+- id: CWE-96
+  name: Improper Neutralization of Directives in Statically Saved Code
+  url: https://cwe.mitre.org/data/definitions/96.html
+tags:
+- python
+- django
+- code-injection
+- globals
+- owasp-a03
+- cwe-96
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect code injection vulnerabilities in Django applications where untrusted
+
+  user input from HTTP requests flows into dynamic code evaluation functions such as eval(),
+
+  exec(), or is used to index globals() for arbitrary function dispatch. Python''s eval() and
+
+  exec() interpret strings as Python code, meaning any user-controlled input reaching these
+
+  functions allows an attacker to execute arbitrary Python code on the server with the full
+
+  privileges of the application process.'
+message: User input used to index globals(). This allows arbitrary code execution.
+secure_example: "from django.http import JsonResponse\nimport ast\nimport operator\n\n# Safe math operations\
+  \ whitelist\nSAFE_OPS = {\n    ast.Add: operator.add,\n    ast.Sub: operator.sub,\n    ast.Mult: operator.mul,\n\
+  \    ast.Div: operator.truediv,\n}\n\ndef safe_eval_math(expr):\n    \\\"\\\"\\\"Evaluate simple math\
+  \ expressions safely using AST parsing.\\\"\\\"\\\"\n    tree = ast.parse(expr, mode='eval')\n    #\
+  \ Only allow numbers and basic arithmetic\n    for node in ast.walk(tree):\n        if not isinstance(node,\
+  \ (ast.Expression, ast.BinOp, ast.Constant,\n                                 ast.Add, ast.Sub, ast.Mult,\
+  \ ast.Div)):\n            raise ValueError(\"Unsafe expression\")\n    return eval(compile(tree, '<string>',\
+  \ 'eval'))\n\ndef calculate(request):\n    # SECURE: Use ast.literal_eval or custom safe parser\n  \
+  \  expression = request.GET.get('expr', '')\n    try:\n        result = safe_eval_math(expression)\n\
+  \    except (ValueError, SyntaxError):\n        return JsonResponse({'error': 'Invalid expression'},\
+  \ status=400)\n    return JsonResponse({'result': result})\n\ndef dispatch(request):\n    # SECURE:\
+  \ Use explicit allowlist for dispatch\n    ALLOWED_ACTIONS = {\n        'list': list_items,\n      \
+  \  'search': search_items,\n        'count': count_items,\n    }\n    action = request.GET.get('action',\
+  \ '')\n    handler = ALLOWED_ACTIONS.get(action)\n    if handler is None:\n        return JsonResponse({'error':\
+  \ 'Unknown action'}, status=400)\n    return handler(request)"
+recommendations: []
+references:
+- title: 'CWE-95: https://cwe.mitre.org/data/definitions/95.html'
+  url: ''
+- title: 'CWE-96: https://cwe.mitre.org/data/definitions/96.html'
+  url: ''
+- title: 'OWASP Code Injection: https://owasp.org/www-community/attacks/Code_Injection'
+  url: ''
+- title: 'Python ast.literal_eval: https://docs.python.org/3/library/ast.html#ast.literal_eval'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

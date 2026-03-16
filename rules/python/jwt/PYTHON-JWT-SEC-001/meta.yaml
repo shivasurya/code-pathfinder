@@ -1,0 +1,62 @@
+id: PYTHON-JWT-SEC-001
+name: JWT Hardcoded Secret
+short_description: Hardcoded string used as JWT signing secret. Use environment variables or key management.
+severity: HIGH
+category: jwt
+language: python
+ruleset: python/PYTHON-JWT-SEC-001
+cwe:
+- id: CWE-522
+  name: Insufficiently Protected Credentials
+  url: https://cwe.mitre.org/data/definitions/522.html
+tags:
+- python
+- jwt
+- hardcoded-secret
+- credentials
+- owasp-a02
+- cwe-522
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect security misconfigurations in JSON Web Token (JWT) usage with the
+
+  PyJWT library (`jwt` module). JWTs are widely used for authentication and authorization
+
+  in web applications. Misconfigurations can allow token forgery, credential exposure, and
+
+  authentication bypass.'
+message: Hardcoded string used as JWT signing secret. Use environment variables or key management.
+secure_example: "import jwt\nimport os\n\n# SECURE: Secret from environment variable\nSECRET = os.environ[\"\
+  JWT_SECRET_KEY\"]\n\n# SECURE: Use strong algorithm with proper secret\ntoken = jwt.encode(\n    {\"\
+  user_id\": 123, \"role\": \"admin\", \"exp\": datetime.utcnow() + timedelta(hours=1)},\n    SECRET,\n\
+  \    algorithm=\"HS256\"\n)\n\n# SECURE: Verify signature and specify allowed algorithms\npayload =\
+  \ jwt.decode(\n    token,\n    SECRET,\n    algorithms=[\"HS256\"],  # Explicitly whitelist algorithms\n\
+  \    options={\"require\": [\"exp\", \"iat\"]}\n)\n\n# SECURE: Use RS256 with asymmetric keys for distributed\
+  \ systems\nwith open(\"private_key.pem\", \"rb\") as f:\n    private_key = f.read()\ntoken = jwt.encode(payload,\
+  \ private_key, algorithm=\"RS256\")\n\nwith open(\"public_key.pem\", \"rb\") as f:\n    public_key =\
+  \ f.read()\npayload = jwt.decode(token, public_key, algorithms=[\"RS256\"])"
+recommendations: []
+references:
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm (https://cwe.mitre.org/data/definitions/327.html)'
+  url: ''
+- title: 'CWE-522: Insufficiently Protected Credentials (https://cwe.mitre.org/data/definitions/522.html)'
+  url: ''
+- title: 'CWE-287: Improper Authentication (https://cwe.mitre.org/data/definitions/287.html)'
+  url: ''
+- title: 'RFC 8725: JSON Web Token Best Current Practices (https://tools.ietf.org/html/rfc8725)'
+  url: ''
+- title: OWASP JWT Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
+  url: ''
+- title: Auth0 JWT Handbook (https://auth0.com/resources/ebooks/jwt-handbook)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

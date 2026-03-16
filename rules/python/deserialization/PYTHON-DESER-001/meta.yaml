@@ -1,0 +1,70 @@
+id: PYTHON-DESER-001
+name: Unsafe Pickle Deserialization
+short_description: 'Unsafe pickle deserialization: Untrusted data flows to pickle.loads() which can execute
+  arbitrary code. Use json.loads() instead.'
+severity: CRITICAL
+category: deserialization
+language: python
+ruleset: python/PYTHON-DESER-001
+cwe:
+- id: CWE-502
+  name: Deserialization of Untrusted Data
+  url: https://cwe.mitre.org/data/definitions/502.html
+tags:
+- python
+- deserialization
+- pickle
+- rce
+- untrusted-data
+- owasp-a08
+- cwe-502
+- remote-code-execution
+- critical
+- security
+- intra-procedural
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects unsafe pickle deserialization where untrusted user input flows directly
+
+  to pickle.loads() or pickle.load(). Pickle is Python''s binary serialization format that can
+
+  execute arbitrary code during deserialization, making it extremely dangerous when used with
+
+  untrusted data.'
+message: 'Unsafe pickle deserialization: Untrusted data flows to pickle.loads() which can execute arbitrary
+  code. Use json.loads() instead.'
+secure_example: "import json\nfrom flask import Flask, request\nimport hmac\nimport hashlib\n\napp = Flask(__name__)\n\
+  SECRET_KEY = 'your-secret-key-here'\n\n@app.route('/api/load_data', methods=['POST'])\ndef load_user_data():\n\
+  \    \\\"\\\"\\\"\n    SECURE: Use JSON for untrusted data, not pickle!\n    \\\"\\\"\\\"\n    try:\n\
+  \        # Use JSON instead of pickle\n        user_data = json.loads(request.data)\n        return\
+  \ {'data': user_data}\n    except json.JSONDecodeError:\n        return {'error': 'Invalid JSON'}, 400\n\
+  \n# If you MUST use pickle with trusted sources:\n@app.route('/api/load_trusted', methods=['POST'])\n\
+  def load_trusted_data():\n    \\\"\\\"\\\"\n    LESS UNSAFE: Verify HMAC signature before unpickling.\n\
+  \    Only use this for data you control!\n    \\\"\\\"\\\"\n    data = request.get_json()\n    signed_data\
+  \ = base64.b64decode(data['signed_data'])\n    signature = data['signature']\n\n    # Verify HMAC signature\n\
+  \    expected = hmac.new(SECRET_KEY.encode(), signed_data, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(signature,\
+  \ expected):\n        return {'error': 'Invalid signature'}, 403\n\n    # Only unpickle if signature\
+  \ is valid\n    obj = pickle.loads(signed_data)\n    return {'data': str(obj)}"
+recommendations: []
+references:
+- title: 'CWE-502: Deserialization of Untrusted Data (https://cwe.mitre.org/data/definitions/502.html)'
+  url: ''
+- title: 'CVE-2021-3177: Python Buffer Overflow'
+  url: ''
+- title: OWASP A08:2021 - Software and Data Integrity Failures
+  url: ''
+- title: Python Pickle Documentation (Security Warning!)
+  url: ''
+- title: 'Deserialization Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A08:2021
+  name: ''
+  url: ''

@@ -1,0 +1,65 @@
+id: PYTHON-DJANGO-SEC-030
+name: Django SSRF via requests Library
+short_description: User input flows to requests HTTP call. Validate and restrict URLs.
+severity: HIGH
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-030
+cwe:
+- id: CWE-918
+  name: Server-Side Request Forgery (SSRF)
+  url: https://cwe.mitre.org/data/definitions/918.html
+tags:
+- python
+- django
+- ssrf
+- requests
+- owasp-a10
+- cwe-918
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect Server-Side Request Forgery (SSRF) vulnerabilities in Django applications
+
+  where untrusted user input from HTTP requests flows into server-side HTTP client calls such
+
+  as requests.get(), requests.post(), or urllib.request.urlopen(). SSRF allows attackers to
+
+  make the server send HTTP requests to arbitrary destinations, including internal services,
+
+  cloud metadata endpoints, and private network resources that are not directly accessible
+
+  from the internet.'
+message: User input flows to requests HTTP call. Validate and restrict URLs.
+secure_example: "from django.http import JsonResponse\nimport requests\nfrom urllib.parse import urlparse\n\
+  import ipaddress\n\nALLOWED_DOMAINS = {'api.example.com', 'cdn.example.com'}\nBLOCKED_NETWORKS = [\n\
+  \    ipaddress.ip_network('10.0.0.0/8'),\n    ipaddress.ip_network('172.16.0.0/12'),\n    ipaddress.ip_network('192.168.0.0/16'),\n\
+  \    ipaddress.ip_network('169.254.0.0/16'),  # Cloud metadata\n    ipaddress.ip_network('127.0.0.0/8'),\
+  \     # Loopback\n]\n\ndef is_safe_url(url):\n    \\\"\\\"\\\"Validate URL against allowlist and block\
+  \ internal networks.\\\"\\\"\\\"\n    parsed = urlparse(url)\n    if parsed.scheme not in ('http', 'https'):\n\
+  \        return False\n    if parsed.hostname in ALLOWED_DOMAINS:\n        return True\n    try:\n \
+  \       ip = ipaddress.ip_address(parsed.hostname)\n        return not any(ip in network for network\
+  \ in BLOCKED_NETWORKS)\n    except ValueError:\n        return False\n\ndef fetch_url(request):\n  \
+  \  # SECURE: Validate URL before making request\n    url = request.GET.get('url', '')\n    if not is_safe_url(url):\n\
+  \        return JsonResponse({'error': 'URL not allowed'}, status=400)\n    response = requests.get(url,\
+  \ timeout=5)\n    return JsonResponse({'content': response.text})"
+recommendations: []
+references:
+- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
+  url: ''
+- title: 'OWASP SSRF: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery'
+  url: ''
+- title: 'OWASP SSRF Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A10:2021
+  name: ''
+  url: ''

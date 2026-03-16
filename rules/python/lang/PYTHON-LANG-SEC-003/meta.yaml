@@ -1,0 +1,56 @@
+id: PYTHON-LANG-SEC-003
+name: Dangerous code.InteractiveConsole Usage
+short_description: code.InteractiveConsole/interact detected. This enables arbitrary code execution.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-003
+cwe:
+- id: CWE-95
+  name: Improper Neutralization of Directives in Dynamically Evaluated Code
+  url: https://cwe.mitre.org/data/definitions/95.html
+tags:
+- python
+- code-run
+- interactive-console
+- cwe-95
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Python provides several built-in functions and modules that evaluate or execute
+
+  arbitrary code at runtime, including eval(), exec(), code.InteractiveConsole, and
+
+  dynamic imports via __import__() or importlib.import_module(). When these functions
+
+  receive untrusted input, attackers can achieve full remote code execution (RCE) on
+
+  the host system.'
+message: code.InteractiveConsole/interact detected. This enables arbitrary code execution.
+secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nresult = ast.literal_eval(user_expr)\n\
+  \n# Whitelist allowed modules for dynamic imports\nALLOWED_MODULES = {\"json\", \"math\", \"datetime\"\
+  }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/95.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/96.html
+  url: ''
+- title: https://owasp.org/Top10/A03_2021-Injection/
+  url: ''
+- title: https://docs.python.org/3/library/functions.html#eval
+  url: ''
+- title: https://docs.python.org/3/library/ast.html#ast.literal_eval
+  url: ''
+- title: https://docs.python.org/3/library/code.html
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

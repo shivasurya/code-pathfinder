@@ -1,0 +1,70 @@
+id: PYTHON-LANG-SEC-031
+name: Insecure SHA1 Hash Usage
+short_description: SHA-1 is cryptographically weak. Use SHA-256 or SHA-3 instead.
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-031
+cwe:
+- id: CWE-327
+  name: Use of a Broken or Risky Cryptographic Algorithm
+  url: https://cwe.mitre.org/data/definitions/327.html
+tags:
+- python
+- sha1
+- weak-hash
+- cryptography
+- owasp-a02
+- cwe-327
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'MD5 and SHA-1 are cryptographically broken hash algorithms with known collision
+
+  attacks. MD5 collisions can be generated in seconds on modern hardware, and
+
+  SHA-1 collisions have been demonstrated practically (SHAttered attack, 2017).
+
+  Using these algorithms for integrity verification, digital signatures, certificate
+
+  validation, or password hashing provides a false sense of security and exposes
+
+  applications to forgery and pre-image attacks.'
+message: SHA-1 is cryptographically weak. Use SHA-256 or SHA-3 instead.
+secure_example: 'import hashlib
+
+  # Use SHA-256 or SHA-3 for integrity verification
+
+  file_hash = hashlib.sha256(data).hexdigest()
+
+  # Use dedicated password hashing (bcrypt, scrypt, argon2)
+
+  import bcrypt
+
+  pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+
+  # SHA-3 for digital signatures
+
+  sig_hash = hashlib.sha3_256(document).hexdigest()'
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/327.html
+  url: ''
+- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  url: ''
+- title: https://docs.python.org/3/library/hashlib.html
+  url: ''
+- title: https://shattered.io/ (SHA-1 collision demonstration)
+  url: ''
+- title: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

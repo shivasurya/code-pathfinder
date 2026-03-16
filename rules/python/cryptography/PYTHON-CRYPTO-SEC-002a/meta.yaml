@@ -1,0 +1,75 @@
+id: PYTHON-CRYPTO-SEC-002a
+name: Insecure Blowfish Cipher (PyCryptodome)
+short_description: Blowfish has a 64-bit block size vulnerable to birthday attacks. Use AES instead.
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/PYTHON-CRYPTO-SEC-002a
+cwe:
+- id: CWE-327
+  name: Use of a Broken or Risky Cryptographic Algorithm
+  url: https://cwe.mitre.org/data/definitions/327.html
+tags:
+- python
+- pycryptodome
+- blowfish
+- weak-cipher
+- cwe-327
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect usage of insecure or deprecated symmetric cipher algorithms across
+
+  Python cryptographic libraries including `cryptography` (hazmat primitives) and
+
+  `PyCryptodome`/`PyCrypto`. The flagged ciphers have known cryptographic weaknesses that
+
+  make them unsuitable for protecting sensitive data.'
+message: Blowfish has a 64-bit block size vulnerable to birthday attacks. Use AES instead.
+secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+  import os
+
+
+  # SECURE: AES-256-GCM provides both confidentiality and integrity
+
+  key = AESGCM.generate_key(bit_length=256)
+
+  aesgcm = AESGCM(key)
+
+  nonce = os.urandom(12)
+
+  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
+
+
+  # Or use ChaCha20-Poly1305
+
+  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+  key = ChaCha20Poly1305.generate_key()
+
+  chacha = ChaCha20Poly1305(key)
+
+  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
+recommendations: []
+references:
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm (https://cwe.mitre.org/data/definitions/327.html)'
+  url: ''
+- title: 'RFC 7465: Prohibiting RC4 Cipher Suites (https://tools.ietf.org/html/rfc7465)'
+  url: ''
+- title: 'Sweet32: Birthday attacks on 64-bit block ciphers (https://sweet32.info/)'
+  url: ''
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
+  url: ''
+- title: OWASP Cryptographic Failures (https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

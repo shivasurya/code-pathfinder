@@ -1,0 +1,65 @@
+id: PYTHON-DJANGO-SEC-081
+name: Django Default Empty Password Value
+short_description: Password default value may be empty string. Use None as default.
+severity: HIGH
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-081
+cwe:
+- id: CWE-521
+  name: Weak Password Requirements
+  url: https://cwe.mitre.org/data/definitions/521.html
+tags:
+- python
+- django
+- password
+- default
+- owasp-a07
+- cwe-521
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect weak password handling patterns in Django applications where passwords
+
+  may be set to empty strings or where request.POST.get() with a default empty string value
+
+  flows into set_password(). Django''s set_password() with an empty string creates a user
+
+  account with no password protection, effectively disabling authentication for that account.
+
+  The correct approach is to use None (not empty string) when no password should be set,
+
+  which makes the password unusable via Django''s set_unusable_password() mechanism.'
+message: Password default value may be empty string. Use None as default.
+secure_example: "from django.contrib.auth.models import User\nfrom django.core.exceptions import ValidationError\n\
+  \ndef reset_password(request):\n    # SECURE: Validate password is present and meets requirements\n\
+  \    password = request.POST.get('password')\n    if not password or len(password) < 8:\n        raise\
+  \ ValidationError(\"Password must be at least 8 characters\")\n    user = User.objects.get(id=request.user.id)\n\
+  \    user.set_password(password)\n    user.save()\n\ndef create_user_no_password(request):\n    # SECURE:\
+  \ Use set_unusable_password() instead of empty string\n    user = User.objects.create_user(\n      \
+  \  username=request.POST.get('username'),\n    )\n    user.set_unusable_password()  # Correct way to\
+  \ create account without password\n    user.save()\n\ndef create_user_with_validation(request):\n  \
+  \  # SECURE: Use Django's password validators\n    from django.contrib.auth.password_validation import\
+  \ validate_password\n    password = request.POST.get('password')\n    validate_password(password)  #\
+  \ Raises ValidationError if too weak\n    user = User.objects.create_user(\n        username=request.POST.get('username'),\n\
+  \        password=password,\n    )"
+recommendations: []
+references:
+- title: 'CWE-521: https://cwe.mitre.org/data/definitions/521.html'
+  url: ''
+- title: 'OWASP Authentication Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html'
+  url: ''
+- title: 'Django Password Management: https://docs.djangoproject.com/en/stable/topics/auth/passwords/'
+  url: ''
+- title: 'Django Password Validation: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A07:2021
+  name: ''
+  url: ''

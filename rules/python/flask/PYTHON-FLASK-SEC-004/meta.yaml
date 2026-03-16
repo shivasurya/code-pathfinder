@@ -1,0 +1,58 @@
+id: PYTHON-FLASK-SEC-004
+name: Flask Code Injection via eval()
+short_description: User input flows to eval(). Use ast.literal_eval() for safe evaluation.
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-004
+cwe:
+- id: CWE-95
+  name: Improper Neutralization of Directives in Dynamically Evaluated Code
+  url: https://cwe.mitre.org/data/definitions/95.html
+tags:
+- python
+- flask
+- code-injection
+- eval
+- rce
+- owasp-a03
+- cwe-95
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: "These rules detect code injection vulnerabilities in Flask applications where user-controlled\n\
+  input flows into Python's dynamic code evaluation functions. Two attack vectors are covered:\n\n- **SEC-004**:\
+  \ Detects flows from Flask request data to eval(), which evaluates a string as\n  a Python expression\
+  \ and returns its result. Attackers can execute arbitrary expressions\n  including function calls, attribute\
+  \ access, and import statements.\n\n- **SEC-005**: Detects flows from Flask request data to exec() and\
+  \ compile(), which execute\n  arbitrary Python statements. Unlike eval(), exec() can execute multi-line\
+  \ code blocks,\n  import modules, define classes, and perform any Python operation.\n\nThese are among\
+  \ the most dangerous injection vulnerabilities because they provide direct\narbitrary code execution\
+  \ within the Python interpreter, with the full privileges of the\napplication process."
+message: User input flows to eval(). Use ast.literal_eval() for safe evaluation.
+secure_example: "from flask import Flask, request\nimport ast\nimport json\n\napp = Flask(__name__)\n\n\
+  @app.route('/calculate')\ndef calculate():\n    expression = request.args.get('expr')\n    # SAFE: ast.literal_eval\
+  \ only evaluates literals (strings, numbers, tuples, etc.)\n    try:\n        result = ast.literal_eval(expression)\n\
+  \    except (ValueError, SyntaxError):\n        return {'error': 'Invalid expression'}, 400\n    return\
+  \ {'result': result}\n\n# For math expressions, use a dedicated safe parser\n# For structured data,\
+  \ use json.loads()"
+recommendations: []
+references:
+- title: 'CWE-95: https://cwe.mitre.org/data/definitions/95.html'
+  url: ''
+- title: 'Python eval() Security: https://nedbatchelder.com/blog/201206/eval_really_is_dangerous.html'
+  url: ''
+- title: 'Python ast.literal_eval: https://docs.python.org/3/library/ast.html#ast.literal_eval'
+  url: ''
+- title: 'OWASP Code Injection: https://owasp.org/www-community/attacks/Code_Injection'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

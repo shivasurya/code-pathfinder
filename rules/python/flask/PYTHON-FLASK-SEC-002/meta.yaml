@@ -1,0 +1,57 @@
+id: PYTHON-FLASK-SEC-002
+name: Flask Command Injection via subprocess
+short_description: User input flows to subprocess call. Use shlex.quote() or avoid shell=True.
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-002
+cwe:
+- id: CWE-78
+  name: Improper Neutralization of Special Elements used in an OS Command
+  url: https://cwe.mitre.org/data/definitions/78.html
+tags:
+- python
+- flask
+- command-injection
+- subprocess
+- owasp-a03
+- cwe-78
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: "These rules detect OS command injection vulnerabilities in Flask applications where\nuser-controlled\
+  \ input from HTTP request parameters flows into system command execution\nfunctions. Two distinct attack\
+  \ surfaces are covered:\n\n- **SEC-001**: Detects flows to os.system(), os.popen(), and related os module\
+  \ functions\n  that execute shell commands as a single string, making them inherently vulnerable to\n\
+  \  shell metacharacter injection.\n\n- **SEC-002**: Detects flows to subprocess module functions (subprocess.call,\
+  \ subprocess.run,\n  subprocess.Popen, etc.) where user input may be passed as part of a command string,\n\
+  \  especially when shell=True is used.\n\nCommand injection allows attackers to execute arbitrary operating\
+  \ system commands on the\nserver hosting the Flask application, typically leading to full system compromise."
+message: User input flows to subprocess call. Use shlex.quote() or avoid shell=True.
+secure_example: "from flask import Flask, request\nimport subprocess\nimport shlex\n\napp = Flask(__name__)\n\
+  \n@app.route('/ping')\ndef ping_host():\n    host = request.args.get('host')\n    # SAFE: Use subprocess\
+  \ with list arguments (no shell interpretation)\n    result = subprocess.run(['ping', '-c', '3', host],\
+  \ capture_output=True, text=True)\n    return result.stdout\n\n@app.route('/lookup')\ndef dns_lookup():\n\
+  \    domain = request.args.get('domain')\n    # SAFE: shlex.quote() escapes shell metacharacters\n \
+  \   safe_domain = shlex.quote(domain)\n    result = subprocess.check_output(['nslookup', safe_domain])\n\
+  \    return result"
+recommendations: []
+references:
+- title: 'CWE-78: https://cwe.mitre.org/data/definitions/78.html'
+  url: ''
+- title: 'OWASP Command Injection: https://owasp.org/www-community/attacks/Command_Injection'
+  url: ''
+- title: 'Python subprocess documentation: https://docs.python.org/3/library/subprocess.html'
+  url: ''
+- title: 'Python shlex.quote: https://docs.python.org/3/library/shlex.html#shlex.quote'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

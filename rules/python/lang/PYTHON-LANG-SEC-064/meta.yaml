@@ -1,0 +1,73 @@
+id: PYTHON-LANG-SEC-064
+name: telnetlib Usage Detected
+short_description: telnetlib transmits data in plaintext. Use SSH (paramiko) instead.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-064
+cwe:
+- id: CWE-319
+  name: Cleartext Transmission of Sensitive Information
+  url: https://cwe.mitre.org/data/definitions/319.html
+tags:
+- python
+- telnet
+- insecure-transport
+- plaintext
+- cwe-319
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Transmitting sensitive data over unencrypted channels (HTTP, FTP, Telnet) exposes
+
+  it to interception by network-level attackers through traffic sniffing,
+
+  man-in-the-middle (MITM) attacks, or ARP spoofing. Python''s requests library,
+
+  urllib module, ftplib, and telnetlib can all be configured to communicate over
+
+  plaintext protocols that provide no confidentiality or integrity guarantees.'
+message: telnetlib transmits data in plaintext. Use SSH (paramiko) instead.
+secure_example: 'import requests, ftplib
+
+  # Always use HTTPS for network requests
+
+  response = requests.get("https://api.example.com/users")
+
+  # Use FTP over TLS (FTPS)
+
+  ftp = ftplib.FTP_TLS("ftp.example.com")
+
+  ftp.auth()  # Establish TLS
+
+  ftp.login("user", "password")  # Encrypted
+
+  # Use SSH (paramiko) instead of telnet
+
+  import paramiko
+
+  ssh = paramiko.SSHClient()
+
+  ssh.connect("server.example.com", username="user", key_filename="key.pem")'
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/319.html
+  url: ''
+- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  url: ''
+- title: https://docs.python.org/3/library/ftplib.html#ftplib.FTP_TLS
+  url: ''
+- title: https://docs.python.org/3/library/http.client.html#http.client.HTTPSConnection
+  url: ''
+- title: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

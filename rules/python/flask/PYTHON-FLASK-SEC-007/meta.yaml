@@ -1,0 +1,65 @@
+id: PYTHON-FLASK-SEC-007
+name: Flask Path Traversal via open()
+short_description: User input flows to open(). Use os.path.basename() or werkzeug.utils.secure_filename().
+severity: HIGH
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-007
+cwe:
+- id: CWE-22
+  name: Improper Limitation of a Pathname to a Restricted Directory
+  url: https://cwe.mitre.org/data/definitions/22.html
+tags:
+- python
+- flask
+- path-traversal
+- file-access
+- owasp-a01
+- cwe-22
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects path traversal vulnerabilities in Flask applications where user-controlled
+
+  input flows into file system open() calls without proper sanitization. When an attacker
+
+  supplies directory traversal sequences such as `../` in a filename parameter, they can
+
+  escape the intended directory and access arbitrary files on the server''s file system.
+
+
+  Path traversal is a fundamental file system access control vulnerability. In Flask web
+
+  applications, it commonly occurs when route handlers accept user-supplied filenames or
+
+  paths from request parameters and pass them directly to Python''s built-in open() function
+
+  or io.open() without stripping or validating the path components.'
+message: User input flows to open(). Use os.path.basename() or werkzeug.utils.secure_filename().
+secure_example: "from flask import Flask, request, abort\nfrom werkzeug.utils import secure_filename\n\
+  import os\n\napp = Flask(__name__)\nUPLOAD_DIR = '/uploads'\n\n@app.route('/download')\ndef download_file():\n\
+  \    filename = request.args.get('file')\n    # SAFE: secure_filename strips directory separators and\
+  \ traversal sequences\n    safe_name = secure_filename(filename)\n    filepath = os.path.join(UPLOAD_DIR,\
+  \ safe_name)\n\n    # Additional check: ensure resolved path is within allowed directory\n    if not\
+  \ os.path.realpath(filepath).startswith(os.path.realpath(UPLOAD_DIR)):\n        abort(403)\n\n    with\
+  \ open(filepath, 'r') as f:\n        return f.read()"
+recommendations: []
+references:
+- title: 'CWE-22: https://cwe.mitre.org/data/definitions/22.html'
+  url: ''
+- title: 'OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal'
+  url: ''
+- title: 'Werkzeug secure_filename: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.secure_filename'
+  url: ''
+- title: 'Flask File Uploads: https://flask.palletsprojects.com/en/latest/patterns/fileuploads/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A01:2021
+  name: ''
+  url: ''

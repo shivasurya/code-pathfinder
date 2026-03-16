@@ -1,0 +1,66 @@
+id: PYTHON-DJANGO-SEC-052
+name: Django html_safe() Usage (Audit)
+short_description: html_safe() marks output as safe HTML. Ensure content is properly sanitized.
+severity: MEDIUM
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-052
+cwe:
+- id: CWE-79
+  name: Improper Neutralization of Input During Web Page Generation
+  url: https://cwe.mitre.org/data/definitions/79.html
+tags:
+- python
+- django
+- xss
+- html-safe
+- audit
+- cwe-79
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect Cross-Site Scripting (XSS) vulnerabilities in Django applications.
+
+  Django provides automatic HTML escaping in templates by default, but developers can bypass
+
+  this protection by using HttpResponse directly with user input, calling mark_safe() on
+
+  untrusted data, using the html_safe() decorator, or extending SafeString. When user-controlled
+
+  input is rendered as unescaped HTML in the browser, attackers can inject malicious JavaScript
+
+  that executes in the context of the victim''s session.'
+message: html_safe() marks output as safe HTML. Ensure content is properly sanitized.
+secure_example: "from django.http import HttpResponse\nfrom django.utils.html import escape, strip_tags\n\
+  from django.template import loader\n\ndef greet_user(request):\n    # SECURE: Use Django template with\
+  \ auto-escaping\n    template = loader.get_template('greet.html')\n    name = request.GET.get('name',\
+  \ '')\n    return HttpResponse(template.render({'name': name}))\n    # Django templates auto-escape\
+  \ {{ name }} by default\n\ndef greet_user_direct(request):\n    # SECURE: Explicitly escape user input\
+  \ in HttpResponse\n    name = escape(request.GET.get('name', ''))\n    return HttpResponse(\"<h1>Hello,\
+  \ \" + name + \"!</h1>\")\n\ndef render_comment(request):\n    # SECURE: Sanitize before marking as\
+  \ safe, or use template auto-escaping\n    comment = request.POST.get('comment', '')\n    # Option 1:\
+  \ Strip all HTML tags\n    clean_comment = strip_tags(comment)\n    # Option 2: Use bleach to allow\
+  \ safe HTML subset\n    # clean_comment = bleach.clean(comment, tags=['b', 'i', 'em', 'strong'])\n \
+  \   return render(request, 'comment.html', {'comment': clean_comment})"
+recommendations: []
+references:
+- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
+  url: ''
+- title: 'OWASP XSS: https://owasp.org/www-community/attacks/xss/'
+  url: ''
+- title: 'OWASP XSS Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html'
+  url: ''
+- title: 'Django auto-escaping: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-scripting-xss-protection'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

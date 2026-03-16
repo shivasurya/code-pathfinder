@@ -1,0 +1,58 @@
+id: PYTHON-LANG-SEC-020
+name: Dangerous subprocess Usage
+short_description: subprocess call detected. Ensure arguments are not user-controlled.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-020
+cwe:
+- id: CWE-78
+  name: Improper Neutralization of Special Elements used in an OS Command
+  url: https://cwe.mitre.org/data/definitions/78.html
+tags:
+- python
+- subprocess
+- command-injection
+- owasp-a03
+- cwe-78
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'The subprocess module is Python''s recommended interface for spawning child
+
+  processes. However, when subprocess calls use shell=True or accept unsanitized
+
+  user input as command arguments, they become vulnerable to OS command injection.
+
+  The asyncio module provides asynchronous equivalents (create_subprocess_shell)
+
+  that carry the same risks. Python''s experimental subinterpreters API allows
+
+  executing arbitrary code strings in isolated interpreters.'
+message: subprocess call detected. Ensure arguments are not user-controlled.
+secure_example: "import subprocess\n# Pass arguments as a list (no shell interpretation)\nsubprocess.run([\"\
+  grep\", user_input, \"log\"], check=True)\n# Use asyncio exec variant (no shell)\nawait asyncio.create_subprocess_exec(\"\
+  grep\", user_input, \"log\")\n# Validate and restrict allowed commands\nALLOWED_COMMANDS = {\"ls\",\
+  \ \"grep\", \"wc\"}\nif cmd not in ALLOWED_COMMANDS:\n    raise ValueError(\"Command not allowed\")"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/78.html
+  url: ''
+- title: https://owasp.org/Top10/A03_2021-Injection/
+  url: ''
+- title: https://docs.python.org/3/library/subprocess.html#security-considerations
+  url: ''
+- title: https://docs.python.org/3/library/asyncio-subprocess.html
+  url: ''
+- title: https://docs.python.org/3/library/shlex.html#shlex.split
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

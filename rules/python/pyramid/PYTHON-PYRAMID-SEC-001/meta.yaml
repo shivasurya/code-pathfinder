@@ -1,0 +1,62 @@
+id: PYTHON-PYRAMID-SEC-001
+name: Pyramid CSRF Check Disabled Globally
+short_description: CSRF protection disabled globally via set_default_csrf_options(require_csrf=False).
+severity: HIGH
+category: pyramid
+language: python
+ruleset: python/PYTHON-PYRAMID-SEC-001
+cwe:
+- id: CWE-352
+  name: Cross-Site Request Forgery (CSRF)
+  url: https://cwe.mitre.org/data/definitions/352.html
+tags:
+- python
+- pyramid
+- csrf
+- security
+- owasp-a05
+- cwe-352
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect common security vulnerabilities in Python Pyramid web applications,
+
+  covering three critical categories: CSRF protection bypass, Cross-Site Scripting (XSS)
+
+  via direct response construction, and SQL injection through SQLAlchemy raw queries.'
+message: CSRF protection disabled globally via set_default_csrf_options(require_csrf=False).
+secure_example: "from pyramid.config import Configurator\nfrom pyramid.response import Response\nfrom\
+  \ markupsafe import escape\nfrom sqlalchemy import text\n\n# SECURE: CSRF protection enabled (default)\n\
+  config = Configurator()\nconfig.set_default_csrf_options(require_csrf=True, token='csrf_token')\n\n\
+  # SECURE: Escape user input or use templates with auto-escaping\n@view_config(route_name='greet', renderer='templates/greet.jinja2')\n\
+  def greet(request):\n    name = request.params.get('name', '')\n    return {'name': name}  # Jinja2\
+  \ auto-escapes by default\n\n# Or if using Response directly:\n@view_config(route_name='greet')\ndef\
+  \ greet_safe(request):\n    name = escape(request.params.get('name', ''))\n    return Response(f'<h1>Hello,\
+  \ {name}!</h1>')\n\n# SECURE: Parameterized SQL queries\n@view_config(route_name='search')\ndef search(request):\n\
+  \    query = request.params.get('q', '')\n    results = DBSession.query(User).filter(\n        User.name.like(f'%{query}%')\
+  \  # ORM method - safe\n    ).all()\n    # Or with raw SQL using bindparams:\n    stmt = text(\"SELECT\
+  \ * FROM users WHERE name LIKE :q\").bindparams(q=f'%{query}%')\n    return {'results': results}"
+recommendations: []
+references:
+- title: 'CWE-352: Cross-Site Request Forgery (https://cwe.mitre.org/data/definitions/352.html)'
+  url: ''
+- title: 'CWE-79: Cross-Site Scripting (https://cwe.mitre.org/data/definitions/79.html)'
+  url: ''
+- title: 'CWE-89: SQL Injection (https://cwe.mitre.org/data/definitions/89.html)'
+  url: ''
+- title: Pyramid Security Documentation (https://docs.pylonsproject.org/projects/pyramid/en/latest/narr/security.html)
+  url: ''
+- title: OWASP CSRF Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+  url: ''
+- title: OWASP SQL Injection Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A05:2021
+  name: ''
+  url: ''

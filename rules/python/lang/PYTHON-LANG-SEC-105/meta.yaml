@@ -1,0 +1,70 @@
+id: PYTHON-LANG-SEC-105
+name: Logger Credential Leak Risk
+short_description: Logging call detected. Audit log statements for credential/secret leakage.
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-105
+cwe:
+- id: CWE-532
+  name: Insertion of Sensitive Information into Log File
+  url: https://cwe.mitre.org/data/definitions/532.html
+tags:
+- python
+- logging
+- credentials
+- information-disclosure
+- cwe-532
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This module covers a range of security concerns that span multiple vulnerability
+
+  categories. These include predictable UUID generation that leaks host information,
+
+  overly permissive file permissions that expose sensitive files, hardcoded
+
+  credentials in source code, regular expression patterns susceptible to
+
+  denial-of-service through catastrophic backtracking, unsafe logging configuration
+
+  listeners that evaluate arbitrary code, and logging statements that may
+
+  inadvertently record sensitive credentials.'
+message: Logging call detected. Audit log statements for credential/secret leakage.
+secure_example: "import uuid, os, re\n# Use uuid4 for cryptographically random UUIDs\nsession_id = str(uuid.uuid4())\n\
+  # Restrictive file permissions (owner read/write only)\nos.chmod(\"/app/config.ini\", 0o600)\n# Load\
+  \ passwords from environment or secrets manager\ndef connect_db(host, password=None):\n    password\
+  \ = password or os.environ[\"DB_PASSWORD\"]\n# Use atomic groups or possessive quantifiers to prevent\
+  \ backtracking\npattern = re.compile(r\"a+$\")  # Simplified non-vulnerable pattern\n# Never log credentials\n\
+  logging.info(f\"User {user} logged in successfully\")"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/330.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/732.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/259.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/1333.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/532.html
+  url: ''
+- title: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  url: ''
+- title: https://docs.python.org/3/library/uuid.html
+  url: ''
+- title: https://docs.python.org/3/library/os.html#os.chmod
+  url: ''
+- title: https://www.landh.tech/blog/20230811-sandwich-attack/
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A09:2021
+  name: ''
+  url: ''

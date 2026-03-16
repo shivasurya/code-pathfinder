@@ -1,0 +1,63 @@
+id: PYTHON-LANG-SEC-071
+name: Paramiko Implicit Trust Host Key
+short_description: AutoAddPolicy/WarningPolicy trusts unknown host keys. Use RejectPolicy or verify keys.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-071
+cwe:
+- id: CWE-322
+  name: Key Exchange without Entity Authentication
+  url: https://cwe.mitre.org/data/definitions/322.html
+tags:
+- python
+- paramiko
+- ssh
+- host-key
+- mitm
+- cwe-322
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Network-facing Python applications must properly authenticate remote hosts,
+
+  restrict listening interfaces, sanitize remote commands, and safely handle
+
+  deserialized data from network connections. This module detects insecure socket
+
+  binding patterns, SSH host key verification bypass, unvalidated remote command
+
+  execution over SSH, and unsafe deserialization through multiprocessing connections.'
+message: AutoAddPolicy/WarningPolicy trusts unknown host keys. Use RejectPolicy or verify keys.
+secure_example: "import socket, paramiko\n# Bind to localhost only for internal services\nsock = socket.socket()\n\
+  sock.bind((\"127.0.0.1\", 8080))\n# Verify SSH host keys explicitly\nclient = paramiko.SSHClient()\n\
+  client.load_system_host_keys()\nclient.set_missing_host_key_policy(paramiko.RejectPolicy())\nclient.connect(host)\n\
+  # Validate commands before remote execution\nALLOWED_COMMANDS = {\"ls\", \"df\", \"uptime\"}\nif cmd\
+  \ not in ALLOWED_COMMANDS:\n    raise ValueError(\"Unauthorized command\")\nclient.exec_command(cmd)\n\
+  # Use authenticated Pipe() for multiprocessing\nparent_conn, child_conn = multiprocessing.Pipe()"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/322.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/200.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/502.html
+  url: ''
+- title: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  url: ''
+- title: https://docs.paramiko.org/en/stable/api/client.html
+  url: ''
+- title: https://docs.python.org/3/library/multiprocessing.html#multiprocessing.connection.Connection
+  url: ''
+- title: https://docs.python.org/3/library/socket.html#socket.socket.bind
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

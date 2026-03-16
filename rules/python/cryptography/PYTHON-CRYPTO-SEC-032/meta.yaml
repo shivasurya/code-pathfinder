@@ -1,0 +1,88 @@
+id: PYTHON-CRYPTO-SEC-032
+name: Unauthenticated Cipher Mode (PyCryptodome)
+short_description: AES in non-GCM/EAX/SIV mode may lack authentication. Use MODE_GCM or MODE_EAX.
+severity: MEDIUM
+category: cryptography
+language: python
+ruleset: python/PYTHON-CRYPTO-SEC-032
+cwe:
+- id: CWE-327
+  name: Use of a Broken or Risky Cryptographic Algorithm
+  url: https://cwe.mitre.org/data/definitions/327.html
+tags:
+- python
+- pycryptodome
+- cipher-mode
+- unauthenticated
+- cwe-327
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect the use of insecure or unauthenticated cipher modes in Python
+
+  cryptographic libraries. Cipher mode selection is critical to the security of symmetric
+
+  encryption: the wrong mode can leak plaintext patterns, enable ciphertext manipulation,
+
+  or allow padding oracle attacks even when using a strong cipher like AES.'
+message: AES in non-GCM/EAX/SIV mode may lack authentication. Use MODE_GCM or MODE_EAX.
+secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+  import os
+
+
+  # SECURE: AES-GCM provides both confidentiality AND integrity
+
+  key = AESGCM.generate_key(bit_length=256)
+
+  aesgcm = AESGCM(key)
+
+  nonce = os.urandom(12)
+
+  ct = aesgcm.encrypt(nonce, plaintext, associated_data=b"header")
+
+  # Tampered ciphertext will raise InvalidTag on decrypt
+
+
+  # SECURE: PyCryptodome AES-GCM
+
+  from Crypto.Cipher import AES
+
+  cipher = AES.new(key, AES.MODE_GCM)
+
+  ct, tag = cipher.encrypt_and_digest(plaintext)
+
+
+  # SECURE: If CBC is required, add HMAC (Encrypt-then-MAC)
+
+  import hmac, hashlib
+
+  cipher = Cipher(algorithms.AES(key_enc), modes.CBC(iv))
+
+  ct = cipher.encryptor().update(plaintext) + cipher.encryptor().finalize()
+
+  mac = hmac.new(key_mac, ct, hashlib.sha256).digest()
+
+  # Verify MAC before decrypting'
+recommendations: []
+references:
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm (https://cwe.mitre.org/data/definitions/327.html)'
+  url: ''
+- title: 'NIST SP 800-38A: Recommendation for Block Cipher Modes of Operation'
+  url: ''
+- title: 'The ECB Penguin: Why ECB mode is insecure (https://blog.filippo.io/the-ecb-penguin/)'
+  url: ''
+- title: 'Padding Oracle Attacks: Vaudenay (2002), POODLE (CVE-2014-3566)'
+  url: ''
+- title: OWASP Cryptographic Failures (https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

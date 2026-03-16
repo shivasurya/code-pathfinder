@@ -1,0 +1,64 @@
+id: PYTHON-LANG-SEC-013
+name: System Call with Wildcard
+short_description: os.system() with wildcard (*) detected. Wildcards may lead to unintended file inclusion.
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-013
+cwe:
+- id: CWE-78
+  name: Improper Neutralization of Special Elements used in an OS Command
+  url: https://cwe.mitre.org/data/definitions/78.html
+tags:
+- python
+- wildcard
+- command-injection
+- cwe-78
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'The Python os module provides direct access to operating system functions that
+
+  execute shell commands and spawn processes. Functions such as os.system(),
+
+  os.popen(), os.exec*(), and os.spawn*() pass arguments directly to the OS shell
+
+  or kernel. When user-controlled data reaches these functions without proper
+
+  sanitization, attackers can inject arbitrary operating system commands.'
+message: os.system() with wildcard (*) detected. Wildcards may lead to unintended file inclusion.
+secure_example: 'import subprocess
+
+  import shlex
+
+  # Use subprocess with list arguments (no shell interpretation)
+
+  subprocess.run(["ls", user_input], check=True)
+
+  # Or properly quote shell arguments
+
+  subprocess.run(f"ls {shlex.quote(user_input)}", shell=True, check=True)'
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/78.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/506.html
+  url: ''
+- title: https://owasp.org/Top10/A03_2021-Injection/
+  url: ''
+- title: https://docs.python.org/3/library/os.html#os.system
+  url: ''
+- title: https://docs.python.org/3/library/subprocess.html
+  url: ''
+- title: https://docs.python.org/3/library/shlex.html#shlex.quote
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

@@ -1,0 +1,62 @@
+id: PYTHON-DJANGO-SEC-005
+name: Raw SQL Usage Detected (Audit)
+short_description: Raw SQL usage detected. Ensure parameterized queries are used.
+severity: MEDIUM
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-005
+cwe:
+- id: CWE-89
+  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
+  url: https://cwe.mitre.org/data/definitions/89.html
+tags:
+- python
+- django
+- sql-injection
+- raw-sql
+- audit
+- cwe-89
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect SQL injection vulnerabilities in Django applications where untrusted
+
+  user input from HTTP requests flows into raw SQL queries without proper parameterization.
+
+  Django''s ORM provides safe query construction by default, but developers sometimes bypass
+
+  this protection by using raw SQL via cursor.execute(), Model.objects.raw(), QuerySet.extra(),
+
+  or RawSQL expressions. When user input reaches these functions without parameterization,
+
+  attackers can manipulate SQL queries to read, modify, or delete arbitrary database records.'
+message: Raw SQL usage detected. Ensure parameterized queries are used.
+secure_example: "from django.http import JsonResponse\nfrom django.db import connection\n\ndef search_users(request):\n\
+  \    # SECURE: Parameterized query with %s placeholder\n    username = request.GET.get('username')\n\
+  \    cursor = connection.cursor()\n    cursor.execute(\"SELECT * FROM users WHERE username = %s\", [username])\n\
+  \    results = cursor.fetchall()\n    return JsonResponse({'users': results})\n\ndef get_orders(request):\n\
+  \    # SECURE: Use Django ORM with safe filtering\n    status = request.GET.get('status')\n    orders\
+  \ = Order.objects.filter(status=status).values()\n    return JsonResponse({'orders': list(orders)})\n\
+  \ndef get_orders_raw(request):\n    # SECURE: Parameterized .raw() query\n    status = request.GET.get('status')\n\
+  \    orders = Order.objects.raw(\"SELECT * FROM orders WHERE status = %s\", [status])\n    return JsonResponse({'orders':\
+  \ list(orders)})"
+recommendations: []
+references:
+- title: 'CWE-89: https://cwe.mitre.org/data/definitions/89.html'
+  url: ''
+- title: 'OWASP SQL Injection: https://owasp.org/www-community/attacks/SQL_Injection'
+  url: ''
+- title: 'Django Raw SQL: https://docs.djangoproject.com/en/stable/topics/db/sql/'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

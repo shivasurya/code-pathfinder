@@ -1,0 +1,62 @@
+id: PYTHON-DJANGO-SEC-040
+name: Django Path Traversal via open()
+short_description: User input flows to open(). Validate file paths with os.path.realpath().
+severity: HIGH
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-040
+cwe:
+- id: CWE-22
+  name: Improper Limitation of a Pathname to a Restricted Directory
+  url: https://cwe.mitre.org/data/definitions/22.html
+tags:
+- python
+- django
+- path-traversal
+- open
+- owasp-a01
+- cwe-22
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect path traversal vulnerabilities in Django applications where untrusted
+
+  user input from HTTP requests flows into file system operations such as open(), os.path.join(),
+
+  or other file access functions. Path traversal (also known as directory traversal) occurs when
+
+  user-controlled input containing sequences like "../" is used to construct file paths, allowing
+
+  attackers to escape the intended directory and access arbitrary files on the server''s file system.'
+message: User input flows to open(). Validate file paths with os.path.realpath().
+secure_example: "from django.http import HttpResponse, FileResponse, Http404\nimport os\n\nUPLOAD_DIR\
+  \ = '/var/www/uploads/'\n\ndef download_file(request):\n    # SECURE: Validate resolved path stays within\
+  \ allowed directory\n    filename = request.GET.get('file', '')\n    # Use basename to strip directory\
+  \ traversal sequences\n    safe_name = os.path.basename(filename)\n    filepath = os.path.join(UPLOAD_DIR,\
+  \ safe_name)\n    # Double-check with realpath\n    real_path = os.path.realpath(filepath)\n    if not\
+  \ real_path.startswith(os.path.realpath(UPLOAD_DIR)):\n        raise Http404(\"File not found\")\n \
+  \   if not os.path.isfile(real_path):\n        raise Http404(\"File not found\")\n    return FileResponse(open(real_path,\
+  \ 'rb'))\n\ndef read_template(request):\n    # SECURE: Allowlist of permitted templates\n    ALLOWED_TEMPLATES\
+  \ = {'header.html', 'footer.html', 'sidebar.html'}\n    template = request.GET.get('template', '')\n\
+  \    if template not in ALLOWED_TEMPLATES:\n        raise Http404(\"Template not found\")\n    filepath\
+  \ = os.path.join('/app/templates/', template)\n    with open(filepath) as f:\n        return HttpResponse(f.read())"
+recommendations: []
+references:
+- title: 'CWE-22: https://cwe.mitre.org/data/definitions/22.html'
+  url: ''
+- title: 'OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal'
+  url: ''
+- title: 'Python os.path documentation: https://docs.python.org/3/library/os.path.html'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A01:2021
+  name: ''
+  url: ''

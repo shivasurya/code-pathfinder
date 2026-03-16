@@ -1,0 +1,67 @@
+id: PYTHON-LAMBDA-SEC-021
+name: Lambda Tainted HTML String
+short_description: Lambda event data in HTML string construction. Use html.escape().
+severity: MEDIUM
+category: aws_lambda
+language: python
+ruleset: python/PYTHON-LAMBDA-SEC-021
+cwe:
+- id: CWE-79
+  name: Improper Neutralization of Input During Web Page Generation
+  url: https://cwe.mitre.org/data/definitions/79.html
+tags:
+- python
+- aws
+- lambda
+- xss
+- html-string
+- owasp-a03
+- cwe-79
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect Cross-Site Scripting (XSS), code injection, and unsafe deserialization
+
+  vulnerabilities in AWS Lambda functions. When Lambda functions serve as API Gateway backends
+
+  or process untrusted event data, these vulnerabilities can lead to client-side attacks,
+
+  remote code execution, and full server-side compromise.'
+message: Lambda event data in HTML string construction. Use html.escape().
+secure_example: "import json\nimport html\nimport ast\n\ndef lambda_handler(event, context):\n    # SECURE:\
+  \ HTML-escape user input before embedding in response\n    name = html.escape(event.get('name', ''))\n\
+  \    body = f'<html><body><h1>Hello, {name}!</h1></body></html>'\n    return {\n        'statusCode':\
+  \ 200,\n        'headers': {'Content-Type': 'text/html'},\n        'body': body\n    }\n\ndef process_handler(event,\
+  \ context):\n    # SECURE: Use ast.literal_eval() for safe expression parsing\n    expression = event.get('calc',\
+  \ '')\n    try:\n        result = ast.literal_eval(expression)  # Only parses literals\n    except (ValueError,\
+  \ SyntaxError):\n        return {'statusCode': 400, 'body': 'Invalid expression'}\n\n    # SECURE: Use\
+  \ JSON instead of pickle for deserialization\n    data = event.get('data', '{}')\n    try:\n       \
+  \ obj = json.loads(data)  # Safe - no code execution\n    except json.JSONDecodeError:\n        return\
+  \ {'statusCode': 400, 'body': 'Invalid JSON'}\n\n    # SECURE: Use allowlist for operations instead\
+  \ of eval/exec\n    ALLOWED_OPS = {'add': lambda a, b: a + b, 'sub': lambda a, b: a - b}\n    op = event.get('operation',\
+  \ '')\n    if op not in ALLOWED_OPS:\n        return {'statusCode': 400, 'body': 'Invalid operation'}\n\
+  \n    return {'statusCode': 200, 'body': json.dumps({'result': str(result)})}"
+recommendations: []
+references:
+- title: 'CWE-79: Cross-Site Scripting (https://cwe.mitre.org/data/definitions/79.html)'
+  url: ''
+- title: 'CWE-95: Eval Injection (https://cwe.mitre.org/data/definitions/95.html)'
+  url: ''
+- title: 'CWE-502: Deserialization of Untrusted Data (https://cwe.mitre.org/data/definitions/502.html)'
+  url: ''
+- title: OWASP XSS Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html)
+  url: ''
+- title: AWS Lambda Security Best Practices (https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
+  url: ''
+- title: OWASP Injection (https://owasp.org/Top10/A03_2021-Injection/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

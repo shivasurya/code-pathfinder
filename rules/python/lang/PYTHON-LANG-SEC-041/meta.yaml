@@ -1,0 +1,60 @@
+id: PYTHON-LANG-SEC-041
+name: PyYAML Unsafe Load
+short_description: yaml.load() or yaml.unsafe_load() detected. Use yaml.safe_load() instead.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-041
+cwe:
+- id: CWE-502
+  name: Deserialization of Untrusted Data
+  url: https://cwe.mitre.org/data/definitions/502.html
+tags:
+- python
+- yaml
+- deserialization
+- rce
+- owasp-a08
+- cwe-502
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Python''s pickle module and its derivatives (dill, shelve, jsonpickle) can
+
+  instantiate arbitrary Python objects during deserialization, enabling remote
+
+  code execution when processing untrusted data. Similarly, PyYAML''s yaml.load()
+
+  and ruamel.yaml with unsafe type settings can construct arbitrary Python objects
+
+  from YAML input. The marshal module, while not designed for security, also
+
+  deserializes binary data without validation.'
+message: yaml.load() or yaml.unsafe_load() detected. Use yaml.safe_load() instead.
+secure_example: "import json, yaml\n# Use JSON for data interchange (no code execution)\ndata = json.loads(network_data)\n\
+  # Use SafeLoader for YAML parsing\nconfig = yaml.safe_load(user_yaml_string)\n# Use hmac signing to\
+  \ verify pickle integrity (defense in depth)\nimport hmac, hashlib\nexpected_sig = hmac.new(secret_key,\
+  \ data, hashlib.sha256).digest()\nif not hmac.compare_digest(expected_sig, received_sig):\n    raise\
+  \ ValueError(\"Tampered data\")"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/502.html
+  url: ''
+- title: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  url: ''
+- title: https://docs.python.org/3/library/pickle.html#restricting-globals
+  url: ''
+- title: https://pyyaml.org/wiki/PyYAMLDocumentation
+  url: ''
+- title: https://docs.python.org/3/library/marshal.html
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A08:2021
+  name: ''
+  url: ''

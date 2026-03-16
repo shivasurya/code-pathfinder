@@ -1,0 +1,72 @@
+id: PYTHON-FLASK-SEC-014
+name: Flask Server-Side Template Injection
+short_description: User input flows to render_template_string(). Use render_template() with separate template
+  files.
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-014
+cwe:
+- id: CWE-96
+  name: Improper Neutralization of Directives in Statically Saved Code
+  url: https://cwe.mitre.org/data/definitions/96.html
+tags:
+- python
+- flask
+- ssti
+- template-injection
+- rce
+- owasp-a03
+- cwe-96
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects Server-Side Template Injection (SSTI) vulnerabilities in Flask applications
+
+  where user-controlled input flows into render_template_string(). Unlike render_template()
+
+  which loads templates from files, render_template_string() compiles and renders a Jinja2
+
+  template from a string argument. When user input is embedded in that template string,
+
+  attackers can inject Jinja2 template directives that execute arbitrary Python code on the
+
+  server.
+
+
+  SSTI in Jinja2 is especially dangerous because the template engine provides access to
+
+  Python''s object hierarchy. Attackers can traverse from basic objects through __class__,
+
+  __mro__, __subclasses__(), and __globals__ to reach arbitrary Python functions including
+
+  os.system(), subprocess.Popen(), and import mechanisms.'
+message: User input flows to render_template_string(). Use render_template() with separate template files.
+secure_example: "from flask import Flask, request, render_template, render_template_string\n\napp = Flask(__name__)\n\
+  \n@app.route('/hello')\ndef hello():\n    name = request.args.get('name', 'World')\n    # SAFE Option\
+  \ 1: Use render_template with a file-based template\n    return render_template('hello.html', name=name)\n\
+  \n@app.route('/hello-inline')\ndef hello_inline():\n    name = request.args.get('name', 'World')\n \
+  \   # SAFE Option 2: Pass user input as a template variable, never in the template string\n    return\
+  \ render_template_string('<h1>Hello, {{ name }}!</h1>', name=name)"
+recommendations: []
+references:
+- title: 'CWE-96: https://cwe.mitre.org/data/definitions/96.html'
+  url: ''
+- title: 'Flask Jinja2 SSTI: https://nvisium.com/blog/2016/03/09/exploring-ssti-in-flask-jinja2.html'
+  url: ''
+- title: 'Jinja2 SSTI Cheat Sheet: https://pequalsnp-team.github.io/cheatsheet/flask-jinja2-ssti'
+  url: ''
+- title: 'Jinja2 Sandbox: https://jinja.palletsprojects.com/en/latest/sandbox/'
+  url: ''
+- title: 'Flask render_template_string: https://flask.palletsprojects.com/en/latest/api/#flask.render_template_string'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

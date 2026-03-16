@@ -1,0 +1,68 @@
+id: PYTHON-LANG-SEC-093
+name: Mako Template Detected
+short_description: Mako templates do not sandbox expressions. Ensure templates are trusted.
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-093
+cwe:
+- id: CWE-96
+  name: Improper Neutralization of Directives in Statically Saved Code
+  url: https://cwe.mitre.org/data/definitions/96.html
+tags:
+- python
+- mako
+- template
+- ssti
+- cwe-96
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Python''s standard library XML parsers (xml.etree.ElementTree, xml.dom.minidom,
+
+  xml.sax, xml.dom.pulldom) are vulnerable to XML External Entity (XXE) attacks by
+
+  default. XXE allows attackers to read local files, perform server-side request
+
+  forgery (SSRF), and in some configurations achieve remote code execution through
+
+  crafted XML documents. The xmlrpc module is similarly vulnerable. Mako templates
+
+  execute embedded Python expressions without sandboxing, enabling server-side
+
+  template injection (SSTI). CSV writers that do not sanitize cell values may allow
+
+  formula injection in spreadsheet applications.'
+message: Mako templates do not sandbox expressions. Ensure templates are trusted.
+secure_example: "# Use defusedxml for safe XML parsing\nimport defusedxml.ElementTree as ET\ntree = ET.parse(user_uploaded_xml)\
+  \  # XXE protection enabled\nimport defusedxml.minidom\ndoc = defusedxml.minidom.parseString(user_xml_string)\n\
+  # Restrict Mako templates to trusted sources only\nfrom mako.template import Template\nt = Template(filename=\"\
+  /app/templates/report.html\")  # Trusted file, not user input\n# Sanitize CSV cell values to prevent\
+  \ formula injection\ndef sanitize_csv_value(value):\n    if isinstance(value, str) and value and value[0]\
+  \ in \"=+-@\":\n        return \"'\" + value  # Prefix with single quote\n    return value"
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/611.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/96.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/1236.html
+  url: ''
+- title: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  url: ''
+- title: https://pypi.org/project/defusedxml/
+  url: ''
+- title: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
+  url: ''
+- title: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

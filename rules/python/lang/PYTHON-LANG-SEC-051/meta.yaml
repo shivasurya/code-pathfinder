@@ -1,0 +1,79 @@
+id: PYTHON-LANG-SEC-051
+name: Weak SSL/TLS Protocol Version
+short_description: Weak SSL/TLS version detected (SSLv2/3 or TLSv1/1.1). Use TLS 1.2+ minimum.
+severity: HIGH
+category: lang
+language: python
+ruleset: python/PYTHON-LANG-SEC-051
+cwe:
+- id: CWE-326
+  name: Inadequate Encryption Strength
+  url: https://cwe.mitre.org/data/definitions/326.html
+tags:
+- python
+- ssl
+- weak-tls
+- protocol-version
+- cwe-326
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Proper SSL/TLS configuration is essential for establishing secure encrypted
+
+  communication channels. Python''s ssl module provides fine-grained control over
+
+  TLS protocol versions, certificate verification, and cipher suites. Misconfigurations
+
+  such as disabling certificate verification, using deprecated protocol versions
+
+  (SSLv2, SSLv3, TLS 1.0, TLS 1.1), or using the deprecated ssl.wrap_socket()
+
+  function undermine transport security and expose applications to interception.'
+message: Weak SSL/TLS version detected (SSLv2/3 or TLSv1/1.1). Use TLS 1.2+ minimum.
+secure_example: 'import ssl, requests
+
+  # Use default context with proper certificate verification
+
+  ctx = ssl.create_default_context()
+
+  response = requests.get("https://api.example.com")  # verify=True is default
+
+  # Enforce minimum TLS 1.2
+
+  ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+  ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+
+  # Use SSLContext.wrap_socket with hostname checking
+
+  ctx = ssl.create_default_context()
+
+  secure_sock = ctx.wrap_socket(sock, server_hostname="api.example.com")
+
+  # Always use HTTPS
+
+  conn = http.client.HTTPSConnection("api.example.com")'
+recommendations: []
+references:
+- title: https://cwe.mitre.org/data/definitions/295.html
+  url: ''
+- title: https://cwe.mitre.org/data/definitions/326.html
+  url: ''
+- title: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  url: ''
+- title: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
+  url: ''
+- title: https://docs.python.org/3/library/ssl.html#ssl-security
+  url: ''
+- title: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

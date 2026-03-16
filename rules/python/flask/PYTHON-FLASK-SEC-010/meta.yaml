@@ -1,0 +1,58 @@
+id: PYTHON-FLASK-SEC-010
+name: Flask NaN Injection
+short_description: User input flows to float() which may produce NaN/Inf. Validate numeric input.
+severity: LOW
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-010
+cwe:
+- id: CWE-704
+  name: CWE-704
+  url: https://cwe.mitre.org/data/definitions/704.html
+tags:
+- python
+- flask
+- nan-injection
+- type-confusion
+- cwe-704
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: This module contains three distinct injection detection rules for Flask applications targeting
+message: User input flows to float() which may produce NaN/Inf. Validate numeric input.
+secure_example: "from flask import Flask, request\nimport csv, io, requests, math\n\napp = Flask(__name__)\n\
+  \ndef sanitize_csv_value(value):\n    \\\"\\\"\\\"Strip leading formula characters from CSV values.\\\
+  \"\\\"\\\"\n    if isinstance(value, str) and value and value[0] in ('=', '+', '-', '@'):\n        return\
+  \ \"'\" + value  # Prefix with single quote to prevent formula execution\n    return value\n\n@app.route('/export')\n\
+  def export_csv():\n    name = request.args.get('name')\n    writer = csv.writer(io.StringIO())\n   \
+  \ # SAFE: Sanitize before writing to CSV\n    writer.writerow([sanitize_csv_value(name), 'data'])\n\n\
+  @app.route('/convert')\ndef convert():\n    value = request.args.get('value')\n    num = float(value)\n\
+  \    # SAFE: Reject NaN and Inf values\n    if math.isnan(num) or math.isinf(num):\n        return {'error':\
+  \ 'Invalid number'}, 400\n    return {'result': num}\n\nALLOWED_HOSTS = {'api.example.com', 'cdn.example.com'}\n\
+  \n@app.route('/proxy')\ndef proxy():\n    host = request.args.get('host')\n    # SAFE: Validate host\
+  \ against allowlist\n    if host not in ALLOWED_HOSTS:\n        return {'error': 'Host not allowed'},\
+  \ 403\n    response = requests.get(f'https://{host}/api/data')\n    return response.text"
+recommendations: []
+references:
+- title: 'CWE-1236: https://cwe.mitre.org/data/definitions/1236.html'
+  url: ''
+- title: 'CWE-704: https://cwe.mitre.org/data/definitions/704.html'
+  url: ''
+- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
+  url: ''
+- title: 'OWASP CSV Injection: https://owasp.org/www-community/attacks/CSV_Injection'
+  url: ''
+- title: 'OWASP SSRF Prevention: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
+  url: ''
+- title: 'defusedcsv library: https://github.com/raphaelm/defusedcsv'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

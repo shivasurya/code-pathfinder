@@ -1,0 +1,67 @@
+id: PYTHON-FLASK-SEC-012
+name: Flask Open Redirect
+short_description: User input flows to redirect(). Validate redirect URLs against an allowlist.
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-012
+cwe:
+- id: CWE-601
+  name: URL Redirection to Untrusted Site
+  url: https://cwe.mitre.org/data/definitions/601.html
+tags:
+- python
+- flask
+- open-redirect
+- owasp-a01
+- cwe-601
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects open redirect vulnerabilities in Flask applications where user-controlled
+
+  input flows into redirect() function calls without URL validation. An open redirect occurs
+
+  when an application accepts a user-supplied URL or path and uses it as the destination of an
+
+  HTTP redirect response (3xx status code) without verifying that the target URL belongs to a
+
+  trusted domain.
+
+
+  Open redirects are commonly found in login flows (redirect after authentication), logout
+
+  handlers, and link shortener patterns. While sometimes considered low severity, they are
+
+  a critical component in phishing attack chains and can be combined with other vulnerabilities
+
+  for greater impact.'
+message: User input flows to redirect(). Validate redirect URLs against an allowlist.
+secure_example: "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlparse\n\
+  \napp = Flask(__name__)\n\ndef is_safe_redirect_url(target):\n    \\\"\\\"\\\"Verify the redirect URL\
+  \ is relative or points to the same host.\\\"\\\"\\\"\n    host_url = urlparse(request.host_url)\n \
+  \   redirect_url = urlparse(target)\n    return (redirect_url.scheme in ('', 'http', 'https') and\n\
+  \            redirect_url.netloc in ('', host_url.netloc))\n\n@app.route('/login', methods=['POST'])\n\
+  def login():\n    # ... authenticate user ...\n    next_url = request.args.get('next')\n    # SAFE:\
+  \ Validate redirect URL before use\n    if next_url and is_safe_redirect_url(next_url):\n        return\
+  \ redirect(next_url)\n    return redirect(url_for('index'))  # Default to known safe route"
+recommendations: []
+references:
+- title: 'CWE-601: https://cwe.mitre.org/data/definitions/601.html'
+  url: ''
+- title: 'OWASP Unvalidated Redirects: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html'
+  url: ''
+- title: 'Flask redirect(): https://flask.palletsprojects.com/en/latest/api/#flask.redirect'
+  url: ''
+- title: 'Flask url_for(): https://flask.palletsprojects.com/en/latest/api/#flask.url_for'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A01:2021
+  name: ''
+  url: ''

@@ -1,0 +1,63 @@
+id: PYTHON-FLASK-001
+name: Flask Debug Mode Enabled
+short_description: Flask debug mode enabled. Never use debug=True in production. Use a production WSGI
+  server like Gunicorn.
+severity: HIGH
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-001
+cwe:
+- id: CWE-489
+  name: Active Debug Code
+  url: https://cwe.mitre.org/data/definitions/489.html
+tags:
+- python
+- flask
+- debug-mode
+- configuration
+- information-disclosure
+- owasp-a05
+- cwe-489
+- production
+- werkzeug
+- security
+- misconfiguration
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects Flask applications configured with debug mode enabled (debug=True). Running
+
+  Flask with debug mode in production exposes the interactive Werkzeug debugger, which allows
+
+  arbitrary code execution and exposes sensitive application internals.'
+message: Flask debug mode enabled. Never use debug=True in production. Use a production WSGI server like
+  Gunicorn.
+secure_example: "import os\nfrom flask import Flask, request\n\napp = Flask(__name__)\n\n@app.route('/api/users')\n\
+  def get_users():\n    return {'users': [...]}\n\nif __name__ == '__main__':\n    # SAFE: Debug mode\
+  \ explicitly disabled\n    app.run(debug=False)\n\n    # BETTER: Use environment variable\n    debug_mode\
+  \ = os.getenv('FLASK_DEBUG', 'False') == 'True'\n    app.run(debug=debug_mode)\n\n    # BEST: Don't\
+  \ set it at all (defaults to False)\n    app.run()  # debug=False is the default"
+recommendations: []
+references:
+- title: 'CWE-489: Active Debug Code (https://cwe.mitre.org/data/definitions/489.html)'
+  url: ''
+- title: 'CVE-2015-5306: Werkzeug Debug PIN Bypass'
+  url: ''
+- title: OWASP A05:2021 - Security Misconfiguration
+  url: ''
+- title: 'Flask Security Docs: https://flask.palletsprojects.com/en/stable/security/'
+  url: ''
+- title: 'Werkzeug Documentation: https://werkzeug.palletsprojects.com/'
+  url: ''
+- title: 'Production Flask Deployment: https://flask.palletsprojects.com/en/stable/deploying/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A05:2021
+  name: ''
+  url: ''

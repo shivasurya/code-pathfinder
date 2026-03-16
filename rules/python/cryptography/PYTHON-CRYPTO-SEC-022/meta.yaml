@@ -1,0 +1,64 @@
+id: PYTHON-CRYPTO-SEC-022
+name: EC Key Generation (Audit)
+short_description: EC key generation detected. Ensure curve >= 224 bits (avoid SECP192R1).
+severity: LOW
+category: cryptography
+language: python
+ruleset: python/PYTHON-CRYPTO-SEC-022
+cwe:
+- id: CWE-326
+  name: Inadequate Encryption Strength
+  url: https://cwe.mitre.org/data/definitions/326.html
+tags:
+- python
+- cryptography
+- ec
+- elliptic-curve
+- key-size
+- audit
+- cwe-326
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules audit asymmetric key generation operations across Python cryptographic libraries
+
+  (`cryptography` and `PyCryptodome`) to flag instances where key sizes may be insufficient.
+
+  They detect RSA, DSA, and Elliptic Curve key generation calls so developers can verify that
+
+  key sizes meet current security standards.
+
+
+  These are audit-level rules: they flag key generation for manual review rather than
+
+  definitively identifying a vulnerability, since the key size parameter requires value analysis
+
+  to determine if it is adequate.'
+message: EC key generation detected. Ensure curve >= 224 bits (avoid SECP192R1).
+secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec\nfrom cryptography.hazmat.backends\
+  \ import default_backend\n\n# SECURE: RSA-3072 or higher\nprivate_key = rsa.generate_private_key(\n\
+  \    public_exponent=65537,\n    key_size=3072,\n    backend=default_backend()\n)\n\n# SECURE: DSA-2048\
+  \ or higher\nprivate_key = dsa.generate_private_key(\n    key_size=2048,\n    backend=default_backend()\n\
+  )\n\n# SECURE: Strong elliptic curve (P-256 or higher)\nprivate_key = ec.generate_private_key(\n   \
+  \ ec.SECP256R1(),  # NIST P-256\n    backend=default_backend()\n)\n\n# SECURE: PyCryptodome RSA-3072\n\
+  from Crypto.PublicKey import RSA\nkey = RSA.generate(3072)"
+recommendations: []
+references:
+- title: 'CWE-326: Inadequate Encryption Strength (https://cwe.mitre.org/data/definitions/326.html)'
+  url: ''
+- title: 'NIST SP 800-57 Part 1 Rev 5: Key Management Recommendations'
+  url: ''
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
+  url: ''
+- title: OWASP Cryptographic Failures (https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

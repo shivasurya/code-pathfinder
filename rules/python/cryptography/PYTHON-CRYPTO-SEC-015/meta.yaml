@@ -1,0 +1,84 @@
+id: PYTHON-CRYPTO-SEC-015
+name: Insecure SHA1 Hash (PyCryptodome)
+short_description: SHA-1 is deprecated for security use. Use SHA-256 or SHA-3 instead.
+severity: MEDIUM
+category: cryptography
+language: python
+ruleset: python/PYTHON-CRYPTO-SEC-015
+cwe:
+- id: CWE-327
+  name: Use of a Broken or Risky Cryptographic Algorithm
+  url: https://cwe.mitre.org/data/definitions/327.html
+tags:
+- python
+- pycryptodome
+- sha1
+- weak-hash
+- cwe-327
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect usage of cryptographically broken or weak hash algorithms across
+
+  Python libraries including `cryptography` (hazmat primitives) and `PyCryptodome`/`PyCrypto`.
+
+  Weak hash functions are vulnerable to collision attacks and should not be used for security
+
+  purposes such as digital signatures, certificate validation, password hashing, or data
+
+  integrity verification.'
+message: SHA-1 is deprecated for security use. Use SHA-256 or SHA-3 instead.
+secure_example: 'from cryptography.hazmat.primitives import hashes
+
+  from cryptography.hazmat.backends import default_backend
+
+
+  # SECURE: SHA-256 for integrity checking
+
+  digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+
+  digest.update(document_bytes)
+
+  checksum = digest.finalize()
+
+
+  # SECURE: SHA-3 for digital signatures
+
+  from Crypto.Hash import SHA3_256
+
+  h = SHA3_256.new()
+
+  h.update(b"data to sign")
+
+  hash_value = h.hexdigest()
+
+
+  # SECURE: Argon2 for password hashing
+
+  from argon2 import PasswordHasher
+
+  ph = PasswordHasher()
+
+  password_hash = ph.hash(password)'
+recommendations: []
+references:
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm (https://cwe.mitre.org/data/definitions/327.html)'
+  url: ''
+- title: 'CVE-2004-2761: MD5 collision vulnerability in certificate signing'
+  url: ''
+- title: 'SHAttered: SHA-1 collision attack (https://shattered.io/)'
+  url: ''
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
+  url: ''
+- title: OWASP Cryptographic Failures (https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: ''
+  url: ''

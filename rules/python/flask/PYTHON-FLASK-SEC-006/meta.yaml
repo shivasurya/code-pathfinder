@@ -1,0 +1,68 @@
+id: PYTHON-FLASK-SEC-006
+name: Flask SSRF via requests library
+short_description: User input flows to HTTP request URL. Validate and allowlist target URLs.
+severity: HIGH
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-006
+cwe:
+- id: CWE-918
+  name: Server-Side Request Forgery (SSRF)
+  url: https://cwe.mitre.org/data/definitions/918.html
+tags:
+- python
+- flask
+- ssrf
+- requests
+- owasp-a10
+- cwe-918
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects Server-Side Request Forgery (SSRF) vulnerabilities in Flask applications
+
+  where user-controlled input from HTTP request parameters flows into outbound HTTP request
+
+  URLs. When an attacker controls the destination URL of a server-initiated HTTP request,
+
+  they can force the application server to make requests to arbitrary internal or external
+
+  endpoints.
+
+
+  SSRF is particularly dangerous in cloud environments where metadata endpoints
+
+  (e.g., http://169.254.169.254/) expose instance credentials, and in microservice
+
+  architectures where internal services trust requests originating from the local network.'
+message: User input flows to HTTP request URL. Validate and allowlist target URLs.
+secure_example: "from flask import Flask, request\nfrom urllib.parse import urlparse\nimport requests\n\
+  import ipaddress\n\nALLOWED_HOSTS = {'api.example.com', 'cdn.example.com'}\n\ndef validate_url(url):\n\
+  \    parsed = urlparse(url)\n    if parsed.scheme not in ('http', 'https'):\n        raise ValueError('Invalid\
+  \ scheme')\n    if parsed.hostname not in ALLOWED_HOSTS:\n        raise ValueError('Host not in allowlist')\n\
+  \    # Block private/reserved IP ranges\n    try:\n        ip = ipaddress.ip_address(parsed.hostname)\n\
+  \        if ip.is_private or ip.is_loopback or ip.is_link_local:\n            raise ValueError('Private\
+  \ IP not allowed')\n    except ValueError:\n        pass  # hostname is not an IP, DNS will resolve\
+  \ it\n    return url\n\napp = Flask(__name__)\n\n@app.route('/fetch')\ndef fetch_url():\n    url = request.args.get('url')\n\
+  \    # SAFE: URL validated against allowlist before use\n    safe_url = validate_url(url)\n    response\
+  \ = requests.get(safe_url)\n    return response.text"
+recommendations: []
+references:
+- title: 'CWE-918: https://cwe.mitre.org/data/definitions/918.html'
+  url: ''
+- title: 'OWASP SSRF: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery'
+  url: ''
+- title: 'OWASP SSRF Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html'
+  url: ''
+- title: 'Cloud SSRF Exploitation: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A10:2021
+  name: ''
+  url: ''

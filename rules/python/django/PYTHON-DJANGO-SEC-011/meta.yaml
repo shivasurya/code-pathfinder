@@ -1,0 +1,60 @@
+id: PYTHON-DJANGO-SEC-011
+name: Django Command Injection via subprocess
+short_description: User input flows to subprocess call. Use shlex.quote() or avoid shell=True.
+severity: CRITICAL
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-011
+cwe:
+- id: CWE-78
+  name: Improper Neutralization of Special Elements used in an OS Command
+  url: https://cwe.mitre.org/data/definitions/78.html
+tags:
+- python
+- django
+- command-injection
+- subprocess
+- owasp-a03
+- cwe-78
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect OS command injection vulnerabilities in Django applications where
+
+  untrusted user input from HTTP requests flows into system command execution functions
+
+  such as os.system(), os.popen(), or subprocess module calls. When user-controlled data
+
+  is incorporated into shell commands without proper sanitization, attackers can inject
+
+  arbitrary OS commands that execute with the privileges of the web application process.'
+message: User input flows to subprocess call. Use shlex.quote() or avoid shell=True.
+secure_example: "from django.http import JsonResponse\nimport subprocess\nimport shlex\nimport re\n\n\
+  def ping_host(request):\n    # SECURE: Validate input and use subprocess with list args\n    host =\
+  \ request.GET.get('host', '')\n    # Whitelist validation: only allow valid hostnames/IPs\n    if not\
+  \ re.match(r'^[a-zA-Z0-9._-]+$', host):\n        return JsonResponse({'error': 'Invalid host'}, status=400)\n\
+  \    result = subprocess.run(['ping', '-c', '3', host], capture_output=True, text=True)\n    return\
+  \ JsonResponse({'result': result.stdout})\n\ndef run_tool(request):\n    # SECURE: Use list arguments,\
+  \ never shell=True with user input\n    filename = request.POST.get('filename', '')\n    if not re.match(r'^[a-zA-Z0-9._-]+$',\
+  \ filename):\n        return JsonResponse({'error': 'Invalid filename'}, status=400)\n    result = subprocess.run(['file',\
+  \ filename], capture_output=True, text=True)\n    return JsonResponse({'result': result.stdout})"
+recommendations: []
+references:
+- title: 'CWE-78: https://cwe.mitre.org/data/definitions/78.html'
+  url: ''
+- title: 'OWASP Command Injection: https://owasp.org/www-community/attacks/Command_Injection'
+  url: ''
+- title: 'Python subprocess documentation: https://docs.python.org/3/library/subprocess.html'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

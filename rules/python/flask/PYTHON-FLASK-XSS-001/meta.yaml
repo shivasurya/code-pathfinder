@@ -1,0 +1,75 @@
+id: PYTHON-FLASK-XSS-001
+name: Flask Direct Use of Jinja2
+short_description: Direct Jinja2 Environment usage bypasses Flask's auto-escaping. Use Flask's render_template().
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-XSS-001
+cwe:
+- id: CWE-79
+  name: Improper Neutralization of Input During Web Page Generation
+  url: https://cwe.mitre.org/data/definitions/79.html
+tags:
+- python
+- flask
+- jinja2
+- xss
+- audit
+- cwe-79
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This module contains ten audit and configuration-based security rules for Flask applications.
+
+  Unlike dataflow rules that track tainted input from sources to sinks, these rules use pattern
+
+  matching to detect insecure configurations, dangerous API usage, and security anti-patterns
+
+  that do not require taint analysis.
+
+
+  These rules serve two purposes: (1) detecting definitive security misconfigurations that should
+
+  be fixed regardless of context, and (2) flagging potentially dangerous patterns that warrant
+
+  manual review to determine if they represent actual vulnerabilities in the specific application
+
+  context.'
+message: Direct Jinja2 Environment usage bypasses Flask's auto-escaping. Use Flask's render_template().
+secure_example: ''
+recommendations: []
+references:
+- title: 'CWE-200: https://cwe.mitre.org/data/definitions/200.html'
+  url: ''
+- title: 'CWE-942: https://cwe.mitre.org/data/definitions/942.html'
+  url: ''
+- title: 'CWE-614: https://cwe.mitre.org/data/definitions/614.html'
+  url: ''
+- title: 'CWE-352: https://cwe.mitre.org/data/definitions/352.html'
+  url: ''
+- title: 'CWE-330: https://cwe.mitre.org/data/definitions/330.html'
+  url: ''
+- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
+  url: ''
+- title: 'Flask Security Considerations: https://flask.palletsprojects.com/en/latest/security/'
+  url: ''
+- title: 'Flask-CORS Documentation: https://flask-cors.readthedocs.io/'
+  url: ''
+- title: 'Flask-WTF CSRF: https://flask-wtf.readthedocs.io/en/latest/csrf/'
+  url: ''
+- title: 'Hashids Cryptanalysis: http://carnage.github.io/2015/08/cryptanalysis-of-hashids'
+  url: ''
+- title: 'OWASP Secure Cookie Attributes: https://owasp.org/www-community/controls/SecureCookieAttribute'
+  url: ''
+- title: 'Jinja2 Autoescaping: https://jinja.palletsprojects.com/en/latest/api/#autoescaping'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A07:2021
+  name: ''
+  url: ''

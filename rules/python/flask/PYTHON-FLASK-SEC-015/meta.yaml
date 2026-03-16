@@ -1,0 +1,53 @@
+id: PYTHON-FLASK-SEC-015
+name: Flask Unsanitized Input in Response
+short_description: User input returned directly in response without escaping. Use markupsafe.escape().
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/PYTHON-FLASK-SEC-015
+cwe:
+- id: CWE-79
+  name: Improper Neutralization of Input During Web Page Generation
+  url: https://cwe.mitre.org/data/definitions/79.html
+tags:
+- python
+- flask
+- xss
+- unsanitized-input
+- owasp-a07
+- cwe-79
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect Cross-Site Scripting (XSS) vulnerabilities in Flask applications where
+
+  user-controlled input is reflected in HTTP responses without proper output encoding. Two'
+message: User input returned directly in response without escaping. Use markupsafe.escape().
+secure_example: "from flask import Flask, request, render_template\nfrom markupsafe import escape\n\n\
+  app = Flask(__name__)\n\n@app.route('/greet')\ndef greet():\n    name = request.args.get('name')\n \
+  \   # SAFE Option 1: Use Jinja2 template (auto-escapes by default)\n    return render_template('greet.html',\
+  \ name=name)\n\n@app.route('/greet-inline')\ndef greet_inline():\n    name = request.args.get('name')\n\
+  \    # SAFE Option 2: Explicitly escape user input\n    safe_name = escape(name)\n    return f'<h1>Hello,\
+  \ {safe_name}!</h1>'"
+recommendations: []
+references:
+- title: 'CWE-79: https://cwe.mitre.org/data/definitions/79.html'
+  url: ''
+- title: 'OWASP XSS: https://owasp.org/www-community/attacks/xss/'
+  url: ''
+- title: 'OWASP XSS Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html'
+  url: ''
+- title: 'Flask Security Considerations: https://flask.palletsprojects.com/en/latest/security/'
+  url: ''
+- title: 'MarkupSafe: https://markupsafe.palletsprojects.com/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A07:2021
+  name: ''
+  url: ''

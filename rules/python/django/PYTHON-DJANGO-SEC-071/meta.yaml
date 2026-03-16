@@ -1,0 +1,72 @@
+id: PYTHON-DJANGO-SEC-071
+name: Django CSRF Exempt Decorator
+short_description: '@csrf_exempt disables CSRF protection. Ensure this is intentional.'
+severity: MEDIUM
+category: django
+language: python
+ruleset: python/PYTHON-DJANGO-SEC-071
+cwe:
+- id: CWE-352
+  name: Cross-Site Request Forgery (CSRF)
+  url: https://cwe.mitre.org/data/definitions/352.html
+tags:
+- python
+- django
+- csrf
+- security
+- owasp-a05
+- cwe-352
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: "These rules detect common security misconfigurations and unsafe patterns in Django\napplications.\
+  \ They cover three distinct vulnerability categories:\n\n1. **Insecure Cookie Settings (CWE-614)**:\
+  \ Detects set_cookie() calls that may lack the\n   secure, httponly, or samesite flags. Without these\
+  \ flags, cookies can be intercepted\n   over unencrypted connections, accessed by JavaScript (enabling\
+  \ XSS-based session theft),\n   or sent in cross-site requests (enabling CSRF attacks).\n\n2. **CSRF\
+  \ Exempt Decorator (CWE-352)**: Detects usage of Django's @csrf_exempt decorator,\n   which disables\
+  \ Cross-Site Request Forgery protection on views. This allows attackers to\n   craft malicious pages\
+  \ that trigger state-changing actions on behalf of authenticated\n   users without their consent.\n\n\
+  3. **Insecure Deserialization (CWE-502)**: Detects request data flowing into unsafe\n   deserialization\
+  \ functions (pickle, yaml.load, dill, shelve). These functions can execute\n   arbitrary code during\
+  \ deserialization, making them critical attack vectors when used with\n   untrusted input."
+message: '@csrf_exempt disables CSRF protection. Ensure this is intentional.'
+secure_example: "from django.http import HttpResponse, JsonResponse\nfrom django.middleware.csrf import\
+  \ CsrfViewMiddleware\nimport json\n\ndef set_preferences(request):\n    # SECURE: Cookie set with all\
+  \ security flags\n    response = HttpResponse(\"Preferences saved\")\n    response.set_cookie(\n   \
+  \     'session_id',\n        request.session.session_key,\n        secure=True,      # Only sent over\
+  \ HTTPS\n        httponly=True,     # Not accessible via JavaScript\n        samesite='Lax',   # Prevents\
+  \ cross-site sending\n        max_age=3600,     # 1 hour expiry\n    )\n    return response\n\n# SECURE:\
+  \ No @csrf_exempt - CSRF protection enabled by default\ndef transfer_funds(request):\n    if request.method\
+  \ != 'POST':\n        return HttpResponse(status=405)\n    amount = request.POST.get('amount')\n   \
+  \ recipient = request.POST.get('recipient')\n    perform_transfer(request.user, recipient, amount)\n\
+  \    return HttpResponse(\"Transfer complete\")\n\ndef load_data(request):\n    # SECURE: Use JSON instead\
+  \ of pickle for untrusted data\n    try:\n        data = json.loads(request.body)\n    except json.JSONDecodeError:\n\
+  \        return JsonResponse({'error': 'Invalid JSON'}, status=400)\n    return JsonResponse({'data':\
+  \ data})"
+recommendations: []
+references:
+- title: 'CWE-502: https://cwe.mitre.org/data/definitions/502.html'
+  url: ''
+- title: 'CWE-352: https://cwe.mitre.org/data/definitions/352.html'
+  url: ''
+- title: 'CWE-614: https://cwe.mitre.org/data/definitions/614.html'
+  url: ''
+- title: 'OWASP CSRF: https://owasp.org/www-community/attacks/csrf'
+  url: ''
+- title: 'Django CSRF Protection: https://docs.djangoproject.com/en/stable/ref/csrf/'
+  url: ''
+- title: 'Django Cookie Security: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure'
+  url: ''
+- title: 'Django Security: https://docs.djangoproject.com/en/stable/topics/security/'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A05:2021
+  name: ''
+  url: ''

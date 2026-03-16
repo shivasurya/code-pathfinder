@@ -1,0 +1,63 @@
+id: PYTHON-LAMBDA-SEC-012
+name: Lambda SQL Injection via pymssql Cursor
+short_description: Lambda event data flows to pymssql cursor.execute(). Use parameterized queries.
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/PYTHON-LAMBDA-SEC-012
+cwe:
+- id: CWE-89
+  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
+  url: https://cwe.mitre.org/data/definitions/89.html
+tags:
+- python
+- aws
+- lambda
+- sql-injection
+- pymssql
+- owasp-a03
+- cwe-89
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect SQL injection vulnerabilities in AWS Lambda functions where untrusted
+
+  event data flows into database query execution. Lambda functions commonly interact with
+
+  RDS, Aurora, or DynamoDB, and event data from API Gateway, S3, SNS, or other triggers
+
+  is frequently used to construct queries without proper parameterization.'
+message: Lambda event data flows to pymssql cursor.execute(). Use parameterized queries.
+secure_example: "import pymysql\nfrom sqlalchemy import text\n\ndef lambda_handler(event, context):\n\
+  \    user_id = event.get('user_id', '')\n    conn = pymysql.connect(host='rds-host', user='admin', password='pass',\
+  \ db='mydb')\n    cursor = conn.cursor()\n\n    # SECURE: Parameterized query with placeholders\n  \
+  \  query = \"SELECT * FROM users WHERE id = %s\"\n    cursor.execute(query, (user_id,))\n\n    # SECURE:\
+  \ SQLAlchemy with text() and bindparams\n    stmt = text(\"SELECT * FROM orders WHERE user_id = :uid\"\
+  ).bindparams(uid=user_id)\n    session.execute(stmt)\n\n    # SECURE: Input validation before query\n\
+  \    try:\n        user_id_int = int(user_id)\n    except ValueError:\n        return {'statusCode':\
+  \ 400, 'body': 'Invalid user ID'}\n    cursor.execute(\"SELECT * FROM users WHERE id = %s\", (user_id_int,))\n\
+  \n    # SECURE: DynamoDB with proper Key/FilterExpression\n    import boto3\n    table = boto3.resource('dynamodb').Table('users')\n\
+  \    response = table.query(\n        KeyConditionExpression=Key('user_id').eq(user_id)  # SDK handles\
+  \ escaping\n    )\n\n    return {'statusCode': 200, 'body': cursor.fetchall()}"
+recommendations: []
+references:
+- title: 'CWE-89: SQL Injection (https://cwe.mitre.org/data/definitions/89.html)'
+  url: ''
+- title: 'CWE-943: NoSQL Injection (https://cwe.mitre.org/data/definitions/943.html)'
+  url: ''
+- title: OWASP SQL Injection Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+  url: ''
+- title: AWS Lambda with RDS Best Practices (https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html)
+  url: ''
+- title: OWASP Injection (https://owasp.org/Top10/A03_2021-Injection/)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''

@@ -1,0 +1,60 @@
+id: PYTHON-LAMBDA-SEC-005
+name: Lambda Command Injection via asyncio exec
+short_description: Lambda event data flows to asyncio.create_subprocess_exec().
+severity: HIGH
+category: aws_lambda
+language: python
+ruleset: python/PYTHON-LAMBDA-SEC-005
+cwe:
+- id: CWE-78
+  name: Improper Neutralization of Special Elements used in an OS Command
+  url: https://cwe.mitre.org/data/definitions/78.html
+tags:
+- python
+- aws
+- lambda
+- command-injection
+- asyncio
+- owasp-a03
+- cwe-78
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'These rules detect OS command injection vulnerabilities in AWS Lambda functions where
+
+  untrusted event data flows into command execution functions. Lambda functions receive
+
+  event data from various AWS triggers (API Gateway, S3, SNS, SQS, DynamoDB Streams)
+
+  and this data is fully attacker-controllable in many scenarios.'
+message: Lambda event data flows to asyncio.create_subprocess_exec().
+secure_example: "import subprocess\nimport shlex\nimport os\n\ndef lambda_handler(event, context):\n \
+  \   # SECURE: Use subprocess with list arguments (no shell interpretation)\n    filename = event.get('filename',\
+  \ '')\n    result = subprocess.run(\n        ['ls', '-la', f'/tmp/{filename}'],  # List args = no shell\
+  \ injection\n        capture_output=True, text=True\n    )\n\n    # SECURE: Use shlex.quote() for shell\
+  \ commands when unavoidable\n    user_input = event.get('name', '')\n    safe_input = shlex.quote(user_input)\n\
+  \    result = subprocess.run(\n        f'echo {safe_input}',\n        shell=True, capture_output=True,\
+  \ text=True\n    )\n\n    # SECURE: Validate and sanitize input\n    import re\n    filename = event.get('filename',\
+  \ '')\n    if not re.match(r'^[a-zA-Z0-9._-]+$', filename):\n        return {'statusCode': 400, 'body':\
+  \ 'Invalid filename'}\n\n    result = subprocess.run(\n        ['cat', f'/tmp/{filename}'],\n      \
+  \  capture_output=True, text=True\n    )\n\n    return {'statusCode': 200, 'body': result.stdout}"
+recommendations: []
+references:
+- title: 'CWE-78: OS Command Injection (https://cwe.mitre.org/data/definitions/78.html)'
+  url: ''
+- title: OWASP Command Injection (https://owasp.org/www-community/attacks/Command_Injection)
+  url: ''
+- title: AWS Lambda Security Best Practices (https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
+  url: ''
+- title: OWASP Injection Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A03:2021
+  name: ''
+  url: ''
