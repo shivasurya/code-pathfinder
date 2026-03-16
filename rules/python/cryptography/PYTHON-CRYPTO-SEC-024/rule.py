@@ -1,9 +1,7 @@
 from rules.python_decorators import python_rule
 from codepathfinder import calls, flows, QueryType
-from codepathfinder.presets import PropagationPresets
+from codepathfinder.qualifiers import lt
 
-class CryptoDSA(QueryType):
-    fqns = ["cryptography.hazmat.primitives.asymmetric.dsa"]
 
 class PyCryptoDSA(QueryType):
     fqns = ["Crypto.PublicKey.DSA", "Cryptodome.PublicKey.DSA"]
@@ -11,14 +9,14 @@ class PyCryptoDSA(QueryType):
 
 @python_rule(
     id="PYTHON-CRYPTO-SEC-024",
-    name="DSA Key Generation (PyCryptodome, Audit)",
-    severity="MEDIUM",
+    name="Insufficient DSA Key Size (PyCryptodome)",
+    severity="HIGH",
     category="cryptography",
     cwe="CWE-326",
-    tags="python,pycryptodome,dsa,key-size,audit,cwe-326",
-    message="DSA key generation detected. Ensure bits >= 2048.",
+    tags="python,pycryptodome,dsa,key-size,CWE-326,OWASP-A02",
+    message="DSA key size is less than 2048 bits.",
     owasp="A02:2021",
 )
 def detect_dsa_keygen_pycrypto():
-    """Audit: detects DSA key generation in PyCryptodome."""
-    return PyCryptoDSA.method("generate")
+    """Detects DSA key generation with insufficient key size in PyCryptodome."""
+    return PyCryptoDSA.method("generate").where(0, lt(2048))
