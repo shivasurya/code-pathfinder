@@ -62,16 +62,16 @@ secure_example: 'from cryptography.hazmat.primitives import hashes
   password_hash = ph.hash(password)'
 recommendations: []
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm ('
-  url: https://cwe.mitre.org/data/definitions/327.html)
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+  url: https://cwe.mitre.org/data/definitions/327.html
 - title: 'CVE-2004-2761: MD5 collision vulnerability in certificate signing'
   url: ''
-- title: 'SHAttered: SHA-1 collision attack ('
-  url: https://shattered.io/)
+- title: 'SHAttered: SHA-1 collision attack'
+  url: https://shattered.io/
 - title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
   url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures (
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+- title: OWASP Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
 compliance: []
 faq: []
 similar_rules: []

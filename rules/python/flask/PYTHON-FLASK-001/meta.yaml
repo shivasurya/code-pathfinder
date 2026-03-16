@@ -39,8 +39,8 @@ secure_example: "import os\nfrom flask import Flask, request\n\napp = Flask(__na
   \ set it at all (defaults to False)\n    app.run()  # debug=False is the default"
 recommendations: []
 references:
-- title: 'CWE-489: Active Debug Code ('
-  url: https://cwe.mitre.org/data/definitions/489.html)
+- title: 'CWE-489: Active Debug Code'
+  url: https://cwe.mitre.org/data/definitions/489.html
 - title: 'CVE-2015-5306: Werkzeug Debug PIN Bypass'
   url: ''
 - title: OWASP A05:2021 - Security Misconfiguration

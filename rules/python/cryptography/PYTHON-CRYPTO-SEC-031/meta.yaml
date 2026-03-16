@@ -66,16 +66,16 @@ secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
   # Verify MAC before decrypting'
 recommendations: []
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm ('
-  url: https://cwe.mitre.org/data/definitions/327.html)
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+  url: https://cwe.mitre.org/data/definitions/327.html
 - title: 'NIST SP 800-38A: Recommendation for Block Cipher Modes of Operation'
   url: https://csrc.nist.gov/publications
-- title: 'The ECB Penguin: Why ECB mode is insecure ('
-  url: https://blog.filippo.io/the-ecb-penguin/)
+- title: 'The ECB Penguin: Why ECB mode is insecure'
+  url: https://blog.filippo.io/the-ecb-penguin/
 - title: 'Padding Oracle Attacks: Vaudenay (2002), POODLE (CVE-2014-3566)'
   url: ''
-- title: OWASP Cryptographic Failures (
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+- title: OWASP Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
 compliance: []
 faq: []
 similar_rules: []

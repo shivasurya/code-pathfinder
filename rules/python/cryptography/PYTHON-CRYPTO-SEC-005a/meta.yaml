@@ -54,16 +54,16 @@ secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
   ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
 recommendations: []
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm ('
-  url: https://cwe.mitre.org/data/definitions/327.html)
-- title: 'RFC 7465: Prohibiting RC4 Cipher Suites ('
-  url: https://tools.ietf.org/html/rfc7465)
-- title: 'Sweet32: Birthday attacks on 64-bit block ciphers ('
-  url: https://sweet32.info/)
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+  url: https://cwe.mitre.org/data/definitions/327.html
+- title: 'RFC 7465: Prohibiting RC4 Cipher Suites'
+  url: https://tools.ietf.org/html/rfc7465
+- title: 'Sweet32: Birthday attacks on 64-bit block ciphers'
+  url: https://sweet32.info/
 - title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
   url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures (
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+- title: OWASP Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
 compliance: []
 faq: []
 similar_rules: []

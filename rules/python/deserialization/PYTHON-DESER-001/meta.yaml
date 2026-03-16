@@ -48,8 +48,8 @@ secure_example: "import json\nfrom flask import Flask, request\nimport hmac\nimp
   \ is valid\n    obj = pickle.loads(signed_data)\n    return {'data': str(obj)}"
 recommendations: []
 references:
-- title: 'CWE-502: Deserialization of Untrusted Data ('
-  url: https://cwe.mitre.org/data/definitions/502.html)
+- title: 'CWE-502: Deserialization of Untrusted Data'
+  url: https://cwe.mitre.org/data/definitions/502.html
 - title: 'CVE-2021-3177: Python Buffer Overflow'
   url: ''
 - title: OWASP A08:2021 - Software and Data Integrity Failures

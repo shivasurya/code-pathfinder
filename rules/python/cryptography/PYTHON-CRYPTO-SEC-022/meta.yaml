@@ -44,14 +44,14 @@ secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa,
   from Crypto.PublicKey import RSA\nkey = RSA.generate(3072)"
 recommendations: []
 references:
-- title: 'CWE-326: Inadequate Encryption Strength ('
-  url: https://cwe.mitre.org/data/definitions/326.html)
+- title: 'CWE-326: Inadequate Encryption Strength'
+  url: https://cwe.mitre.org/data/definitions/326.html
 - title: 'NIST SP 800-57 Part 1 Rev 5: Key Management Recommendations'
   url: https://csrc.nist.gov/publications
 - title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
   url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures (
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/)
+- title: OWASP Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
 compliance: []
 faq: []
 similar_rules: []

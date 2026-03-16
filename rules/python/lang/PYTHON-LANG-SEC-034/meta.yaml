@@ -54,7 +54,7 @@ references:
 - title: 'Python docs: hashlib'
   url: https://docs.python.org/3/library/hashlib.html
 - title: shattered.io
-  url: https://shattered.io/ (SHA-1 collision demonstration)
+  url: https://shattered.io/ (SHA-1 collision demonstration
 - title: csrc.nist.gov
   url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
 compliance: []

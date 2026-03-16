@@ -41,16 +41,16 @@ secure_example: "import pymysql\nfrom sqlalchemy import text\n\ndef lambda_handl
   \ escaping\n    )\n\n    return {'statusCode': 200, 'body': cursor.fetchall()}"
 recommendations: []
 references:
-- title: 'CWE-89: SQL Injection ('
-  url: https://cwe.mitre.org/data/definitions/89.html)
-- title: 'CWE-943: NoSQL Injection ('
-  url: https://cwe.mitre.org/data/definitions/943.html)
-- title: OWASP SQL Injection Prevention Cheat Sheet (
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
-- title: AWS Lambda with RDS Best Practices (
-  url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html)
-- title: OWASP Injection (
-  url: https://owasp.org/Top10/A03_2021-Injection/)
+- title: 'CWE-89: SQL Injection'
+  url: https://cwe.mitre.org/data/definitions/89.html
+- title: 'CWE-943: NoSQL Injection'
+  url: https://cwe.mitre.org/data/definitions/943.html
+- title: OWASP SQL Injection Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+- title: AWS Lambda with RDS Best Practices
+  url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+- title: OWASP Injection
+  url: https://owasp.org/Top10/A03_2021-Injection/
 compliance: []
 faq: []
 similar_rules: []

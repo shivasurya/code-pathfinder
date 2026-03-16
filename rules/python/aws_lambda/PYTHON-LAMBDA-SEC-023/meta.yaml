@@ -43,18 +43,18 @@ secure_example: "import json\nimport html\nimport ast\n\ndef lambda_handler(even
   \n    return {'statusCode': 200, 'body': json.dumps({'result': str(result)})}"
 recommendations: []
 references:
-- title: 'CWE-79: Cross-Site Scripting ('
-  url: https://cwe.mitre.org/data/definitions/79.html)
-- title: 'CWE-95: Eval Injection ('
-  url: https://cwe.mitre.org/data/definitions/95.html)
-- title: 'CWE-502: Deserialization of Untrusted Data ('
-  url: https://cwe.mitre.org/data/definitions/502.html)
-- title: OWASP XSS Prevention Cheat Sheet (
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html)
-- title: AWS Lambda Security Best Practices (
-  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
-- title: OWASP Injection (
-  url: https://owasp.org/Top10/A03_2021-Injection/)
+- title: 'CWE-79: Cross-Site Scripting'
+  url: https://cwe.mitre.org/data/definitions/79.html
+- title: 'CWE-95: Eval Injection'
+  url: https://cwe.mitre.org/data/definitions/95.html
+- title: 'CWE-502: Deserialization of Untrusted Data'
+  url: https://cwe.mitre.org/data/definitions/502.html
+- title: OWASP XSS Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html
+- title: AWS Lambda Security Best Practices
+  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+- title: OWASP Injection
+  url: https://owasp.org/Top10/A03_2021-Injection/
 compliance: []
 faq: []
 similar_rules: []

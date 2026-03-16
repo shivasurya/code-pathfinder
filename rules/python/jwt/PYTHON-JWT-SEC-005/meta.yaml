@@ -37,18 +37,18 @@ secure_example: "import jwt\nimport os\n\n# SECURE: Secret from environment vari
   \ f.read()\npayload = jwt.decode(token, public_key, algorithms=[\"RS256\"])"
 recommendations: []
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm ('
-  url: https://cwe.mitre.org/data/definitions/327.html)
-- title: 'CWE-522: Insufficiently Protected Credentials ('
-  url: https://cwe.mitre.org/data/definitions/522.html)
-- title: 'CWE-287: Improper Authentication ('
-  url: https://cwe.mitre.org/data/definitions/287.html)
-- title: 'RFC 8725: JSON Web Token Best Current Practices ('
-  url: https://tools.ietf.org/html/rfc8725)
-- title: OWASP JWT Cheat Sheet (
-  url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
-- title: Auth0 JWT Handbook (
-  url: https://auth0.com/resources/ebooks/jwt-handbook)
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+  url: https://cwe.mitre.org/data/definitions/327.html
+- title: 'CWE-522: Insufficiently Protected Credentials'
+  url: https://cwe.mitre.org/data/definitions/522.html
+- title: 'CWE-287: Improper Authentication'
+  url: https://cwe.mitre.org/data/definitions/287.html
+- title: 'RFC 8725: JSON Web Token Best Current Practices'
+  url: https://tools.ietf.org/html/rfc8725
+- title: OWASP JWT Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+- title: Auth0 JWT Handbook
+  url: https://auth0.com/resources/ebooks/jwt-handbook
 compliance: []
 faq: []
 similar_rules: []

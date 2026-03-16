@@ -40,14 +40,14 @@ secure_example: "import subprocess\nimport shlex\nimport os\n\ndef lambda_handle
   \  capture_output=True, text=True\n    )\n\n    return {'statusCode': 200, 'body': result.stdout}"
 recommendations: []
 references:
-- title: 'CWE-78: OS Command Injection ('
-  url: https://cwe.mitre.org/data/definitions/78.html)
-- title: OWASP Command Injection (
-  url: https://owasp.org/www-community/attacks/Command_Injection)
-- title: AWS Lambda Security Best Practices (
-  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
-- title: OWASP Injection Prevention Cheat Sheet (
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html)
+- title: 'CWE-78: OS Command Injection'
+  url: https://cwe.mitre.org/data/definitions/78.html
+- title: OWASP Command Injection
+  url: https://owasp.org/www-community/attacks/Command_Injection
+- title: AWS Lambda Security Best Practices
+  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+- title: OWASP Injection Prevention Cheat Sheet
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
 compliance: []
 faq: []
 similar_rules: []
