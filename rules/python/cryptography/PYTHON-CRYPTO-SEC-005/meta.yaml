@@ -1,75 +1,195 @@
+# Rule Identity
 id: PYTHON-CRYPTO-SEC-005
-name: Insecure DES Cipher
-short_description: DES has a 56-bit key, easily brute-forced. Use AES instead.
+name: DES Cipher Usage via PyCryptodome
+short_description: Detects use of single DES through PyCryptodome, which has only a 56-bit key that has been publicly brute-forceable since 1999 and is disallowed by FIPS 46-3 (withdrawn 2005).
+
+# Classification
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-005
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-005
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- pycryptodome
-- des
-- weak-cipher
-- CWE-327
+  - python
+  - pycryptodome
+  - des
+  - 56-bit-key
+  - brute-force
+  - broken-crypto
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of insecure or deprecated symmetric cipher algorithms across
 
-  Python cryptographic libraries including `cryptography` (hazmat primitives) and
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.DES.new()` from the PyCryptodome library.
+  DES (Data Encryption Standard) uses a 56-bit key. In 1999, the EFF's Deep Crack
+  machine broke a DES-encrypted challenge in 22 hours. Modern GPU clusters can
+  exhaust the entire DES keyspace in minutes. The algorithm is completely broken for
+  confidentiality purposes.
 
-  `PyCryptodome`/`PyCrypto`. The flagged ciphers have known cryptographic weaknesses that
+  DES was standardized in 1977 and was already under brute-force pressure by the late
+  1990s. FIPS 46-3 (the DES standard) was formally withdrawn in 2005. NIST SP 800-131A
+  disallows DES for all uses. The 64-bit block size also exposes DES to the Sweet32
+  birthday attack for any key, and its eight S-boxes have been studied extensively
+  with differential and linear cryptanalysis.
 
-  make them unsuitable for protecting sensitive data.'
-message: DES has a 56-bit key, easily brute-forced. Use AES instead.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  The rule matches `PyCryptoCipherDES.method("new")`. There is no safe way to use
+  single DES. See PYTHON-CRYPTO-SEC-005a for the companion rule covering 3DES.
 
+message: "DES has a 56-bit key brute-forceable since 1999. Replace with AES-256-GCM."
+
+security_implications:
+  - title: 56-Bit Key Brute-Forceable in Under 24 Hours
+    description: |
+      DES's 56-bit key space (2^56 = ~72 quadrillion keys) was publicly brute-forced
+      in 22 hours in 1999 using the EFF DES Cracker costing $250,000. Modern
+      commodity GPU clusters perform this attack in minutes. Any DES-encrypted data
+      should be considered compromised if an attacker had access to the ciphertext.
+  - title: FIPS 46-3 Formally Withdrawn in 2005
+    description: |
+      The DES standard FIPS 46-3 was withdrawn by NIST in 2005 and is no longer
+      approved for any federal information processing use. Systems that encrypt
+      sensitive data with DES are automatically non-compliant with FISMA, FedRAMP,
+      HIPAA Security Rule technical safeguards, and PCI DSS.
+  - title: 64-Bit Block Size Adds Sweet32 Exposure
+    description: |
+      Beyond the key length problem, DES uses a 64-bit block size. Under sustained
+      encryption with the same key, block collisions become probable after ~32GB --
+      enabling birthday-bound plaintext recovery attacks. A single encryption session
+      is unlikely to reach this limit, but long-running services that reuse DES keys
+      accumulate ciphertext toward this threshold.
+  - title: No Authentication -- Vulnerable to Chosen-Ciphertext Attacks
+    description: |
+      DES in any mode available via PyCryptodome (CBC, CFB, OFB, ECB) provides no
+      integrity or authentication. CBC mode DES without a MAC is vulnerable to
+      padding oracle and chosen-ciphertext attacks. ECB mode leaks plaintext patterns
+      directly. Neither mode is safe for any use case.
+
+secure_example: |
+  from Crypto.Cipher import AES
   import os
 
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
 
-  # SECURE: AES-256-GCM provides both confidentiality and integrity
+recommendations:
+  - Replace Crypto.Cipher.DES with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for authenticated encryption
+  - Use ChaCha20-Poly1305 via the cryptography library as an alternative when AES hardware acceleration is unavailable
+  - Treat all data previously encrypted with DES as potentially compromised and assess exposure accordingly
+  - Generate 256-bit (32-byte) AES keys using os.urandom(32) or a proper KDF like PBKDF2/scrypt/Argon2
+  - Audit all key derivation and storage code when migrating from DES -- a DES key is 8 bytes; an AES-256 key is 32 bytes
 
-  key = AESGCM.generate_key(bit_length=256)
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.DES.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherDES.method("new")`. It fires on any single-DES
+  cipher object instantiation regardless of mode (CBC, ECB, CFB, OFB, CTR). There is
+  no safe configuration for single DES. The companion rule PYTHON-CRYPTO-SEC-005a
+  covers Triple DES (3DES, DES3) in PyCryptodome.
 
-  aesgcm = AESGCM(key)
-
-  nonce = os.urandom(12)
-
-  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
-
-
-  # Or use ChaCha20-Poly1305
-
-  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-  key = ChaCha20Poly1305.generate_key()
-
-  chacha = ChaCha20Poly1305(key)
-
-  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
-recommendations: []
+# References
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'RFC 7465: Prohibiting RC4 Cipher Suites'
-  url: https://tools.ietf.org/html/rfc7465
-- title: 'Sweet32: Birthday attacks on 64-bit block ciphers'
-  url: https://sweet32.info/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "EFF DES Cracker -- Breaking DES in 22 hours (1999)"
+    url: https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/
+  - title: "FIPS 46-3: DES Standard (Withdrawn 2005)"
+    url: https://csrc.nist.gov/publications/detail/fips/46/3/final
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+  - standard: FIPS 46-3
+    requirement: "DES standard withdrawn in 2005 -- no longer approved for use"
+
+# FAQ
+faq:
+  - question: We only use DES internally and our data has low sensitivity. Do we need to fix this?
+    answer: |
+      Yes. Internal systems are common lateral movement targets. An attacker who
+      compromises any internal host can collect DES-encrypted data and brute-force
+      it in minutes. Even if the data itself is low-sensitivity today, using DES
+      normalizes weak cryptography practices and creates technical debt. Compliance
+      frameworks like PCI DSS and HIPAA apply to system configurations regardless
+      of the perceived sensitivity of specific data sets.
+
+  - question: How fast can modern hardware break a DES key?
+    answer: |
+      The 1999 EFF DES Cracker cost $250,000 and broke DES in 22 hours. A 2023
+      GPU cluster costing a few thousand dollars can exhaust the 2^56 DES keyspace
+      in under an hour. Cloud computing makes this accessible to any attacker for
+      under $100. DES provides no meaningful confidentiality against any motivated
+      adversary with commodity resources.
+
+  - question: We use DES only to interoperate with a legacy mainframe system. What should we do?
+    answer: |
+      Interoperability constraints are the most common reason for legacy cipher usage.
+      The correct path is to negotiate a protocol upgrade with the mainframe team --
+      most modern mainframe systems support AES. As a temporary measure, minimize the
+      sensitivity of data exchanged over the DES channel and document the risk formally.
+      Add a migration deadline and track it. Do not let the temporary workaround become
+      permanent.
+
+  - question: Why does PyCryptodome still include DES if it is broken?
+    answer: |
+      PyCryptodome includes DES for interoperability with legacy systems and protocols
+      that require decryption of existing data. The library cannot remove DES without
+      breaking valid use cases like reading old encrypted files or communicating with
+      systems that have not been updated. Inclusion in the library is a backward
+      compatibility decision, not an endorsement of DES for new encryption.
+
+  - question: What is the difference between this rule and PYTHON-CRYPTO-SEC-005a?
+    answer: |
+      PYTHON-CRYPTO-SEC-005 flags single DES (Crypto.Cipher.DES), which uses one
+      56-bit key. PYTHON-CRYPTO-SEC-005a flags Triple DES (Crypto.Cipher.DES3), which
+      applies DES three times with two or three different keys. 3DES is stronger than
+      single DES but still has the 64-bit block size (Sweet32) and was deprecated by
+      NIST after 2023. Both rules recommend AES-256-GCM as the replacement.
+
+  - question: How do compliance auditors treat DES findings during PCI DSS assessments?
+    answer: |
+      PCI DSS QSAs treat any use of DES as an automatic failure under Requirement 4.2.1,
+      which mandates strong cryptography. DES findings during a PCI assessment will
+      block certification until remediated. FedRAMP assessors classify DES usage as a
+      HIGH finding under NIST SP 800-53 SC-13. Running this rule in CI provides
+      evidence that DES is not present in the codebase for audit purposes.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-005a
+  - PYTHON-CRYPTO-SEC-001
+  - PYTHON-CRYPTO-SEC-001a
+  - PYTHON-CRYPTO-SEC-004
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

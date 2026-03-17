@@ -17,5 +17,5 @@ class JWTModule(QueryType):
     owasp="A02:2021",
 )
 def detect_jwt_none_algorithm():
-    """Detects jwt.encode/decode with algorithm='none'."""
-    return JWTModule.method("encode", "decode")
+    """Detects jwt.encode() with algorithm='none'."""
+    return JWTModule.method("encode").where("algorithm", "none")

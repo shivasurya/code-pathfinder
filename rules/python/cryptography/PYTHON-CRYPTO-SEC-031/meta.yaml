@@ -1,10 +1,10 @@
 id: PYTHON-CRYPTO-SEC-031
-name: Unauthenticated Cipher Mode (cryptography)
-short_description: CBC/CTR/CFB/OFB without authentication (HMAC). Use GCM or add HMAC.
+name: Unauthenticated Cipher Mode Audit (cryptography lib)
+short_description: CBC/CTR/CFB/OFB mode detected — these modes provide confidentiality but NOT authentication. Verify HMAC is applied or migrate to GCM.
 severity: MEDIUM
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-031
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-031
 cwe:
 - id: CWE-327
   name: Use of a Broken or Risky Cryptographic Algorithm
@@ -14,75 +14,156 @@ tags:
 - cryptography
 - cipher-mode
 - unauthenticated
+- cbc
+- ctr
+- cfb
+- ofb
 - CWE-327
+- OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect the use of insecure or unauthenticated cipher modes in Python
+description: >
+  Audit rule that flags usage of CBC, CTR, CFB, and OFB cipher modes from the `cryptography`
+  library via `modes.CBC()`, `modes.CTR()`, `modes.CFB()`, and `modes.OFB()`. These modes
+  provide confidentiality but do NOT provide ciphertext authentication or integrity protection.
+  Without a separate message authentication code (MAC), an attacker who can observe or
+  manipulate ciphertext can mount padding oracle attacks (CBC), bit-flipping attacks (CTR/CFB/OFB),
+  or replay attacks — all without knowing the encryption key.
 
-  cryptographic libraries. Cipher mode selection is critical to the security of symmetric
+  This is an audit rule, not a hard vulnerability rule. CBC with a correct Encrypt-then-MAC
+  construction using HMAC-SHA256 is cryptographically sound, but the analysis engine cannot
+  currently detect whether an HMAC is applied to the ciphertext after encryption. Therefore
+  all four modes are flagged for manual review. False positives are expected for code that
+  correctly combines these modes with HMAC — the recommended action is to verify the HMAC
+  is present and suppress the finding if the implementation is correct.
 
-  encryption: the wrong mode can leak plaintext patterns, enable ciphertext manipulation,
-
-  or allow padding oracle attacks even when using a strong cipher like AES.'
-message: CBC/CTR/CFB/OFB without authentication (HMAC). Use GCM or add HMAC.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
+  For new code, the simplest correct choice is AES-GCM via `AESGCM` from
+  `cryptography.hazmat.primitives.ciphers.aead` — it provides both confidentiality and
+  authentication in a single primitive with no risk of HMAC omission.
+message: >
+  Audit: CBC/CTR/CFB/OFB mode provides confidentiality only. Verify that HMAC is applied
+  over the ciphertext (Encrypt-then-MAC), or migrate to AES-GCM for authenticated encryption.
+secure_example: |
+  from cryptography.hazmat.primitives.ciphers.aead import AESGCM
   import os
 
-
-  # SECURE: AES-GCM provides both confidentiality AND integrity
-
+  # PREFERRED: AES-GCM provides confidentiality + authentication, no HMAC needed
   key = AESGCM.generate_key(bit_length=256)
-
   aesgcm = AESGCM(key)
-
   nonce = os.urandom(12)
+  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=b"header")
 
-  ct = aesgcm.encrypt(nonce, plaintext, associated_data=b"header")
+  # ACCEPTABLE: CBC + HMAC (Encrypt-then-MAC) — verify MAC BEFORE decrypting
+  from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+  from cryptography.hazmat.primitives import hmac, hashes, padding
+  import os
 
-  # Tampered ciphertext will raise InvalidTag on decrypt
-
-
-  # SECURE: PyCryptodome AES-GCM
-
-  from Crypto.Cipher import AES
-
-  cipher = AES.new(key, AES.MODE_GCM)
-
-  ct, tag = cipher.encrypt_and_digest(plaintext)
-
-
-  # SECURE: If CBC is required, add HMAC (Encrypt-then-MAC)
-
-  import hmac, hashlib
-
+  key_enc = os.urandom(32)
+  key_mac = os.urandom(32)
+  iv = os.urandom(16)
+  padder = padding.PKCS7(128).padder()
+  padded = padder.update(b"sensitive data") + padder.finalize()
   cipher = Cipher(algorithms.AES(key_enc), modes.CBC(iv))
+  enc = cipher.encryptor()
+  ct = enc.update(padded) + enc.finalize()
+  h = hmac.HMAC(key_mac, hashes.SHA256())
+  h.update(iv + ct)
+  tag = h.finalize()
+  # Store (iv, ct, tag) and verify tag before decrypting
 
-  ct = cipher.encryptor().update(plaintext) + cipher.encryptor().finalize()
-
-  mac = hmac.new(key_mac, ct, hashlib.sha256).digest()
-
-  # Verify MAC before decrypting'
-recommendations: []
+  # SECURE: ChaCha20Poly1305 — modern AEAD alternative to AES-GCM
+  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+  key = ChaCha20Poly1305.generate_key()
+  nonce = os.urandom(12)
+  chacha = ChaCha20Poly1305(key)
+  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)
+recommendations:
+- Migrate to `AESGCM` from `cryptography.hazmat.primitives.ciphers.aead` for new code — it provides authenticated encryption with no risk of forgetting the MAC.
+- If CBC is required (e.g., for protocol compatibility), use Encrypt-then-MAC with HMAC-SHA256. Always verify the MAC before decrypting — never decrypt-then-verify.
+- For CTR/CFB/OFB modes, add an HMAC over (nonce || ciphertext) before transmitting. Verify the HMAC on receipt before decryption.
+- Consider ChaCha20Poly1305 as an alternative AEAD if AES hardware acceleration is unavailable.
+- Do not use CBC for TLS-like record protocols — use TLS 1.3 which mandates AEAD-only cipher suites.
 references:
 - title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
   url: https://cwe.mitre.org/data/definitions/327.html
 - title: 'NIST SP 800-38A: Recommendation for Block Cipher Modes of Operation'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38a/final
+- title: 'NIST SP 800-38D: Recommendation for GCM Mode'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38d/final
+- title: 'Padding Oracle Attacks: Vaudenay (2002), POODLE (CVE-2014-3566), Lucky13'
+  url: https://www.openssl.org/~bodo/tls-cbc.txt
+- title: 'Authenticated Encryption: Relations among notions and analysis (Bellare, Namprempre)'
   url: https://csrc.nist.gov/publications
-- title: 'The ECB Penguin: Why ECB mode is insecure'
-  url: https://blog.filippo.io/the-ecb-penguin/
-- title: 'Padding Oracle Attacks: Vaudenay (2002), POODLE (CVE-2014-3566)'
-  url: ''
-- title: OWASP Cryptographic Failures
+- title: OWASP Cryptographic Failures (A02:2021)
   url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography; unauthenticated modes require additional MAC"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit RSA/DSA keys; mode selection guidance covered by SP 800-38 series"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- key usage and algorithm selection for confidentiality and integrity"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms with appropriate modes"
+faq:
+- question: Is CBC safe if I use it with HMAC?
+  answer: >
+    Yes — CBC used with Encrypt-then-MAC (ETM) where HMAC-SHA256 covers the IV and ciphertext
+    is cryptographically sound. The critical requirements are: (1) use Encrypt-THEN-MAC, not
+    MAC-then-Encrypt; (2) verify the MAC before performing any decryption; (3) use separate
+    keys for encryption and MAC. The analysis engine flags CBC because it cannot detect
+    whether HMAC is correctly applied, not because CBC+HMAC is inherently broken.
+- question: What is a padding oracle attack and why does it affect CBC?
+  answer: >
+    In CBC mode, decryption of each block depends on the previous ciphertext block via XOR.
+    If a decryption endpoint reveals whether padding is valid (through different error messages,
+    timing differences, or exceptions), an attacker can perform a byte-by-byte oracle attack
+    to decrypt any ciphertext block without the key. Famous examples include POODLE
+    (CVE-2014-3566) and Lucky13. Using Encrypt-then-MAC and rejecting invalid MACs before
+    any decryption eliminates this attack surface.
+- question: What is a bit-flipping attack and why does it affect CTR/CFB/OFB?
+  answer: >
+    CTR, CFB, and OFB modes produce keystream that is XORed with plaintext. An attacker who
+    can modify a specific bit in the ciphertext will flip the corresponding bit in the
+    decrypted plaintext in a predictable way — without knowing the key. Without a MAC, an
+    attacker can modify ciphertext to produce controlled plaintext changes at known positions
+    (e.g., flipping an "admin=false" flag to "admin=true" in an encrypted cookie).
+- question: Why does this rule flag CTR mode if CTR is commonly recommended?
+  answer: >
+    CTR mode itself provides good confidentiality. The flag is not about CTR being broken
+    but about CTR lacking authentication. If an application uses CTR mode without HMAC,
+    it is vulnerable to bit-flipping attacks on decrypted data. The rule flags CTR as an
+    audit checkpoint to confirm HMAC is present. CTR+HMAC is a valid construction.
+- question: Why does this rule flag both CBC and CTR together?
+  answer: >
+    All four modes (CBC, CTR, CFB, OFB) share the property of providing confidentiality
+    without authentication. While CBC is also vulnerable to padding oracle attacks (an
+    additional risk CTR avoids), both families require separate MAC protection. A single
+    audit rule covering all four avoids missing any unauthenticated mode usage.
+- question: Should I use AES-GCM or AES-CBC+HMAC for new applications?
+  answer: >
+    For new applications use AES-GCM via AESGCM — it is simpler (no separate MAC key,
+    no risk of incorrect ETM ordering), hardware-accelerated on modern CPUs (AES-NI + PCLMULQDQ),
+    and the standard choice in TLS 1.3, modern SSH, and cloud cryptography APIs. CBC+HMAC
+    is acceptable when protocol compatibility requires it but introduces implementation
+    complexity that GCM avoids.
+- question: What is the difference between MAC-then-Encrypt and Encrypt-then-MAC?
+  answer: >
+    Encrypt-then-MAC (ETM) applies HMAC to the ciphertext after encryption — the MAC covers
+    the ciphertext and IV. Verification rejects tampered ciphertext before any decryption
+    occurs, eliminating padding oracle attack surface. MAC-then-Encrypt applies HMAC to
+    plaintext before encryption — the MAC is then encrypted. Verification requires decryption
+    first, which re-exposes padding oracle vulnerabilities. Always use Encrypt-then-MAC.
+similar_rules:
+- PYTHON-CRYPTO-SEC-030
+- PYTHON-CRYPTO-SEC-032
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
 - id: A02:2021
-  name: ''
-  url: ''
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

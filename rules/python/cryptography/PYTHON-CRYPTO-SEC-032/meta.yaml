@@ -1,10 +1,10 @@
 id: PYTHON-CRYPTO-SEC-032
-name: Unauthenticated Cipher Mode (PyCryptodome)
-short_description: AES in non-GCM/EAX/SIV mode may lack authentication. Use MODE_GCM or MODE_EAX.
+name: AES Cipher Mode Audit (PyCryptodome)
+short_description: Audit all AES.new() calls — verify the cipher mode is MODE_GCM, MODE_EAX, MODE_SIV, or MODE_CCM. Unauthenticated modes (MODE_ECB, MODE_CBC without HMAC) must not be used.
 severity: MEDIUM
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-032
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-032
 cwe:
 - id: CWE-327
   name: Use of a Broken or Risky Cryptographic Algorithm
@@ -14,75 +14,144 @@ tags:
 - pycryptodome
 - cipher-mode
 - unauthenticated
+- aes
+- audit
 - CWE-327
+- OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect the use of insecure or unauthenticated cipher modes in Python
+description: >
+  Audit rule that flags all calls to `AES.new()` from PyCryptodome to prompt review of the
+  cipher mode argument. This rule matches `PyCryptoAES.method("new")` without filtering on the
+  mode constant because the analysis engine cannot currently distinguish `AES.MODE_GCM` from
+  `AES.MODE_ECB` or `AES.MODE_CBC` when the mode is passed as a positional or keyword argument.
+  This is a known engine limitation (the `not_in` qualifier for argument value exclusion is not
+  yet available).
 
-  cryptographic libraries. Cipher mode selection is critical to the security of symmetric
+  PyCryptodome's AES.new() supports both secure and insecure modes in the same API:
+  MODE_GCM, MODE_EAX, MODE_SIV, and MODE_CCM provide authenticated encryption (AEAD) and are
+  safe for new code. MODE_ECB is deterministic and leaks plaintext patterns — it is a hard
+  vulnerability (see SEC-030). MODE_CBC, MODE_CTR, MODE_CFB, and MODE_OFB provide confidentiality
+  only and require a separate HMAC for integrity (see SEC-031).
 
-  encryption: the wrong mode can leak plaintext patterns, enable ciphertext manipulation,
-
-  or allow padding oracle attacks even when using a strong cipher like AES.'
-message: AES in non-GCM/EAX/SIV mode may lack authentication. Use MODE_GCM or MODE_EAX.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
+  All AES.new() calls are flagged here as an audit checkpoint. Expected false positives include
+  code using MODE_GCM or MODE_EAX correctly — verify the mode and suppress findings where
+  authenticated modes are used. Findings using MODE_ECB or unauthenticated modes without HMAC
+  are confirmed vulnerabilities.
+message: >
+  Audit: review the AES cipher mode used here. MODE_GCM/EAX/SIV/CCM are safe (AEAD).
+  MODE_ECB must not be used. MODE_CBC/CTR/CFB/OFB require a separate HMAC for authentication.
+secure_example: |
+  from Crypto.Cipher import AES
   import os
 
-
-  # SECURE: AES-GCM provides both confidentiality AND integrity
-
-  key = AESGCM.generate_key(bit_length=256)
-
-  aesgcm = AESGCM(key)
-
-  nonce = os.urandom(12)
-
-  ct = aesgcm.encrypt(nonce, plaintext, associated_data=b"header")
-
-  # Tampered ciphertext will raise InvalidTag on decrypt
-
-
-  # SECURE: PyCryptodome AES-GCM
-
-  from Crypto.Cipher import AES
-
+  # SECURE: AES-GCM — authenticated encryption, provides confidentiality + integrity
+  key = os.urandom(32)
   cipher = AES.new(key, AES.MODE_GCM)
+  ct, tag = cipher.encrypt_and_digest(b"sensitive data")
+  nonce = cipher.nonce
+  # Decrypt: AES.new(key, AES.MODE_GCM, nonce=nonce).decrypt_and_verify(ct, tag)
 
-  ct, tag = cipher.encrypt_and_digest(plaintext)
+  # SECURE: AES-EAX — authenticated encryption, simpler nonce handling than GCM
+  cipher = AES.new(key, AES.MODE_EAX)
+  ct, tag = cipher.encrypt_and_digest(b"sensitive data")
 
+  # SECURE: AES-SIV — nonce-misuse-resistant authenticated encryption
+  key_siv = os.urandom(32)
+  cipher = AES.new(key_siv, AES.MODE_SIV)
+  ct, tag = cipher.encrypt_and_digest(b"sensitive data")
 
-  # SECURE: If CBC is required, add HMAC (Encrypt-then-MAC)
-
-  import hmac, hashlib
-
-  cipher = Cipher(algorithms.AES(key_enc), modes.CBC(iv))
-
-  ct = cipher.encryptor().update(plaintext) + cipher.encryptor().finalize()
-
-  mac = hmac.new(key_mac, ct, hashlib.sha256).digest()
-
-  # Verify MAC before decrypting'
-recommendations: []
+  # NOT SECURE — flag for immediate review:
+  # cipher = AES.new(key, AES.MODE_ECB)           # ECB: leaks patterns, never use
+  # cipher = AES.new(key, AES.MODE_CBC, iv=iv)    # CBC: needs HMAC for integrity
+recommendations:
+- Use AES.MODE_GCM with `encrypt_and_digest()` for all new PyCryptodome encryption — it provides confidentiality and authentication in a single call.
+- Use AES.MODE_EAX as an alternative to GCM — it has a simpler nonce handling model and is also authenticated.
+- Never use AES.MODE_ECB for any structured or multi-block data — replace it immediately with GCM or EAX.
+- If MODE_CBC must be used (protocol compatibility), pair it with an explicit HMAC-SHA256 over (iv || ciphertext) using a separate MAC key and verify before decrypting.
+- For migrating from MODE_CBC to GCM, note that GCM ciphertexts are longer by the tag length (16 bytes by default) — account for this in storage or wire format.
 references:
 - title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
   url: https://cwe.mitre.org/data/definitions/327.html
+- title: 'PyCryptodome Documentation: AES cipher modes'
+  url: https://pycryptodome.readthedocs.io/en/latest/src/cipher/modern.html
+- title: 'NIST SP 800-38D: Recommendation for GCM Mode'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38d/final
 - title: 'NIST SP 800-38A: Recommendation for Block Cipher Modes of Operation'
-  url: https://csrc.nist.gov/publications
-- title: 'The ECB Penguin: Why ECB mode is insecure'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38a/final
+- title: 'The ECB Penguin: Why ECB mode is insecure (Filippo Valsorda)'
   url: https://blog.filippo.io/the-ecb-penguin/
-- title: 'Padding Oracle Attacks: Vaudenay (2002), POODLE (CVE-2014-3566)'
-  url: ''
-- title: OWASP Cryptographic Failures
+- title: OWASP Cryptographic Failures (A02:2021)
   url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography; authenticated modes required for cardholder data"
+- standard: NIST SP 800-131A
+  requirement: "Mode selection guidance covered by SP 800-38 series; ECB not approved for general use"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- algorithm and mode selection for appropriate security level"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and modes"
+faq:
+- question: Why does this rule flag AES.MODE_GCM if GCM is the recommended mode?
+  answer: >
+    This is an intentional audit-level rule. The engine matches all `AES.new()` calls because
+    it cannot currently filter by the mode constant value. This means safe GCM calls are
+    flagged alongside dangerous ECB calls. The intent is to ensure all AES usage is reviewed.
+    For confirmed GCM, EAX, SIV, or CCM calls, suppress the finding with an inline annotation
+    after verifying the usage is correct.
+- question: Why can't the engine filter by mode constant?
+  answer: >
+    The engine currently lacks a `not_in` qualifier that would allow excluding specific
+    argument values. Until that capability is available, this rule must audit all AES.new()
+    calls. The known gap is documented in the ruleset roadmap. When the qualifier is implemented,
+    this rule will be updated to flag only unauthenticated modes precisely.
+- question: What is the difference between MODE_GCM and MODE_EAX?
+  answer: >
+    Both GCM and EAX are authenticated encryption modes (AEAD) providing confidentiality and
+    integrity. GCM is based on GHASH and is hardware-accelerated on modern CPUs (PCLMULQDQ
+    instruction), making it faster in most environments. EAX is based on CMAC, is slightly
+    simpler to implement correctly (no nonce length restrictions), and avoids potential
+    multi-key GCM weaknesses. For most applications GCM is the practical choice due to
+    hardware support; EAX is a good alternative when simplicity is preferred.
+- question: Is MODE_CBC ever acceptable in PyCryptodome?
+  answer: >
+    Yes, but only when paired with HMAC in Encrypt-then-MAC construction: encrypt first,
+    then compute HMAC-SHA256 over (IV || ciphertext), store both. On decryption, verify the
+    HMAC before any decryption call. The analysis engine cannot detect the HMAC pairing, so
+    CBC usage will always be flagged by this rule. Consider migrating to GCM to eliminate
+    the audit overhead.
+- question: What is MODE_SIV and when should I use it?
+  answer: >
+    SIV (Synthetic IV) is a nonce-misuse-resistant authenticated encryption mode. Unlike GCM,
+    which produces completely broken output if a nonce is ever reused, SIV degrades gracefully
+    under nonce reuse — it still provides integrity, only losing IND-CPA security for repeated
+    messages. SIV is recommended when deterministic encryption is needed (e.g., encrypting
+    database values where nonce storage is impractical) or when nonce generation cannot be
+    guaranteed to be unique.
+- question: How do I migrate from AES.MODE_ECB to GCM in PyCryptodome?
+  answer: >
+    Replace `cipher = AES.new(key, AES.MODE_ECB)` with `cipher = AES.new(key, AES.MODE_GCM)`.
+    Change `ciphertext = cipher.encrypt(data)` to `ciphertext, tag = cipher.encrypt_and_digest(data)`.
+    Store the nonce (`cipher.nonce`) alongside the ciphertext and tag. For decryption, create a
+    new cipher with the stored nonce and call `cipher.decrypt_and_verify(ciphertext, tag)` which
+    raises `ValueError` if the tag is invalid. Note that existing ECB-encrypted data cannot be
+    decrypted with GCM — you need to decrypt old data with ECB and re-encrypt with GCM.
+- question: Does this rule cover DES or 3DES in PyCryptodome?
+  answer: >
+    No — this rule specifically targets `AES.new()`. DES and 3DES usage is covered by separate
+    rules in the weak algorithm category. Both DES (56-bit) and 3DES (112-bit effective) are
+    deprecated by NIST SP 800-131A and should be replaced with AES-256-GCM.
+similar_rules:
+- PYTHON-CRYPTO-SEC-030
+- PYTHON-CRYPTO-SEC-031
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
 - id: A02:2021
-  name: ''
-  url: ''
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

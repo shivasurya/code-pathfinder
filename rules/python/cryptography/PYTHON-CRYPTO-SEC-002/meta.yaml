@@ -1,75 +1,187 @@
+# Rule Identity
 id: PYTHON-CRYPTO-SEC-002
-name: Insecure Blowfish Cipher
-short_description: Blowfish has a 64-bit block size vulnerable to birthday attacks. Use AES instead.
+name: Blowfish Cipher Usage via cryptography Library
+short_description: Detects use of the Blowfish cipher through the cryptography library, which has a 64-bit block size making it vulnerable to Sweet32 birthday attacks after approximately 32GB of data.
+
+# Classification
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-002
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-002
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- cryptography
-- blowfish
-- weak-cipher
-- CWE-327
+  - python
+  - cryptography
+  - blowfish
+  - sweet32
+  - birthday-attack
+  - 64-bit-block
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of insecure or deprecated symmetric cipher algorithms across
 
-  Python cryptographic libraries including `cryptography` (hazmat primitives) and
+# Content
+description: |
+  This rule detects instantiation of the Blowfish algorithm via the `cryptography`
+  library's `cryptography.hazmat.primitives.ciphers.algorithms.Blowfish` class.
+  Blowfish uses a 64-bit block size, which makes it susceptible to the Sweet32
+  birthday attack once approximately 32GB of data is encrypted under the same key.
 
-  `PyCryptodome`/`PyCrypto`. The flagged ciphers have known cryptographic weaknesses that
+  The Sweet32 attack (CVE-2016-2183) exploits the birthday paradox: with a 64-bit
+  block cipher in CBC mode, after 2^32 blocks (roughly 32GB), the probability of
+  a block collision exceeds 50%. An attacker who can observe enough ciphertext
+  can exploit these collisions to recover plaintext, including session cookies in
+  HTTPS traffic. All major browsers and TLS stacks have disabled 64-bit block
+  cipher suites as a result.
 
-  make them unsuitable for protecting sensitive data.'
-message: Blowfish has a 64-bit block size vulnerable to birthday attacks. Use AES instead.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  The rule matches `CryptoCipherAlgorithms.method("Blowfish")`. Blowfish's key
+  flexibility (32 to 448 bits) does not mitigate the block size problem. The
+  companion rule PYTHON-CRYPTO-SEC-002a covers Blowfish in PyCryptodome.
 
+message: "Blowfish has a 64-bit block size vulnerable to Sweet32 birthday attacks. Replace with AES-256-GCM."
+
+security_implications:
+  - title: Sweet32 Birthday Attack After 32GB of Data
+    description: |
+      With a 64-bit block cipher, the birthday bound is 2^32 blocks (~32GB). Once
+      this threshold is crossed under the same key, block collisions become likely.
+      In CBC mode, an attacker who observes a collision can XOR the surrounding
+      blocks to recover the repeated plaintext. For long-lived TLS sessions or bulk
+      data encryption, this threshold is reachable in hours on a busy server.
+  - title: No Authenticated Encryption -- Padding Oracle Risk
+    description: |
+      Blowfish as exposed through the cryptography hazmat API does not provide
+      authenticated encryption. Using it in CBC mode without a separate MAC creates
+      padding oracle vulnerability surfaces. An attacker can submit modified
+      ciphertexts and observe error responses to decrypt content without the key.
+  - title: Deprecated by All Major TLS Implementations
+    description: |
+      Following CVE-2016-2183 (Sweet32), all major TLS stacks -- OpenSSL, NSS,
+      GnuTLS, and Java's JSSE -- disabled 64-bit block cipher suites by default.
+      Blowfish usage in new code runs counter to the established security consensus
+      and will be flagged in any TLS configuration audit.
+  - title: Design-Era Limitations Relative to AES
+    description: |
+      Blowfish was designed in 1993 as a free alternative to DES. AES was
+      standardized in 2001 after an open competition and has a 128-bit block
+      size that eliminates the Sweet32 class of attacks entirely. There is no
+      scenario where Blowfish is the right choice for new code.
+
+secure_example: |
+  from cryptography.hazmat.primitives.ciphers.aead import AESGCM
   import os
 
-
   # SECURE: AES-256-GCM provides both confidentiality and integrity
-
   key = AESGCM.generate_key(bit_length=256)
-
   aesgcm = AESGCM(key)
-
   nonce = os.urandom(12)
-
   ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
 
+recommendations:
+  - Replace Blowfish with AES-256-GCM (AESGCM from cryptography.hazmat.primitives.ciphers.aead) for authenticated encryption
+  - Use ChaCha20-Poly1305 as an alternative when hardware AES acceleration is not available
+  - If using a block cipher mode manually (CBC, CTR), always pair it with a separate HMAC-SHA256 to detect tampering
+  - Rotate keys and re-encrypt any data stored with Blowfish under AES-256-GCM
+  - Audit TLS configuration to confirm no 64-bit block cipher suites remain enabled alongside this code-level fix
 
-  # Or use ChaCha20-Poly1305
+detection_scope: |
+  This rule matches calls to the Blowfish constructor in the cryptography library's
+  hazmat algorithms module via the QueryType pattern
+  `CryptoCipherAlgorithms.method("Blowfish")`. It fires on any instantiation of a
+  Blowfish cipher object, regardless of key size or block mode. The 64-bit block
+  size vulnerability applies to all Blowfish configurations. The companion rule
+  PYTHON-CRYPTO-SEC-002a covers Blowfish in PyCryptodome.
 
-  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-  key = ChaCha20Poly1305.generate_key()
-
-  chacha = ChaCha20Poly1305(key)
-
-  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
-recommendations: []
+# References
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'RFC 7465: Prohibiting RC4 Cipher Suites'
-  url: https://tools.ietf.org/html/rfc7465
-- title: 'Sweet32: Birthday attacks on 64-bit block ciphers'
-  url: https://sweet32.info/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Sweet32: Birthday attacks on 64-bit block ciphers in TLS and OpenVPN"
+    url: https://sweet32.info/
+  - title: "CVE-2016-2183: Sweet32 vulnerability"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2016-2183
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: Blowfish supports up to 448-bit keys. Doesn't that make it secure?
+    answer: |
+      Key length and block size are separate properties. Blowfish's key size is indeed
+      flexible and large, but the Sweet32 attack targets the 64-bit block size, not
+      the key. Once 2^32 blocks are encrypted under any Blowfish key of any length,
+      the birthday bound is reached and block collisions become exploitable. AES
+      eliminates this with its 128-bit block size.
+
+  - question: We only encrypt small files with Blowfish. Is the 32GB limit still relevant?
+    answer: |
+      For truly isolated, small, one-off files with key rotation between each file,
+      the practical risk is reduced. However, the 32GB limit is a per-key bound --
+      if the same key is reused across many small files, the total ciphertext volume
+      accumulates. The safer path is to use AES-GCM, which has a 128-bit block size
+      and eliminates the Sweet32 class of attacks entirely regardless of data volume.
+
+  - question: How does the Sweet32 attack actually work in practice?
+    answer: |
+      In CBC mode, each plaintext block is XORed with the previous ciphertext block
+      before encryption. When two blocks encrypt to the same ciphertext (a birthday
+      collision), an attacker can XOR the two ciphertext blocks with each other and
+      with the preceding blocks to recover the plaintext of one block if the other
+      is known. In HTTPS sessions, an attacker can inject known content (e.g., CSRF
+      tokens in form data) and wait for the collision to reveal the session cookie.
+
+  - question: How do I handle key rotation if I must keep Blowfish temporarily during migration?
+    answer: |
+      If an immediate replacement is not feasible, limit each Blowfish key to
+      encrypting no more than 4GB (well below the 32GB birthday bound), rotate keys
+      frequently, and add a separate HMAC-SHA256 over each ciphertext to detect
+      tampering. Document this as a temporary measure with a hard cutoff date and
+      migrate to AES-256-GCM before that date.
+
+  - question: Does this rule flag Blowfish in bcrypt, which uses Blowfish internally?
+    answer: |
+      No. The rule specifically matches the Blowfish symmetric cipher constructor via
+      cryptography.hazmat.primitives.ciphers.algorithms.Blowfish. The bcrypt password
+      hashing function uses the Blowfish key schedule in a different way and is not
+      flagged by this rule. Bcrypt is appropriate for password hashing; symmetric
+      Blowfish is not appropriate for data encryption.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-002a
+  - PYTHON-CRYPTO-SEC-003
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-005a
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

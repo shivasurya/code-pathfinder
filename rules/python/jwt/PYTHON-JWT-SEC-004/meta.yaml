@@ -1,59 +1,207 @@
+# Rule Identity
 id: PYTHON-JWT-SEC-004
-name: JWT Exposed Credentials (Audit)
-short_description: jwt.encode() detected. Ensure no passwords or secrets are in the payload.
+name: JWT Exposed Credentials
+short_description: Detects jwt.encode() calls where passwords or secrets may be included in the token payload, exposing them to anyone who reads the token.
+
+# Classification
 severity: MEDIUM
 category: jwt
 language: python
-ruleset: python/PYTHON-JWT-SEC-004
+ruleset: python/jwt/PYTHON-JWT-SEC-004
+
+# Vulnerability Details
 cwe:
-- id: CWE-522
-  name: Insufficiently Protected Credentials
-  url: https://cwe.mitre.org/data/definitions/522.html
+  - id: CWE-522
+    name: "Insufficiently Protected Credentials"
+    url: https://cwe.mitre.org/data/definitions/522.html
+  - id: CWE-312
+    name: "Cleartext Storage of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/312.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - id: A04:2021
+    name: Insecure Design
+    url: https://owasp.org/Top10/A04_2021-Insecure_Design/
+
 tags:
-- python
-- jwt
-- credentials
-- audit
-- CWE-522
+  - python
+  - jwt
+  - pyjwt
+  - credentials
+  - password-exposure
+  - data-exposure
+  - cleartext
+  - audit
+  - CWE-522
+  - CWE-312
+  - OWASP-A02
+  - OWASP-A04
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect security misconfigurations in JSON Web Token (JWT) usage with the
 
-  PyJWT library (`jwt` module). JWTs are widely used for authentication and authorization
+# Content
+description: |
+  This rule flags jwt.encode() calls for review to ensure that passwords, API keys,
+  or other secrets aren't being included in the JWT payload. JWT payloads are
+  base64-encoded, not encrypted. Anyone who intercepts the token -- from browser
+  DevTools, a proxy, server logs, or a database -- can decode the payload and read
+  every field in plaintext.
 
-  in web applications. Misconfigurations can allow token forgery, credential exposure, and
+  Developers sometimes include passwords in JWT payloads because it seems convenient
+  -- "the token is signed, so it's secure." Signing prevents tampering, not reading.
+  A signed JWT is like a sealed letter written in pencil: nobody can change it, but
+  anyone can read it.
 
-  authentication bypass.'
-message: jwt.encode() detected. Ensure no passwords or secrets are in the payload.
-secure_example: "import jwt\nimport os\n\n# SECURE: Secret from environment variable\nSECRET = os.environ[\"\
-  JWT_SECRET_KEY\"]\n\n# SECURE: Use strong algorithm with proper secret\ntoken = jwt.encode(\n    {\"\
-  user_id\": 123, \"role\": \"admin\", \"exp\": datetime.utcnow() + timedelta(hours=1)},\n    SECRET,\n\
-  \    algorithm=\"HS256\"\n)\n\n# SECURE: Verify signature and specify allowed algorithms\npayload =\
-  \ jwt.decode(\n    token,\n    SECRET,\n    algorithms=[\"HS256\"],  # Explicitly whitelist algorithms\n\
-  \    options={\"require\": [\"exp\", \"iat\"]}\n)\n\n# SECURE: Use RS256 with asymmetric keys for distributed\
-  \ systems\nwith open(\"private_key.pem\", \"rb\") as f:\n    private_key = f.read()\ntoken = jwt.encode(payload,\
-  \ private_key, algorithm=\"RS256\")\n\nwith open(\"public_key.pem\", \"rb\") as f:\n    public_key =\
-  \ f.read()\npayload = jwt.decode(token, public_key, algorithms=[\"RS256\"])"
-recommendations: []
+  The rule operates at audit level, flagging all jwt.encode() calls. This is because
+  the engine can't yet inspect dictionary keys in arguments to check specifically for
+  keys like "password", "secret", or "api_key". Future engine updates will add dict
+  key matching to reduce false positives.
+
+message: "jwt.encode() call detected. Ensure the payload does not contain passwords, secrets, or sensitive credentials."
+
+security_implications:
+  - title: Password Exposure
+    description: |
+      If a password is in the JWT payload, anyone who gets the token can read it.
+      JWTs appear in Authorization headers (visible in browser DevTools), server
+      access logs, reverse proxy logs, and error tracking tools. That's a lot of
+      places for a plaintext password to end up.
+  - title: Credential Harvesting
+    description: |
+      Tokens are stored in localStorage, cookies, and mobile app storage. A single
+      XSS vulnerability or compromised device can expose every JWT the user has
+      received -- and if those tokens contain passwords, the attacker gets credentials
+      for free.
+  - title: Compliance Violations
+    description: |
+      Storing passwords in cleartext (even base64-encoded) violates PCI DSS, GDPR,
+      and most security standards. Base64 is not encryption -- it's encoding. Auditors
+      and pen testers will flag this immediately.
+  - title: Password Reuse Exploitation
+    description: |
+      Users reuse passwords across services. A password leaked from a JWT can be used
+      in credential stuffing attacks against other services -- email, banking, cloud
+      accounts.
+
+secure_example: |
+  import jwt
+  import os
+
+  SECRET = os.environ["JWT_SECRET_KEY"]
+
+  # SECURE: Only include non-sensitive identifiers in the payload
+  token = jwt.encode(
+      {
+          "user_id": 123,          # Opaque identifier, not a secret
+          "role": "admin",         # Authorization claim
+          "exp": expires_at,       # Expiration
+          "iat": issued_at,        # Issued at
+      },
+      SECRET,
+      algorithm="HS256"
+  )
+
+  # NEVER include passwords, API keys, secrets, SSNs, credit card numbers,
+  # or any PII that would cause harm if exposed.
+
+recommendations:
+  - Never put passwords, API keys, secrets, or PII in JWT payloads -- use opaque user IDs and look up sensitive data server-side
+  - If you need to include user attributes in the token, limit it to non-sensitive claims like user_id, role, and permissions
+  - Use JWE (JSON Web Encryption) if you genuinely need encrypted token payloads, but consider whether the data should be in the token at all
+  - Review your JWT payload structure with your security team -- the principle is minimum necessary claims
+  - Add automated checks in code review to catch sensitive keys being added to token payloads
+
+detection_scope: |
+  This rule matches all jwt.encode() calls resolved through the PyJWT library using
+  QueryType-based type inference. It currently operates as an audit rule that flags
+  all jwt.encode() calls for review. The rule cannot yet inspect dictionary keys in
+  the payload argument to specifically flag keys like "password", "secret", or
+  "api_key" -- this requires dict key matching support in the engine.
+
+# References
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'CWE-522: Insufficiently Protected Credentials'
-  url: https://cwe.mitre.org/data/definitions/522.html
-- title: 'CWE-287: Improper Authentication'
-  url: https://cwe.mitre.org/data/definitions/287.html
-- title: 'RFC 8725: JSON Web Token Best Current Practices'
-  url: https://tools.ietf.org/html/rfc8725
-- title: OWASP JWT Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-522: Insufficiently Protected Credentials"
+    url: https://cwe.mitre.org/data/definitions/522.html
+  - title: "CWE-312: Cleartext Storage of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/312.html
+  - title: "RFC 8725: JSON Web Token Best Current Practices (Section 3.11)"
+    url: https://tools.ietf.org/html/rfc8725#section-3.11
+  - title: OWASP JWT Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+  - title: "RFC 7519: JSON Web Token (JWT) -- Claims"
+    url: https://tools.ietf.org/html/rfc7519#section-4
+  - title: PyJWT Documentation
+    url: https://pyjwt.readthedocs.io/en/stable/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 3.4 -- render PAN unreadable anywhere it is stored"
+  - standard: GDPR
+    requirement: "Article 32 -- appropriate technical measures to protect personal data"
+  - standard: NIST SP 800-53
+    requirement: "SC-28: Protection of Information at Rest"
+  - standard: SOC 2
+    requirement: "CC6.7 -- restrict transmission of sensitive data"
+
+# FAQ
+faq:
+  - question: Why is base64 encoding not the same as encryption?
+    answer: |
+      Base64 is a reversible encoding scheme -- anyone can decode it without any key.
+      Run echo "eyJ1c2VyIjoiYWRtaW4ifQ" | base64 -d and you get {"user":"admin"}.
+      Encryption requires a secret key to decrypt. JWT payloads are base64-encoded,
+      which means they are readable by anyone who has the token.
+
+  - question: What should I include in a JWT payload?
+    answer: |
+      Include only non-sensitive identifiers and authorization claims: user_id (opaque,
+      not email), role, permissions, exp (expiration), iat (issued at), iss (issuer).
+      Look up anything sensitive server-side using the user_id from the token.
+
+  - question: Why does this rule flag all jwt.encode() calls?
+    answer: |
+      The engine can't yet inspect dictionary keys in function arguments. To check
+      specifically for keys like "password" or "secret" in the payload dict, it would
+      need dict key matching support. This is a known engine limitation tracked in
+      the product roadmap. For now, the rule flags all jwt.encode() calls for manual
+      review.
+
+  - question: Should I use JWE instead of JWS for sensitive data?
+    answer: |
+      JWE (JSON Web Encryption) encrypts the payload, so it can't be read without the
+      decryption key. But first ask whether the data needs to be in the token at all.
+      Tokens get stored in browsers, logged by proxies, and cached by CDNs. Even
+      encrypted, minimizing the data in a token reduces your attack surface.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/jwt --project .
+      It outputs SARIF, JSON, or CSV. On GitHub, it posts inline review comments directly
+      on pull requests pointing to the exact lines. No dashboard needed.
+
+  - question: What's the difference between this rule and SEC-005 (exposed data)?
+    answer: |
+      SEC-004 is about credentials in the payload (passwords, API keys). SEC-005 is
+      about user-controlled input flowing into jwt.encode() through taint analysis --
+      it catches cases where request data (form fields, query parameters) ends up in
+      the token payload, which could expose user-submitted sensitive data.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-JWT-SEC-001
+  - PYTHON-JWT-SEC-005
+  - PYTHON-FLASK-SEC-003
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

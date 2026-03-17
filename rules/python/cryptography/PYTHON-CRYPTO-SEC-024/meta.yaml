@@ -1,10 +1,10 @@
 id: PYTHON-CRYPTO-SEC-024
 name: Insufficient DSA Key Size (PyCryptodome)
-short_description: DSA key size is less than 2048 bits.
+short_description: DSA key size is less than 2048 bits in PyCryptodome. Use DSA.generate(2048) or higher.
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-024
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-024
 cwe:
 - id: CWE-326
   name: Inadequate Encryption Strength
@@ -14,37 +14,112 @@ tags:
 - pycryptodome
 - dsa
 - key-size
-- audit
 - CWE-326
+- OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: Detects DSA key generation with bits less than 2048 in PyCryptodome.
-message: DSA key size is less than 2048 bits.
-secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec\nfrom cryptography.hazmat.backends\
-  \ import default_backend\n\n# SECURE: RSA-3072 or higher\nprivate_key = rsa.generate_private_key(\n\
-  \    public_exponent=65537,\n    key_size=3072,\n    backend=default_backend()\n)\n\n# SECURE: DSA-2048\
-  \ or higher\nprivate_key = dsa.generate_private_key(\n    key_size=2048,\n    backend=default_backend()\n\
-  )\n\n# SECURE: Strong elliptic curve (P-256 or higher)\nprivate_key = ec.generate_private_key(\n   \
-  \ ec.SECP256R1(),  # NIST P-256\n    backend=default_backend()\n)\n\n# SECURE: PyCryptodome RSA-3072\n\
-  from Crypto.PublicKey import RSA\nkey = RSA.generate(3072)"
-recommendations: []
+description: >
+  Detects DSA key generation using `DSA.generate(bits)` from PyCryptodome where the first
+  positional argument (key size in bits) is less than 2048. This rule uses a
+  `.where(0, lt(2048))` predicate targeting position 0 — it fires only on provably undersized
+  keys and does not flag 2048-bit or larger keys.
+
+  DSA with small keys is vulnerable to discrete logarithm attacks. A 1024-bit DSA key can
+  have its private key recovered through index calculus methods, enabling an attacker to forge
+  arbitrary signatures. NIST SP 800-131A formally deprecated 1024-bit DSA in 2013 and requires
+  2048-bit minimum. Beyond the key size risk, DSA signing requires a cryptographically random
+  per-signature nonce (k): a reused nonce across two signatures algebraically exposes the private
+  key regardless of key size, as demonstrated in the 2010 Sony PlayStation 3 master key extraction.
+  For new applications, prefer ECDSA (ECC.generate(curve='P-256')) or avoid DSA entirely.
+message: DSA key size is less than 2048 bits. Use DSA.generate(2048) or prefer ECDSA/EdDSA for new systems.
+secure_example: |
+  from Crypto.PublicKey import DSA, ECC
+
+  # SECURE: DSA 2048-bit key (NIST SP 800-131A minimum)
+  key = DSA.generate(2048)
+
+  # SECURE: DSA 3072-bit key (recommended for post-2030)
+  key = DSA.generate(3072)
+
+  # PREFERRED: ECC P-256 replaces DSA for new systems
+  key = ECC.generate(curve='P-256')
+
+  # PREFERRED: ECC P-384 for high-value signing keys
+  key = ECC.generate(curve='P-384')
+recommendations:
+- Use DSA.generate(2048) as the absolute minimum; use DSA.generate(3072) for systems requiring protection beyond 2030.
+- Consider replacing DSA with ECC (curve='P-256' or 'P-384') for new applications — smaller keys, faster operations, and immune to nonce-reuse catastrophe when using EdDSA.
+- If DSA must be used, ensure the per-signature nonce (k) is generated from a CSPRNG; never reuse a nonce across two signatures with the same key.
+- Audit all DSA key material and schedule rotation of any keys below 2048 bits.
 references:
 - title: 'CWE-326: Inadequate Encryption Strength'
   url: https://cwe.mitre.org/data/definitions/326.html
-- title: 'NIST SP 800-57 Part 1 Rev 5: Key Management Recommendations'
-  url: https://csrc.nist.gov/publications
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
+- title: 'NIST SP 800-57 Part 1 Rev 5: Recommendation for Key Management'
+  url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths'
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+- title: 'PyCryptodome Documentation: DSA.generate()'
+  url: https://pycryptodome.readthedocs.io/en/latest/src/public_key/dsa.html
+- title: 'Sony PS3 DSA Nonce Reuse Attack (2010) — private key recovered from two signatures'
+  url: https://www.bbc.co.uk/news/technology-12116051
+- title: OWASP Cryptographic Failures (A02:2021)
   url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography for transmission of cardholder data"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit DSA keys; 1024-bit deprecated since 2013"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- minimum key strengths for equivalent security levels"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and key sizes"
+faq:
+- question: Does this rule flag DSA.generate(2048)?
+  answer: >
+    No. The rule uses `.where(0, lt(2048))` which only fires when the bits argument is
+    strictly less than 2048. DSA.generate(2048) does NOT trigger this rule.
+- question: What key size should I use for new DSA applications?
+  answer: >
+    Use DSA.generate(2048) as the minimum, or DSA.generate(3072) for data requiring
+    protection beyond 2030. However, for any new system seriously consider replacing DSA
+    with ECC.generate(curve='P-256') — it is faster, has smaller signatures, and if using
+    Ed25519-style deterministic signing avoids the nonce-reuse vulnerability entirely.
+- question: How does this rule differ from SEC-021 (DSA in the cryptography lib)?
+  answer: >
+    Both rules flag DSA keys below 2048 bits. The difference is the target library and API:
+    SEC-021 targets `cryptography`'s `dsa.generate_private_key(key_size=...)` named-argument
+    API, while SEC-024 targets PyCryptodome's `DSA.generate(bits)` positional-argument API
+    and uses `.where(0, lt(2048))` to check position 0.
+- question: What attack does a small DSA key enable?
+  answer: >
+    Small DSA keys are vulnerable to the index calculus algorithm for computing discrete
+    logarithms. With a 1024-bit modulus an attacker can recover the private key and forge
+    signatures on arbitrary messages — enabling code signing bypass, authentication
+    impersonation, or certificate forgery depending on how the key is used.
+- question: Why is DSA particularly dangerous compared to RSA?
+  answer: >
+    Beyond key size, DSA has a catastrophic nonce-reuse vulnerability: if the per-signature
+    random value k is ever reused across two signatures (even with a large key), an attacker
+    can algebraically derive the private key from those two signatures. This happened to Sony
+    in 2010 and to Bitcoin wallet implementations that used flawed RNGs. RSA signing does not
+    have this property. EdDSA (Ed25519) mitigates it by deriving k deterministically.
+- question: How does this rule detect the key size when it is a positional argument?
+  answer: >
+    PyCryptodome's DSA.generate() accepts key size as position 0. The rule uses `.where(0, lt(2048))`
+    to filter on the first positional argument. If the key size is passed as a variable whose
+    value cannot be statically resolved, this rule may not fire (under-approximation).
+    Use literal integer values for key sizes in production code to ensure static detectability.
+similar_rules:
+- PYTHON-CRYPTO-SEC-021
+- PYTHON-CRYPTO-SEC-022
+- PYTHON-CRYPTO-SEC-023
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
 - id: A02:2021
-  name: ''
-  url: ''
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

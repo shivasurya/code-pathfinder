@@ -1,10 +1,10 @@
 id: PYTHON-CRYPTO-SEC-021
-name: Insufficient DSA Key Size
-short_description: DSA key size is less than 2048 bits. Use at least 2048-bit keys.
+name: Insufficient DSA Key Size (cryptography lib)
+short_description: DSA key size is less than 2048 bits. NIST SP 800-131A requires 2048-bit minimum.
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-021
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-021
 cwe:
 - id: CWE-326
   name: Inadequate Encryption Strength
@@ -14,38 +14,110 @@ tags:
 - cryptography
 - dsa
 - key-size
-- audit
 - CWE-326
+- OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: Detects DSA key generation with key_size less than 2048 bits in the cryptography library.
-  NIST SP 800-131A requires 2048-bit minimum for DSA keys.
-message: DSA key size is less than 2048 bits. Use at least 2048-bit keys.
-secure_example: "from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec\nfrom cryptography.hazmat.backends\
-  \ import default_backend\n\n# SECURE: RSA-3072 or higher\nprivate_key = rsa.generate_private_key(\n\
-  \    public_exponent=65537,\n    key_size=3072,\n    backend=default_backend()\n)\n\n# SECURE: DSA-2048\
-  \ or higher\nprivate_key = dsa.generate_private_key(\n    key_size=2048,\n    backend=default_backend()\n\
-  )\n\n# SECURE: Strong elliptic curve (P-256 or higher)\nprivate_key = ec.generate_private_key(\n   \
-  \ ec.SECP256R1(),  # NIST P-256\n    backend=default_backend()\n)\n\n# SECURE: PyCryptodome RSA-3072\n\
-  from Crypto.PublicKey import RSA\nkey = RSA.generate(3072)"
-recommendations: []
+description: >
+  Detects DSA key generation using `dsa.generate_private_key()` from the `cryptography` library
+  where the `key_size` argument is less than 2048 bits. This rule uses a `.where("key_size", lt(2048))`
+  predicate and fires only on provably undersized keys; it does not flag 2048-bit or larger keys.
+  DSA with small keys is vulnerable to discrete logarithm attacks: with a 1024-bit modulus an
+  attacker can recover the private key and then forge arbitrary signatures on any message.
+  NIST SP 800-131A formally deprecated 1024-bit DSA in 2013 and requires 2048-bit minimum.
+  Note that DSA itself is being phased out in favour of ECDSA — even at 2048 bits, DSA requires
+  careful nonce management (a reused nonce leaks the private key as demonstrated in Sony PlayStation
+  3 key extraction). For new systems prefer ECDSA with SECP256R1 or EdDSA.
+message: DSA key size is less than 2048 bits. Use at least 2048-bit DSA keys, or prefer ECDSA/EdDSA for new systems.
+secure_example: |
+  from cryptography.hazmat.primitives.asymmetric import dsa, ec
+  from cryptography.hazmat.backends import default_backend
+
+  # SECURE: DSA 2048-bit key (NIST minimum)
+  private_key = dsa.generate_private_key(
+      key_size=2048,
+      backend=default_backend()
+  )
+
+  # SECURE: DSA 3072-bit key (recommended for post-2030)
+  private_key = dsa.generate_private_key(
+      key_size=3072,
+      backend=default_backend()
+  )
+
+  # PREFERRED: ECDSA P-256 — replaces DSA for new systems, immune to nonce reuse issues
+  private_key = ec.generate_private_key(ec.SECP256R1(), backend=default_backend())
+recommendations:
+- Use key_size=2048 as the absolute minimum; use key_size=3072 for systems expected to operate beyond 2030.
+- Consider replacing DSA with ECDSA (SECP256R1) or EdDSA for new applications — smaller keys, faster operations, and no nonce-reuse catastrophe.
+- If DSA must be used, ensure the per-signature nonce (k) is generated with a cryptographically secure random number generator; a reused nonce leaks the private key.
+- Audit all DSA key material in your infrastructure and schedule rotation of any keys below 2048 bits.
 references:
 - title: 'CWE-326: Inadequate Encryption Strength'
   url: https://cwe.mitre.org/data/definitions/326.html
-- title: 'NIST SP 800-57 Part 1 Rev 5: Key Management Recommendations'
-  url: https://csrc.nist.gov/publications
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
+- title: 'NIST SP 800-57 Part 1 Rev 5: Recommendation for Key Management'
+  url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths'
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+- title: 'Sony PS3 DSA Nonce Reuse Attack (2010) — private key recovered from two signatures'
+  url: https://www.bbc.co.uk/news/technology-12116051
+- title: OWASP Cryptographic Failures (A02:2021)
   url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography for transmission of cardholder data"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit RSA/DSA keys; 1024-bit deprecated since 2013"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- minimum key strengths and algorithm selection for equivalent security levels"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and key sizes"
+faq:
+- question: Does this rule flag 2048-bit DSA keys?
+  answer: >
+    No. The rule uses `.where("key_size", lt(2048))` which only fires when key_size is strictly
+    less than 2048 bits. A key_size=2048 call does NOT trigger this rule.
+- question: What key size should I use for DSA in new applications?
+  answer: >
+    Use 2048-bit DSA at minimum, or 3072-bit for systems requiring protection beyond 2030.
+    However, for any new system consider replacing DSA entirely with ECDSA using SECP256R1
+    (equivalent to 3072-bit RSA/DSA) or EdDSA (Ed25519). These are faster, have smaller
+    key and signature sizes, and EdDSA is immune to nonce reuse vulnerabilities.
+- question: Why is DSA particularly risky compared to RSA?
+  answer: >
+    DSA signing requires a random nonce (k) per signature. If that nonce is ever reused across
+    two signatures, an attacker can algebraically recover the private key — even if the key
+    itself is 4096 bits. This attack was used in 2010 to extract the Sony PS3 master signing key.
+    ECDSA shares this property; EdDSA (Ed25519) deterministically derives nonces and is immune.
+- question: What attack does a small DSA key enable?
+  answer: >
+    Small DSA keys are vulnerable to the index calculus algorithm for computing discrete
+    logarithms over the underlying finite field. With a 1024-bit modulus, an attacker can
+    recover the private key and then forge signatures on arbitrary messages, enabling them
+    to impersonate the key holder for code signing, authentication, or certificate issuance.
+- question: Why does this rule flag below 2048 while SEC-024 (PyCryptodome) also flags below 2048?
+  answer: >
+    Both SEC-021 and SEC-024 use 2048 bits as the threshold, aligning with the NIST SP 800-131A
+    minimum. The only difference is the library being targeted: SEC-021 targets the `cryptography`
+    library's `dsa.generate_private_key(key_size=...)` API, while SEC-024 targets PyCryptodome's
+    `DSA.generate(bits)` API where key size is a positional argument.
+- question: Is DSA still acceptable for compliance purposes?
+  answer: >
+    Yes, 2048-bit DSA remains acceptable under most compliance frameworks through 2030. However,
+    NIST SP 800-131A notes that DSA is losing support across implementations. OpenSSH deprecated
+    DSA host keys in version 7.0 (2015). Check your compliance framework's current approved
+    algorithm list before committing to DSA for new systems.
+similar_rules:
+- PYTHON-CRYPTO-SEC-020
+- PYTHON-CRYPTO-SEC-022
+- PYTHON-CRYPTO-SEC-024
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
 - id: A02:2021
-  name: ''
-  url: ''
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

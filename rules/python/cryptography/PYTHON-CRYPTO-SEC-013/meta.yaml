@@ -1,84 +1,137 @@
 id: PYTHON-CRYPTO-SEC-013
 name: Insecure MD4 Hash (PyCryptodome)
-short_description: MD4 is severely broken. Use SHA-256 or SHA-3 instead.
+short_description: MD4 has been completely broken since 1995 with full collisions computable in seconds. It has no legitimate security use. Use SHA-256 or SHA-3 instead.
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-013
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-013
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: Use of Weak Hash
+    url: https://cwe.mitre.org/data/definitions/328.html
 tags:
-- python
-- pycryptodome
-- md4
-- weak-hash
-- CWE-327
+  - python
+  - pycryptodome
+  - md4
+  - weak-hash
+  - CWE-327
+  - OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of cryptographically broken or weak hash algorithms across
+description: |
+  Detects usage of MD4 via PyCryptodome's `Crypto.Hash.MD4.new()` or `Cryptodome.Hash.MD4.new()`
+  constructor. MD4 was designed by Ron Rivest in 1990 as a faster predecessor to MD5. By 1995,
+  Hans Dobbertin had demonstrated full collision attacks against MD4. Today, MD4 collisions
+  can be computed in milliseconds on a laptop using algebraic attacks. There is no scenario
+  in which MD4 provides meaningful security.
 
-  Python libraries including `cryptography` (hazmat primitives) and `PyCryptodome`/`PyCrypto`.
+  MD4 appears in legacy protocols including NTLMv1/NTLMv2 Windows authentication (as a
+  component) and older LAN Manager hashes. Its presence in PyCryptodome exists solely to
+  support parsing and interoperability with these legacy systems, not for new security
+  implementations.
 
-  Weak hash functions are vulnerable to collision attacks and should not be used for security
+  This rule is rated HIGH severity because MD4 is more completely broken than MD5 — the
+  attack complexity is lower, preimage resistance is weaker, and no context exists where
+  MD4 is an acceptable security primitive today. If MD4 appears in a codebase, it should
+  be treated as a critical finding requiring immediate remediation or explicit documented
+  justification (e.g., NTLM protocol compatibility with a defined migration timeline).
+message: MD4 is completely broken — full collisions compute in milliseconds. This algorithm has no security value. Replace with Crypto.Hash.SHA256.new() or Crypto.Hash.SHA3_256.new() immediately.
+detection_scope: |
+  Matches any call to `PyCryptoHashMD4.method("new")` where `PyCryptoHashMD4` is a
+  QueryType resolving fully-qualified names `Crypto.Hash.MD4` and `Cryptodome.Hash.MD4`.
+  This covers both the PyCryptodome drop-in compatibility namespace (`Crypto.*`) and the
+  standalone namespace (`Cryptodome.*`). The rule fires on `.new()` constructor invocation.
+  MD4 has an extremely narrow set of legitimate uses (NTLM protocol compatibility), making
+  almost all detected instances a genuine security concern.
+secure_example: |
+  from Crypto.Hash import SHA256, SHA3_256
 
-  purposes such as digital signatures, certificate validation, password hashing, or data
+  # SECURE: SHA-256 for general integrity checking
+  h = SHA256.new()
+  h.update(b"data to hash")
+  digest = h.hexdigest()
 
-  integrity verification.'
-message: MD4 is severely broken. Use SHA-256 or SHA-3 instead.
-secure_example: 'from cryptography.hazmat.primitives import hashes
-
-  from cryptography.hazmat.backends import default_backend
-
-
-  # SECURE: SHA-256 for integrity checking
-
-  digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-
-  digest.update(document_bytes)
-
-  checksum = digest.finalize()
-
-
-  # SECURE: SHA-3 for digital signatures
-
-  from Crypto.Hash import SHA3_256
-
+  # SECURE: SHA-3 for applications requiring stronger collision resistance
   h = SHA3_256.new()
+  h.update(b"document bytes")
+  digest = h.hexdigest()
 
-  h.update(b"data to sign")
-
-  hash_value = h.hexdigest()
-
-
-  # SECURE: Argon2 for password hashing
-
-  from argon2 import PasswordHasher
-
-  ph = PasswordHasher()
-
-  password_hash = ph.hash(password)'
-recommendations: []
+  # SECURE: HMAC with SHA-256 for message authentication codes
+  from Crypto.Hash import HMAC
+  import os
+  key = os.urandom(32)
+  mac = HMAC.new(key, digestmod=SHA256)
+  mac.update(b"message to authenticate")
+  tag = mac.hexdigest()
+security_implications:
+  - "Trivial collision attacks: MD4 collisions can be computed in milliseconds using algebraic differential attacks, making any MD4-based integrity check immediately forgeable by an attacker with basic tools."
+  - "Password cracking: MD4 was the underlying hash in LAN Manager and NTLM authentication. Existing password database dumps using MD4 are entirely compromised; an attacker can recover passwords in seconds using precomputed tables or GPU cracking."
+  - "Protocol exploitation: systems implementing NTLM authentication (which internally uses MD4 for NT hashes) are vulnerable to pass-the-hash attacks and offline cracking of captured authentication handshakes."
+  - "Regulatory non-compliance: MD4 fails all major cryptographic standards (NIST, PCI DSS, FIPS), and its presence in code is a mandatory remediation finding in any compliance-driven security review."
+recommendations:
+  - "Replace Crypto.Hash.MD4.new() with Crypto.Hash.SHA256.new() for all integrity and authentication use cases — SHA-256 provides 256-bit collision resistance with no known weaknesses."
+  - "For password hashing, use Argon2id (argon2-cffi), bcrypt, or scrypt — not SHA-256 or any raw hash function, as these are too fast for password storage."
+  - "If MD4 is required by a legacy protocol such as NTLM, document the usage explicitly with a migration plan and compensating controls (e.g., require modern NTLMv2 negotiation, enforce network-level authentication)."
+  - "Audit all callers of Crypto.Hash.MD4 to determine whether they are in a security-sensitive code path — given MD4's total brokenness, even non-obvious uses (e.g., as a PRF component) pose risk."
+  - "For message authentication, use Crypto.Hash.HMAC with SHA-256 as the digest module."
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography"
+  - standard: NIST SP 800-131A
+    requirement: "MD5 and SHA-1 disallowed for digital signatures"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+faq:
+  - question: "Is MD4 ever safe to use?"
+    answer: "No. Unlike MD5 or SHA-1, there is no non-security context in which MD4 provides a meaningful property. Even for trivial checksums it is better to use a non-broken algorithm for future-proofing. The only legitimate reason to call Crypto.Hash.MD4.new() is to implement or parse a legacy protocol (e.g., NTLM) that you cannot change — and even then, a migration timeline should be documented."
+  - question: "My application uses NTLM authentication and needs MD4 — what should I do?"
+    answer: "If you are implementing NTLM for Windows domain authentication compatibility, document the MD4 usage explicitly as a protocol-mandated legacy dependency. Ensure NTLMv2 is enforced (not NTLMv1), apply the defense-in-depth controls recommended by Microsoft, and plan migration to Kerberos or modern authentication protocols. Do not extend the use of MD4 beyond the minimum required for protocol compliance."
+  - question: "How does MD4 compare to MD5 in terms of how broken it is?"
+    answer: "MD4 is significantly more broken than MD5. MD5 collisions became practical in 2004 and require seconds; MD4 collisions were demonstrated in 1995 and now take milliseconds using algebraic differential techniques. MD4 also has weaker preimage resistance than MD5. There is no scenario where MD4 is preferable to MD5, and MD5 itself is unacceptable for security."
+  - question: "Why is this rated HIGH while MD5 is rated MEDIUM?"
+    answer: "The severity difference reflects practical attack cost. MD5 collisions require seconds to minutes of computation and some specialized knowledge. MD4 collisions require milliseconds and are trivially reproducible using published tools. The window for exploiting MD4 is significantly wider, and the algorithm has no redeemable security properties."
+  - question: "How do I run this rule in CI/CD?"
+    answer: "Run `code-pathfinder scan --ruleset python/cryptography/PYTHON-CRYPTO-SEC-013 --path ./src` in your pipeline. Add `--format sarif` to produce SARIF output compatible with GitHub Advanced Security and similar platforms."
+  - question: "Does PyCryptodome still include MD4?"
+    answer: "Yes, PyCryptodome includes MD4 for legacy protocol support. Its inclusion does not imply it is safe for new security applications."
+  - question: "What if I am computing an NT hash for testing NTLM handshakes in a security tool?"
+    answer: "Security tooling that intentionally implements broken algorithms for attack simulation or protocol testing should suppress this finding with a documented suppression comment explaining the context. The suppression should be scoped as narrowly as possible and reviewed in code review."
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'CVE-2004-2761: MD5 collision vulnerability in certificate signing'
-  url: ''
-- title: 'SHAttered: SHA-1 collision attack'
-  url: https://shattered.io/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "Dobbertin 1995: Cryptanalysis of MD4"
+    url: https://link.springer.com/chapter/10.1007/3-540-60590-8_1
+  - title: "RFC 1320: The MD4 Message-Digest Algorithm (historic)"
+    url: https://www.rfc-editor.org/rfc/rfc1320
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "OWASP Cryptographic Failures (A02:2021)"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "PyCryptodome documentation: Crypto.Hash.MD4"
+    url: https://pycryptodome.readthedocs.io/en/latest/src/hash/md4.html
+similar_rules:
+  - id: PYTHON-CRYPTO-SEC-014
+    description: MD2 usage via PyCryptodome — also rated HIGH, even older and slower algorithm
+  - id: PYTHON-CRYPTO-SEC-012
+    description: MD5 usage via PyCryptodome — same library, weaker-but-still-broken MD5
+  - id: PYTHON-CRYPTO-SEC-010
+    description: MD5 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-011
+    description: SHA-1 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-015
+    description: SHA-1 usage via PyCryptodome
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
-- id: A02:2021
-  name: ''
-  url: ''
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

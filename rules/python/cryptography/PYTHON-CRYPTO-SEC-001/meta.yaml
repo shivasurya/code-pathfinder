@@ -1,76 +1,192 @@
+# Rule Identity
 id: PYTHON-CRYPTO-SEC-001
-name: Insecure ARC4 (RC4) Cipher
-short_description: ARC4/RC4 is a broken stream cipher. Use AES-GCM or ChaCha20Poly1305 instead.
+name: RC4 (ARC4) Cipher Usage via cryptography Library
+short_description: Detects use of the RC4 stream cipher through the cryptography library's ARC4 algorithm, which has known keystream biases and is prohibited by RFC 7465.
+
+# Classification
 severity: HIGH
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-001
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-001
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- cryptography
-- arc4
-- rc4
-- weak-cipher
-- CWE-327
+  - python
+  - cryptography
+  - rc4
+  - arc4
+  - stream-cipher
+  - broken-crypto
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of insecure or deprecated symmetric cipher algorithms across
 
-  Python cryptographic libraries including `cryptography` (hazmat primitives) and
+# Content
+description: |
+  This rule detects instantiation of the ARC4 (RC4) algorithm via the `cryptography`
+  library's `cryptography.hazmat.primitives.ciphers.algorithms.ARC4` class. RC4 was
+  once widely deployed in SSL/TLS, WEP, and WPA, but it has been cryptographically
+  broken for over a decade.
 
-  `PyCryptodome`/`PyCrypto`. The flagged ciphers have known cryptographic weaknesses that
+  RC4 produces a biased keystream: the first few bytes are strongly correlated with
+  the key, and the output distribution is non-uniform across the full byte range. The
+  BEAST, RC4NOMORE, and related attacks exploit these biases to recover plaintext from
+  captured ciphertext. RFC 7465 explicitly prohibits RC4 in all versions of TLS, and
+  NIST SP 800-131A disallows it for federal use.
 
-  make them unsuitable for protecting sensitive data.'
-message: ARC4/RC4 is a broken stream cipher. Use AES-GCM or ChaCha20Poly1305 instead.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  The rule matches `CryptoCipherAlgorithms.method("ARC4")` — any call to the ARC4
+  constructor in the hazmat algorithms module. There is no safe configuration for RC4;
+  the algorithm itself is the problem, regardless of key size.
 
+message: "RC4 (ARC4) cipher is cryptographically broken. Replace with AES-256-GCM or ChaCha20-Poly1305."
+
+security_implications:
+  - title: Biased Keystream Enables Plaintext Recovery
+    description: |
+      RC4's keystream is statistically biased from the very first byte. Attackers who
+      observe enough ciphertext encrypted under the same or related keys can
+      statistically recover the plaintext. The RC4NOMORE attack demonstrated full
+      HTTP cookie recovery in under 75 hours against a live HTTPS connection using
+      only network traffic capture.
+  - title: Prohibited in TLS by RFC 7465
+    description: |
+      RFC 7465 (2015) mandates that TLS implementations MUST NOT negotiate any
+      RC4-based cipher suite. Code that uses RC4 in a network context directly
+      violates this requirement and will fail compliance reviews for any system
+      handling PCI DSS, HIPAA, or FedRAMP data.
+  - title: No Authentication -- Ciphertext is Malleable
+    description: |
+      RC4 provides only stream confidentiality, with no built-in integrity or
+      authentication. An attacker who can flip bits in the ciphertext will produce
+      predictable, corresponding bit flips in the plaintext, enabling undetected
+      message tampering without knowledge of the key.
+  - title: Key Reuse Eliminates All Security
+    description: |
+      If the same RC4 key is ever reused across two messages, an attacker who XORs
+      the two ciphertexts removes the keystream entirely. Both plaintexts can then
+      be recovered using statistical analysis. WEP was broken at scale this way,
+      and the same risk applies to any RC4-encrypted data at rest or in transit.
+
+secure_example: |
+  from cryptography.hazmat.primitives.ciphers.aead import AESGCM
   import os
 
-
   # SECURE: AES-256-GCM provides both confidentiality and integrity
-
   key = AESGCM.generate_key(bit_length=256)
-
   aesgcm = AESGCM(key)
-
   nonce = os.urandom(12)
-
   ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
 
+recommendations:
+  - Replace ARC4 with AES-256-GCM (AESGCM from cryptography.hazmat.primitives.ciphers.aead) for authenticated encryption
+  - Use ChaCha20-Poly1305 (ChaCha20Poly1305) as an alternative when AES hardware acceleration is unavailable
+  - Never reuse a key with any stream cipher -- generate a cryptographically random key per encryption operation
+  - Migrate any data previously encrypted with RC4 by decrypting and re-encrypting under AES-256-GCM with a new key
+  - Run this rule in CI to prevent RC4 from being reintroduced during future development or library upgrades
 
-  # Or use ChaCha20-Poly1305
+detection_scope: |
+  This rule matches calls to the ARC4 constructor in the cryptography library's hazmat
+  algorithms module via the QueryType pattern `CryptoCipherAlgorithms.method("ARC4")`.
+  It fires whenever the ARC4 class is instantiated, regardless of key size or any
+  surrounding wrapper logic. There is no safe configuration for RC4, so no sanitizer
+  exclusions apply. The companion rule PYTHON-CRYPTO-SEC-001a covers the same algorithm
+  in the PyCryptodome library.
 
-  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-  key = ChaCha20Poly1305.generate_key()
-
-  chacha = ChaCha20Poly1305(key)
-
-  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
-recommendations: []
+# References
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'RFC 7465: Prohibiting RC4 Cipher Suites'
-  url: https://tools.ietf.org/html/rfc7465
-- title: 'Sweet32: Birthday attacks on 64-bit block ciphers'
-  url: https://sweet32.info/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "RFC 7465: Prohibiting RC4 Cipher Suites"
+    url: https://www.rfc-editor.org/rfc/rfc7465
+  - title: "RC4NOMORE: Practically breaking WPA-TKIP and TLS using RC4 biases"
+    url: https://www.rc4nomore.com/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+  - standard: RFC 7465
+    requirement: "RC4 cipher suites are prohibited in all versions of TLS"
+
+# FAQ
+faq:
+  - question: Why is RC4 considered broken if it was used in WPA and SSL for years?
+    answer: |
+      RC4 was widely deployed before researchers fully characterized its keystream
+      biases. The BEAST attack (2011), the RC4NOMORE attack (2015), and two decades
+      of academic analysis have conclusively shown that RC4's output is non-uniform
+      enough to recover plaintext from realistic traffic volumes. RFC 7465 formalized
+      the prohibition in 2015. Legacy deployment does not imply safety.
+
+  - question: Can I add a random IV or use key derivation to make RC4 safe?
+    answer: |
+      No. The weakness is in the keystream generation algorithm itself, not in how
+      the key is selected or derived. A random IV prevents identical keystreams across
+      sessions, but the per-byte biases in the RC4 output remain exploitable. The
+      correct fix is to replace the algorithm entirely -- use AES-GCM or
+      ChaCha20-Poly1305.
+
+  - question: How do I migrate data that was already encrypted with RC4?
+    answer: |
+      Decrypt all RC4-protected data using the existing key, then re-encrypt with
+      AES-256-GCM using a freshly generated 256-bit key. Securely destroy the old
+      RC4 key after migration. For data in transit (e.g., archived TLS sessions),
+      captured ciphertext cannot be retroactively fixed -- disable RC4 cipher suites
+      at the TLS negotiation layer and rotate session keys going forward.
+
+  - question: Does this rule fire on RC4 mentioned in comments or variable names?
+    answer: |
+      No. The rule matches the ARC4 constructor call, not string literals or comments.
+      A variable named arc4_key or a comment explaining RC4's weaknesses will not
+      trigger a finding. Only actual instantiation of the ARC4 class fires.
+
+  - question: What does failing a compliance audit due to RC4 usage look like?
+    answer: |
+      PCI DSS QSAs flag RC4 as a violation of Requirement 4.2.1 during on-site
+      assessments. FedRAMP assessors treat it as a HIGH finding under NIST SP 800-53
+      SC-13. For TLS, external scanners will assign an F grade if RC4 cipher suites
+      are negotiable. Running this rule in CI provides auditable evidence that RC4
+      is not present in the codebase.
+
+  - question: Is there a performance argument for RC4 over modern AEAD ciphers?
+    answer: |
+      No. ChaCha20-Poly1305 is faster than RC4 on hardware without AES-NI instruction
+      support, and AES-GCM with AES-NI acceleration is faster still. The cryptography
+      library provides both via its AEAD primitives. There is no performance
+      justification for choosing RC4 on any modern platform.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-001a
+  - PYTHON-CRYPTO-SEC-002
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-006
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

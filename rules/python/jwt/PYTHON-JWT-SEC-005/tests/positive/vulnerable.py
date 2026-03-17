@@ -1,11 +1,10 @@
+from flask import Flask, request
 import jwt
 
-# SEC-001: hardcoded secret + SEC-004: encode audit
-token = jwt.encode({"user": "admin"}, "my_secret_key", algorithm="HS256")
+app = Flask(__name__)
 
-# SEC-002: none algorithm (encode)
-unsafe_token = jwt.encode({"user": "admin"}, "", algorithm="none")
-
-# SEC-005: request data to jwt.encode (flow)
+@app.route('/token')
+def create_token():
+    # Vulnerable: user input flows directly into JWT payload
     user_data = request.args.get('user')
     return jwt.encode({"sub": user_data}, "key", algorithm="HS256")

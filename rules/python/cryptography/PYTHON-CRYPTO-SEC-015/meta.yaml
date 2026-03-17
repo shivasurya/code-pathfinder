@@ -1,84 +1,147 @@
 id: PYTHON-CRYPTO-SEC-015
 name: Insecure SHA1 Hash (PyCryptodome)
-short_description: SHA-1 is deprecated for security use. Use SHA-256 or SHA-3 instead.
+short_description: SHA-1 was broken by the SHAttered collision attack in 2017 and is deprecated by NIST for digital signatures. Use SHA-256 or SHA-3 via PyCryptodome instead.
 severity: MEDIUM
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-015
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-015
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: Use of Weak Hash
+    url: https://cwe.mitre.org/data/definitions/328.html
 tags:
-- python
-- pycryptodome
-- sha1
-- weak-hash
-- CWE-327
+  - python
+  - pycryptodome
+  - sha1
+  - weak-hash
+  - CWE-327
+  - OWASP-A02
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of cryptographically broken or weak hash algorithms across
+description: |
+  Detects usage of SHA-1 via the PyCryptodome library using any of its SHA-1 module aliases:
+  `Crypto.Hash.SHA.new()`, `Cryptodome.Hash.SHA.new()`, `Crypto.Hash.SHA1.new()`, or
+  `Cryptodome.Hash.SHA1.new()`. PyCryptodome exposes SHA-1 under both the older `SHA` name
+  (for historical compatibility with PyCrypto) and the explicit `SHA1` name.
 
-  Python libraries including `cryptography` (hazmat primitives) and `PyCryptodome`/`PyCrypto`.
+  SHA-1 produces a 160-bit digest and was formally broken in 2017 when Stevens et al. at
+  CWI Amsterdam and Google produced the first known SHA-1 collision (SHAttered attack).
+  A chosen-prefix collision attack was demonstrated in 2020 at a cost of approximately
+  900 GPU-years, making targeted forgery feasible for well-resourced adversaries.
 
-  Weak hash functions are vulnerable to collision attacks and should not be used for security
+  NIST deprecated SHA-1 for digital signatures in SP 800-131A and FIPS 186-5 removes SHA-1
+  entirely from approved signature algorithms. Browser vendors stopped trusting SHA-1 TLS
+  certificates in 2017.
 
-  purposes such as digital signatures, certificate validation, password hashing, or data
+  SHA-1 must not be used for digital signatures, certificate hashing, HMAC authentication,
+  or data integrity in security contexts. It is sometimes encountered in PyCryptodome
+  codebases because older PyCrypto tutorials used `from Crypto.Hash import SHA` — this
+  rule catches both the legacy `SHA` alias and the explicit `SHA1` module name.
+message: SHA-1 is deprecated for security use. The SHAttered attack (2017) demonstrated practical SHA-1 collisions. Replace Crypto.Hash.SHA.new() or Crypto.Hash.SHA1.new() with Crypto.Hash.SHA256.new() or Crypto.Hash.SHA3_256.new().
+detection_scope: |
+  Matches any call to `PyCryptoHashSHA.method("new")` where `PyCryptoHashSHA` is a QueryType
+  resolving fully-qualified names `Crypto.Hash.SHA`, `Cryptodome.Hash.SHA`, `Crypto.Hash.SHA1`,
+  and `Cryptodome.Hash.SHA1`. This covers all four naming variants that PyCryptodome exposes
+  for SHA-1, ensuring detection regardless of whether code uses the legacy `SHA` alias
+  (from PyCrypto era) or the explicit `SHA1` module name. The rule fires on `.new()`
+  constructor invocation in either namespace.
+secure_example: |
+  from Crypto.Hash import SHA256, SHA3_256
 
-  integrity verification.'
-message: SHA-1 is deprecated for security use. Use SHA-256 or SHA-3 instead.
-secure_example: 'from cryptography.hazmat.primitives import hashes
+  # SECURE: SHA-256 for general integrity checking
+  h = SHA256.new()
+  h.update(b"data to hash")
+  digest = h.hexdigest()
 
-  from cryptography.hazmat.backends import default_backend
-
-
-  # SECURE: SHA-256 for integrity checking
-
-  digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-
-  digest.update(document_bytes)
-
-  checksum = digest.finalize()
-
-
-  # SECURE: SHA-3 for digital signatures
-
-  from Crypto.Hash import SHA3_256
-
+  # SECURE: SHA-3 for stronger collision resistance
   h = SHA3_256.new()
+  h.update(b"document bytes")
+  digest = h.hexdigest()
 
-  h.update(b"data to sign")
+  # SECURE: HMAC with SHA-256 for message authentication
+  from Crypto.Hash import HMAC
+  import os
+  key = os.urandom(32)
+  mac = HMAC.new(key, digestmod=SHA256)
+  mac.update(b"message to authenticate")
+  tag = mac.hexdigest()
 
-  hash_value = h.hexdigest()
-
-
-  # SECURE: Argon2 for password hashing
-
-  from argon2 import PasswordHasher
-
-  ph = PasswordHasher()
-
-  password_hash = ph.hash(password)'
-recommendations: []
+  # SECURE: SHA-512 when a larger digest is needed
+  from Crypto.Hash import SHA512
+  h = SHA512.new()
+  h.update(b"data requiring 512-bit digest")
+  digest = h.hexdigest()
+security_implications:
+  - "Certificate and signature forgery: chosen-prefix SHA-1 collision attacks allow an attacker to craft two documents with the same SHA-1 hash, enabling substitution of a malicious document for a legitimately signed original."
+  - "TLS impersonation: SHA-1 TLS certificates are no longer trusted by major browsers and clients, so code that still generates or validates SHA-1 certificates will either fail or accept forged certificates from legacy systems."
+  - "HMAC weakening: while HMAC-SHA1 has not been directly broken by collision attacks, it is deprecated in current standards and migrating away is required for compliance in regulated environments."
+  - "Protocol downgrade: SHA-1 in handshake hash negotiation (e.g., TLS signature algorithms extension) can be downgraded by an active attacker, weakening otherwise secure sessions."
+recommendations:
+  - "Replace Crypto.Hash.SHA.new() and Crypto.Hash.SHA1.new() with Crypto.Hash.SHA256.new() for all integrity, signing, and authentication use cases."
+  - "Use Crypto.Hash.SHA3_256.new() or Crypto.Hash.SHA3_512.new() when stronger collision resistance or independence from SHA-2 is needed."
+  - "For password hashing, do not use SHA-1 or any raw hash — use Argon2id (argon2-cffi), bcrypt, or scrypt."
+  - "Update any HMAC usage from HMAC with SHA-1 to HMAC with SHA-256: `HMAC.new(key, digestmod=SHA256)` instead of `HMAC.new(key, digestmod=SHA)`."
+  - "If SHA-1 is required by a legacy file format or protocol you cannot modify, isolate the usage, document it explicitly, and apply compensating controls such as an outer SHA-256 HMAC over the data."
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography"
+  - standard: NIST SP 800-131A
+    requirement: "MD5 and SHA-1 disallowed for digital signatures"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+faq:
+  - question: "Is SHA-1 ever safe to use with PyCryptodome?"
+    answer: "SHA-1 is acceptable only for non-security legacy compatibility contexts where collision resistance is not a security requirement — for example, computing Git-style content identifiers in tooling that is not security-sensitive. It must not be used for digital signatures, HMAC, certificate hashing, or password hashing."
+  - question: "What is the difference between this rule and PYTHON-CRYPTO-SEC-011?"
+    answer: "PYTHON-CRYPTO-SEC-011 targets SHA-1 used via the `cryptography` library hazmat interface (hashes.SHA1()). This rule (PYTHON-CRYPTO-SEC-015) targets SHA-1 in PyCryptodome via Crypto.Hash.SHA.new() or Crypto.Hash.SHA1.new(). The underlying weakness is identical; the rules differ by library."
+  - question: "Why does this rule cover both Crypto.Hash.SHA and Crypto.Hash.SHA1?"
+    answer: "PyCryptodome inherited the `SHA` module name from the original PyCrypto library, where `from Crypto.Hash import SHA` was the canonical way to import SHA-1. PyCryptodome also provides the explicit `SHA1` name. Both resolve to the same SHA-1 algorithm. This rule catches both to handle both modern and legacy import styles."
+  - question: "Why not use SHA-256 for password hashing?"
+    answer: "SHA-256 is designed to be fast, which benefits attackers performing brute-force attacks. Use Argon2id, bcrypt, or scrypt for password hashing — these are deliberately slow and memory-intensive to limit attacker throughput to thousands of attempts per second rather than billions."
+  - question: "Does this rule fire on HMAC-SHA1?"
+    answer: "Yes, if Crypto.Hash.SHA or Crypto.Hash.SHA1 is used as the digestmod for an HMAC. While HMAC-SHA1 is not broken by collision attacks, it is deprecated in current standards and should be replaced with HMAC-SHA256."
+  - question: "How do I run this rule in CI/CD?"
+    answer: "Run `code-pathfinder scan --ruleset python/cryptography/PYTHON-CRYPTO-SEC-015 --path ./src` in your pipeline. Add `--format sarif` to produce SARIF output compatible with GitHub Advanced Security and similar platforms."
+  - question: "I see SHA-1 used in a legacy codebase that I cannot fully migrate yet — how should I prioritize?"
+    answer: "Prioritize eliminating SHA-1 from: (1) digital signatures and certificate generation first, (2) HMAC authentication second, (3) data integrity checks third. Non-security uses such as content identifiers can be addressed last. Document all retained uses with a migration timeline and review compensating controls."
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'CVE-2004-2761: MD5 collision vulnerability in certificate signing'
-  url: ''
-- title: 'SHAttered: SHA-1 collision attack'
-  url: https://shattered.io/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "SHAttered: First SHA-1 Collision (Stevens et al., 2017)"
+    url: https://shattered.io/
+  - title: "Leurent & Peyrin 2020: SHA-1 is a Shambles — Chosen-Prefix Collisions"
+    url: https://eprint.iacr.org/2020/014.pdf
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "FIPS 186-5: Digital Signature Standard — SHA-1 removed"
+    url: https://csrc.nist.gov/publications/detail/fips/186/5/final
+  - title: "OWASP Cryptographic Failures (A02:2021)"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "PyCryptodome documentation: Crypto.Hash.SHA1"
+    url: https://pycryptodome.readthedocs.io/en/latest/src/hash/sha1.html
+similar_rules:
+  - id: PYTHON-CRYPTO-SEC-011
+    description: SHA-1 usage via the cryptography library hazmat primitives (hashes.SHA1())
+  - id: PYTHON-CRYPTO-SEC-012
+    description: MD5 usage via PyCryptodome — same library, same library family
+  - id: PYTHON-CRYPTO-SEC-013
+    description: MD4 usage via PyCryptodome — rated HIGH severity, more severely broken
+  - id: PYTHON-CRYPTO-SEC-014
+    description: MD2 usage via PyCryptodome — rated HIGH severity, most broken MD-family algorithm
+  - id: PYTHON-CRYPTO-SEC-010
+    description: MD5 usage via the cryptography library hazmat primitives
 tests:
   positive: tests/positive/
   negative: tests/negative/
 owasp:
-- id: A02:2021
-  name: ''
-  url: ''
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

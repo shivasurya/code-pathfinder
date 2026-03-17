@@ -1,76 +1,192 @@
+# Rule Identity
 id: PYTHON-CRYPTO-SEC-005a
-name: Insecure Triple DES Cipher
-short_description: Triple DES (3DES) is deprecated. Use AES instead.
+name: Triple DES (3DES) Cipher Usage via PyCryptodome
+short_description: Detects use of Triple DES (3DES) through PyCryptodome, which has a 64-bit block size vulnerable to Sweet32 birthday attacks and was deprecated by NIST after 2023.
+
+# Classification
 severity: MEDIUM
 category: cryptography
 language: python
-ruleset: python/PYTHON-CRYPTO-SEC-005a
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-005a
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- pycryptodome
-- 3des
-- triple-des
-- weak-cipher
-- CWE-327
+  - python
+  - pycryptodome
+  - 3des
+  - triple-des
+  - des3
+  - sweet32
+  - nist-deprecated
+  - 64-bit-block
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect usage of insecure or deprecated symmetric cipher algorithms across
 
-  Python cryptographic libraries including `cryptography` (hazmat primitives) and
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.DES3.new()` from the PyCryptodome library.
+  Triple DES (3DES, TDEA) applies the DES algorithm three times with either two or
+  three independent keys (112-bit or 168-bit effective key strength). While 3DES is
+  significantly stronger than single DES against brute-force attacks, it retains the
+  64-bit block size that makes it vulnerable to the Sweet32 birthday attack.
 
-  `PyCryptodome`/`PyCrypto`. The flagged ciphers have known cryptographic weaknesses that
+  NIST formally deprecated 3DES (TDEA) for new applications after December 31, 2023,
+  as documented in NIST SP 800-131A Rev 2 and NIST SP 800-67 Rev 2. 3DES is also
+  approximately three times slower than single DES and orders of magnitude slower than
+  AES with hardware acceleration. Systems using 3DES in long-lived TLS sessions or
+  bulk data encryption are exposed to Sweet32: after ~32GB under the same key, block
+  collisions enable partial plaintext recovery.
 
-  make them unsuitable for protecting sensitive data.'
-message: Triple DES (3DES) is deprecated. Use AES instead.
-secure_example: 'from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  The rule matches `PyCryptoCipherDES3.method("new")`. The companion rule
+  PYTHON-CRYPTO-SEC-005 covers single DES.
 
+message: "3DES (Triple DES) has a 64-bit block size and was deprecated by NIST after 2023. Replace with AES-256-GCM."
+
+security_implications:
+  - title: 64-Bit Block Size -- Sweet32 Birthday Attack
+    description: |
+      3DES inherits DES's 8-byte block size. After approximately 32GB of ciphertext
+      under the same key, the probability of a block collision exceeds 50%. In CBC
+      mode, an attacker who observes a collision can XOR adjacent ciphertext blocks
+      to recover a plaintext segment. HTTPS servers processing significant traffic
+      with 3DES cipher suites were practically exploited via Sweet32 in 2016.
+  - title: NIST Deprecated 3DES After December 31, 2023
+    description: |
+      NIST SP 800-131A Rev 2 and NIST SP 800-67 Rev 2 formally disallow 3DES for
+      new applications after 2023 and for existing applications after 2030. Systems
+      subject to FedRAMP, FISMA, or NIST-aligned frameworks must migrate to AES.
+      Using 3DES in new code written after 2023 is an immediate compliance violation.
+  - title: Significantly Slower Than AES Without Any Compensating Benefit
+    description: |
+      3DES performs three full DES operations per block. On hardware with AES-NI
+      instruction support -- which is essentially all x86 CPUs since ~2010 --
+      AES-256-GCM is 5-10x faster than 3DES. For high-throughput services, 3DES
+      imposes a measurable performance penalty with no security advantage over AES.
+  - title: No Authenticated Encryption -- MAC-then-Encrypt Vulnerabilities
+    description: |
+      PyCryptodome's DES3 in CBC or other classic modes provides no authentication.
+      Applications that wrap 3DES with a separate MAC often implement the MAC
+      incorrectly (encrypt-then-MAC vs MAC-then-encrypt ordering). AES-GCM provides
+      both confidentiality and authentication atomically, eliminating this error class.
+
+secure_example: |
+  from Crypto.Cipher import AES
   import os
 
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
 
-  # SECURE: AES-256-GCM provides both confidentiality and integrity
+recommendations:
+  - Replace Crypto.Cipher.DES3 with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for authenticated encryption
+  - Use ChaCha20-Poly1305 as an alternative if AES hardware acceleration is not available in the deployment environment
+  - Complete migration from 3DES before the NIST SP 800-131A disallowance deadline for existing applications
+  - Ensure any TLS configuration disables SWEET32-vulnerable cipher suites (TLS_RSA_WITH_3DES_EDE_CBC_SHA) in parallel
+  - Re-encrypt data stored under 3DES with AES-256-GCM and rotate all 3DES key material after migration
 
-  key = AESGCM.generate_key(bit_length=256)
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.DES3.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherDES3.method("new")`. It fires on any Triple DES
+  cipher object instantiation regardless of key size (16 or 24 bytes) or cipher mode.
+  The 64-bit block size vulnerability and NIST deprecation apply to all 3DES
+  configurations. The companion rule PYTHON-CRYPTO-SEC-005 covers single DES.
 
-  aesgcm = AESGCM(key)
-
-  nonce = os.urandom(12)
-
-  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
-
-
-  # Or use ChaCha20-Poly1305
-
-  from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-  key = ChaCha20Poly1305.generate_key()
-
-  chacha = ChaCha20Poly1305(key)
-
-  ct = chacha.encrypt(nonce, b"sensitive data", associated_data=None)'
-recommendations: []
+# References
 references:
-- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: 'RFC 7465: Prohibiting RC4 Cipher Suites'
-  url: https://tools.ietf.org/html/rfc7465
-- title: 'Sweet32: Birthday attacks on 64-bit block ciphers'
-  url: https://sweet32.info/
-- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms'
-  url: https://csrc.nist.gov/publications
-- title: OWASP Cryptographic Failures
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Sweet32: Birthday attacks on 64-bit block ciphers"
+    url: https://sweet32.info/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "NIST SP 800-67 Rev 2: Recommendation for the Triple Data Encryption Algorithm (TDEA) Block Cipher"
+    url: https://csrc.nist.gov/publications/detail/sp/800-67/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+  - standard: NIST SP 800-67 Rev 2
+    requirement: "3DES deprecated for new applications after 2023, disallowed for all after 2030"
+
+# FAQ
+faq:
+  - question: 3DES uses 168-bit keys. Why is it rated MEDIUM severity rather than HIGH?
+    answer: |
+      The MEDIUM severity reflects that 3DES is not immediately brute-forceable the
+      way single DES is. Its 168-bit (or 112-bit effective) key space provides
+      reasonable key strength. The primary risks are the 64-bit block size (Sweet32)
+      and the NIST deprecation deadline. These are serious concerns that require
+      migration, but they represent a different risk profile than single DES, where
+      the key itself can be exhausted in minutes.
+
+  - question: NIST says 3DES is disallowed for new applications after 2023 but existing applications have until 2030. Are we safe?
+    answer: |
+      The 2030 deadline for existing applications is a transition period, not a
+      security guarantee. Sweet32 applies today regardless of the NIST timeline, and
+      any TLS session using 3DES cipher suites has been practically exploitable since
+      2016. Additionally, writing new code with 3DES in 2024 or later is explicitly
+      disallowed by NIST SP 800-131A Rev 2. The 2030 date applies only to already-
+      deployed systems, not new development.
+
+  - question: We use 3DES for interoperability with a payment processing system that requires it. What should we do?
+    answer: |
+      Payment network interoperability (particularly older HSM-based PIN encryption
+      using TDES) is the most common legitimate use of 3DES. In this context, push
+      for protocol negotiation of AES with your payment processor -- major payment
+      networks have published timelines for AES migration. As a transitional measure,
+      limit the volume of data encrypted per key, ensure keys rotate before the 32GB
+      Sweet32 threshold, and document the compliance exception formally.
+
+  - question: How does Sweet32 practically affect a 3DES-encrypted HTTPS server?
+    answer: |
+      An attacker who can inject JavaScript into the browser (e.g., via a third-party
+      ad or XSS on another tab) can cause the browser to make thousands of requests
+      per second carrying a known fragment (such as a CSRF token). After approximately
+      32GB of traffic -- achievable within hours on a busy server -- a block collision
+      reveals the session cookie. This attack was demonstrated against real servers
+      in 2016. All major browsers subsequently disabled 3DES cipher suites.
+
+  - question: How do I identify all 3DES key material in our system for rotation?
+    answer: |
+      Search for DES3 key references in configuration files, secrets managers, HSMs,
+      and database key tables. DES3 keys are 16 bytes (two-key 3DES) or 24 bytes
+      (three-key 3DES). Document all locations before starting migration. Replace each
+      key with a 32-byte AES-256 key, re-encrypt the associated data under AES-GCM,
+      and then securely destroy the 3DES key material.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-002
+  - PYTHON-CRYPTO-SEC-002a
+  - PYTHON-CRYPTO-SEC-003
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''
