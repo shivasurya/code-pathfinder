@@ -102,11 +102,11 @@ secure_example: |
   payload = jwt.decode(token, public_key, algorithms=["RS256"])
 
 recommendations:
-  - Never set verify_signature to False in production -- if you need to read claims without verification, use jwt.decode(token, options={"verify_signature": False}) only in debug/test code and gate it behind an environment check
+  - "Never set verify_signature to False in production -- if you need to read claims without verification, use jwt.decode(token, options={\"verify_signature\": False}) only in debug/test code and gate it behind an environment check"
   - Always pass an explicit algorithms list to jwt.decode() to prevent algorithm confusion attacks
-  - Use options={"require": ["exp", "iat"]} to ensure tokens have required claims
+  - "Use options={\"require\": [\"exp\", \"iat\"]} to ensure tokens have required claims"
   - Consider wrapping jwt.decode() in a helper function that enforces verification, so individual call sites can't accidentally disable it
-  - In PyJWT 1.x, the parameter was verify=False -- if you're migrating from 1.x to 2.x, search for both patterns
+  - "In PyJWT 1.x, the parameter was verify=False -- if you're migrating from 1.x to 2.x, search for both patterns"
 
 detection_scope: |
   This rule matches all jwt.decode() calls resolved through the PyJWT library using
