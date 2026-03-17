@@ -1,75 +1,222 @@
+# Rule Identity
 id: PYTHON-FLASK-XSS-002
 name: Flask Explicit Unescape with Markup
-short_description: Markup() bypasses auto-escaping. Ensure input is trusted before wrapping in Markup().
+short_description: Detects use of Markup() or markupsafe.Markup() which marks strings as safe HTML, bypassing Jinja2's autoescaping and introducing XSS risk if applied to user-controlled content.
+
+# Classification
 severity: MEDIUM
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-XSS-002
+ruleset: python/flask/PYTHON-FLASK-XSS-002
+
+# Vulnerability Details
 cwe:
-- id: CWE-79
-  name: Improper Neutralization of Input During Web Page Generation
-  url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- flask
-- markup
-- xss
-- audit
-- CWE-79
+  - python
+  - flask
+  - markup
+  - markupsafe
+  - xss
+  - cross-site-scripting
+  - autoescaping
+  - audit
+  - CWE-79
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module contains ten audit and configuration-based security rules for Flask applications.
 
-  Unlike dataflow rules that track tainted input from sources to sinks, these rules use pattern
+# Content
+description: |
+  This rule detects calls to Markup() or markupsafe.Markup() in Flask applications. Markup
+  is a string subclass from the markupsafe library (which Flask and Jinja2 depend on) that
+  marks its content as safe HTML. When Jinja2 renders a template variable, it checks whether
+  the value is a Markup instance. If it is, autoescaping is skipped and the raw string is
+  inserted into the HTML output. If it is a plain string, HTML metacharacters are escaped.
 
-  matching to detect insecure configurations, dangerous API usage, and security anti-patterns
+  Markup() is a legitimate API for generating trusted HTML programmatically (e.g., building
+  HTML tags in Python helpers). It becomes a vulnerability when applied to user-controlled
+  content. Markup(user_input) tells Jinja2 "this string is safe HTML" -- but if user_input
+  contains <script> tags or event handlers, those will be inserted verbatim into the page
+  and executed in the browser.
 
-  that do not require taint analysis.
+  This is an audit-grade rule. Not every Markup() call is vulnerable -- wrapping a hardcoded
+  HTML string like Markup("<br>") is safe. The vulnerability arises when user-controlled data
+  flows into Markup() without prior sanitization. Every use of Markup() warrants review to
+  confirm the string being wrapped is developer-controlled, sanitized, or already escaped.
 
+  The detection uses Or(calls("Markup"), calls("markupsafe.Markup")) to catch both the
+  directly imported form (from markupsafe import Markup; Markup(...)) and the module-qualified
+  form (markupsafe.Markup(...)). Flask re-exports Markup via flask.Markup, but that form is
+  deprecated; this rule covers the two primary import paths.
 
-  These rules serve two purposes: (1) detecting definitive security misconfigurations that should
+message: "Markup() bypasses Jinja2 autoescaping. Verify the wrapped string does not contain user-controlled content. Use Markup.escape() for sanitized HTML output."
 
-  be fixed regardless of context, and (2) flagging potentially dangerous patterns that warrant
+security_implications:
+  - title: Reflected XSS via Markup-Wrapped User Input
+    description: |
+      If user input is passed to Markup() and the result is rendered in a Jinja2 template,
+      the user's HTML/JavaScript is inserted verbatim into the page. An attacker can craft
+      a request with a payload like <img src=x onerror=alert(1)> that executes in the
+      victim's browser immediately on page load.
+  - title: Stored XSS via Markup-Wrapped Database Content
+    description: |
+      Applications that retrieve content from a database, wrap it in Markup(), and render
+      it in templates are vulnerable to stored XSS if an attacker can write HTML content
+      to the database through any input path. The Markup() call silently suppresses the
+      escaping that would otherwise protect against stored XSS.
+  - title: Confused Developer Intent Propagation
+    description: |
+      Markup instances propagate through string operations: Markup("safe") + user_input
+      returns a Markup instance containing the user input. Developers who build HTML strings
+      by concatenating Markup with plain strings may inadvertently mark unsafe content as
+      safe, especially across function boundaries or after code refactoring.
+  - title: Bypass of Defense-in-Depth Escaping
+    description: |
+      Even if other layers (input validation, CSP) partially mitigate XSS, Markup() removes
+      the last line of defense at the template rendering layer. An attacker who finds any
+      way to get malicious content into a Markup()-wrapped variable can bypass all other
+      controls at the output stage.
 
-  manual review to determine if they represent actual vulnerabilities in the specific application
+secure_example: |
+  from flask import Flask, render_template, request
+  from markupsafe import Markup, escape
 
-  context.'
-message: Markup() bypasses auto-escaping. Ensure input is trusted before wrapping in Markup().
-secure_example: ''
-recommendations: []
+  app = Flask(__name__)
+
+  # SAFE approach 1: Pass user input as a plain string to the template.
+  # Jinja2 autoescaping handles HTML encoding of 'name'.
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', '')
+      return render_template('greet.html', name=name)
+      # In greet.html: <h1>Hello, {{ name }}!</h1>  -- autoescaped
+
+  # SAFE approach 2: If you must build HTML in Python, escape user input first,
+  # then wrap in Markup only after escaping.
+  def build_greeting(name: str) -> Markup:
+      # escape() returns a Markup instance with HTML metacharacters escaped
+      safe_name = escape(name)
+      return Markup(f"<strong>{safe_name}</strong>")
+
+  # UNSAFE (do not do this):
+  # def build_greeting_unsafe(name: str) -> Markup:
+  #     return Markup(f"<strong>{name}</strong>")  # name not escaped -- XSS risk
+
+recommendations:
+  - Prefer passing user input as plain context variables to render_template() rather than wrapping in Markup(). Jinja2 autoescaping handles HTML encoding automatically.
+  - When building HTML in Python code (e.g., in template helper functions), always escape user-supplied strings with markupsafe.escape() before concatenating into a Markup instance.
+  - Use Markup() only for hardcoded HTML strings that are entirely developer-controlled and contain no user input, even indirectly.
+  - Review every Markup() call to trace the source of its argument. If any part of the argument can be influenced by user input, apply escape() first.
+  - Consider using a dedicated HTML sanitization library (bleach) for user-provided rich text content rather than wrapping unsanitized HTML in Markup().
+
+detection_scope: |
+  This rule uses Or(calls("Markup"), calls("markupsafe.Markup")) to match both the directly
+  imported constructor (from markupsafe import Markup; Markup(...)) and the module-qualified
+  form (markupsafe.Markup(...)). This is a broad audit pattern -- every Markup() call is
+  flagged for review regardless of whether its argument is demonstrably user-controlled.
+  The rule surfaces all uses for manual inspection. For a dataflow rule that specifically
+  traces user input from Flask request parameters into Markup(), a taint-analysis companion
+  rule would provide confirmed-vulnerable findings as a complement to this audit coverage.
+
+# References
 references:
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-942
-  url: https://cwe.mitre.org/data/definitions/942.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: Flask Security Considerations
-  url: https://flask.palletsprojects.com/en/latest/security/
-- title: Flask-CORS Documentation
-  url: https://flask-cors.readthedocs.io/
-- title: Flask-WTF CSRF
-  url: https://flask-wtf.readthedocs.io/en/latest/csrf/
-- title: Hashids Cryptanalysis
-  url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
-- title: OWASP Secure Cookie Attributes
-  url: https://owasp.org/www-community/controls/SecureCookieAttribute
-- title: Jinja2 Autoescaping
-  url: https://jinja.palletsprojects.com/en/latest/api/#autoescaping
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-79: Improper Neutralization of Input During Web Page Generation (XSS)"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: markupsafe Markup Documentation
+    url: https://markupsafe.palletsprojects.com/en/stable/
+  - title: Jinja2 Autoescaping Documentation
+    url: https://jinja.palletsprojects.com/en/stable/api/#autoescaping
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: bleach HTML Sanitization Library
+    url: https://bleach.readthedocs.io/en/latest/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection: prevent cross-site scripting through proper output encoding"
+  - standard: CWE Top 25
+    requirement: "CWE-79 Improper Neutralization of Input During Web Page Generation (XSS)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including cross-site scripting"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- encode output to prevent script injection"
+
+# FAQ
+faq:
+  - question: Is every Markup() call a vulnerability?
+    answer: |
+      No. Markup("<br>") or Markup("<strong>Bold text</strong>") with hardcoded strings are
+      perfectly safe. The vulnerability only arises when user-controlled content is wrapped
+      in Markup() without prior escaping. This rule flags all uses for review because the
+      call site alone does not reveal whether the argument is safe -- the data origin must
+      be traced.
+
+  - question: What is the difference between Markup() and Markup.escape()?
+    answer: |
+      Markup(s) marks the string s as safe without modification -- whatever HTML is in s
+      will be rendered as HTML. Markup.escape(s) (equivalent to markupsafe.escape(s))
+      first HTML-encodes the string and then wraps the result in Markup, so the output is
+      safe to render. Always use escape() for user-supplied content and Markup() only for
+      developer-controlled HTML.
+
+  - question: How does Markup propagate through string operations?
+    answer: |
+      markupsafe is designed so that string operations involving at least one Markup instance
+      return a Markup instance. For example, Markup("Hello, ") + name returns a Markup if
+      Markup("Hello, ") is the left operand -- but name is not escaped. This means XSS can
+      be introduced through string concatenation that mixes Markup and plain strings.
+
+  - question: What is the right way to render user-provided rich text (HTML)?
+    answer: |
+      Use a dedicated HTML sanitization library like bleach to allow a specific allow-list
+      of safe HTML tags and attributes, then wrap the sanitized output in Markup(). For example:
+        safe_html = bleach.clean(user_html, tags=['p', 'b', 'i', 'a'], strip=True)
+        return Markup(safe_html)
+      Never render raw user HTML in a template without sanitization.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-XSS-002 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule catch flask.Markup()?
+    answer: |
+      No. flask.Markup was deprecated in Flask 2.0 and removed in Flask 2.3. The current
+      canonical import path is markupsafe.Markup. This rule matches calls("Markup") and
+      calls("markupsafe.Markup"). If your codebase uses the deprecated flask.Markup import,
+      add calls("flask.Markup") to the Or pattern in the rule.
+
+  - question: What is the difference between this rule and PYTHON-FLASK-XSS-001?
+    answer: |
+      PYTHON-FLASK-XSS-001 detects direct use of jinja2.Environment, which bypasses
+      Flask's autoescaping at the environment level -- affecting all variables. This rule
+      (XSS-002) detects Markup(), which bypasses autoescaping at the individual value level --
+      only the specific Markup-wrapped value is unescaped. Both are XSS risks, but through
+      different mechanisms. Together they provide comprehensive coverage of Flask's autoescaping
+      bypass vectors.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-XSS-001
+  - PYTHON-FLASK-AUDIT-008
+  - PYTHON-FLASK-SEC-014
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A07:2021
-  name: ''
-  url: ''

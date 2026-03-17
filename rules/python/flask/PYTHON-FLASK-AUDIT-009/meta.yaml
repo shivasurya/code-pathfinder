@@ -1,75 +1,205 @@
+# Rule Identity
 id: PYTHON-FLASK-AUDIT-009
 name: Flask Cookie Without Secure Flags
-short_description: Cookie set without secure=True or httponly=True. Set both flags for session cookies.
+short_description: Detects set_cookie() calls with secure=False or httponly=False, which expose session and authentication cookies to theft via network eavesdropping or JavaScript access.
+
+# Classification
 severity: MEDIUM
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-AUDIT-009
+ruleset: python/flask/PYTHON-FLASK-AUDIT-009
+
+# Vulnerability Details
 cwe:
-- id: CWE-614
-  name: Sensitive Cookie in HTTPS Session Without Secure Attribute
-  url: https://cwe.mitre.org/data/definitions/614.html
+  - id: CWE-614
+    name: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute
+    url: https://cwe.mitre.org/data/definitions/614.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- flask
-- cookie
-- secure
-- httponly
-- CWE-614
+  - python
+  - flask
+  - cookie
+  - secure
+  - httponly
+  - samesite
+  - session-management
+  - configuration
+  - CWE-614
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module contains ten audit and configuration-based security rules for Flask applications.
 
-  Unlike dataflow rules that track tainted input from sources to sinks, these rules use pattern
+# Content
+description: |
+  This rule detects Flask response.set_cookie() calls where the secure or httponly flags are
+  explicitly set to False. Cookies that carry session identifiers, authentication tokens, or
+  any sensitive value must be protected by these flags.
 
-  matching to detect insecure configurations, dangerous API usage, and security anti-patterns
+  The Secure flag prevents the browser from transmitting the cookie over unencrypted HTTP
+  connections. Without it, a session cookie can be stolen by a passive network observer on
+  any unencrypted path between the client and server -- public Wi-Fi, misconfigured proxies,
+  or HTTP-to-HTTPS redirect chains. The HttpOnly flag prevents JavaScript running on the page
+  (including injected XSS payloads) from accessing the cookie via document.cookie. Without
+  it, a successful XSS attack instantly yields the session token.
 
-  that do not require taint analysis.
+  The detection uses an Or pattern: Or(calls("*.set_cookie", match_name={"secure": False}),
+  calls("*.set_cookie", match_name={"httponly": False})). This matches any object's set_cookie()
+  method where either flag is explicitly disabled. The wildcard (*) on the receiver covers both
+  response objects returned by Flask directly and response objects created via make_response().
 
+message: "Cookie set with secure=False or httponly=False. Enable both flags for cookies carrying session or authentication data."
 
-  These rules serve two purposes: (1) detecting definitive security misconfigurations that should
+security_implications:
+  - title: Session Hijacking via Network Eavesdropping
+    description: |
+      Without the Secure flag, a session cookie is sent over plain HTTP. On any network path
+      that includes an unencrypted segment -- public Wi-Fi, HTTP-to-HTTPS redirect, mixed
+      content -- a passive observer can capture the cookie and replay it to impersonate the
+      authenticated user.
+  - title: Session Hijacking via XSS
+    description: |
+      Without the HttpOnly flag, any JavaScript running on the page can read document.cookie
+      and exfiltrate session tokens to an attacker-controlled server. A single XSS
+      vulnerability anywhere on the domain can compromise every logged-in user's session.
+  - title: Cross-Site Request Forgery Amplification
+    description: |
+      Cookies without the SameSite attribute (an additional flag not covered by this rule
+      but worth setting) can be sent with cross-site requests, making CSRF attacks easier.
+      Explicitly setting secure and httponly is the baseline; SameSite=Strict or Lax should
+      also be configured.
+  - title: Persistent Cookie Exposure
+    description: |
+      If a cookie is set without the Secure flag and the application later migrates to HTTPS,
+      existing cookies issued to users during the HTTP period remain readable over plain HTTP
+      until they expire or the user logs out.
 
-  be fixed regardless of context, and (2) flagging potentially dangerous patterns that warrant
+secure_example: |
+  from flask import Flask, make_response
 
-  manual review to determine if they represent actual vulnerabilities in the specific application
+  app = Flask(__name__)
 
-  context.'
-message: Cookie set without secure=True or httponly=True. Set both flags for session cookies.
-secure_example: ''
-recommendations: []
+  @app.route('/login', methods=['POST'])
+  def login():
+      response = make_response({'status': 'logged in'})
+
+      # SAFE: Set all protective flags on the session cookie
+      response.set_cookie(
+          'session_id',
+          value='abc123',
+          secure=True,      # Only send over HTTPS
+          httponly=True,    # Prevent JavaScript access
+          samesite='Strict' # Prevent cross-site sending
+      )
+      return response
+
+  # Also configure Flask's built-in session cookie flags globally:
+  # app.config['SESSION_COOKIE_SECURE'] = True
+  # app.config['SESSION_COOKIE_HTTPONLY'] = True
+  # app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+recommendations:
+  - Set secure=True on all cookies that carry session identifiers, authentication tokens, or any sensitive data so they are never transmitted over plain HTTP.
+  - Set httponly=True on all session and authentication cookies so JavaScript cannot access them via document.cookie, limiting XSS damage.
+  - Set samesite='Strict' or samesite='Lax' to reduce CSRF risk. Use 'None' only for third-party contexts, and only in combination with secure=True.
+  - Configure Flask's global session cookie settings in app.config: SESSION_COOKIE_SECURE=True, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax'. These protect the built-in session cookie without requiring per-route set_cookie() calls.
+  - Review cookie usage during code review as a security-sensitive change and include it in your application's security checklist.
+
+detection_scope: |
+  This rule uses Or(calls("*.set_cookie", match_name={"secure": False}),
+  calls("*.set_cookie", match_name={"httponly": False})) to match any set_cookie() method
+  call on any object where either the secure or httponly keyword argument is explicitly False.
+  The wildcard receiver (*) covers response objects from both make_response() and direct
+  route return-value manipulation. Calls that omit the secure or httponly argument entirely
+  are not flagged by this rule -- consider those a separate audit (missing flag vs. explicit
+  False). The rule operates at the call-site level without cross-file dataflow analysis.
+
+# References
 references:
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-942
-  url: https://cwe.mitre.org/data/definitions/942.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: Flask Security Considerations
-  url: https://flask.palletsprojects.com/en/latest/security/
-- title: Flask-CORS Documentation
-  url: https://flask-cors.readthedocs.io/
-- title: Flask-WTF CSRF
-  url: https://flask-wtf.readthedocs.io/en/latest/csrf/
-- title: Hashids Cryptanalysis
-  url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
-- title: OWASP Secure Cookie Attributes
-  url: https://owasp.org/www-community/controls/SecureCookieAttribute
-- title: Jinja2 Autoescaping
-  url: https://jinja.palletsprojects.com/en/latest/api/#autoescaping
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+    url: https://cwe.mitre.org/data/definitions/614.html
+  - title: OWASP Secure Cookie Attributes
+    url: https://owasp.org/www-community/controls/SecureCookieAttribute
+  - title: Flask Cookie Documentation
+    url: https://flask.palletsprojects.com/en/stable/api/#flask.Response.set_cookie
+  - title: MDN HTTP Cookie Security
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#security
+  - title: OWASP A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - title: OWASP Session Management Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration: set Secure and HttpOnly flags on session cookies"
+  - standard: CWE Top 25
+    requirement: "CWE-614 Sensitive Cookie Without Secure Attribute"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- protect session tokens from theft; Requirement 8.2.6 -- secure authentication credentials in transit"
+  - standard: NIST SP 800-53
+    requirement: "SC-8: Transmission Confidentiality -- protect session tokens during transport"
+
+# FAQ
+faq:
+  - question: Why does this rule only flag explicit False values, not missing flags?
+    answer: |
+      Explicitly setting secure=False or httponly=False is a deliberate override that is
+      almost never correct for sensitive cookies. Missing flags are a separate concern --
+      Flask's default for set_cookie() is to omit the flags (which browsers treat as not
+      set). A separate audit rule covering absent flags would complement this one. This rule
+      focuses on explicit disabling, which is the highest-confidence finding.
+
+  - question: My application serves both HTTP and HTTPS. Can I set secure=True on cookies?
+    answer: |
+      Yes, and you should. Cookies with the Secure flag are simply not sent over HTTP
+      connections -- they are only sent over HTTPS. If you have an HTTP endpoint, users
+      accessing it without HTTPS will not have the secure cookie sent, but they also will
+      not have it stolen in transit. Migrate fully to HTTPS and set the Secure flag on all
+      sensitive cookies.
+
+  - question: Does Flask's built-in session cookie respect these flags?
+    answer: |
+      Flask's built-in session cookie is configured via app.config: SESSION_COOKIE_SECURE,
+      SESSION_COOKIE_HTTPONLY, and SESSION_COOKIE_SAMESITE. This rule does not cover the
+      built-in session cookie because it uses a different configuration path. Always configure
+      those app.config values explicitly for the built-in session.
+
+  - question: What is the SameSite attribute and should I set it?
+    answer: |
+      The SameSite attribute controls whether cookies are sent with cross-site requests.
+      SameSite=Strict prevents sending with any cross-site request. SameSite=Lax allows
+      sending with top-level navigations (links) but not with AJAX requests. SameSite=None
+      allows cross-site but requires Secure=True. Set Lax or Strict for session cookies to
+      reduce CSRF risk. This rule does not currently check for missing SameSite, but it is
+      a recommended addition.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-AUDIT-009 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule catch Flask-Login or Flask-Session cookie configuration?
+    answer: |
+      No. Flask-Login and Flask-Session use Flask's built-in session cookie infrastructure,
+      configured via app.config. This rule matches explicit set_cookie() calls in Python code.
+      For Flask-Login and Flask-Session, audit the SESSION_COOKIE_SECURE and related
+      app.config settings directly.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-AUDIT-004
+  - PYTHON-FLASK-AUDIT-010
+  - PYTHON-FLASK-SEC-004
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''

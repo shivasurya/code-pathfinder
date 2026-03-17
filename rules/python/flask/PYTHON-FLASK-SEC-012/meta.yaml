@@ -1,67 +1,249 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-012
 name: Flask Open Redirect
-short_description: User input flows to redirect(). Validate redirect URLs against an allowlist.
+short_description: User input from Flask request parameters flows to redirect() without URL validation. Validate redirect targets against an allowlist or use url_for() to generate trusted application-internal URLs.
+
+# Classification
 severity: MEDIUM
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-012
+ruleset: python/flask/PYTHON-FLASK-SEC-012
+
+# Vulnerability Details
 cwe:
-- id: CWE-601
-  name: URL Redirection to Untrusted Site
-  url: https://cwe.mitre.org/data/definitions/601.html
+  - id: CWE-601
+    name: "URL Redirection to Untrusted Site ('Open Redirect')"
+    url: https://cwe.mitre.org/data/definitions/601.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
 tags:
-- python
-- flask
-- open-redirect
-- OWASP-A01
-- CWE-601
+  - python
+  - flask
+  - open-redirect
+  - unvalidated-redirect
+  - phishing
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-601
+  - OWASP-A01
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This rule detects open redirect vulnerabilities in Flask applications where user-controlled
 
-  input flows into redirect() function calls without URL validation. An open redirect occurs
+# Content
+description: |
+  This rule detects open redirect vulnerabilities in Flask applications where
+  user-controlled input from HTTP request parameters flows to Flask's redirect()
+  function without URL validation. An open redirect occurs when the application
+  accepts a URL or path from user input and issues an HTTP redirect (302 or 301)
+  to that destination without verifying it belongs to a trusted origin.
 
-  when an application accepts a user-supplied URL or path and uses it as the destination of an
+  Open redirects are endemic in Flask login flows: after authentication, the
+  application redirects to the "next" URL parameter. Without validation, an
+  attacker sends victims to a URL like:
+    https://legitimate-app.com/login?next=https://evil.com/phishing
 
-  HTTP redirect response (3xx status code) without verifying that the target URL belongs to a
+  The victim sees the legitimate application's login page, authenticates, and is
+  transparently redirected to the attacker's site -- all appearing as a natural
+  post-login navigation. This is a primary vector for credential phishing because
+  the legitimate domain is visible in the initial URL shared with the victim.
 
-  trusted domain.
+  The taint analysis traces the URL value from Flask request sources through variable
+  assignments and function calls to the Flask redirect() function at argument position 0.
+  Flows through url_for() or url_has_allowed_host_and_scheme() are recognized as
+  sanitizers: url_for() generates only application-internal URLs, and
+  url_has_allowed_host_and_scheme() (from Werkzeug) validates that a URL's host and
+  scheme are acceptable.
 
+message: "User input flows to redirect() without URL validation. Use url_for() for internal redirects or validate with url_has_allowed_host_and_scheme()."
 
-  Open redirects are commonly found in login flows (redirect after authentication), logout
+security_implications:
+  - title: Phishing Attack Amplification via Trusted Domain
+    description: |
+      Attackers craft URLs like https://yourapp.com/login?next=https://phishing.com/steal
+      and distribute them. Victims who click the link land on the real application login
+      page, authenticate normally, and are redirected to the phishing site. Because the
+      initial URL shows the legitimate domain, anti-phishing training does not help.
+      The application's credibility is weaponized against its own users.
+  - title: OAuth Token Theft via Redirect URI Manipulation
+    description: |
+      In OAuth flows, a vulnerable redirect_uri parameter in the authorization request
+      can redirect access tokens to an attacker-controlled site. If the Flask application
+      uses the "next" parameter in OAuth callbacks without validation, the access token
+      or authorization code in the redirect URL is sent to the attacker's server.
+  - title: SSRF Gadget in Redirect Chains
+    description: |
+      Internal services that trust redirects from the application server may follow a
+      redirect to an internal endpoint. In microservice architectures, an open redirect
+      in a Flask service can be chained with redirect-following HTTP clients in other
+      services to reach internal APIs that the attacker cannot access directly.
+  - title: Session Fixation via External Redirect with Cookie Setting
+    description: |
+      An attacker who controls the redirect destination can combine the open redirect with
+      a response that sets a cookie or manipulates browser storage, then redirects back to
+      the application with a known session token (session fixation). The redirect through
+      a legitimate domain gives the attacker's cookies the opportunity to be stored.
 
-  handlers, and link shortener patterns. While sometimes considered low severity, they are
+secure_example: |
+  from flask import Flask, request, redirect, url_for, abort
+  from werkzeug.security import safe_join
+  from urllib.parse import urlparse, urljoin
 
-  a critical component in phishing attack chains and can be combined with other vulnerabilities
+  app = Flask(__name__)
 
-  for greater impact.'
-message: User input flows to redirect(). Validate redirect URLs against an allowlist.
-secure_example: "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlparse\n\
-  \napp = Flask(__name__)\n\ndef is_safe_redirect_url(target):\n    \\\"\\\"\\\"Verify the redirect URL\
-  \ is relative or points to the same host.\\\"\\\"\\\"\n    host_url = urlparse(request.host_url)\n \
-  \   redirect_url = urlparse(target)\n    return (redirect_url.scheme in ('', 'http', 'https') and\n\
-  \            redirect_url.netloc in ('', host_url.netloc))\n\n@app.route('/login', methods=['POST'])\n\
-  def login():\n    # ... authenticate user ...\n    next_url = request.args.get('next')\n    # SAFE:\
-  \ Validate redirect URL before use\n    if next_url and is_safe_redirect_url(next_url):\n        return\
-  \ redirect(next_url)\n    return redirect(url_for('index'))  # Default to known safe route"
-recommendations: []
+  def is_safe_redirect_url(target):
+      """
+      Verify the redirect target is relative or points to the same host.
+      werkzeug.utils.url_has_allowed_host_and_scheme() does this more robustly.
+      """
+      host_url = urlparse(request.host_url)
+      redirect_url = urlparse(urljoin(request.host_url, target))
+      return (
+          redirect_url.scheme in ('http', 'https') and
+          redirect_url.netloc == host_url.netloc
+      )
+
+  @app.route('/login', methods=['POST'])
+  def login():
+      # ... authenticate user ...
+      next_url = request.args.get('next', '')
+      # SAFE: validate before redirecting
+      if next_url and is_safe_redirect_url(next_url):
+          return redirect(next_url)
+      # SAFE fallback: url_for() generates only application-internal URLs
+      return redirect(url_for('dashboard'))
+
+  @app.route('/logout')
+  def logout():
+      # SAFE: always redirect to a known application route, never user-supplied URL
+      return redirect(url_for('index'))
+
+recommendations:
+  - For post-login and post-action redirects, use url_for() with a route name rather than accepting a redirect URL from the request -- url_for() can only generate URLs for routes defined in the application.
+  - If you must accept a redirect URL from user input, validate it with werkzeug's url_has_allowed_host_and_scheme() which checks that the URL's host matches the application's configured allowed hosts.
+  - Maintain an explicit allowlist of external domains that the application is permitted to redirect to, and reject any redirect URL whose host is not on the list.
+  - Implement a redirect disclaimer page for redirects to external sites -- show users where they are going and require confirmation before navigating away from the application.
+  - Log all redirects to external domains for anomaly detection -- legitimate use rarely generates high volumes of redirects to diverse external domains.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- which can deliver attacker-controlled
+  URL strings. The "next" parameter in login flows is the most common source.
+
+  Sinks: Flask's redirect() function. The .tracks(0) parameter targets the URL
+  argument at position 0 -- the redirect destination. The HTTP status code argument
+  at position 1 is not tracked.
+
+  Sanitizers: url_for() and url_has_allowed_host_and_scheme() are recognized as
+  sanitizing transformations. url_for() generates only application-internal URLs
+  (it cannot produce external URLs). url_has_allowed_host_and_scheme() from Werkzeug
+  validates that the host and scheme are in the application's allowed set. A redirect
+  URL that passes through either is treated as safe.
+
+  The rule follows URL values through variable assignments, string manipulation,
+  and cross-file function calls to the redirect() sink.
+
+# References
 references:
-- title: CWE-601
-  url: https://cwe.mitre.org/data/definitions/601.html
-- title: OWASP Unvalidated Redirects
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
-- title: Flask redirect()
-  url: https://flask.palletsprojects.com/en/latest/api/#flask.redirect
-- title: Flask url_for()
-  url: https://flask.palletsprojects.com/en/latest/api/#flask.url_for
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-601: Open Redirect"
+    url: https://cwe.mitre.org/data/definitions/601.html
+  - title: OWASP Unvalidated Redirects and Forwards Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+  - title: Flask redirect() documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.redirect
+  - title: Werkzeug url_has_allowed_host_and_scheme
+    url: https://werkzeug.palletsprojects.com/en/latest/utils/#werkzeug.utils.url_has_allowed_host_and_scheme
+  - title: Flask url_for() documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.url_for
+  - title: OWASP Testing for Open Redirect
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/04-Testing_for_Client-side_URL_Redirect
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control (unvalidated redirects are an access control failure)"
+  - standard: CWE Top 25
+    requirement: "CWE-601 -- URL Redirection to Untrusted Site"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent unvalidated redirects that could expose cardholder data"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- validate redirect target URLs"
+  - standard: ASVS v4.0
+    requirement: "V5.1.5 -- verify that redirect and forward parameters are not included in allowlisted redirect targets"
+
+# FAQ
+faq:
+  - question: Is open redirect really a security vulnerability?
+    answer: |
+      Yes, though it is lower severity than injection or authentication bypass. Open redirect
+      is primarily a phishing amplifier -- it allows attackers to use the legitimate
+      application's domain in URLs that lead to malicious sites. Its real-world impact
+      is measured by the credibility of the domain and the size of the user base. High-
+      trust applications (banking, healthcare, government) have significantly higher
+      phishing risk from open redirects.
+
+  - question: Why is url_for() a sanitizer for this rule?
+    answer: |
+      url_for() takes a Flask endpoint name (e.g., 'dashboard', 'user.profile') and
+      generates the URL for that route. It can only produce URLs that correspond to
+      routes registered in the application. It cannot generate external URLs like
+      https://evil.com. Using url_for() as the redirect target guarantees the destination
+      is an internal application route.
+
+  - question: How does url_has_allowed_host_and_scheme() work?
+    answer: |
+      url_has_allowed_host_and_scheme(url, allowed_hosts) parses the URL and checks
+      that the hostname is in the allowed_hosts set and the scheme is http or https.
+      For relative URLs (no hostname), it returns True. Pass request.host as the
+      allowed host to permit redirects to the same application domain only.
+
+  - question: What about redirects to HTTPS from HTTP? Does that trigger the rule?
+    answer: |
+      The rule tracks whether the redirect destination value is tainted from user input.
+      A hardcoded redirect like redirect('https://app.example.com/dashboard') has no
+      taint and will not trigger. Only redirects where the URL or a part of it traces
+      back to a Flask request source are flagged.
+
+  - question: We use a "next" parameter in our login form that is validated with a starts-with check on our domain. Is that safe?
+    answer: |
+      A starts-with check on a string like 'https://yourapp.com' can be bypassed with
+      URLs like 'https://yourapp.com.evil.com' (if not checking the full hostname) or
+      'https://yourapp.com@evil.com' (attacker.com becomes the actual host with yourapp.com
+      as the userinfo). Use url_has_allowed_host_and_scheme() which parses the URL properly
+      and compares the actual netloc (hostname:port) component.
+
+  - question: How do I handle deep links after OAuth callback where the user should be redirected to their original destination?
+    answer: |
+      Store the intended destination in the server-side session before the OAuth flow
+      begins: session['next'] = request.args.get('next'). After OAuth completion,
+      retrieve it from the session and validate it with url_has_allowed_host_and_scheme()
+      before redirecting. Never pass the "next" URL through the OAuth provider --
+      it becomes an open redirect in the OAuth callback.
+
+  - question: Is this rule prone to false positives on redirect(url_for('route')) patterns?
+    answer: |
+      No. url_for() is recognized as a sanitizer. redirect(url_for('dashboard')) does
+      not trigger the rule because the URL is generated by url_for(), not from a tainted
+      source. The rule only fires when the argument to redirect() traces back to a
+      Flask request parameter without passing through a recognized sanitizer.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-006
+  - PYTHON-FLASK-SEC-011
+  - PYTHON-DJANGO-SEC-012
+  - PYTHON-LANG-SEC-035
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A01:2021
-  name: ''
-  url: ''

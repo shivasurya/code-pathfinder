@@ -1,53 +1,243 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-008
-name: Flask XSS via Raw HTML Concatenation
-short_description: User input concatenated into HTML response. Use render_template() or markupsafe.escape().
+name: Flask XSS via Raw HTML in make_response
+short_description: User input from Flask request parameters flows to make_response() as raw HTML content. Escape user data with html.escape() or markupsafe.escape() before inserting it into HTML responses.
+
+# Classification
 severity: HIGH
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-008
+ruleset: python/flask/PYTHON-FLASK-SEC-008
+
+# Vulnerability Details
 cwe:
-- id: CWE-79
-  name: Improper Neutralization of Input During Web Page Generation
-  url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- flask
-- xss
-- html
-- OWASP-A07
-- CWE-79
+  - python
+  - flask
+  - xss
+  - cross-site-scripting
+  - make-response
+  - html-injection
+  - reflected-xss
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-79
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Cross-Site Scripting (XSS) vulnerabilities in Flask applications where
 
-  user-controlled input is reflected in HTTP responses without proper output encoding. Two'
-message: User input concatenated into HTML response. Use render_template() or markupsafe.escape().
-secure_example: "from flask import Flask, request, render_template\nfrom markupsafe import escape\n\n\
-  app = Flask(__name__)\n\n@app.route('/greet')\ndef greet():\n    name = request.args.get('name')\n \
-  \   # SAFE Option 1: Use Jinja2 template (auto-escapes by default)\n    return render_template('greet.html',\
-  \ name=name)\n\n@app.route('/greet-inline')\ndef greet_inline():\n    name = request.args.get('name')\n\
-  \    # SAFE Option 2: Explicitly escape user input\n    safe_name = escape(name)\n    return f'<h1>Hello,\
-  \ {safe_name}!</h1>'"
-recommendations: []
+# Content
+description: |
+  This rule detects reflected and stored Cross-Site Scripting (XSS) in Flask applications
+  where user-controlled input from HTTP request parameters flows into make_response() as
+  raw HTML content without output encoding. Flask's make_response() returns an HTTP
+  response with exactly the content you provide -- it applies no escaping. When user
+  input is embedded into an HTML body string and returned via make_response(), script
+  tags, event handlers, and other executable HTML in the user-supplied value run in
+  the victim's browser with the application's origin.
+
+  This vulnerability is distinct from XSS through Jinja2 templates. render_template()
+  and render_template_string() with {{ variable }} syntax apply autoescaping by default.
+  make_response() has no template layer -- it is a raw HTTP response builder. Code that
+  constructs HTML with f-strings or concatenation and passes the result to make_response()
+  is vulnerable even if the developer considers the data "processed."
+
+  The taint analysis traces user input from Flask request sources through string
+  operations and function calls to the body argument of make_response() at position 0.
+  Flows through html.escape(), markupsafe.escape(), Markup.escape(), or bleach.clean()
+  are recognized as sanitizers because they convert HTML special characters to entity
+  references that browsers display as text rather than executing as markup.
+
+message: "User input flows to make_response() as raw HTML. Escape with html.escape() or markupsafe.escape() before inserting into HTML content."
+
+security_implications:
+  - title: Session Hijacking via Cookie Theft
+    description: |
+      Injected JavaScript reads document.cookie and sends the session identifier to an
+      attacker-controlled server. The attacker uses the stolen session token to impersonate
+      the victim in subsequent requests. Even with HttpOnly cookies (which prevent JS
+      access), an attacker running injected scripts can make authenticated requests on
+      behalf of the victim within the same browser session.
+  - title: Credential Harvesting via DOM Manipulation
+    description: |
+      Injected scripts rewrite login forms, redirect form action URLs to attacker servers,
+      or overlay fake UI elements over the real page. Victims submit real credentials to
+      the attacker's infrastructure with no indication of the attack. This is particularly
+      effective in single-page applications where the URL does not change on navigation.
+  - title: Malware Distribution and Drive-by Exploitation
+    description: |
+      Stored XSS in make_response() paths that render user-generated content turns the
+      Flask application into a malware distribution platform. Every visitor to the
+      affected endpoint receives injected scripts that can exploit browser vulnerabilities,
+      install extensions, or silently exfiltrate browser-stored credentials.
+  - title: CSRF Token Theft Enabling State-Change Attacks
+    description: |
+      Scripts injected via XSS run in the application's origin and have full DOM access.
+      CSRF tokens embedded in form hidden fields are readable by injected JavaScript.
+      With the CSRF token, the attacker constructs and submits authenticated forms on
+      behalf of the victim, bypassing the CSRF protection entirely.
+
+secure_example: |
+  from flask import Flask, request, make_response
+  from markupsafe import escape
+  import html
+
+  app = Flask(__name__)
+
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', '')
+      # SAFE: markupsafe.escape() converts <, >, &, ", ' to HTML entities
+      safe_name = escape(name)
+      html_content = f'<html><body><h1>Hello, {safe_name}!</h1></body></html>'
+      response = make_response(html_content)
+      response.headers['Content-Type'] = 'text/html; charset=utf-8'
+      # Defense-in-depth: Content Security Policy limits script execution
+      response.headers['Content-Security-Policy'] = "default-src 'self'"
+      return response
+
+  @app.route('/search')
+  def search():
+      query = request.args.get('q', '')
+      # SAFE: html.escape() from stdlib -- identical effect to markupsafe.escape()
+      safe_query = html.escape(query)
+      body = f'<p>Results for: {safe_query}</p>'
+      return make_response(body, 200)
+
+recommendations:
+  - Apply html.escape() or markupsafe.escape() to every user-supplied string before inserting it into HTML content passed to make_response().
+  - Prefer render_template() with file-based Jinja2 templates over make_response() with hand-built HTML strings -- Jinja2 autoescaping handles entity encoding automatically for {{ variable }} expressions.
+  - Set an explicit Content-Type: text/html; charset=utf-8 header -- a response served as text/plain cannot execute injected scripts even if they are present in the body.
+  - Add a Content-Security-Policy header with a restrictive script-src directive to limit the impact of any XSS that bypasses output encoding.
+  - Set HttpOnly and Secure flags on session cookies to reduce the value of session theft via injected JavaScript.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- all of which can deliver strings
+  containing HTML markup and JavaScript payloads.
+
+  Sinks: make_response(). The .tracks(0) parameter targets the response body
+  argument at position 0. The HTTP status code argument and headers dict at
+  other positions are not tracked by this rule.
+
+  Sanitizers: html.escape(), markupsafe.escape(), Markup.escape(), and
+  bleach.clean() are recognized as sanitizing transformations. A user input
+  value that passes through any of these functions before reaching make_response()
+  is treated as safe from HTML injection. bleach.clean() is only a safe
+  sanitizer when configured with a restricted tag allowlist.
+
+  The rule follows tainted strings through f-string interpolation, concatenation,
+  format() calls, and cross-file function calls, catching HTML assembly patterns
+  in utility or rendering modules that receive input from Flask route handlers.
+
+# References
 references:
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: OWASP XSS
-  url: https://owasp.org/www-community/attacks/xss/
-- title: OWASP XSS Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html
-- title: Flask Security Considerations
-  url: https://flask.palletsprojects.com/en/latest/security/
-- title: MarkupSafe
-  url: https://markupsafe.palletsprojects.com/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: MarkupSafe documentation
+    url: https://markupsafe.palletsprojects.com/
+  - title: Python html.escape documentation
+    url: https://docs.python.org/3/library/html.html#html.escape
+  - title: Flask make_response documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.make_response
+  - title: OWASP Content Security Policy Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS is classified as client-side injection)"
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent XSS and injection attacks in cardholder data applications"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SC-28: Protection of Information at Rest"
+  - standard: ASVS v4.0
+    requirement: "V5.3.3 -- verify that output encoding is context-appropriate and applied to HTML contexts"
+
+# FAQ
+faq:
+  - question: Jinja2 autoescaping is enabled. Why does XSS still occur through make_response()?
+    answer: |
+      Jinja2 autoescaping only applies inside render_template() and render_template_string()
+      when variables are inserted via {{ }} syntax. make_response() bypasses the Jinja2
+      engine entirely -- it is a raw HTTP response builder. Whatever string you pass as
+      the body is sent verbatim. If that string was built with f-strings or concatenation
+      containing user input, there is no escaping layer.
+
+  - question: How is this different from PYTHON-FLASK-SEC-015?
+    answer: |
+      SEC-008 targets make_response() specifically -- a common pattern for constructing
+      custom HTML responses outside the template engine. SEC-015 targets both make_response()
+      and jsonify() with a broader focus on any response type that reflects unsanitized
+      user data. Run both rules together for complete XSS coverage across response patterns.
+
+  - question: Does setting Content-Type to application/json prevent XSS?
+    answer: |
+      If the Content-Type header is application/json, modern browsers will not render
+      the response as HTML and injected script tags will not execute in that context.
+      However, if the Content-Type is text/html (Flask's default for make_response()),
+      the browser renders the response as HTML. Always set Content-Type explicitly
+      when using make_response() to avoid accidental HTML rendering.
+
+  - question: Can I use bleach.clean() to strip dangerous HTML while allowing some tags?
+    answer: |
+      Yes, with caveats. bleach.clean() with a restrictive allowlist (e.g., only p, b,
+      em, ul, li with no event handler attributes) is a valid sanitizer for rich text
+      content. The safety depends entirely on the allowlist configuration. A misconfigured
+      allowlist that permits onclick or javascript: scheme URLs reintroduces XSS.
+      Use the most restrictive allowlist that meets your feature requirements.
+
+  - question: Is Content-Security-Policy a sufficient fix for XSS?
+    answer: |
+      CSP is defense-in-depth, not a primary fix. A strict CSP (no unsafe-inline,
+      no unsafe-eval, trusted script-src) limits the impact of XSS but does not
+      eliminate the injection. The primary fix is output encoding -- escape user
+      data before inserting it into HTML. CSP provides a second line of defense
+      for bypasses. Implement both.
+
+  - question: We return JSON from make_response() for API endpoints. Does this rule still fire?
+    answer: |
+      It fires if the first argument to make_response() is tainted, regardless of the
+      intended content type. If you set Content-Type: application/json explicitly, the
+      browser will not render it as HTML. To avoid the finding, either set Content-Type
+      correctly (and document that), or use jsonify() instead of make_response() for
+      JSON responses -- jsonify() sets the correct Content-Type automatically.
+
+  - question: How does this rule handle multi-step HTML construction across functions?
+    answer: |
+      The taint analysis follows data through assignments, return values, string
+      operations, and cross-file function calls. If request.args.get() in routes.py
+      produces a value that flows into a build_html() helper in render.py that returns
+      an HTML string passed to make_response() in the route handler, the full chain
+      is flagged. The .tracks(0) setting ensures only the body argument is analyzed.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-015
+  - PYTHON-FLASK-SEC-014
+  - PYTHON-DJANGO-SEC-008
+  - PYTHON-LANG-SEC-040
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A07:2021
-  name: ''
-  url: ''

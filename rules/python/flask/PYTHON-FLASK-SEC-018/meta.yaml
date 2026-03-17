@@ -1,74 +1,203 @@
+# Rule Identity
 id: PYTHON-FLASK-SEC-018
-name: Flask Hashids with Secret Key
-short_description: Flask SECRET_KEY used as Hashids salt. Use a separate salt value.
+name: Flask Hashids with Secret Key as Salt
+short_description: Detects Hashids initialized with app.secret_key as the salt, which exposes Flask's secret key because the Hashids salt is recoverable through cryptanalysis.
+
+# Classification
 severity: MEDIUM
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-SEC-018
+ruleset: python/flask/PYTHON-FLASK-SEC-018
+
+# Vulnerability Details
 cwe:
-- id: CWE-330
-  name: Use of Insufficiently Random Values
-  url: https://cwe.mitre.org/data/definitions/330.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- flask
-- hashids
-- secret-key
-- CWE-330
+  - python
+  - flask
+  - hashids
+  - secret-key
+  - cryptography
+  - salt
+  - session-forgery
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module contains ten audit and configuration-based security rules for Flask applications.
 
-  Unlike dataflow rules that track tainted input from sources to sinks, these rules use pattern
+# Content
+description: |
+  This rule detects Flask applications that initialize Hashids with Flask's secret key as the
+  salt: Hashids(salt=app.secret_key). Hashids is a library for encoding integers into
+  short URL-friendly strings. It is not a cryptographic hash function -- it is a
+  bidirectional encoding scheme, and the salt is recoverable.
 
-  matching to detect insecure configurations, dangerous API usage, and security anti-patterns
+  In 2015, security researcher Phil Carnage published a cryptanalysis showing that the Hashids
+  salt can be recovered with approximately 20 known plaintext pairs (input integer and
+  corresponding hashid). This means an attacker who observes enough hashids in your application's
+  URLs can reverse-engineer the salt value. If the salt is Flask's secret_key, the attacker
+  now has the key used to sign session cookies, CSRF tokens, and any other Flask security
+  primitive that depends on SECRET_KEY. With the secret key, the attacker can forge arbitrary
+  session cookies and authenticate as any user, including administrators.
 
-  that do not require taint analysis.
+  The detection uses HashidsModule.method("Hashids").where("salt", "app.secret_key") -- a
+  QueryType-based precise match. HashidsModule declares fqns=["hashids"], so only Hashids
+  objects imported from the hashids package are matched. The .where("salt", "app.secret_key")
+  filter means only calls where the salt keyword argument is specifically the Flask secret key
+  attribute are flagged. Using a separate, dedicated salt value for Hashids does not trigger
+  this rule. This precision delivers zero false positives on correctly configured applications.
 
+message: "Hashids salt set to app.secret_key. The Hashids salt is recoverable, which would expose the Flask secret key. Use a separate salt value for Hashids."
 
-  These rules serve two purposes: (1) detecting definitive security misconfigurations that should
+security_implications:
+  - title: Flask Secret Key Exposure via Hashids Cryptanalysis
+    description: |
+      With approximately 20 known (integer, hashid) pairs -- easily obtained from any
+      paginated list, user profile URL, or content ID that exposes hashids -- an attacker
+      can recover the Hashids salt through known-plaintext cryptanalysis. If that salt is
+      app.secret_key, the attacker has the key used to sign everything Flask protects with
+      it.
+  - title: Session Cookie Forgery
+    description: |
+      Flask's session cookie is signed with SECRET_KEY using itsdangerous. Once an attacker
+      obtains the secret key, they can forge a session cookie with any user ID -- including
+      admin accounts -- without ever knowing a password or exploiting authentication logic.
+  - title: CSRF Token Bypass
+    description: |
+      Flask-WTF's CSRF tokens are also derived from SECRET_KEY. With the key recovered,
+      an attacker can generate valid CSRF tokens for any target user's session, bypassing
+      CSRF protection on all state-changing endpoints.
+  - title: Itsdangerous Token Forgery
+    description: |
+      Any itsdangerous-based token (password reset links, email confirmation tokens, timed
+      tokens) that the application generates using SECRET_KEY can be forged by an attacker
+      who possesses the key.
 
-  be fixed regardless of context, and (2) flagging potentially dangerous patterns that warrant
+secure_example: |
+  import os
+  from flask import Flask
+  from hashids import Hashids
 
-  manual review to determine if they represent actual vulnerabilities in the specific application
+  app = Flask(__name__)
+  app.config['SECRET_KEY'] = os.urandom(32)
 
-  context.'
-message: Flask SECRET_KEY used as Hashids salt. Use a separate salt value.
-secure_example: ''
-recommendations: []
+  # SAFE: Use a separate, independently generated salt for Hashids.
+  # This salt can be compromised without exposing the Flask secret key.
+  HASHIDS_SALT = os.getenv('HASHIDS_SALT', os.urandom(16).hex())
+  hashids = Hashids(salt=HASHIDS_SALT, min_length=8)
+
+  # NEVER do this:
+  # hashids = Hashids(salt=app.secret_key)  # Exposes SECRET_KEY via cryptanalysis
+
+  @app.route('/user/<int:user_id>')
+  def user_profile(user_id):
+      encoded = hashids.encode(user_id)
+      return {'id': encoded}
+
+recommendations:
+  - Use a separate, independently generated value for the Hashids salt -- for example, an environment variable HASHIDS_SALT that is distinct from FLASK_SECRET_KEY.
+  - Rotate the Hashids salt independently of the Flask secret key so a compromise of one does not affect the other.
+  - Understand that Hashids is not a security primitive -- it is an obfuscation library. Do not rely on Hashids to protect access control. Always enforce authorization server-side regardless of whether the ID is encoded.
+  - If you need cryptographically secure token generation for URLs, use itsdangerous.URLSafeTimedSerializer with a dedicated signing key rather than Hashids.
+  - Store sensitive key material (secret keys, salts) in a secrets manager or environment variables, never hardcoded in source code.
+
+detection_scope: |
+  This rule uses a QueryType-based precise match: HashidsModule.method("Hashids").where("salt", "app.secret_key").
+  HashidsModule declares fqns=["hashids"], restricting matches to objects imported from the
+  hashids package. The .method("Hashids") step targets the Hashids() constructor call. The
+  .where("salt", "app.secret_key") step filters to calls where the salt keyword argument is
+  specifically the attribute access app.secret_key -- the Flask application's secret key.
+  Using a variable that happens to equal the secret key at runtime, or using app.config["SECRET_KEY"]
+  instead of app.secret_key, are separate patterns not covered by this precise match. The rule
+  operates at the call-site level without cross-file dataflow analysis.
+
+# References
 references:
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-942
-  url: https://cwe.mitre.org/data/definitions/942.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: Flask Security Considerations
-  url: https://flask.palletsprojects.com/en/latest/security/
-- title: Flask-CORS Documentation
-  url: https://flask-cors.readthedocs.io/
-- title: Flask-WTF CSRF
-  url: https://flask-wtf.readthedocs.io/en/latest/csrf/
-- title: Hashids Cryptanalysis
-  url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
-- title: OWASP Secure Cookie Attributes
-  url: https://owasp.org/www-community/controls/SecureCookieAttribute
-- title: Jinja2 Autoescaping
-  url: https://jinja.palletsprojects.com/en/latest/api/#autoescaping
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: Hashids Cryptanalysis by Phil Carnage (2015)
+    url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
+  - title: Flask SECRET_KEY Documentation
+    url: https://flask.palletsprojects.com/en/stable/config/#SECRET_KEY
+  - title: itsdangerous Documentation
+    url: https://itsdangerous.palletsprojects.com/
+  - title: OWASP A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: OWASP Cryptographic Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures: use strong, purpose-specific keys for each cryptographic function"
+  - standard: CWE Top 25
+    requirement: "CWE-327 Use of a Broken or Risky Cryptographic Algorithm"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 3.5 -- protect cryptographic keys and prevent key reuse across different security functions"
+  - standard: NIST SP 800-53
+    requirement: "SC-12: Cryptographic Key Establishment and Management -- use separate keys for separate functions"
+
+# FAQ
+faq:
+  - question: How can the Hashids salt be recovered? Isn't it hidden inside the encoding?
+    answer: |
+      Hashids uses the salt in a way that is mathematically reversible given enough known
+      plaintext pairs. The 2015 cryptanalysis by Phil Carnage demonstrated recovery with
+      approximately 20 (input, output) pairs. In a web application that exposes encoded IDs
+      in URLs or API responses, an attacker can easily collect these pairs by incrementing
+      input integers and observing the outputs.
+
+  - question: Why does this rule use .where() instead of a broader pattern?
+    answer: |
+      The .where("salt", "app.secret_key") constraint makes this a zero-false-positive rule.
+      It only flags the specific case where the salt argument is Flask's secret key attribute.
+      Hashids with any other salt value is not flagged, even if that other value might also
+      be sensitive. The precise match means every finding is a confirmed misuse of the secret
+      key, not a general Hashids audit.
+
+  - question: Is Hashids a cryptographic library?
+    answer: |
+      No. Hashids is explicitly documented as an obfuscation library, not a cryptographic one.
+      The author warns against using it for security purposes. It encodes integers into
+      short strings in a way that is aesthetically pleasing and reversible. It provides no
+      security guarantees against an adversary who can make observations.
+
+  - question: What should I use for secure URL tokens instead of Hashids?
+    answer: |
+      For URL-safe tokens that need to be tamper-evident, use itsdangerous.URLSafeTimedSerializer
+      or URLSafeSerializer with a dedicated signing key. For simple obfuscation without security
+      requirements, use a UUID or a different encoding scheme. For access-controlled resources,
+      enforce authorization server-side -- the token format does not substitute for access control.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-018 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule catch app.config["SECRET_KEY"] used as the Hashids salt?
+    answer: |
+      No. This rule matches the specific attribute access pattern app.secret_key. Using
+      app.config["SECRET_KEY"] as the salt is an equivalent vulnerability but a different
+      code pattern. Review your codebase for both forms when addressing this finding.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-004
+  - PYTHON-FLASK-SEC-001
+  - PYTHON-FLASK-AUDIT-010
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

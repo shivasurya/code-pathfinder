@@ -1,74 +1,205 @@
+# Rule Identity
 id: PYTHON-FLASK-AUDIT-004
 name: Flask CORS Wildcard Origin
-short_description: CORS configured with wildcard origin '*'. Restrict to specific domains.
+short_description: Detects Flask-CORS configured with origins="*", allowing any domain to make cross-origin requests to the application.
+
+# Classification
 severity: MEDIUM
 category: flask
 language: python
-ruleset: python/PYTHON-FLASK-AUDIT-004
+ruleset: python/flask/PYTHON-FLASK-AUDIT-004
+
+# Vulnerability Details
 cwe:
-- id: CWE-942
-  name: Permissive Cross-domain Policy with Untrusted Domains
-  url: https://cwe.mitre.org/data/definitions/942.html
+  - id: CWE-942
+    name: Permissive Cross-domain Policy with Untrusted Domains
+    url: https://cwe.mitre.org/data/definitions/942.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- flask
-- cors
-- wildcard
-- CWE-942
+  - python
+  - flask
+  - cors
+  - wildcard
+  - cross-origin
+  - configuration
+  - misconfiguration
+  - flask-cors
+  - CWE-942
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module contains ten audit and configuration-based security rules for Flask applications.
 
-  Unlike dataflow rules that track tainted input from sources to sinks, these rules use pattern
+# Content
+description: |
+  This rule detects Flask applications that initialize Flask-CORS with a wildcard origin
+  (origins="*"). The Access-Control-Allow-Origin: * header instructs browsers to allow any
+  web page -- on any domain, including attacker-controlled sites -- to make cross-origin
+  requests to the application and read the responses.
 
-  matching to detect insecure configurations, dangerous API usage, and security anti-patterns
+  The critical risk arises when wildcard CORS is combined with credentials (cookies, HTTP
+  auth, or client-side certificates). While browsers prevent credentials from being sent with
+  a pure wildcard response, the misconfiguration often evolves: developers add
+  supports_credentials=True and then change origins="*" to origins="null" or reflect the
+  Origin header, inadvertently creating a credentialed CORS bypass. Auditing wildcard CORS
+  early prevents this class of vulnerability from appearing in the first place.
 
-  that do not require taint analysis.
+  The detection uses FlaskCORS.method("CORS").where("origins", "*") -- a QueryType-based
+  precise match. FlaskCORS declares fqns=["flask_cors"], so only objects imported from the
+  flask_cors package are matched. The .where("origins", "*") filter means only calls where
+  the origins keyword argument is exactly the string "*" are flagged. Calls with a specific
+  domain list, a regex, or a variable are not flagged. This precision delivers zero false
+  positives on correctly configured applications.
 
+message: "CORS configured with wildcard origin '*'. Restrict to specific trusted domains."
 
-  These rules serve two purposes: (1) detecting definitive security misconfigurations that should
+security_implications:
+  - title: Cross-Origin Data Theft from Authenticated Users
+    description: |
+      With wildcard CORS, any malicious web page can make JavaScript fetch() calls to the
+      application's API and read the JSON responses. If the user visiting the malicious page
+      is already authenticated (via cookie or session), the request carries their credentials
+      and the attacker's page can silently exfiltrate account data, private API responses,
+      or internal state.
+  - title: Cross-Site Request Forgery Amplification
+    description: |
+      Wildcard CORS allows attackers to use JavaScript XMLHttpRequest with full access to
+      response bodies, not just fire-and-forget form submissions. This upgrades CSRF from
+      blind state-changing attacks to data-reading attacks where the attacker can actually
+      see what the server returns.
+  - title: Credential-Based Bypass When supports_credentials Is Added Later
+    description: |
+      Applications often start with origins="*" and later add supports_credentials=True as
+      authentication is added. At that point, browsers block the combination. Developers then
+      change to reflecting the Origin header or using origins="null", both of which are
+      exploitable. Fixing the wildcard origin early prevents this progression.
+  - title: Internal API Exposure
+    description: |
+      Wildcard CORS on internal APIs (admin panels, management endpoints, metrics) allows
+      any external website visited by a privileged user to make requests to those endpoints.
+      Even if authentication is required, the attacker's page executes in the authenticated
+      user's browser context.
 
-  be fixed regardless of context, and (2) flagging potentially dangerous patterns that warrant
+secure_example: |
+  from flask import Flask
+  from flask_cors import CORS
 
-  manual review to determine if they represent actual vulnerabilities in the specific application
+  app = Flask(__name__)
 
-  context.'
-message: CORS configured with wildcard origin '*'. Restrict to specific domains.
-secure_example: ''
-recommendations: []
+  # SAFE: Restrict CORS to specific trusted origins
+  CORS(app, origins=["https://app.example.com", "https://admin.example.com"])
+
+  # For APIs that must be public, restrict to specific HTTP methods
+  # and do not enable supports_credentials:
+  CORS(app, origins=["https://trusted-partner.com"], methods=["GET"])
+
+  # For truly public read-only APIs, wildcard is acceptable only
+  # if no authentication is used and no sensitive data is returned:
+  # CORS(app, origins="*", supports_credentials=False)  # document this decision
+
+recommendations:
+  - Replace origins="*" with an explicit list of trusted origins -- for example, ["https://app.example.com", "https://admin.example.com"].
+  - If you need to allow multiple environments (dev, staging, prod), maintain an allow-list per environment and inject it via configuration rather than hardcoding "*".
+  - Never combine origins="*" with supports_credentials=True -- browsers block this and developers tend to work around it in insecure ways.
+  - Restrict CORS to the minimum required HTTP methods (methods=["GET", "POST"]) rather than allowing all methods.
+  - Audit CORS configuration changes in code review as a security-sensitive change, similar to changes to authentication middleware.
+
+detection_scope: |
+  This rule uses a QueryType-based precise match: FlaskCORS.method("CORS").where("origins", "*").
+  FlaskCORS declares fqns=["flask_cors"], restricting matches to objects imported from the
+  flask_cors package. The .method("CORS") step targets the CORS() constructor call. The
+  .where("origins", "*") step filters to calls where the origins keyword argument is exactly
+  the string "*". Calls with a list of specific origins, a compiled regex, or a variable are
+  not flagged. The rule operates at the call-site level without cross-file dataflow analysis.
+
+# References
 references:
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-942
-  url: https://cwe.mitre.org/data/definitions/942.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: Flask Security Considerations
-  url: https://flask.palletsprojects.com/en/latest/security/
-- title: Flask-CORS Documentation
-  url: https://flask-cors.readthedocs.io/
-- title: Flask-WTF CSRF
-  url: https://flask-wtf.readthedocs.io/en/latest/csrf/
-- title: Hashids Cryptanalysis
-  url: http://carnage.github.io/2015/08/cryptanalysis-of-hashids
-- title: OWASP Secure Cookie Attributes
-  url: https://owasp.org/www-community/controls/SecureCookieAttribute
-- title: Jinja2 Autoescaping
-  url: https://jinja.palletsprojects.com/en/latest/api/#autoescaping
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+    url: https://cwe.mitre.org/data/definitions/942.html
+  - title: OWASP CORS Configuration Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: Flask-CORS Documentation
+    url: https://flask-cors.readthedocs.io/
+  - title: MDN Web Docs -- Cross-Origin Resource Sharing (CORS)
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+  - title: OWASP A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - title: PortSwigger CORS Exploitation
+    url: https://portswigger.net/web-security/cors
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration: restrict cross-origin access to trusted domains"
+  - standard: CWE Top 25
+    requirement: "CWE-942 Permissive Cross-domain Policy with Untrusted Domains"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent cross-site attacks including insecure CORS policies"
+  - standard: NIST SP 800-53
+    requirement: "SC-8: Transmission Confidentiality and Integrity -- protect data from unauthorized cross-origin access"
+
+# FAQ
+faq:
+  - question: Is wildcard CORS always unsafe, or are there legitimate use cases?
+    answer: |
+      Wildcard CORS (origins="*") is safe only for fully public, unauthenticated APIs that
+      return no sensitive data -- for example, a public CDN or a read-only open data API with
+      no authentication. For any API that uses cookies, sessions, API keys, or returns
+      user-specific data, wildcard CORS is a vulnerability.
+
+  - question: How does the .where() filter make this rule precise?
+    answer: |
+      Without .where(), the rule would flag every CORS() call regardless of the origins value,
+      producing false positives on applications with proper origin allow-lists. The
+      .where("origins", "*") constraint means only the literal string "*" triggers a finding.
+      CORS(app, origins=["https://example.com"]) is not flagged.
+
+  - question: The MDN docs say browsers block credentials with wildcard CORS. Why is this still a finding?
+    answer: |
+      Browsers do block Access-Control-Allow-Credentials: true with Access-Control-Allow-Origin: *.
+      However, many APIs do not use cookies and instead use tokens in headers -- those requests
+      work fine with wildcard CORS. Additionally, developers who hit the credential-blocking
+      error often switch to reflecting the Origin header (effectively any-origin) as a workaround,
+      which is exploitable. Flagging wildcard early prevents the whole pattern.
+
+  - question: How do I handle CORS for multiple environments (dev, staging, prod)?
+    answer: |
+      Maintain a per-environment allow-list and inject it through configuration:
+        allowed_origins = os.getenv("CORS_ORIGINS", "https://app.example.com").split(",")
+        CORS(app, origins=allowed_origins)
+      This way, no environment has wildcard origins hardcoded in source code.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-AUDIT-004 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule also detect per-route CORS decorators with wildcard origins?
+    answer: |
+      No. This rule matches the CORS() constructor call pattern. Per-route decorators such as
+      @cross_origin(origins="*") are a separate pattern not covered here. A dedicated rule
+      for the @cross_origin decorator would complement this one.
+
+  - question: What should I do if I truly need public CORS for a subset of routes?
+    answer: |
+      Use Flask-CORS's resource-specific configuration to restrict wildcard CORS to specific
+      URL patterns: CORS(app, resources={r"/public/*": {"origins": "*"}}). This limits the
+      wildcard to routes that genuinely require it rather than applying it globally.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-001
+  - PYTHON-FLASK-AUDIT-003
+  - PYTHON-FLASK-AUDIT-009
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''
