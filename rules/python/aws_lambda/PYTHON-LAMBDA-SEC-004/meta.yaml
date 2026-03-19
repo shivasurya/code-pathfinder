@@ -1,60 +1,211 @@
+# Rule Identity
 id: PYTHON-LAMBDA-SEC-004
-name: Lambda Command Injection via asyncio shell
-short_description: Lambda event data flows to asyncio.create_subprocess_shell().
+name: Lambda Command Injection via asyncio.create_subprocess_shell()
+short_description: Lambda event data flows to asyncio.create_subprocess_shell(), enabling OS command injection in async Lambda handlers.
+
+# Classification
 severity: CRITICAL
 category: aws_lambda
 language: python
-ruleset: python/PYTHON-LAMBDA-SEC-004
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-004
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aws
-- lambda
-- command-injection
-- asyncio
-- OWASP-A03
-- CWE-78
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - asyncio
+  - create-subprocess-shell
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect OS command injection vulnerabilities in AWS Lambda functions where
 
-  untrusted event data flows into command execution functions. Lambda functions receive
+# Content
+description: |
+  This rule detects OS command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into asyncio.create_subprocess_shell() calls within async
+  Lambda handlers.
 
-  event data from various AWS triggers (API Gateway, S3, SNS, SQS, DynamoDB Streams)
+  Lambda functions increasingly use async/await patterns with asyncio for concurrent
+  I/O operations. asyncio.create_subprocess_shell() is the async equivalent of
+  subprocess.run(shell=True) and carries the same shell injection risk: the command
+  string is passed to /bin/sh for interpretation, and any shell metacharacters in the
+  event data will be executed as shell syntax.
 
-  and this data is fully attacker-controllable in many scenarios.'
-message: Lambda event data flows to asyncio.create_subprocess_shell().
-secure_example: "import subprocess\nimport shlex\nimport os\n\ndef lambda_handler(event, context):\n \
-  \   # SECURE: Use subprocess with list arguments (no shell interpretation)\n    filename = event.get('filename',\
-  \ '')\n    result = subprocess.run(\n        ['ls', '-la', f'/tmp/{filename}'],  # List args = no shell\
-  \ injection\n        capture_output=True, text=True\n    )\n\n    # SECURE: Use shlex.quote() for shell\
-  \ commands when unavoidable\n    user_input = event.get('name', '')\n    safe_input = shlex.quote(user_input)\n\
-  \    result = subprocess.run(\n        f'echo {safe_input}',\n        shell=True, capture_output=True,\
-  \ text=True\n    )\n\n    # SECURE: Validate and sanitize input\n    import re\n    filename = event.get('filename',\
-  \ '')\n    if not re.match(r'^[a-zA-Z0-9._-]+$', filename):\n        return {'statusCode': 400, 'body':\
-  \ 'Invalid filename'}\n\n    result = subprocess.run(\n        ['cat', f'/tmp/{filename}'],\n      \
-  \  capture_output=True, text=True\n    )\n\n    return {'statusCode': 200, 'body': result.stdout}"
-recommendations: []
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other triggers. Fields like event.get("body"),
+  event.get("queryStringParameters"), and event["Records"] are attacker-controllable.
+  There is no sanitization layer between the event payload and application code.
+
+  The async nature of the handler does not provide any additional security for shell
+  commands. Injected commands run asynchronously but still complete within the
+  invocation timeout, allowing exfiltration of the Lambda execution role's AWS
+  credentials (available in environment variables) and other sensitive data before
+  the invocation ends.
+
+message: "Lambda event data flows to asyncio.create_subprocess_shell(). Replace with asyncio.create_subprocess_exec() using a list of arguments."
+
+security_implications:
+  - title: Shell Injection in Async Lambda Handlers
+    description: |
+      asyncio.create_subprocess_shell() passes the command string to /bin/sh for
+      execution. Lambda event data embedded via f-strings or concatenation allows
+      an attacker to inject shell metacharacters (;, |, $(), ``) that chain additional
+      commands. The async execution model does not prevent injection; commands run
+      concurrently and complete before the handler returns.
+  - title: AWS Credential Exfiltration via Async Shell
+    description: |
+      The Lambda execution environment exposes AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+      and AWS_SESSION_TOKEN as environment variables. An async shell injection can
+      spawn a background process that exfiltrates these credentials via curl or wget
+      to attacker-controlled infrastructure, completing before the Lambda invocation ends.
+  - title: Concurrent Exploitation Amplification
+    description: |
+      Async handlers may process multiple event records concurrently (e.g., SQS batch
+      processing). A batch of malicious SQS messages could trigger multiple concurrent
+      injections within a single invocation, amplifying the attack surface and
+      potentially overwhelming logging or detection systems.
+  - title: VPC Lateral Movement
+    description: |
+      Lambda functions in a VPC have network access to internal resources. An async
+      shell injection can initiate non-blocking outbound connections to internal
+      endpoints (RDS, ElastiCache, internal APIs) that are not accessible from the
+      internet, enabling lateral movement through the VPC.
+
+secure_example: |
+  import asyncio
+  import re
+  import json
+
+  async def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      filename = body.get('filename', '')
+
+      # SECURE: Validate filename with strict regex
+      if not re.match(r'^[a-zA-Z0-9_.\-]+$', filename):
+          return {'statusCode': 400, 'body': 'Invalid filename'}
+
+      # SECURE: Use create_subprocess_exec with individual arguments — no shell
+      process = await asyncio.create_subprocess_exec(
+          'convert', '--', f'/tmp/{filename}', f'/tmp/out_{filename}',
+          stdout=asyncio.subprocess.PIPE,
+          stderr=asyncio.subprocess.PIPE
+      )
+      stdout, stderr = await process.communicate()
+      return {'statusCode': 200, 'body': stdout.decode()}
+
+recommendations:
+  - Replace asyncio.create_subprocess_shell() with asyncio.create_subprocess_exec() using individual arguments, which bypasses the shell entirely.
+  - Never interpolate Lambda event data into shell command strings, even with asyncio async patterns.
+  - Validate all event fields with strict allowlists or regular expressions before they appear in any subprocess or asyncio subprocess argument.
+  - Apply least-privilege IAM policies to the Lambda execution role to limit the AWS APIs accessible if credentials are exfiltrated.
+  - Enable AWS CloudTrail and VPC Flow Logs to detect unusual outbound connections from the Lambda execution environment.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is
+  calls("asyncio.create_subprocess_shell") with the tainted command string tracked
+  via .tracks(0). Sanitizers include shlex.quote() applied per-argument. The analysis
+  follows taint through async function calls, await expressions, f-string interpolation,
+  and module boundaries.
+
+# References
 references:
-- title: 'CWE-78: OS Command Injection'
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: OWASP Command Injection
-  url: https://owasp.org/www-community/attacks/Command_Injection
-- title: AWS Lambda Security Best Practices
-  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
-- title: OWASP Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: Python asyncio.create_subprocess_shell documentation
+    url: https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.create_subprocess_shell
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: Python asyncio subprocess documentation
+    url: https://docs.python.org/3/library/asyncio-subprocess.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: How is asyncio.create_subprocess_shell() different from asyncio.create_subprocess_exec()?
+    answer: |
+      create_subprocess_shell() passes the command to the system shell (/bin/sh) for
+      interpretation, exactly like subprocess.run(shell=True). This means shell
+      metacharacters in user input are interpreted as shell syntax. create_subprocess_exec()
+      takes individual arguments and passes them directly to execve() without shell
+      interpretation, making it safe from shell injection when arguments are validated.
+
+  - question: Does the async nature of the Lambda handler prevent or limit injection?
+    answer: |
+      No. The async execution model allows non-blocking I/O but does not impose any
+      security boundary on the shell commands that are spawned. The injected shell
+      command runs as a subprocess of the Lambda process and completes before the
+      invocation ends. Async concurrency may actually amplify the attack if multiple
+      event records are processed concurrently and each contains an injection payload.
+
+  - question: What is the correct async replacement for asyncio.create_subprocess_shell()?
+    answer: |
+      Use asyncio.create_subprocess_exec() with individual string arguments for each
+      part of the command. This function bypasses the shell entirely and passes
+      arguments directly to the process. Validate all arguments from event data before
+      use and source executable names from a hardcoded allowlist rather than event data.
+
+  - question: Can this rule detect injection in async helper functions called by the Lambda handler?
+    answer: |
+      Yes. The rule performs inter-procedural analysis and follows taint from the
+      Lambda handler's event parameter through await calls, async function arguments,
+      and return values. If event data flows from lambda_handler() through an async
+      helper to asyncio.create_subprocess_shell() in another module, the finding
+      is still reported.
+
+  - question: What if SQS triggers deliver multiple records and one is malicious?
+    answer: |
+      SQS batch processing often loops over event["Records"] and processes each record.
+      If the loop body passes record data to create_subprocess_shell(), each record in
+      the batch is a potential injection vector. Validate every record field individually
+      before use. Use batch item failure reporting to handle individual malformed records
+      without failing the entire batch.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LAMBDA-SEC-006
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

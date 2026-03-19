@@ -1,70 +1,159 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-103
 name: Regex DoS Risk
-short_description: re.compile/match/search detected. Audit regex patterns for catastrophic backtracking.
+short_description: Detects re.compile(), re.match(), re.search(), and re.findall() calls that should be audited for catastrophic backtracking patterns.
+
+# Classification
 severity: LOW
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-103
+ruleset: python/lang/PYTHON-LANG-SEC-103
+
+# Vulnerability Details
 cwe:
-- id: CWE-1333
-  name: Inefficient Regular Expression Complexity
-  url: https://cwe.mitre.org/data/definitions/1333.html
+  - id: CWE-1333
+    name: "Inefficient Regular Expression Complexity"
+    url: https://cwe.mitre.org/data/definitions/1333.html
+
+owasp:
+  - id: A06:2021
+    name: Vulnerable and Outdated Components
+    url: https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/
+
 tags:
-- python
-- regex
-- redos
-- denial-of-service
-- CWE-1333
+  - python
+  - regex
+  - redos
+  - denial-of-service
+  - audit
+  - CWE-1333
+  - OWASP-A06
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module covers a range of security concerns that span multiple vulnerability
 
-  categories. These include predictable UUID generation that leaks host information,
+# Content
+description: |
+  This rule flags calls to re.compile(), re.match(), re.search(), and re.findall()
+  as audit items. Regular expressions with nested quantifiers, overlapping
+  alternatives, or unbounded repetition can cause catastrophic backtracking where
+  matching time grows exponentially with input length.
 
-  overly permissive file permissions that expose sensitive files, hardcoded
+  An attacker who controls the input string can craft a payload that causes a single
+  regex match to consume 100% CPU for minutes or hours, effectively creating a
+  denial-of-service condition. This is known as ReDoS (Regular Expression Denial
+  of Service).
 
-  credentials in source code, regular expression patterns susceptible to
+  The rule operates at audit level because not all regex patterns are vulnerable.
+  Review each flagged pattern for nested quantifiers like (a+)+, (a|a)+, or
+  (a*)*. Consider using the re2 library for untrusted input, which guarantees
+  linear-time matching.
 
-  denial-of-service through catastrophic backtracking, unsafe logging configuration
+message: "Regex usage detected. Audit patterns for catastrophic backtracking (ReDoS)."
 
-  listeners that evaluate arbitrary code, and logging statements that may
+security_implications:
+  - title: Denial of Service via Catastrophic Backtracking
+    description: |
+      A regex pattern like ^(a+)+$ takes exponential time on inputs like
+      "aaaaaaaaaaaaaaaaab". Each additional 'a' doubles the matching time. An
+      attacker can send a short string that locks up a worker thread for minutes.
+  - title: Application Unavailability
+    description: |
+      In web applications, a ReDoS attack ties up request-handling threads. A
+      handful of crafted requests can exhaust the thread pool and make the
+      application unresponsive to legitimate users.
+  - title: Amplification in Validation Logic
+    description: |
+      Regex patterns in input validation (email, URL, phone number) are common
+      ReDoS targets because they process user-controlled input directly. A
+      vulnerability in a validation regex affects every request that triggers it.
 
-  inadvertently record sensitive credentials.'
-message: re.compile/match/search detected. Audit regex patterns for catastrophic backtracking.
-secure_example: "import uuid, os, re\n# Use uuid4 for cryptographically random UUIDs\nsession_id = str(uuid.uuid4())\n\
-  # Restrictive file permissions (owner read/write only)\nos.chmod(\"/app/config.ini\", 0o600)\n# Load\
-  \ passwords from environment or secrets manager\ndef connect_db(host, password=None):\n    password\
-  \ = password or os.environ[\"DB_PASSWORD\"]\n# Use atomic groups or possessive quantifiers to prevent\
-  \ backtracking\npattern = re.compile(r\"a+$\")  # Simplified non-vulnerable pattern\n# Never log credentials\n\
-  logging.info(f\"User {user} logged in successfully\")"
-recommendations: []
+secure_example: |
+  import re
+
+  # SAFE: Simple pattern without nested quantifiers
+  email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+  # SAFER: Use re2 for untrusted input (linear-time guarantee)
+  # import re2
+  # pattern = re2.compile(r'complex_pattern')
+
+  # SAFE: Set a timeout with re.match
+  # Python 3.11+ supports timeout parameter
+  # re.match(pattern, user_input, timeout=1.0)
+
+recommendations:
+  - Audit regex patterns for nested quantifiers like (a+)+, (a|a)+, or (.*a){10}
+  - Use atomic groups or possessive quantifiers where supported to prevent backtracking
+  - Consider the re2 library (google-re2) for patterns that process untrusted input, as it guarantees linear-time matching
+  - Set input length limits before applying regex patterns to user-controlled strings
+  - Use Python 3.11+ timeout parameter in re.match() and re.search() for defense in depth
+
+detection_scope: |
+  This rule matches all calls to re.compile(), re.match(), re.search(), and
+  re.findall() via the QueryType pattern ReModule.method("compile", "match",
+  "search", "findall"). It operates as an audit rule that flags all regex usage
+  for manual review of the pattern string.
+
+# References
 references:
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-732
-  url: https://cwe.mitre.org/data/definitions/732.html
-- title: CWE-259
-  url: https://cwe.mitre.org/data/definitions/259.html
-- title: CWE-1333
-  url: https://cwe.mitre.org/data/definitions/1333.html
-- title: CWE-532
-  url: https://cwe.mitre.org/data/definitions/532.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
-- title: 'Python docs: uuid'
-  url: https://docs.python.org/3/library/uuid.html
-- title: 'Python docs: os - os.chmod'
-  url: https://docs.python.org/3/library/os.html#os.chmod
-- title: www.landh.tech
-  url: https://www.landh.tech/blog/20230811-sandwich-attack/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-1333: Inefficient Regular Expression Complexity"
+    url: https://cwe.mitre.org/data/definitions/1333.html
+  - title: OWASP ReDoS Prevention
+    url: https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS
+  - title: "Python re module documentation"
+    url: https://docs.python.org/3/library/re.html
+  - title: "Google RE2 library"
+    url: https://github.com/google/re2
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A06:2021 - Vulnerable and Outdated Components"
+  - standard: CWE
+    requirement: "CWE-1333 - Inefficient Regular Expression Complexity"
+  - standard: NIST SP 800-53
+    requirement: "SC-5: Denial of Service Protection"
+
+# FAQ
+faq:
+  - question: Does every regex pattern have a ReDoS risk?
+    answer: |
+      No. Simple patterns without nested quantifiers or overlapping alternatives
+      are safe. The risk comes from patterns like (a+)+, (a|a)+, or (.+)+
+      where the engine can try exponentially many matching paths.
+
+  - question: How do I test if my regex is vulnerable?
+    answer: |
+      Try matching your pattern against a string that almost matches but doesn't.
+      For example, if your pattern expects a valid email, try a long string of
+      valid-looking characters followed by an invalid character. If matching time
+      grows noticeably with input length, the pattern is vulnerable.
+
+  - question: Does Python's re module support timeouts?
+    answer: |
+      Python 3.11+ added a timeout parameter to re.match(), re.search(), and
+      other functions. For older versions, run regex matching in a separate
+      thread with a timeout or use the google-re2 library.
+
+  - question: Why is this rule LOW severity?
+    answer: |
+      Not all regex usage is vulnerable. This is an audit rule that flags regex
+      calls for review. The actual severity depends on whether the pattern has
+      nested quantifiers and whether the input is user-controlled.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/lang --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-050
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A06:2021
-  name: ''
-  url: ''

@@ -1,34 +1,250 @@
+# Rule Identity
 id: PYTHON-LAMBDA-SEC-022
-name: Lambda Code Injection via eval/exec
-short_description: Lambda event data flows to eval()/exec()/compile(). Never eval untrusted data.
+name: Lambda Code Injection via eval() or exec()
+short_description: Lambda event data flows to eval() or exec(), enabling arbitrary Python code execution with the full permissions of the Lambda execution environment.
+
+# Classification
 severity: CRITICAL
 category: aws_lambda
 language: python
-ruleset: python/PYTHON-LAMBDA-SEC-022
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-022
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aws
-- lambda
-- code-injection
-- eval
-- exec
-- OWASP-A03
-- CWE-95
+  - python
+  - aws
+  - lambda
+  - code-injection
+  - eval
+  - exec
+  - rce
+  - taint-analysis
+  - inter-procedural
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Cross-Site Scripting (XSS), code injection, and unsafe deserialization
 
-  vulnerabilities in AWS Lambda functions. When Lambda functions serve as API Gateway backends
+# Content
+description: |
+  This rule detects code injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into Python's eval() or exec() functions.
 
-  or process untrusted event data, these vulnerabilities can lead to client-side attacks,
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other triggers. Fields like event.get("body"),
+  event.get("queryStringParameters"), and event["Records"] are attacker-controllable.
+  There is no sanitization layer between the event payload and application code.
 
-  remote code execution, and full server-side compromise.'
-message: Lambda event data flows to eval()/exec()/compile(). Never eval untrusted data.
+  Python's eval() evaluates a string as a Python expression. exec() executes a string
+  as Python statements. When Lambda event data reaches either function, an attacker
+  can inject arbitrary Python code that executes with the full capabilities of the
+  Lambda execution environment: all imported modules, the boto3 SDK with the execution
+  role's AWS credentials, the filesystem (especially /tmp), and outbound network access.
+
+  Lambda code injection is particularly severe because the execution role's temporary
+  AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) are
+  available as environment variables. A single eval() injection can exfiltrate these
+  credentials, giving the attacker the full permissions of the Lambda's IAM role
+  across all attached AWS services, with no additional authentication required.
+
+  There is no safe way to use eval() or exec() with event data from any Lambda trigger.
+
+message: "Lambda event data flows to eval() or exec(). There is no safe way to eval() or exec() untrusted Lambda event data. Use ast.literal_eval() or a purpose-specific parser."
+
+security_implications:
+  - title: Direct AWS Credential Exfiltration
+    description: |
+      The Lambda execution environment automatically provides temporary AWS credentials
+      as environment variables. Injected code like __import__('os').environ can
+      immediately access and exfiltrate AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+      and AWS_SESSION_TOKEN, giving the attacker the full IAM role permissions without
+      any additional authentication steps.
+  - title: Boto3 SDK Abuse via Execution Role
+    description: |
+      Lambda execution environments have boto3 pre-installed and the execution role
+      credentials pre-configured. Injected code can import boto3 and call any AWS API
+      permitted by the execution role: reading S3 buckets, querying DynamoDB, publishing
+      to SNS/SQS, reading Secrets Manager, invoking other Lambda functions, and
+      modifying IAM resources if the role has those permissions.
+  - title: Complete Python Runtime Compromise
+    description: |
+      eval() injection gives attackers direct access to the Python runtime without any
+      shell intermediary. Unlike command injection that requires a shell, eval() lets
+      attackers traverse the Python object hierarchy, access arbitrary modules, modify
+      the Lambda's global state, and install persistence mechanisms that affect
+      subsequent warm invocations.
+  - title: Python Sandbox Escape Is Not Feasible
+    description: |
+      Restricted namespaces passed to eval() (globals={}, locals={}) provide no
+      meaningful protection. Python's rich object model allows traversal of the class
+      hierarchy via __class__, __bases__, __subclasses__, and __init__ to access
+      built-in functions and modules without direct name references. There is no safe
+      sandbox for eval() with untrusted input.
+
+secure_example: |
+  import ast
+  import json
+  import operator
+
+  # Safe arithmetic evaluator using AST node validation
+  SAFE_OPS = {
+      ast.Add: operator.add,
+      ast.Sub: operator.sub,
+      ast.Mult: operator.mul,
+      ast.Div: operator.truediv,
+  }
+  SAFE_NODES = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
+                ast.Add, ast.Sub, ast.Mult, ast.Div, ast.USub)
+
+  def safe_eval_arithmetic(expression):
+      tree = ast.parse(expression, mode='eval')
+      if not all(isinstance(n, SAFE_NODES) for n in ast.walk(tree)):
+          raise ValueError("Unsafe expression")
+      def _eval(node):
+          if isinstance(node, ast.Expression):
+              return _eval(node.body)
+          elif isinstance(node, ast.Constant):
+              return node.value
+          elif isinstance(node, ast.BinOp):
+              return SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
+          raise ValueError(f"Unsupported: {type(node)}")
+      return _eval(tree)
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+
+      # SECURE: ast.literal_eval() for safe literal parsing (no code execution)
+      config_str = params.get('config', '{}')
+      try:
+          config = ast.literal_eval(config_str)
+          if not isinstance(config, dict):
+              raise ValueError("Must be a dict")
+      except (ValueError, SyntaxError):
+          return {'statusCode': 400, 'body': 'Invalid config'}
+
+      # SECURE: Custom AST evaluator for arithmetic only
+      expr = params.get('expr', '1+1')
+      try:
+          result = safe_eval_arithmetic(expr)
+      except (ValueError, SyntaxError):
+          return {'statusCode': 400, 'body': 'Invalid expression'}
+
+      return {'statusCode': 200, 'body': json.dumps({'result': result, 'config': config})}
+
+recommendations:
+  - Remove all uses of eval() and exec() with Lambda event data; there is no safe sanitizer for these functions.
+  - Use ast.literal_eval() for safely parsing Python literals (dicts, lists, strings, numbers) without executing arbitrary code.
+  - For mathematical expressions, implement a custom recursive evaluator over the AST using ast.parse() with strict node type validation.
+  - For function dispatch based on event data, use an explicit allowlist dictionary mapping string names to callable objects.
+  - For JSON-like data structures, use json.loads() which is safe and standardized.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. Sinks are calls("eval") and
+  calls("exec") with tainted input tracked via .tracks(0). There are no recognized
+  sanitizers for eval() or exec() — any Lambda event data reaching these sinks is a
+  confirmed vulnerability. The analysis follows taint across file and module boundaries.
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: Python ast.literal_eval() documentation
+    url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+  - title: AWS Lambda Execution Environment
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in Most Dangerous Software Weaknesses list"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: AWS Security Best Practices
+    requirement: "Never execute untrusted code; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: Why is eval() injection in Lambda more severe than in a traditional server?
+    answer: |
+      In a traditional server, eval() injection gives the attacker Python runtime access
+      but requires additional steps to access cloud credentials. In Lambda, the execution
+      role's temporary AWS credentials are pre-loaded as environment variables in every
+      invocation. Injected code immediately has boto3 access with the full execution role
+      permissions. The attacker can call any AWS API the role allows in the same
+      invocation, without any lateral movement step.
+
+  - question: Can passing eval() a restricted globals or locals dict make it safe?
+    answer: |
+      No. Restricting the globals dict does not prevent sandbox escapes. Python's object
+      model allows traversal of the class hierarchy via ().__class__.__base__.__subclasses__()
+      and similar patterns to access arbitrary built-in classes and modules without
+      direct name access. Multiple CVEs exist for products that attempted restricted
+      eval() sandboxes and were bypassed. The only safe approach is to not call eval()
+      with event data at all.
+
+  - question: What is the difference between eval() and exec() risk in Lambda?
+    answer: |
+      eval() evaluates a single expression and returns a value. exec() executes statements
+      and can include loops, assignments, imports, and function definitions. Both give an
+      attacker full Python code execution in the Lambda environment. exec() is technically
+      more powerful (multi-statement programs), but eval() is sufficient to import modules,
+      call functions, and exfiltrate data. Both must be treated as equally dangerous.
+
+  - question: Our Lambda uses eval() for a formula evaluation feature. How do I replace it?
+    answer: |
+      Implement a safe arithmetic evaluator using ast.parse() with mode='eval', then
+      walk the resulting AST with ast.walk() to verify all nodes are in an allowlist of
+      safe node types (BinOp, UnaryOp, Constant, and safe operator types). Recursively
+      evaluate only the validated AST nodes. The secure_example in this rule demonstrates
+      this pattern. For more complex expression languages, use a dedicated safe evaluation
+      library with a defined grammar.
+
+  - question: Does wrapping eval() in try/except make it safe?
+    answer: |
+      No. The try/except catches exceptions but does not prevent code execution. The
+      attacker's injected code runs and all non-exception side effects (reading environment
+      variables, making outbound HTTP calls, importing modules) occur before any exception
+      is raised. Successful exploitation may not raise any exception at all if the payload
+      is crafted to execute silently.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-020
+  - PYTHON-LAMBDA-SEC-021
+  - PYTHON-LAMBDA-SEC-023
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
 secure_example: "import json\nimport html\nimport ast\n\ndef lambda_handler(event, context):\n    # SECURE:\
   \ HTML-escape user input before embedding in response\n    name = html.escape(event.get('name', ''))\n\
   \    body = f'<html><body><h1>Hello, {name}!</h1></body></html>'\n    return {\n        'statusCode':\
@@ -57,8 +273,6 @@ references:
 - title: OWASP Injection
   url: https://owasp.org/Top10/A03_2021-Injection/
 compliance: []
-faq: []
-similar_rules: []
 tests:
   positive: tests/positive/
   negative: tests/negative/

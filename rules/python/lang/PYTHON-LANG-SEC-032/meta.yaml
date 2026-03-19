@@ -1,68 +1,191 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-032
 name: Insecure Hash via hashlib.new()
-short_description: hashlib.new() with insecure algorithm. Use SHA-256 or SHA-3.
+short_description: hashlib.new() with an insecure algorithm name (MD5, SHA1, SHA-224) creates a cryptographically weak hash. Use SHA-256 or SHA-3.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-032
+ruleset: python/lang/PYTHON-LANG-SEC-032
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- weak-hash
-- hashlib-new
-- CWE-327
+  - python
+  - hashlib-new
+  - weak-hash
+  - algorithm-selection
+  - cryptography
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'MD5 and SHA-1 are cryptographically broken hash algorithms with known collision
 
-  attacks. MD5 collisions can be generated in seconds on modern hardware, and
+# Content
+description: |
+  Python's hashlib.new() creates a hash object for the algorithm specified by a string name.
+  Unlike direct constructors such as hashlib.md5() or hashlib.sha256(), the algorithm name
+  in hashlib.new() is a runtime string that may be derived from configuration, user input,
+  or other external sources.
 
-  SHA-1 collisions have been demonstrated practically (SHAttered attack, 2017).
+  This creates two distinct risks: first, if the algorithm name is derived from untrusted
+  input, an attacker can select a weak or broken algorithm; second, even in code that uses
+  hardcoded names, the dynamic nature means the algorithm choice is not visible at the call
+  site without examining the string value.
 
-  Using these algorithms for integrity verification, digital signatures, certificate
+  All insecure algorithm names (md5, sha1, sha224, sha3_224) should be replaced with sha256,
+  sha3_256, sha512, or sha3_512. Algorithm names should never be derived from user input.
 
-  validation, or password hashing provides a false sense of security and exposes
+message: "hashlib.new() detected. Verify the algorithm name is a strong, secure hash. Never derive the algorithm name from untrusted input."
 
-  applications to forgery and pre-image attacks.'
-message: hashlib.new() with insecure algorithm. Use SHA-256 or SHA-3.
-secure_example: 'import hashlib
+security_implications:
+  - title: Dynamic Algorithm Selection Attack
+    description: |
+      If the algorithm name passed to hashlib.new() is derived from user input or external
+      configuration, an attacker can select a broken algorithm (md5, sha1) to weaken
+      integrity checks or make hashes easier to preimage or collide.
+  - title: Weak Algorithm via Hardcoded Insecure Name
+    description: |
+      Code calling hashlib.new("md5") or hashlib.new("sha1") has the same cryptographic
+      weaknesses as calling hashlib.md5() or hashlib.sha1() directly. The runtime string
+      form may escape static analysis tools that only check direct constructor calls.
+  - title: Algorithm Downgrade in Protocol Negotiation
+    description: |
+      In protocols that negotiate hash algorithms and use hashlib.new() to instantiate
+      the negotiated algorithm, an attacker performing a downgrade attack can negotiate
+      a weak algorithm, undermining the security of the entire protocol session.
+  - title: Inconsistent Algorithm Enforcement
+    description: |
+      Using hashlib.new() with algorithm names from configuration makes it difficult to
+      audit which algorithms are in use. Different deployments may use different algorithms,
+      creating inconsistent security guarantees across environments.
 
-  # Use SHA-256 or SHA-3 for integrity verification
+secure_example: |
+  import hashlib
 
-  file_hash = hashlib.sha256(data).hexdigest()
+  # INSECURE: hashlib.new() with insecure or dynamic algorithm
+  # h = hashlib.new("md5", data)
+  # h = hashlib.new(config["hash_algorithm"], data)  # dynamic!
 
-  # Use dedicated password hashing (bcrypt, scrypt, argon2)
+  # SECURE: Use direct constructors with strong algorithms
+  def hash_data(data: bytes) -> str:
+      return hashlib.sha256(data).hexdigest()
 
-  import bcrypt
+  # SECURE: If algorithm must be configurable, validate against an allowlist
+  ALLOWED_HASH_ALGORITHMS = {"sha256", "sha384", "sha512", "sha3_256", "sha3_512", "blake2b"}
 
-  pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+  def hash_with_config(data: bytes, algorithm: str) -> str:
+      if algorithm not in ALLOWED_HASH_ALGORITHMS:
+          raise ValueError(f"Hash algorithm not allowed: {algorithm}")
+      return hashlib.new(algorithm, data).hexdigest()
 
-  # SHA-3 for digital signatures
+  # SECURE: Use direct constructors for clarity and static analysis
+  def compute_file_hash(data: bytes) -> str:
+      return hashlib.sha3_256(data).hexdigest()
 
-  sig_hash = hashlib.sha3_256(document).hexdigest()'
-recommendations: []
+recommendations:
+  - Replace hashlib.new("md5"), hashlib.new("sha1"), and hashlib.new("sha224") with hashlib.sha256() or hashlib.sha3_256().
+  - If the hash algorithm must be configurable, validate the algorithm name against an explicit allowlist of strong algorithms before calling hashlib.new().
+  - Never derive the algorithm name from user input, HTTP parameters, or database values.
+  - Prefer direct constructors (hashlib.sha256()) over hashlib.new("sha256") for clarity and to ensure static analysis tools can detect the algorithm.
+  - Document the cryptographic purpose of each hash operation to make algorithm selection auditable.
+
+detection_scope: |
+  This rule detects all calls to hashlib.new() in Python source code. The rule flags all
+  call sites since the algorithm name must be reviewed to ensure it is both a strong
+  algorithm and not derived from untrusted input. Calls with strong, hardcoded algorithm
+  names may be considered lower risk but should still be reviewed.
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A Revision 2
+    requirement: "Only approved hash algorithms (SHA-256, SHA-384, SHA-512, SHA-3 family) may be used for security applications"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for data protection"
+  - standard: FIPS 140-3
+    requirement: "Only FIPS-approved hash algorithms are permitted in certified modules"
+
+# References
 references:
-- title: CWE-327
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: hashlib'
-  url: https://docs.python.org/3/library/hashlib.html
-- title: shattered.io
-  url: https://shattered.io/ (SHA-1 collision demonstration
-- title: csrc.nist.gov
-  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Python docs: hashlib.new()"
+    url: https://docs.python.org/3/library/hashlib.html#hashlib.new
+  - title: OWASP Cryptographic Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+  - title: NIST SP 800-131A Revision 2
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: Why flag hashlib.new() when the algorithm string might be sha256?
+    answer: |
+      hashlib.new() is flagged regardless of the algorithm string because: (1) the algorithm
+      may be a variable rather than a literal, requiring review to confirm it is always a
+      strong algorithm; (2) even with a strong algorithm, the dynamic form may be confused
+      with an insecure one in code review; (3) direct constructors are clearer and more
+      accessible to static analysis.
+
+  - question: What algorithms are safe to use with hashlib.new()?
+    answer: |
+      Safe algorithms include sha256, sha384, sha512, sha3_224, sha3_256, sha3_384, sha3_512,
+      blake2b, and blake2s. Insecure algorithms include md5, sha1, sha224, and md4. Note that
+      sha3_224 and sha224 provide only 112-bit security against collision attacks, which is
+      below modern recommendations.
+
+  - question: Can the algorithm name in hashlib.new() come from user input safely?
+    answer: |
+      Only if validated against a strict allowlist of approved algorithm names. Never pass
+      a raw user input string to hashlib.new() without validation, as users could request
+      md5, sha1, or an unsupported algorithm name causing an error or using a weak hash.
+
+  - question: What is the difference between hashlib.new("sha256") and hashlib.sha256()?
+    answer: |
+      They produce identical results. hashlib.sha256() is more explicit, more readable,
+      and easier for static analysis tools to identify. hashlib.new("sha256") is useful
+      when the algorithm name needs to be determined at runtime. For hardcoded algorithms,
+      always prefer the direct constructor form.
+
+  - question: Does hashlib.new() support all algorithms available on the OpenSSL backend?
+    answer: |
+      Yes. hashlib.new() can access all hash algorithms provided by the underlying OpenSSL
+      library, not just the ones with dedicated constructors. This means it can use algorithms
+      not available as direct constructors but may also inadvertently use deprecated or
+      experimental OpenSSL algorithms. Use hashlib.algorithms_guaranteed for the list of
+      always-available algorithms.
+
+  - question: How do I find all hashlib.new() calls using insecure algorithms in my codebase?
+    answer: |
+      Run Code Pathfinder's PYTHON-LANG-SEC-032 rule to find all hashlib.new() calls. Then
+      manually review each call to check whether the algorithm name is a hardcoded string
+      and whether it is a strong algorithm. Supplement with a text search for hashlib.new("md5"),
+      hashlib.new("sha1"), and hashlib.new("sha224") to find obviously weak usages.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-033
+  - PYTHON-LANG-SEC-034
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

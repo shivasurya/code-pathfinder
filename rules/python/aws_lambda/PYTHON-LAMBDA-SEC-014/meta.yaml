@@ -1,63 +1,227 @@
+# Rule Identity
 id: PYTHON-LAMBDA-SEC-014
-name: Lambda SQL Injection via SQLAlchemy
-short_description: Lambda event data flows to SQLAlchemy session.execute(). Use text() with params.
+name: Lambda SQL Injection via SQLAlchemy execute()
+short_description: Lambda event data flows to SQLAlchemy session.execute() or connection.execute() without bound parameters, enabling SQL injection against any RDS backend.
+
+# Classification
 severity: CRITICAL
 category: aws_lambda
 language: python
-ruleset: python/PYTHON-LAMBDA-SEC-014
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-014
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aws
-- lambda
-- sql-injection
-- sqlalchemy
-- OWASP-A03
-- CWE-89
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - sqlalchemy
+  - rds
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect SQL injection vulnerabilities in AWS Lambda functions where untrusted
 
-  event data flows into database query execution. Lambda functions commonly interact with
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into SQLAlchemy session.execute() or connection.execute()
+  calls without bound parameters, enabling SQL injection against RDS MySQL, PostgreSQL,
+  SQL Server, or any SQLAlchemy-supported backend.
 
-  RDS, Aurora, or DynamoDB, and event data from API Gateway, S3, SNS, or other triggers
+  SQLAlchemy is widely used in Lambda functions for its ORM capabilities and support
+  for multiple database backends. When used correctly with the ORM or with text()
+  and bound parameters, SQLAlchemy prevents injection. However, two unsafe patterns
+  are common in Lambda handlers: passing a raw f-string SQL query to text() without
+  bound parameters, and passing event data directly to execute() as an unparameterized
+  string.
 
-  is frequently used to construct queries without proper parameterization.'
-message: Lambda event data flows to SQLAlchemy session.execute(). Use text() with params.
-secure_example: "import pymysql\nfrom sqlalchemy import text\n\ndef lambda_handler(event, context):\n\
-  \    user_id = event.get('user_id', '')\n    conn = pymysql.connect(host='rds-host', user='admin', password='pass',\
-  \ db='mydb')\n    cursor = conn.cursor()\n\n    # SECURE: Parameterized query with placeholders\n  \
-  \  query = \"SELECT * FROM users WHERE id = %s\"\n    cursor.execute(query, (user_id,))\n\n    # SECURE:\
-  \ SQLAlchemy with text() and bindparams\n    stmt = text(\"SELECT * FROM orders WHERE user_id = :uid\"\
-  ).bindparams(uid=user_id)\n    session.execute(stmt)\n\n    # SECURE: Input validation before query\n\
-  \    try:\n        user_id_int = int(user_id)\n    except ValueError:\n        return {'statusCode':\
-  \ 400, 'body': 'Invalid user ID'}\n    cursor.execute(\"SELECT * FROM users WHERE id = %s\", (user_id_int,))\n\
-  \n    # SECURE: DynamoDB with proper Key/FilterExpression\n    import boto3\n    table = boto3.resource('dynamodb').Table('users')\n\
-  \    response = table.query(\n        KeyConditionExpression=Key('user_id').eq(user_id)  # SDK handles\
-  \ escaping\n    )\n\n    return {'statusCode': 200, 'body': cursor.fetchall()}"
-recommendations: []
+  Lambda functions receive event data from API Gateway, SQS, SNS, S3, and other
+  triggers (event.get("body"), event.get("queryStringParameters"), event["Records"]).
+  This data is attacker-controllable. When it is embedded in the SQL string argument
+  to text() or execute() via f-strings or concatenation, the injection bypasses all
+  SQLAlchemy protections since SQLAlchemy only escapes values that are passed through
+  its bound parameter mechanism (text() with :parameter syntax and bindparams()).
+
+message: "Lambda event data flows to SQLAlchemy execute() without bound parameters. Use text() with :param syntax and pass values via bindparams() or execute({})."
+
+security_implications:
+  - title: False Safety from SQLAlchemy's Reputation
+    description: |
+      Developers often assume that using SQLAlchemy automatically prevents SQL injection.
+      This is true for ORM operations (query(), filter(), Session.add()) but not for raw
+      SQL via execute(). When event data is embedded in a string passed to text() or
+      execute() directly, SQLAlchemy provides no injection protection. The false sense
+      of security from using SQLAlchemy can cause security reviews to overlook these
+      vulnerable call sites.
+  - title: Multi-Database Backend Exposure
+    description: |
+      SQLAlchemy supports MySQL, PostgreSQL, SQL Server, Oracle, and SQLite. A Lambda
+      function using SQLAlchemy with any of these backends is equally vulnerable to
+      injection through unparameterized execute() calls. The attacker's injection
+      payload adapts to the specific SQL dialect, enabling database-specific attack
+      techniques on each backend.
+  - title: Full Database Access via Session Context
+    description: |
+      SQLAlchemy sessions are often configured with broad database permissions for
+      ORM convenience. An injected SQL string through session.execute() executes with
+      all permissions of the session's database user, which may include read/write
+      access to all tables in the schema.
+  - title: ORM Bypass via Raw execute()
+    description: |
+      The presence of SQLAlchemy ORM models and safe ORM queries in the same Lambda
+      function does not protect against injection in raw execute() calls. Both safe and
+      unsafe call sites can coexist in the same Lambda handler, and only the unsafe
+      raw execute() calls with event data need to be fixed.
+
+secure_example: |
+  import json
+  from sqlalchemy import create_engine, text
+  from sqlalchemy.orm import sessionmaker
+
+  engine = create_engine('postgresql+psycopg2://user:pass@rds-host/appdb')
+  Session = sessionmaker(bind=engine)
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      user_id = params.get('user_id', '')
+      status = params.get('status', '')
+
+      # SECURE: Validate type before query
+      try:
+          user_id = int(user_id)
+      except (ValueError, TypeError):
+          return {'statusCode': 400, 'body': 'Invalid user ID'}
+
+      session = Session()
+      try:
+          # SECURE: Use text() with :named params and pass values via execute()
+          result = session.execute(
+              text("SELECT id, username, email FROM users WHERE id = :uid AND status = :status"),
+              {'uid': user_id, 'status': status}
+          )
+          rows = [dict(row._mapping) for row in result]
+      finally:
+          session.close()
+      return {'statusCode': 200, 'body': json.dumps(rows)}
+
+recommendations:
+  - Always use SQLAlchemy's text() with :parameter_name syntax and pass values as a dictionary to execute(), never embed event data in the SQL string.
+  - Prefer SQLAlchemy ORM methods (session.query(), session.get(), filter()) over raw SQL to benefit from automatic parameterization.
+  - Validate and type-convert event fields before use (e.g., int() for numeric IDs) as a defense-in-depth measure.
+  - Grant the Lambda's database user the minimum necessary privileges; avoid broad permissions even when using SQLAlchemy ORM.
+  - Initialize the SQLAlchemy engine at module level for connection reuse across warm Lambda invocations.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. Sinks are calls("*.execute")
+  matching SQLAlchemy session or connection objects with the tainted SQL string tracked
+  via .tracks(0). The rule flags cases where event data reaches the SQL string argument
+  without being passed through the bound parameters dictionary. Sanitizers include
+  explicit int() or float() type conversion. The analysis follows taint through
+  f-strings, concatenation, variable assignments, and module boundaries.
+
+# References
 references:
-- title: 'CWE-89: SQL Injection'
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: 'CWE-943: NoSQL Injection'
-  url: https://cwe.mitre.org/data/definitions/943.html
-- title: OWASP SQL Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-- title: AWS Lambda with RDS Best Practices
-  url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
-- title: OWASP Injection
-  url: https://owasp.org/Top10/A03_2021-Injection/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: SQLAlchemy Using Textual SQL
+    url: https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql
+  - title: AWS Lambda with RDS Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: SQLAlchemy Security Considerations
+    url: https://docs.sqlalchemy.org/en/14/core/sqlelement.html#sqlalchemy.sql.expression.text
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: Does using SQLAlchemy ORM automatically prevent SQL injection?
+    answer: |
+      Yes for ORM operations: session.query(User).filter(User.id == user_id), session.get(),
+      and relationship-based queries all use parameterization internally. No for raw SQL:
+      session.execute("SELECT * FROM users WHERE id = " + user_id) bypasses all ORM
+      protections. The rule specifically targets raw SQL execute() calls with event data
+      embedded in the string argument, which are the dangerous pattern even when ORM is
+      used elsewhere in the same Lambda function.
+
+  - question: What is the correct way to use text() with parameters in SQLAlchemy?
+    answer: |
+      Use named parameters with colon syntax in the SQL string and pass values as a
+      dictionary: session.execute(text("SELECT * FROM t WHERE id = :id"), {"id": user_id}).
+      SQLAlchemy's bindparams() method on the text() object is an alternative:
+      text("SELECT * FROM t WHERE id = :id").bindparams(id=user_id). Both correctly
+      use parameterization. Never use Python f-strings or % formatting to embed values
+      in the string passed to text().
+
+  - question: How do I manage SQLAlchemy connection pools with Lambda's ephemeral execution model?
+    answer: |
+      Create the engine at module level so it is reused across warm invocations. Use
+      pool_pre_ping=True to test connections before use. For high-concurrency Lambda
+      functions, set pool_size and max_overflow conservatively or use NullPool to
+      create new connections per invocation. AWS RDS Proxy is the recommended solution
+      for connection pooling at Lambda scale, as it handles connection reuse outside
+      the Lambda execution environment.
+
+  - question: Can I use SQLAlchemy's Core expression language to build dynamic queries safely?
+    answer: |
+      Yes. SQLAlchemy's Core expression language (select(), where(), and_(), or_())
+      builds parameterized queries programmatically using column objects rather than
+      string concatenation. Dynamic filters built with and_() and column objects are
+      safe. The injection risk is specifically with raw SQL strings (text() with
+      f-strings, or execute() with concatenated strings). Use Core expressions for
+      dynamic query construction instead.
+
+  - question: What if my Lambda uses multiple SQLAlchemy engines for different RDS backends?
+    answer: |
+      The injection risk applies equally to all backends. The fix is the same for
+      each engine: use text() with :param syntax and pass values as dictionaries.
+      If different Lambda functions connect to different backends, each one must be
+      audited independently. Consider using a shared database utilities module that
+      enforces parameterization for all execute() calls across all backends.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-015
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

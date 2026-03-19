@@ -1,65 +1,197 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-010
-name: Dangerous os.system() Call
-short_description: os.system() detected. Use subprocess.run() with list arguments instead.
+name: Dangerous os.system() or os.popen() Call
+short_description: os.system() and os.popen() execute shell commands via /bin/sh, enabling command injection when arguments contain untrusted input.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-010
+ruleset: python/lang/PYTHON-LANG-SEC-010
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- os-system
-- command-injection
-- OWASP-A03
-- CWE-78
+  - python
+  - os-system
+  - os-popen
+  - command-injection
+  - shell-injection
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'The Python os module provides direct access to operating system functions that
 
-  execute shell commands and spawn processes. Functions such as os.system(),
+# Content
+description: |
+  Python's os.system() and os.popen() functions execute a shell command string by invoking
+  the system shell (/bin/sh on Unix, cmd.exe on Windows). Because the command is passed through
+  a shell interpreter, special characters such as semicolons, pipes, backticks, dollar signs,
+  and redirections are interpreted as shell metacharacters.
 
-  os.popen(), os.exec*(), and os.spawn*() pass arguments directly to the OS shell
+  When any part of the command string is derived from untrusted user input, an attacker can
+  inject additional commands using shell metacharacters. For example, user input of
+  "file.txt; rm -rf /" would cause os.system("cat file.txt; rm -rf /") to execute both
+  commands.
 
-  or kernel. When user-controlled data reaches these functions without proper
+  The recommended replacement is subprocess.run() with a list of arguments (not a shell string),
+  which bypasses the shell entirely and passes arguments directly to the OS exec() syscall.
+  subprocess.run(["cat", filename]) is safe regardless of what filename contains.
 
-  sanitization, attackers can inject arbitrary operating system commands.'
-message: os.system() detected. Use subprocess.run() with list arguments instead.
-secure_example: 'import subprocess
+message: "os.system() or os.popen() detected. Use subprocess.run() with a list of arguments to avoid shell injection."
 
+security_implications:
+  - title: OS Command Injection
+    description: |
+      Shell metacharacters in user-supplied input allow injecting additional commands. An
+      attacker can chain arbitrary commands using semicolons, pipes, or newlines, executing
+      them with the privileges of the Python process.
+  - title: Data Exfiltration
+    description: |
+      Injected commands can read sensitive files (credentials, private keys, configuration),
+      encode them, and send them to an attacker-controlled endpoint using curl, wget, or
+      other available tools on the system.
+  - title: Persistent Backdoor Installation
+    description: |
+      Command injection can write cron jobs, SSH authorized_keys, or systemd unit files that
+      survive process restarts and provide persistent access to the attacker even after the
+      vulnerability is patched.
+  - title: Lateral Movement
+    description: |
+      On cloud environments or internal networks, injected commands can access metadata
+      services for IAM credential theft, scan internal networks, and pivot to other systems
+      using the compromised host's network access.
+
+secure_example: |
+  import subprocess
   import shlex
 
-  # Use subprocess with list arguments (no shell interpretation)
+  # SECURE: Use subprocess.run() with a list of arguments (no shell)
+  def process_file(filename: str) -> str:
+      result = subprocess.run(
+          ["cat", filename],
+          capture_output=True,
+          text=True,
+          check=True,
+          timeout=30,
+      )
+      return result.stdout
 
-  subprocess.run(["ls", user_input], check=True)
+  # SECURE: Validate and sanitize input before use in commands
+  import os
+  import re
 
-  # Or properly quote shell arguments
+  SAFE_FILENAME_RE = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
 
-  subprocess.run(f"ls {shlex.quote(user_input)}", shell=True, check=True)'
-recommendations: []
+  def convert_image(input_name: str, output_name: str) -> None:
+      for name in (input_name, output_name):
+          if not SAFE_FILENAME_RE.match(name):
+              raise ValueError(f"Invalid filename: {name}")
+      subprocess.run(
+          ["convert", input_name, output_name],
+          check=True,
+          timeout=60,
+      )
+
+recommendations:
+  - Replace os.system() and os.popen() with subprocess.run() using a list of arguments, which bypasses the shell entirely.
+  - Never construct shell command strings by concatenating or interpolating user input, even if the input appears to be validated.
+  - If a shell pipeline is genuinely required, validate all user-supplied values against a strict allowlist before including them.
+  - Set a timeout on subprocess.run() to prevent resource exhaustion from long-running injected commands.
+  - Run the Python process with the minimum OS privileges required so that injected commands cannot escalate to root or access sensitive paths.
+
+detection_scope: |
+  This rule detects calls to os.system(), os.popen(), os.popen2(), os.popen3(), and os.popen4()
+  from the Python os module. All call sites are flagged since these functions always invoke the
+  system shell and are vulnerable to injection whenever the command string includes non-literal
+  content.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: CWE-506
-  url: https://cwe.mitre.org/data/definitions/506.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: os - os.system'
-  url: https://docs.python.org/3/library/os.html#os.system
-- title: 'Python docs: subprocess'
-  url: https://docs.python.org/3/library/subprocess.html
-- title: 'Python docs: shlex - shlex.quote'
-  url: https://docs.python.org/3/library/shlex.html#shlex.quote
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: os.system()"
+    url: https://docs.python.org/3/library/os.html#os.system
+  - title: "Python docs: subprocess module"
+    url: https://docs.python.org/3/library/subprocess.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: Is os.system() safe if I validate the input with a regex first?
+    answer: |
+      Regex validation reduces but does not eliminate the risk. Shell metacharacter sets vary
+      by shell and locale, and regex patterns often miss edge cases like null bytes, Unicode
+      lookalikes, or environment variable expansion. The safe approach is to use subprocess.run()
+      with a list so the shell is never invoked and metacharacter interpretation is impossible.
+
+  - question: What is the difference between os.system() and subprocess.run() with shell=True?
+    answer: |
+      Both invoke the system shell and are equally vulnerable to command injection. The safe
+      alternative is subprocess.run() with a list of arguments and shell=False (the default),
+      which passes the arguments directly to the OS exec() syscall without shell interpretation.
+
+  - question: Does os.popen() have the same risk as os.system()?
+    answer: |
+      Yes. os.popen() also passes the command to the shell and is vulnerable to the same
+      injection attacks. Additionally, os.popen() was deprecated in Python 2.6 in favor of
+      the subprocess module. There is no reason to use os.popen() in modern Python code.
+
+  - question: How do I handle commands that require shell features like pipes or globbing?
+    answer: |
+      Use Python built-in equivalents: the glob module for file globbing, subprocess.PIPE for
+      connecting processes, and pathlib for path manipulation. If a shell pipeline is unavoidable,
+      use subprocess.run() with shell=True but ensure every element of the command string is
+      either a hardcoded literal or validated against a strict allowlist.
+
+  - question: Will this rule flag os.system() called with a hardcoded string literal?
+    answer: |
+      Yes. All os.system() call sites are flagged as a security audit point. Hardcoded strings
+      are lower risk but may still be problematic if the hardcoded command includes values that
+      could be influenced by environment variables, file contents, or other runtime state.
+
+  - question: What timeout should I use for subprocess.run() calls?
+    answer: |
+      Use a timeout appropriate to the expected execution time of the command, typically a few
+      seconds for file operations and up to a minute for external tools. Setting timeout=30 as
+      a default is a reasonable starting point. Always handle subprocess.TimeoutExpired to
+      terminate the child process cleanly.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-011
+  - PYTHON-LANG-SEC-012
+  - PYTHON-LANG-SEC-013
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-021
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

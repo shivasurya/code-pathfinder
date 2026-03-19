@@ -1,67 +1,199 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-092
-name: Insecure xmlrpc Usage
-short_description: xmlrpc is vulnerable to XXE. Use defusedxml.xmlrpc instead.
+name: Insecure xmlrpc Usage (XXE Risk)
+short_description: xmlrpc.client.ServerProxy and xmlrpc.server modules are vulnerable to XXE attacks via malicious XML-RPC payloads. Use defusedxml.xmlrpc for protection.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-092
+ruleset: python/lang/PYTHON-LANG-SEC-092
+
+# Vulnerability Details
 cwe:
-- id: CWE-611
-  name: Improper Restriction of XML External Entity Reference
-  url: https://cwe.mitre.org/data/definitions/611.html
+  - id: CWE-611
+    name: Improper Restriction of XML External Entity Reference
+    url: https://cwe.mitre.org/data/definitions/611.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- xmlrpc
-- xxe
-- CWE-611
+  - python
+  - xmlrpc
+  - xxe
+  - xml-rpc
+  - remote-procedure-call
+  - CWE-611
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s standard library XML parsers (xml.etree.ElementTree, xml.dom.minidom,
 
-  xml.sax, xml.dom.pulldom) are vulnerable to XML External Entity (XXE) attacks by
+# Content
+description: |
+  Python's xmlrpc module implements the XML-RPC protocol for remote procedure calls.
+  XML-RPC uses XML as its encoding format, and the parser used by xmlrpc.server and
+  xmlrpc.client is vulnerable to XXE attacks when processing malicious XML-RPC payloads.
 
-  default. XXE allows attackers to read local files, perform server-side request
+  An attacker who can send XML-RPC requests to a server can craft payloads with external
+  entity references that read local files or make network requests. On the client side,
+  a malicious XML-RPC server can send responses with XXE payloads that read files on
+  the client system.
 
-  forgery (SSRF), and in some configurations achieve remote code execution through
+  defusedxml.xmlrpc monkey-patches the xmlrpc module to use safe XML parsing, preventing
+  XXE attacks. For new implementations, REST over HTTPS is a more secure alternative
+  to XML-RPC.
 
-  crafted XML documents. The xmlrpc module is similarly vulnerable. Mako templates
+message: "xmlrpc.client.ServerProxy or xmlrpc.server detected. xmlrpc is vulnerable to XXE. Use defusedxml.xmlrpc for protection or migrate to a REST API."
 
-  execute embedded Python expressions without sandboxing, enabling server-side
+security_implications:
+  - title: Server-Side File Disclosure via XML-RPC XXE
+    description: |
+      A client sending a malicious XML-RPC request with XXE entities can cause the server
+      to read local files (configuration files, credentials, SSH keys) and include their
+      contents in error responses or method parameters.
+  - title: SSRF via XML-RPC Client
+    description: |
+      When an XML-RPC client receives a malicious response from a compromised or malicious
+      server, XXE entities in the response can cause the client to make HTTP requests to
+      internal network resources or cloud metadata endpoints.
+  - title: XML-RPC Server DoS via DTD
+    description: |
+      Billion Laughs attacks via XML-RPC requests can exhaust server memory and CPU
+      resources, causing denial of service for legitimate users.
+  - title: Blind XXE via XML-RPC Fault Responses
+    description: |
+      XML-RPC fault responses can contain XXE payloads. Blind XXE via out-of-band DNS
+      or HTTP callbacks to attacker-controlled servers can exfiltrate data even when
+      fault content is not directly returned to the attacker.
 
-  template injection (SSTI). CSV writers that do not sanitize cell values may allow
+secure_example: |
+  # INSECURE: xmlrpc without XXE protection
+  # import xmlrpc.client
+  # proxy = xmlrpc.client.ServerProxy("http://api.example.com/xmlrpc")
 
-  formula injection in spreadsheet applications.'
-message: xmlrpc is vulnerable to XXE. Use defusedxml.xmlrpc instead.
-secure_example: "# Use defusedxml for safe XML parsing\nimport defusedxml.ElementTree as ET\ntree = ET.parse(user_uploaded_xml)\
-  \  # XXE protection enabled\nimport defusedxml.minidom\ndoc = defusedxml.minidom.parseString(user_xml_string)\n\
-  # Restrict Mako templates to trusted sources only\nfrom mako.template import Template\nt = Template(filename=\"\
-  /app/templates/report.html\")  # Trusted file, not user input\n# Sanitize CSV cell values to prevent\
-  \ formula injection\ndef sanitize_csv_value(value):\n    if isinstance(value, str) and value and value[0]\
-  \ in \"=+-@\":\n        return \"'\" + value  # Prefix with single quote\n    return value"
-recommendations: []
+  # SECURE: Use defusedxml.xmlrpc to patch the xmlrpc module
+  import defusedxml.xmlrpc
+  defusedxml.xmlrpc.monkey_patch()  # Must be called before using xmlrpc
+
+  import xmlrpc.client
+
+  def call_xmlrpc_api(url: str, method: str, *args):
+      """Call XML-RPC API with defusedxml protection applied."""
+      proxy = xmlrpc.client.ServerProxy(url)
+      return getattr(proxy, method)(*args)
+
+  # PREFERRED: Migrate to REST API using requests
+  import requests
+
+  def call_rest_api(base_url: str, endpoint: str, data: dict) -> dict:
+      response = requests.post(
+          f"{base_url}/{endpoint}",
+          json=data,
+          timeout=30,
+      )
+      response.raise_for_status()
+      return response.json()
+
+  # SECURE: XML-RPC server with defusedxml patching
+  def create_safe_xmlrpc_server(host: str, port: int):
+      import defusedxml.xmlrpc
+      defusedxml.xmlrpc.monkey_patch()
+      from xmlrpc.server import SimpleXMLRPCServer
+      server = SimpleXMLRPCServer((host, port))
+      return server
+
+recommendations:
+  - Call defusedxml.xmlrpc.monkey_patch() before using any xmlrpc module to patch the XML parser to prevent XXE.
+  - For new implementations, migrate from XML-RPC to REST over HTTPS for a more secure, modern, and widely supported API protocol.
+  - Use HTTPS instead of HTTP for all XML-RPC endpoints to protect credentials and data in transit.
+  - Implement authentication and authorization on XML-RPC endpoints; the protocol itself provides no access control.
+  - Validate and restrict XML-RPC method names and parameters to an explicit allowlist to prevent exploitation of server-side methods.
+
+detection_scope: |
+  This rule detects usage of xmlrpc.client.ServerProxy(), xmlrpc.server.SimpleXMLRPCServer(),
+  and xmlrpc.server.MultiPathXMLRPCServer() without prior application of defusedxml.xmlrpc.monkey_patch().
+  All xmlrpc usage is flagged for review.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration (XXE)"
+  - standard: CWE Top 25
+    requirement: "CWE-611 - Improper Restriction of XML External Entity Reference"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including XXE"
+
+# References
 references:
-- title: CWE-611
-  url: https://cwe.mitre.org/data/definitions/611.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: CWE-1236
-  url: https://cwe.mitre.org/data/definitions/1236.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
-- title: pypi.org
-  url: https://pypi.org/project/defusedxml/
-- title: 'Python docs: xml - xml-vulnerabilities'
-  url: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
-- title: OWASP XML External Entity Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-611: Improper Restriction of XML External Entity Reference"
+    url: https://cwe.mitre.org/data/definitions/611.html
+  - title: "Python docs: xmlrpc.client"
+    url: https://docs.python.org/3/library/xmlrpc.client.html
+  - title: "defusedxml.xmlrpc documentation"
+    url: https://github.com/tiran/defusedxml#defusedxmlxmlrpc
+  - title: OWASP XXE Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+  - title: OWASP Top 10 A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+# FAQ
+faq:
+  - question: What does defusedxml.xmlrpc.monkey_patch() do?
+    answer: |
+      monkey_patch() replaces the XML parser used internally by xmlrpc.client and
+      xmlrpc.server with defusedxml's safe parser. After calling monkey_patch(), all
+      XML-RPC parsing is done through defusedxml, blocking XXE, Billion Laughs, and
+      other XML attacks. Call it once at application startup before any xmlrpc imports.
+
+  - question: Is XML-RPC still a reasonable protocol to use?
+    answer: |
+      XML-RPC is a legacy protocol designed in the late 1990s. Modern alternatives (REST
+      over HTTPS with JSON, gRPC, GraphQL) are more secure, performant, and widely
+      supported. If you must maintain XML-RPC for backward compatibility, apply defusedxml
+      patching and consider providing a REST alternative for new integrations.
+
+  - question: Does this rule apply to XML-RPC over HTTPS?
+    answer: |
+      Yes. Using HTTPS for XML-RPC protects data in transit and authenticates the server,
+      but it does not prevent XXE in the XML payload itself. An attacker who has valid
+      access to the XML-RPC endpoint (or compromises the HTTPS connection) can still send
+      malicious XML-RPC payloads. defusedxml is needed regardless of transport security.
+
+  - question: Are there CVEs for Python's xmlrpc XXE vulnerability?
+    answer: |
+      Yes. Multiple CVEs have been reported for XML-RPC implementations across various
+      programming languages and Python versions. The Python standard library's xmlrpc
+      module's XXE vulnerability is documented and the defusedxml library was created
+      specifically to address it along with other XML security issues in Python.
+
+  - question: Is xmlrpc.client safe when only reading responses (not sending)?
+    answer: |
+      No. XXE can occur in both request parsing (server-side) and response parsing
+      (client-side). A malicious or compromised XML-RPC server can send responses with
+      XXE payloads that cause the client's parser to read local files. Apply defusedxml
+      patching for both client and server usage.
+
+  - question: Can I use xmlrpc for internal microservice communication safely?
+    answer: |
+      Apply defusedxml.xmlrpc.monkey_patch() and use HTTPS with mutual TLS for internal
+      communication. Restrict access to the XML-RPC endpoint to authorized services via
+      network policies. However, REST over HTTPS with JSON is strongly preferred for new
+      microservice APIs due to better tooling, documentation, and security support.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-090
+  - PYTHON-LANG-SEC-091
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''

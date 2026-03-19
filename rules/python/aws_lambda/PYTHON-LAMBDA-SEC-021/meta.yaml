@@ -1,33 +1,224 @@
+# Rule Identity
 id: PYTHON-LAMBDA-SEC-021
-name: Lambda Tainted HTML String
-short_description: Lambda event data in HTML string construction. Use html.escape().
-severity: MEDIUM
+name: Lambda XSS via Tainted HTML String Construction
+short_description: Lambda event data is used in HTML string construction via f-strings or concatenation before being returned to API Gateway, enabling Cross-Site Scripting.
+
+# Classification
+severity: HIGH
 category: aws_lambda
 language: python
-ruleset: python/PYTHON-LAMBDA-SEC-021
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-021
+
+# Vulnerability Details
 cwe:
-- id: CWE-79
-  name: Improper Neutralization of Input During Web Page Generation
-  url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aws
-- lambda
-- xss
-- html-string
-- OWASP-A03
-- CWE-79
+  - python
+  - aws
+  - lambda
+  - xss
+  - html-string
+  - string-construction
+  - api-gateway
+  - taint-analysis
+  - inter-procedural
+  - CWE-79
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Cross-Site Scripting (XSS), code injection, and unsafe deserialization
 
-  vulnerabilities in AWS Lambda functions. When Lambda functions serve as API Gateway backends
+# Content
+description: |
+  This rule detects Cross-Site Scripting (XSS) vulnerabilities in AWS Lambda functions
+  where untrusted event data is used to construct an HTML string via f-string interpolation
+  or string concatenation, and the resulting tainted HTML string is subsequently returned
+  as part of an API Gateway response.
 
-  or process untrusted event data, these vulnerabilities can lead to client-side attacks,
+  This rule differs from SEC-020 by focusing on the intermediate HTML string construction
+  step rather than the direct response return. It catches the common Lambda pattern where
+  HTML fragments are built in helper functions (e.g., render_user_card(), format_error_page())
+  that combine event data with HTML templates, and the assembled string is returned from
+  the helper and passed to the Lambda return value.
 
-  remote code execution, and full server-side compromise.'
-message: Lambda event data in HTML string construction. Use html.escape().
+  Lambda functions triggered by API Gateway receive attacker-controllable event data
+  in query parameters, path parameters, request bodies, and headers. Without a template
+  engine that escapes variables by default, every f-string interpolation of event data
+  into an HTML string is a potential XSS vector. The multi-step construction pattern
+  (event data -> HTML fragment -> assembled page -> response body) makes these
+  vulnerabilities easier to miss in code review.
+
+message: "Lambda event data is used in HTML string construction without html.escape(). Escape all event data with html.escape() before embedding in HTML strings."
+
+security_implications:
+  - title: Reflected XSS via HTML Helper Function Output
+    description: |
+      HTML construction helpers that accept event data as parameters and return HTML
+      strings without escaping embed the XSS vulnerability in a utility layer rather
+      than the handler. This makes the vulnerability harder to find in code review
+      and allows it to be reused across multiple Lambda handlers that call the helper.
+  - title: Stored XSS via Database-Backed HTML Generation
+    description: |
+      Lambda functions that retrieve user-supplied data from DynamoDB or RDS and embed
+      it in HTML strings without escaping enable stored XSS. An attacker stores a
+      payload via one Lambda, and a victim retrieves it via another Lambda that renders
+      it in HTML. The taint originates from the database read, not the current event.
+  - title: Email Template Injection via HTML Strings
+    description: |
+      Lambda functions that generate HTML email templates (for SES or SNS email
+      delivery) by embedding event data in HTML strings without escaping can deliver
+      XSS payloads to email clients that render HTML. This is particularly dangerous
+      because the malicious email appears to come from a trusted application domain.
+  - title: Content Injection in API Error Pages
+    description: |
+      Error handling code that generates HTML error pages from exception messages or
+      request data (e.g., "Error processing request: {event['body']}") is a common
+      source of XSS via HTML string construction. Error pages rendered with unescaped
+      event data are a frequent injection point.
+
+secure_example: |
+  import html
+  import json
+
+  def render_user_profile(username, bio, email):
+      # SECURE: html.escape() applied to each value before embedding in HTML
+      safe_username = html.escape(username)
+      safe_bio = html.escape(bio)
+      safe_email = html.escape(email)
+      return f'''
+      <div class="profile">
+        <h2>{safe_username}</h2>
+        <p>{safe_bio}</p>
+        <a href="mailto:{safe_email}">{safe_email}</a>
+      </div>'''
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      username = params.get('username', '')
+      bio = params.get('bio', '')
+      email = params.get('email', '')
+
+      # SECURE: HTML is built with escaped values in the helper function
+      profile_html = render_user_profile(username, bio, email)
+      full_page = f'<!DOCTYPE html><html><body>{profile_html}</body></html>'
+      return {
+          'statusCode': 200,
+          'headers': {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Content-Security-Policy': "default-src 'self'"
+          },
+          'body': full_page
+      }
+
+recommendations:
+  - Apply html.escape() to every event data value at the point where it is first embedded in an HTML string, within the helper function or the handler, before any concatenation.
+  - Audit all HTML construction helpers (render_*, format_*, generate_*) to ensure they apply html.escape() to all externally-sourced parameters.
+  - Use a template engine (Jinja2 with autoescape=True) for HTML generation in Lambda layers to avoid manual escaping discipline.
+  - Return JSON responses instead of HTML wherever possible; render HTML client-side with a framework that escapes content automatically.
+  - Add Content-Security-Policy headers to all HTML responses as defense-in-depth against any escaping oversights.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["headers"]. The rule tracks taint through
+  f-string interpolation and string concatenation operations that produce HTML strings.
+  The sink is any tainted HTML string variable that flows into the Lambda return value's
+  'body' key (tracked via .tracks(0)). Sanitizers include html.escape() applied to
+  individual values before embedding. The analysis follows taint through function return
+  values, variable assignments, and module boundaries.
+
+# References
+references:
+  - title: "CWE-79: Cross-Site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: OWASP Cross Site Scripting
+    url: https://owasp.org/www-community/attacks/xss/
+  - title: Python html.escape() documentation
+    url: https://docs.python.org/3/library/html.html#html.escape
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: Content Security Policy
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks including XSS"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate and sanitize all event data before including in responses"
+
+# FAQ
+faq:
+  - question: How does SEC-021 differ from SEC-020 for detecting XSS in Lambda functions?
+    answer: |
+      SEC-020 flags the case where event data flows directly from the Lambda event to the
+      HTML response body. SEC-021 flags the intermediate step: when event data is used to
+      build an HTML string variable (via f-strings or concatenation), and that tainted
+      HTML string variable is then returned in the response body. SEC-021 catches the
+      common pattern where HTML is assembled in helper functions or template utilities
+      before being returned to the handler.
+
+  - question: If I escape event data in a helper function, is the returned HTML string safe?
+    answer: |
+      Yes, if html.escape() is applied to every piece of event data before it is embedded
+      in the HTML string within the helper, the returned string is safe to include in an
+      HTML response. The key is that escaping must occur at the string construction site,
+      not at the response return site. Escaping the entire assembled HTML string after
+      construction does not work because it would escape the legitimate HTML tags.
+
+  - question: Does Jinja2 autoescaping protect against this class of XSS in Lambda?
+    answer: |
+      Yes, if Jinja2 is configured with autoescape=True (or using select_autoescape())
+      and variables are rendered with {{ variable }} syntax (not {{ variable | safe }}),
+      Jinja2 escapes all variable values automatically when rendering templates. This
+      prevents XSS from event data embedded in Jinja2 templates and is the recommended
+      pattern for HTML generation in Lambda functions.
+
+  - question: What about Lambda functions that generate HTML for SES email delivery?
+    answer: |
+      SES HTML emails are rendered by email clients, and unescaped HTML in email templates
+      can enable XSS in email clients that render HTML. Apply the same html.escape() rule
+      to all event data embedded in HTML email templates. Some email clients apply their
+      own sanitization, but this varies by client and version. Do not rely on client-side
+      sanitization.
+
+  - question: Can this rule detect XSS when the HTML is stored in DynamoDB and retrieved later?
+    answer: |
+      The rule primarily tracks taint from the current Lambda invocation's event dictionary.
+      For stored XSS where the payload was written to DynamoDB by a previous invocation,
+      the taint originates from the DynamoDB read operation in the current invocation rather
+      than the event. Comprehensive stored XSS detection requires taint tracking from
+      database read operations, which is a separate analysis scope from event-based taint.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-020
+  - PYTHON-LAMBDA-SEC-022
+  - PYTHON-LAMBDA-SEC-023
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
 secure_example: "import json\nimport html\nimport ast\n\ndef lambda_handler(event, context):\n    # SECURE:\
   \ HTML-escape user input before embedding in response\n    name = html.escape(event.get('name', ''))\n\
   \    body = f'<html><body><h1>Hello, {name}!</h1></body></html>'\n    return {\n        'statusCode':\
@@ -56,8 +247,6 @@ references:
 - title: OWASP Injection
   url: https://owasp.org/Top10/A03_2021-Injection/
 compliance: []
-faq: []
-similar_rules: []
 tests:
   positive: tests/positive/
   negative: tests/negative/

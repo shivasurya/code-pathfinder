@@ -1,68 +1,184 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-033
-name: SHA-224 Weak Hash
-short_description: SHA-224 provides only 112-bit security. Consider SHA-256 or SHA-3.
+name: SHA-224 or SHA3-224 Weak Hash Usage
+short_description: SHA-224 and SHA3-224 provide only 112-bit collision resistance, which is below the 128-bit minimum recommended by NIST for new applications.
+
+# Classification
 severity: LOW
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-033
+ruleset: python/lang/PYTHON-LANG-SEC-033
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- sha224
-- weak-hash
-- CWE-327
+  - python
+  - sha224
+  - sha3-224
+  - insufficient-bit-length
+  - cryptography
+  - hashlib
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'MD5 and SHA-1 are cryptographically broken hash algorithms with known collision
 
-  attacks. MD5 collisions can be generated in seconds on modern hardware, and
+# Content
+description: |
+  SHA-224 and SHA3-224 produce 224-bit digests, which provides 112-bit security against
+  collision attacks (due to the birthday bound). NIST SP 800-57 recommends a minimum of
+  128-bit security strength for new applications, which requires at least a 256-bit hash
+  function. NIST SP 800-131A deprecated the use of SHA-224 for digital signatures beyond 2030.
 
-  SHA-1 collisions have been demonstrated practically (SHAttered attack, 2017).
+  While SHA-224 and SHA3-224 are not as critically broken as MD5 or SHA-1, they fall below
+  current best-practice security levels and should not be used for long-lived data protection,
+  digital signatures in new systems, or applications requiring a security life beyond 2030.
 
-  Using these algorithms for integrity verification, digital signatures, certificate
+  For most security applications, SHA-256 or SHA3-256 are the appropriate replacements.
+  The SHA-256 or SHA3-256 variants are the same computational cost on most hardware and
+  provide 128-bit security strength.
 
-  validation, or password hashing provides a false sense of security and exposes
+message: "hashlib.sha224() or hashlib.sha3_224() detected. These provide only 112-bit security. Use SHA-256 or SHA3-256 for new applications."
 
-  applications to forgery and pre-image attacks.'
-message: SHA-224 provides only 112-bit security. Consider SHA-256 or SHA-3.
-secure_example: 'import hashlib
+security_implications:
+  - title: Below Recommended Security Level
+    description: |
+      112-bit security against collision attacks is currently below the NIST-recommended
+      128-bit minimum for new systems. While not immediately breakable, this provides reduced
+      margin against advances in cryptanalysis and quantum computing.
+  - title: Long-term Data Protection Risk
+    description: |
+      Data protected by SHA-224 digests may need to remain secure for years or decades.
+      The 112-bit security margin may be insufficient for data whose integrity needs to be
+      verifiable in the long term as computing power increases.
+  - title: Digital Signature Weakness
+    description: |
+      NIST has deprecated SHA-224 for digital signatures beyond 2030. New signature schemes
+      should use SHA-256 or stronger to ensure signatures remain valid and secure for their
+      intended lifetime.
+  - title: Quantum Computing Considerations
+    description: |
+      Grover's algorithm halves the effective bit security of hash functions against quantum
+      computers. SHA-224's 112-bit collision resistance becomes effectively 56-bit under
+      quantum attack, which is well below any acceptable threshold.
 
-  # Use SHA-256 or SHA-3 for integrity verification
+secure_example: |
+  import hashlib
 
-  file_hash = hashlib.sha256(data).hexdigest()
+  # BELOW RECOMMENDED: SHA-224 provides only 112-bit security
+  # h = hashlib.sha224(data).hexdigest()
+  # h = hashlib.sha3_224(data).hexdigest()
 
-  # Use dedicated password hashing (bcrypt, scrypt, argon2)
+  # SECURE: SHA-256 provides 128-bit security at similar computational cost
+  def hash_content(data: bytes) -> str:
+      return hashlib.sha256(data).hexdigest()
 
-  import bcrypt
+  # SECURE: SHA3-256 for post-quantum forward security
+  def hash_document(data: bytes) -> str:
+      return hashlib.sha3_256(data).hexdigest()
 
-  pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+  # SECURE: SHA-512 for applications requiring maximum security margin
+  def hash_sensitive_data(data: bytes) -> str:
+      return hashlib.sha512(data).hexdigest()
 
-  # SHA-3 for digital signatures
+recommendations:
+  - Replace hashlib.sha224() and hashlib.sha3_224() with hashlib.sha256() or hashlib.sha3_256() in all new code.
+  - For digital signatures and certificate operations, use SHA-256 or SHA-384 as required by current CA/Browser Forum baseline requirements.
+  - Prioritize migration of SHA-224 usage in long-lived digital signatures and certificates to SHA-256 before 2030.
+  - Document any remaining SHA-224 usage with an explanation of why the reduced security margin is acceptable.
+  - Consider SHA-384 or SHA-512 for applications with the highest security requirements or longest data lifetimes.
 
-  sig_hash = hashlib.sha3_256(document).hexdigest()'
-recommendations: []
+detection_scope: |
+  This rule detects calls to hashlib.sha224() and hashlib.sha3_224() in Python source code.
+  The rule reports LOW severity findings since these algorithms are not broken but are below
+  current best-practice recommendations for new applications.
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-57 Part 1 Revision 5
+    requirement: "Minimum 128-bit security strength recommended for new systems (requires 256-bit hash)"
+  - standard: NIST SP 800-131A Revision 2
+    requirement: "SHA-224 deprecated for digital signatures beyond 2030"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: FIPS 186-5
+    requirement: "SHA-256, SHA-384, SHA-512, and SHA-3 variants are approved; SHA-224 permitted with restrictions"
+
+# References
 references:
-- title: CWE-327
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: hashlib'
-  url: https://docs.python.org/3/library/hashlib.html
-- title: shattered.io
-  url: https://shattered.io/ (SHA-1 collision demonstration
-- title: csrc.nist.gov
-  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "NIST SP 800-57 Part 1 Revision 5 - Key Management"
+    url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+  - title: "NIST SP 800-131A Revision 2 - Cryptographic Algorithm Transitions"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "Python docs: hashlib module"
+    url: https://docs.python.org/3/library/hashlib.html
+  - title: OWASP Cryptographic Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: Is SHA-224 broken like MD5 and SHA-1?
+    answer: |
+      No. SHA-224 has no known practical collision attacks and is not broken in the same sense
+      as MD5 or SHA-1. However, its 112-bit security level is below the current NIST minimum
+      recommendation of 128 bits for new applications. The risk is that future cryptanalytic
+      advances or increased computing power could reduce the effective security below
+      acceptable thresholds.
+
+  - question: Why does SHA-224 have only 112-bit security despite a 224-bit output?
+    answer: |
+      The birthday bound means that collision attacks on an n-bit hash require approximately
+      2^(n/2) operations. For SHA-224, this is 2^112. NIST defines security strength in terms
+      of this birthday bound, so SHA-224's security strength is 112 bits, not 224 bits.
+
+  - question: Is SHA3-224 safer than SHA-224?
+    answer: |
+      SHA3-224 uses a fundamentally different construction (Keccak sponge) than SHA-224
+      (Merkle-Damgård). This makes it immune to length-extension attacks that affect SHA-224.
+      However, both have the same 112-bit collision security from the birthday bound. For
+      applications requiring strong security, SHA3-256 is the preferred upgrade.
+
+  - question: When is SHA-224 acceptable to use?
+    answer: |
+      SHA-224 is acceptable for non-security checksums, content addressing where collision
+      resistance is not a security requirement, and applications with short data lifetimes
+      where 112-bit security is sufficient. For digital signatures, certificates, and
+      long-lived security, use SHA-256 or stronger.
+
+  - question: What is the performance difference between SHA-224 and SHA-256?
+    answer: |
+      SHA-256 and SHA-224 perform identical computations (SHA-224 is truncated SHA-256) and
+      have essentially the same performance. There is no performance reason to use SHA-224
+      over SHA-256. SHA-256 is strictly better and should always be preferred.
+
+  - question: Does the FIPS 186-5 standard approve SHA-224 for digital signatures?
+    answer: |
+      FIPS 186-5 (Digital Signature Standard) approves SHA-256, SHA-384, SHA-512, SHA-512/224,
+      SHA-512/256, SHA3-256, SHA3-384, and SHA3-512 for digital signatures. SHA-224 is no
+      longer listed as approved for new signature schemes in FIPS 186-5.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-032
+  - PYTHON-LANG-SEC-034
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

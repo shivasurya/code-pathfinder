@@ -1,64 +1,193 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-013
-name: System Call with Wildcard
-short_description: os.system() with wildcard (*) detected. Wildcards may lead to unintended file inclusion.
+name: Shell Command with Wildcard Character
+short_description: os.system() calls containing wildcard characters (*) may lead to unintended file inclusion or command injection through wildcard expansion.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-013
+ruleset: python/lang/PYTHON-LANG-SEC-013
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- wildcard
-- command-injection
-- CWE-78
+  - python
+  - wildcard
+  - glob-expansion
+  - command-injection
+  - os-system
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'The Python os module provides direct access to operating system functions that
 
-  execute shell commands and spawn processes. Functions such as os.system(),
+# Content
+description: |
+  Shell commands containing wildcard characters such as * (glob), ? (single character), and
+  [ ] (character class) are expanded by the shell before the command executes. When wildcards
+  are used in commands executed via os.system() or similar shell-invoking functions, an attacker
+  who can create files in the target directory can exploit wildcard expansion to inject additional
+  command-line flags or arguments.
 
-  os.popen(), os.exec*(), and os.spawn*() pass arguments directly to the OS shell
+  The classic wildcard injection technique creates files with names like "-rf ." or
+  "--checkpoint-action=exec=malicious.sh" in a directory that is processed with wildcards.
+  When tar, rsync, chown, chmod, or similar commands run with a wildcard argument, the shell
+  expands the wildcard to include the attacker-created filenames as additional command-line
+  arguments, effectively injecting arbitrary flags into the command.
 
-  or kernel. When user-controlled data reaches these functions without proper
+  Use Python's glob module or pathlib for file pattern matching, and pass argument lists to
+  subprocess.run() to avoid wildcard expansion entirely.
 
-  sanitization, attackers can inject arbitrary operating system commands.'
-message: os.system() with wildcard (*) detected. Wildcards may lead to unintended file inclusion.
-secure_example: 'import subprocess
+message: "Wildcard character in shell command detected. Wildcards expand to filenames and can inject flags. Use Python glob module and subprocess with list arguments."
 
-  import shlex
+security_implications:
+  - title: Argument Injection via Malicious Filenames
+    description: |
+      An attacker who can create files in a directory processed with wildcards can create
+      filenames that look like command-line flags (e.g., --checkpoint=1 for tar). The shell
+      expands the wildcard to include these filenames as arguments, injecting attacker-
+      controlled flags into the command execution.
+  - title: File Inclusion Beyond Intended Scope
+    description: |
+      Wildcards in copy, tar, or rsync commands may match more files than intended if
+      an attacker creates files in the target directory. This can cause sensitive files
+      to be included in archives, transmitted over the network, or processed by insecure
+      handlers.
+  - title: Chown/Chmod Privilege Escalation
+    description: |
+      Running chown or chmod with wildcards is particularly dangerous. An attacker who
+      creates a symlink named "file*" in the directory can cause chown to traverse
+      the symlink and change ownership of arbitrary system files, leading to privilege
+      escalation.
+  - title: Data Destruction
+    description: |
+      Wildcard expansion in rm or find commands can include unintended files and directories
+      in deletion operations. An attacker creating strategically named files can trigger
+      deletion of configuration files, logs, or application data.
 
-  # Use subprocess with list arguments (no shell interpretation)
+secure_example: |
+  import glob
+  import subprocess
+  import pathlib
 
-  subprocess.run(["ls", user_input], check=True)
+  # SECURE: Use Python's glob module for file pattern matching
+  def compress_logs(log_dir: str) -> None:
+      log_files = glob.glob(f"{log_dir}/*.log")
+      for log_file in log_files:
+          path = pathlib.Path(log_file)
+          if path.is_file() and path.suffix == ".log":
+              subprocess.run(
+                  ["/bin/gzip", str(path)],
+                  check=True,
+                  timeout=30,
+              )
 
-  # Or properly quote shell arguments
+  # SECURE: Use pathlib.glob() for directory traversal
+  def list_python_files(directory: str) -> list:
+      return [str(p) for p in pathlib.Path(directory).glob("*.py") if p.is_file()]
 
-  subprocess.run(f"ls {shlex.quote(user_input)}", shell=True, check=True)'
-recommendations: []
+recommendations:
+  - Replace shell commands with wildcards using Python's glob module or pathlib.Path.glob() for file pattern matching, combined with subprocess.run() using a list of arguments.
+  - When using tar, rsync, or similar tools that must process multiple files, explicitly enumerate the files in Python and pass them as individual arguments rather than using shell wildcards.
+  - Validate that files in directories processed with wildcards cannot be created by untrusted users; ensure proper directory permissions.
+  - Use subprocess.run() with shell=False (the default) and a list of arguments to prevent shell wildcard expansion entirely.
+  - For chown/chmod operations on multiple files, use Python's os.chown() and os.chmod() functions directly to avoid shell wildcard risks.
+
+detection_scope: |
+  This rule detects os.system() calls where the command string contains wildcard characters
+  (* or ?). The rule flags these patterns as they indicate shell wildcard expansion is in use,
+  which requires review to ensure the wildcarded directory cannot contain attacker-controlled
+  filenames that could inject arguments.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: CWE-506
-  url: https://cwe.mitre.org/data/definitions/506.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: os - os.system'
-  url: https://docs.python.org/3/library/os.html#os.system
-- title: 'Python docs: subprocess'
-  url: https://docs.python.org/3/library/subprocess.html
-- title: 'Python docs: shlex - shlex.quote'
-  url: https://docs.python.org/3/library/shlex.html#shlex.quote
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Wildcard Injection in Unix Shell Commands"
+    url: https://www.exploit-db.com/papers/33930
+  - title: "Python docs: glob module"
+    url: https://docs.python.org/3/library/glob.html
+  - title: "Python docs: pathlib module"
+    url: https://docs.python.org/3/library/pathlib.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: Is wildcard injection only possible when attackers can create files?
+    answer: |
+      Yes, exploiting wildcard injection requires that an attacker can create files with
+      strategically crafted names in the directory being processed. Directories with proper
+      permissions that prevent attacker file creation are not exploitable via this technique.
+      However, shared directories, upload directories, and world-writable temp directories
+      are common targets.
+
+  - question: Which tools are most commonly exploited via wildcard injection?
+    answer: |
+      tar (--checkpoint-action), rsync (-e option), chown (symlink traversal), chmod, find
+      (-exec), and cp are the most commonly exploited commands. These tools accept flag-like
+      arguments that can be injected via malicious filenames and have been used in real-world
+      privilege escalation attacks on Linux systems.
+
+  - question: Does using subprocess.run() with shell=True still have this problem?
+    answer: |
+      Yes. subprocess.run() with shell=True passes the command to /bin/sh, which performs
+      wildcard expansion. The safe solution is subprocess.run() with shell=False (the default)
+      and an explicit list of file paths obtained via Python's glob module, not a shell wildcard.
+
+  - question: What if I genuinely need to process all files matching a pattern?
+    answer: |
+      Use Python's glob.glob() or pathlib.Path.glob() to expand the pattern in Python code,
+      then pass each resulting path individually to subprocess.run() as a list argument. This
+      performs the same file matching without invoking the shell and without vulnerability to
+      filename-based argument injection.
+
+  - question: Are Windows wildcards affected by this vulnerability?
+    answer: |
+      Windows cmd.exe also performs wildcard expansion, though the specific exploitation
+      techniques differ. On Windows, subprocess.run() with shell=False on Python 3 uses
+      CreateProcess directly without shell expansion, which avoids this risk. Use list
+      arguments and avoid shell=True on all platforms.
+
+  - question: How do I audit my codebase for wildcard injection risks beyond this rule?
+    answer: |
+      Look for all uses of os.system(), subprocess.run(shell=True), subprocess.Popen(shell=True),
+      and os.popen() where the command string contains wildcards or processes directories that
+      users can write to. Also audit cron jobs, backup scripts, and deployment scripts for
+      the same pattern.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-011
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-021
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

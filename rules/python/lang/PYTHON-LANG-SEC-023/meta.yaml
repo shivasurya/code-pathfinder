@@ -1,57 +1,196 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-023
-name: Dangerous subinterpreters run_string
-short_description: subinterpreters.run_string() detected. Avoid executing untrusted code strings.
+name: Dangerous subinterpreters run_string() Usage
+short_description: subinterpreters.run_string() executes arbitrary Python code strings in sub-interpreters, enabling code injection when called with untrusted input.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-023
+ruleset: python/lang/PYTHON-LANG-SEC-023
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- subinterpreters
-- code-execution
-- CWE-95
+  - python
+  - subinterpreters
+  - code-execution
+  - sub-interpreter
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'The subprocess module is Python''s recommended interface for spawning child
 
-  processes. However, when subprocess calls use shell=True or accept unsanitized
+# Content
+description: |
+  Python's _xxsubinterpreters (also accessible as subinterpreters in some builds) module
+  provides low-level access to CPython's sub-interpreter API, allowing multiple Python
+  interpreters to run in the same process. The run_string() function executes a Python code
+  string inside a specified sub-interpreter.
 
-  user input as command arguments, they become vulnerable to OS command injection.
+  Despite running in a separate interpreter instance, sub-interpreters do not provide a
+  security sandbox. Code running in a sub-interpreter can still access the filesystem, make
+  network connections, import arbitrary modules, and interact with the host system. If the
+  code string passed to run_string() is derived from untrusted input, an attacker achieves
+  full code execution in the context of the Python process.
 
-  The asyncio module provides asynchronous equivalents (create_subprocess_shell)
+  This module is experimental and its API has changed between Python versions. Its use in
+  production code is rare and should be carefully audited.
 
-  that carry the same risks. Python''s experimental subinterpreters API allows
+message: "subinterpreters.run_string() detected. Do not pass untrusted code strings to run_string(). Sub-interpreters do not provide a security sandbox."
 
-  executing arbitrary code strings in isolated interpreters.'
-message: subinterpreters.run_string() detected. Avoid executing untrusted code strings.
-secure_example: "import subprocess\n# Pass arguments as a list (no shell interpretation)\nsubprocess.run([\"\
-  grep\", user_input, \"log\"], check=True)\n# Use asyncio exec variant (no shell)\nawait asyncio.create_subprocess_exec(\"\
-  grep\", user_input, \"log\")\n# Validate and restrict allowed commands\nALLOWED_COMMANDS = {\"ls\",\
-  \ \"grep\", \"wc\"}\nif cmd not in ALLOWED_COMMANDS:\n    raise ValueError(\"Command not allowed\")"
-recommendations: []
+security_implications:
+  - title: Code Execution in Sub-interpreter
+    description: |
+      Code executing in a sub-interpreter has full access to the filesystem, network, and
+      installed Python modules. It can spawn subprocesses, open sockets, read files, and
+      import os or subprocess. The sub-interpreter boundary provides isolation from the
+      parent interpreter's namespace but not from host system resources.
+  - title: Inter-interpreter State Leakage
+    description: |
+      Sub-interpreters share the same process memory space. Through ctypes, cffi, or direct
+      memory access, code in a sub-interpreter may be able to read or corrupt the parent
+      interpreter's memory, bypassing the namespace separation.
+  - title: Experimental API Instability
+    description: |
+      The subinterpreters API is experimental and has changed across Python versions. Code
+      relying on it may break silently or exhibit unexpected security behaviors on version
+      upgrades, making security properties difficult to reason about.
+  - title: Resource Exhaustion
+    description: |
+      Injected code running in a sub-interpreter can create threads, allocate large amounts
+      of memory, or perform CPU-intensive operations that consume process resources and
+      cause denial of service for the parent interpreter.
+
+secure_example: |
+  # There is no safe way to execute untrusted code strings in sub-interpreters.
+  # For sandboxed code execution, use process isolation instead:
+
+  import subprocess
+
+  # SECURE: Execute untrusted code in a separate process with restricted permissions
+  def execute_sandboxed(code: str, timeout: int = 5) -> str:
+      """
+      Execute code in a completely isolated subprocess.
+      The subprocess should run as a restricted user with no network access.
+      """
+      result = subprocess.run(
+          ["/usr/bin/python3", "-c", code],
+          capture_output=True,
+          text=True,
+          timeout=timeout,
+          # In production: use seccomp, namespaces, or containers for true isolation
+      )
+      return result.stdout
+
+  # SECURE: For dynamic computation, use a safe expression evaluator
+  from ast import literal_eval
+
+  def evaluate_safe_expression(expr: str):
+      return literal_eval(expr)
+
+recommendations:
+  - Never pass user-controlled strings to subinterpreters.run_string(); there is no security isolation between sub-interpreters and the host filesystem.
+  - For sandboxed execution of untrusted code, use process isolation with resource limits, seccomp filters, or container-level sandboxing rather than sub-interpreters.
+  - Use ast.literal_eval() for safe expression evaluation of Python literals without code execution.
+  - If dynamic computation is needed, use a purpose-built safe expression library that restricts available operations.
+  - Audit all uses of the subinterpreters module since it is experimental and rarely needed in production application code.
+
+detection_scope: |
+  This rule detects calls to _xxsubinterpreters.run_string() and subinterpreters.run_string()
+  in Python source code. All call sites are flagged since this is an experimental low-level
+  API that should not appear in production code and always requires review when found.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: subprocess - security-considerations'
-  url: https://docs.python.org/3/library/subprocess.html#security-considerations
-- title: 'Python docs: asyncio-subprocess'
-  url: https://docs.python.org/3/library/asyncio-subprocess.html
-- title: 'Python docs: shlex - shlex.split'
-  url: https://docs.python.org/3/library/shlex.html#shlex.split
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "PEP 554: Multiple Interpreters in the Stdlib"
+    url: https://peps.python.org/pep-0554/
+  - title: "Python docs: _xxsubinterpreters"
+    url: https://docs.python.org/3/c-api/init.html#sub-interpreter-support
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+
+# FAQ
+faq:
+  - question: Do sub-interpreters provide any security isolation?
+    answer: |
+      Sub-interpreters provide namespace isolation — each interpreter has its own module
+      namespace and global state. However, they do NOT provide filesystem isolation, network
+      isolation, or memory isolation. Code in a sub-interpreter can still perform any OS
+      operation, access any file, and potentially access the parent interpreter's memory
+      via ctypes or direct pointer manipulation.
+
+  - question: What is the intended use of sub-interpreters?
+    answer: |
+      Sub-interpreters are intended for multi-tenancy in frameworks where multiple Python
+      programs need to run in the same process with separate global state (e.g., Python
+      embedded in a web server). They are designed for trusted code isolation (preventing
+      global state pollution), not for security isolation of untrusted code.
+
+  - question: How does run_string() compare to eval() for security?
+    answer: |
+      run_string() is equally dangerous to eval() for security purposes. Both execute
+      arbitrary Python code. run_string() adds the overhead of a sub-interpreter but
+      provides no additional security boundary against malicious code accessing host
+      resources.
+
+  - question: What should I use for true sandboxed code execution?
+    answer: |
+      True sandboxing requires process isolation combined with OS-level resource restrictions.
+      Options include: subprocess with seccomp-bpf syscall filtering, Docker containers with
+      read-only filesystems and no network, WebAssembly runtimes (Pyodide, WASM), and
+      dedicated sandboxing services. No pure-Python or CPython-internal mechanism provides
+      true sandboxing.
+
+  - question: Is this module stable enough to rely on in production?
+    answer: |
+      No. The _xxsubinterpreters module is explicitly experimental and marked as such in
+      CPython source. Its API has changed multiple times between minor Python versions.
+      Using it in production code creates both a security risk and a maintenance burden
+      from API instability.
+
+  - question: What Python version introduced subinterpreters?
+    answer: |
+      Low-level sub-interpreter support has existed in CPython's C API since Python 3.x,
+      but the _xxsubinterpreters module exposing it to Python code was added as an
+      experimental feature in Python 3.9. PEP 554 proposes making it a proper public API,
+      but as of Python 3.12 it remains experimental.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-003
+  - PYTHON-LANG-SEC-006
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

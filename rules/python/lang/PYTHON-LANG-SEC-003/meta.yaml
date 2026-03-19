@@ -1,56 +1,193 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-003
 name: Dangerous code.InteractiveConsole Usage
-short_description: code.InteractiveConsole/interact detected. This enables arbitrary code execution.
+short_description: code.InteractiveConsole and code.interact() enable arbitrary Python code execution and should not be exposed to untrusted users.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-003
+ruleset: python/lang/PYTHON-LANG-SEC-003
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- code-run
-- interactive-console
-- CWE-95
+  - python
+  - code-module
+  - interactive-console
+  - code-execution
+  - repl
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python provides several built-in functions and modules that evaluate or execute
 
-  arbitrary code at runtime, including eval(), exec(), code.InteractiveConsole, and
+# Content
+description: |
+  Python's code module provides the InteractiveConsole, InteractiveInterpreter, and interact()
+  classes and functions which implement a Python read-eval-print loop (REPL). These are intended
+  for debugging and development tooling; when exposed to or called with untrusted input in
+  production code, they grant the caller full Python code execution capability.
 
-  dynamic imports via __import__() or importlib.import_module(). When these functions
+  code.InteractiveConsole().interact() drops into a full Python REPL. code.compile_command()
+  partially compiles Python source and is used as a building block for interactive interpreters.
+  Any application that pipes untrusted network or user input into these components effectively
+  gives the attacker a remote Python shell on the server.
 
-  receive untrusted input, attackers can achieve full remote code execution (RCE) on
+  These functions are legitimate for local development tools, administrative debug consoles
+  that are properly authenticated, and embedded REPL features. They become dangerous when
+  exposed unauthenticated over a network or when the input source is not strictly controlled.
 
-  the host system.'
-message: code.InteractiveConsole/interact detected. This enables arbitrary code execution.
-secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nresult = ast.literal_eval(user_expr)\n\
-  \n# Whitelist allowed modules for dynamic imports\nALLOWED_MODULES = {\"json\", \"math\", \"datetime\"\
-  }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
-recommendations: []
+message: "code.InteractiveConsole or code.interact() detected. This enables arbitrary code execution. Do not expose to untrusted input."
+
+security_implications:
+  - title: Remote Python Shell
+    description: |
+      An unauthenticated or improperly authenticated code.interact() endpoint gives the
+      attacker a full interactive Python interpreter with the privileges of the web server
+      process, equivalent to SSH access to the host.
+  - title: Unrestricted File System Access
+    description: |
+      Through the interactive console, an attacker can read, write, and delete any file
+      accessible to the process, including application secrets, SSL private keys, database
+      credentials, and user data.
+  - title: Process and System Control
+    description: |
+      The interactive console can spawn subprocesses, open network connections, modify
+      environment variables, send signals to other processes, and call any system call
+      available to Python, giving the attacker complete control of the host environment.
+  - title: Debug Endpoint Exposure
+    description: |
+      Development debug panels (such as Werkzeug's debug console) that use code module
+      internals are commonly left enabled in production deployments. This is a well-known
+      and frequently exploited attack vector in Python web applications.
+
+secure_example: |
+  # SECURE: Gate any interactive console behind strong authentication
+  # and restrict to localhost only in production
+  import code
+  import os
+
+  def start_admin_console(is_admin: bool, remote_addr: str):
+      if not is_admin:
+          raise PermissionError("Admin access required")
+      if remote_addr not in ("127.0.0.1", "::1"):
+          raise PermissionError("Console only available from localhost")
+      # Further: wrap in audit logging, rate limiting, and session recording
+      code.interact(local={"help": "Type Python expressions"})
+
+  # SECURE: Use a dedicated admin CLI with explicit commands instead of a REPL
+  import argparse
+
+  def admin_cli():
+      parser = argparse.ArgumentParser()
+      subparsers = parser.add_subparsers(dest="command")
+      subparsers.add_parser("status")
+      subparsers.add_parser("reload")
+      args = parser.parse_args()
+      # Handle each command explicitly without code execution
+
+recommendations:
+  - Never expose code.InteractiveConsole or code.interact() over an unauthenticated network endpoint.
+  - In production deployments, disable any debug console or REPL endpoint; ensure DEBUG=False in all production configuration.
+  - If an admin REPL is required, gate it behind strong multi-factor authentication, restrict to localhost or a VPN-only interface, and log all commands executed.
+  - Replace interactive consoles with purpose-built admin CLIs that accept an explicit allowlist of commands without arbitrary code execution.
+  - Use a process supervisor or container runtime that provides exec access only to authorized operations teams rather than exposing a Python REPL.
+
+detection_scope: |
+  This rule detects calls to code.InteractiveConsole(), code.interact(), code.compile_command(),
+  and code.InteractiveInterpreter() from the Python standard library code module. All call
+  sites are flagged as these functions are designed for interactive interpreter use and are
+  inappropriate in production application code that processes external input.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-95
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: functions - eval'
-  url: https://docs.python.org/3/library/functions.html#eval
-- title: 'Python docs: ast - ast.literal_eval'
-  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
-- title: 'Python docs: code'
-  url: https://docs.python.org/3/library/code.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "Python docs: code module"
+    url: https://docs.python.org/3/library/code.html
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: Werkzeug Debug Console RCE (CVE-2019-14322)
+    url: https://nvd.nist.gov/vuln/detail/CVE-2019-14322
+
+# FAQ
+faq:
+  - question: Is code.InteractiveConsole dangerous in all contexts?
+    answer: |
+      No. When used in a local development tool, a properly authenticated and localhost-only
+      admin console, or an embedded REPL for trusted users, code.InteractiveConsole is
+      appropriate. It is dangerous when the input it processes can be influenced by untrusted
+      remote users or when it is exposed on a network interface without authentication.
+
+  - question: Why does this rule flag code.compile_command() which just compiles code?
+    answer: |
+      code.compile_command() is the building block for interactive interpreters. Its presence
+      usually indicates that a partial REPL is being assembled. The flag prompts a review of
+      how the compiled code object is eventually executed, since the execution step may follow
+      without being obvious from the call site alone.
+
+  - question: How does this relate to Werkzeug's debug console vulnerability?
+    answer: |
+      Werkzeug's interactive debugger uses code module internals to provide a REPL in browser-
+      based exception pages. When deployed with DEBUG=True in production, this console is
+      reachable by any user who can trigger an exception. This has been exploited in numerous
+      real-world attacks. This rule helps identify code paths that share this pattern.
+
+  - question: What should I use instead for admin debugging in production?
+    answer: |
+      Use structured logging and distributed tracing for debugging production issues. For
+      administrative operations, expose a purpose-built CLI with explicit command verbs, proper
+      authentication, and audit logging. If live inspection of running processes is required,
+      use py-spy or similar profiling tools that do not expose code execution.
+
+  - question: Can I suppress this finding for legitimate development tooling?
+    answer: |
+      Yes. If the code.InteractiveConsole usage is in a module that is only loaded in
+      development environments (e.g., guarded by an explicit DEVELOPMENT_MODE flag or only
+      present in a dev-specific Django management command), document the suppression with a
+      comment explaining the trust boundary and access control measures.
+
+  - question: Does this rule detect indirect usage through wrapper libraries?
+    answer: |
+      The rule detects direct calls to the code module functions. If a wrapper library
+      re-exports these functions under a different name, the indirect call may not be detected.
+      Review dependencies that provide REPL or interactive shell functionality to ensure they
+      do not expose code module internals without proper access controls.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-005
+  - PYTHON-LANG-SEC-023
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

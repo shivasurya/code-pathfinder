@@ -1,58 +1,205 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-022
 name: Dangerous asyncio Shell Execution
-short_description: asyncio.create_subprocess_shell() detected. Use create_subprocess_exec() instead.
+short_description: asyncio.create_subprocess_shell() passes the command through the system shell, enabling command injection when arguments contain untrusted input.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-022
+ruleset: python/lang/PYTHON-LANG-SEC-022
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- asyncio
-- shell
-- command-injection
-- CWE-78
+  - python
+  - asyncio
+  - shell
+  - command-injection
+  - async
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'The subprocess module is Python''s recommended interface for spawning child
 
-  processes. However, when subprocess calls use shell=True or accept unsanitized
+# Content
+description: |
+  Python's asyncio.create_subprocess_shell() is the async equivalent of subprocess.run()
+  with shell=True. It passes the command string to the system shell (/bin/sh on Unix) for
+  interpretation, which means all shell metacharacters are processed before the command
+  executes.
 
-  user input as command arguments, they become vulnerable to OS command injection.
+  When any part of the command string is derived from untrusted input such as HTTP request
+  parameters or user-provided data, an attacker can inject shell metacharacters to execute
+  additional commands or access the shell's full feature set.
 
-  The asyncio module provides asynchronous equivalents (create_subprocess_shell)
+  The safe replacement is asyncio.create_subprocess_exec() which accepts a list of arguments
+  and passes them directly to the OS exec() syscall without shell interpretation, exactly
+  like subprocess.run() with shell=False.
 
-  that carry the same risks. Python''s experimental subinterpreters API allows
+message: "asyncio.create_subprocess_shell() detected. Use asyncio.create_subprocess_exec() with a list of arguments to prevent shell injection."
 
-  executing arbitrary code strings in isolated interpreters.'
-message: asyncio.create_subprocess_shell() detected. Use create_subprocess_exec() instead.
-secure_example: "import subprocess\n# Pass arguments as a list (no shell interpretation)\nsubprocess.run([\"\
-  grep\", user_input, \"log\"], check=True)\n# Use asyncio exec variant (no shell)\nawait asyncio.create_subprocess_exec(\"\
-  grep\", user_input, \"log\")\n# Validate and restrict allowed commands\nALLOWED_COMMANDS = {\"ls\",\
-  \ \"grep\", \"wc\"}\nif cmd not in ALLOWED_COMMANDS:\n    raise ValueError(\"Command not allowed\")"
-recommendations: []
+security_implications:
+  - title: Async Shell Command Injection
+    description: |
+      The same shell injection risks present in subprocess with shell=True apply to
+      asyncio.create_subprocess_shell(). Semicolons, pipes, backticks, and dollar signs
+      in user input allow injection of additional commands executed with the process's
+      privileges.
+  - title: Concurrent Injection Amplification
+    description: |
+      In async web servers handling concurrent requests, a shell injection vulnerability in
+      an async subprocess call can be exploited by multiple concurrent attackers simultaneously,
+      amplifying the impact compared to synchronous code.
+  - title: Event Loop Blocking from Injected Commands
+    description: |
+      Injected long-running or CPU-intensive commands can block the asyncio event loop,
+      causing denial-of-service for all concurrent requests handled by the same event loop.
+  - title: Uncaptured Output in Async Context
+    description: |
+      In async code, subprocess output handling is more complex and errors in output
+      capture can lead to process hangs or output appearing in unexpected contexts,
+      potentially exposing sensitive information.
+
+secure_example: |
+  import asyncio
+
+  # INSECURE: asyncio.create_subprocess_shell() with user input
+  # proc = await asyncio.create_subprocess_shell(f"process {user_input}")
+
+  # SECURE: asyncio.create_subprocess_exec() with list arguments
+  async def run_processor(input_file: str) -> str:
+      import re
+      if not re.match(r'^[a-zA-Z0-9_\-\.]+$', input_file):
+          raise ValueError(f"Invalid filename: {input_file}")
+      proc = await asyncio.create_subprocess_exec(
+          "/usr/bin/processor",
+          "--input", input_file,
+          stdout=asyncio.subprocess.PIPE,
+          stderr=asyncio.subprocess.PIPE,
+      )
+      stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+      if proc.returncode != 0:
+          raise RuntimeError(f"Processor failed: {stderr.decode()}")
+      return stdout.decode()
+
+  # SECURE: With timeout and error handling
+  async def convert_file(source: str, dest: str) -> None:
+      import re
+      SAFE_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+      if not SAFE_PATTERN.match(source) or not SAFE_PATTERN.match(dest):
+          raise ValueError("Invalid filename")
+      proc = await asyncio.create_subprocess_exec(
+          "/usr/bin/convert", source, dest,
+          stdout=asyncio.subprocess.DEVNULL,
+          stderr=asyncio.subprocess.PIPE,
+      )
+      try:
+          _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+      except asyncio.TimeoutError:
+          proc.kill()
+          raise
+
+recommendations:
+  - Replace asyncio.create_subprocess_shell() with asyncio.create_subprocess_exec() and pass the command as separate arguments to avoid shell interpretation.
+  - Validate all user-controlled values that become process arguments against a strict allowlist or regex before use.
+  - Set a timeout using asyncio.wait_for() to prevent hung child processes from blocking the event loop.
+  - Capture stdout and stderr explicitly to prevent sensitive information from appearing in server logs.
+  - Use absolute executable paths to prevent PATH hijacking attacks in the async context.
+
+detection_scope: |
+  This rule detects calls to asyncio.create_subprocess_shell() and the equivalent
+  asyncio.subprocess.create_subprocess_shell() form. All call sites are flagged since
+  this function always invokes the system shell and is inherently riskier than
+  asyncio.create_subprocess_exec().
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: subprocess - security-considerations'
-  url: https://docs.python.org/3/library/subprocess.html#security-considerations
-- title: 'Python docs: asyncio-subprocess'
-  url: https://docs.python.org/3/library/asyncio-subprocess.html
-- title: 'Python docs: shlex - shlex.split'
-  url: https://docs.python.org/3/library/shlex.html#shlex.split
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: asyncio.create_subprocess_shell()"
+    url: https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.create_subprocess_shell
+  - title: "Python docs: asyncio.create_subprocess_exec()"
+    url: https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.create_subprocess_exec
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# FAQ
+faq:
+  - question: What is the async equivalent of subprocess.run() with shell=False?
+    answer: |
+      asyncio.create_subprocess_exec() is the async equivalent of subprocess.run() with
+      shell=False. It accepts the executable as the first argument and additional arguments
+      as separate positional parameters, bypassing the shell entirely. Use it instead of
+      create_subprocess_shell() for all async process creation.
+
+  - question: Does asyncio.create_subprocess_shell() have the same risks as subprocess shell=True?
+    answer: |
+      Yes, exactly the same risks apply. Both pass the command to /bin/sh (or cmd.exe on
+      Windows) for interpretation. Shell metacharacters in user input are expanded and executed.
+      The async nature does not change the injection vulnerability.
+
+  - question: How do I handle shell pipelines in async code?
+    answer: |
+      Implement pipelines using asyncio.create_subprocess_exec() for each process in the
+      pipeline, connected via asyncio.subprocess.PIPE for stdin/stdout. Alternatively,
+      process intermediate data in Python async code between exec() calls. Avoid piping
+      commands through a shell string.
+
+  - question: Can blocking in an injected command affect other async requests?
+    answer: |
+      Yes. If an injected command runs a CPU-intensive or long-running operation, and
+      asyncio.wait_for() is not used, the event loop can block, causing all concurrent
+      requests in the same process to queue up. Always use asyncio.wait_for() with a
+      timeout to limit the maximum duration of subprocess execution.
+
+  - question: Is asyncio.create_subprocess_shell() ever acceptable to use?
+    answer: |
+      Only when the entire command string is a hardcoded literal with no user-controlled
+      components. Even then, asyncio.create_subprocess_exec() with a list is preferable
+      for clarity and to prevent future developers from accidentally adding user input
+      to the command string.
+
+  - question: How do I migrate existing create_subprocess_shell() calls to create_subprocess_exec()?
+    answer: |
+      Replace await asyncio.create_subprocess_shell("cmd arg1 arg2") with
+      await asyncio.create_subprocess_exec("cmd", "arg1", "arg2"). For more complex
+      shell commands, use shlex.split() to tokenize the hardcoded command string into
+      a list, then validate all non-hardcoded arguments before adding them to the list.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-021
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-011
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

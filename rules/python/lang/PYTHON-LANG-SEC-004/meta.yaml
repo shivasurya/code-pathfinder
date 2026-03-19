@@ -1,56 +1,186 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-004
-name: Dangerous globals() Usage
-short_description: globals() passed to a function. This may allow arbitrary attribute access.
+name: Dangerous globals() Usage Detected
+short_description: globals() exposes the module's global namespace as a mutable dictionary, allowing arbitrary attribute injection when passed to untrusted code.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-004
+ruleset: python/lang/PYTHON-LANG-SEC-004
+
+# Vulnerability Details
 cwe:
-- id: CWE-96
-  name: Improper Neutralization of Directives in Statically Saved Code
-  url: https://cwe.mitre.org/data/definitions/96.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- globals
-- code-injection
-- CWE-96
+  - python
+  - globals
+  - namespace-injection
+  - dynamic-execution
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python provides several built-in functions and modules that evaluate or execute
 
-  arbitrary code at runtime, including eval(), exec(), code.InteractiveConsole, and
+# Content
+description: |
+  Python's built-in globals() function returns a reference to the current module's global
+  namespace as a live, mutable dictionary. Any code that receives this dictionary can read
+  all global variables, overwrite them, inject new names, or delete existing ones.
 
-  dynamic imports via __import__() or importlib.import_module(). When these functions
+  Passing globals() to eval(), exec(), or any function that modifies the dictionary enables
+  an attacker to redefine security-critical functions, inject callable backdoors, overwrite
+  configuration values, or access credentials stored in module-level constants.
 
-  receive untrusted input, attackers can achieve full remote code execution (RCE) on
+  Common dangerous patterns include passing globals() as the namespace argument to eval() or
+  exec(), passing it to template rendering functions, serializing it to disk or network, or
+  using it as a lookup table to resolve user-supplied function names.
 
-  the host system.'
-message: globals() passed to a function. This may allow arbitrary attribute access.
-secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nresult = ast.literal_eval(user_expr)\n\
-  \n# Whitelist allowed modules for dynamic imports\nALLOWED_MODULES = {\"json\", \"math\", \"datetime\"\
-  }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
-recommendations: []
+message: "globals() detected. Passing the global namespace to untrusted code enables arbitrary attribute injection and code execution."
+
+security_implications:
+  - title: Global Namespace Corruption
+    description: |
+      An attacker who gains write access to the dictionary returned by globals() can overwrite
+      any module-level variable or function. This includes authentication functions, access
+      control checks, cryptographic keys, and database connection strings.
+  - title: Code Execution via Namespace Injection
+    description: |
+      When globals() is passed as the namespace to eval() or exec(), an attacker controlling
+      the evaluated code can define new entries in the global namespace that persist after the
+      eval/exec call, creating persistent backdoors in the running process.
+  - title: Credential Exposure
+    description: |
+      The global namespace typically contains imported modules, configuration constants, and
+      application-level secrets. Serializing or logging globals() can expose API keys, database
+      passwords, cryptographic secrets, and other sensitive values.
+  - title: Authentication Bypass
+    description: |
+      Overwriting a global function such as is_authenticated or check_permission through the
+      globals() dictionary allows an attacker to replace security checks with no-ops, effectively
+      bypassing all authorization logic in the module.
+
+secure_example: |
+  # SECURE: Use an explicit allowlist for dynamic function lookup
+  import math
+
+  ALLOWED_FUNCTIONS = {
+      "sqrt": math.sqrt,
+      "abs": abs,
+      "round": round,
+  }
+
+  def call_function(func_name: str, arg: float) -> float:
+      if func_name not in ALLOWED_FUNCTIONS:
+          raise ValueError(f"Function not allowed: {func_name}")
+      return ALLOWED_FUNCTIONS[func_name](arg)
+
+  # SECURE: Use getattr() with an allowlist instead of globals() lookup
+  import myapp.handlers as handlers
+
+  ALLOWED_HANDLERS = {"handle_get", "handle_post", "handle_delete"}
+
+  def dispatch(method: str, request):
+      if method not in ALLOWED_HANDLERS:
+          raise ValueError(f"Handler not found: {method}")
+      return getattr(handlers, method)(request)
+
+recommendations:
+  - Replace globals()-based function lookup with an explicit dictionary mapping allowed names to their callables.
+  - Never pass globals() as the namespace argument to eval() or exec(); create a minimal, read-only namespace with only the names required.
+  - Do not serialize, log, or transmit the globals() dictionary as it contains credentials and sensitive configuration.
+  - Use getattr() with an allowlist on a specific module or object for dynamic dispatch rather than searching the entire global namespace.
+  - Audit all uses of globals() in code that processes external input to ensure no user-controlled key can reach the globals dict.
+
+detection_scope: |
+  This rule detects all calls to the built-in globals() function in Python source code. It
+  targets patterns where the return value of globals() is passed to another function, used as
+  a namespace argument, stored in a variable for later use, or directly returned from a function.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-95
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: functions - eval'
-  url: https://docs.python.org/3/library/functions.html#eval
-- title: 'Python docs: ast - ast.literal_eval'
-  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
-- title: 'Python docs: code'
-  url: https://docs.python.org/3/library/code.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "Python docs: built-in globals()"
+    url: https://docs.python.org/3/library/functions.html#globals
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: Python Namespace and Scope Documentation
+    url: https://docs.python.org/3/reference/executionmodel.html#names-and-binding
+
+# FAQ
+faq:
+  - question: Is globals() always dangerous to use?
+    answer: |
+      Not always. globals() is safe when used for introspection in development tools, test
+      frameworks, or debugging utilities that only read from the dictionary. It becomes dangerous
+      when the dictionary is passed to code that can modify it, when it is used for user-controlled
+      name resolution, or when it is serialized and exposed over a network.
+
+  - question: Why not just pass a copy of globals() to be safe?
+    answer: |
+      A shallow copy of globals() still contains references to all module objects. An attacker
+      who can call methods on those objects (e.g., imported modules) can still execute arbitrary
+      code. A deep copy is impractical and would not include live module state. The correct fix
+      is to use a minimal, purpose-built namespace with only required names.
+
+  - question: What is a safe alternative for dynamic function dispatch?
+    answer: |
+      Create an explicit allowlist dictionary mapping string names to their corresponding
+      callables. Check that the user-supplied name exists in the allowlist before calling it.
+      This is both more secure and more explicit about what operations are permitted.
+
+  - question: Does this rule flag globals() used in __init__.py module setup code?
+    answer: |
+      Yes, all globals() calls are flagged. Module setup code in __init__.py typically does not
+      need to call globals() and is usually better expressed with explicit variable assignments.
+      If the usage is purely for package introspection during import (not at request time), it
+      can be reviewed and suppressed with a comment explaining the safety rationale.
+
+  - question: How does globals() interact with eval() and exec()?
+    answer: |
+      When globals() is passed as the first (global namespace) argument to eval() or exec(),
+      any names defined in the evaluated code are written into the module's live global
+      namespace and persist after the eval/exec returns. This is one of the most dangerous
+      combinations possible in Python code.
+
+  - question: Are there performance implications from calling globals() frequently?
+    answer: |
+      globals() is O(1) and has minimal performance overhead. Performance is not a valid
+      reason to use globals() for dynamic dispatch; the security risk outweighs any benefit
+      compared to a simple allowlist dictionary lookup.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-005
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

@@ -1,70 +1,197 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-031
-name: Insecure SHA1 Hash Usage
-short_description: SHA-1 is cryptographically weak. Use SHA-256 or SHA-3 instead.
+name: Insecure SHA-1 Hash Usage
+short_description: SHA-1 is cryptographically weak due to practical collision attacks. Use SHA-256 or SHA-3 for security-sensitive hashing.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-031
+ruleset: python/lang/PYTHON-LANG-SEC-031
+
+# Vulnerability Details
 cwe:
-- id: CWE-327
-  name: Use of a Broken or Risky Cryptographic Algorithm
-  url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- sha1
-- weak-hash
-- cryptography
-- OWASP-A02
-- CWE-327
+  - python
+  - sha1
+  - weak-hash
+  - cryptography
+  - hashlib
+  - CWE-327
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'MD5 and SHA-1 are cryptographically broken hash algorithms with known collision
 
-  attacks. MD5 collisions can be generated in seconds on modern hardware, and
+# Content
+description: |
+  SHA-1 (Secure Hash Algorithm 1) produces a 160-bit digest and has been deprecated for
+  cryptographic use since 2011. In 2017, the SHAttered attack demonstrated a practical
+  SHA-1 collision, and chosen-prefix collision attacks became feasible in 2019, enabling
+  forgery of X.509 certificates, PGP keys, and other structures that use SHA-1 signatures.
 
-  SHA-1 collisions have been demonstrated practically (SHAttered attack, 2017).
+  SHA-1 should not be used for digital signatures, certificate fingerprinting, HMAC in
+  new protocols, code signing, password hashing, or any context where collision resistance
+  is a security requirement. NIST formally deprecated SHA-1 for all security applications
+  in 2022.
 
-  Using these algorithms for integrity verification, digital signatures, certificate
+  SHA-1 retains some non-security uses: it remains acceptable for non-adversarial integrity
+  checks, content-addressed storage where the threat model does not include adversarial input,
+  and HMAC-SHA1 in legacy protocol compatibility (where cryptographic analysis shows HMAC
+  construction still provides MAC security despite the hash's weaknesses).
 
-  validation, or password hashing provides a false sense of security and exposes
+message: "hashlib.sha1() detected. SHA-1 is cryptographically weak. Use hashlib.sha256() or hashlib.sha3_256() instead."
 
-  applications to forgery and pre-image attacks.'
-message: SHA-1 is cryptographically weak. Use SHA-256 or SHA-3 instead.
-secure_example: 'import hashlib
+security_implications:
+  - title: Chosen-Prefix Collision Attacks
+    description: |
+      Chosen-prefix collisions allow an attacker to craft two documents with identical
+      SHA-1 hashes where each document starts with attacker-chosen content. This has been
+      used to forge X.509 certificates and create malicious files that match expected
+      checksums. The attack cost is within reach of well-funded attackers.
+  - title: Certificate Forgery
+    description: |
+      X.509 certificates using SHA-1 signatures can be forged through collision attacks.
+      Major browser vendors and CA/Browser Forum deprecated SHA-1 certificates in 2016-2017.
+      Applications still accepting SHA-1 certificate fingerprints are vulnerable to
+      certificate impersonation attacks.
+  - title: Code Signing Weakness
+    description: |
+      Software signed with SHA-1 can potentially be replaced by malicious code with a
+      crafted collision that produces the same SHA-1 hash, undermining software supply
+      chain integrity.
+  - title: PGP Key Forgery
+    description: |
+      PGP/GPG uses SHA-1 for key fingerprints in older key formats. SHA-1 collision attacks
+      have been demonstrated against PGP key certification signatures, enabling key
+      impersonation in some configurations.
 
-  # Use SHA-256 or SHA-3 for integrity verification
+secure_example: |
+  import hashlib
 
-  file_hash = hashlib.sha256(data).hexdigest()
+  # INSECURE: SHA-1 for security-sensitive hashing
+  # digest = hashlib.sha1(data).hexdigest()
 
-  # Use dedicated password hashing (bcrypt, scrypt, argon2)
+  # SECURE: SHA-256 for general security purposes
+  def compute_signature_hash(data: bytes) -> str:
+      return hashlib.sha256(data).hexdigest()
 
-  import bcrypt
+  # SECURE: SHA-3 for new protocols requiring stronger guarantees
+  def compute_document_hash(data: bytes) -> str:
+      return hashlib.sha3_256(data).hexdigest()
 
-  pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+  # SECURE: BLAKE2b for high-performance secure hashing
+  def compute_fast_hash(data: bytes) -> str:
+      return hashlib.blake2b(data, digest_size=32).hexdigest()
 
-  # SHA-3 for digital signatures
+  # SHA-1 in HMAC for legacy protocol compatibility (document clearly)
+  import hmac
+  def legacy_hmac_sha1(key: bytes, message: bytes) -> bytes:
+      # ACCEPTABLE: HMAC-SHA1 is cryptographically sound for MAC purposes
+      # despite SHA-1's collision weakness. Only use for legacy protocol compatibility.
+      return hmac.new(key, message, "sha1").digest()
 
-  sig_hash = hashlib.sha3_256(document).hexdigest()'
-recommendations: []
+recommendations:
+  - Replace hashlib.sha1() with hashlib.sha256() or hashlib.sha3_256() for all security-sensitive hashing operations.
+  - Update certificate fingerprint verification to use SHA-256 fingerprints.
+  - Migrate code signing pipelines from SHA-1 to SHA-256 or stronger algorithms.
+  - For HMAC in new code, use HMAC-SHA-256; HMAC-SHA1 may be retained only for legacy protocol compatibility where migration is not feasible.
+  - Audit all SHA-1 usages and document whether each is security-sensitive or acceptable for non-adversarial use.
+
+detection_scope: |
+  This rule detects calls to hashlib.sha1() in Python source code. All call sites are flagged
+  for review. Security-sensitive uses require migration to SHA-256 or stronger. Non-security
+  uses and HMAC-SHA1 for legacy compatibility may be documented and suppressed.
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A Revision 2
+    requirement: "SHA-1 is disallowed for digital signatures, key derivation, and random bit generation"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography; SHA-1 not permitted for TLS"
+  - standard: CA/Browser Forum Baseline Requirements
+    requirement: "SHA-1 certificates deprecated since January 2017"
+
+# References
 references:
-- title: CWE-327
-  url: https://cwe.mitre.org/data/definitions/327.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: hashlib'
-  url: https://docs.python.org/3/library/hashlib.html
-- title: shattered.io
-  url: https://shattered.io/ (SHA-1 collision demonstration
-- title: csrc.nist.gov
-  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "SHAttered: First SHA-1 collision (2017)"
+    url: https://shattered.io/
+  - title: "Python docs: hashlib module"
+    url: https://docs.python.org/3/library/hashlib.html
+  - title: OWASP Cryptographic Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+  - title: NIST SP 800-131A Revision 2 - Transitioning the Use of Cryptographic Algorithms
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+
+# FAQ
+faq:
+  - question: Is SHA-1 completely broken or just weakened?
+    answer: |
+      SHA-1 has practical collision attacks (SHAttered 2017, chosen-prefix 2019) that
+      are within reach of determined attackers. It is broken for collision-resistance-dependent
+      uses (signatures, certificates, code signing). HMAC-SHA1 retains MAC security since
+      HMAC's security depends on pseudorandomness rather than collision resistance, but
+      HMAC-SHA256 is strongly preferred for new code.
+
+  - question: Why is SHA-1 still in Git and some protocols?
+    answer: |
+      Git historically used SHA-1 for content addressing (not digital signatures), where
+      the threat model is accidental corruption rather than adversarial collision. Git is
+      transitioning to SHA-256 (SHA-256 repository support was added in Git 2.29). Legacy
+      protocols using HMAC-SHA1 (e.g., TOTP, some OAuth variants) retain security because
+      HMAC construction is not broken by SHA-1 collision attacks.
+
+  - question: How is SHA-1 different from MD5 in terms of security?
+    answer: |
+      SHA-1 is stronger than MD5 (160-bit vs 128-bit digest, more complex structure) but
+      both have practical collision attacks and should not be used for security purposes.
+      SHA-1 collision attacks are more expensive than MD5 collision attacks but have been
+      demonstrated. The migration guidance is the same: use SHA-256 or stronger.
+
+  - question: What is the recommended migration timeline for SHA-1?
+    answer: |
+      For new code: use SHA-256 immediately. For existing systems: prioritize certificate
+      fingerprints and code signing (highest risk), then integrity verification, then
+      content addressing. HMAC-SHA1 in legacy protocols can be lower priority if migration
+      cost is high, but should be documented with a migration plan.
+
+  - question: Does FIPS mode affect SHA-1 usage in Python?
+    answer: |
+      In FIPS 140-3 mode, SHA-1 is not approved for security applications. Python's hashlib
+      in FIPS mode may raise an error or require the usedforsecurity=False parameter when
+      creating a SHA-1 hash. Systems operating under FIPS requirements must migrate away
+      from SHA-1 in all security-sensitive contexts.
+
+  - question: Is SHA-1 safe for non-cryptographic uses like hash tables?
+    answer: |
+      SHA-1 is computationally heavy compared to purpose-built non-cryptographic hash
+      functions. For hash tables and checksums with no adversarial threat model, use
+      xxHash, SipHash, or Python's built-in hash() instead. SHA-1 is neither the safest
+      nor the most performant choice for non-security hash uses.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-032
+  - PYTHON-LANG-SEC-033
+  - PYTHON-LANG-SEC-034
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

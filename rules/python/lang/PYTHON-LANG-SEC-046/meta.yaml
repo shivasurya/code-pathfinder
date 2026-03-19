@@ -1,59 +1,206 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-046
 name: dill Deserialization Detected
-short_description: dill.loads/load detected. dill extends pickle and can execute arbitrary code.
+short_description: dill.loads() and dill.load() extend pickle with broader serialization capabilities and can execute arbitrary code when deserializing untrusted data.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-046
+ruleset: python/lang/PYTHON-LANG-SEC-046
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- dill
-- deserialization
-- rce
-- CWE-502
+  - python
+  - dill
+  - pickle-extension
+  - deserialization
+  - code-execution
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s pickle module and its derivatives (dill, shelve, jsonpickle) can
 
-  instantiate arbitrary Python objects during deserialization, enabling remote
+# Content
+description: |
+  dill is a Python package that extends the standard pickle module with broader serialization
+  capabilities, supporting lambda functions, generators, closures, nested functions, and other
+  Python objects that pickle cannot serialize. dill uses pickle's serialization mechanism as
+  its foundation and is fully compatible with pickle's security issues.
 
-  code execution when processing untrusted data. Similarly, PyYAML''s yaml.load()
+  Like pickle, dill can execute arbitrary Python code during deserialization. dill actually
+  extends the attack surface compared to standard pickle because it can serialize and
+  deserialize additional constructs including lambda functions and closures containing
+  executable code.
 
-  and ruamel.yaml with unsafe type settings can construct arbitrary Python objects
+  dill is commonly used in scientific computing (multiprocessing with lambdas, distributed
+  computing) and machine learning (serializing model training functions). These use cases
+  involve trusted internal data, but dill.loads() on external data is just as dangerous
+  as pickle.loads().
 
-  from YAML input. The marshal module, while not designed for security, also
+message: "dill.loads() or dill.load() detected. dill extends pickle with broader code execution capabilities. Use JSON for external data interchange."
 
-  deserializes binary data without validation.'
-message: dill.loads/load detected. dill extends pickle and can execute arbitrary code.
-secure_example: "import json, yaml\n# Use JSON for data interchange (no code execution)\ndata = json.loads(network_data)\n\
-  # Use SafeLoader for YAML parsing\nconfig = yaml.safe_load(user_yaml_string)\n# Use hmac signing to\
-  \ verify pickle integrity (defense in depth)\nimport hmac, hashlib\nexpected_sig = hmac.new(secret_key,\
-  \ data, hashlib.sha256).digest()\nif not hmac.compare_digest(expected_sig, received_sig):\n    raise\
-  \ ValueError(\"Tampered data\")"
-recommendations: []
+security_implications:
+  - title: Extended Code Execution via Closures and Lambdas
+    description: |
+      dill can serialize lambda functions, closures, and generators that contain executable
+      code. An attacker crafting a dill payload can embed malicious lambda functions or
+      closures that execute arbitrary code when deserialized, in addition to all of pickle's
+      existing attack vectors.
+  - title: Distributed Computing Attack Surface
+    description: |
+      dill is commonly used with multiprocessing and distributed frameworks (Ray, Dask,
+      Apache Spark's Python serialization) to serialize functions for distribution across
+      workers. If an attacker can inject dill-serialized payloads into the task queue,
+      they can execute code on all worker nodes.
+  - title: ML Model Poisoning
+    description: |
+      Machine learning pipelines that serialize model training functions, preprocessing
+      steps, or custom loss functions using dill are vulnerable to model poisoning if
+      the serialized files can be replaced. Loading a malicious dill file from an
+      untrusted model repository triggers code execution.
+  - title: Lambda-based Payload Evasion
+    description: |
+      dill's ability to serialize lambdas and closures enables more sophisticated attack
+      payloads that may evade signature-based detection designed to look for common pickle
+      gadget chains, since the malicious code is embedded in function bytecode rather than
+      class instantiation sequences.
+
+secure_example: |
+  import json
+
+  # INSECURE: dill.loads() on external or network data
+  # import dill
+  # obj = dill.loads(received_bytes)
+  # func = dill.load(open("untrusted_model.dill", "rb"))
+
+  # SECURE: Use JSON for data interchange
+  def deserialize_request(data: bytes) -> dict:
+      return json.loads(data.decode("utf-8"))
+
+  # SECURE: For ML function serialization, use explicit function registries
+  # instead of serializing function objects
+  ALLOWED_TRANSFORMS = {
+      "normalize": lambda x: (x - x.mean()) / x.std(),
+      "log": lambda x: x.apply(lambda v: max(0, v)),
+  }
+
+  def get_transform(name: str):
+      if name not in ALLOWED_TRANSFORMS:
+          raise ValueError(f"Transform not allowed: {name}")
+      return ALLOWED_TRANSFORMS[name]
+
+  # SECURE: For distributed computing, use function references by name
+  # rather than serialized function objects
+  def submit_task(func_name: str, args: list):
+      ALLOWED_FUNCTIONS = {"process_batch", "validate_record", "aggregate_results"}
+      if func_name not in ALLOWED_FUNCTIONS:
+          raise ValueError(f"Function not allowed: {func_name}")
+      # Submit by reference, not by serialization
+
+recommendations:
+  - Never use dill.loads() or dill.load() on data from external sources, including network payloads, file uploads, or user-provided files.
+  - For distributed computing task serialization, restrict task definitions to developer-controlled function references rather than serialized closures from user input.
+  - For ML model portability, use format-specific safe serialization (ONNX, TorchScript, SavedModel) instead of dill-serialized Python function objects.
+  - If dill must be used for internal distributed computing, ensure task payloads are signed with HMAC and only processed within a trusted network boundary.
+  - Audit all dill usage in data science and ML pipelines to confirm no external data flows through dill.loads().
+
+detection_scope: |
+  This rule detects calls to dill.loads() and dill.load() from the dill package. All call
+  sites are flagged since dill has the same code execution risk as pickle with an extended
+  attack surface from its additional serialization capabilities.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-- title: 'Python docs: pickle - restricting-globals'
-  url: https://docs.python.org/3/library/pickle.html#restricting-globals
-- title: pyyaml.org
-  url: https://pyyaml.org/wiki/PyYAMLDocumentation
-- title: 'Python docs: marshal'
-  url: https://docs.python.org/3/library/marshal.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "dill documentation"
+    url: https://dill.readthedocs.io/
+  - title: "Python docs: pickle security warning"
+    url: https://docs.python.org/3/library/pickle.html#restricting-globals
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+# FAQ
+faq:
+  - question: Why is dill more dangerous than standard pickle?
+    answer: |
+      Standard pickle cannot serialize lambda functions, closures, generators, or nested
+      functions. dill can serialize all of these, expanding the set of possible attack
+      payloads. An attacker can embed malicious code in a lambda or closure that executes
+      upon deserialization, potentially evading defenses designed for standard pickle gadget
+      chains.
+
+  - question: Is dill used for legitimate purposes?
+    answer: |
+      Yes. dill is widely used for multiprocessing (to serialize lambda functions for worker
+      processes), distributed computing (to ship function closures to remote workers), and
+      ML/scientific computing (to checkpoint model training functions). These are all
+      legitimate use cases involving trusted internal data, not external input.
+
+  - question: How does dill relate to cloudpickle, multiprocess, and pathos?
+    answer: |
+      cloudpickle (used by Apache Spark, Ray) and pathos.multiprocessing both use dill or
+      similar extended pickle mechanisms for function serialization. All share the same
+      security risk: loading a serialized object from an untrusted source can execute
+      arbitrary code. The same guidance applies: never deserialize externally sourced data
+      with these libraries.
+
+  - question: Can I use dill.loads() if I hash-verify the data first?
+    answer: |
+      HMAC signing with a secret key before transmission and verification before deserialization
+      provides a reasonable mitigation for trusted sender scenarios. If the sender is trusted
+      and the secret key is properly protected, this reduces the risk to that of a
+      key compromise. However, this requires careful key management and is error-prone.
+
+  - question: What is the safe alternative for ML model sharing?
+    answer: |
+      For model weights: use PyTorch's torch.save() with weights_only=True when loading,
+      or ONNX for cross-framework portability. For preprocessing pipelines: serialize
+      parameters (not functions) as JSON and reconstruct the pipeline deterministically.
+      For custom layers: use model architecture code in version-controlled source files,
+      not serialized function objects.
+
+  - question: Are there any dill-compatible safe deserialization approaches?
+    answer: |
+      dill does not provide a safe subset or restricted loader like PyYAML's SafeLoader.
+      The only safe approach with dill is to ensure the data being deserialized comes
+      from a trusted source with cryptographic integrity protection. For untrusted data,
+      there is no safe way to use dill.loads().
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-044
+  - PYTHON-LANG-SEC-045
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''

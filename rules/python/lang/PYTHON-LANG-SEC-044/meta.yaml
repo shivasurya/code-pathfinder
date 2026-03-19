@@ -1,58 +1,195 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-044
-name: marshal Usage Detected
-short_description: marshal.loads/load detected. Marshal is not secure against erroneous or malicious data.
+name: marshal Deserialization Detected
+short_description: marshal.loads() and marshal.load() are not secure against erroneous or malicious data and should not be used to deserialize untrusted input.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-044
+ruleset: python/lang/PYTHON-LANG-SEC-044
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- marshal
-- deserialization
-- CWE-502
+  - python
+  - marshal
+  - deserialization
+  - bytecode
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s pickle module and its derivatives (dill, shelve, jsonpickle) can
 
-  instantiate arbitrary Python objects during deserialization, enabling remote
+# Content
+description: |
+  Python's marshal module serializes Python objects in a binary format used internally for
+  .pyc bytecode files and Python's import system. The module can serialize code objects,
+  which can be executed using exec() or eval(). Unlike pickle, marshal cannot serialize
+  arbitrary class instances, but it can serialize Python bytecode (code objects) that
+  execute arbitrary Python when eval()-ed or exec()-ed.
 
-  code execution when processing untrusted data. Similarly, PyYAML''s yaml.load()
+  Python's documentation explicitly states: "The marshal module is not intended to be secure
+  against erroneous or maliciously constructed data. Never unmarshal data received from an
+  untrusted or unauthenticated source."
 
-  and ruamel.yaml with unsafe type settings can construct arbitrary Python objects
+  Marshal is used in Python's internal bytecode caching (.pyc files). Applications that use
+  marshal.loads() to deserialize data from external sources may be vulnerable to code execution
+  if the input contains serialized code objects.
 
-  from YAML input. The marshal module, while not designed for security, also
+message: "marshal.loads() or marshal.load() detected. marshal is not secure against malicious data. Use JSON for external data interchange."
 
-  deserializes binary data without validation.'
-message: marshal.loads/load detected. Marshal is not secure against erroneous or malicious data.
-secure_example: "import json, yaml\n# Use JSON for data interchange (no code execution)\ndata = json.loads(network_data)\n\
-  # Use SafeLoader for YAML parsing\nconfig = yaml.safe_load(user_yaml_string)\n# Use hmac signing to\
-  \ verify pickle integrity (defense in depth)\nimport hmac, hashlib\nexpected_sig = hmac.new(secret_key,\
-  \ data, hashlib.sha256).digest()\nif not hmac.compare_digest(expected_sig, received_sig):\n    raise\
-  \ ValueError(\"Tampered data\")"
-recommendations: []
+security_implications:
+  - title: Code Object Deserialization
+    description: |
+      marshal can serialize and deserialize Python code objects. An attacker who can control
+      marshal input can provide a crafted code object that, when executed via exec() or eval()
+      on the deserialized object, runs arbitrary Python code with the process's privileges.
+  - title: Bytecode Execution via Code Objects
+    description: |
+      marshal.loads() on attacker-controlled data can produce a code object containing
+      malicious bytecode. If the application subsequently executes this object (e.g., in a
+      dynamic import or eval context), the attacker achieves code execution.
+  - title: Process Crash via Malformed Data
+    description: |
+      The Python documentation warns that marshal is not safe against erroneous data. Malformed
+      marshal streams can crash the Python interpreter with segmentation faults or cause memory
+      corruption in the CPython implementation.
+  - title: Bytecode Cache Poisoning
+    description: |
+      Applications that cache compiled code objects using marshal in shared storage (Redis,
+      memcached, filesystem) are vulnerable if an attacker can write to that storage, replacing
+      legitimate bytecode with malicious code objects.
+
+secure_example: |
+  import json
+
+  # INSECURE: marshal.loads() on external data
+  # import marshal
+  # obj = marshal.loads(external_data)
+
+  # SECURE: Use JSON for external data interchange
+  def load_cached_data(cache_bytes: bytes) -> dict:
+      return json.loads(cache_bytes.decode("utf-8"))
+
+  # SECURE: Use pickle with HMAC for signed internal caching of Python objects
+  import pickle
+  import hmac
+  import hashlib
+  import os
+
+  SECRET_KEY = os.environ.get("CACHE_SECRET_KEY", "").encode()
+
+  def load_signed_cache(data: bytes) -> object:
+      if len(data) < 32:
+          raise ValueError("Invalid cache data")
+      signature = data[:32]
+      payload = data[32:]
+      expected_sig = hmac.new(SECRET_KEY, payload, hashlib.sha256).digest()
+      if not hmac.compare_digest(signature, expected_sig):
+          raise ValueError("Invalid cache signature")
+      return pickle.loads(payload)
+
+recommendations:
+  - Never use marshal.loads() or marshal.load() for data received from external sources, networks, or file uploads.
+  - Use JSON or MessagePack for external data interchange instead of marshal.
+  - For internal Python object caching, use pickle with HMAC signing rather than marshal.
+  - If marshal is used for .pyc caching, ensure the cache directory is not writable by untrusted users and has proper filesystem permissions.
+  - Audit all uses of the marshal module to confirm they only process data from trusted, internal Python processes.
+
+detection_scope: |
+  This rule detects calls to marshal.loads() and marshal.load() from the Python marshal
+  module. All call sites are flagged since marshal is explicitly documented as unsafe for
+  untrusted data and its use for external data is almost always a security concern.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-- title: 'Python docs: pickle - restricting-globals'
-  url: https://docs.python.org/3/library/pickle.html#restricting-globals
-- title: pyyaml.org
-  url: https://pyyaml.org/wiki/PyYAMLDocumentation
-- title: 'Python docs: marshal'
-  url: https://docs.python.org/3/library/marshal.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "Python docs: marshal module warning"
+    url: https://docs.python.org/3/library/marshal.html
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "Python bytecode security research"
+    url: https://nedbatchelder.com/blog/201803/is_python_a_scripting_language.html
+
+# FAQ
+faq:
+  - question: Is marshal less dangerous than pickle?
+    answer: |
+      marshal cannot serialize arbitrary class instances as pickle can, which limits some
+      attack vectors. However, marshal CAN serialize code objects (Python bytecode), which
+      can be executed to run arbitrary Python. For external data, both are dangerous and
+      should be replaced with JSON or similar safe formats.
+
+  - question: What does Python use marshal for internally?
+    answer: |
+      Python uses marshal internally to read and write .pyc bytecode cache files. This is
+      a trusted, internal use where the .pyc files are generated by the Python compiler
+      from trusted source code. The risk arises only when marshal.loads() is used on
+      externally sourced data.
+
+  - question: Can I use marshal for IPC between trusted Python processes?
+    answer: |
+      Marshal between trusted processes in the same deployment is lower risk but is still
+      not recommended due to the code object serialization risk and lack of versioning.
+      For trusted IPC, pickle with HMAC signing provides similar Python object support
+      with additional integrity protection. JSON is preferred for all new IPC designs.
+
+  - question: What Python types can marshal serialize?
+    answer: |
+      marshal supports: None, booleans, integers, floating point, complex numbers, bytes,
+      strings, tuples, lists, dicts, sets, frozensets, and code objects. It does not support
+      class instances, arbitrary objects, or circular references. The code object type is
+      the primary security concern.
+
+  - question: How does marshal compare to pickle for performance?
+    answer: |
+      marshal is generally faster than pickle for the types it supports and is used in
+      Python's performance-critical import system. However, for application-level data
+      interchange, the performance difference is rarely significant enough to justify using
+      marshal over safer alternatives.
+
+  - question: Are .pyc files a security risk if writable?
+    answer: |
+      Yes. If an attacker can write to .pyc cache files, they can inject malicious bytecode
+      that executes when Python imports the corresponding module. .pyc directories should
+      be writable only by the application deployment process, not by the application runtime
+      or external users.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-041
+  - PYTHON-LANG-SEC-045
+  - PYTHON-LANG-SEC-046
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''

@@ -1,58 +1,200 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-020
 name: Dangerous subprocess Usage
-short_description: subprocess call detected. Ensure arguments are not user-controlled.
+short_description: subprocess calls detected. Ensure command arguments are not user-controlled to prevent OS command injection.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-020
+ruleset: python/lang/PYTHON-LANG-SEC-020
+
+# Vulnerability Details
 cwe:
-- id: CWE-78
-  name: Improper Neutralization of Special Elements used in an OS Command
-  url: https://cwe.mitre.org/data/definitions/78.html
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- subprocess
-- command-injection
-- OWASP-A03
-- CWE-78
+  - python
+  - subprocess
+  - command-injection
+  - process-execution
+  - CWE-78
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'The subprocess module is Python''s recommended interface for spawning child
 
-  processes. However, when subprocess calls use shell=True or accept unsanitized
+# Content
+description: |
+  Python's subprocess module provides the recommended API for spawning child processes.
+  The module is significantly safer than os.system() when used correctly — passing a list
+  of arguments with shell=False (the default) bypasses the shell entirely and passes
+  arguments directly to the OS exec() syscall.
 
-  user input as command arguments, they become vulnerable to OS command injection.
+  However, subprocess becomes dangerous when: (1) shell=True is used with a string command
+  containing user input; (2) the first argument in a list is attacker-controlled, pointing
+  to an arbitrary executable; or (3) arguments in the list are derived from untrusted input
+  without proper validation, such as injecting paths that traverse to sensitive files.
 
-  The asyncio module provides asynchronous equivalents (create_subprocess_shell)
+  This rule audits all subprocess calls to ensure the command and arguments are safe.
+  subprocess.call(), subprocess.check_call(), subprocess.check_output(), subprocess.run(),
+  and subprocess.Popen() all require the same care.
 
-  that carry the same risks. Python''s experimental subinterpreters API allows
+message: "subprocess call detected. Verify command arguments are not derived from untrusted input and shell=False is used."
 
-  executing arbitrary code strings in isolated interpreters.'
-message: subprocess call detected. Ensure arguments are not user-controlled.
-secure_example: "import subprocess\n# Pass arguments as a list (no shell interpretation)\nsubprocess.run([\"\
-  grep\", user_input, \"log\"], check=True)\n# Use asyncio exec variant (no shell)\nawait asyncio.create_subprocess_exec(\"\
-  grep\", user_input, \"log\")\n# Validate and restrict allowed commands\nALLOWED_COMMANDS = {\"ls\",\
-  \ \"grep\", \"wc\"}\nif cmd not in ALLOWED_COMMANDS:\n    raise ValueError(\"Command not allowed\")"
-recommendations: []
+security_implications:
+  - title: Command Injection via shell=True
+    description: |
+      When shell=True is combined with a string that includes user input, shell metacharacters
+      in the input can inject additional commands. This is equivalent to calling os.system()
+      and is the most common subprocess-related vulnerability.
+  - title: Arbitrary Executable via First Argument
+    description: |
+      If the first element of the command list (the executable path) is attacker-controlled,
+      any program on the system can be run. This can be exploited via path traversal or by
+      pointing to attacker-placed binaries.
+  - title: Argument Injection
+    description: |
+      Even with shell=False, attacker-controlled values in the argument list can inject
+      unintended flags. For example, if a filename from user input starts with "-", it may
+      be interpreted as a command-line option by the target program (e.g., rsync, git, ffmpeg).
+  - title: Sensitive Output Exposure
+    description: |
+      subprocess commands may output sensitive information. If stdout is not captured, the
+      output appears in server logs or the terminal, potentially exposing credentials, system
+      configuration, or private data.
+
+secure_example: |
+  import subprocess
+  import shlex
+  import re
+
+  # SECURE: Use list arguments with shell=False (default)
+  def run_linter(filepath: str) -> str:
+      SAFE_PATH = re.compile(r'^[/a-zA-Z0-9_\-\.]+\.py$')
+      if not SAFE_PATH.match(filepath):
+          raise ValueError(f"Invalid file path: {filepath}")
+      result = subprocess.run(
+          ["/usr/bin/pylint", "--output-format=json", filepath],
+          capture_output=True,
+          text=True,
+          timeout=60,
+          check=False,
+      )
+      return result.stdout
+
+  # SECURE: Enumerate allowed commands with absolute paths
+  ALLOWED_COMMANDS = {
+      "compress": ["/bin/gzip"],
+      "checksum": ["/usr/bin/sha256sum"],
+  }
+
+  def run_tool(tool_name: str, target_file: str) -> str:
+      if tool_name not in ALLOWED_COMMANDS:
+          raise ValueError(f"Tool not allowed: {tool_name}")
+      cmd = ALLOWED_COMMANDS[tool_name] + [target_file]
+      result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=True)
+      return result.stdout
+
+recommendations:
+  - Always use subprocess with a list of arguments and shell=False to prevent shell metacharacter interpretation.
+  - Validate all user-controlled values that become subprocess arguments against a strict allowlist or regex before use.
+  - Use absolute paths for executables to prevent PATH hijacking attacks.
+  - Set a timeout on all subprocess calls to prevent resource exhaustion from hung child processes.
+  - Capture stdout and stderr explicitly to prevent information leakage and ensure proper error handling.
+
+detection_scope: |
+  This rule detects calls to subprocess.call(), subprocess.check_call(), subprocess.check_output(),
+  subprocess.run(), and subprocess.Popen() from the Python subprocess module. All call sites
+  are flagged for review to ensure shell=False is used and that command arguments are validated.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-78
-  url: https://cwe.mitre.org/data/definitions/78.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: subprocess - security-considerations'
-  url: https://docs.python.org/3/library/subprocess.html#security-considerations
-- title: 'Python docs: asyncio-subprocess'
-  url: https://docs.python.org/3/library/asyncio-subprocess.html
-- title: 'Python docs: shlex - shlex.split'
-  url: https://docs.python.org/3/library/shlex.html#shlex.split
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: subprocess module"
+    url: https://docs.python.org/3/library/subprocess.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python subprocess security considerations"
+    url: https://docs.python.org/3/library/subprocess.html#security-considerations
+
+# FAQ
+faq:
+  - question: Is subprocess.run() with a list always safe?
+    answer: |
+      subprocess.run() with a list and shell=False is safe from shell injection since no shell
+      interprets the arguments. However, it is not safe from argument injection (flags injected
+      via filenames starting with "-") or from running attacker-controlled executables. Always
+      validate argument values and use absolute executable paths.
+
+  - question: When is subprocess with shell=True acceptable?
+    answer: |
+      subprocess with shell=True is acceptable only when the entire command string is a
+      hardcoded literal with no user-controlled components. If any part of the command comes
+      from external input, even after validation, prefer shell=False with a list of arguments
+      to eliminate the shell injection risk entirely.
+
+  - question: What is argument injection and how do I prevent it?
+    answer: |
+      Argument injection occurs when a value in the subprocess argument list starts with "-"
+      and is interpreted as a flag by the target program. For example, a filename of
+      "--checkpoint-action=exec=evil.sh" passed to tar would inject a malicious option.
+      Prevent this by validating that arguments do not start with "-" or by using "--" to
+      signal the end of options before file arguments (e.g., ["tar", "-czf", "archive.tar", "--", filename]).
+
+  - question: Does shlex.quote() make shell=True safe?
+    answer: |
+      shlex.quote() provides some protection for POSIX shells but is not a complete solution.
+      It handles most metacharacters but may miss edge cases in specific shells or contexts.
+      The robust solution is to use shell=False with a list of arguments and avoid shell=True
+      entirely when user input is involved.
+
+  - question: How should I handle subprocess errors and timeouts?
+    answer: |
+      Use check=True to raise CalledProcessError on non-zero exit codes, and always set a
+      timeout parameter. Catch subprocess.TimeoutExpired to terminate the child process and
+      handle the error gracefully. Use capture_output=True to prevent output from appearing
+      in server logs. Log the exit code and error output for security monitoring.
+
+  - question: What is the difference between subprocess.run() and subprocess.Popen()?
+    answer: |
+      subprocess.run() is a high-level wrapper that blocks until the subprocess completes and
+      returns a CompletedProcess object. subprocess.Popen() is lower-level and provides more
+      control for streaming I/O, bidirectional communication, and async process management.
+      For most use cases, subprocess.run() with appropriate parameters is sufficient and safer.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-011
+  - PYTHON-LANG-SEC-012
+  - PYTHON-LANG-SEC-021
+  - PYTHON-LANG-SEC-022
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

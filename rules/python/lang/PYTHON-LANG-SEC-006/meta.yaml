@@ -1,57 +1,197 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-006
-name: Dangerous Annotations Usage
-short_description: typing.get_type_hints() may execute string annotations. Be cautious with untrusted
-  code.
+name: Dangerous typing.get_type_hints() Usage
+short_description: typing.get_type_hints() evaluates string annotations as Python expressions, enabling code execution when annotation strings contain untrusted content.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-006
+ruleset: python/lang/PYTHON-LANG-SEC-006
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- annotations
-- pep-563
-- CWE-95
+  - python
+  - annotations
+  - get-type-hints
+  - pep-563
+  - type-evaluation
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python provides several built-in functions and modules that evaluate or execute
 
-  arbitrary code at runtime, including eval(), exec(), code.InteractiveConsole, and
+# Content
+description: |
+  Python's typing.get_type_hints() resolves type annotations by evaluating string annotations
+  (also known as PEP 563 postponed annotations) using eval() in the context of the annotated
+  object's module namespace. When from __future__ import annotations is used or annotations are
+  stored as string literals, get_type_hints() calls eval() on those strings to resolve them.
 
-  dynamic imports via __import__() or importlib.import_module(). When these functions
+  If annotations are dynamically constructed or sourced from untrusted data, an attacker can
+  inject arbitrary Python expressions into the annotation string that will be evaluated when
+  get_type_hints() is called. This is particularly relevant in frameworks that use annotations
+  for serialization, validation, or ORM field definitions and call get_type_hints() at runtime.
 
-  receive untrusted input, attackers can achieve full remote code execution (RCE) on
+  In most applications, get_type_hints() is called on developer-controlled class definitions
+  and poses no direct risk. The risk arises when annotation strings are generated dynamically
+  from external input or when get_type_hints() is called on classes loaded from untrusted sources.
 
-  the host system.'
-message: typing.get_type_hints() may execute string annotations. Be cautious with untrusted code.
-secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nresult = ast.literal_eval(user_expr)\n\
-  \n# Whitelist allowed modules for dynamic imports\nALLOWED_MODULES = {\"json\", \"math\", \"datetime\"\
-  }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
-recommendations: []
+message: "typing.get_type_hints() evaluates string annotations via eval(). Ensure annotations are from trusted sources only."
+
+security_implications:
+  - title: Annotation String Evaluation
+    description: |
+      With from __future__ import annotations enabled, all annotations are stored as strings
+      and evaluated lazily. get_type_hints() calls eval() on these strings. If annotation
+      strings can be influenced by an attacker, this becomes an eval injection vulnerability.
+  - title: Framework-Level Risk in Pydantic and Dataclasses
+    description: |
+      Frameworks such as pydantic, dataclasses, and attrs call get_type_hints() to resolve
+      field types. If these frameworks process class definitions constructed from external
+      data, the annotation evaluation can be exploited. This is a known risk in dynamic
+      schema generation.
+  - title: Serialization and ORM Reflection Attacks
+    description: |
+      ORMs and serialization libraries that use annotations to determine field types and
+      call get_type_hints() for schema reflection can be attacked via malicious annotation
+      strings in serialized object metadata.
+  - title: Plugin and Extension Loading
+    description: |
+      Systems that dynamically load classes from user-specified modules and then call
+      get_type_hints() on those classes for introspection may execute malicious annotation
+      expressions defined in attacker-controlled plugin code.
+
+secure_example: |
+  import typing
+
+  # SECURE: Only call get_type_hints() on statically defined, trusted classes
+  class UserSchema:
+      name: str
+      age: int
+      email: str
+
+  hints = typing.get_type_hints(UserSchema)  # Safe: class is developer-defined
+
+  # SECURE: If dynamic classes are needed, avoid string annotations
+  # and use typing constructs directly without from __future__ import annotations
+  def create_typed_class(field_definitions: dict):
+      # Validate field types against an allowlist
+      ALLOWED_TYPES = {
+          "str": str,
+          "int": int,
+          "float": float,
+          "bool": bool,
+      }
+      namespace = {}
+      for field_name, type_name in field_definitions.items():
+          if type_name not in ALLOWED_TYPES:
+              raise ValueError(f"Type not allowed: {type_name}")
+          namespace[field_name] = ALLOWED_TYPES[type_name]
+      return type("DynamicClass", (), {"__annotations__": namespace})
+
+recommendations:
+  - Only call get_type_hints() on classes and functions defined in trusted, version-controlled source code.
+  - Never construct annotation strings dynamically from external input or store annotation strings in untrusted data sources.
+  - When building dynamic schemas from external configuration, use typing constructs as Python objects (str, int, List[str]) rather than string representations.
+  - Audit frameworks that call get_type_hints() on plugin or user-defined classes to ensure annotation content cannot be influenced by attackers.
+  - Consider using inspect.get_annotations() in Python 3.10+ for lower-level annotation access that avoids the eval() behavior in specific contexts.
+
+detection_scope: |
+  This rule detects calls to typing.get_type_hints() and the unqualified form get_type_hints()
+  in Python source code. The rule flags all call sites for review since the safety depends on
+  the trust level of the object passed as the argument, which requires human review to determine.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-95
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: functions - eval'
-  url: https://docs.python.org/3/library/functions.html#eval
-- title: 'Python docs: ast - ast.literal_eval'
-  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
-- title: 'Python docs: code'
-  url: https://docs.python.org/3/library/code.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "Python docs: typing.get_type_hints()"
+    url: https://docs.python.org/3/library/typing.html#typing.get_type_hints
+  - title: "PEP 563: Postponed Evaluation of Annotations"
+    url: https://peps.python.org/pep-0563/
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "PEP 649: Deferred Evaluation of Annotations"
+    url: https://peps.python.org/pep-0649/
+
+# FAQ
+faq:
+  - question: Is get_type_hints() always dangerous to call?
+    answer: |
+      No. When called on developer-defined classes whose annotations are written directly in
+      source code, get_type_hints() is safe. The risk is only present when the object being
+      inspected has annotations that were constructed from external input or loaded from an
+      untrusted source.
+
+  - question: What is the relationship between PEP 563 and this vulnerability?
+    answer: |
+      PEP 563 (from __future__ import annotations) changes Python to store all annotations
+      as strings rather than evaluating them at class definition time. get_type_hints() then
+      evaluates these strings lazily. This defers the evaluation, which means that any
+      dynamically constructed annotation string that contains malicious content is not executed
+      until get_type_hints() is called.
+
+  - question: Does pydantic v2 use get_type_hints() and is it vulnerable?
+    answer: |
+      Pydantic v2 uses its own annotation resolution mechanism (pydantic._internal._generate_schema)
+      that is separate from typing.get_type_hints(). Pydantic v1 uses get_type_hints() for model
+      field resolution. In both cases, if models are dynamically constructed from untrusted data,
+      the annotation resolution can be exploited. Prefer defining pydantic models statically in
+      source code.
+
+  - question: How does Python 3.11+ change this behavior?
+    answer: |
+      Python 3.11+ (and PEP 649 in Python 3.14) introduces deferred annotation evaluation with
+      a different mechanism that does not immediately eval all annotation strings. However,
+      get_type_hints() still evaluates annotation strings, so the risk remains whenever
+      get_type_hints() is explicitly called on objects with string annotations.
+
+  - question: Can I suppress this finding for framework code that legitimately uses get_type_hints()?
+    answer: |
+      Yes. Framework initialization code that calls get_type_hints() on statically defined
+      model classes during application startup is generally safe. Document the suppression with
+      the classes being inspected and confirmation that their annotations cannot be influenced
+      by external input at runtime.
+
+  - question: What is inspect.get_annotations() and is it safer?
+    answer: |
+      inspect.get_annotations() (Python 3.10+) returns the raw annotation dictionary without
+      evaluating string annotations. It is safer when you only need the raw annotation strings
+      for documentation or metadata purposes, not for type resolution. Use it when get_type_hints()
+      evaluation is not needed.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-005
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

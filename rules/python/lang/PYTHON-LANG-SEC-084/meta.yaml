@@ -1,72 +1,205 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-084
-name: Formatted SQL Query
-short_description: SQL query built with string formatting detected. Use parameterized queries instead.
+name: Formatted SQL Query Passed to cursor.execute()
+short_description: SQL query built with string formatting detected. String-formatted SQL strings are a common SQL injection vector. Use parameterized queries.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-084
+ruleset: python/lang/PYTHON-LANG-SEC-084
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- sql-injection
-- formatted-query
-- CWE-89
+  - python
+  - sql-injection
+  - string-formatting
+  - cursor-execute
+  - database
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'SQL injection occurs when user-controlled input is concatenated or interpolated
 
-  into SQL query strings without proper parameterization. Python database drivers
+# Content
+description: |
+  This rule detects the general pattern of SQL queries constructed using string formatting
+  operations (f-strings, % operator, .format(), or string concatenation with +) and
+  passed to any database cursor.execute() method, regardless of the specific database
+  driver being used.
 
-  including psycopg2, asyncpg, aiopg, and pg8000 all support parameterized queries
+  This covers drivers not addressed by more specific rules, including sqlite3, MySQL
+  Connector, PyMySQL, cx_Oracle, and any custom database abstraction layer that exposes
+  a cursor.execute() interface.
 
-  that separate SQL structure from data values. When developers use string
+  String-formatted SQL is the root cause of SQL injection vulnerabilities across all
+  database drivers. The pattern is always the same: untrusted data embedded in the SQL
+  string before it reaches the database engine, where the database interprets the
+  embedded data as SQL syntax.
 
-  formatting (f-strings, .format(), % operator, or concatenation) to build queries,
+message: "SQL query built with string formatting detected. Use parameterized queries with placeholders appropriate to your database driver."
 
-  they create injection points that allow attackers to manipulate query logic.'
-message: SQL query built with string formatting detected. Use parameterized queries instead.
-secure_example: 'import psycopg2
+security_implications:
+  - title: Universal SQL Injection Risk
+    description: |
+      SQL injection via string-formatted queries is the most widespread database
+      vulnerability class. Every database engine (PostgreSQL, MySQL, SQLite, Oracle,
+      MSSQL) is affected when query strings are constructed from user input rather
+      than using parameterized queries.
+  - title: SQLite Local Database Exposure
+    description: |
+      Python applications using sqlite3 with string-formatted queries are vulnerable.
+      Local SQLite databases may contain sensitive application state, user data, and
+      credentials that can be exfiltrated or corrupted via SQL injection.
+  - title: ORM Bypass via Raw SQL
+    description: |
+      Applications using ORMs often include escape hatches for raw SQL (Django's
+      connection.cursor().execute(), SQLAlchemy's text()). String-formatted raw SQL
+      in these contexts bypasses the ORM's parameterization protections.
+  - title: Blind SQL Injection via Timing
+    description: |
+      Even when query results are not directly returned to the user (e.g., in background
+      workers or event processors), time-based blind SQL injection using SLEEP() or
+      pg_sleep() allows an attacker to extract data one bit at a time.
 
-  # Parameterized query with psycopg2 (safe)
+secure_example: |
+  import sqlite3
+  import mysql.connector
 
-  cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+  # INSECURE: String formatting in SQL
+  # cursor.execute(f"SELECT * FROM users WHERE email = '{email}'")
+  # cursor.execute("SELECT * FROM orders WHERE id = " + str(order_id))
 
-  # Parameterized query with asyncpg (safe)
+  # SECURE: sqlite3 - use ? placeholders
+  def get_sqlite_user(conn: sqlite3.Connection, username: str) -> dict:
+      cursor = conn.execute(
+          "SELECT id, username, email FROM users WHERE username = ?",
+          (username,)
+      )
+      row = cursor.fetchone()
+      return {"id": row[0], "username": row[1]} if row else {}
 
-  await conn.fetch("SELECT * FROM users WHERE id = $1", user_id)
+  # SECURE: MySQL Connector - use %s placeholders
+  def get_mysql_user(conn: mysql.connector.MySQLConnection, user_id: int) -> dict:
+      cursor = conn.cursor(dictionary=True)
+      cursor.execute(
+          "SELECT id, username, email FROM users WHERE id = %s",
+          (user_id,)
+      )
+      return cursor.fetchone() or {}
 
-  # Use psycopg2.sql module for dynamic identifiers
+  # SECURE: SQLAlchemy text() with bindparams
+  from sqlalchemy import text
 
-  from psycopg2 import sql
+  def search_records(session, category: str, limit: int) -> list:
+      result = session.execute(
+          text("SELECT id, title FROM records WHERE category = :cat LIMIT :lim"),
+          {"cat": category, "lim": limit}
+      )
+      return result.fetchall()
 
-  query = sql.SQL("SELECT * FROM {} WHERE id = %s").format(sql.Identifier(table_name))
+recommendations:
+  - "Use the placeholder syntax appropriate to your database driver: ? for sqlite3, %s for psycopg2/MySQL/pg8000, $1/$2 for asyncpg, :name for SQLAlchemy text()."
+  - Never construct SQL strings using f-strings, % operator, .format(), or string concatenation with user-controlled values.
+  - For ORMs, use the ORM's query building API rather than raw SQL; fall back to text() with explicit bindparams when raw SQL is needed.
+  - Validate and restrict dynamic SQL elements (ORDER BY directions, column names) to allowlists when they cannot be parameterized.
+  - Enable database-level audit logging to detect and alert on unusual query patterns that may indicate exploitation attempts.
 
-  cursor.execute(query, (user_id,))'
-recommendations: []
+detection_scope: |
+  This rule detects cursor.execute() and cursor.executemany() calls where the SQL string
+  argument is built using string formatting operations. It covers any cursor-like object
+  regardless of the specific database driver, serving as a catch-all for drivers not
+  covered by more specific rules.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against SQL injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# References
 references:
-- title: CWE-89
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: www.psycopg.org
-  url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
-- title: magicstack.github.io
-  url: https://magicstack.github.io/asyncpg/current/usage.html
-- title: 'Python docs: sqlite3 - sqlite3-placeholders'
-  url: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
-- title: OWASP SQL Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: "Python DB-API 2.0 Specification (PEP 249)"
+    url: https://peps.python.org/pep-0249/
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "SQLAlchemy: Using textual SQL"
+    url: https://docs.sqlalchemy.org/en/14/core/sqlelement.html#sqlalchemy.sql.expression.text
+
+# FAQ
+faq:
+  - question: What placeholder syntax should I use for my specific database driver?
+    answer: |
+      sqlite3: ? (question mark). psycopg2, aiopg, pg8000, MySQL Connector, PyMySQL: %s.
+      asyncpg: $1, $2, $3 (numbered). cx_Oracle: :name (named) or :1, :2 (positional).
+      SQLAlchemy text(): :param_name. ODBC drivers (pyodbc): ? (question mark). Always
+      consult your driver's documentation; the concept is the same but syntax varies.
+
+  - question: Is string formatting ever acceptable in SQL strings?
+    answer: |
+      String formatting is acceptable for static, developer-controlled values that are
+      not user-influenced. For example, table names or column names from a hardcoded
+      allowlist. However, once any user-controlled value could influence the SQL string,
+      even indirectly, parameterization is required for that value.
+
+  - question: Does this rule catch SQL injection in raw queries via SQLAlchemy?
+    answer: |
+      Yes. SQLAlchemy's text() function accepts raw SQL strings. If the string passed to
+      text() is formatted with user input instead of using SQLAlchemy's bindparam() or
+      the :name syntax, it is flagged. SQLAlchemy's ORM query methods are safe by default
+      and are not flagged.
+
+  - question: What about stored procedures — can they be vulnerable to SQL injection?
+    answer: |
+      Calling stored procedures with parameterized arguments is safe. However, if a stored
+      procedure uses EXEC sp_executesql or dynamic SQL internally with concatenated
+      parameters, the injection risk exists inside the stored procedure. Audit stored
+      procedure code for dynamic SQL with parameter concatenation.
+
+  - question: How do I handle LIKE queries with parameterization?
+    answer: |
+      For LIKE queries, include the wildcard characters in the Python string before
+      parameterization: cursor.execute("SELECT * FROM t WHERE name LIKE %s", (f"%{user_input}%",)).
+      Do not include % in the SQL template. The database driver handles escaping of the
+      user input including any % or _ characters that would be interpreted as LIKE wildcards.
+
+  - question: Is there a way to automatically detect all SQL string formatting issues?
+    answer: |
+      Code Pathfinder's taint analysis tracks user input from all sources through string
+      operations to cursor.execute() calls. Combined with the database-specific rules
+      (PYTHON-LANG-SEC-080 through 083), this rule provides broad coverage of SQL
+      injection patterns across all Python database drivers.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-080
+  - PYTHON-LANG-SEC-081
+  - PYTHON-LANG-SEC-082
+  - PYTHON-LANG-SEC-083
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

@@ -1,72 +1,194 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-100
-name: Insecure UUID Version (uuid1)
-short_description: uuid.uuid1() leaks the host MAC address and uses predictable timestamps. Use uuid.uuid4()
-  for random UUIDs.
+name: UUID Version 1 Leaks MAC Address
+short_description: uuid.uuid1() embeds the host MAC address in the generated UUID, leaking hardware identity information.
+
+# Classification
 severity: LOW
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-100
+ruleset: python/lang/PYTHON-LANG-SEC-100
+
+# Vulnerability Details
 cwe:
-- id: CWE-330
-  name: Use of Insufficiently Random Values
-  url: https://cwe.mitre.org/data/definitions/330.html
+  - id: CWE-200
+    name: "Exposure of Sensitive Information to an Unauthorized Actor"
+    url: https://cwe.mitre.org/data/definitions/200.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- uuid
-- mac-address
-- insufficiently-random
-- CWE-330
+  - python
+  - uuid
+  - uuid1
+  - information-disclosure
+  - mac-address
+  - privacy
+  - CWE-200
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This module covers a range of security concerns that span multiple vulnerability
 
-  categories. These include predictable UUID generation that leaks host information,
+# Content
+description: |
+  Python's uuid.uuid1() generates a UUID using the current timestamp combined with the
+  host machine's MAC address (or a random node if the MAC address cannot be determined).
+  The MAC address is embedded in bits 48–63 of the UUID and is visible in plain text
+  when the UUID is converted to its canonical string form.
 
-  overly permissive file permissions that expose sensitive files, hardcoded
+  This leaks hardware identity information that can be used to track the physical machine
+  generating UUIDs across different sessions or deployments. In cloud environments, the
+  MAC address may identify the specific VM instance or network interface. In on-premises
+  deployments, it directly identifies physical hardware. When UUIDs are used as session
+  tokens, CSRF tokens, or other security-sensitive identifiers, the MAC address embedded
+  in them also provides attackers with predictability information since the node component
+  is constant.
 
-  credentials in source code, regular expression patterns susceptible to
+  The safe alternative is uuid.uuid4(), which is generated entirely from cryptographically
+  random bytes with no hardware-derived components, providing both better privacy and
+  better uniqueness properties for security-sensitive use cases.
 
-  denial-of-service through catastrophic backtracking, unsafe logging configuration
+message: "uuid.uuid1() embeds the host MAC address in the UUID. Use uuid.uuid4() for privacy-safe random UUIDs."
 
-  listeners that evaluate arbitrary code, and logging statements that may
+security_implications:
+  - title: Hardware Identity Disclosure
+    description: |
+      The MAC address embedded in uuid1() UUIDs identifies the network interface that generated
+      them. If UUIDs are exposed in API responses, logs, URLs, or database exports, an attacker
+      can extract the MAC address and use it to track the specific machine or container across
+      deployments, identify cloud VM instance types, or correlate activity across sessions.
+  - title: Predictability in Security Tokens
+    description: |
+      Because the node component (MAC address) of uuid1() is constant for a given host and
+      the timestamp component is sequential, uuid1() output is partially predictable. If
+      uuid1() is used to generate session tokens, password reset tokens, or API keys, an
+      attacker who observes one token can narrow the search space for other tokens generated
+      around the same time.
+  - title: Privacy Regulation Violations
+    description: |
+      GDPR and other privacy regulations treat hardware identifiers including MAC addresses as
+      personal data when they can be linked to an individual. Embedding MAC addresses in
+      user-visible UUIDs and logging or transmitting them may constitute a privacy violation
+      requiring data protection impact assessment and user notification obligations.
+  - title: Container and Infrastructure Fingerprinting
+    description: |
+      In containerized environments, the MAC address in uuid1() can help attackers distinguish
+      between different nodes in a cluster, track which node processed a given request, or
+      identify infrastructure layout when combined with other signals. This information assists
+      in lateral movement planning and targeted attacks against specific nodes.
 
-  inadvertently record sensitive credentials.'
-message: uuid.uuid1() leaks the host MAC address and uses predictable timestamps. Use uuid.uuid4() for
-  random UUIDs.
-secure_example: "import uuid, os, re\n# Use uuid4 for cryptographically random UUIDs\nsession_id = str(uuid.uuid4())\n\
-  # Restrictive file permissions (owner read/write only)\nos.chmod(\"/app/config.ini\", 0o600)\n# Load\
-  \ passwords from environment or secrets manager\ndef connect_db(host, password=None):\n    password\
-  \ = password or os.environ[\"DB_PASSWORD\"]\n# Use atomic groups or possessive quantifiers to prevent\
-  \ backtracking\npattern = re.compile(r\"a+$\")  # Simplified non-vulnerable pattern\n# Never log credentials\n\
-  logging.info(f\"User {user} logged in successfully\")"
-recommendations: []
+secure_example: |
+  import uuid
+
+  # SECURE: Use uuid4() for random UUIDs with no hardware-derived components
+  def generate_session_id() -> str:
+      return str(uuid.uuid4())
+
+  def generate_api_key() -> str:
+      return uuid.uuid4().hex  # 32-character hex string, no MAC address
+
+  def generate_request_id() -> str:
+      # uuid4 is cryptographically random and contains no identifying information
+      return str(uuid.uuid4())
+
+  # SECURE: If you need time-ordered UUIDs, use uuid7 from a third-party library
+  # pip install uuid6
+  # from uuid6 import uuid7
+  # def generate_ordered_id():
+  #     return str(uuid7())  # time-ordered, no MAC address
+
+recommendations:
+  - Replace uuid.uuid1() with uuid.uuid4() for all security-sensitive identifiers including session tokens, API keys, CSRF tokens, and password reset links.
+  - Audit all UUID generation in your codebase and replace uuid1 calls where the MAC address disclosure is unacceptable.
+  - If time-ordering is required, consider UUID v7 (available in third-party libraries) which uses random bytes for the node component instead of the MAC address.
+  - Review API responses, logs, and database schemas for existing uuid1-generated values that may have already leaked MAC addresses.
+  - Document any intentional use of uuid1 where MAC address embedding is acceptable, and add a comment explaining the justification.
+
+detection_scope: |
+  This rule detects all calls to uuid.uuid1() in Python source code. Every call site is
+  flagged regardless of context because the MAC address is always embedded in the output.
+  The rule matches both the qualified form uuid.uuid1() and any local alias of the uuid
+  module. Calls that pass an explicit node parameter (uuid.uuid1(node=random_node)) are
+  also flagged since even with a random node the temporal predictability concern remains.
+
+# Compliance
+compliance:
+  - standard: GDPR Article 4
+    requirement: "MAC addresses qualify as personal data when linkable to an individual; embedding them in user-visible identifiers requires justification"
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration covers unnecessary information exposure"
+  - standard: NIST SP 800-53
+    requirement: "SC-28: Protection of Information at Rest; avoid embedding hardware identifiers in persistent tokens"
+  - standard: CWE Top 25
+    requirement: "CWE-200 - Exposure of Sensitive Information to an Unauthorized Actor"
+
+# References
 references:
-- title: CWE-330
-  url: https://cwe.mitre.org/data/definitions/330.html
-- title: CWE-732
-  url: https://cwe.mitre.org/data/definitions/732.html
-- title: CWE-259
-  url: https://cwe.mitre.org/data/definitions/259.html
-- title: CWE-1333
-  url: https://cwe.mitre.org/data/definitions/1333.html
-- title: CWE-532
-  url: https://cwe.mitre.org/data/definitions/532.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
-- title: 'Python docs: uuid'
-  url: https://docs.python.org/3/library/uuid.html
-- title: 'Python docs: os - os.chmod'
-  url: https://docs.python.org/3/library/os.html#os.chmod
-- title: www.landh.tech
-  url: https://www.landh.tech/blog/20230811-sandwich-attack/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "Python docs: uuid module"
+    url: https://docs.python.org/3/library/uuid.html
+  - title: "RFC 4122: UUID Format Specification"
+    url: https://datatracker.ietf.org/doc/html/rfc4122
+  - title: "CWE-200: Exposure of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/200.html
+  - title: "UUID v7 Draft Specification"
+    url: https://www.ietf.org/archive/id/draft-peabody-dispatch-new-uuid-format-04.html
+  - title: OWASP Information Exposure
+    url: https://owasp.org/www-community/vulnerabilities/Information_exposure_through_query_strings_in_url
+
+# FAQ
+faq:
+  - question: Is uuid.uuid1() always a security problem?
+    answer: |
+      uuid.uuid1() is a low-severity concern rather than an immediate critical vulnerability.
+      The main risks are information disclosure (MAC address leakage) and partial predictability.
+      If UUIDs are used for internal database primary keys that are never exposed externally,
+      the risk is lower. The concern escalates significantly when uuid1() is used for security
+      tokens such as session IDs, API keys, or password reset links.
+
+  - question: What information is actually revealed by uuid1()?
+    answer: |
+      The last 12 hexadecimal characters (6 bytes) of a uuid1() string represent the node,
+      which is typically the host's MAC address. For example in
+      "550e8400-e29b-41d4-a716-446655440000", the node is "446655440000". This can be
+      looked up in IEEE OUI databases to identify the hardware vendor and, for cloud
+      instances, often the specific instance type or provider.
+
+  - question: Does Python always use the real MAC address?
+    answer: |
+      Python first attempts to find a real MAC address using platform-specific methods.
+      If it cannot determine the MAC address, it falls back to a randomly generated 48-bit
+      node with the multicast bit set. In many cloud and container environments, Python
+      successfully finds the virtual network interface MAC address, so the leakage risk
+      is real in those environments.
+
+  - question: Can I use uuid.uuid1() with a custom node to avoid MAC leakage?
+    answer: |
+      Yes, you can pass a random integer as the node parameter: uuid.uuid1(node=random.getrandbits(48)).
+      However, this still leaves the temporal predictability concern since the timestamp
+      component is sequential. For security-sensitive use cases, uuid.uuid4() is simpler
+      and avoids both concerns entirely.
+
+  - question: What about UUID v5 or v3?
+    answer: |
+      UUID v3 and v5 are name-based and deterministic — they generate the same UUID for
+      the same input. They do not embed a MAC address, but they are not suitable as random
+      security tokens. Use them only when you need a stable, reproducible identifier for
+      a known namespace and name. For unpredictable security tokens, always use uuid.uuid4().
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-101
+  - PYTHON-LANG-SEC-102
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

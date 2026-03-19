@@ -1,68 +1,191 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-093
-name: Mako Template Detected
-short_description: Mako templates do not sandbox expressions. Ensure templates are trusted.
+name: Mako Template Usage Detected
+short_description: Mako templates execute Python expressions without sandboxing. Ensure templates are from trusted sources and user input is not rendered as template code.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-093
+ruleset: python/lang/PYTHON-LANG-SEC-093
+
+# Vulnerability Details
 cwe:
-- id: CWE-96
-  name: Improper Neutralization of Directives in Statically Saved Code
-  url: https://cwe.mitre.org/data/definitions/96.html
+  - id: CWE-94
+    name: Improper Control of Generation of Code ('Code Injection')
+    url: https://cwe.mitre.org/data/definitions/94.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- mako
-- template
-- ssti
-- CWE-96
+  - python
+  - mako
+  - template-injection
+  - ssti
+  - server-side-template-injection
+  - CWE-94
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s standard library XML parsers (xml.etree.ElementTree, xml.dom.minidom,
 
-  xml.sax, xml.dom.pulldom) are vulnerable to XML External Entity (XXE) attacks by
+# Content
+description: |
+  Mako is a Python template engine used by web frameworks including Pyramid and TurboGears.
+  Unlike some template engines with sandboxed expression evaluation, Mako templates execute
+  Python expressions in the server's Python environment with no security sandbox.
 
-  default. XXE allows attackers to read local files, perform server-side request
+  Server-Side Template Injection (SSTI) occurs when user-supplied content is rendered as
+  part of a template's code section (between <% %> or ${} delimiters) rather than being
+  safely HTML-escaped as data. In Mako, injected template code can access __builtins__,
+  import modules, and execute arbitrary Python.
 
-  forgery (SSRF), and in some configurations achieve remote code execution through
+  The primary risks are: (1) using user input as the template string itself
+  (mako.Template(user_input)) and (2) insufficient escaping allowing template syntax
+  characters to reach template evaluation contexts.
 
-  crafted XML documents. The xmlrpc module is similarly vulnerable. Mako templates
+message: "Mako Template detected. Mako does not sandbox template expressions. Ensure templates are from trusted sources and user input is HTML-escaped, not rendered as template code."
 
-  execute embedded Python expressions without sandboxing, enabling server-side
+security_implications:
+  - title: Server-Side Template Injection (SSTI)
+    description: |
+      If user-controlled content is passed as the template string to mako.Template(), or
+      if user content containing ${} or <% %> is rendered in an expression context, an
+      attacker can inject Python code executed on the server. Payloads like
+      ${__import__("os").system("id")} achieve RCE.
+  - title: Information Disclosure via Template Context
+    description: |
+      Mako templates have access to all variables in the template rendering context. Injected
+      template code can access and exfiltrate any variable passed to template.render(), including
+      database connections, session objects, configuration dictionaries, and request objects.
+  - title: Sandbox Escape via Python Built-ins
+    description: |
+      Unlike Jinja2's sandboxed environment, Mako provides no sandbox. Injected Python in
+      a Mako template can directly access __builtins__, __import__(), and any Python object
+      reachable from the template context without restriction.
+  - title: Cross-Site Scripting (XSS) via Insufficient Escaping
+    description: |
+      Mako's ${variable} expression auto-escapes HTML by default with the h filter, but
+      developers who use ${ variable | n } (raw output) or construct HTML manually can
+      bypass XSS protection, enabling reflected or stored XSS.
 
-  template injection (SSTI). CSV writers that do not sanitize cell values may allow
+secure_example: |
+  from mako.template import Template
+  from mako.lookup import TemplateLookup
 
-  formula injection in spreadsheet applications.'
-message: Mako templates do not sandbox expressions. Ensure templates are trusted.
-secure_example: "# Use defusedxml for safe XML parsing\nimport defusedxml.ElementTree as ET\ntree = ET.parse(user_uploaded_xml)\
-  \  # XXE protection enabled\nimport defusedxml.minidom\ndoc = defusedxml.minidom.parseString(user_xml_string)\n\
-  # Restrict Mako templates to trusted sources only\nfrom mako.template import Template\nt = Template(filename=\"\
-  /app/templates/report.html\")  # Trusted file, not user input\n# Sanitize CSV cell values to prevent\
-  \ formula injection\ndef sanitize_csv_value(value):\n    if isinstance(value, str) and value and value[0]\
-  \ in \"=+-@\":\n        return \"'\" + value  # Prefix with single quote\n    return value"
-recommendations: []
+  # INSECURE: Template with user input as template string
+  # template = Template(user_provided_template)
+  # result = template.render(name=username)
+
+  # SECURE: Load templates from trusted filesystem directory only
+  lookup = TemplateLookup(
+      directories=["/app/templates"],  # Trusted directory only
+      strict_undefined=True,           # Fail on undefined variables
+      default_filters=["h"],           # Auto-escape HTML by default
+      input_encoding="utf-8",
+  )
+
+  def render_user_profile(username: str, user_data: dict) -> str:
+      template = lookup.get_template("profile.html")
+      return template.render(
+          username=username,   # Passed as data, auto-escaped
+          user_data=user_data
+      )
+
+  # SECURE: Never include user input in template strings
+  # All user data must be passed as render() arguments, not embedded in templates
+
+recommendations:
+  - Never use mako.Template(user_input) or any pattern where user input becomes the template string; load templates from a trusted directory using TemplateLookup.
+  - Always configure TemplateLookup with a fixed templates directory that only contains developer-controlled template files.
+  - Enable default_filters=["h"] on TemplateLookup to auto-escape HTML in all ${} expressions by default.
+  - Avoid the | n (no-escape) filter unless the template variable content has been explicitly validated as safe HTML.
+  - Pass all user data as template render() arguments, never concatenate user data into template strings.
+
+detection_scope: |
+  This rule detects calls to mako.template.Template() constructor in Python source code.
+  All call sites are flagged to prompt review of whether the template string argument is
+  user-controlled, which would enable SSTI.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (includes SSTI)"
+  - standard: CWE Top 25
+    requirement: "CWE-94 - Improper Control of Generation of Code"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-611
-  url: https://cwe.mitre.org/data/definitions/611.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: CWE-1236
-  url: https://cwe.mitre.org/data/definitions/1236.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
-- title: pypi.org
-  url: https://pypi.org/project/defusedxml/
-- title: 'Python docs: xml - xml-vulnerabilities'
-  url: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
-- title: OWASP XML External Entity Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-94: Code Injection"
+    url: https://cwe.mitre.org/data/definitions/94.html
+  - title: "Mako templates documentation"
+    url: https://docs.makotemplates.org/
+  - title: OWASP Server-Side Template Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server_Side_Template_Injection
+  - title: "PortSwigger: Server-Side Template Injection"
+    url: https://portswigger.net/research/server-side-template-injection
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# FAQ
+faq:
+  - question: Does Mako auto-escape user input to prevent XSS?
+    answer: |
+      Mako's ${expression} syntax applies the h (HTML escape) filter by default when
+      output_encoding is set and default_filters includes "h". However, this must be
+      explicitly configured via TemplateLookup. Without this configuration, ${expression}
+      outputs raw unescaped content. Always configure default_filters=["h"] explicitly.
+
+  - question: How is Mako's security compared to Jinja2?
+    answer: |
+      Jinja2 provides a sandboxed execution environment (jinja2.sandbox.SandboxedEnvironment)
+      that restricts access to dangerous built-ins and attributes. Mako has no equivalent
+      sandbox. Both are vulnerable to SSTI if user input is used as the template string,
+      but Mako provides fewer mitigations. Jinja2 is generally preferred for new projects.
+
+  - question: What is the safe pattern for Mako with user-provided template names?
+    answer: |
+      Use TemplateLookup to map template names to files in a trusted directory. Accept only
+      a template name (filename) from the user, not a template string. The TemplateLookup
+      directory acts as a chroot-like boundary: lookup.get_template(user_name) is safe if
+      user_name is validated to not contain path traversal sequences (../).
+
+  - question: Is Pyramid/TurboGears affected if they use Mako internally?
+    answer: |
+      Pyramid uses Mako as one of its template engines via pyramid.mako_templating. When
+      Pyramid loads templates from trusted directories using its registry-based template
+      lookup, the risk is low. The risk is when developers call mako.Template() directly
+      with content derived from user input or untrusted sources.
+
+  - question: How do I detect SSTI vulnerability in existing Mako code?
+    answer: |
+      Look for any code path where a string derived from user input (HTTP parameters,
+      database values, file contents) reaches the mako.Template() constructor or is
+      concatenated into a template string before rendering. Code Pathfinder's taint
+      analysis traces these flows from HTTP input sources to the Template() sink.
+
+  - question: "What Mako filter prevents XSS: h, u, or n?"
+    answer: |
+      h applies HTML entity escaping (< becomes &lt;) and prevents XSS in HTML context.
+      u applies URL encoding for URL parameters. n means no filter (raw output) and should
+      only be used for already-safe HTML content. Always use h as the default filter and
+      explicitly mark content with n only after HTML sanitization (e.g., via bleach).
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

@@ -1,73 +1,187 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-082
-name: aiopg SQL Injection
-short_description: String formatting in aiopg query. Use parameterized queries.
+name: aiopg SQL Injection via String Formatting
+short_description: SQL query built with string formatting passed to aiopg cursor.execute() enables SQL injection. Use parameterized queries with %s placeholders.
+
+# Classification
 severity: CRITICAL
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-082
+ruleset: python/lang/PYTHON-LANG-SEC-082
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aiopg
-- sql-injection
-- database
-- CWE-89
+  - python
+  - aiopg
+  - sql-injection
+  - postgresql
+  - async
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'SQL injection occurs when user-controlled input is concatenated or interpolated
 
-  into SQL query strings without proper parameterization. Python database drivers
+# Content
+description: |
+  aiopg is an asyncio-based wrapper around psycopg2 for async PostgreSQL access. Like
+  psycopg2, aiopg uses %s placeholders for parameterized queries. SQL injection occurs
+  when user data is embedded in the SQL string via string formatting operations instead
+  of being passed as separate parameters.
 
-  including psycopg2, asyncpg, aiopg, and pg8000 all support parameterized queries
+  aiopg's async cursor.execute() and cursor.executemany() methods accept a SQL template
+  string as the first argument and a tuple or list of parameters as the second argument.
+  When only the first argument is used and it contains user-controlled content via
+  string formatting, SQL injection is possible.
 
-  that separate SQL structure from data values. When developers use string
+message: "aiopg cursor.execute() with string-formatted SQL detected. Use parameterized queries: cursor.execute(sql, (param,)) with %s placeholders."
 
-  formatting (f-strings, .format(), % operator, or concatenation) to build queries,
+security_implications:
+  - title: Database Exfiltration via Async Injection
+    description: |
+      SQL injection via aiopg in async web applications allows UNION SELECT and other
+      injection techniques to read data from any PostgreSQL table with the database
+      user's read permissions.
+  - title: Authentication Bypass
+    description: |
+      Async login endpoints using aiopg with string-formatted SQL can be bypassed
+      with SQL injection payloads, granting unauthorized access.
+  - title: Data Modification via Async Requests
+    description: |
+      High-concurrency async applications handling many requests simultaneously allow
+      an attacker to submit multiple injection payloads concurrently, potentially
+      performing multiple data modifications or deletions in rapid succession.
+  - title: PostgreSQL Privilege Escalation
+    description: |
+      If the database user has superuser privileges, SQL injection can leverage
+      PostgreSQL's COPY TO/FROM PROGRAM and pg_read_file() for OS-level access.
 
-  they create injection points that allow attackers to manipulate query logic.'
-message: String formatting in aiopg query. Use parameterized queries.
-secure_example: 'import psycopg2
+secure_example: |
+  import aiopg
 
-  # Parameterized query with psycopg2 (safe)
+  # INSECURE: String formatting in SQL
+  # await cursor.execute(f"SELECT * FROM users WHERE username = '{username}'")
 
-  cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+  # SECURE: Parameterized queries with %s placeholders (psycopg2 style)
+  async def get_user(pool: aiopg.Pool, username: str) -> dict:
+      async with pool.acquire() as conn:
+          async with conn.cursor() as cursor:
+              await cursor.execute(
+                  "SELECT id, username, email FROM users WHERE username = %s",
+                  (username,)
+              )
+              row = await cursor.fetchone()
+              if row is None:
+                  return {}
+              return {"id": row[0], "username": row[1], "email": row[2]}
 
-  # Parameterized query with asyncpg (safe)
+  async def list_orders(pool: aiopg.Pool, user_id: int, status: str) -> list:
+      async with pool.acquire() as conn:
+          async with conn.cursor() as cursor:
+              await cursor.execute(
+                  "SELECT id, total FROM orders WHERE user_id = %s AND status = %s",
+                  (user_id, status)
+              )
+              return await cursor.fetchall()
 
-  await conn.fetch("SELECT * FROM users WHERE id = $1", user_id)
+recommendations:
+  - Always use aiopg's parameterized query syntax with %s placeholders and pass values as the second argument tuple to cursor.execute().
+  - Never construct SQL strings with f-strings, % operator, or .format() when user data is involved.
+  - Use aiopg.Pool for efficient connection management in high-concurrency async applications.
+  - Validate and type-check user inputs before passing them as SQL parameters.
+  - Use SQLAlchemy with aiopg backend for ORM-level parameterization and additional query building safety.
 
-  # Use psycopg2.sql module for dynamic identifiers
+detection_scope: |
+  This rule performs taint analysis tracing user-controlled data through string formatting
+  operations to aiopg cursor.execute() and cursor.executemany() call sites. The first SQL
+  string argument is the sink for injection.
 
-  from psycopg2 import sql
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against SQL injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
 
-  query = sql.SQL("SELECT * FROM {} WHERE id = %s").format(sql.Identifier(table_name))
-
-  cursor.execute(query, (user_id,))'
-recommendations: []
+# References
 references:
-- title: CWE-89
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: www.psycopg.org
-  url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
-- title: magicstack.github.io
-  url: https://magicstack.github.io/asyncpg/current/usage.html
-- title: 'Python docs: sqlite3 - sqlite3-placeholders'
-  url: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
-- title: OWASP SQL Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "aiopg documentation"
+    url: https://aiopg.readthedocs.io/en/stable/
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "psycopg2 docs: Parameterized queries (aiopg uses same syntax)"
+    url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
+
+# FAQ
+faq:
+  - question: Does aiopg use the same query syntax as psycopg2?
+    answer: |
+      Yes. aiopg is a thin async wrapper around psycopg2's connection and cursor objects.
+      It uses the same %s placeholder syntax for parameterized queries and the same
+      parameter passing convention: cursor.execute(sql, (param1, param2)).
+      The async/await syntax is the primary difference from psycopg2.
+
+  - question: Is aiopg still actively maintained?
+    answer: |
+      aiopg is in maintenance mode. For new async PostgreSQL projects, asyncpg is generally
+      preferred for its higher performance and native async design. However, projects using
+      aiopg should still fix SQL injection vulnerabilities using parameterized queries.
+
+  - question: How do I migrate from aiopg to asyncpg for new projects?
+    answer: |
+      asyncpg uses $1, $2 numbered placeholders instead of %s, and values are passed as
+      positional arguments: conn.execute(sql, val1, val2) instead of cursor.execute(sql, (val1, val2)).
+      asyncpg is direct (no cursor object by default). The parameterization concept is
+      identical, only the syntax differs.
+
+  - question: Can I use SQLAlchemy async with aiopg?
+    answer: |
+      SQLAlchemy 1.4+ supports async engines with aiopg as the backend via
+      create_async_engine("postgresql+aiopg://..."). Using SQLAlchemy's ORM or Core
+      query building with parameterized text() constructs is the safest approach for
+      complex query patterns.
+
+  - question: Does this rule detect injection in aiopg connection pools?
+    answer: |
+      Yes. Whether the SQL string is built from user input and passed to a cursor from
+      a pool connection or a direct connection, the taint analysis follows the data flow
+      to the cursor.execute() sink.
+
+  - question: Are aiopg executemany() calls also vulnerable?
+    answer: |
+      executemany() is safe when the SQL template is parameterized with %s placeholders.
+      It becomes vulnerable if the SQL string itself is constructed from user input using
+      string formatting, even if the second argument provides some parameters. Ensure
+      the SQL template string is always a static literal.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-080
+  - PYTHON-LANG-SEC-081
+  - PYTHON-LANG-SEC-083
+  - PYTHON-LANG-SEC-084
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

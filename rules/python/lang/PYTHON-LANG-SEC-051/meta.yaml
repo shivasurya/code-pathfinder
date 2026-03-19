@@ -1,79 +1,195 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-051
 name: Weak SSL/TLS Protocol Version
-short_description: Weak SSL/TLS version detected (SSLv2/3 or TLSv1/1.1). Use TLS 1.2+ minimum.
+short_description: SSLContext configured with SSLv2, SSLv3, TLSv1.0, or TLSv1.1 uses deprecated protocols with known vulnerabilities. Use TLS 1.2 or TLS 1.3.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-051
+ruleset: python/lang/PYTHON-LANG-SEC-051
+
+# Vulnerability Details
 cwe:
-- id: CWE-326
-  name: Inadequate Encryption Strength
-  url: https://cwe.mitre.org/data/definitions/326.html
+  - id: CWE-326
+    name: Inadequate Encryption Strength
+    url: https://cwe.mitre.org/data/definitions/326.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- ssl
-- weak-tls
-- protocol-version
-- CWE-326
+  - python
+  - ssl
+  - tls
+  - weak-protocol
+  - deprecated-tls
+  - CWE-326
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Proper SSL/TLS configuration is essential for establishing secure encrypted
 
-  communication channels. Python''s ssl module provides fine-grained control over
+# Content
+description: |
+  SSL 2.0, SSL 3.0, TLS 1.0, and TLS 1.1 are deprecated protocol versions with known
+  cryptographic vulnerabilities that enable various attacks on TLS connections. These
+  protocols should not be enabled in any production system.
 
-  TLS protocol versions, certificate verification, and cipher suites. Misconfigurations
+  SSLv2 (DROWN attack), SSLv3 (POODLE attack), TLS 1.0/1.1 (BEAST, POODLE-TLS, SLOTH,
+  SWEET32) all have published attacks. NIST deprecated TLS 1.0 and 1.1 in 2018, and
+  PCI DSS required migration away from these versions by 2018.
 
-  such as disabling certificate verification, using deprecated protocol versions
+  Python's ssl module provides PROTOCOL_TLS_CLIENT and PROTOCOL_TLS_SERVER constants that
+  negotiate the highest mutually supported version (at least TLS 1.2 when properly
+  configured). SSLContext should be created with these constants, not with specific deprecated
+  version constants.
 
-  (SSLv2, SSLv3, TLS 1.0, TLS 1.1), or using the deprecated ssl.wrap_socket()
+message: "Weak SSL/TLS protocol version detected (SSLv2/SSLv3/TLSv1/TLSv1.1). Use PROTOCOL_TLS_CLIENT or PROTOCOL_TLS_SERVER with minimum TLS 1.2."
 
-  function undermine transport security and expose applications to interception.'
-message: Weak SSL/TLS version detected (SSLv2/3 or TLSv1/1.1). Use TLS 1.2+ minimum.
-secure_example: 'import ssl, requests
+security_implications:
+  - title: POODLE Attack (SSLv3/TLS 1.0)
+    description: |
+      The POODLE (Padding Oracle On Downgraded Legacy Encryption) attack exploits CBC
+      padding oracle weaknesses in SSLv3 and some TLS 1.0 implementations. An attacker
+      performing a MITM can decrypt individual bytes of the ciphertext by making repeated
+      requests and observing padding validation errors.
+  - title: BEAST Attack (TLS 1.0)
+    description: |
+      BEAST (Browser Exploit Against SSL/TLS) exploits a chosen-plaintext vulnerability
+      in TLS 1.0's CBC mode implementation. Attackers with network access can recover
+      plaintext from TLS 1.0 connections using this attack.
+  - title: DROWN Attack (SSLv2)
+    description: |
+      DROWN (Decrypting RSA with Obsolete and Weakened eNcryption) allows attackers who
+      can make connections to a server supporting SSLv2 to decrypt TLS connections to that
+      server even from clients that don't use SSLv2, due to shared keys.
+  - title: Protocol Downgrade via Version Negotiation
+    description: |
+      Enabling old protocol versions allows downgrade attacks where an attacker forces
+      both client and server to negotiate an older, weaker protocol version even though
+      both support TLS 1.3, enabling the older protocol's vulnerabilities.
 
-  # Use default context with proper certificate verification
+secure_example: |
+  import ssl
 
-  ctx = ssl.create_default_context()
+  # INSECURE: Using deprecated protocol versions
+  # ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv2)  # Not available in Python 3.10+
+  # ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv3)
+  # ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+  # ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
 
-  response = requests.get("https://api.example.com")  # verify=True is default
+  # SECURE: Use PROTOCOL_TLS_CLIENT for clients (verifies certificates)
+  def create_client_context() -> ssl.SSLContext:
+      ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+      ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+      return ctx
 
-  # Enforce minimum TLS 1.2
+  # SECURE: Use PROTOCOL_TLS_SERVER for servers with minimum TLS 1.3
+  def create_server_context(certfile: str, keyfile: str) -> ssl.SSLContext:
+      ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+      ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+      ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+      return ctx
 
-  ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+  # SECURE: Use ssl.create_default_context() for client connections (recommended)
+  def make_secure_connection(host: str, port: int):
+      ctx = ssl.create_default_context()
+      # create_default_context() sets minimum version to TLS 1.2 by default
+      return ctx
 
-  ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+recommendations:
+  - Replace all deprecated protocol constants (PROTOCOL_SSLv2, PROTOCOL_SSLv3, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1) with PROTOCOL_TLS_CLIENT or PROTOCOL_TLS_SERVER.
+  - Set ctx.minimum_version = ssl.TLSVersion.TLSv1_2 or TLSv1_3 explicitly to prevent negotiation of older versions.
+  - Use ssl.create_default_context() for client connections, which configures secure defaults including minimum TLS version.
+  - Disable weak cipher suites by setting ctx.set_ciphers() with a strong cipher string excluding RC4, DES, 3DES, and export ciphers.
+  - Test TLS configuration with tools that verify protocol version support and cipher suite strength.
 
-  # Use SSLContext.wrap_socket with hostname checking
+detection_scope: |
+  This rule detects ssl.SSLContext() constructor calls where the protocol argument is
+  ssl.PROTOCOL_SSLv2, ssl.PROTOCOL_SSLv3, ssl.PROTOCOL_TLSv1, or ssl.PROTOCOL_TLSv1_1.
+  These are deprecated protocol constants whose use enables insecure protocol versions.
 
-  ctx = ssl.create_default_context()
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - TLS 1.2+ required; TLS 1.0 and 1.1 prohibited"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "TLS 1.2 minimum required; TLS 1.3 recommended"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: FIPS 140-3
+    requirement: "Only TLS 1.2 and TLS 1.3 are approved for FIPS 140-3 compliant systems"
 
-  secure_sock = ctx.wrap_socket(sock, server_hostname="api.example.com")
-
-  # Always use HTTPS
-
-  conn = http.client.HTTPSConnection("api.example.com")'
-recommendations: []
+# References
 references:
-- title: CWE-295
-  url: https://cwe.mitre.org/data/definitions/295.html
-- title: CWE-326
-  url: https://cwe.mitre.org/data/definitions/326.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: ssl - ssl.create_default_context'
-  url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
-- title: 'Python docs: ssl - ssl-security'
-  url: https://docs.python.org/3/library/ssl.html#ssl-security
-- title: requests.readthedocs.io
-  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-326: Inadequate Encryption Strength"
+    url: https://cwe.mitre.org/data/definitions/326.html
+  - title: "Python docs: ssl module TLS version constants"
+    url: https://docs.python.org/3/library/ssl.html#ssl.TLSVersion
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: NIST SP 800-52 Revision 2 - Guidelines for TLS Implementations
+    url: https://csrc.nist.gov/publications/detail/sp/800-52/rev-2/final
+  - title: "POODLE Attack Research"
+    url: https://www.openssl.org/~bodo/ssl-poodle.pdf
+
+# FAQ
+faq:
+  - question: Are SSLv2 and SSLv3 constants even available in modern Python?
+    answer: |
+      ssl.PROTOCOL_SSLv2 was removed in Python 3.7 and ssl.PROTOCOL_SSLv3 in Python 3.10
+      as these protocols are completely insecure. Using these constants will raise an error.
+      ssl.PROTOCOL_TLSv1 and ssl.PROTOCOL_TLSv1_1 were deprecated in Python 3.10 and
+      removed in Python 3.12. Code using these constants needs to be updated to
+      PROTOCOL_TLS_CLIENT or PROTOCOL_TLS_SERVER.
+
+  - question: What is the minimum recommended TLS version in 2025?
+    answer: |
+      TLS 1.2 is the current minimum for compliance with PCI DSS and NIST guidance. TLS 1.3
+      is strongly recommended for new systems as it has a simpler, more secure handshake,
+      removes all cipher suites with known weaknesses, and provides forward secrecy by
+      default. Configure minimum_version = ssl.TLSVersion.TLSv1_2 at minimum.
+
+  - question: What is ssl.PROTOCOL_TLS vs ssl.PROTOCOL_TLS_CLIENT?
+    answer: |
+      ssl.PROTOCOL_TLS is deprecated as of Python 3.10. ssl.PROTOCOL_TLS_CLIENT is the
+      recommended replacement for client contexts and automatically enables certificate
+      verification (check_hostname=True, verify_mode=CERT_REQUIRED). ssl.PROTOCOL_TLS_SERVER
+      is for server contexts. Always use the CLIENT/SERVER variants.
+
+  - question: How do I enforce TLS 1.3 only?
+    answer: |
+      Set ctx.minimum_version = ssl.TLSVersion.TLSv1_3 and ctx.maximum_version = ssl.TLSVersion.TLSv1_3
+      on the SSL context. Note that this may prevent connections with older clients or servers
+      that don't support TLS 1.3. For compatibility, use TLSv1_2 as minimum and allow TLS 1.3
+      negotiation.
+
+  - question: Does this rule check for weak cipher suites as well?
+    answer: |
+      This rule specifically checks for deprecated protocol version constants. Weak cipher
+      suite configuration (RC4, DES, export ciphers, NULL ciphers) is a related concern
+      that requires additional review of the cipher string passed to ctx.set_ciphers().
+
+  - question: What happens when a client connects to a server that only supports TLS 1.0?
+    answer: |
+      With TLS 1.2+ enforced on the client, the TLS handshake will fail with a protocol
+      version error. The correct response is to update the server to support TLS 1.2 or
+      higher, not to lower the client's minimum version. If the legacy server cannot be
+      updated, document the risk, isolate the connection, and plan migration.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-050
+  - PYTHON-LANG-SEC-052
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-054
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

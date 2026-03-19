@@ -1,63 +1,232 @@
+# Rule Identity
 id: PYTHON-LAMBDA-SEC-010
-name: Lambda SQL Injection via MySQL Cursor
-short_description: Lambda event data flows to MySQL cursor.execute(). Use parameterized queries.
+name: Lambda SQL Injection via MySQL cursor.execute()
+short_description: Lambda event data flows to MySQL cursor.execute() without parameterization, enabling SQL injection against RDS MySQL or Aurora MySQL backends.
+
+# Classification
 severity: CRITICAL
 category: aws_lambda
 language: python
-ruleset: python/PYTHON-LAMBDA-SEC-010
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-010
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- aws
-- lambda
-- sql-injection
-- mysql
-- OWASP-A03
-- CWE-89
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - mysql
+  - mysqlclient
+  - rds
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect SQL injection vulnerabilities in AWS Lambda functions where untrusted
 
-  event data flows into database query execution. Lambda functions commonly interact with
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into MySQL cursor.execute() calls without proper
+  parameterization, enabling SQL injection against RDS MySQL, Aurora MySQL, or
+  any MySQL-compatible backend.
 
-  RDS, Aurora, or DynamoDB, and event data from API Gateway, S3, SNS, or other triggers
+  Lambda functions commonly connect to RDS MySQL or Aurora MySQL for CRUD operations
+  triggered by API Gateway, SQS, SNS, or S3 events. The event dictionary fields
+  (event.get("body"), event.get("queryStringParameters"), event["Records"]) are
+  attacker-controllable in public-facing deployments. Unlike web frameworks that
+  provide ORM layers, Lambda handlers often use raw MySQL client connections
+  (mysql-connector-python, mysqlclient) where parameterization is the developer's
+  explicit responsibility.
 
-  is frequently used to construct queries without proper parameterization.'
-message: Lambda event data flows to MySQL cursor.execute(). Use parameterized queries.
-secure_example: "import pymysql\nfrom sqlalchemy import text\n\ndef lambda_handler(event, context):\n\
-  \    user_id = event.get('user_id', '')\n    conn = pymysql.connect(host='rds-host', user='admin', password='pass',\
-  \ db='mydb')\n    cursor = conn.cursor()\n\n    # SECURE: Parameterized query with placeholders\n  \
-  \  query = \"SELECT * FROM users WHERE id = %s\"\n    cursor.execute(query, (user_id,))\n\n    # SECURE:\
-  \ SQLAlchemy with text() and bindparams\n    stmt = text(\"SELECT * FROM orders WHERE user_id = :uid\"\
-  ).bindparams(uid=user_id)\n    session.execute(stmt)\n\n    # SECURE: Input validation before query\n\
-  \    try:\n        user_id_int = int(user_id)\n    except ValueError:\n        return {'statusCode':\
-  \ 400, 'body': 'Invalid user ID'}\n    cursor.execute(\"SELECT * FROM users WHERE id = %s\", (user_id_int,))\n\
-  \n    # SECURE: DynamoDB with proper Key/FilterExpression\n    import boto3\n    table = boto3.resource('dynamodb').Table('users')\n\
-  \    response = table.query(\n        KeyConditionExpression=Key('user_id').eq(user_id)  # SDK handles\
-  \ escaping\n    )\n\n    return {'statusCode': 200, 'body': cursor.fetchall()}"
-recommendations: []
+  When event data is concatenated or f-stringed into the SQL query string before
+  being passed as the first argument to cursor.execute(), an attacker can inject
+  arbitrary SQL: reading all database records, modifying or deleting data, bypassing
+  authentication conditions, or escalating to file system access via MySQL's
+  LOAD DATA INFILE and INTO OUTFILE on misconfigured RDS instances.
+
+  The short-lived Lambda execution model does not limit the impact: a single injected
+  UNION SELECT can exfiltrate an entire table in one invocation, and stacked queries
+  (where supported) can alter data across the database.
+
+message: "Lambda event data flows to MySQL cursor.execute() without parameterization. Pass user input as the second argument (parameters tuple), never in the SQL string."
+
+security_implications:
+  - title: Full Database Exfiltration via UNION SELECT
+    description: |
+      An attacker who controls the WHERE clause or any other SQL fragment can use
+      UNION SELECT to read from any table in the RDS database, including user
+      credentials, session tokens, financial records, and other sensitive data
+      stored alongside the Lambda's application tables.
+  - title: Authentication Bypass for Downstream Services
+    description: |
+      Lambda functions that query user records for downstream authentication (e.g.,
+      checking API key validity, session token lookup) can be bypassed with ' OR
+      '1'='1 payloads that cause the query to return all rows, granting the attacker
+      the identity of any user in the system.
+  - title: Data Manipulation via INSERT/UPDATE/DELETE
+    description: |
+      On MySQL configurations that support stacked queries or where the Lambda's
+      database user has write permissions, an attacker can inject INSERT, UPDATE,
+      or DELETE statements through cursor.execute(), modifying financial records,
+      creating backdoor accounts, or corrupting application data.
+  - title: Cascading Blast Radius via IAM and RDS
+    description: |
+      Lambda functions typically use a single database user with broad permissions
+      for simplicity. SQL injection through the Lambda can affect all tables
+      accessible to that user, and if the RDS instance is shared across Lambda
+      functions or services, the blast radius extends to all data in the instance.
+
+secure_example: |
+  import json
+  import mysql.connector
+
+  def get_db_connection():
+      return mysql.connector.connect(
+          host='rds-host.cluster.us-east-1.rds.amazonaws.com',
+          user='lambda_user',
+          password='password',
+          database='appdb'
+      )
+
+  def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      user_id = body.get('user_id', '')
+
+      # SECURE: Validate type before query
+      try:
+          user_id = int(user_id)
+      except (ValueError, TypeError):
+          return {'statusCode': 400, 'body': 'Invalid user ID'}
+
+      conn = get_db_connection()
+      cursor = conn.cursor()
+
+      # SECURE: Pass user_id as a parameter tuple, never in the SQL string
+      cursor.execute(
+          "SELECT id, username, email FROM users WHERE id = %s",
+          (user_id,)
+      )
+      row = cursor.fetchone()
+      cursor.close()
+      conn.close()
+      return {'statusCode': 200, 'body': json.dumps(row)}
+
+recommendations:
+  - Always pass Lambda event data as the second argument to cursor.execute() as a tuple or list, never by concatenating it into the SQL string.
+  - Validate and type-convert event fields before use (e.g., int() for numeric IDs) to eliminate injection risk for typed parameters.
+  - Grant the Lambda's RDS database user the minimum necessary permissions (SELECT only for read operations, specific tables only) to limit blast radius.
+  - Use AWS Secrets Manager to store and rotate RDS credentials rather than hardcoding them in environment variables.
+  - Enable RDS Performance Insights and CloudWatch query logging to detect unusual query patterns that may indicate active exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is calls("*.execute")
+  matching MySQL cursor objects (mysql.connector, mysqlclient) with the tainted SQL
+  string tracked via .tracks(0) (the query string argument, not the parameters tuple).
+  Sanitizers include explicit int() or float() type conversion. The analysis follows
+  taint through string concatenation, f-string interpolation, variable assignments,
+  and function boundaries.
+
+# References
 references:
-- title: 'CWE-89: SQL Injection'
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: 'CWE-943: NoSQL Injection'
-  url: https://cwe.mitre.org/data/definitions/943.html
-- title: OWASP SQL Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-- title: AWS Lambda with RDS Best Practices
-  url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
-- title: OWASP Injection
-  url: https://owasp.org/Top10/A03_2021-Injection/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: AWS Lambda with RDS Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+  - title: MySQL Connector Python Parameterized Queries
+    url: https://dev.mysql.com/doc/connector-python/en/connector-python-api-mysqlcursor-execute.html
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: How does Lambda SQL injection differ from traditional web application SQL injection?
+    answer: |
+      The injection mechanism is identical: untrusted input in the SQL string argument.
+      The Lambda-specific difference is the attack surface: Lambda functions receive
+      input from many AWS event sources (API Gateway, SQS, SNS, S3, DynamoDB Streams)
+      and there is no framework ORM layer to encourage parameterized queries by default.
+      Developers writing raw SQL in Lambda handlers must apply parameterization explicitly.
+      The blast radius is also different: the same Lambda execution role may grant access
+      to RDS and other AWS services, so a compromise can extend beyond the database.
+
+  - question: Is it safe to use f-strings in SQL queries if the event data is validated first?
+    answer: |
+      No. Validation reduces but does not eliminate risk, and the appropriate fix is
+      parameterization, not validation. The only safe pattern is to pass event data
+      as the second argument to cursor.execute() as a tuple, regardless of whether
+      the data has been validated. The database driver handles escaping correctly only
+      when data is passed through the parameters mechanism.
+
+  - question: What MySQL user permissions should a Lambda function's database user have?
+    answer: |
+      Apply least-privilege: grant only SELECT for read-only Lambda functions, and
+      only SELECT/INSERT/UPDATE on specific tables for write operations. Never grant
+      LOAD DATA, FILE, SUPER, or PROCESS privileges to application database users.
+      Use a separate database user per Lambda function or function group, and store
+      credentials in AWS Secrets Manager with automatic rotation.
+
+  - question: Can this rule detect SQL injection across multiple Lambda helper modules?
+    answer: |
+      Yes. The rule performs inter-procedural analysis and follows taint from the
+      event dictionary through utility functions, database helper modules, and return
+      values across file boundaries. If event data flows through a get_user_id()
+      helper into a build_query() function and then to cursor.execute(), the finding
+      is still reported.
+
+  - question: How should I connect to RDS from Lambda securely?
+    answer: |
+      Use AWS Secrets Manager to store RDS credentials and retrieve them at cold start
+      with caching. Use RDS IAM authentication for Lambda functions where supported
+      (MySQL with IAM database authentication enabled). Connect via a VPC with security
+      groups that restrict the RDS port to only Lambda's security group. Use connection
+      pooling libraries or RDS Proxy to manage connection limits given Lambda's
+      per-invocation connection model.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-015
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

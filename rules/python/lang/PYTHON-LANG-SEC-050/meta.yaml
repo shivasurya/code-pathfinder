@@ -1,80 +1,198 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-050
-name: Unverified SSL Context
-short_description: ssl._create_unverified_context() disables certificate verification. Use ssl.create_default_context().
+name: Unverified SSL Context Created
+short_description: ssl._create_unverified_context() disables certificate verification entirely, making TLS connections vulnerable to man-in-the-middle attacks.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-050
+ruleset: python/lang/PYTHON-LANG-SEC-050
+
+# Vulnerability Details
 cwe:
-- id: CWE-295
-  name: Improper Certificate Validation
-  url: https://cwe.mitre.org/data/definitions/295.html
+  - id: CWE-295
+    name: Improper Certificate Validation
+    url: https://cwe.mitre.org/data/definitions/295.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- ssl
-- unverified-context
-- certificate
-- OWASP-A07
-- CWE-295
+  - python
+  - ssl
+  - tls
+  - certificate-validation
+  - mitm
+  - CWE-295
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Proper SSL/TLS configuration is essential for establishing secure encrypted
 
-  communication channels. Python''s ssl module provides fine-grained control over
+# Content
+description: |
+  ssl._create_unverified_context() creates an SSL context that does not verify the server's
+  certificate. With certificate verification disabled, a TLS connection provides only
+  encryption confidentiality — it does not authenticate the server, meaning an attacker on
+  the network path can perform a man-in-the-middle (MITM) attack by presenting any TLS
+  certificate and intercepting all traffic.
 
-  TLS protocol versions, certificate verification, and cipher suites. Misconfigurations
+  The leading underscore in the function name signals that it is a private, internal function
+  not intended for general use. It exists to provide a workaround for legacy code that
+  cannot use valid certificates. The public API ssl.create_default_context() is the correct
+  function to use, as it enables certificate verification with proper CA chain validation.
 
-  such as disabling certificate verification, using deprecated protocol versions
+  This function is sometimes used as a quick fix for certificate errors in development, then
+  accidentally committed to production code. Its presence in production code is always a
+  critical security finding.
 
-  (SSLv2, SSLv3, TLS 1.0, TLS 1.1), or using the deprecated ssl.wrap_socket()
+message: "ssl._create_unverified_context() detected. This disables certificate verification and enables MITM attacks. Use ssl.create_default_context() instead."
 
-  function undermine transport security and expose applications to interception.'
-message: ssl._create_unverified_context() disables certificate verification. Use ssl.create_default_context().
-secure_example: 'import ssl, requests
+security_implications:
+  - title: Man-in-the-Middle Attack
+    description: |
+      Without certificate verification, any attacker on the network path can present a
+      self-signed or fraudulent TLS certificate. The Python client accepts it without
+      validation, and the attacker can read and modify all "encrypted" traffic.
+  - title: Credential and Session Token Interception
+    description: |
+      Unverified TLS connections protect data from passive eavesdropping but not from
+      MITM attacks. Login credentials, session tokens, API keys, and sensitive data
+      transmitted over these connections can be captured by an attacker positioned between
+      the client and server.
+  - title: Data Integrity Failure
+    description: |
+      MITM attackers can modify request and response data in transit, injecting malicious
+      content into responses, altering financial transaction amounts, or replacing software
+      downloads with malicious binaries.
+  - title: Regulatory Compliance Violation
+    description: |
+      Disabling certificate verification violates PCI DSS Requirement 4.2.1 (secure
+      transmission of cardholder data), HIPAA technical safeguards, and most data
+      protection regulations that mandate proper TLS implementation.
 
-  # Use default context with proper certificate verification
+secure_example: |
+  import ssl
+  import urllib.request
 
-  ctx = ssl.create_default_context()
+  # INSECURE: Disabling certificate verification
+  # ctx = ssl._create_unverified_context()
+  # response = urllib.request.urlopen(url, context=ctx)
 
-  response = requests.get("https://api.example.com")  # verify=True is default
+  # SECURE: Use ssl.create_default_context() with proper certificate verification
+  def make_secure_request(url: str) -> bytes:
+      ctx = ssl.create_default_context()
+      with urllib.request.urlopen(url, context=ctx) as response:
+          return response.read()
 
-  # Enforce minimum TLS 1.2
+  # SECURE: For custom CA certificates (corporate environments)
+  def make_request_with_custom_ca(url: str, ca_cert_path: str) -> bytes:
+      ctx = ssl.create_default_context(cafile=ca_cert_path)
+      with urllib.request.urlopen(url, context=ctx) as response:
+          return response.read()
 
-  ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+  # SECURE: For mutual TLS (client certificate authentication)
+  def make_mtls_request(url: str, cert_path: str, key_path: str) -> bytes:
+      ctx = ssl.create_default_context()
+      ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
+      with urllib.request.urlopen(url, context=ctx) as response:
+          return response.read()
 
-  ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+recommendations:
+  - Replace ssl._create_unverified_context() with ssl.create_default_context() which enables certificate verification with the system CA store.
+  - If connecting to a server with a self-signed or private CA certificate, use ssl.create_default_context(cafile=path_to_ca) to specify the trusted CA.
+  - Never disable certificate verification as a workaround for certificate errors; fix the underlying certificate issue instead.
+  - In development environments, use a local CA (such as mkcert) to issue development certificates trusted by your machine rather than disabling verification.
+  - Audit all SSL context creation in the codebase to ensure CERT_REQUIRED is the validation mode and no custom cert verification bypass is present.
 
-  # Use SSLContext.wrap_socket with hostname checking
+detection_scope: |
+  This rule detects calls to ssl._create_unverified_context() in Python source code. All
+  call sites are flagged since this function unconditionally disables certificate verification
+  and is never appropriate for production use.
 
-  ctx = ssl.create_default_context()
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission (proper TLS required)"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "Certificate validation required for all TLS connections"
+  - standard: HIPAA Security Rule
+    requirement: "45 CFR 164.312(e)(2)(ii) - Encryption and decryption of data in transit"
 
-  secure_sock = ctx.wrap_socket(sock, server_hostname="api.example.com")
-
-  # Always use HTTPS
-
-  conn = http.client.HTTPSConnection("api.example.com")'
-recommendations: []
+# References
 references:
-- title: CWE-295
-  url: https://cwe.mitre.org/data/definitions/295.html
-- title: CWE-326
-  url: https://cwe.mitre.org/data/definitions/326.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: ssl - ssl.create_default_context'
-  url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
-- title: 'Python docs: ssl - ssl-security'
-  url: https://docs.python.org/3/library/ssl.html#ssl-security
-- title: requests.readthedocs.io
-  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-295: Improper Certificate Validation"
+    url: https://cwe.mitre.org/data/definitions/295.html
+  - title: "Python docs: ssl.create_default_context()"
+    url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: "Python SSL HOWTO"
+    url: https://docs.python.org/3/library/ssl.html#ssl-howto
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: Why does ssl._create_unverified_context() exist if it is insecure?
+    answer: |
+      It exists to support legacy code that needs TLS encryption without certificate
+      validation, such as connecting to internal development servers with self-signed
+      certificates before proper PKI is set up. The underscore prefix signals it is
+      an internal function not intended for general use. It should never appear in
+      production code.
+
+  - question: How do I fix a certificate verification error without disabling verification?
+    answer: |
+      Certificate errors indicate a real problem: an expired certificate, a hostname mismatch,
+      an untrusted CA, or a self-signed certificate. Fix the error by: renewing the certificate,
+      correcting the hostname, adding the CA certificate to the trust store, or using
+      ssl.create_default_context(cafile=path) for private CA certificates. Never bypass
+      the error.
+
+  - question: Is ssl._create_unverified_context() safe in unit tests?
+    answer: |
+      In unit tests that mock network calls or run against a local test server, disabling
+      verification may be acceptable. However, it is better to use a test CA with mkcert
+      or similar tools, or to use Python's ssl.create_default_context() with the test
+      server's CA certificate. This ensures tests validate the same configuration used
+      in production.
+
+  - question: What is the difference between ssl._create_unverified_context() and ssl.CERT_NONE?
+    answer: |
+      Both disable certificate verification. ssl._create_unverified_context() returns a
+      pre-configured context with verification disabled. ssl.SSLContext() with
+      ctx.verify_mode = ssl.CERT_NONE achieves the same result through explicit configuration.
+      See PYTHON-LANG-SEC-053 for rules covering the CERT_NONE pattern.
+
+  - question: Can I use ssl.create_default_context() with a corporate internal CA?
+    answer: |
+      Yes. ssl.create_default_context(cafile="/path/to/corporate-ca.crt") loads the corporate
+      CA certificate and uses it for validation. Alternatively, add the corporate CA to the
+      system trust store, which ssl.create_default_context() uses by default.
+
+  - question: Is disabling verification acceptable for localhost connections?
+    answer: |
+      For localhost connections to locally controlled services, the MITM risk is low since
+      an attacker would need local process access to intercept the connection. However,
+      even localhost TLS should use proper certificates for consistency with production
+      configuration and to prevent errors if the connection is accidentally redirected.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-051
+  - PYTHON-LANG-SEC-052
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-054
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A07:2021
-  name: ''
-  url: ''

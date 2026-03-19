@@ -1,57 +1,193 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-001
-name: Dangerous eval() Detected
-short_description: eval() detected. Avoid eval() on untrusted input. Use ast.literal_eval() for safe parsing.
+name: Dangerous eval() Usage Detected
+short_description: eval() executes arbitrary Python expressions from strings, enabling remote code execution when called with untrusted input.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-001
+ruleset: python/lang/PYTHON-LANG-SEC-001
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- eval
-- code-injection
-- OWASP-A03
-- CWE-95
+  - python
+  - eval
+  - code-injection
+  - dynamic-execution
+  - builtins
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python provides several built-in functions and modules that evaluate or execute
 
-  arbitrary code at runtime, including eval(), exec(), code.InteractiveConsole, and
+# Content
+description: |
+  Python's built-in eval() function evaluates an arbitrary string as a Python expression
+  and returns its result. When the string argument is derived from untrusted user input
+  such as query parameters, request bodies, environment variables, or file contents, an
+  attacker can craft an expression that executes system commands, reads sensitive files,
+  spawns reverse shells, or accesses any installed module via __import__().
 
-  dynamic imports via __import__() or importlib.import_module(). When these functions
+  Unlike exec(), eval() is restricted to expressions, but this provides almost no security
+  boundary since an attacker can call __import__('os').system('cmd') or traverse __builtins__
+  to reach any callable. Safe alternatives include ast.literal_eval() for Python literals,
+  json.loads() for structured data, and explicit allowlist dispatch for dynamic function calls.
 
-  receive untrusted input, attackers can achieve full remote code execution (RCE) on
+message: "eval() detected. Avoid calling eval() with untrusted input. Use ast.literal_eval() for safe literal parsing."
 
-  the host system.'
-message: eval() detected. Avoid eval() on untrusted input. Use ast.literal_eval() for safe parsing.
-secure_example: "# Use ast.literal_eval for safe literal parsing\nimport ast\nresult = ast.literal_eval(user_expr)\n\
-  \n# Whitelist allowed modules for dynamic imports\nALLOWED_MODULES = {\"json\", \"math\", \"datetime\"\
-  }\nif module_name in ALLOWED_MODULES:\n    mod = __import__(module_name)"
-recommendations: []
+security_implications:
+  - title: Remote Code Execution
+    description: |
+      An attacker controlling the eval() argument can execute arbitrary Python code in the
+      context of the running process, including spawning OS commands, opening network
+      connections, reading credentials from disk, and importing any installed module.
+  - title: Data Exfiltration
+    description: |
+      eval() can access environment variables, configuration files, and in-memory secrets.
+      Attackers can encode exfiltrated data in the return value or send it over a network
+      connection opened within the evaluated expression.
+  - title: Privilege Escalation
+    description: |
+      If the Python process runs with elevated privileges such as root, broad IAM permissions,
+      or a privileged Kubernetes service account, eval() injection immediately grants the
+      attacker those same privileges with no additional steps.
+  - title: Persistent Backdoor Surface
+    description: |
+      eval() in configuration loaders, plugin systems, or template engines creates a persistent
+      attack surface. An attacker influencing config files or environment variables can achieve
+      persistent code execution without touching application source code.
+
+secure_example: |
+  import ast
+  import json
+
+  # SECURE: Use ast.literal_eval() for parsing Python literals
+  def parse_config_value(raw_value: str):
+      try:
+          return ast.literal_eval(raw_value)
+      except (ValueError, SyntaxError):
+          return raw_value
+
+  # SECURE: Use json.loads() for structured data from external sources
+  def parse_user_data(raw_json: str):
+      return json.loads(raw_json)
+
+  # SECURE: Use an allowlist for dynamic dispatch instead of eval()
+  ALLOWED_OPERATIONS = {
+      "add": lambda a, b: a + b,
+      "multiply": lambda a, b: a * b,
+  }
+
+  def compute(op_name: str, a: float, b: float):
+      if op_name not in ALLOWED_OPERATIONS:
+          raise ValueError(f"Unknown operation: {op_name}")
+      return ALLOWED_OPERATIONS[op_name](a, b)
+
+recommendations:
+  - Replace eval() with ast.literal_eval() when the input is expected to be a Python literal such as a number, string, list, or dictionary.
+  - Use json.loads() or a schema validation library such as pydantic or marshmallow for structured data from external sources.
+  - If dynamic dispatch is needed, use an explicit allowlist mapping names to callables rather than evaluating the name as code.
+  - Audit all call sites of eval() and document why each one cannot use a safer alternative; treat any use on untrusted data as a critical finding.
+  - Apply the principle of least privilege so that even if eval() is exploited, the process cannot access credentials or execute privileged operations.
+
+detection_scope: |
+  This rule detects all direct calls to the built-in eval() function anywhere in Python
+  source code, matching both unqualified eval() and builtins.eval() forms. Every call site
+  is flagged regardless of whether the argument is a literal or a variable, because static
+  analysis cannot always determine the runtime origin of a value at the call site.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
 references:
-- title: CWE-95
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: 'Python docs: functions - eval'
-  url: https://docs.python.org/3/library/functions.html#eval
-- title: 'Python docs: ast - ast.literal_eval'
-  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
-- title: 'Python docs: code'
-  url: https://docs.python.org/3/library/code.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "Python docs: built-in eval()"
+    url: https://docs.python.org/3/library/functions.html#eval
+  - title: "Python docs: ast.literal_eval()"
+    url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# FAQ
+faq:
+  - question: Is eval() always dangerous or only when used with untrusted input?
+    answer: |
+      eval() is dangerous whenever its argument can be influenced by an attacker. Trace the
+      variable backward to its origin — if it can be set from HTTP parameters, file contents,
+      environment variables, CLI arguments, or database values, it is untrusted. Literals
+      hardcoded in source code are safer but should still use ast.literal_eval() to prevent
+      future refactoring from accidentally introducing a taint path.
+
+  - question: Does ast.literal_eval() really provide complete safety?
+    answer: |
+      ast.literal_eval() is safe for parsing Python literals: strings, bytes, numbers, tuples,
+      lists, dicts, sets, booleans, and None. It raises ValueError or SyntaxError on anything
+      else and does not execute function calls or attribute access. However, deeply nested
+      structures can cause recursion errors, so validate input length before calling it in
+      high-availability services.
+
+  - question: What if I need to evaluate mathematical expressions safely?
+    answer: |
+      Use a dedicated safe expression evaluator such as the simpleeval or asteval library.
+      These parse the expression AST and allow only whitelisted operations. Never use eval()
+      for this purpose even with restricted namespace arguments, as Python namespace sandboxes
+      have been bypassed repeatedly.
+
+  - question: Can this rule produce false positives on eval() with hardcoded strings?
+    answer: |
+      Yes. The rule flags all eval() call sites to ensure no taint path is missed. If the
+      argument is a hardcoded literal, the finding is low-risk but should still be refactored
+      to ast.literal_eval() or a constant to make the intent explicit and eliminate future risk.
+
+  - question: What about eval() inside test code or REPL utilities?
+    answer: |
+      Test code and REPL utilities are still subject to injection if they process any external
+      input such as test fixtures from files or user input in a debug console. Suppress
+      findings only after confirming the eval() argument is never derived from external sources.
+
+  - question: How does this rule interact with inter-procedural taint flows?
+    answer: |
+      Code Pathfinder tracks data flow from source functions such as HTTP request parameters,
+      os.environ, file reads, and socket receives through variable assignments and function
+      calls to the eval() sink. Inter-procedural analysis follows tainted values across
+      function boundaries and file boundaries, catching patterns where input handling and
+      eval() execution are separated across the codebase.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-003
+  - PYTHON-LANG-SEC-005
+  - PYTHON-LANG-SEC-006
+  - PYTHON-LANG-SEC-023
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

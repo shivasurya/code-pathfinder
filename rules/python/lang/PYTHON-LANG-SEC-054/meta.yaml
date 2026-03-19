@@ -1,79 +1,191 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-054
-name: Insecure HTTP Connection
-short_description: HTTPConnection used instead of HTTPSConnection. Use HTTPS for sensitive communications.
+name: Insecure HTTP Connection via http.client
+short_description: http.client.HTTPConnection transmits data in plaintext without encryption. Use HTTPSConnection for sensitive communications.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-054
+ruleset: python/lang/PYTHON-LANG-SEC-054
+
+# Vulnerability Details
 cwe:
-- id: CWE-319
-  name: Cleartext Transmission of Sensitive Information
-  url: https://cwe.mitre.org/data/definitions/319.html
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- http
-- plaintext
-- insecure-transport
-- CWE-319
+  - python
+  - http-client
+  - plaintext
+  - cleartext-transmission
+  - CWE-319
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Proper SSL/TLS configuration is essential for establishing secure encrypted
 
-  communication channels. Python''s ssl module provides fine-grained control over
+# Content
+description: |
+  http.client.HTTPConnection creates an unencrypted HTTP connection that transmits all
+  data in plaintext. Any data sent over this connection including authentication tokens,
+  session cookies, API keys, user data, and sensitive parameters can be intercepted by
+  anyone on the network path between the client and server.
 
-  TLS protocol versions, certificate verification, and cipher suites. Misconfigurations
+  HTTP (without TLS) should not be used for any endpoint that transmits sensitive data.
+  HTTPSConnection (http.client.HTTPSConnection) uses TLS to encrypt the connection,
+  protecting data confidentiality and authenticating the server.
 
-  such as disabling certificate verification, using deprecated protocol versions
+  HTTPConnection is appropriate for: internal health check endpoints on localhost,
+  connections to infrastructure components on a private, isolated network where TLS
+  termination occurs at a load balancer, and specific protocol requirements. For all
+  other use cases, HTTPSConnection or the requests library with HTTPS URLs should be used.
 
-  (SSLv2, SSLv3, TLS 1.0, TLS 1.1), or using the deprecated ssl.wrap_socket()
+message: "http.client.HTTPConnection detected. HTTP transmits data in plaintext. Use HTTPSConnection or the requests library with HTTPS URLs."
 
-  function undermine transport security and expose applications to interception.'
-message: HTTPConnection used instead of HTTPSConnection. Use HTTPS for sensitive communications.
-secure_example: 'import ssl, requests
+security_implications:
+  - title: Credential Interception
+    description: |
+      Authentication headers (Basic auth, Bearer tokens, API keys), form credentials, and
+      session cookies transmitted over HTTP are visible in plaintext to any observer on
+      the network, including the ISP, corporate network monitoring, and MITM attackers.
+  - title: Session Hijacking
+    description: |
+      HTTP cookies visible on the network allow session hijacking: an attacker who captures
+      the session token can use it to authenticate as the victim without knowing the password.
+  - title: Data Integrity Failure
+    description: |
+      HTTP provides no integrity protection. An attacker on the network path can inject,
+      modify, or suppress HTTP traffic. Responses can be modified to serve malicious content,
+      and requests can be altered to change transaction parameters.
+  - title: Compliance Violations
+    description: |
+      Transmitting cardholder data (PCI DSS), health information (HIPAA), or personal data
+      (GDPR) over unencrypted HTTP violates regulatory requirements and may result in
+      significant fines and mandatory breach notifications.
 
-  # Use default context with proper certificate verification
+secure_example: |
+  import http.client
+  import ssl
 
-  ctx = ssl.create_default_context()
+  # INSECURE: Plain HTTP connection
+  # conn = http.client.HTTPConnection("api.example.com")
+  # conn.request("GET", "/sensitive-data", headers={"Authorization": "Bearer token"})
 
-  response = requests.get("https://api.example.com")  # verify=True is default
+  # SECURE: HTTPS connection with default SSL context
+  def make_https_request(host: str, path: str, token: str) -> str:
+      ctx = ssl.create_default_context()
+      conn = http.client.HTTPSConnection(host, context=ctx)
+      conn.request("GET", path, headers={"Authorization": f"Bearer {token}"})
+      response = conn.getresponse()
+      return response.read().decode()
 
-  # Enforce minimum TLS 1.2
+  # PREFERRED: Use the requests library for a simpler, safer API
+  import requests
 
-  ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+  def make_api_request(url: str, token: str) -> dict:
+      response = requests.get(
+          url,
+          headers={"Authorization": f"Bearer {token}"},
+          timeout=30,
+      )
+      response.raise_for_status()
+      return response.json()
 
-  ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+recommendations:
+  - Replace http.client.HTTPConnection with http.client.HTTPSConnection for all external service calls.
+  - Use the requests library with https:// URLs as a higher-level, safer alternative to http.client.
+  - For internal service-to-service communication in containerized environments, use HTTPS even on private networks to protect against internal threats and lateral movement.
+  - If HTTP must be used for specific infrastructure reasons (health checks, load balancer endpoints), ensure sensitive data is never transmitted over these endpoints.
+  - Configure HSTS (HTTP Strict Transport Security) on servers to prevent clients from accidentally connecting over HTTP.
 
-  # Use SSLContext.wrap_socket with hostname checking
+detection_scope: |
+  This rule detects calls to http.client.HTTPConnection() and the equivalent
+  httplib.HTTPConnection() (Python 2 compatibility) constructor. All call sites are
+  flagged since plaintext HTTP is inappropriate for sensitive data transmission and
+  requires review to confirm the use case is safe.
 
-  ctx = ssl.create_default_context()
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: HIPAA Security Rule
+    requirement: "45 CFR 164.312(e) - Technical safeguards for data in transit"
+  - standard: GDPR Article 32
+    requirement: "Appropriate technical measures including encryption of personal data in transit"
 
-  secure_sock = ctx.wrap_socket(sock, server_hostname="api.example.com")
-
-  # Always use HTTPS
-
-  conn = http.client.HTTPSConnection("api.example.com")'
-recommendations: []
+# References
 references:
-- title: CWE-295
-  url: https://cwe.mitre.org/data/definitions/295.html
-- title: CWE-326
-  url: https://cwe.mitre.org/data/definitions/326.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: ssl - ssl.create_default_context'
-  url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
-- title: 'Python docs: ssl - ssl-security'
-  url: https://docs.python.org/3/library/ssl.html#ssl-security
-- title: requests.readthedocs.io
-  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python docs: http.client.HTTPConnection"
+    url: https://docs.python.org/3/library/http.client.html#http.client.HTTPConnection
+  - title: "Python docs: http.client.HTTPSConnection"
+    url: https://docs.python.org/3/library/http.client.html#http.client.HTTPSConnection
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: Is HTTP acceptable for internal microservice communication?
+    answer: |
+      HTTP without TLS is risky even on internal networks. Compromised internal services,
+      lateral movement attacks, and network sniffing on internal subnets can all intercept
+      plaintext HTTP traffic. Use HTTPS with service mesh mTLS (Istio, Linkerd) or at
+      minimum HTTPS with internal CA certificates for service-to-service communication.
+
+  - question: What about connecting to a local service for health checks?
+    answer: |
+      Health check endpoints on localhost (127.0.0.1) that do not transmit sensitive data
+      are generally acceptable over HTTP. If the health check endpoint returns information
+      about internal service configuration or secrets, use HTTPS even for localhost
+      connections.
+
+  - question: Is http.client.HTTPConnection safer than requests with an http:// URL?
+    answer: |
+      No, both transmit data in plaintext over TCP without TLS. The security risk is
+      identical. The requests library is generally preferred for its simpler API, better
+      defaults, and built-in support for session management, retries, and certificate
+      verification.
+
+  - question: How do I add a custom SSL context to HTTPSConnection?
+    answer: |
+      Pass the context parameter: http.client.HTTPSConnection(host, context=ssl_ctx).
+      Use ssl.create_default_context() for the context object unless you have specific
+      requirements. This ensures certificate verification and hostname checking are enabled.
+
+  - question: What port does HTTPSConnection use by default?
+    answer: |
+      http.client.HTTPSConnection defaults to port 443 (HTTPS). http.client.HTTPConnection
+      defaults to port 80 (HTTP). Specify a custom port as the second argument if needed:
+      HTTPSConnection("api.example.com", 8443).
+
+  - question: Does this rule catch http.client.HTTPConnection used through urllib?
+    answer: |
+      urllib.request.urlopen() on HTTP URLs uses http.client.HTTPConnection internally.
+      PYTHON-LANG-SEC-061 covers urllib.request.urlopen() with HTTP URLs specifically.
+      This rule targets direct http.client.HTTPConnection() constructor calls.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-050
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-060
+  - PYTHON-LANG-SEC-061
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

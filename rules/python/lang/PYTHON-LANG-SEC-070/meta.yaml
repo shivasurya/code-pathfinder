@@ -1,62 +1,197 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-070
-name: Socket Bind to All Interfaces
-short_description: Socket bound to 0.0.0.0 (all interfaces). Bind to specific interface in production.
+name: Socket Bound to All Interfaces (0.0.0.0)
+short_description: Binding a socket to 0.0.0.0 exposes the service on all network interfaces, including public-facing ones. Bind to specific interfaces in production.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-070
+ruleset: python/lang/PYTHON-LANG-SEC-070
+
+# Vulnerability Details
 cwe:
-- id: CWE-200
-  name: Exposure of Sensitive Information to an Unauthorized Actor
-  url: https://cwe.mitre.org/data/definitions/200.html
+  - id: CWE-605
+    name: Multiple Binds to the Same Port
+    url: https://cwe.mitre.org/data/definitions/605.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- socket
-- bind
-- network
-- CWE-200
+  - python
+  - socket
+  - bind
+  - all-interfaces
+  - network-exposure
+  - CWE-605
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Network-facing Python applications must properly authenticate remote hosts,
 
-  restrict listening interfaces, sanitize remote commands, and safely handle
+# Content
+description: |
+  Binding a socket to 0.0.0.0 (or "::" for IPv6) causes the service to listen on all
+  available network interfaces simultaneously, including loopback (localhost), private LAN,
+  and public internet interfaces. This exposes internal services to the public internet
+  when the host has a public IP address.
 
-  deserialized data from network connections. This module detects insecure socket
+  In production environments, services should bind to specific interfaces: localhost
+  (127.0.0.1) for local-only services, the internal network interface IP for intranet
+  services, or the load balancer's internal interface for web services fronted by a
+  reverse proxy.
 
-  binding patterns, SSH host key verification bypass, unvalidated remote command
+  Binding to 0.0.0.0 is common during development and often left unchanged in production.
+  This can expose debug endpoints, admin interfaces, internal APIs, and development servers
+  to the public internet.
 
-  execution over SSH, and unsafe deserialization through multiprocessing connections.'
-message: Socket bound to 0.0.0.0 (all interfaces). Bind to specific interface in production.
-secure_example: "import socket, paramiko\n# Bind to localhost only for internal services\nsock = socket.socket()\n\
-  sock.bind((\"127.0.0.1\", 8080))\n# Verify SSH host keys explicitly\nclient = paramiko.SSHClient()\n\
-  client.load_system_host_keys()\nclient.set_missing_host_key_policy(paramiko.RejectPolicy())\nclient.connect(host)\n\
-  # Validate commands before remote execution\nALLOWED_COMMANDS = {\"ls\", \"df\", \"uptime\"}\nif cmd\
-  \ not in ALLOWED_COMMANDS:\n    raise ValueError(\"Unauthorized command\")\nclient.exec_command(cmd)\n\
-  # Use authenticated Pipe() for multiprocessing\nparent_conn, child_conn = multiprocessing.Pipe()"
-recommendations: []
+message: "Socket bound to 0.0.0.0 (all interfaces). In production, bind to specific interfaces to limit exposure."
+
+security_implications:
+  - title: Accidental Public Exposure of Internal Services
+    description: |
+      Services bound to 0.0.0.0 on a host with a public IP are accessible from the
+      internet. Development servers, debug endpoints, admin interfaces, and internal APIs
+      accidentally exposed this way have been a common source of data breaches.
+  - title: Bypass of Network Security Controls
+    description: |
+      Services intended to be accessed only from internal networks or through a load
+      balancer can be directly accessed by external clients when bound to 0.0.0.0,
+      bypassing firewall rules, WAFs, authentication layers, and rate limiting applied
+      at the load balancer.
+  - title: Service Discovery and Fingerprinting
+    description: |
+      Publicly accessible services reveal information about the server's technology stack,
+      version, and configuration through banner grabbing, error messages, and protocol
+      fingerprinting, enabling targeted attacks.
+  - title: Debug Endpoint Exposure
+    description: |
+      Development services like Flask's built-in server, Jupyter notebooks, and debug
+      consoles commonly bind to 0.0.0.0 by default. Deploying these in production exposes
+      interactive Python execution environments to the internet.
+
+secure_example: |
+  import socket
+
+  # INSECURE: Binding to all interfaces
+  # server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  # server.bind(("0.0.0.0", 8080))
+
+  # SECURE: Bind to localhost only (local-only service)
+  def create_local_server(port: int) -> socket.socket:
+      server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      server.bind(("127.0.0.1", port))
+      server.listen(5)
+      return server
+
+  # SECURE: Bind to specific interface from configuration
+  import os
+
+  def create_configured_server(port: int) -> socket.socket:
+      bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
+      # Validate the bind address is not 0.0.0.0 unless explicitly intended
+      if bind_addr == "0.0.0.0":
+          import warnings
+          warnings.warn("Binding to all interfaces; ensure firewall rules restrict access")
+      server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      server.bind((bind_addr, port))
+      server.listen(5)
+      return server
+
+recommendations:
+  - Bind services to specific interfaces (127.0.0.1 for local-only, the load balancer or proxy interface for proxied services) rather than 0.0.0.0.
+  - Configure the bind address from environment variables or deployment configuration rather than hardcoding 0.0.0.0.
+  - Use firewall rules (iptables, security groups) as an additional layer of protection even when binding to specific interfaces.
+  - For containerized deployments, publish only the necessary ports and use Docker's -p flag to bind to specific host interfaces.
+  - Audit all listening services with netstat or ss to verify no unintended services are exposed on public interfaces.
+
+detection_scope: |
+  This rule detects socket.bind() calls where the first element of the address tuple is
+  "0.0.0.0" or "::" (all interfaces). The rule flags these for review to ensure the
+  all-interfaces binding is intentional and protected by appropriate network controls.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: NIST SP 800-53
+    requirement: "SC-7: Boundary Protection - restrict inbound and outbound traffic"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 1.3.2 - Restrict inbound traffic to only that needed"
+  - standard: CIS Benchmark
+    requirement: "Network services should bind to specific interfaces, not all interfaces"
+
+# References
 references:
-- title: CWE-322
-  url: https://cwe.mitre.org/data/definitions/322.html
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
-- title: docs.paramiko.org
-  url: https://docs.paramiko.org/en/stable/api/client.html
-- title: 'Python docs: multiprocessing - multiprocessing.connection.Connection'
-  url: https://docs.python.org/3/library/multiprocessing.html#multiprocessing.connection.Connection
-- title: 'Python docs: socket - socket.socket.bind'
-  url: https://docs.python.org/3/library/socket.html#socket.socket.bind
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-605: Multiple Binds to the Same Port"
+    url: https://cwe.mitre.org/data/definitions/605.html
+  - title: "Python docs: socket.bind()"
+    url: https://docs.python.org/3/library/socket.html#socket.socket.bind
+  - title: OWASP Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - title: "Network interface binding security considerations"
+    url: https://wiki.mozilla.org/Security/Server_Side_TLS
+  - title: OWASP Top 10 A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+# FAQ
+faq:
+  - question: Is binding to 0.0.0.0 always a security problem?
+    answer: |
+      Not always. In containerized environments where the container's network namespace
+      is isolated, binding to 0.0.0.0 within the container only exposes to published
+      ports. Load balancers and reverse proxies may need to bind to 0.0.0.0 by design.
+      The concern is when services with no authentication or services intended to be
+      internal are accidentally exposed to external networks.
+
+  - question: What should I bind to for a web application behind nginx?
+    answer: |
+      The Python application server (gunicorn, uvicorn) should bind to 127.0.0.1 (localhost)
+      since nginx communicates with it on the same host. nginx then binds to 0.0.0.0:80
+      and 0.0.0.0:443 to accept external connections. This way, the application server
+      is only reachable through nginx, not directly from the internet.
+
+  - question: How does 0.0.0.0 behave differently in Docker containers?
+    answer: |
+      In Docker, binding to 0.0.0.0 inside the container listens on the container's network
+      namespace, not the host. The container's ports are only accessible from outside if
+      explicitly published with -p hostport:containerport. Without -p, the service is
+      isolated to the Docker network. This reduces (but doesn't eliminate) the risk.
+
+  - question: What is the IPv6 equivalent of 0.0.0.0?
+    answer: |
+      The IPv6 all-interfaces address is :: (double colon). On systems with IPv6 and
+      IPV6_V6ONLY=0, binding to :: may also listen on IPv4 via IPv4-mapped IPv6 addresses.
+      The rule detects both 0.0.0.0 (IPv4) and :: (IPv6) bindings for all-interface exposure.
+
+  - question: Should development servers bind to 0.0.0.0?
+    answer: |
+      Development servers (Flask debug mode, Jupyter, etc.) sometimes bind to 0.0.0.0 to
+      allow access from other devices on the development network. This is acceptable in
+      private development environments but should never be deployed to production or any
+      network with untrusted hosts. Use environment-specific configuration to control the
+      bind address.
+
+  - question: How do I audit all listening ports and their bind addresses on Linux?
+    answer: |
+      Use ss -tlnp (for TCP) or ss -ulnp (for UDP) to list all listening sockets with
+      their bind addresses and the process IDs. Alternatively, netstat -tlnp on systems
+      without ss. Look for 0.0.0.0:port or :::port entries and verify each is intentional.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-071
+  - PYTHON-LANG-SEC-072
+  - PYTHON-LANG-SEC-073
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''

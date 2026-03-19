@@ -1,59 +1,198 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-042
-name: jsonpickle Usage Detected
-short_description: jsonpickle.decode() detected. jsonpickle can execute arbitrary code. Use json instead.
+name: jsonpickle Deserialization Detected
+short_description: jsonpickle.decode() can execute arbitrary Python code during deserialization. Use the standard json module for untrusted data.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-042
+ruleset: python/lang/PYTHON-LANG-SEC-042
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- jsonpickle
-- deserialization
-- rce
-- CWE-502
+  - python
+  - jsonpickle
+  - deserialization
+  - code-execution
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s pickle module and its derivatives (dill, shelve, jsonpickle) can
 
-  instantiate arbitrary Python objects during deserialization, enabling remote
+# Content
+description: |
+  jsonpickle is a Python library that extends JSON serialization to support arbitrary Python
+  objects by encoding type information and object state in JSON format. During deserialization,
+  jsonpickle.decode() uses the type information embedded in the JSON to reconstruct Python
+  objects, which involves calling __new__() and __setstate__() or __reduce__() on the
+  reconstructed types.
 
-  code execution when processing untrusted data. Similarly, PyYAML''s yaml.load()
+  This means that jsonpickle.decode() can instantiate arbitrary Python classes and execute
+  their initialization code, making it equivalent to pickle deserialization in terms of
+  security risk. An attacker who can control the JSON input can craft a payload that calls
+  os.system() or other dangerous functions during the decode() call.
 
-  and ruamel.yaml with unsafe type settings can construct arbitrary Python objects
+  For data interchange with untrusted parties, use standard json.loads() which only produces
+  Python built-in types (dict, list, str, int, float, bool, None).
 
-  from YAML input. The marshal module, while not designed for security, also
+message: "jsonpickle.decode() detected. jsonpickle can execute arbitrary code during deserialization. Use standard json.loads() for untrusted input."
 
-  deserializes binary data without validation.'
-message: jsonpickle.decode() detected. jsonpickle can execute arbitrary code. Use json instead.
-secure_example: "import json, yaml\n# Use JSON for data interchange (no code execution)\ndata = json.loads(network_data)\n\
-  # Use SafeLoader for YAML parsing\nconfig = yaml.safe_load(user_yaml_string)\n# Use hmac signing to\
-  \ verify pickle integrity (defense in depth)\nimport hmac, hashlib\nexpected_sig = hmac.new(secret_key,\
-  \ data, hashlib.sha256).digest()\nif not hmac.compare_digest(expected_sig, received_sig):\n    raise\
-  \ ValueError(\"Tampered data\")"
-recommendations: []
+security_implications:
+  - title: Arbitrary Class Instantiation
+    description: |
+      jsonpickle encodes Python type information as {"py/object": "os.system"} or similar
+      structures. During decode(), these types are imported and instantiated. An attacker
+      crafts JSON that triggers instantiation of dangerous classes with malicious arguments.
+  - title: JSON Format Disguise
+    description: |
+      jsonpickle data looks like valid JSON, which may bypass security controls that check
+      content type or basic JSON validity. The malicious payload is hidden within the
+      structural JSON that appears benign to casual inspection.
+  - title: API Endpoint Exploitation
+    description: |
+      REST APIs that use jsonpickle to deserialize request bodies or parameters are directly
+      exploitable. Any endpoint accepting application/json content that is decoded with
+      jsonpickle is a remote code execution vector.
+  - title: Cache and Storage Poisoning
+    description: |
+      Applications storing jsonpickle-serialized objects in Redis, databases, or message
+      queues are vulnerable if an attacker can inject data into those stores, as the
+      deserialization will execute the embedded code when the value is read.
+
+secure_example: |
+  import json
+
+  # INSECURE: jsonpickle.decode() on untrusted input
+  # import jsonpickle
+  # obj = jsonpickle.decode(user_json)
+
+  # SECURE: Use standard json.loads() for untrusted data
+  def parse_api_request(json_str: str) -> dict:
+      data = json.loads(json_str)
+      if not isinstance(data, dict):
+          raise ValueError("Expected JSON object")
+      return data
+
+  # SECURE: Use pydantic for typed deserialization with validation
+  from pydantic import BaseModel
+
+  class RequestPayload(BaseModel):
+      user_id: int
+      action: str
+      metadata: dict
+
+  def parse_typed_request(json_str: str) -> RequestPayload:
+      return RequestPayload.model_validate_json(json_str)
+
+  # If jsonpickle is needed for internal serialization of trusted objects:
+  # Use it only between trusted components, never for external input
+  import jsonpickle
+
+  def serialize_for_internal_cache(obj) -> str:
+      # ACCEPTABLE: Only used for trusted internal objects, never decoded from external input
+      return jsonpickle.encode(obj)
+
+recommendations:
+  - Replace jsonpickle.decode() with json.loads() for all data received from external sources, including API requests, file uploads, and message queue payloads.
+  - Use pydantic or marshmallow for typed deserialization with validation when structured Python objects are needed from external data.
+  - If jsonpickle is used for internal serialization between trusted components, ensure the serialized data never flows back from external sources.
+  - Audit all jsonpickle usage in API handlers, webhook processors, and data import functions.
+  - Consider migrating from jsonpickle to a schema-defined format (Protocol Buffers, Avro) for internal object serialization.
+
+detection_scope: |
+  This rule detects calls to jsonpickle.decode() and jsonpickle.loads() in Python source
+  code. All call sites are flagged since jsonpickle deserialization is inherently dangerous
+  with any input that could be attacker-influenced.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-- title: 'Python docs: pickle - restricting-globals'
-  url: https://docs.python.org/3/library/pickle.html#restricting-globals
-- title: pyyaml.org
-  url: https://pyyaml.org/wiki/PyYAMLDocumentation
-- title: 'Python docs: marshal'
-  url: https://docs.python.org/3/library/marshal.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "jsonpickle documentation"
+    url: https://jsonpickle.github.io/
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "Python pickle insecurity - the jsonpickle variant"
+    url: https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data
+
+# FAQ
+faq:
+  - question: Is jsonpickle really as dangerous as pickle?
+    answer: |
+      Yes. jsonpickle uses pickle's __reduce__ mechanism internally to reconstruct objects.
+      Any object that pickle can deserialize dangerously, jsonpickle can too. The JSON
+      encoding provides an illusion of safety because JSON is often considered safe, but
+      jsonpickle's type resolution during decode makes it equivalent to pickle.
+
+  - question: Why would anyone use jsonpickle over standard json?
+    answer: |
+      jsonpickle handles Python types that JSON cannot represent: datetime, Decimal, sets,
+      custom classes, numpy arrays, and objects with circular references. It is useful for
+      debugging, logging complex Python objects, or serializing state for trusted internal
+      use. The problem arises when it is used to deserialize data from untrusted sources.
+
+  - question: Can I use jsonpickle.decode() with keys=False for safety?
+    answer: |
+      The keys parameter controls dictionary key handling, not object instantiation safety.
+      There is no jsonpickle parameter that disables arbitrary class instantiation. If you
+      need to use jsonpickle for internal purposes, never decode data that originated from
+      external sources.
+
+  - question: What if I'm using jsonpickle in a Django REST API?
+    answer: |
+      Any Django REST API endpoint that calls jsonpickle.decode() on request data is
+      critically vulnerable to remote code execution. Replace with DRF serializers,
+      pydantic models, or standard json.loads() with manual field validation immediately.
+
+  - question: How do I migrate from jsonpickle to a safe alternative?
+    answer: |
+      For external data: use json.loads() + pydantic/marshmallow for typed validation.
+      For internal object serialization: evaluate Protocol Buffers, Apache Avro, or custom
+      JSON serializers that explicitly handle each supported type. For the transition period,
+      use jsonpickle only for encoding (never decoding) and migrate decoders first.
+
+  - question: Does this rule detect jsonpickle used through other libraries?
+    answer: |
+      The rule detects direct calls to jsonpickle.decode() and jsonpickle.loads(). Libraries
+      that wrap jsonpickle internally may not be detected. Audit your dependencies for
+      jsonpickle usage and review any library that accepts JSON or dict input and returns
+      typed Python objects.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-041
+  - PYTHON-LANG-SEC-043
+  - PYTHON-LANG-SEC-044
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''

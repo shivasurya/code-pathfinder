@@ -1,73 +1,195 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-062
-name: Insecure urllib Request Object
-short_description: urllib.request.Request() detected. Ensure HTTPS URLs are used.
+name: Insecure urllib Request Object Usage
+short_description: urllib.request.Request() and OpenerDirector used with HTTP URLs transmit data in plaintext. Verify HTTPS URLs are used.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-062
+ruleset: python/lang/PYTHON-LANG-SEC-062
+
+# Vulnerability Details
 cwe:
-- id: CWE-319
-  name: Cleartext Transmission of Sensitive Information
-  url: https://cwe.mitre.org/data/definitions/319.html
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
 tags:
-- python
-- urllib
-- request-object
-- insecure-transport
-- CWE-319
+  - python
+  - urllib
+  - request-object
+  - plaintext
+  - http
+  - CWE-319
+  - OWASP-A02
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Transmitting sensitive data over unencrypted channels (HTTP, FTP, Telnet) exposes
 
-  it to interception by network-level attackers through traffic sniffing,
+# Content
+description: |
+  urllib.request.Request() creates a request object that encapsulates a URL, headers, and
+  request body. When the URL in the Request object uses http:// rather than https://,
+  all data transmitted including authentication headers, API keys, request bodies, and
+  cookies is sent in plaintext over the network.
 
-  man-in-the-middle (MITM) attacks, or ARP spoofing. Python''s requests library,
+  urllib.request.OpenerDirector (obtained via urllib.request.build_opener()) provides
+  a customizable request opener. When configured without proper HTTPS handlers or used
+  with HTTP URLs, it has the same cleartext transmission risk.
 
-  urllib module, ftplib, and telnetlib can all be configured to communicate over
+  This rule audits urllib.request.Request() and urllib.request.build_opener() usage to
+  ensure HTTPS URLs are used and no insecure handlers are installed.
 
-  plaintext protocols that provide no confidentiality or integrity guarantees.'
-message: urllib.request.Request() detected. Ensure HTTPS URLs are used.
-secure_example: 'import requests, ftplib
+message: "urllib.request.Request() or OpenerDirector detected. Ensure HTTPS URLs are used to protect data in transit."
 
-  # Always use HTTPS for network requests
+security_implications:
+  - title: Authentication Header Exposure
+    description: |
+      Authentication headers added to Request objects (Authorization, X-API-Key, Cookie)
+      are transmitted in plaintext when HTTP URLs are used, exposing credentials to
+      network observers.
+  - title: Request Body Disclosure
+    description: |
+      POST request bodies containing passwords, form data, file contents, or API parameters
+      are transmitted without encryption, enabling data theft by network observers.
+  - title: Custom Handler Security Bypass
+    description: |
+      OpenerDirector with custom handlers can install insecure protocols or disable
+      default security behaviors. Handlers that bypass certificate verification or
+      add HTTP Basic Auth to HTTP (not HTTPS) URLs create additional security risks.
+  - title: Redirect Security
+    description: |
+      Custom openers may handle redirects differently from urlopen(), potentially following
+      redirects from HTTPS to HTTP URLs or not handling security-sensitive redirect
+      scenarios correctly.
 
-  response = requests.get("https://api.example.com/users")
+secure_example: |
+  import urllib.request
+  import ssl
 
-  # Use FTP over TLS (FTPS)
+  # INSECURE: urllib.request.Request with HTTP URL
+  # req = urllib.request.Request("http://api.example.com/data",
+  #                              headers={"Authorization": "Bearer token"})
+  # response = urllib.request.urlopen(req)
 
-  ftp = ftplib.FTP_TLS("ftp.example.com")
+  # SECURE: Use HTTPS URL with the Request object
+  def make_authenticated_request(url: str, token: str) -> bytes:
+      if not url.startswith("https://"):
+          raise ValueError("Only HTTPS URLs are permitted")
+      req = urllib.request.Request(
+          url,
+          headers={"Authorization": f"Bearer {token}"},
+      )
+      ctx = ssl.create_default_context()
+      with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
+          return response.read()
 
-  ftp.auth()  # Establish TLS
+  # PREFERRED: Use the requests library instead
+  import requests
 
-  ftp.login("user", "password")  # Encrypted
+  def api_call(url: str, token: str) -> dict:
+      response = requests.get(
+          url,
+          headers={"Authorization": f"Bearer {token}"},
+          timeout=30,
+      )
+      response.raise_for_status()
+      return response.json()
 
-  # Use SSH (paramiko) instead of telnet
+recommendations:
+  - Validate that all URLs in urllib.request.Request() objects use the https:// scheme before the request is executed.
+  - When using OpenerDirector, audit all installed handlers to ensure no insecure HTTP handlers or certificate bypass handlers are used.
+  - Pass an explicit ssl.create_default_context() to urlopen() when executing HTTPS Request objects for clarity and security.
+  - Consider migrating from urllib.request.Request/OpenerDirector to the requests library for simpler, more secure HTTP client code.
+  - Add URL scheme validation in any code that accepts URLs from configuration or user input before using them in urllib.request.Request().
 
-  import paramiko
+detection_scope: |
+  This rule detects calls to urllib.request.Request(), urllib.request.build_opener(), and
+  urllib.request.install_opener() in Python source code. All call sites are flagged to
+  prompt review of the URL scheme and handler configuration for security.
 
-  ssh = paramiko.SSHClient()
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "TLS with certificate validation required for all sensitive data transmission"
+  - standard: GDPR Article 32
+    requirement: "Appropriate technical measures including encryption of personal data in transit"
 
-  ssh.connect("server.example.com", username="user", key_filename="key.pem")'
-recommendations: []
+# References
 references:
-- title: CWE-319
-  url: https://cwe.mitre.org/data/definitions/319.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
-- title: 'Python docs: ftplib - ftplib.FTP_TLS'
-  url: https://docs.python.org/3/library/ftplib.html#ftplib.FTP_TLS
-- title: 'Python docs: http.client - http.client.HTTPSConnection'
-  url: https://docs.python.org/3/library/http.client.html#http.client.HTTPSConnection
-- title: requests.readthedocs.io
-  url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python docs: urllib.request.Request"
+    url: https://docs.python.org/3/library/urllib.request.html#urllib.request.Request
+  - title: "Python docs: urllib.request.build_opener()"
+    url: https://docs.python.org/3/library/urllib.request.html#urllib.request.build_opener
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: What is the difference between urllib.request.Request and urlopen()?
+    answer: |
+      urllib.request.Request() creates a request object that stores the URL, headers, data,
+      and method without making the network connection. urllib.request.urlopen() actually
+      executes the HTTP request. You can pass a Request object to urlopen() to execute it.
+      The security concern is the URL scheme stored in the Request object when it is executed.
+
+  - question: Is urllib.request.build_opener() inherently insecure?
+    answer: |
+      No. build_opener() creates an opener with configurable handlers. It becomes insecure
+      if handlers are installed that bypass certificate verification (HTTPSHandler with
+      an unverified context) or if HTTP URLs are used with credential headers. Review
+      all handlers installed via build_opener().
+
+  - question: How do I add Basic Authentication with urllib.request securely?
+    answer: |
+      Use urllib.request.HTTPPasswordMgrWithDefaultRealm() and urllib.request.HTTPBasicAuthHandler()
+      with the opener. Ensure the URL uses https:// so credentials are not transmitted in
+      plaintext. Alternatively, add the Authorization header directly to the Request object.
+
+  - question: What custom handlers might be security-sensitive?
+    answer: |
+      HTTPRedirectHandler: controls redirect behavior. ProxyHandler: routes traffic through
+      a proxy (ensure proxy uses HTTPS). HTTPSHandler: controls SSL context (ensure it uses
+      ssl.create_default_context()). UnknownHandler: handles unknown protocols (avoid). Any
+      custom handler that bypasses authentication or certificate verification.
+
+  - question: Should I use urllib.request.install_opener() globally?
+    answer: |
+      urllib.request.install_opener() sets a global default opener that affects all subsequent
+      urlopen() calls in the process. Avoid installing global openers with reduced security
+      settings as they affect all HTTP requests, not just the intended ones. Use local openers
+      passed explicitly to urlopen() instead.
+
+  - question: Does this rule detect urllib.request usage in Python 2 compatibility code?
+    answer: |
+      The rule targets Python 3 urllib.request patterns. Python 2 used urllib and urllib2
+      which are not available in Python 3. Code that imports from six.moves.urllib or
+      uses compatibility shims is not directly detected by this rule.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-060
+  - PYTHON-LANG-SEC-061
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-054
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A02:2021
-  name: ''
-  url: ''

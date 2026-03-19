@@ -1,61 +1,202 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-040
-name: Pickle Deserialization Detected
-short_description: pickle.loads/load detected. Pickle can execute arbitrary code. Use json or msgpack
-  instead.
+name: Pickle Deserialization of Untrusted Data
+short_description: pickle.loads() and pickle.load() execute arbitrary Python code during deserialization. Never unpickle data from untrusted sources.
+
+# Classification
 severity: HIGH
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-040
+ruleset: python/lang/PYTHON-LANG-SEC-040
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- pickle
-- deserialization
-- rce
-- OWASP-A08
-- CWE-502
+  - python
+  - pickle
+  - deserialization
+  - arbitrary-code-execution
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Python''s pickle module and its derivatives (dill, shelve, jsonpickle) can
 
-  instantiate arbitrary Python objects during deserialization, enabling remote
+# Content
+description: |
+  Python's pickle module serializes and deserializes Python objects by encoding them as a
+  stream of opcodes that are executed by a virtual stack machine during unpickling. The
+  __reduce__() and __reduce_ex__() methods on objects can define arbitrary Python code to
+  be executed when the object is deserialized.
 
-  code execution when processing untrusted data. Similarly, PyYAML''s yaml.load()
+  This means that deserializing a pickle stream from an untrusted source is equivalent to
+  executing arbitrary Python code. An attacker who can control the pickled data can achieve
+  full remote code execution, read files, spawn processes, and exfiltrate data. There is no
+  safe subset of pickle operations — the entire pickle format is a code execution vector.
 
-  and ruamel.yaml with unsafe type settings can construct arbitrary Python objects
+  The Python documentation explicitly warns: "The pickle module is not secure. Only unpickle
+  data you trust." Use JSON, MessagePack, or Protocol Buffers for data interchange with
+  untrusted parties.
 
-  from YAML input. The marshal module, while not designed for security, also
+message: "pickle.loads() or pickle.load() detected. Pickle can execute arbitrary code. Use JSON or a schema-validated format for untrusted data."
 
-  deserializes binary data without validation.'
-message: pickle.loads/load detected. Pickle can execute arbitrary code. Use json or msgpack instead.
-secure_example: "import json, yaml\n# Use JSON for data interchange (no code execution)\ndata = json.loads(network_data)\n\
-  # Use SafeLoader for YAML parsing\nconfig = yaml.safe_load(user_yaml_string)\n# Use hmac signing to\
-  \ verify pickle integrity (defense in depth)\nimport hmac, hashlib\nexpected_sig = hmac.new(secret_key,\
-  \ data, hashlib.sha256).digest()\nif not hmac.compare_digest(expected_sig, received_sig):\n    raise\
-  \ ValueError(\"Tampered data\")"
-recommendations: []
+security_implications:
+  - title: Arbitrary Code Execution via __reduce__
+    description: |
+      The pickle __reduce__ protocol allows any pickleable object to specify a callable and
+      arguments to be invoked during deserialization. An attacker crafts a pickle stream
+      that calls os.system(), subprocess.Popen(), or exec() with malicious arguments,
+      achieving RCE simply by having the pickle stream deserialized.
+  - title: No Sanitization Is Possible
+    description: |
+      Unlike SQL injection or XSS where sanitization can be effective, there is no way to
+      safely sanitize or validate a pickle stream before deserializing it. Parsing the pickle
+      stream to check for dangerous opcodes requires implementing a pickle interpreter, which
+      can itself be bypassed by encoding techniques.
+  - title: Session and Cache Poisoning
+    description: |
+      Applications that store pickled objects in Redis, Memcached, or cookies for session
+      management are vulnerable if an attacker can write to those stores. Session poisoning
+      via pickle injection in shared cache stores has been used in real attacks.
+  - title: File Upload and Deserialization Chain
+    description: |
+      Applications that accept file uploads and deserialize them with pickle (e.g., ML model
+      files, scientific data, serialized objects) are vulnerable to malicious uploads that
+      execute code on the server when the file is loaded.
+
+secure_example: |
+  import json
+  import struct
+
+  # INSECURE: pickle.loads() on data from network/file/user
+  # obj = pickle.loads(received_data)
+
+  # SECURE: Use JSON for data interchange
+  def deserialize_config(json_bytes: bytes) -> dict:
+      data = json.loads(json_bytes.decode("utf-8"))
+      # Validate structure and types
+      if not isinstance(data, dict):
+          raise ValueError("Expected dict")
+      return data
+
+  # SECURE: Use a schema-validated format for complex objects
+  from pydantic import BaseModel
+
+  class UserData(BaseModel):
+      username: str
+      age: int
+      email: str
+
+  def parse_user_data(json_str: str) -> UserData:
+      return UserData.model_validate_json(json_str)
+
+  # SECURE: For ML models, use format-specific safe loaders
+  # PyTorch: torch.load(f, map_location=...) with weights_only=True
+  # Scikit-learn: use joblib with caution, or export to ONNX
+  # NumPy arrays: np.load(f, allow_pickle=False)
+
+recommendations:
+  - Replace pickle with JSON, MessagePack, or Protocol Buffers for data received from any external source.
+  - For ML model serialization, use format-specific safe formats: ONNX, SavedModel (TensorFlow), TorchScript, or weights_only=True for PyTorch.
+  - If pickle must be used for internal IPC, sign all pickle payloads with HMAC using a secret key and verify the signature before deserializing.
+  - Never accept pickle data in file uploads, API endpoints, message queues, or any interface reachable by external parties.
+  - For scientific data (NumPy, pandas), use safe alternatives: np.load() with allow_pickle=False, df.to_parquet()/pd.read_parquet(), or HDF5.
+
+detection_scope: |
+  This rule detects calls to pickle.loads(), pickle.load(), pickle.Unpickler(),
+  and equivalent methods from the pickle module (including cPickle). All call sites
+  are flagged since the safety depends entirely on the trust level of the data source,
+  which requires human review.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data in the MITRE CWE Top 25"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including deserialization"
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
-- title: 'Python docs: pickle - restricting-globals'
-  url: https://docs.python.org/3/library/pickle.html#restricting-globals
-- title: pyyaml.org
-  url: https://pyyaml.org/wiki/PyYAMLDocumentation
-- title: 'Python docs: marshal'
-  url: https://docs.python.org/3/library/marshal.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "Python docs: pickle security warning"
+    url: https://docs.python.org/3/library/pickle.html#restricting-globals
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: "Exploiting Python pickles (research)"
+    url: https://davidhamann.de/2020/04/05/exploiting-python-pickle/
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+# FAQ
+faq:
+  - question: Can I make pickle safe by restricting globals with a custom Unpickler?
+    answer: |
+      Python's documentation suggests subclassing pickle.Unpickler and overriding find_class()
+      to restrict which classes can be deserialized. This provides some protection but is
+      difficult to implement correctly and has been bypassed in practice using creative opcode
+      sequences. For truly untrusted data, use a different serialization format entirely.
+
+  - question: Is pickle safe for data stored in my own database?
+    answer: |
+      Pickle is safer when stored data is only written by your own code and the storage
+      system is protected from external writes. However, if an attacker can inject data
+      into your database (via SQL injection, for example), they can plant malicious pickle
+      payloads. Defense in depth suggests using JSON even for internal storage.
+
+  - question: What about signing pickle data with HMAC?
+    answer: |
+      Signing pickled data with HMAC and verifying the signature before deserializing is
+      a valid mitigation for trusted sender scenarios (e.g., signed cookies in web frameworks).
+      Django's signed cookie framework does this. The key must be kept secret and rotated
+      if compromised. This is not a substitute for avoiding pickle with truly untrusted data.
+
+  - question: Is joblib.load() safer than pickle.load() for ML models?
+    answer: |
+      No. joblib uses pickle internally and has the same code execution risk. For scikit-learn
+      models, use ONNX export via sklearn2onnx for deployment. For numpy arrays, use
+      np.save()/np.load() with allow_pickle=False. For pandas DataFrames, use Parquet or
+      CSV with explicit dtypes.
+
+  - question: How do I safely load PyTorch model files?
+    answer: |
+      PyTorch .pt/.pth files are pickle-based and can execute code. From PyTorch 2.0+, use
+      torch.load(f, weights_only=True) to load only tensor data without executing arbitrary
+      pickle opcodes. For third-party model files, use ONNX runtime or model format-specific
+      safe loaders.
+
+  - question: What serialization format should I use to replace pickle?
+    answer: |
+      For structured data interchange: JSON (universal), MessagePack (binary, compact),
+      Protocol Buffers (schema-validated, efficient). For Python-specific types with schema
+      validation: Pydantic models with JSON. For scientific data: Arrow/Parquet, HDF5 with
+      h5py, NumPy's npz format with allow_pickle=False. Choose based on your type requirements
+      and performance needs.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-041
+  - PYTHON-LANG-SEC-042
+  - PYTHON-LANG-SEC-043
+  - PYTHON-LANG-SEC-044
+  - PYTHON-LANG-SEC-046
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''

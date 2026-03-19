@@ -1,73 +1,192 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-083
-name: pg8000 SQL Injection
-short_description: String formatting in pg8000 query. Use parameterized queries.
+name: pg8000 SQL Injection via String Formatting
+short_description: SQL query built with string formatting passed to pg8000 cursor.execute() enables SQL injection. Use parameterized queries with %s placeholders.
+
+# Classification
 severity: CRITICAL
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-083
+ruleset: python/lang/PYTHON-LANG-SEC-083
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- pg8000
-- sql-injection
-- database
-- CWE-89
+  - python
+  - pg8000
+  - sql-injection
+  - postgresql
+  - database
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'SQL injection occurs when user-controlled input is concatenated or interpolated
 
-  into SQL query strings without proper parameterization. Python database drivers
+# Content
+description: |
+  pg8000 is a pure-Python PostgreSQL driver that implements DB-API 2.0. Like psycopg2,
+  it uses %s placeholders for parameterized queries. SQL injection occurs when user data
+  is embedded in the SQL string using string formatting operations.
 
-  including psycopg2, asyncpg, aiopg, and pg8000 all support parameterized queries
+  pg8000's cursor.execute() and cursor.executemany() accept a SQL template as the first
+  argument and a tuple of parameters as the optional second argument. When only the SQL
+  string is provided and it contains user data embedded via f-strings or string concatenation,
+  SQL injection is possible.
 
-  that separate SQL structure from data values. When developers use string
+  pg8000 is commonly used in cloud environments and Google Cloud's Python client libraries
+  due to its pure-Python nature (no C extension dependency). SQL injection via pg8000
+  is equally dangerous regardless of the deployment environment.
 
-  formatting (f-strings, .format(), % operator, or concatenation) to build queries,
+message: "pg8000 cursor.execute() with string-formatted SQL detected. Use parameterized queries: cursor.execute(sql, (param,)) with %s placeholders."
 
-  they create injection points that allow attackers to manipulate query logic.'
-message: String formatting in pg8000 query. Use parameterized queries.
-secure_example: 'import psycopg2
+security_implications:
+  - title: PostgreSQL Data Exfiltration
+    description: |
+      SQL injection via pg8000 allows UNION SELECT and other techniques to read from
+      any PostgreSQL table. Cloud-deployed applications using pg8000 for managed
+      PostgreSQL (Cloud SQL, RDS) are fully vulnerable to data exfiltration.
+  - title: Cloud Database Compromise
+    description: |
+      In Google Cloud or AWS environments, injected SQL in pg8000 queries can access
+      all data the database user has permissions to read, potentially including data
+      from multiple tenants in a shared database architecture.
+  - title: Authentication Bypass
+    description: |
+      Login queries built with string formatting via pg8000 can be bypassed with standard
+      SQL injection payloads, granting unauthorized database access.
+  - title: Row-Level Security Bypass
+    description: |
+      PostgreSQL's row-level security (RLS) policies can be bypassed by SQL injection
+      that changes the query structure, allowing access to rows that RLS would normally
+      restrict.
 
-  # Parameterized query with psycopg2 (safe)
+secure_example: |
+  import pg8000.native
 
-  cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+  # INSECURE: String formatting in SQL
+  # cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
 
-  # Parameterized query with asyncpg (safe)
+  # SECURE: Parameterized queries with %s placeholders
+  def get_user_by_id(conn: pg8000.native.Connection, user_id: int) -> dict:
+      cursor = conn.cursor()
+      cursor.execute(
+          "SELECT id, username, email FROM users WHERE id = %s",
+          (user_id,)
+      )
+      row = cursor.fetchone()
+      if row is None:
+          return {}
+      return {"id": row[0], "username": row[1], "email": row[2]}
 
-  await conn.fetch("SELECT * FROM users WHERE id = $1", user_id)
+  def search_records(conn: pg8000.native.Connection,
+                     category: str, limit: int) -> list:
+      cursor = conn.cursor()
+      cursor.execute(
+          "SELECT id, title, content FROM records WHERE category = %s LIMIT %s",
+          (category, limit)
+      )
+      return cursor.fetchall()
 
-  # Use psycopg2.sql module for dynamic identifiers
+recommendations:
+  - Always use pg8000's parameterized query syntax with %s placeholders and pass values as a tuple argument to cursor.execute().
+  - Never construct SQL strings using f-strings, % operator, or .format() with user-supplied values.
+  - Validate and sanitize input types (ensure integer IDs are actually integers) before passing them as SQL parameters.
+  - Grant the PostgreSQL database user the minimum privileges required by the application.
+  - Use an ORM such as SQLAlchemy with pg8000 as the backend for additional query building safety.
 
-  from psycopg2 import sql
+detection_scope: |
+  This rule performs taint analysis tracing user-controlled data through string formatting
+  to pg8000 cursor.execute() and cursor.executemany() call sites. The first SQL string
+  argument is the injection sink.
 
-  query = sql.SQL("SELECT * FROM {} WHERE id = %s").format(sql.Identifier(table_name))
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against SQL injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
 
-  cursor.execute(query, (user_id,))'
-recommendations: []
+# References
 references:
-- title: CWE-89
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A03_2021-Injection/
-- title: www.psycopg.org
-  url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
-- title: magicstack.github.io
-  url: https://magicstack.github.io/asyncpg/current/usage.html
-- title: 'Python docs: sqlite3 - sqlite3-placeholders'
-  url: https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders
-- title: OWASP SQL Injection Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "pg8000 documentation"
+    url: https://github.com/tlocke/pg8000
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python DB-API 2.0 Specification (PEP 249)"
+    url: https://peps.python.org/pep-0249/
+
+# FAQ
+faq:
+  - question: What is pg8000 and how does it differ from psycopg2?
+    answer: |
+      pg8000 is a pure-Python PostgreSQL driver with no C extension dependency. psycopg2
+      uses a C extension for performance. pg8000 is preferred in environments where
+      installing C extensions is restricted (e.g., some PaaS platforms, restricted
+      container environments). Both implement DB-API 2.0 and use %s parameterization.
+      SQL injection risks and mitigations are identical.
+
+  - question: Does pg8000 support named parameters in addition to positional %s?
+    answer: |
+      pg8000 supports both %s (positional) and %(name)s (named dictionary-based)
+      parameterization, as defined by DB-API 2.0. Named parameters:
+      cursor.execute("SELECT * FROM t WHERE id = %(id)s", {"id": user_id}).
+      Both are safe as long as the SQL template string is a static literal.
+
+  - question: Is SQLAlchemy compatible with pg8000?
+    answer: |
+      Yes. SQLAlchemy supports pg8000 as a backend via the postgresql+pg8000:// connection
+      string. Using SQLAlchemy's ORM or Core with bound parameters is the recommended
+      approach for complex applications, as it provides additional parameterization
+      guarantees at the ORM level.
+
+  - question: How does Google Cloud SQL use pg8000?
+    answer: |
+      Google Cloud's Cloud SQL Python Connector supports pg8000 as the underlying
+      PostgreSQL driver, especially in environments where psycopg2's C extension
+      cannot be installed. Cloud SQL connector handles connection credentials and
+      SSL; pg8000 handles query execution. SQL injection mitigations are the same.
+
+  - question: Does this rule apply to pg8000.native.Connection as well as the legacy interface?
+    answer: |
+      Yes. Both pg8000's legacy DBAPI interface and the native interface use similar
+      parameterization. The native interface may use different method names but the
+      security principle (parameterize all user input) remains the same.
+
+  - question: What happens if I accidentally use Python's % operator on the SQL string?
+    answer: |
+      cursor.execute("SELECT * FROM t WHERE id = %s" % user_id) applies Python's string
+      formatting to the SQL string before passing it to pg8000. This is NOT parameterization
+      — it embeds the value directly in the SQL string, enabling injection. Always pass the
+      parameters as a separate argument: cursor.execute("... %s", (user_id,)).
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-080
+  - PYTHON-LANG-SEC-081
+  - PYTHON-LANG-SEC-082
+  - PYTHON-LANG-SEC-084
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

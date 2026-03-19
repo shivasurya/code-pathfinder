@@ -1,62 +1,200 @@
+# Rule Identity
 id: PYTHON-LANG-SEC-073
-name: multiprocessing Connection.recv()
-short_description: Connection.recv() uses pickle internally. Not safe for untrusted connections.
+name: multiprocessing Connection.recv() Usage
+short_description: multiprocessing.Connection.recv() uses pickle internally and is not safe for receiving data from untrusted connections.
+
+# Classification
 severity: MEDIUM
 category: lang
 language: python
-ruleset: python/PYTHON-LANG-SEC-073
+ruleset: python/lang/PYTHON-LANG-SEC-073
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- multiprocessing
-- recv
-- deserialization
-- CWE-502
+  - python
+  - multiprocessing
+  - recv
+  - pickle
+  - deserialization
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'Network-facing Python applications must properly authenticate remote hosts,
 
-  restrict listening interfaces, sanitize remote commands, and safely handle
+# Content
+description: |
+  Python's multiprocessing.Connection.recv() method receives and deserializes data using
+  pickle. When data arrives on the Connection object, recv() calls pickle.loads() internally
+  to reconstruct the Python object from the received bytes. This means that any data
+  received via recv() executes arbitrary Python code if the sender can craft a malicious
+  pickle payload.
 
-  deserialized data from network connections. This module detects insecure socket
+  multiprocessing Connections are designed for inter-process communication between trusted
+  Python processes in the same application. They become dangerous when exposed over a
+  network socket (via multiprocessing.connection.Client()/Listener()) to untrusted parties.
 
-  binding patterns, SSH host key verification bypass, unvalidated remote command
+  Use recv_bytes() to receive raw bytes without pickle deserialization, then parse the
+  bytes with a safe format like JSON.
 
-  execution over SSH, and unsafe deserialization through multiprocessing connections.'
-message: Connection.recv() uses pickle internally. Not safe for untrusted connections.
-secure_example: "import socket, paramiko\n# Bind to localhost only for internal services\nsock = socket.socket()\n\
-  sock.bind((\"127.0.0.1\", 8080))\n# Verify SSH host keys explicitly\nclient = paramiko.SSHClient()\n\
-  client.load_system_host_keys()\nclient.set_missing_host_key_policy(paramiko.RejectPolicy())\nclient.connect(host)\n\
-  # Validate commands before remote execution\nALLOWED_COMMANDS = {\"ls\", \"df\", \"uptime\"}\nif cmd\
-  \ not in ALLOWED_COMMANDS:\n    raise ValueError(\"Unauthorized command\")\nclient.exec_command(cmd)\n\
-  # Use authenticated Pipe() for multiprocessing\nparent_conn, child_conn = multiprocessing.Pipe()"
-recommendations: []
+message: "Connection.recv() uses pickle internally. Not safe for untrusted connections. Use recv_bytes() and parse with JSON instead."
+
+security_implications:
+  - title: Pickle Deserialization via IPC Channel
+    description: |
+      recv() calls pickle.loads() on the received bytes. An attacker who can write to
+      the connection (either as a MITM attacker or a malicious process connecting to an
+      exposed Listener) can send a malicious pickle payload that executes arbitrary code
+      in the receiving process.
+  - title: Listener Exposed to Network
+    description: |
+      multiprocessing.connection.Listener() can bind to a TCP address. If exposed to
+      a network-accessible address (not localhost), any client can send arbitrary pickle
+      payloads to the Listener, achieving remote code execution.
+  - title: Authentication Bypass
+    description: |
+      multiprocessing connections support HMAC-based authentication via the authkey
+      parameter. Without authkey, there is no authentication and any connecting client
+      can send pickle payloads. Even with authkey, compromised keys allow exploitation.
+  - title: Forked Process Trust Assumption
+    description: |
+      Code that assumes recv() is safe because "it's only used with forked processes"
+      may be vulnerable if the connection is also exposed to a network or if the expected
+      trusted sender can be replaced by an attacker-controlled process.
+
+secure_example: |
+  import json
+  from multiprocessing.connection import Connection
+
+  # INSECURE: recv() uses pickle on received data
+  # data = conn.recv()  # pickle.loads() internally
+
+  # SECURE: Use recv_bytes() and parse with JSON
+  def receive_json(conn: Connection) -> dict:
+      raw = conn.recv_bytes()
+      data = json.loads(raw.decode("utf-8"))
+      if not isinstance(data, dict):
+          raise ValueError("Expected JSON object")
+      return data
+
+  # SECURE: Sender uses send_bytes() with JSON
+  def send_json(conn: Connection, data: dict) -> None:
+      conn.send_bytes(json.dumps(data).encode("utf-8"))
+
+  # SECURE: Listener with authentication key (defense in depth)
+  from multiprocessing.connection import Listener
+  import os
+
+  def create_authenticated_listener(address: tuple) -> Listener:
+      authkey = os.environ.get("IPC_AUTH_KEY", "").encode()
+      if not authkey:
+          raise RuntimeError("IPC_AUTH_KEY not configured")
+      return Listener(address, authkey=authkey)
+
+recommendations:
+  - Replace Connection.recv() with Connection.recv_bytes() and parse the received bytes with json.loads() to avoid pickle deserialization.
+  - Always bind multiprocessing Listener() to localhost (127.0.0.1) and not to 0.0.0.0 or a network-accessible address.
+  - Use the authkey parameter for all multiprocessing connections to require HMAC authentication, even between trusted processes.
+  - For inter-process communication that must cross network boundaries, use a proper message queue (Redis, RabbitMQ) with authenticated, schema-validated payloads.
+  - Audit all multiprocessing.connection.Listener() configurations to ensure they are not exposed to untrusted network connections.
+
+detection_scope: |
+  This rule detects calls to .recv() on multiprocessing Connection objects and related
+  objects that use pickle for deserialization. The rule flags all recv() call sites
+  to prompt review of the connection's trust boundary.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
 references:
-- title: CWE-322
-  url: https://cwe.mitre.org/data/definitions/322.html
-- title: CWE-200
-  url: https://cwe.mitre.org/data/definitions/200.html
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP Top 10
-  url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
-- title: docs.paramiko.org
-  url: https://docs.paramiko.org/en/stable/api/client.html
-- title: 'Python docs: multiprocessing - multiprocessing.connection.Connection'
-  url: https://docs.python.org/3/library/multiprocessing.html#multiprocessing.connection.Connection
-- title: 'Python docs: socket - socket.socket.bind'
-  url: https://docs.python.org/3/library/socket.html#socket.socket.bind
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "Python docs: multiprocessing.connection"
+    url: https://docs.python.org/3/library/multiprocessing.html#connection-objects
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "Python docs: pickle security warning"
+    url: https://docs.python.org/3/library/pickle.html#restricting-globals
+
+# FAQ
+faq:
+  - question: Is recv() safe when used only between processes I control?
+    answer: |
+      recv() is safer when both ends are trusted Python processes in the same deployment.
+      However, if the multiprocessing Listener is bound to a network-accessible address
+      without authkey, any process can connect and send malicious data. Even with authkey,
+      a compromised key or a compromised trusted process enables attacks. Using recv_bytes()
+      with JSON eliminates the deserialization risk entirely.
+
+  - question: What is authkey and does it make recv() safe?
+    answer: |
+      The authkey parameter enables HMAC-based challenge-response authentication on
+      multiprocessing connections. It prevents unauthorized clients from connecting to
+      a Listener. However, it does not encrypt the connection, and if the authkey is
+      compromised (e.g., via environment variable exposure), unauthorized clients can
+      connect and send malicious pickle payloads. authkey is defense-in-depth, not a
+      substitute for using recv_bytes() + JSON.
+
+  - question: What is the difference between recv() and recv_bytes()?
+    answer: |
+      recv() calls pickle.loads() on the received data to return a Python object.
+      recv_bytes() returns the raw bytes without deserialization. Use recv_bytes()
+      and then parse the bytes with a safe format (json.loads, msgpack.loads with
+      no Python object extension). This avoids pickle deserialization entirely.
+
+  - question: When might a multiprocessing Connection be exposed to untrusted data?
+    answer: |
+      Risk scenarios include: (1) Listener bound to 0.0.0.0 or a network interface
+      accessible to external clients. (2) Shared queue or pipe where external input
+      can reach the sender process. (3) Test infrastructure that connects to production
+      Listeners. (4) Container environments where network policies allow cross-container
+      multiprocessing connections.
+
+  - question: Is multiprocessing.Queue.get() also vulnerable?
+    answer: |
+      Yes. multiprocessing.Queue uses pickle for serialization. Queue.get() is equivalent
+      to recv() in terms of deserialization risk. If an attacker can put malicious data
+      into a Queue (through a shared queue server or process injection), Queue.get()
+      will execute the malicious pickle payload.
+
+  - question: What is the recommended replacement for inter-process communication?
+    answer: |
+      For same-host IPC: use a Unix domain socket with JSON messages, or a shared memory
+      segment (multiprocessing.shared_memory) for raw data. For network IPC: use gRPC
+      with Protocol Buffers, or a message broker (Redis, RabbitMQ) with authenticated,
+      schema-validated JSON payloads. Avoid pickle-based IPC for any data that could
+      be influenced by external input.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-070
+  - PYTHON-LANG-SEC-072
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''
