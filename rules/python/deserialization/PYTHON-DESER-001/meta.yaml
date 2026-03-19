@@ -1,70 +1,194 @@
+# Rule Identity
 id: PYTHON-DESER-001
 name: Unsafe Pickle Deserialization
-short_description: 'Unsafe pickle deserialization: Untrusted data flows to pickle.loads() which can execute
-  arbitrary code. Use json.loads() instead.'
+short_description: Traces untrusted user input from request objects to pickle.loads() or pickle.load(), which can execute arbitrary Python code during deserialization.
+
+# Classification
 severity: CRITICAL
 category: deserialization
 language: python
-ruleset: python/PYTHON-DESER-001
+ruleset: python/deserialization/PYTHON-DESER-001
+
+# Vulnerability Details
 cwe:
-- id: CWE-502
-  name: Deserialization of Untrusted Data
-  url: https://cwe.mitre.org/data/definitions/502.html
+  - id: CWE-502
+    name: "Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
 tags:
-- python
-- deserialization
-- pickle
-- rce
-- untrusted-data
-- OWASP-A08
-- CWE-502
-- remote-code-execution
-- critical
-- security
-- intra-procedural
+  - python
+  - deserialization
+  - pickle
+  - remote-code-execution
+  - untrusted-data
+  - taint-analysis
+  - CWE-502
+  - OWASP-A08
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'This rule detects unsafe pickle deserialization where untrusted user input flows directly
 
-  to pickle.loads() or pickle.load(). Pickle is Python''s binary serialization format that can
+# Content
+description: |
+  This rule uses taint analysis to trace untrusted input from web request objects
+  (request.data, request.get_data, request.GET, request.POST, socket.recv) to
+  pickle.loads() and pickle.load(). Pickle is Python's native serialization format
+  and it can execute arbitrary Python code during deserialization. An attacker who
+  controls the input to pickle.loads() can run any code on the server, install
+  backdoors, exfiltrate data, or pivot to other systems.
 
-  execute arbitrary code during deserialization, making it extremely dangerous when used with
+  Python's own documentation includes a prominent warning: "The pickle module is
+  not secure. Only unpickle data you trust." Despite this, pickle deserialization
+  of user input remains one of the most common Python RCE vectors in the wild.
 
-  untrusted data.'
-message: 'Unsafe pickle deserialization: Untrusted data flows to pickle.loads() which can execute arbitrary
-  code. Use json.loads() instead.'
-secure_example: "import json\nfrom flask import Flask, request\nimport hmac\nimport hashlib\n\napp = Flask(__name__)\n\
-  SECRET_KEY = 'your-secret-key-here'\n\n@app.route('/api/load_data', methods=['POST'])\ndef load_user_data():\n\
-  \    \\\"\\\"\\\"\n    SECURE: Use JSON for untrusted data, not pickle!\n    \\\"\\\"\\\"\n    try:\n\
-  \        # Use JSON instead of pickle\n        user_data = json.loads(request.data)\n        return\
-  \ {'data': user_data}\n    except json.JSONDecodeError:\n        return {'error': 'Invalid JSON'}, 400\n\
-  \n# If you MUST use pickle with trusted sources:\n@app.route('/api/load_trusted', methods=['POST'])\n\
-  def load_trusted_data():\n    \\\"\\\"\\\"\n    LESS UNSAFE: Verify HMAC signature before unpickling.\n\
-  \    Only use this for data you control!\n    \\\"\\\"\\\"\n    data = request.get_json()\n    signed_data\
-  \ = base64.b64decode(data['signed_data'])\n    signature = data['signature']\n\n    # Verify HMAC signature\n\
-  \    expected = hmac.new(SECRET_KEY.encode(), signed_data, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(signature,\
-  \ expected):\n        return {'error': 'Invalid signature'}, 403\n\n    # Only unpickle if signature\
-  \ is valid\n    obj = pickle.loads(signed_data)\n    return {'data': str(obj)}"
-recommendations: []
+  The rule tracks data flow from request sources through variable assignments to
+  pickle sinks. It recognizes HMAC signature verification and input validation as
+  sanitizers. If the data passes through hmac.compare_digest() or a .validate()
+  call before reaching pickle.loads(), the finding is suppressed.
+
+message: "Untrusted data flows to pickle.loads(), enabling arbitrary code execution. Use json.loads() instead."
+
+security_implications:
+  - title: Remote Code Execution
+    description: |
+      Pickle deserialization calls __reduce__() on objects in the byte stream, which
+      can execute arbitrary Python code. An attacker sends a crafted pickle payload
+      that imports os and calls os.system('rm -rf /') or installs a reverse shell.
+      There is no safe subset of pickle. Any pickle.loads() on attacker-controlled
+      data is full RCE.
+  - title: Server Takeover
+    description: |
+      Unlike SQL injection or XSS, pickle RCE gives the attacker a Python interpreter
+      running as the web server process. They can read environment variables (database
+      credentials, API keys), access the filesystem, connect to internal services, and
+      establish persistent backdoor access.
+  - title: Supply Chain Risk
+    description: |
+      Pickle payloads can import and execute any installed Python package. If the
+      server has packages with known vulnerabilities, an attacker can leverage them
+      through pickle deserialization even if the application code never imports those
+      packages directly.
+  - title: Difficult to Detect in Production
+    description: |
+      Pickle payloads are binary and opaque. Standard WAFs and request logging won't
+      flag them because the malicious content is encoded in Python's internal object
+      format, not in visible strings. The attack leaves no obvious trace in
+      application logs.
+
+secure_example: |
+  import json
+  from flask import Flask, request
+
+  app = Flask(__name__)
+
+  @app.route('/api/load', methods=['POST'])
+  def load_data():
+      # SECURE: Use JSON for untrusted data, never pickle
+      try:
+          user_data = json.loads(request.data)
+          return {'data': user_data}
+      except json.JSONDecodeError:
+          return {'error': 'Invalid JSON'}, 400
+
+recommendations:
+  - Never use pickle.loads() or pickle.load() on data from untrusted sources. Use json.loads() for structured data exchange.
+  - If you must deserialize complex Python objects, use a restricted format like jsonpickle with a strict allow-list of permitted classes
+  - For inter-service communication where you control both ends, consider Protocol Buffers, MessagePack, or CBOR instead of pickle
+  - If legacy code requires pickle for trusted internal data, verify an HMAC signature before deserializing and rotate signing keys regularly
+  - Audit all uses of pickle, _pickle, cPickle, shelve, and dill in your codebase. Each one is a potential RCE vector.
+
+detection_scope: |
+  This rule traces data from request sources (request.data, request.get_data,
+  request.GET, request.POST, request.COOKIES, input(), *.read(), *.recv()) to
+  pickle sinks (pickle.loads, pickle.load, _pickle.loads, _pickle.load, *.loads,
+  *.load). Sanitizers include *.validate(), *.verify_signature(), *.verify(), and
+  hmac.compare_digest(). Uses scope="local" for intra-procedural analysis within
+  a single function.
+
+# References
 references:
-- title: 'CWE-502: Deserialization of Untrusted Data'
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: 'CVE-2021-3177: Python Buffer Overflow'
-  url: ''
-- title: OWASP A08:2021 - Software and Data Integrity Failures
-  url: https://owasp.org/www-project-top-ten/
-- title: Python Pickle Documentation (Security Warning!)
-  url: ''
-- title: Deserialization Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: "Python pickle module documentation (security warning)"
+    url: https://docs.python.org/3/library/pickle.html
+  - title: OWASP A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "Exploiting Python Pickle (research)"
+    url: https://davidhamann.de/2020/04/05/exploiting-python-pickle/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: CWE Top 25
+    requirement: "CWE-502 ranked in Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - prevent injection and code execution attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# FAQ
+faq:
+  - question: Why is pickle so dangerous compared to JSON?
+    answer: |
+      JSON only supports primitive data types (strings, numbers, booleans, arrays,
+      objects). It cannot execute code during parsing. Pickle supports arbitrary
+      Python objects and calls __reduce__() during deserialization, which can execute
+      any Python code. There is no "safe mode" for pickle. The format itself is the
+      vulnerability.
+
+  - question: Does this rule also catch shelve, dill, and other pickle-based libraries?
+    answer: |
+      The rule covers pickle.loads, pickle.load, and _pickle variants. For shelve,
+      dill, marshal, yaml.load, and jsonpickle, see the Flask and Django deserialization
+      rules (PYTHON-FLASK-SEC-013, PYTHON-DJANGO-SEC-072) which cover a broader set
+      of dangerous deserialization functions.
+
+  - question: We use pickle for caching between our own services. Is that safe?
+    answer: |
+      Only if the transport is fully trusted and authenticated. If an attacker can
+      inject data into the cache (through cache poisoning, network interception, or
+      a compromised service), pickle deserialization becomes an RCE vector. Consider
+      using MessagePack or Protocol Buffers for inter-service serialization, which
+      are both faster and safer.
+
+  - question: Can I use pickle safely with HMAC verification?
+    answer: |
+      HMAC verification before deserialization reduces the risk by ensuring the data
+      hasn't been tampered with. However, this only works if the HMAC key is never
+      compromised and the verification is correctly implemented. The rule recognizes
+      hmac.compare_digest() as a sanitizer and will suppress findings when it's
+      present in the flow.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/deserialization --project .
+      It outputs SARIF, JSON, or CSV. On GitHub, it posts inline review comments
+      directly on pull requests pointing to the exact lines.
+
+  - question: What does a pickle RCE exploit actually look like?
+    answer: |
+      An attacker crafts a Python class with a __reduce__ method that returns
+      (os.system, ('malicious_command',)). When pickle.loads() processes this
+      object, it calls os.system('malicious_command'). The payload is typically
+      base64-encoded binary data that looks innocuous in HTTP request bodies.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-013
+  - PYTHON-DJANGO-SEC-072
+  - PYTHON-LANG-SEC-070
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A08:2021
-  name: ''
-  url: ''
