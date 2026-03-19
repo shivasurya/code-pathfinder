@@ -245,38 +245,3 @@ similar_rules:
 tests:
   positive: tests/positive/
   negative: tests/negative/
-secure_example: "import json\nimport html\nimport ast\n\ndef lambda_handler(event, context):\n    # SECURE:\
-  \ HTML-escape user input before embedding in response\n    name = html.escape(event.get('name', ''))\n\
-  \    body = f'<html><body><h1>Hello, {name}!</h1></body></html>'\n    return {\n        'statusCode':\
-  \ 200,\n        'headers': {'Content-Type': 'text/html'},\n        'body': body\n    }\n\ndef process_handler(event,\
-  \ context):\n    # SECURE: Use ast.literal_eval() for safe expression parsing\n    expression = event.get('calc',\
-  \ '')\n    try:\n        result = ast.literal_eval(expression)  # Only parses literals\n    except (ValueError,\
-  \ SyntaxError):\n        return {'statusCode': 400, 'body': 'Invalid expression'}\n\n    # SECURE: Use\
-  \ JSON instead of pickle for deserialization\n    data = event.get('data', '{}')\n    try:\n       \
-  \ obj = json.loads(data)  # Safe - no code execution\n    except json.JSONDecodeError:\n        return\
-  \ {'statusCode': 400, 'body': 'Invalid JSON'}\n\n    # SECURE: Use allowlist for operations instead\
-  \ of eval/exec\n    ALLOWED_OPS = {'add': lambda a, b: a + b, 'sub': lambda a, b: a - b}\n    op = event.get('operation',\
-  \ '')\n    if op not in ALLOWED_OPS:\n        return {'statusCode': 400, 'body': 'Invalid operation'}\n\
-  \n    return {'statusCode': 200, 'body': json.dumps({'result': str(result)})}"
-recommendations: []
-references:
-- title: 'CWE-79: Cross-Site Scripting'
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: 'CWE-95: Eval Injection'
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: 'CWE-502: Deserialization of Untrusted Data'
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: OWASP XSS Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html
-- title: AWS Lambda Security Best Practices
-  url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
-- title: OWASP Injection
-  url: https://owasp.org/Top10/A03_2021-Injection/
-compliance: []
-tests:
-  positive: tests/positive/
-  negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''
