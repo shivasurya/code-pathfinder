@@ -1,70 +1,232 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-020
 name: Django Code Injection via eval()
-short_description: User input flows to eval(). Never use eval() with untrusted data.
+short_description: User input flows to eval(), enabling arbitrary Python code execution on the server.
+
+# Classification
 severity: CRITICAL
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-020
+ruleset: python/django/PYTHON-DJANGO-SEC-020
+
+# Vulnerability Details
 cwe:
-- id: CWE-95
-  name: Improper Neutralization of Directives in Dynamically Evaluated Code
-  url: https://cwe.mitre.org/data/definitions/95.html
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- django
-- code-injection
-- eval
-- OWASP-A03
-- CWE-95
+  - python
+  - django
+  - code-injection
+  - eval
+  - rce
+  - taint-analysis
+  - inter-procedural
+  - CWE-95
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect code injection vulnerabilities in Django applications where untrusted
 
-  user input from HTTP requests flows into dynamic code evaluation functions such as eval(),
+# Content
+description: |
+  This rule detects code injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into Python's eval() function.
 
-  exec(), or is used to index globals() for arbitrary function dispatch. Python''s eval() and
+  Python's eval() interprets its string argument as a Python expression and evaluates it
+  in the current scope. When user-controlled data reaches eval(), an attacker can inject
+  arbitrary Python code that executes with the full privileges and scope of the application
+  process. Unlike SQL injection or command injection, eval() injection gives attackers
+  direct access to the Python runtime, all imported modules, the filesystem, and network
+  resources without any shell intermediary.
 
-  exec() interpret strings as Python code, meaning any user-controlled input reaching these
+  Even supposedly "safe" uses of eval() with restricted builtins or custom namespaces
+  have repeatedly been bypassed through creative use of Python's object model and
+  dunder attributes. There is no safe way to call eval() on untrusted input; the
+  function must be replaced with purpose-specific parsers (ast.literal_eval() for data
+  structures, or custom validators for specific expression types).
 
-  functions allows an attacker to execute arbitrary Python code on the server with the full
+message: "User input flows to eval(). There is no safe way to eval() untrusted input. Use ast.literal_eval() or a purpose-specific parser."
 
-  privileges of the application process.'
-message: User input flows to eval(). Never use eval() with untrusted data.
-secure_example: "from django.http import JsonResponse\nimport ast\nimport operator\n\n# Safe math operations\
-  \ whitelist\nSAFE_OPS = {\n    ast.Add: operator.add,\n    ast.Sub: operator.sub,\n    ast.Mult: operator.mul,\n\
-  \    ast.Div: operator.truediv,\n}\n\ndef safe_eval_math(expr):\n    \\\"\\\"\\\"Evaluate simple math\
-  \ expressions safely using AST parsing.\\\"\\\"\\\"\n    tree = ast.parse(expr, mode='eval')\n    #\
-  \ Only allow numbers and basic arithmetic\n    for node in ast.walk(tree):\n        if not isinstance(node,\
-  \ (ast.Expression, ast.BinOp, ast.Constant,\n                                 ast.Add, ast.Sub, ast.Mult,\
-  \ ast.Div)):\n            raise ValueError(\"Unsafe expression\")\n    return eval(compile(tree, '<string>',\
-  \ 'eval'))\n\ndef calculate(request):\n    # SECURE: Use ast.literal_eval or custom safe parser\n  \
-  \  expression = request.GET.get('expr', '')\n    try:\n        result = safe_eval_math(expression)\n\
-  \    except (ValueError, SyntaxError):\n        return JsonResponse({'error': 'Invalid expression'},\
-  \ status=400)\n    return JsonResponse({'result': result})\n\ndef dispatch(request):\n    # SECURE:\
-  \ Use explicit allowlist for dispatch\n    ALLOWED_ACTIONS = {\n        'list': list_items,\n      \
-  \  'search': search_items,\n        'count': count_items,\n    }\n    action = request.GET.get('action',\
-  \ '')\n    handler = ALLOWED_ACTIONS.get(action)\n    if handler is None:\n        return JsonResponse({'error':\
-  \ 'Unknown action'}, status=400)\n    return handler(request)"
-recommendations: []
+security_implications:
+  - title: Direct Remote Code Execution
+    description: |
+      eval() with user input is direct Remote Code Execution. An attacker can import
+      os, read filesystem contents, spawn shells, exfiltrate secrets, and install
+      persistence backdoors through a single request. No privilege escalation step
+      is needed -- the code runs immediately in the application process context.
+  - title: Secret and Credential Theft
+    description: |
+      Django applications store database passwords, API keys, and secret keys in
+      settings or environment variables. An injected expression like
+      __import__('os').environ can exfiltrate all of these in a single request.
+  - title: Complete Application Compromise
+    description: |
+      Beyond reading secrets, an attacker can modify application state, alter database
+      records, delete files, corrupt the application's module cache, or replace
+      functions with malicious versions that persist for the lifetime of the process.
+  - title: Sandbox Escape Patterns
+    description: |
+      Restricted namespaces and custom builtins passed to eval() do not provide
+      meaningful protection. Attackers can access the full Python object hierarchy
+      through patterns like ().__class__.__base__.__subclasses__() to obtain references
+      to arbitrary classes and modules without needing direct imports.
+
+secure_example: |
+  from django.http import JsonResponse
+  import ast
+  import operator
+
+  # Safe arithmetic using AST validation
+  SAFE_NODES = (
+      ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
+      ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub,
+  )
+  SAFE_OPS = {
+      ast.Add: operator.add, ast.Sub: operator.sub,
+      ast.Mult: operator.mul, ast.Div: operator.truediv,
+  }
+
+  def eval_tree(node):
+      if isinstance(node, ast.Expression):
+          return eval_tree(node.body)
+      elif isinstance(node, ast.Constant):
+          return node.value
+      elif isinstance(node, ast.BinOp):
+          return SAFE_OPS[type(node.op)](eval_tree(node.left), eval_tree(node.right))
+      raise ValueError(f"Unsupported node: {type(node)}")
+
+  def calculate(request):
+      expression = request.GET.get('expr', '')
+      # SECURE: Parse AST, validate only safe nodes, evaluate manually
+      try:
+          tree = ast.parse(expression, mode='eval')
+          if not all(isinstance(n, SAFE_NODES) for n in ast.walk(tree)):
+              raise ValueError("Unsafe expression")
+          result = eval_tree(tree)
+      except (ValueError, SyntaxError, KeyError):
+          return JsonResponse({'error': 'Invalid expression'}, status=400)
+      return JsonResponse({'result': result})
+
+  def parse_config(request):
+      config_str = request.POST.get('config', '')
+      # SECURE: ast.literal_eval() only evaluates Python literals safely
+      try:
+          config = ast.literal_eval(config_str)
+          if not isinstance(config, dict):
+              raise ValueError("Config must be a dict")
+      except (ValueError, SyntaxError):
+          return JsonResponse({'error': 'Invalid config format'}, status=400)
+      return JsonResponse({'parsed': config})
+
+recommendations:
+  - Remove all uses of eval() with user-controlled input; there is no safe sanitizer for this.
+  - Use ast.literal_eval() for safely parsing Python literals (dicts, lists, strings, numbers) without executing arbitrary code.
+  - For mathematical expressions, implement a custom recursive descent parser over the AST using ast.parse() with strict node type validation.
+  - For function dispatch, use an explicit allowlist dictionary mapping string names to callable objects rather than using eval() or globals().
+  - For JSON-like data structures, use json.loads() which is safe and standardized.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is calls("eval") with tainted input tracked via .tracks(0). There are no
+  recognized sanitizers for eval() -- any user-controlled input reaching eval() is a
+  confirmed vulnerability. The rule follows taint across file and module boundaries.
+
+# References
 references:
-- title: CWE-95
-  url: https://cwe.mitre.org/data/definitions/95.html
-- title: CWE-96
-  url: https://cwe.mitre.org/data/definitions/96.html
-- title: OWASP Code Injection
-  url: https://owasp.org/www-community/attacks/Code_Injection
-- title: Python ast.literal_eval
-  url: https://docs.python.org/3/library/ast.html#ast.literal_eval
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: Python ast.literal_eval() documentation
+    url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+  - title: Django Security
+    url: https://docs.djangoproject.com/en/stable/topics/security/
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+  - title: Python sandbox escape techniques
+    url: https://book.hacktricks.xyz/generic-methodologies-and-resources/python/bypass-python-sandboxes
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in Most Dangerous Software Weaknesses list"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: SANS Top 25
+    requirement: "Improper Control of Generation of Code (Code Injection)"
+
+# FAQ
+faq:
+  - question: Is eval() ever safe to use with restricted builtins or namespaces?
+    answer: |
+      No. Passing eval() a restricted globals or locals dict does not prevent
+      sandbox escapes. Python's rich object model allows attackers to traverse the
+      class hierarchy using __class__, __bases__, __subclasses__, and __init__ to
+      access built-in functions and modules without direct name access. Multiple
+      CVEs exist for products that attempted restricted eval() sandboxes and were
+      bypassed. The only safe use of eval() is with fully static, hardcoded strings.
+
+  - question: What is the difference between eval() and exec()? Are both flagged?
+    answer: |
+      eval() evaluates a single expression and returns its value. exec() executes
+      statements and does not return a meaningful value. Both interpret user input as
+      Python code when given untrusted strings and are equally dangerous. SEC-020
+      covers eval(), SEC-021 covers exec(). Both should be flagged and remediated.
+
+  - question: Our application uses eval() for a math calculator feature. What should I do?
+    answer: |
+      Implement a safe math evaluator using ast.parse() and AST node validation.
+      Parse the input to an AST, walk all nodes, raise an error if any node type
+      is not in an allowlist of safe arithmetic nodes (BinOp, UnaryOp, Constant,
+      safe operator types), then recursively evaluate only the validated AST nodes.
+      The secure_example in this rule demonstrates this pattern.
+
+  - question: Can ast.literal_eval() replace eval() for most use cases?
+    answer: |
+      ast.literal_eval() safely evaluates Python literals: strings, bytes, numbers,
+      tuples, lists, dicts, sets, booleans, and None. It raises ValueError or
+      SyntaxError for anything that is not a literal. It is safe for parsing
+      configuration values, coordinate pairs, or other structured data. It cannot
+      evaluate expressions, function calls, or variable references.
+
+  - question: What if the eval() is inside a try/except block? Does that make it safe?
+    answer: |
+      No. Wrapping eval() in try/except catches exceptions but does not prevent code
+      execution. The attacker's injected code runs and any non-exception side effects
+      (file reads, network calls, process spawning) still occur before any exception
+      is raised or caught.
+
+  - question: How severe is eval() injection compared to SQL injection?
+    answer: |
+      eval() injection is generally more severe. SQL injection is limited to database
+      operations (unless the database has OS-level features). eval() injection runs
+      arbitrary Python code in the application process directly, with access to all
+      imported modules, all environment variables, the filesystem, and network. It is
+      effectively Remote Code Execution with no intermediate step.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-021
+  - PYTHON-DJANGO-SEC-022
+  - PYTHON-DJANGO-SEC-010
+  - PYTHON-DJANGO-SEC-011
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

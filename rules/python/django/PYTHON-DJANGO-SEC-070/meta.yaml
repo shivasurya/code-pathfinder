@@ -1,72 +1,227 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-070
-name: Django Insecure Cookie Settings
-short_description: set_cookie() without secure/httponly flags. Set secure=True, httponly=True, samesite='Lax'.
+name: Django Insecure Cookie Settings via set_cookie()
+short_description: Cookie set without secure, httponly, or samesite flags, making it vulnerable to interception, XSS-based theft, and CSRF attacks.
+
+# Classification
 severity: MEDIUM
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-070
+ruleset: python/django/PYTHON-DJANGO-SEC-070
+
+# Vulnerability Details
 cwe:
-- id: CWE-614
-  name: Sensitive Cookie in HTTPS Session Without Secure Attribute
-  url: https://cwe.mitre.org/data/definitions/614.html
+  - id: CWE-614
+    name: Sensitive Cookie in HTTPS Session Without Secure Attribute
+    url: https://cwe.mitre.org/data/definitions/614.html
+  - id: CWE-1004
+    name: Sensitive Cookie Without HttpOnly Flag
+    url: https://cwe.mitre.org/data/definitions/1004.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- django
-- cookies
-- security
-- OWASP-A05
-- CWE-614
+  - python
+  - django
+  - cookies
+  - security-misconfiguration
+  - httponly
+  - secure
+  - samesite
+  - audit
+  - CWE-614
+  - CWE-1004
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: "These rules detect common security misconfigurations and unsafe patterns in Django\napplications.\
-  \ They cover three distinct vulnerability categories:\n\n1. **Insecure Cookie Settings (CWE-614)**:\
-  \ Detects set_cookie() calls that may lack the\n   secure, httponly, or samesite flags. Without these\
-  \ flags, cookies can be intercepted\n   over unencrypted connections, accessed by JavaScript (enabling\
-  \ XSS-based session theft),\n   or sent in cross-site requests (enabling CSRF attacks).\n\n2. **CSRF\
-  \ Exempt Decorator (CWE-352)**: Detects usage of Django's @csrf_exempt decorator,\n   which disables\
-  \ Cross-Site Request Forgery protection on views. This allows attackers to\n   craft malicious pages\
-  \ that trigger state-changing actions on behalf of authenticated\n   users without their consent.\n\n\
-  3. **Insecure Deserialization (CWE-502)**: Detects request data flowing into unsafe\n   deserialization\
-  \ functions (pickle, yaml.load, dill, shelve). These functions can execute\n   arbitrary code during\
-  \ deserialization, making them critical attack vectors when used with\n   untrusted input."
-message: set_cookie() without secure/httponly flags. Set secure=True, httponly=True, samesite='Lax'.
-secure_example: "from django.http import HttpResponse, JsonResponse\nfrom django.middleware.csrf import\
-  \ CsrfViewMiddleware\nimport json\n\ndef set_preferences(request):\n    # SECURE: Cookie set with all\
-  \ security flags\n    response = HttpResponse(\"Preferences saved\")\n    response.set_cookie(\n   \
-  \     'session_id',\n        request.session.session_key,\n        secure=True,      # Only sent over\
-  \ HTTPS\n        httponly=True,     # Not accessible via JavaScript\n        samesite='Lax',   # Prevents\
-  \ cross-site sending\n        max_age=3600,     # 1 hour expiry\n    )\n    return response\n\n# SECURE:\
-  \ No @csrf_exempt - CSRF protection enabled by default\ndef transfer_funds(request):\n    if request.method\
-  \ != 'POST':\n        return HttpResponse(status=405)\n    amount = request.POST.get('amount')\n   \
-  \ recipient = request.POST.get('recipient')\n    perform_transfer(request.user, recipient, amount)\n\
-  \    return HttpResponse(\"Transfer complete\")\n\ndef load_data(request):\n    # SECURE: Use JSON instead\
-  \ of pickle for untrusted data\n    try:\n        data = json.loads(request.body)\n    except json.JSONDecodeError:\n\
-  \        return JsonResponse({'error': 'Invalid JSON'}, status=400)\n    return JsonResponse({'data':\
-  \ data})"
-recommendations: []
+
+# Content
+description: |
+  This rule detects insecure cookie configurations in Django applications by auditing
+  calls to response.set_cookie() that may be missing critical security flags: Secure,
+  HttpOnly, and SameSite.
+
+  Cookies without the Secure flag are transmitted over unencrypted HTTP connections,
+  exposing them to network eavesdropping. Cookies without the HttpOnly flag are
+  accessible via document.cookie in JavaScript, enabling session cookie theft through
+  XSS attacks. Cookies without the SameSite flag can be sent in cross-site requests,
+  facilitating Cross-Site Request Forgery (CSRF) attacks.
+
+  This rule uses pattern matching on calls to *.set_cookie() to audit all cookie
+  setting calls and flag those missing the recommended security attributes. For session
+  cookies specifically, Django's global settings SESSION_COOKIE_SECURE, SESSION_COOKIE_HTTPONLY,
+  and SESSION_COOKIE_SAMESITE should also be set.
+
+message: "set_cookie() called without complete security flags. Set secure=True, httponly=True, and samesite='Lax' or 'Strict'."
+
+security_implications:
+  - title: Session Hijacking via Network Interception
+    description: |
+      Cookies without the Secure flag are transmitted in plaintext over HTTP. An
+      attacker on the same network (coffee shop WiFi, corporate network with a
+      compromised switch) can intercept session cookies using passive eavesdropping,
+      enabling session hijacking without any interaction with the application.
+  - title: Session Cookie Theft via XSS
+    description: |
+      Cookies without the HttpOnly flag are readable by JavaScript via document.cookie.
+      Any XSS vulnerability in the application can be used to exfiltrate session
+      cookies to attacker-controlled servers, enabling account takeover. HttpOnly
+      prevents this specific attack path even when XSS is present.
+  - title: Cross-Site Request Forgery via Unprotected Cookies
+    description: |
+      Cookies without SameSite=Lax or SameSite=Strict are sent by browsers in
+      cross-site requests. Combined with insufficient CSRF token protection, this
+      enables attackers to craft pages that trigger state-changing actions in the
+      application on behalf of authenticated users.
+  - title: Cookie Theft via Mixed Content
+    description: |
+      Even on HTTPS pages, cookies without the Secure flag can be exposed if any
+      resource on the page is loaded over HTTP (mixed content). Browsers may send
+      non-Secure cookies with HTTP requests to the same domain, creating an
+      exposure window even on otherwise HTTPS deployments.
+
+secure_example: |
+  from django.http import HttpResponse, JsonResponse
+
+  def set_preferences(request):
+      response = HttpResponse("Preferences saved")
+      # SECURE: All three security flags set for sensitive cookies
+      response.set_cookie(
+          'user_pref',
+          'dark_mode',
+          secure=True,      # Only sent over HTTPS
+          httponly=True,    # Not accessible from JavaScript
+          samesite='Lax',   # Sent on top-level navigation, blocked on cross-site sub-requests
+          max_age=86400,    # 1 day expiry
+      )
+      return response
+
+  def set_session_tracking(request):
+      response = JsonResponse({'status': 'ok'})
+      # SECURE: Analytics cookie with Strict SameSite for enhanced CSRF protection
+      response.set_cookie(
+          'analytics_id',
+          request.session.session_key,
+          secure=True,
+          httponly=False,  # Analytics cookies may need JS access -- document this
+          samesite='Strict',
+          max_age=30 * 24 * 3600,  # 30 days
+      )
+      return response
+
+  # ALSO configure Django settings for session cookies:
+  # SESSION_COOKIE_SECURE = True
+  # SESSION_COOKIE_HTTPONLY = True
+  # SESSION_COOKIE_SAMESITE = 'Lax'
+  # CSRF_COOKIE_SECURE = True
+  # CSRF_COOKIE_HTTPONLY = True
+
+recommendations:
+  - Set secure=True on all cookies that should only be transmitted over HTTPS connections.
+  - Set httponly=True on all session and authentication cookies to prevent JavaScript access.
+  - Set samesite='Lax' as the minimum SameSite policy; use samesite='Strict' for cookies not needed in cross-site top-level navigation.
+  - Configure Django's global session and CSRF cookie settings: SESSION_COOKIE_SECURE, SESSION_COOKIE_HTTPONLY, SESSION_COOKIE_SAMESITE, CSRF_COOKIE_SECURE.
+  - Set appropriate max_age or expires values to limit the lifetime of cookies and reduce the window of exposure for stolen cookies.
+
+detection_scope: |
+  This rule uses QueryType pattern matching on calls("*.set_cookie") to audit all
+  cookie-setting calls in Django views and middleware. It checks for the presence of
+  the secure, httponly, and samesite keyword arguments and flags calls where these
+  are absent or set to False/None. The .where() clause constrains matches to Python
+  files in Django project structures. This is an audit rule rather than a taint-based
+  rule -- it flags all set_cookie() calls regardless of what value is being stored
+  in the cookie.
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: OWASP CSRF
-  url: https://owasp.org/www-community/attacks/csrf
-- title: Django CSRF Protection
-  url: https://docs.djangoproject.com/en/stable/ref/csrf/
-- title: Django Cookie Security
-  url: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-614: Sensitive Cookie Without Secure Flag"
+    url: https://cwe.mitre.org/data/definitions/614.html
+  - title: "CWE-1004: Sensitive Cookie Without HttpOnly Flag"
+    url: https://cwe.mitre.org/data/definitions/1004.html
+  - title: Django Cookie Security Settings
+    url: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure
+  - title: OWASP Session Management Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+  - title: Mozilla Cookie Security documentation
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#security
+  - title: Django Security - CSRF Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-request-forgery-csrf-protection
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: CWE Top 25
+    requirement: "CWE-614 and CWE-1004 - Cookie security flags"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.4.1 - all cookies that do not have the Secure attribute must be justified"
+  - standard: NIST SP 800-53
+    requirement: "SC-8: Transmission Confidentiality and Integrity; SC-23: Session Authenticity"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure security of personal data processing including session management"
+
+# FAQ
+faq:
+  - question: Does setting secure=True on individual cookies replace the Django settings?
+    answer: |
+      Both are needed for complete coverage. Django's SESSION_COOKIE_SECURE and
+      CSRF_COOKIE_SECURE settings protect the built-in session and CSRF cookies.
+      Custom cookies set via response.set_cookie() require the secure parameter to
+      be passed explicitly, as they are not covered by the session cookie settings.
+      Set both: the global Django settings for built-in cookies and explicit flags
+      for custom cookies.
+
+  - question: What is the difference between SameSite=Lax and SameSite=Strict?
+    answer: |
+      SameSite=Lax sends cookies on top-level GET navigation from other sites (e.g.,
+      clicking a link from an email). SameSite=Strict never sends the cookie on
+      cross-site requests, even top-level navigation. Lax is the recommended default
+      for session cookies because it allows users to follow external links and arrive
+      at the site already logged in. Strict provides better CSRF protection but may
+      confuse users who click links from external sites and appear logged out.
+
+  - question: Can I omit httponly=True for cookies that need to be read by JavaScript?
+    answer: |
+      For cookies that genuinely need JavaScript access (analytics, user preferences
+      accessed by client-side code), httponly=False is acceptable -- but document this
+      explicitly in code comments and ensure those cookies do not contain session tokens
+      or authentication state. Authentication and session cookies must always have
+      httponly=True.
+
+  - question: Does setting SameSite=Strict eliminate the need for Django's CSRF middleware?
+    answer: |
+      No. SameSite cookies are a defense-in-depth measure but not a complete CSRF
+      replacement. Some browsers do not fully support SameSite, older browsers ignore
+      it entirely, and some legitimate cross-site requests (OAuth, payment provider
+      callbacks) may need to carry cookies. Django's CSRF middleware should remain
+      enabled. SameSite cookies reduce the CSRF attack surface but do not eliminate it.
+
+  - question: How do Django's global cookie security settings interact with set_cookie()?
+    answer: |
+      Django's global settings (SESSION_COOKIE_SECURE, etc.) apply only to cookies
+      set through Django's session framework and CSRF middleware. They have no effect
+      on cookies set directly via response.set_cookie(). Each set_cookie() call must
+      include the security flags explicitly.
+
+  - question: What should I do about third-party Django packages that call set_cookie() without security flags?
+    answer: |
+      Check the package's documentation for cookie security configuration options.
+      Many packages support settings like COOKIE_SECURE or allow wrapping their
+      response processing. If the package does not support security flags, submit
+      a bug report. In the interim, you can wrap the package's views with middleware
+      that adds security flags to all Set-Cookie headers.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-071
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''

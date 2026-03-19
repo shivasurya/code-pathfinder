@@ -1,62 +1,232 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-006
-name: Tainted SQL String Construction
-short_description: User input used in SQL string construction. Use parameterized queries.
+name: Django Tainted SQL String Construction
+short_description: User input is used to construct a SQL string that flows to a database execution function, enabling SQL injection via string building.
+
+# Classification
 severity: HIGH
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-006
+ruleset: python/django/PYTHON-DJANGO-SEC-006
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- django
-- sql-injection
-- string-format
-- OWASP-A03
-- CWE-89
+  - python
+  - django
+  - sql-injection
+  - string-construction
+  - f-string
+  - format
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect SQL injection vulnerabilities in Django applications where untrusted
 
-  user input from HTTP requests flows into raw SQL queries without proper parameterization.
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Django applications where user
+  input from HTTP request parameters is used to construct SQL strings via f-strings,
+  string concatenation, or % formatting before being passed to a database execution
+  function.
 
-  Django''s ORM provides safe query construction by default, but developers sometimes bypass
+  This rule complements the specific sink rules (SEC-001 through SEC-004) by catching
+  the pattern where the SQL construction and execution are in separate functions or
+  files. A common pattern is a view that builds a query string from request parameters
+  and passes it to a database utility function which calls cursor.execute() or raw().
+  The taint flows through the string construction step and reaches the sink in a
+  different code location.
 
-  this protection by using raw SQL via cursor.execute(), Model.objects.raw(), QuerySet.extra(),
+  The rule specifically tracks the construction of SQL strings using user-controlled
+  data, making it effective at catching patterns like:
+  sql = f"SELECT * FROM orders WHERE user_id = {user_id}"
+  or:
+  sql = "SELECT * FROM users WHERE name = '" + username + "'"
 
-  or RawSQL expressions. When user input reaches these functions without parameterization,
+message: "User input flows into SQL string construction. Use parameterized query placeholders instead of string formatting."
 
-  attackers can manipulate SQL queries to read, modify, or delete arbitrary database records.'
-message: User input used in SQL string construction. Use parameterized queries.
-secure_example: "from django.http import JsonResponse\nfrom django.db import connection\n\ndef search_users(request):\n\
-  \    # SECURE: Parameterized query with %s placeholder\n    username = request.GET.get('username')\n\
-  \    cursor = connection.cursor()\n    cursor.execute(\"SELECT * FROM users WHERE username = %s\", [username])\n\
-  \    results = cursor.fetchall()\n    return JsonResponse({'users': results})\n\ndef get_orders(request):\n\
-  \    # SECURE: Use Django ORM with safe filtering\n    status = request.GET.get('status')\n    orders\
-  \ = Order.objects.filter(status=status).values()\n    return JsonResponse({'orders': list(orders)})\n\
-  \ndef get_orders_raw(request):\n    # SECURE: Parameterized .raw() query\n    status = request.GET.get('status')\n\
-  \    orders = Order.objects.raw(\"SELECT * FROM orders WHERE status = %s\", [status])\n    return JsonResponse({'orders':\
-  \ list(orders)})"
-recommendations: []
+security_implications:
+  - title: Multi-Hop Injection via String Building
+    description: |
+      The most dangerous injection patterns involve SQL strings built incrementally
+      across multiple function calls. User input may be appended to a query string in
+      one function, the partially-built string passed to another, and the final string
+      executed in a third. Taint analysis across these hops catches what per-function
+      review would miss.
+  - title: F-String SQL Construction
+    description: |
+      Python f-strings are concise and natural to write, making them a common pitfall
+      for SQL construction. A query like f"SELECT * FROM t WHERE id = {user_id}" looks
+      harmless but is a direct injection vector. Any value of user_id that contains
+      SQL metacharacters will alter the query structure.
+  - title: Conditional SQL Building Patterns
+    description: |
+      A common pattern is building WHERE clause conditions dynamically based on which
+      filters a user requests. Each condition appended with concatenation is a separate
+      injection point. This pattern requires careful use of Django's Q() objects or
+      parameterized query fragments instead.
+  - title: Logging and Debugging SQL as a Secondary Path
+    description: |
+      Developers often construct SQL strings for logging or debugging purposes without
+      intending to execute them, but these strings sometimes end up being executed in
+      error handling paths or when debug logging is disabled. This rule catches
+      construction regardless of the intended use.
+
+secure_example: |
+  from django.http import JsonResponse
+  from django.db import connection
+  from myapp.models import Order
+
+  def search_orders(request):
+      user_id = request.GET.get('user_id', '')
+      status = request.GET.get('status', '')
+      try:
+          user_id = int(user_id)
+      except ValueError:
+          return JsonResponse({'error': 'Invalid user_id'}, status=400)
+      # SECURE: Build query with placeholders, pass values separately
+      with connection.cursor() as cursor:
+          cursor.execute(
+              "SELECT id, total FROM orders WHERE user_id = %s AND status = %s",
+              [user_id, status]
+          )
+          orders = cursor.fetchall()
+      return JsonResponse({'orders': orders})
+
+  def dynamic_filter(request):
+      status = request.GET.get('status', '')
+      min_total = request.GET.get('min_total', '0')
+      try:
+          min_total = float(min_total)
+      except ValueError:
+          return JsonResponse({'error': 'Invalid total'}, status=400)
+      # SECURE: Use Django ORM to build dynamic queries safely
+      qs = Order.objects.all()
+      if status:
+          qs = qs.filter(status=status)
+      if min_total > 0:
+          qs = qs.filter(total__gte=min_total)
+      return JsonResponse({'orders': list(qs.values('id', 'total', 'status'))})
+
+recommendations:
+  - Never use f-strings, % formatting, or string concatenation to embed user input into SQL strings; use parameterized query placeholders (%s) with a separate values list.
+  - Refactor dynamic SQL building patterns to use Django's ORM Q() objects, filter chaining, and annotate() for type-safe dynamic query construction.
+  - When raw SQL is unavoidable, build the SQL string as a static template with %s placeholders and keep all dynamic values in a separate list passed to execute().
+  - Perform code review specifically looking for SQL string construction that touches request parameters, even when the execution happens in a different function.
+  - Use Django Debug Toolbar in development to inspect generated SQL and verify parameterization is working correctly.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The rule tracks taint through string construction operations (f-strings, concatenation,
+  % formatting) and follows the resulting tainted string to SQL execution sinks:
+  calls("*.execute"), calls("*.raw"), calls("*.extra"), and calls("RawSQL").
+  The .tracks(0) setting ensures only the SQL string argument (not the params argument)
+  of these sinks is considered. Sanitizers include int(), float(), and shlex.quote()
+  for string values.
+
+# References
 references:
-- title: CWE-89
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: OWASP SQL Injection
-  url: https://owasp.org/www-community/attacks/SQL_Injection
-- title: Django Raw SQL
-  url: https://docs.djangoproject.com/en/stable/topics/db/sql/
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django Raw SQL Queries
+    url: https://docs.djangoproject.com/en/stable/topics/db/sql/
+  - title: Django Q Objects for Complex Queries
+    url: https://docs.djangoproject.com/en/stable/topics/db/queries/#complex-lookups-with-q-objects
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web-facing applications against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure data security against unauthorized access"
+
+# FAQ
+faq:
+  - question: How does this rule differ from SEC-001 through SEC-004?
+    answer: |
+      SEC-001 through SEC-004 focus on specific sink functions: cursor.execute(),
+      raw(), extra(), and RawSQL(). SEC-006 focuses on the construction of tainted
+      SQL strings regardless of which sink they eventually reach. It catches patterns
+      where the string building happens in a different file or function from the
+      execution, or where the tainted string flows through multiple intermediate
+      variables before reaching a sink.
+
+  - question: Can this rule detect SQL injection in helper functions called from views?
+    answer: |
+      Yes. This is exactly the use case SEC-006 is designed for. If a Django view
+      calls request.GET.get('filter'), constructs an f-string SQL query, and passes
+      that string to a database utility function in a separate module, the rule follows
+      the taint chain across the function call and flags the construction-to-sink flow.
+
+  - question: Does casting with int() prevent this rule from triggering?
+    answer: |
+      Yes. Explicit type conversion with int() or float() is recognized as a sanitizer
+      because a successful int() conversion guarantees the value is numeric and cannot
+      contain SQL metacharacters. If the conversion raises ValueError, the application
+      should handle that as invalid input. After a successful int() call, the taint is
+      cleared and subsequent SQL construction using that value will not be flagged.
+
+  - question: What about dynamic query building where column names come from user input?
+    answer: |
+      Column names cannot be parameterized and int/float casting does not apply.
+      For user-controlled column or table names, use an allowlist: validate that the
+      input matches one of a predetermined set of permitted identifiers before including
+      it in the SQL string. Any other approach is unsafe regardless of how the resulting
+      string is executed.
+
+  - question: Our ORM generates some raw SQL internally. Will this rule flag ORM-generated queries?
+    answer: |
+      No. The rule tracks data originating from Django request sources. ORM-generated
+      SQL strings are not tainted from the rule's perspective because they are not
+      constructed from user request data. Only strings that contain user-controlled
+      values as a result of f-string, concatenation, or % formatting operations will
+      be flagged.
+
+  - question: How should I restructure code that builds SQL conditions conditionally?
+    answer: |
+      Replace conditional SQL string building with Django's Q() object pattern:
+      build a list of Q() objects based on the conditions that apply, then combine
+      them with the & and | operators and pass to filter(). This is safe, readable,
+      and testable. For complex cases involving database-specific functions, use
+      RawSQL() with the params argument for each dynamic value.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-DJANGO-SEC-003
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-DJANGO-SEC-005
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

@@ -1,72 +1,232 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-071
-name: Django CSRF Exempt Decorator
-short_description: '@csrf_exempt disables CSRF protection. Ensure this is intentional.'
+name: Django CSRF Exempt Decorator Audit
+short_description: '@csrf_exempt disables Cross-Site Request Forgery protection for the decorated view. Audit all usages to confirm this is intentional and justified.'
+
+# Classification
 severity: MEDIUM
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-071
+ruleset: python/django/PYTHON-DJANGO-SEC-071
+
+# Vulnerability Details
 cwe:
-- id: CWE-352
-  name: Cross-Site Request Forgery (CSRF)
-  url: https://cwe.mitre.org/data/definitions/352.html
+  - id: CWE-352
+    name: Cross-Site Request Forgery (CSRF)
+    url: https://cwe.mitre.org/data/definitions/352.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
 tags:
-- python
-- django
-- csrf
-- security
-- OWASP-A05
-- CWE-352
+  - python
+  - django
+  - csrf
+  - csrf-exempt
+  - security-misconfiguration
+  - audit
+  - CWE-352
+  - OWASP-A05
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: "These rules detect common security misconfigurations and unsafe patterns in Django\napplications.\
-  \ They cover three distinct vulnerability categories:\n\n1. **Insecure Cookie Settings (CWE-614)**:\
-  \ Detects set_cookie() calls that may lack the\n   secure, httponly, or samesite flags. Without these\
-  \ flags, cookies can be intercepted\n   over unencrypted connections, accessed by JavaScript (enabling\
-  \ XSS-based session theft),\n   or sent in cross-site requests (enabling CSRF attacks).\n\n2. **CSRF\
-  \ Exempt Decorator (CWE-352)**: Detects usage of Django's @csrf_exempt decorator,\n   which disables\
-  \ Cross-Site Request Forgery protection on views. This allows attackers to\n   craft malicious pages\
-  \ that trigger state-changing actions on behalf of authenticated\n   users without their consent.\n\n\
-  3. **Insecure Deserialization (CWE-502)**: Detects request data flowing into unsafe\n   deserialization\
-  \ functions (pickle, yaml.load, dill, shelve). These functions can execute\n   arbitrary code during\
-  \ deserialization, making them critical attack vectors when used with\n   untrusted input."
-message: '@csrf_exempt disables CSRF protection. Ensure this is intentional.'
-secure_example: "from django.http import HttpResponse, JsonResponse\nfrom django.middleware.csrf import\
-  \ CsrfViewMiddleware\nimport json\n\ndef set_preferences(request):\n    # SECURE: Cookie set with all\
-  \ security flags\n    response = HttpResponse(\"Preferences saved\")\n    response.set_cookie(\n   \
-  \     'session_id',\n        request.session.session_key,\n        secure=True,      # Only sent over\
-  \ HTTPS\n        httponly=True,     # Not accessible via JavaScript\n        samesite='Lax',   # Prevents\
-  \ cross-site sending\n        max_age=3600,     # 1 hour expiry\n    )\n    return response\n\n# SECURE:\
-  \ No @csrf_exempt - CSRF protection enabled by default\ndef transfer_funds(request):\n    if request.method\
-  \ != 'POST':\n        return HttpResponse(status=405)\n    amount = request.POST.get('amount')\n   \
-  \ recipient = request.POST.get('recipient')\n    perform_transfer(request.user, recipient, amount)\n\
-  \    return HttpResponse(\"Transfer complete\")\n\ndef load_data(request):\n    # SECURE: Use JSON instead\
-  \ of pickle for untrusted data\n    try:\n        data = json.loads(request.body)\n    except json.JSONDecodeError:\n\
-  \        return JsonResponse({'error': 'Invalid JSON'}, status=400)\n    return JsonResponse({'data':\
-  \ data})"
-recommendations: []
+
+# Content
+description: |
+  This audit rule flags all usages of Django's @csrf_exempt decorator, which disables
+  Cross-Site Request Forgery (CSRF) protection for the decorated view.
+
+  Django's CSRF middleware validates that state-changing POST, PUT, PATCH, and DELETE
+  requests include a valid CSRF token, preventing attackers from crafting malicious
+  pages that trigger actions on behalf of authenticated users. The @csrf_exempt
+  decorator completely disables this validation for a specific view.
+
+  Common legitimate reasons for @csrf_exempt include webhook endpoints that receive
+  requests from external services that cannot include CSRF tokens, API endpoints
+  that use token-based authentication (e.g., JWT, API keys) instead of session cookies,
+  and public endpoints that do not perform state-changing actions for authenticated users.
+  This rule surfaces all @csrf_exempt usages for review to confirm each exemption is
+  documented and justified.
+
+message: "@csrf_exempt disables CSRF protection. Ensure this view is authenticated via tokens rather than session cookies, or that no state-changing operations are performed."
+
+security_implications:
+  - title: CSRF Attack Enabling Unauthorized State Changes
+    description: |
+      A view marked @csrf_exempt that performs state-changing operations for
+      authenticated users (fund transfers, password changes, account deletions) is
+      vulnerable to CSRF. An attacker can craft a page that automatically submits
+      a form to this endpoint when visited by an authenticated user, performing
+      the action without the user's knowledge or consent.
+  - title: Account Takeover via Email Change CSRF
+    description: |
+      If a @csrf_exempt view handles email address or password changes, an attacker
+      can use CSRF to change a victim's email address or password to attacker-
+      controlled values, then use the password reset flow to take over the account.
+  - title: Financial Fraud via Payment CSRF
+    description: |
+      @csrf_exempt on payment or fund transfer endpoints allows attackers to trigger
+      unauthorized transactions. E-commerce and financial applications that exempt
+      payment views from CSRF protection face direct financial liability from
+      successful CSRF attacks.
+  - title: Mass Account Manipulation
+    description: |
+      CSRF attacks can be scaled by hosting malicious content that automatically
+      triggers requests from many users simultaneously, enabling mass data deletion,
+      mass privilege changes, or coordinated manipulation of application state across
+      many accounts.
+
+secure_example: |
+  from django.views.decorators.csrf import csrf_exempt
+  from django.http import HttpResponse, JsonResponse
+  from django.contrib.auth.decorators import login_required
+  import hmac
+  import hashlib
+
+  # SECURE: Webhook endpoint -- external service cannot include CSRF token
+  # Authenticate using HMAC signature instead
+  @csrf_exempt
+  def github_webhook(request):
+      if request.method != 'POST':
+          return HttpResponse(status=405)
+      # SECURE: Validate webhook signature from trusted source
+      signature = request.headers.get('X-Hub-Signature-256', '')
+      secret = b'your_webhook_secret'
+      expected = 'sha256=' + hmac.new(secret, request.body, hashlib.sha256).hexdigest()
+      if not hmac.compare_digest(signature, expected):
+          return HttpResponse(status=403)
+      process_webhook(request.body)
+      return HttpResponse(status=200)
+
+  # SECURE: API endpoint that uses token authentication, not session cookies
+  # CSRF only matters for cookie-based authentication
+  @csrf_exempt
+  def api_create_item(request):
+      if request.method != 'POST':
+          return HttpResponse(status=405)
+      # Token auth -- CSRF exemption is safe because no session cookie is used
+      token = request.headers.get('Authorization', '')
+      user = validate_api_token(token)
+      if user is None:
+          return JsonResponse({'error': 'Unauthorized'}, status=401)
+      # Process request for authenticated API user
+      return JsonResponse({'status': 'created'}, status=201)
+
+  # NOT SECURE: Session-authenticated view should NOT be csrf_exempt
+  # @csrf_exempt  <-- REMOVE THIS
+  @login_required
+  def update_profile(request):
+      # This view uses session authentication -- CSRF token required
+      if request.method == 'POST':
+          request.user.first_name = request.POST.get('name', '')
+          request.user.save()
+      return JsonResponse({'status': 'updated'})
+
+recommendations:
+  - Remove @csrf_exempt from all views that perform state-changing operations for session-authenticated users.
+  - For webhook endpoints that receive requests from external services, use HMAC signature validation as an alternative authentication mechanism.
+  - For REST API endpoints, use token-based authentication (JWT, API keys) rather than session cookies, making CSRF protection unnecessary and @csrf_exempt appropriate.
+  - Document the reason for each @csrf_exempt usage in a code comment explaining why CSRF protection is not needed.
+  - Review all @csrf_exempt views to confirm they perform no state-changing operations for session-authenticated users, or that they use equivalent authentication mechanisms.
+
+detection_scope: |
+  This rule uses QueryType pattern matching on calls("csrf_exempt") and
+  DjangoDecorators patterns matching csrf_exempt applied to view functions and
+  class-based views. It matches all @csrf_exempt usages regardless of the view's
+  authentication method or operation type. This is an audit rule providing visibility
+  for security review. The .where() clause constrains matches to Python files in
+  Django project structures.
+
+# References
 references:
-- title: CWE-502
-  url: https://cwe.mitre.org/data/definitions/502.html
-- title: CWE-352
-  url: https://cwe.mitre.org/data/definitions/352.html
-- title: CWE-614
-  url: https://cwe.mitre.org/data/definitions/614.html
-- title: OWASP CSRF
-  url: https://owasp.org/www-community/attacks/csrf
-- title: Django CSRF Protection
-  url: https://docs.djangoproject.com/en/stable/ref/csrf/
-- title: Django Cookie Security
-  url: https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-secure
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-352: Cross-Site Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/352.html
+  - title: OWASP CSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: Django CSRF Protection Documentation
+    url: https://docs.djangoproject.com/en/stable/ref/csrf/
+  - title: Django csrf_exempt decorator
+    url: https://docs.djangoproject.com/en/stable/ref/csrf/#django.views.decorators.csrf.csrf_exempt
+  - title: OWASP Cross-Site Request Forgery Attack
+    url: https://owasp.org/www-community/attacks/csrf
+  - title: Django Security - CSRF
+    url: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-request-forgery-csrf-protection
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-352 - Cross-Site Request Forgery in Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web applications against CSRF"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SC-23: Session Authenticity"
+  - standard: ISO 27001
+    requirement: "A.14.2.5 - Secure system engineering principles"
+
+# FAQ
+faq:
+  - question: When is @csrf_exempt acceptable to use?
+    answer: |
+      @csrf_exempt is acceptable for: (1) Webhook endpoints receiving requests from
+      third-party services that cannot include Django CSRF tokens -- these should use
+      HMAC signature validation instead. (2) REST API views that use token-based
+      authentication (JWT, API keys in headers) rather than session cookies -- CSRF
+      attacks require the victim's browser to send the session cookie, which does not
+      apply to token auth. (3) Public endpoints that perform no state changes for
+      authenticated users.
+
+  - question: Does @csrf_exempt on a webhook endpoint make the application vulnerable?
+    answer: |
+      Only if the webhook endpoint performs state-changing operations without
+      validating that the request comes from the legitimate external service. Use
+      HMAC signature validation, IP allowlisting, or other mechanisms to authenticate
+      webhook sources. A @csrf_exempt webhook endpoint with no source authentication
+      that modifies data is vulnerable to forgery by any external site.
+
+  - question: Can Django REST Framework views use @csrf_exempt safely?
+    answer: |
+      DRF's APIView and authentication classes (TokenAuthentication, JWTAuthentication)
+      automatically enforce CSRF exemption for token-authenticated requests because
+      the session cookie is not used for authentication. This is safe because CSRF
+      requires the browser to automatically send authentication credentials (cookies)
+      with cross-site requests. Token headers are not automatically included by browsers.
+
+  - question: What if @csrf_exempt is required for a legacy AJAX endpoint?
+    answer: |
+      Modern AJAX (XMLHttpRequest, fetch) can include CSRF tokens via headers or body.
+      Django provides csrftoken cookie accessible to JavaScript for AJAX calls. The
+      recommended pattern is to read the csrftoken cookie in JavaScript and include
+      it as an X-CSRFToken header. This works with Django's CSRF middleware and
+      eliminates the need for @csrf_exempt on AJAX endpoints.
+
+  - question: Is SameSite=Strict cookie setting enough to replace CSRF tokens?
+    answer: |
+      SameSite=Strict prevents cookies from being sent on cross-site requests, which
+      would prevent most CSRF attacks. However, browser support is not universal and
+      some legitimate cross-site flows (OAuth, payment provider callbacks) require
+      the Lax setting. Django's CSRF middleware provides defense-in-depth that works
+      regardless of browser SameSite support.
+
+  - question: How do I audit all @csrf_exempt views in my codebase beyond this rule?
+    answer: |
+      Run: pathfinder scan --ruleset python/django/PYTHON-DJANGO-SEC-071 --project .
+      This lists all @csrf_exempt usages. For each finding, verify: (1) the view does
+      not perform state changes for session-authenticated users, or (2) alternative
+      authentication validation is present, and (3) the exemption is documented with
+      a comment explaining the justification.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-070
+  - PYTHON-DJANGO-SEC-072
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A05:2021
-  name: ''
-  url: ''

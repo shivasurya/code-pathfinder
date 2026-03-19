@@ -1,75 +1,222 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-061
-name: Django XSS in send_mail html_message
-short_description: User input in send_mail() html_message parameter. Sanitize content.
+name: Django XSS in send_mail html_message Parameter
+short_description: User input flows into the html_message parameter of send_mail() without sanitization, enabling HTML injection in emails.
+
+# Classification
 severity: MEDIUM
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-061
+ruleset: python/django/PYTHON-DJANGO-SEC-061
+
+# Vulnerability Details
 cwe:
-- id: CWE-79
-  name: Improper Neutralization of Input During Web Page Generation
-  url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- django
-- xss
-- send-mail
-- html
-- OWASP-A03
-- CWE-79
+  - python
+  - django
+  - xss
+  - html-injection
+  - email
+  - send-mail
+  - html-message
+  - taint-analysis
+  - inter-procedural
+  - CWE-79
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Cross-Site Scripting (XSS) vulnerabilities in Django email sending
 
-  functions where untrusted user input flows into HTML email bodies without sanitization.
+# Content
+description: |
+  This rule detects HTML injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into the html_message keyword argument
+  of Django's send_mail() function without proper sanitization.
 
-  When user-controlled data is included in HTML email content via EmailMessage or send_mail()
+  Django's send_mail() accepts an optional html_message parameter for sending HTML
+  email alongside a plain text alternative. When user-controlled data is incorporated
+  into the html_message string without HTML escaping, attackers can inject HTML tags,
+  attributes, and potentially JavaScript that renders when the email recipient opens it.
 
-  with the html_message parameter, attackers can inject malicious HTML and JavaScript that
+  This is functionally the same vulnerability as SEC-060 (EmailMessage HTML injection)
+  but targeting the send_mail() API, which is the most commonly used Django email
+  function due to its simpler interface. The send_mail() function is frequently called
+  from Django views that process form submissions, making it a common location for
+  user input to reach HTML email content.
 
-  executes when the recipient opens the email in a client that renders HTML.
+message: "User input flows to send_mail() html_message without escaping. Use Django templates or escape() for HTML email content."
 
+security_implications:
+  - title: Phishing Content Injection into Legitimate Emails
+    description: |
+      send_mail() is widely used for transactional emails (password resets, welcome
+      emails, order confirmations). An attacker who controls input to any of these
+      flows can inject fake instructions, deceptive links, or fraudulent content
+      into emails that recipients trust because they originate from the legitimate
+      application domain.
+  - title: Contact Form Abuse for Phishing
+    description: |
+      Contact forms that send submitted content in HTML emails are a particularly
+      common injection vector. An attacker submits HTML content through the contact
+      form, which is then included in the html_message parameter and delivered to
+      the recipient's inbox. The recipient sees what appears to be a normal contact
+      submission but containing attacker-controlled HTML.
+  - title: Password Reset Flow Manipulation
+    description: |
+      If user-controlled data (such as a submitted username or display name) flows
+      into the html_message of a password reset email, attackers can inject content
+      that makes the email appear to contain different reset instructions, a malicious
+      link, or a fake customer service message.
+  - title: Notification Email Compromise
+    description: |
+      Applications that send HTML notifications containing user-supplied content
+      (comments, messages, names) without escaping allow attackers to distribute
+      malicious HTML to other users through the application's email system,
+      potentially at scale.
 
-  Unlike browser-based XSS, email XSS targets email clients, which have varying levels of
+secure_example: |
+  from django.core.mail import send_mail
+  from django.utils.html import escape, strip_tags
+  from django.template.loader import render_to_string
 
-  HTML/JavaScript support. While modern webmail clients (Gmail, Outlook.com) strip scripts,
+  def contact_form(request):
+      name = request.POST.get('name', '')
+      message = request.POST.get('message', '')
+      email = request.POST.get('email', '')
+      # SECURE OPTION 1: Use Django template for html_message
+      html_message = render_to_string('emails/contact.html', {
+          'name': name,      # Auto-escaped as {{ name }} in template
+          'message': message, # Auto-escaped as {{ message }} in template
+      })
+      send_mail(
+          subject=f'Contact from {name}',
+          message=strip_tags(html_message),  # Plain text fallback
+          from_email='noreply@example.com',
+          recipient_list=['support@example.com'],
+          html_message=html_message,
+      )
 
-  some desktop email clients and older webmail systems may execute injected JavaScript. Even
+  def welcome_email(request):
+      username = request.POST.get('username', '')
+      # SECURE OPTION 2: Escape user input explicitly
+      escaped_name = escape(username)
+      html_message = f'<h1>Welcome, {escaped_name}!</h1><p>Your account is ready.</p>'
+      send_mail(
+          subject='Welcome to MyApp',
+          message=f'Welcome, {username}! Your account is ready.',
+          from_email='noreply@example.com',
+          recipient_list=[request.POST.get('email', '')],
+          html_message=html_message,
+      )
 
-  without script execution, HTML injection in emails can be used for phishing attacks by
+recommendations:
+  - Generate html_message content using render_to_string() with a template file; Django templates auto-escape all {{ variable }} values.
+  - When constructing html_message as a Python string, escape all user-controlled values with django.utils.html.escape() before inclusion.
+  - Generate the plain text message argument from the HTML by using strip_tags() on the escaped HTML content.
+  - Validate the email recipient address with Django's EmailValidator before passing it to send_mail().
+  - For emails triggered by user-submitted forms, consider whether including the raw user content in the HTML body is necessary, or whether a sanitized summary is sufficient.
 
-  rendering convincing fake content within legitimate emails.'
-message: User input in send_mail() html_message parameter. Sanitize content.
-secure_example: "from django.core.mail import send_mail\nfrom django.utils.html import escape, strip_tags\n\
-  from django.template.loader import render_to_string\n\ndef send_welcome(request):\n    # SECURE: Escape\
-  \ user input before including in HTML email\n    name = escape(request.POST.get('name', ''))\n    html_body\
-  \ = render_to_string('emails/welcome.html', {'name': name})\n    send_mail(\n        'Welcome!',\n \
-  \       strip_tags(html_body),  # Plain text fallback\n        'noreply@example.com',\n        [request.POST.get('email')],\n\
-  \        html_message=html_body,\n    )\n\ndef send_notification(request):\n    # SECURE: Use Django\
-  \ template for HTML email with auto-escaping\n    message = request.POST.get('message', '')\n    context\
-  \ = {'message': message}  # Auto-escaped in template\n    html_content = render_to_string('emails/notification.html',\
-  \ context)\n    send_mail(\n        'Notification',\n        strip_tags(html_content),\n        'noreply@example.com',\n\
-  \        ['admin@example.com'],\n        html_message=html_content,\n    )"
-recommendations: []
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is the html_message keyword argument (tracked via .tracks(0) on the named
+  parameter) of calls("send_mail") and calls("django.core.mail.send_mail").
+  Sanitizers include calls("django.utils.html.escape"), calls("render_to_string"),
+  and calls("bleach.clean"). The rule follows taint across file and module boundaries.
+
+# References
 references:
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: OWASP XSS
-  url: https://owasp.org/www-community/attacks/xss/
-- title: Django send_mail
-  url: https://docs.djangoproject.com/en/stable/topics/email/#send-mail
-- title: Django EmailMessage
-  url: https://docs.djangoproject.com/en/stable/topics/email/#emailmessage-objects
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: Django send_mail() documentation
+    url: https://docs.djangoproject.com/en/stable/topics/email/#send-mail
+  - title: Django Sending HTML Email
+    url: https://docs.djangoproject.com/en/stable/topics/email/#sending-html-email
+  - title: Django Template render_to_string()
+    url: https://docs.djangoproject.com/en/stable/topics/templates/#django.template.loader.render_to_string
+  - title: OWASP HTML Injection
+    url: https://owasp.org/www-community/attacks/HTML_Injection
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-15: Information Output Filtering"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure security and integrity of personal data"
+
+# FAQ
+faq:
+  - question: How does this differ from PYTHON-DJANGO-SEC-060 (EmailMessage)?
+    answer: |
+      SEC-060 targets Django's lower-level EmailMessage and EmailMultiAlternatives
+      classes. SEC-061 targets the higher-level send_mail() convenience function which
+      is more commonly used in Django views for transactional emails. Both are HTML
+      injection sinks but require different sink patterns to detect. Applications
+      typically use send_mail() for simple cases and EmailMessage for more control.
+
+  - question: Does using html_message=render_to_string(...) eliminate this finding?
+    answer: |
+      Yes, if the render_to_string() template properly uses {{ variable }} interpolation
+      for user-controlled values, which auto-escapes them. The finding is eliminated
+      because the sanitizer (render_to_string with auto-escaping) is recognized as
+      a safe transformation of user input before it reaches the html_message argument.
+
+  - question: Can the subject parameter of send_mail() also be injected?
+    answer: |
+      Email header injection (CWE-93) through the subject parameter is a separate
+      concern from HTML injection in the body. Django's send_mail() sanitizes the
+      subject parameter against header injection. However, you should still validate
+      that the subject contains reasonable content and does not include newlines.
+
+  - question: Is it safe to include the user's email address in the html_message?
+    answer: |
+      Email addresses should be escaped if included in HTML. An email address can
+      contain characters like +, ., and @ that are not HTML-special, but a malformed
+      or crafted email address might contain <, >, or & characters. Apply escape()
+      to any value included in html_message content, including email addresses.
+
+  - question: Our contact form sends user messages as HTML. Is that pattern safe with proper escaping?
+    answer: |
+      Yes. If you escape the user's submitted message with escape() before including
+      it in html_message, the HTML injection risk is eliminated. The escaped text
+      renders as visible characters rather than as HTML markup. For contact forms,
+      consider whether HTML rendering is necessary at all -- plain text emails avoid
+      the escaping requirement entirely.
+
+  - question: How do we test that our send_mail() calls are safe against HTML injection?
+    answer: |
+      Write a test that submits a value containing '<script>alert(1)</script>' through
+      the form and verifies that the outgoing email (using Django's mail.outbox in
+      tests) contains '&lt;script&gt;alert(1)&lt;/script&gt;' rather than the raw
+      script tag in the html_message. This directly verifies that escaping is applied.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-050
+  - PYTHON-DJANGO-SEC-051
+  - PYTHON-DJANGO-SEC-060
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

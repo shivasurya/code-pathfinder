@@ -1,62 +1,228 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-001
 name: Django SQL Injection via cursor.execute()
-short_description: User input flows to cursor.execute() without parameterization. Use %s placeholders.
+short_description: User input flows to cursor.execute() without parameterization, enabling SQL injection attacks.
+
+# Classification
 severity: CRITICAL
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-001
+ruleset: python/django/PYTHON-DJANGO-SEC-001
+
+# Vulnerability Details
 cwe:
-- id: CWE-89
-  name: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
-  url: https://cwe.mitre.org/data/definitions/89.html
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- django
-- sql-injection
-- cursor
-- OWASP-A03
-- CWE-89
+  - python
+  - django
+  - sql-injection
+  - cursor-execute
+  - database
+  - raw-sql
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect SQL injection vulnerabilities in Django applications where untrusted
 
-  user input from HTTP requests flows into raw SQL queries without proper parameterization.
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into raw SQL queries passed to
+  cursor.execute() without proper parameterization.
 
-  Django''s ORM provides safe query construction by default, but developers sometimes bypass
+  Django's ORM provides safe, parameterized query construction by default, but developers
+  sometimes bypass this protection by dropping down to raw SQL using Django's database
+  connection cursor. When request.GET, request.POST, request.body, or other user-controlled
+  data is concatenated or f-stringed into a SQL string before being passed to cursor.execute(),
+  an attacker can inject arbitrary SQL, read or modify all database records, bypass
+  authentication, or escalate to OS-level commands on vulnerable database servers.
 
-  this protection by using raw SQL via cursor.execute(), Model.objects.raw(), QuerySet.extra(),
+  The rule uses inter-procedural taint analysis to follow data across function calls and
+  file boundaries, catching patterns like query strings built in one function and executed
+  in another.
 
-  or RawSQL expressions. When user input reaches these functions without parameterization,
+message: "User input flows to cursor.execute() without parameterization. Use %s placeholders with a parameters list."
 
-  attackers can manipulate SQL queries to read, modify, or delete arbitrary database records.'
-message: User input flows to cursor.execute() without parameterization. Use %s placeholders.
-secure_example: "from django.http import JsonResponse\nfrom django.db import connection\n\ndef search_users(request):\n\
-  \    # SECURE: Parameterized query with %s placeholder\n    username = request.GET.get('username')\n\
-  \    cursor = connection.cursor()\n    cursor.execute(\"SELECT * FROM users WHERE username = %s\", [username])\n\
-  \    results = cursor.fetchall()\n    return JsonResponse({'users': results})\n\ndef get_orders(request):\n\
-  \    # SECURE: Use Django ORM with safe filtering\n    status = request.GET.get('status')\n    orders\
-  \ = Order.objects.filter(status=status).values()\n    return JsonResponse({'orders': list(orders)})\n\
-  \ndef get_orders_raw(request):\n    # SECURE: Parameterized .raw() query\n    status = request.GET.get('status')\n\
-  \    orders = Order.objects.raw(\"SELECT * FROM orders WHERE status = %s\", [status])\n    return JsonResponse({'orders':\
-  \ list(orders)})"
-recommendations: []
+security_implications:
+  - title: Full Database Compromise
+    description: |
+      An attacker who controls the SQL string passed to cursor.execute() can use UNION
+      SELECT to read from any table in the database, including user credentials, session
+      tokens, and private records. There is no row-level restriction once the query is
+      fully attacker-controlled.
+  - title: Authentication Bypass
+    description: |
+      Login queries built with string concatenation can be bypassed with the classic
+      ' OR '1'='1 payload. The query returns all rows, the application logs in as the
+      first user found, which is typically an admin account.
+  - title: Data Manipulation and Destruction
+    description: |
+      Stacked queries or subquery injection can issue INSERT, UPDATE, or DELETE statements
+      through the same cursor.execute() call, allowing attackers to alter financial records,
+      create backdoor accounts, or destroy application data.
+  - title: Database Server Escalation
+    description: |
+      On PostgreSQL, COPY TO/FROM can read or write server filesystem files. On MySQL,
+      INTO OUTFILE and LOAD DATA INFILE enable similar file access. These paths can
+      escalate from SQL injection to full server compromise.
+
+secure_example: |
+  from django.http import JsonResponse
+  from django.db import connection
+
+  def search_users(request):
+      username = request.GET.get('username', '')
+      # SECURE: Pass user input as a separate parameters list, never in the SQL string
+      with connection.cursor() as cursor:
+          cursor.execute(
+              "SELECT id, username, email FROM users WHERE username = %s",
+              [username]
+          )
+          rows = cursor.fetchall()
+      return JsonResponse({'users': rows})
+
+  def get_user_orders(request):
+      user_id = request.GET.get('user_id', '')
+      status = request.GET.get('status', '')
+      # SECURE: Multiple parameters are safe when passed as a list
+      with connection.cursor() as cursor:
+          cursor.execute(
+              "SELECT * FROM orders WHERE user_id = %s AND status = %s",
+              [user_id, status]
+          )
+          orders = cursor.fetchall()
+      return JsonResponse({'orders': orders})
+
+  def get_report(request):
+      # SECURE: Prefer Django ORM over raw SQL wherever possible
+      from myapp.models import Order
+      status = request.GET.get('status', '')
+      orders = Order.objects.filter(status=status).values('id', 'total', 'created_at')
+      return JsonResponse({'orders': list(orders)})
+
+recommendations:
+  - Always pass user input as the second argument to cursor.execute() as a list or tuple, never by concatenating it into the SQL string.
+  - Prefer Django ORM methods (filter(), exclude(), annotate()) over raw SQL to benefit from automatic parameterization.
+  - Validate and restrict the format of input used in SQL queries (e.g., enforce integer type for ID parameters) before it reaches the database layer.
+  - Grant database accounts the minimum required privileges so that a compromised query cannot DROP tables or access unrelated schemas.
+  - Enable Django's database query logging in development to audit all SQL statements and catch unparameterized queries early.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are Django
+  HTTP request accessor calls: calls("request.GET.get"), calls("request.POST.get"),
+  calls("request.GET.__getitem__"), calls("request.POST.__getitem__"), calls("request.body"),
+  and calls("request.read"). The sink is the first argument (position 0, tracked via .tracks(0))
+  of calls("*.execute") matching Django database cursor objects. Flows that pass through
+  django.utils.html.escape() or explicit type conversion to int/float are treated as
+  sanitized. The rule follows tainted values through variable assignments, function arguments,
+  and return values across file boundaries.
+
+# References
 references:
-- title: CWE-89
-  url: https://cwe.mitre.org/data/definitions/89.html
-- title: OWASP SQL Injection
-  url: https://owasp.org/www-community/attacks/SQL_Injection
-- title: Django Raw SQL
-  url: https://docs.djangoproject.com/en/stable/topics/db/sql/
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django Raw SQL Queries
+    url: https://docs.djangoproject.com/en/stable/topics/db/sql/
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web-facing applications against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure data security against unauthorized access"
+
+# FAQ
+faq:
+  - question: Why does this rule flag my code even when I'm using cursor.execute() safely?
+    answer: |
+      The rule tracks whether user-controlled data reaches the SQL string argument
+      (position 0) of cursor.execute(). If your code passes user input as the second
+      argument (the parameters list), it will not be flagged. If you are still seeing
+      a finding, check whether the tainted value is being embedded inside the SQL
+      string itself even partially, for example via f-strings or % formatting before
+      the execute call.
+
+  - question: Can this rule detect SQL injection across multiple Django view files?
+    answer: |
+      Yes. The rule uses inter-procedural analysis with global scope, meaning it follows
+      tainted data from request.GET.get() in a view through helper functions in
+      services.py or utils.py all the way to cursor.execute() in a separate database
+      module. This catches the common pattern where views are thin and database logic
+      lives in a separate layer.
+
+  - question: Does using Django ORM make my application immune to this finding?
+    answer: |
+      Yes, Django ORM methods like filter(), exclude(), get(), and annotate() are
+      parameterized by design and will not trigger this rule. This rule specifically
+      targets the raw SQL path through cursor.execute(). If you replace all raw SQL
+      usage with ORM calls, this class of vulnerability is eliminated.
+
+  - question: How do I fix this in code that must use raw SQL for performance reasons?
+    answer: |
+      Keep the SQL template string as a static literal and pass all user-controlled
+      values in the second argument: cursor.execute("SELECT * FROM t WHERE id = %s", [user_id]).
+      Django's database backend handles escaping for you. Never build the SQL string
+      with f-strings or % formatting using untrusted input, even for parts of the query
+      like column names or ORDER BY direction -- use allowlists for those.
+
+  - question: What compliance frameworks require fixing SQL injection?
+    answer: |
+      PCI DSS v4.0 Requirement 6.2.4 explicitly mandates protection against injection
+      attacks for any system that handles cardholder data. OWASP Top 10 A03:2021 covers
+      Injection. NIST SP 800-53 SI-10 requires input validation. SOC 2 Type II CC6.1
+      covers protection of data from unauthorized access. All of these are satisfied
+      by using parameterized queries.
+
+  - question: Will this rule flag Django admin or third-party apps that use cursor.execute()?
+    answer: |
+      Only if user-controlled input flows into the SQL string argument. Django admin
+      and well-maintained third-party packages typically use the ORM or parameterized
+      raw queries, so they will not be flagged. If a third-party package is flagged,
+      that is worth investigating as a genuine vulnerability in that dependency.
+
+  - question: How do I suppress a false positive for a specific cursor.execute() call?
+    answer: |
+      If the value reaching cursor.execute() is validated (e.g., an integer ID parsed
+      from a URL path parameter with int()), add explicit type conversion before the
+      call. Code Pathfinder recognizes int() and float() conversions as sanitizers for
+      SQL injection. Alternatively, use an allowlist check before the query.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-DJANGO-SEC-003
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-DJANGO-SEC-006
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

@@ -1,62 +1,217 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-040
 name: Django Path Traversal via open()
-short_description: User input flows to open(). Validate file paths with os.path.realpath().
+short_description: User input flows to open(), enabling path traversal attacks to read or write arbitrary files on the server.
+
+# Classification
 severity: HIGH
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-040
+ruleset: python/django/PYTHON-DJANGO-SEC-040
+
+# Vulnerability Details
 cwe:
-- id: CWE-22
-  name: Improper Limitation of a Pathname to a Restricted Directory
-  url: https://cwe.mitre.org/data/definitions/22.html
+  - id: CWE-22
+    name: "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
 tags:
-- python
-- django
-- path-traversal
-- open
-- OWASP-A01
-- CWE-22
+  - python
+  - django
+  - path-traversal
+  - directory-traversal
+  - file-access
+  - open
+  - taint-analysis
+  - inter-procedural
+  - CWE-22
+  - OWASP-A01
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect path traversal vulnerabilities in Django applications where untrusted
 
-  user input from HTTP requests flows into file system operations such as open(), os.path.join(),
+# Content
+description: |
+  This rule detects path traversal vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into Python's built-in open() function
+  without proper path validation.
 
-  or other file access functions. Path traversal (also known as directory traversal) occurs when
+  Path traversal (also called directory traversal) occurs when user-controlled input
+  containing sequences like "../" or "%2F..%2F" is used to construct file paths, allowing
+  attackers to escape the intended directory and access arbitrary files on the server's
+  filesystem. This can expose Django's settings.py (containing SECRET_KEY and database
+  credentials), /etc/passwd, SSH keys, environment files, and any other readable file.
 
-  user-controlled input containing sequences like "../" is used to construct file paths, allowing
+  In write mode (open(path, 'w')), path traversal can allow attackers to overwrite
+  configuration files, web content, or system files, potentially leading to code execution
+  if they can write to a location loaded by Python or the web server.
 
-  attackers to escape the intended directory and access arbitrary files on the server''s file system.'
-message: User input flows to open(). Validate file paths with os.path.realpath().
-secure_example: "from django.http import HttpResponse, FileResponse, Http404\nimport os\n\nUPLOAD_DIR\
-  \ = '/var/www/uploads/'\n\ndef download_file(request):\n    # SECURE: Validate resolved path stays within\
-  \ allowed directory\n    filename = request.GET.get('file', '')\n    # Use basename to strip directory\
-  \ traversal sequences\n    safe_name = os.path.basename(filename)\n    filepath = os.path.join(UPLOAD_DIR,\
-  \ safe_name)\n    # Double-check with realpath\n    real_path = os.path.realpath(filepath)\n    if not\
-  \ real_path.startswith(os.path.realpath(UPLOAD_DIR)):\n        raise Http404(\"File not found\")\n \
-  \   if not os.path.isfile(real_path):\n        raise Http404(\"File not found\")\n    return FileResponse(open(real_path,\
-  \ 'rb'))\n\ndef read_template(request):\n    # SECURE: Allowlist of permitted templates\n    ALLOWED_TEMPLATES\
-  \ = {'header.html', 'footer.html', 'sidebar.html'}\n    template = request.GET.get('template', '')\n\
-  \    if template not in ALLOWED_TEMPLATES:\n        raise Http404(\"Template not found\")\n    filepath\
-  \ = os.path.join('/app/templates/', template)\n    with open(filepath) as f:\n        return HttpResponse(f.read())"
-recommendations: []
+message: "User input flows to open(). Validate file paths with os.path.basename() and os.path.realpath() to prevent directory traversal."
+
+security_implications:
+  - title: Sensitive File Disclosure
+    description: |
+      An attacker can read any file accessible to the Django process by providing
+      paths like ../../settings.py, ../../.env, or ../../../etc/passwd. Django's
+      SECRET_KEY, database passwords, API keys, and SSL certificates are all
+      accessible if the process user has read permission.
+  - title: Source Code and Configuration Exfiltration
+    description: |
+      Django application source code, including view logic, model definitions,
+      and business logic, can be read through path traversal. This provides
+      attackers with a roadmap for further attacks by revealing additional
+      vulnerabilities, hardcoded secrets, and internal API structures.
+  - title: File Overwrite Leading to Code Execution
+    description: |
+      If open() is called in write mode (open(path, 'w') or 'a'), an attacker
+      can overwrite application files. Writing to .py files in the Django app
+      directory on servers with auto-reload enabled triggers code execution.
+      Writing to template files enables persistent XSS or phishing content.
+  - title: Arbitrary File Deletion in Delete Operations
+    description: |
+      Path traversal in file deletion workflows (os.remove() or os.unlink() after
+      open()) allows attackers to delete critical application or system files,
+      causing denial of service or disabling security controls.
+
+secure_example: |
+  from django.http import FileResponse, Http404
+  import os
+
+  UPLOAD_DIR = '/var/www/app/uploads'
+
+  def download_file(request):
+      filename = request.GET.get('file', '')
+      # SECURE step 1: Strip directory components to prevent traversal sequences
+      safe_name = os.path.basename(filename)
+      if not safe_name:
+          raise Http404("File not found")
+      # SECURE step 2: Construct full path within upload directory
+      full_path = os.path.join(UPLOAD_DIR, safe_name)
+      # SECURE step 3: Resolve symlinks and verify path stays within UPLOAD_DIR
+      real_path = os.path.realpath(full_path)
+      real_upload_dir = os.path.realpath(UPLOAD_DIR)
+      if not real_path.startswith(real_upload_dir + os.sep):
+          raise Http404("File not found")
+      # SECURE step 4: Confirm file exists
+      if not os.path.isfile(real_path):
+          raise Http404("File not found")
+      return FileResponse(open(real_path, 'rb'))
+
+  def read_template_fragment(request):
+      # SECURE ALTERNATIVE: Use an explicit allowlist for known files
+      ALLOWED_FRAGMENTS = {'header', 'footer', 'sidebar'}
+      fragment = request.GET.get('fragment', '')
+      if fragment not in ALLOWED_FRAGMENTS:
+          raise Http404("Fragment not found")
+      filepath = os.path.join('/app/templates/fragments', f'{fragment}.html')
+      with open(filepath) as f:
+          return f.read()
+
+recommendations:
+  - Use os.path.basename() to strip directory components from user-supplied filenames before constructing paths.
+  - After joining with the base directory, resolve the full path with os.path.realpath() and verify it starts with the expected base directory followed by os.sep.
+  - Prefer an explicit allowlist of permitted filenames over pattern-based path validation, as allowlists eliminate entire categories of traversal techniques.
+  - Use Django's FileResponse with validated file paths and set the as_attachment=True parameter to ensure proper Content-Disposition headers.
+  - Store user-uploaded files using Django's FileField and ImageField which provide safe storage with UUID-based naming rather than user-controlled paths.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is the first argument (path, tracked via .tracks(0)) of calls("open").
+  Sanitizers include os.path.basename() which strips directory traversal sequences,
+  followed by os.path.realpath() path canonicalization when the result is verified
+  against the base directory. The rule follows taint across file and module boundaries.
+
+# References
 references:
-- title: CWE-22
-  url: https://cwe.mitre.org/data/definitions/22.html
-- title: OWASP Path Traversal
-  url: https://owasp.org/www-community/attacks/Path_Traversal
-- title: Python os.path documentation
-  url: https://docs.python.org/3/library/os.path.html
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-22: Path Traversal"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: OWASP Path Traversal
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: OWASP File Upload Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html
+  - title: Python os.path documentation
+    url: https://docs.python.org/3/library/os.path.html
+  - title: Django File Storage
+    url: https://docs.djangoproject.com/en/stable/topics/files/
+  - title: Django Security
+    url: https://docs.djangoproject.com/en/stable/topics/security/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-22 ranked #8 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control (path traversal is a sub-category)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against path traversal attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; AC-3: Access Enforcement"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure confidentiality and integrity of data"
+
+# FAQ
+faq:
+  - question: Is os.path.basename() alone sufficient to prevent path traversal?
+    answer: |
+      os.path.basename() removes all directory components from a path, which prevents
+      traversal sequences from being effective. However, it should be combined with
+      os.path.realpath() verification when constructing the final path, because
+      symbolic links can still escape the intended directory even with basename applied.
+      The combination of basename + join + realpath + startswith check is the
+      recommended pattern.
+
+  - question: Can URL encoding (%2F, %2E%2E) bypass basename() protection?
+    answer: |
+      No. Django automatically URL-decodes request parameters before they reach view
+      functions, so %2F becomes / before basename() sees it. basename() then strips
+      the directory components. The combination is effective for URL-encoded traversal
+      sequences. Null byte injection (%00) in filenames is also handled by the OS on
+      modern Python versions.
+
+  - question: Does Django's built-in file serving protect against this?
+    answer: |
+      Django's built-in serve() view (for development) and Django's file storage
+      system use safe path handling. The vulnerability arises when developers write
+      custom file serving endpoints that use open() directly with user-controlled
+      filenames. Use Django's storage API and FileResponse for file serving instead.
+
+  - question: What about files served from Django's MEDIA_ROOT?
+    answer: |
+      Files in MEDIA_ROOT are user-uploaded files. When serving them, Django's
+      FileSystemStorage.url() generates safe URLs. The problem arises when code
+      manually constructs file paths from MEDIA_ROOT plus user input without
+      validation. Always use Django's storage API (default_storage.open()) rather
+      than constructing raw file paths.
+
+  - question: Can this vulnerability affect Django management commands?
+    answer: |
+      Yes. Management commands that accept file path arguments from user input
+      (e.g., command line arguments that originate from a web interface or API) can
+      be affected. Validate file paths in management commands with the same
+      realpath-based approach used in views.
+
+  - question: How do I handle legitimate file download endpoints that serve user-uploaded files?
+    answer: |
+      Store uploaded files with Django's FileField using upload_to with a callable
+      that generates UUID-based names, preventing user control over the actual storage
+      path. When serving, look up the FileField value from the database (which stores
+      a safe, validated path) and serve it directly rather than accepting filenames
+      from HTTP parameters.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-041
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A01:2021
-  name: ''
-  url: ''

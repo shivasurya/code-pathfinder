@@ -1,66 +1,205 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-051
-name: Django mark_safe() Usage (Audit)
-short_description: mark_safe() bypasses Django auto-escaping. Ensure input is properly sanitized.
+name: Django mark_safe() Usage Audit
+short_description: mark_safe() bypasses Django's automatic HTML escaping. Audit all usages to confirm content is properly sanitized before being marked safe.
+
+# Classification
 severity: MEDIUM
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-051
+ruleset: python/django/PYTHON-DJANGO-SEC-051
+
+# Vulnerability Details
 cwe:
-- id: CWE-79
-  name: Improper Neutralization of Input During Web Page Generation
-  url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
 tags:
-- python
-- django
-- xss
-- mark-safe
-- audit
-- CWE-79
+  - python
+  - django
+  - xss
+  - mark-safe
+  - auto-escaping
+  - audit
+  - CWE-79
+  - OWASP-A03
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Cross-Site Scripting (XSS) vulnerabilities in Django applications.
 
-  Django provides automatic HTML escaping in templates by default, but developers can bypass
+# Content
+description: |
+  This audit rule flags all usages of django.utils.html.mark_safe() in Django
+  applications regardless of whether user-controlled data is detected flowing into it.
+  It is a visibility rule designed to surface all mark_safe() call sites for manual
+  security review.
 
-  this protection by using HttpResponse directly with user input, calling mark_safe() on
+  Django's template engine automatically escapes variables ({{ variable }}) to prevent
+  XSS. mark_safe() is a signal to the template engine that a string is already safe
+  HTML and should not be escaped. When mark_safe() is called on a string that contains
+  unescaped user input, the protection is bypassed and XSS becomes possible.
 
-  untrusted data, using the html_safe() decorator, or extending SafeString. When user-controlled
+  mark_safe() is legitimately used in custom template tags and filters that generate
+  controlled HTML, but it is frequently misused by developers who apply it to strings
+  containing user data without prior escaping. This audit rule identifies all call sites
+  so security reviewers can verify each one is used correctly.
 
-  input is rendered as unescaped HTML in the browser, attackers can inject malicious JavaScript
+message: "mark_safe() bypasses Django's auto-escaping. Verify that content is escaped before being marked safe, and never apply mark_safe() to user input."
 
-  that executes in the context of the victim''s session.'
-message: mark_safe() bypasses Django auto-escaping. Ensure input is properly sanitized.
-secure_example: "from django.http import HttpResponse\nfrom django.utils.html import escape, strip_tags\n\
-  from django.template import loader\n\ndef greet_user(request):\n    # SECURE: Use Django template with\
-  \ auto-escaping\n    template = loader.get_template('greet.html')\n    name = request.GET.get('name',\
-  \ '')\n    return HttpResponse(template.render({'name': name}))\n    # Django templates auto-escape\
-  \ {{ name }} by default\n\ndef greet_user_direct(request):\n    # SECURE: Explicitly escape user input\
-  \ in HttpResponse\n    name = escape(request.GET.get('name', ''))\n    return HttpResponse(\"<h1>Hello,\
-  \ \" + name + \"!</h1>\")\n\ndef render_comment(request):\n    # SECURE: Sanitize before marking as\
-  \ safe, or use template auto-escaping\n    comment = request.POST.get('comment', '')\n    # Option 1:\
-  \ Strip all HTML tags\n    clean_comment = strip_tags(comment)\n    # Option 2: Use bleach to allow\
-  \ safe HTML subset\n    # clean_comment = bleach.clean(comment, tags=['b', 'i', 'em', 'strong'])\n \
-  \   return render(request, 'comment.html', {'comment': clean_comment})"
-recommendations: []
+security_implications:
+  - title: Auto-escaping Bypass Leading to XSS
+    description: |
+      Django templates auto-escape {{ variable }} to prevent XSS. mark_safe() tells
+      the template engine to skip escaping. If a mark_safe() call is applied to a
+      string that contains unescaped user input, that input is rendered raw in the
+      browser and can contain malicious script tags or event handler attributes.
+  - title: Latent Risk from Refactoring
+    description: |
+      A mark_safe() call that is currently safe (applied to a hardcoded HTML string)
+      becomes unsafe if a developer later adds user input to the string before the
+      mark_safe() call. This rule flags all mark_safe() usages so they are reviewed
+      whenever the surrounding code changes.
+  - title: Template Tag and Filter Vulnerabilities
+    description: |
+      Custom template tags and filters that use mark_safe() to return HTML are a
+      common location for XSS vulnerabilities. If the tag or filter incorporates
+      arguments passed from template context (which may originate from user input)
+      without escaping them, the result is XSS.
+  - title: Chained mark_safe() and String Concatenation
+    description: |
+      mark_safe() on a safe string followed by concatenation with an unsafe string
+      creates a SafeString that propagates the safety flag. The resulting concatenation
+      will not be escaped in templates, even though the appended string may be unsafe.
+
+secure_example: |
+  from django.utils.html import mark_safe, escape, format_html
+
+  # SECURE: mark_safe() on a fully static string with no user data
+  LOADING_SPINNER = mark_safe('<div class="spinner" aria-label="Loading"></div>')
+
+  # SECURE: Use format_html() which escapes interpolated values automatically
+  def render_user_badge(username, role):
+      # format_html() escapes all {} arguments, returns a SafeString
+      return format_html('<span class="badge badge-{}">{}</span>', role, username)
+
+  # SECURE: Escape first, then mark safe
+  def render_highlighted(user_text):
+      escaped = escape(user_text)
+      return mark_safe(f'<mark>{escaped}</mark>')
+
+  # SECURE: Use bleach to allow a safe subset of HTML tags
+  import bleach
+  ALLOWED_TAGS = ['b', 'i', 'em', 'strong', 'a']
+  ALLOWED_ATTRS = {'a': ['href', 'title']}
+
+  def render_comment(raw_html):
+      cleaned = bleach.clean(raw_html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+      return mark_safe(cleaned)
+
+recommendations:
+  - Use format_html() instead of mark_safe() with f-strings; format_html() automatically escapes all interpolated arguments.
+  - When mark_safe() must be used, ensure all user-controlled values are passed through escape() first, or use bleach.clean() for rich text that allows a controlled subset of HTML.
+  - Never apply mark_safe() directly to request.GET or request.POST values without prior escaping.
+  - Review all custom template tags and filters that return mark_safe() values to verify they escape any context-provided data.
+  - Prefer Django's |escape template filter for in-template escaping and format_html() for Python-side HTML construction over manual mark_safe() patterns.
+
+detection_scope: |
+  This rule uses QueryType pattern matching rather than taint analysis. It matches all
+  calls to mark_safe() and django.utils.html.mark_safe() regardless of whether
+  user-controlled data flows into the argument. This is an audit rule intended for
+  security reviews and compliance inventories. Use PYTHON-DJANGO-SEC-050 (taint-based
+  rule) for CI-integrated detection of confirmed XSS flows. For complete audit coverage,
+  this rule is used alongside taint-based rules. The .where() clause constrains
+  matches to Python files in Django project structures.
+
+# References
 references:
-- title: CWE-79
-  url: https://cwe.mitre.org/data/definitions/79.html
-- title: OWASP XSS
-  url: https://owasp.org/www-community/attacks/xss/
-- title: OWASP XSS Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
-- title: Django auto-escaping
-  url: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-scripting-xss-protection
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: Django mark_safe() documentation
+    url: https://docs.djangoproject.com/en/stable/ref/utils/#django.utils.html.mark_safe
+  - title: Django format_html() documentation
+    url: https://docs.djangoproject.com/en/stable/ref/utils/#django.utils.html.format_html
+  - title: Django Template Auto-escaping
+    url: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping
+  - title: bleach HTML sanitization library
+    url: https://bleach.readthedocs.io/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 and 6.3.2 - inventory of custom code; protect against XSS"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-15: Information Output Filtering"
+  - standard: ISO 27001
+    requirement: "A.14.2.8 - System security testing"
+
+# FAQ
+faq:
+  - question: Why does this rule flag mark_safe() calls that are clearly safe (applied to static strings)?
+    answer: |
+      This is an audit rule that provides visibility into all mark_safe() usages,
+      not just unsafe ones. The purpose is to create a reviewable inventory. A
+      mark_safe() call on a static string is safe today, but if a developer later
+      modifies the code to include a user-controlled value in that string, the
+      mark_safe() call makes it unsafe. Auditing all call sites catches such
+      regressions before they reach production.
+
+  - question: What is the difference between mark_safe() and format_html()?
+    answer: |
+      format_html() is like Python's str.format() but it escapes all interpolated
+      arguments using escape() before substituting them, and returns a SafeString.
+      It is the recommended way to construct HTML strings from user data in Django.
+      mark_safe() simply tags an existing string as safe without performing any
+      escaping -- it is appropriate only when the string has already been escaped
+      or when it is a static HTML literal.
+
+  - question: Can I use mark_safe() with bleach.clean() output?
+    answer: |
+      Yes. bleach.clean() sanitizes HTML by stripping or escaping disallowed tags
+      and attributes. Its output is safe to pass to mark_safe(). Ensure your
+      bleach.clean() call uses a restrictive allowlist appropriate for your use
+      case and that the strip_comments=True option is set to prevent comment-based
+      injection.
+
+  - question: Are there performance implications to replacing mark_safe() with format_html()?
+    answer: |
+      No meaningful performance difference. format_html() calls the same escape()
+      function that you would call manually before mark_safe(). The escaping is a
+      simple string replacement operation with negligible performance impact.
+      Use format_html() as the default approach for all HTML construction.
+
+  - question: How do I find all mark_safe() usages that are actually unsafe in my codebase?
+    answer: |
+      Run PYTHON-DJANGO-SEC-050 (taint-based XSS detection) to find confirmed flows
+      from user input to HttpResponse. Run this audit rule (SEC-051) to find all
+      mark_safe() usages for manual review. Cross-reference: any mark_safe() call
+      where the argument contains user-controlled data without prior escape() or
+      bleach.clean() processing is an XSS vulnerability.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-050
+  - PYTHON-DJANGO-SEC-052
+  - PYTHON-DJANGO-SEC-053
+  - PYTHON-DJANGO-SEC-060
+  - PYTHON-DJANGO-SEC-061
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A03:2021
-  name: ''
-  url: ''

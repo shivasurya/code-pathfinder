@@ -1,65 +1,225 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-031
 name: Django SSRF via urllib
-short_description: User input flows to urllib.request.urlopen(). Validate and restrict URLs.
+short_description: User input flows to urllib.request.urlopen() or urllib.request.Request(), enabling the server to make HTTP requests to attacker-controlled URLs.
+
+# Classification
 severity: HIGH
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-031
+ruleset: python/django/PYTHON-DJANGO-SEC-031
+
+# Vulnerability Details
 cwe:
-- id: CWE-918
-  name: Server-Side Request Forgery (SSRF)
-  url: https://cwe.mitre.org/data/definitions/918.html
+  - id: CWE-918
+    name: Server-Side Request Forgery (SSRF)
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
 tags:
-- python
-- django
-- ssrf
-- urllib
-- OWASP-A10
-- CWE-918
+  - python
+  - django
+  - ssrf
+  - urllib
+  - http-client
+  - standard-library
+  - taint-analysis
+  - inter-procedural
+  - CWE-918
+  - OWASP-A10
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect Server-Side Request Forgery (SSRF) vulnerabilities in Django applications
 
-  where untrusted user input from HTTP requests flows into server-side HTTP client calls such
+# Content
+description: |
+  This rule detects Server-Side Request Forgery (SSRF) vulnerabilities in Django
+  applications where untrusted user input from HTTP request parameters flows into
+  urllib.request.urlopen() or urllib.request.Request() from Python's standard library.
 
-  as requests.get(), requests.post(), or urllib.request.urlopen(). SSRF allows attackers to
+  urllib is the standard Python HTTP client and is commonly used in Django applications
+  that do not have the third-party requests library as a dependency, or in older
+  codebases. It is subject to the same SSRF risks as any HTTP client: an attacker who
+  controls the URL can direct server-side requests to cloud metadata endpoints, internal
+  services, localhost, or file:// URLs.
 
-  make the server send HTTP requests to arbitrary destinations, including internal services,
+  urllib's urlopen() additionally supports several URL schemes beyond http/https,
+  including file:// and ftp://, which increases the attack surface compared to some
+  other HTTP clients. The file:// scheme in particular can be used to read arbitrary
+  files from the server's filesystem.
 
-  cloud metadata endpoints, and private network resources that are not directly accessible
+message: "User input flows to urllib.request.urlopen(). Validate URLs against an allowlist and block internal network ranges."
 
-  from the internet.'
-message: User input flows to urllib.request.urlopen(). Validate and restrict URLs.
-secure_example: "from django.http import JsonResponse\nimport requests\nfrom urllib.parse import urlparse\n\
-  import ipaddress\n\nALLOWED_DOMAINS = {'api.example.com', 'cdn.example.com'}\nBLOCKED_NETWORKS = [\n\
-  \    ipaddress.ip_network('10.0.0.0/8'),\n    ipaddress.ip_network('172.16.0.0/12'),\n    ipaddress.ip_network('192.168.0.0/16'),\n\
-  \    ipaddress.ip_network('169.254.0.0/16'),  # Cloud metadata\n    ipaddress.ip_network('127.0.0.0/8'),\
-  \     # Loopback\n]\n\ndef is_safe_url(url):\n    \\\"\\\"\\\"Validate URL against allowlist and block\
-  \ internal networks.\\\"\\\"\\\"\n    parsed = urlparse(url)\n    if parsed.scheme not in ('http', 'https'):\n\
-  \        return False\n    if parsed.hostname in ALLOWED_DOMAINS:\n        return True\n    try:\n \
-  \       ip = ipaddress.ip_address(parsed.hostname)\n        return not any(ip in network for network\
-  \ in BLOCKED_NETWORKS)\n    except ValueError:\n        return False\n\ndef fetch_url(request):\n  \
-  \  # SECURE: Validate URL before making request\n    url = request.GET.get('url', '')\n    if not is_safe_url(url):\n\
-  \        return JsonResponse({'error': 'URL not allowed'}, status=400)\n    response = requests.get(url,\
-  \ timeout=5)\n    return JsonResponse({'content': response.text})"
-recommendations: []
+security_implications:
+  - title: Cloud Metadata Service Access via Standard Library
+    description: |
+      urllib.request.urlopen('http://169.254.169.254/latest/meta-data/iam/...') 
+      fetches AWS IAM credentials from the instance metadata service. Unlike the
+      requests library, urllib is always available in any Python environment, making
+      this vector present in any Django deployment regardless of installed packages.
+  - title: Local File Disclosure via file:// Scheme
+    description: |
+      urllib.request.urlopen() supports the file:// URL scheme by default. An attacker
+      can supply a URL like file:///etc/passwd or file:///app/settings.py to read
+      arbitrary files from the server filesystem, potentially exposing Django's
+      SECRET_KEY, database credentials, and other configuration secrets.
+  - title: Internal Service Access and Port Scanning
+    description: |
+      The application server can reach internal network services that are not exposed
+      to the internet. An attacker can use urlopen() to scan internal ports (observing
+      connection errors vs. successful responses) and access internal HTTP services
+      without authentication.
+  - title: Gopher Protocol Exploitation
+    description: |
+      Some versions of urllib support the gopher:// scheme which can be used for
+      SSRF attacks against Redis, Memcached, and other services that use text-based
+      protocols. If gopher:// is accessible, attackers can send arbitrary TCP payloads
+      to internal services.
+
+secure_example: |
+  from django.http import JsonResponse
+  import urllib.request
+  from urllib.parse import urlparse
+  import ipaddress
+
+  ALLOWED_DOMAINS = frozenset({'api.partner.com', 'cdn.example.com'})
+  BLOCKED_NETWORKS = [
+      ipaddress.ip_network('10.0.0.0/8'),
+      ipaddress.ip_network('172.16.0.0/12'),
+      ipaddress.ip_network('192.168.0.0/16'),
+      ipaddress.ip_network('169.254.0.0/16'),  # Link-local / cloud metadata
+      ipaddress.ip_network('127.0.0.0/8'),     # Loopback
+  ]
+
+  def is_safe_url(url):
+      parsed = urlparse(url)
+      # Block non-http/https schemes including file://, ftp://, gopher://
+      if parsed.scheme not in ('http', 'https'):
+          return False
+      if not parsed.hostname:
+          return False
+      if parsed.hostname in ALLOWED_DOMAINS:
+          return True
+      try:
+          ip = ipaddress.ip_address(parsed.hostname)
+          return not any(ip in net for net in BLOCKED_NETWORKS)
+      except ValueError:
+          return False  # Unknown hostname not in allowlist
+
+  def fetch_resource(request):
+      url = request.GET.get('url', '')
+      # SECURE: Validate URL before using urllib
+      if not is_safe_url(url):
+          return JsonResponse({'error': 'URL not permitted'}, status=400)
+      with urllib.request.urlopen(url, timeout=10) as response:
+          content = response.read(4096).decode('utf-8', errors='replace')
+      return JsonResponse({'content': content})
+
+recommendations:
+  - Validate user-supplied URLs against a strict allowlist of trusted domains before calling urlopen().
+  - Block the file://, gopher://, and ftp:// schemes -- accept only http and https.
+  - Block requests to private IP ranges, loopback addresses, and link-local networks (169.254.0.0/16).
+  - Resolve hostnames to IPs at validation time to prevent DNS rebinding attacks from bypassing scheme and domain checks.
+  - Consider replacing urllib with the requests library and its higher-level session management, which makes timeout and redirect controls more explicit.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  Sinks include calls("urllib.request.urlopen"), calls("urllib.request.Request"),
+  and calls("urllib.urlopen") with tainted URL argument tracked via .tracks(0).
+  Sanitizers include URL validation functions that check against allowlists and
+  block private IP ranges and dangerous schemes. The rule follows taint across file
+  and module boundaries.
+
+# References
 references:
-- title: CWE-918
-  url: https://cwe.mitre.org/data/definitions/918.html
-- title: OWASP SSRF
-  url: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery
-- title: OWASP SSRF Prevention Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
-- title: Django Security
-  url: https://docs.djangoproject.com/en/stable/topics/security/
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-918: Server-Side Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: OWASP SSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: OWASP Server-Side Request Forgery
+    url: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery
+  - title: Python urllib.request documentation
+    url: https://docs.python.org/3/library/urllib.request.html
+  - title: Django Security
+    url: https://docs.djangoproject.com/en/stable/topics/security/
+  - title: PortSwigger SSRF Labs
+    url: https://portswigger.net/web-security/ssrf
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 - Server-Side Request Forgery (SSRF)"
+  - standard: CWE Top 25
+    requirement: "CWE-918 - Server-Side Request Forgery in dangerous weaknesses list"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks including SSRF"
+  - standard: NIST SP 800-53
+    requirement: "SC-7: Boundary Protection; SI-10: Information Input Validation"
+  - standard: ISO 27001
+    requirement: "A.13.1.3: Segregation in networks; A.14.2.5: Secure engineering principles"
+
+# FAQ
+faq:
+  - question: Why does urllib support file:// and is that dangerous in SSRF context?
+    answer: |
+      Python's urllib.request.urlopen() was designed as a general URL opener supporting
+      multiple schemes including file://, ftp://, and http://. In an SSRF context,
+      file:// support is critical to block because it allows attackers to read arbitrary
+      files from the server using a URL like file:///etc/passwd or file:///app/settings.py.
+      Always restrict accepted schemes to http and https only.
+
+  - question: How does this differ from PYTHON-DJANGO-SEC-030 targeting the requests library?
+    answer: |
+      SEC-031 targets Python's standard library urllib.request module, which is
+      available without any third-party dependencies. SEC-030 targets the requests
+      library (pip install requests). Both implement SSRF but with different APIs.
+      Some Django projects use urllib for simple HTTP calls to avoid adding a
+      dependency; others use requests for more ergonomic HTTP handling. Both need
+      the same URL validation logic.
+
+  - question: Is urllib used directly in modern Django applications or mainly in legacy code?
+    answer: |
+      Both. urllib is used directly in Django management commands, middleware, and
+      utility functions that perform simple HTTP calls without the complexity of
+      session management. It is also prevalent in older Django applications predating
+      widespread requests library adoption, and in code that avoids third-party
+      dependencies for security or licensing reasons.
+
+  - question: Does using urllib.parse.urlparse() to check the scheme prevent SSRF?
+    answer: |
+      Partial protection only. Checking that the scheme is 'http' or 'https' blocks
+      file://, gopher://, and ftp:// attacks but does not prevent requests to internal
+      IP ranges, cloud metadata, or localhost. A complete SSRF defense requires both
+      scheme validation AND IP range blocking (or strict domain allowlisting with
+      hostname resolution at validation time).
+
+  - question: Can I use urllib.robotparser or other urllib submodules that internally call urlopen?
+    answer: |
+      Yes, and those secondary calls create SSRF risk if user input influences what
+      URL is fetched. Review all urllib submodule usages where user-controlled data
+      could influence the URL argument, not just direct urlopen() calls.
+
+  - question: What is the performance overhead of adding URL validation before every urlopen() call?
+    answer: |
+      URL parsing and IP range checking are microsecond-level operations. Network
+      DNS resolution for hostname-to-IP validation at blocking time adds one DNS
+      lookup per request, which is typically 1-10ms. This is negligible compared
+      to the network round-trip of the HTTP request itself. The security benefit
+      far outweighs the performance cost.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-030
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A10:2021
-  name: ''
-  url: ''

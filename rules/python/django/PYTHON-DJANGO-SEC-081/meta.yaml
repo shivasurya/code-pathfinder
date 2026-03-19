@@ -1,65 +1,235 @@
+# Rule Identity
 id: PYTHON-DJANGO-SEC-081
-name: Django Default Empty Password Value
-short_description: Password default value may be empty string. Use None as default.
+name: Django Default Empty Password Value via flows()
+short_description: request.POST.get('password', '') with empty string default flows to set_password(), potentially setting an empty password when the field is omitted.
+
+# Classification
 severity: HIGH
 category: django
 language: python
-ruleset: python/PYTHON-DJANGO-SEC-081
+ruleset: python/django/PYTHON-DJANGO-SEC-081
+
+# Vulnerability Details
 cwe:
-- id: CWE-521
-  name: Weak Password Requirements
-  url: https://cwe.mitre.org/data/definitions/521.html
+  - id: CWE-521
+    name: Weak Password Requirements
+    url: https://cwe.mitre.org/data/definitions/521.html
+  - id: CWE-287
+    name: Improper Authentication
+    url: https://cwe.mitre.org/data/definitions/287.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
 tags:
-- python
-- django
-- password
-- default
-- OWASP-A07
-- CWE-521
+  - python
+  - django
+  - password
+  - authentication
+  - default-value
+  - empty-password
+  - taint-analysis
+  - CWE-521
+  - CWE-287
+  - OWASP-A07
+
+# Author
 author:
   name: Shivasurya
   url: https://x.com/sshivasurya
-description: 'These rules detect weak password handling patterns in Django applications where passwords
 
-  may be set to empty strings or where request.POST.get() with a default empty string value
+# Content
+description: |
+  This rule detects a specific Django password vulnerability pattern where
+  request.POST.get('password', '') -- using an empty string as the default value --
+  flows into set_password() without an intervening check for empty/None values.
 
-  flows into set_password(). Django''s set_password() with an empty string creates a user
+  This pattern is subtly dangerous because it appears to handle the case where the
+  password field is missing from the request. However, instead of rejecting the
+  missing password as an error, it silently defaults to an empty string and creates
+  an account accessible without any password.
 
-  account with no password protection, effectively disabling authentication for that account.
+  The vulnerability manifests when a user omits the password field from a registration
+  form, or when an API client sends a request without the password parameter. Rather
+  than receiving an error, the user's account is created with an empty password hash,
+  effectively bypassing authentication.
 
-  The correct approach is to use None (not empty string) when no password should be set,
+  This is distinct from SEC-080 (which detects literal empty strings) by specifically
+  tracking the data flow from the GET/POST default parameter through to the set_password
+  sink.
 
-  which makes the password unusable via Django''s set_unusable_password() mechanism.'
-message: Password default value may be empty string. Use None as default.
-secure_example: "from django.contrib.auth.models import User\nfrom django.core.exceptions import ValidationError\n\
-  \ndef reset_password(request):\n    # SECURE: Validate password is present and meets requirements\n\
-  \    password = request.POST.get('password')\n    if not password or len(password) < 8:\n        raise\
-  \ ValidationError(\"Password must be at least 8 characters\")\n    user = User.objects.get(id=request.user.id)\n\
-  \    user.set_password(password)\n    user.save()\n\ndef create_user_no_password(request):\n    # SECURE:\
-  \ Use set_unusable_password() instead of empty string\n    user = User.objects.create_user(\n      \
-  \  username=request.POST.get('username'),\n    )\n    user.set_unusable_password()  # Correct way to\
-  \ create account without password\n    user.save()\n\ndef create_user_with_validation(request):\n  \
-  \  # SECURE: Use Django's password validators\n    from django.contrib.auth.password_validation import\
-  \ validate_password\n    password = request.POST.get('password')\n    validate_password(password)  #\
-  \ Raises ValidationError if too weak\n    user = User.objects.create_user(\n        username=request.POST.get('username'),\n\
-  \        password=password,\n    )"
-recommendations: []
+message: "request.POST.get('password', '') with empty default flows to set_password(). Use None as default and check for empty password before calling set_password()."
+
+security_implications:
+  - title: Silent Authentication Bypass on Missing Form Field
+    description: |
+      When a registration form is submitted without the password field (intentionally
+      or due to a client-side bug), request.POST.get('password', '') returns '' and
+      set_password('') creates a valid empty-password hash. The user can log in
+      without providing any password, bypassing authentication silently with no
+      error logged.
+  - title: API Client Misuse Creating Unprotected Accounts
+    description: |
+      API clients that programmatically create user accounts by POSTing JSON may omit
+      the password field if their integration code has a bug. The server creates the
+      account with an empty password rather than rejecting the request, creating
+      unprotected accounts that an attacker can discover and use.
+  - title: Batch User Provisioning Vulnerabilities
+    description: |
+      Bulk user import scripts that read from CSV files or external APIs may produce
+      empty strings for missing password fields. If these empty strings flow to
+      set_password(), the batch creates unprotected accounts for the affected users.
+  - title: Race Condition in Multi-Step Registration
+    description: |
+      Multi-step registration flows that store partial state between steps may
+      temporarily create accounts with empty passwords if the password step is
+      bypassed or skipped due to a flow logic error. Empty string defaults in
+      set_password() calls make this transient state permanent.
+
+secure_example: |
+  from django.contrib.auth.models import User
+  from django.contrib.auth.password_validation import validate_password
+  from django.core.exceptions import ValidationError
+  from django.http import JsonResponse
+
+  def register_user(request):
+      username = request.POST.get('username', '')
+      # SECURE: Use None default (no default) so missing password is explicit
+      password = request.POST.get('password')
+      if not username:
+          return JsonResponse({'error': 'Username is required'}, status=400)
+      # SECURE: Explicitly reject missing, empty, or whitespace-only passwords
+      if not password or not password.strip():
+          return JsonResponse({'error': 'Password is required'}, status=400)
+      # SECURE: Validate password strength
+      try:
+          validate_password(password)
+      except ValidationError as e:
+          return JsonResponse({'errors': list(e.messages)}, status=400)
+      user = User.objects.create_user(username=username, password=password)
+      return JsonResponse({'user_id': user.id, 'status': 'created'})
+
+  def api_create_account(request):
+      import json
+      try:
+          data = json.loads(request.body)
+      except json.JSONDecodeError:
+          return JsonResponse({'error': 'Invalid JSON'}, status=400)
+      # SECURE: Require password in request body -- no default fallback
+      password = data.get('password')
+      if password is None:
+          return JsonResponse({'error': 'Password field is required'}, status=400)
+      if len(password) < 8:
+          return JsonResponse({'error': 'Password must be at least 8 characters'}, status=400)
+      user = User(username=data.get('username', ''))
+      user.set_password(password)
+      user.save()
+      return JsonResponse({'user_id': user.id})
+
+recommendations:
+  - Use request.POST.get('password') without a default value, so missing fields return None rather than an empty string.
+  - After retrieving the password value, check if it is None, empty, or whitespace-only and return a 400 error immediately.
+  - Apply Django's validate_password() to enforce minimum strength requirements before calling set_password().
+  - Never use '' as the default value for password fields in request.POST.get() or request.GET.get() calls.
+  - For optional password fields in update forms, distinguish between "user wants to keep current password" (field absent) and "user wants to set a new password" (field present) using None/empty checks rather than defaulting to empty string.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. The source is
+  specifically calls("request.POST.get") and calls("request.GET.get") where the second
+  argument (default value) is a literal empty string '', tracked via .tracks(0) on the
+  return value when the field is missing. The sink is calls("*.set_password") where this
+  tainted value reaches the first argument. Sanitizers include truthiness checks (if not
+  password, if password is None, if password) that would reject the empty string before
+  it reaches set_password(). The rule follows taint across function call boundaries.
+
+# References
 references:
-- title: CWE-521
-  url: https://cwe.mitre.org/data/definitions/521.html
-- title: OWASP Authentication Cheat Sheet
-  url: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
-- title: Django Password Management
-  url: https://docs.djangoproject.com/en/stable/topics/auth/passwords/
-- title: Django Password Validation
-  url: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
-compliance: []
-faq: []
-similar_rules: []
+  - title: "CWE-521: Weak Password Requirements"
+    url: https://cwe.mitre.org/data/definitions/521.html
+  - title: "CWE-287: Improper Authentication"
+    url: https://cwe.mitre.org/data/definitions/287.html
+  - title: OWASP Authentication Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+  - title: Django Password Management
+    url: https://docs.djangoproject.com/en/stable/topics/auth/passwords/
+  - title: Django Password Validators
+    url: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
+  - title: Django QueryDict.get() documentation
+    url: https://docs.djangoproject.com/en/stable/ref/request-response/#django.http.QueryDict.get
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A07:2021 - Identification and Authentication Failures"
+  - standard: CWE Top 25
+    requirement: "CWE-521 - Weak Password Requirements; CWE-287 - Improper Authentication"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3.1 - authentication factors managed per security policy; 8.3.6 - minimum password complexity"
+  - standard: NIST SP 800-53
+    requirement: "IA-5: Authenticator Management - minimum password strength"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure appropriate security of personal data including access controls"
+
+# FAQ
+faq:
+  - question: How is this different from PYTHON-DJANGO-SEC-080?
+    answer: |
+      SEC-080 detects literal empty string '' passed directly to set_password() as a
+      constant value in the code. SEC-081 specifically tracks the data flow from
+      request.POST.get('password', '') where the empty string is the default for a
+      missing field, which then flows into set_password() without validation. SEC-081
+      catches the runtime vulnerability pattern that only manifests when the password
+      field is absent from the request.
+
+  - question: Why is using None as the default in request.POST.get() safer?
+    answer: |
+      When request.POST.get('password') returns None (field not in POST data), a
+      subsequent check like if not password raises the expected error condition
+      before set_password() is called. When request.POST.get('password', '') returns ''
+      (field missing), if not password still evaluates to True ('' is falsy), so
+      the same check works -- but the dangerous case is when developers forget the
+      check and call set_password(password) directly.
+
+  - question: Does Django's form validation prevent this vulnerability?
+    answer: |
+      Django's Form and ModelForm classes with required=True on the password field
+      will raise a ValidationError when the field is missing, preventing the empty
+      value from reaching set_password(). This vulnerability pattern occurs in views
+      that bypass the Form system and access request.POST directly, or in API views
+      that process JSON payloads without form validation.
+
+  - question: How do I handle password update forms where the password field is optional?
+    answer: |
+      For "change password" forms where users can optionally update their password:
+      retrieve the value with request.POST.get('new_password') (no default), and if
+      the result is None, skip the set_password() call entirely (preserving the
+      current password). If the result is an empty string or whitespace, return an
+      error -- submitting an empty string for a required field is different from
+      omitting the field.
+
+  - question: Can automated security testing catch this vulnerability?
+    answer: |
+      Yes. Send a registration request without the password field and verify the
+      response is an error (400 status) rather than a success. Then attempt to log
+      in with the created username and an empty password -- if login succeeds, the
+      vulnerability is confirmed. Both Code Pathfinder static analysis and this
+      integration test approach are needed for comprehensive coverage.
+
+  - question: What Django forms-based alternative avoids this pattern entirely?
+    answer: |
+      Use Django's UserCreationForm or a custom ModelForm with a PasswordField for
+      registration. The form handles validation (including required field enforcement),
+      password confirmation matching, and strength validation via AUTH_PASSWORD_VALIDATORS.
+      The form's save() method calls set_password() with the validated value. This
+      approach eliminates the need to manually handle missing/empty passwords.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-080
+
+# Test Files
 tests:
   positive: tests/positive/
   negative: tests/negative/
-owasp:
-- id: A07:2021
-  name: ''
-  url: ''
