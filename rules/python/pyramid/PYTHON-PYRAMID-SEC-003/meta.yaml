@@ -6,6 +6,7 @@ short_description: Traces user input from Pyramid request parameters to SQLAlche
 # Classification
 severity: CRITICAL
 category: pyramid
+status: disabled  # Engine limitation: chained method calls (session.query().filter()) not resolved yet
 language: python
 ruleset: python/pyramid/PYTHON-PYRAMID-SEC-003
 
