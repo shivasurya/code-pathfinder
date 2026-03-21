@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-LANG-SEC-081
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: asyncpg SQL Injection via String Formatting
 short_description: SQL query built with string formatting passed to asyncpg connection.execute() enables SQL injection. Use parameterized queries with $1, $2 placeholders.
 

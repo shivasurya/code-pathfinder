@@ -1,2 +1,3 @@
-ADD app.tar.gz /app/  # ❌ Auto-extracts (might be unintended)
-ADD https://example.com/file /tmp/  # ❌ Downloads from network
+FROM ubuntu:22.04
+ADD app.tar.gz /app/
+ADD https://example.com/file /tmp/

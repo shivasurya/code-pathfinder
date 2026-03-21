@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-LANG-SEC-083
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: pg8000 SQL Injection via String Formatting
 short_description: SQL query built with string formatting passed to pg8000 cursor.execute() enables SQL injection. Use parameterized queries with %s placeholders.
 

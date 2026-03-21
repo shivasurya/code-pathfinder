@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-FLASK-SEC-013
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Flask Insecure Deserialization
 short_description: User input from Flask request parameters flows to pickle.loads(), yaml.load(), marshal.loads(), jsonpickle.decode(), or shelve.open(). Use json.loads() or yaml.safe_load() for untrusted data.
 

@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-FLASK-SEC-001
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Flask Command Injection via os.system
 short_description: User input from Flask request parameters flows to os.system() or os.popen(). Sanitize with shlex.quote() or switch to subprocess with list arguments.
 

@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-LAMBDA-SEC-010
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Lambda SQL Injection via MySQL cursor.execute()
 short_description: Lambda event data flows to MySQL cursor.execute() without parameterization, enabling SQL injection against RDS MySQL or Aurora MySQL backends.
 

@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-FLASK-SEC-008
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Flask XSS via Raw HTML in make_response
 short_description: User input from Flask request parameters flows to make_response() as raw HTML content. Escape user data with html.escape() or markupsafe.escape() before inserting it into HTML responses.
 

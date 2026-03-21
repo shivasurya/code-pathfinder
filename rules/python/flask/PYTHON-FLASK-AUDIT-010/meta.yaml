@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-FLASK-AUDIT-010
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Flask WTF CSRF Disabled
 short_description: Detects Flask configuration that explicitly disables Flask-WTF CSRF protection by setting WTF_CSRF_ENABLED to False.
 

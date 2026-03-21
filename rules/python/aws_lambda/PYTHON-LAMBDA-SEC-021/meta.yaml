@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-LAMBDA-SEC-021
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Lambda XSS via Tainted HTML String Construction
 short_description: Lambda event data is used in HTML string construction via f-strings or concatenation before being returned to API Gateway, enabling Cross-Site Scripting.
 

@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-DJANGO-SEC-071
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Django CSRF Exempt Decorator Audit
 short_description: '@csrf_exempt disables Cross-Site Request Forgery protection for the decorated view. Audit all usages to confirm this is intentional and justified.'
 

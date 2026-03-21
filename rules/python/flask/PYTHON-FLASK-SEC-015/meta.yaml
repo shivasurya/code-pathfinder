@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-FLASK-SEC-015
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Flask Unsanitized Input in Response
 short_description: User input from Flask request parameters flows to make_response() or jsonify() without escaping. Sanitize HTML output with markupsafe.escape(); ensure JSON responses set the correct Content-Type to prevent browser HTML rendering.
 

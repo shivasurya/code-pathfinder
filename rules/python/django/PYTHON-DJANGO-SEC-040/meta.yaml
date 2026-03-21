@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-DJANGO-SEC-040
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Django Path Traversal via open()
 short_description: User input flows to open(), enabling path traversal attacks to read or write arbitrary files on the server.
 

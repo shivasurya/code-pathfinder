@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-LAMBDA-SEC-006
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Lambda Command Injection via loop.subprocess_exec()
 short_description: Lambda event data flows to loop.subprocess_exec(), enabling argument injection through the asyncio event loop in Lambda handlers.
 

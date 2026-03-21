@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-DESER-001
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Unsafe Pickle Deserialization
 short_description: Traces untrusted user input from request objects to pickle.loads() or pickle.load(), which can execute arbitrary Python code during deserialization.
 

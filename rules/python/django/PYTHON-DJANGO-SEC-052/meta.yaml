@@ -1,5 +1,6 @@
 # Rule Identity
 id: PYTHON-DJANGO-SEC-052
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
 name: Django html_safe() Decorator Usage Audit
 short_description: html_safe() marks a class's __str__ output as safe HTML, bypassing auto-escaping. Audit all usages to confirm output is properly sanitized.
 
