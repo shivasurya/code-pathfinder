@@ -61,7 +61,7 @@ jobs:
       - name: Build sandbox-api binary
         working-directory: server/backend
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o sandbox-api ./cmd/api
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o sandbox-api ./cmd/api
           echo "Binary size: $(ls -lh sandbox-api | awk '{print $5}')"
 
       - name: Deploy to server
