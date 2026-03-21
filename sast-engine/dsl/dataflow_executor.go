@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -298,7 +299,17 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 		}
 	}
 
-	return detections
+	// Dedup: multiple matchers can produce identical findings for the same flow
+	seen := make(map[string]bool)
+	deduped := make([]DataflowDetection, 0, len(detections))
+	for _, det := range detections {
+		key := fmt.Sprintf("%s:%d:%d:%s", det.FunctionFQN, det.SourceLine, det.SinkLine, det.SinkCall)
+		if !seen[key] {
+			seen[key] = true
+			deduped = append(deduped, det)
+		}
+	}
+	return deduped
 }
 
 // summaryConfirmsFlow checks whether VDG transfer summaries confirm that
