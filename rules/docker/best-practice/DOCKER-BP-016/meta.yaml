@@ -42,6 +42,8 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
+- title: hadolint DL3025
+  url: ''
 - title: Docker ENTRYPOINT documentation
   url: ''
 compliance: []

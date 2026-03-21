@@ -41,6 +41,8 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
+- title: hadolint DL3036
+  url: ''
 compliance: []
 faq: []
 similar_rules: []

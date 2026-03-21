@@ -34,6 +34,8 @@ secure_example: 'RUN set -o pipefail && wget -O - https://example.com | tar xz  
 recommendations: []
 detection_scope: ''
 references:
+- title: hadolint DL4006
+  url: ''
 - title: 'Bash Manual: set builtin'
   url: ''
 compliance: []
