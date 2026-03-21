@@ -11,9 +11,9 @@ ruleset: python/lang/PYTHON-LANG-SEC-070
 
 # Vulnerability Details
 cwe:
-  - id: CWE-605
+  - id: CWE-668
     name: Multiple Binds to the Same Port
-    url: https://cwe.mitre.org/data/definitions/605.html
+    url: https://cwe.mitre.org/data/definitions/668.html
 
 owasp:
   - id: A05:2021
@@ -26,7 +26,7 @@ tags:
   - bind
   - all-interfaces
   - network-exposure
-  - CWE-605
+  - CWE-668
   - OWASP-A05
 
 # Author
@@ -130,8 +130,8 @@ compliance:
 
 # References
 references:
-  - title: "CWE-605: Multiple Binds to the Same Port"
-    url: https://cwe.mitre.org/data/definitions/605.html
+  - title: "CWE-668: Multiple Binds to the Same Port"
+    url: https://cwe.mitre.org/data/definitions/668.html
   - title: "Python docs: socket.bind()"
     url: https://docs.python.org/3/library/socket.html#socket.socket.bind
   - title: OWASP Security Misconfiguration

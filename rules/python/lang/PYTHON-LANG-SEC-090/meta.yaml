@@ -102,7 +102,7 @@ secure_example: |
 
 recommendations:
   - Replace xml.etree.ElementTree with defusedxml.ElementTree for all XML parsing of untrusted input.
-  - Install defusedxml: pip install defusedxml. It provides safe drop-in replacements for all standard library XML parsers.
+  - "Install defusedxml: pip install defusedxml. It provides safe drop-in replacements for all standard library XML parsers."
   - For configuration files or SOAP/REST XML responses, validate the XML schema after parsing with a schema validator (lxml's xmlschema).
   - Limit the size of XML input accepted from external sources to prevent denial-of-service attacks.
   - Use JSON instead of XML for new API designs to avoid XML security complexity entirely.

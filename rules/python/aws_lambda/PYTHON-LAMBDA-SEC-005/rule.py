@@ -18,7 +18,7 @@ _LAMBDA_SOURCES = [
 @python_rule(
     id="PYTHON-LAMBDA-SEC-005",
     name="Lambda Command Injection via asyncio exec",
-    severity="HIGH",
+    severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-78",
     tags="python,aws,lambda,command-injection,asyncio,owasp-a03,cwe-78",
