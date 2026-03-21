@@ -37,7 +37,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3020
+- title: "Dockerfile Best Practice: Use COPY instead of ADD for files"
   url: ''
 compliance: []
 faq: []

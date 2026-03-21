@@ -41,7 +41,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3036
+- title: "Dockerfile Best Practice: Avoid zypper clean all"
   url: ''
 compliance: []
 faq: []

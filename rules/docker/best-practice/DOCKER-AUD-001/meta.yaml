@@ -49,7 +49,7 @@ detection_scope: ''
 references:
 - title: Docker Content Trust
   url: ''
-- title: hadolint DL3026
+- title: "Dockerfile Best Practice: Pin image digests for reproducibility"
   url: ''
 - title: Supply Chain Security Best Practices
   url: ''

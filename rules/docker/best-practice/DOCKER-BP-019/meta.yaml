@@ -42,7 +42,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3035
+- title: "Dockerfile Best Practice: Avoid zypper update"
   url: ''
 compliance: []
 faq: []

@@ -43,7 +43,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL4006
+- title: "Dockerfile Best Practice: Set SHELL with pipefail for RUN pipes"
   url: ''
 compliance: []
 faq: []

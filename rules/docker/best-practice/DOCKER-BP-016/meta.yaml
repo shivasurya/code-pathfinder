@@ -42,7 +42,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3025
+- title: "Dockerfile Best Practice: Use JSON notation for CMD/ENTRYPOINT"
   url: ''
 - title: Docker ENTRYPOINT documentation
   url: ''

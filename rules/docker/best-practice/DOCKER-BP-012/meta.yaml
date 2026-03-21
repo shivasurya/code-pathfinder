@@ -43,7 +43,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3038
+- title: "Dockerfile Best Practice: Clean package manager cache"
   url: ''
 compliance: []
 faq: []

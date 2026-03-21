@@ -42,7 +42,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3039
+- title: "Dockerfile Best Practice: Avoid dnf update"
   url: ''
 compliance: []
 faq: []

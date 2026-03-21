@@ -50,7 +50,7 @@ detection_scope: ''
 references:
 - title: 'Docker Documentation: CMD instruction'
   url: ''
-- title: hadolint DL4004
+- title: "Dockerfile Best Practice: Multiple ENTRYPOINT instructions"
   url: ''
 - title: Docker Best Practices
   url: ''

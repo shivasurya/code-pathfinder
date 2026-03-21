@@ -45,7 +45,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3003
+- title: "Dockerfile Best Practice: Use WORKDIR instead of cd"
   url: ''
 compliance: []
 faq: []

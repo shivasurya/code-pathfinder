@@ -41,7 +41,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3027
+- title: "Dockerfile Best Practice: Avoid apt instead of apt-get"
   url: ''
 - title: Debian apt vs apt-get documentation
   url: ''

@@ -38,7 +38,7 @@ detection_scope: ''
 references:
 - title: Docker Best Practices
   url: ''
-- title: hadolint DL3005
+- title: "Dockerfile Best Practice: Avoid apt-get upgrade"
   url: ''
 compliance: []
 faq: []
