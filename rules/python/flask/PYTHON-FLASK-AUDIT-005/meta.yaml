@@ -1,0 +1,208 @@
+# Rule Identity
+id: PYTHON-FLASK-AUDIT-005
+name: Flask url_for with _external=True
+short_description: Detects url_for() called with _external=True, which generates absolute URLs using the Host header and can be abused for open redirect or host header injection attacks.
+
+# Classification
+severity: LOW
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-AUDIT-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-601
+    name: "URL Redirection to Untrusted Site ('Open Redirect')"
+    url: https://cwe.mitre.org/data/definitions/601.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - flask
+  - url-for
+  - external
+  - open-redirect
+  - host-header-injection
+  - audit
+  - CWE-601
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to Flask's url_for() with the _external=True keyword argument.
+  When _external=True is set, url_for() generates an absolute URL (including scheme and host)
+  rather than a relative path. Flask constructs the host portion of this URL from the incoming
+  HTTP request's Host header. If the Host header is not validated, an attacker can supply an
+  arbitrary host value and cause url_for() to return a URL pointing to an attacker-controlled
+  domain.
+
+  This becomes a direct security vulnerability when the generated URL is used in an HTTP
+  redirect (redirect(url_for(..., _external=True))), a password-reset email link, an OAuth
+  redirect_uri, or any other context where the URL is sent to a user and the user's browser
+  will follow it. In these cases, host header injection escalates to an open redirect or
+  phishing attack.
+
+  The detection uses calls("url_for", match_name={"_external": True}) -- an Or-free pattern
+  that matches any call to url_for() where the _external keyword argument is present and set
+  to True. This is an audit-grade rule: not every url_for(_external=True) is vulnerable, but
+  every use warrants review to confirm that the generated URL is not used in a redirect or
+  emailed to a user without host validation.
+
+message: "url_for() with _external=True generates absolute URLs from the Host header. Verify the Host header is validated before using the result in redirects or emails."
+
+security_implications:
+  - title: Open Redirect via Host Header Injection
+    description: |
+      If the generated URL is passed to redirect(), an attacker can set the Host header to
+      an attacker-controlled domain. The application will return a 302 response pointing the
+      user's browser to the attacker's site. Phishing, credential harvesting, and malware
+      delivery are the typical payloads.
+  - title: Password Reset Link Hijacking
+    description: |
+      Password reset flows frequently generate absolute URLs with _external=True for email links.
+      If an attacker can influence the Host header during the reset request (possible in some
+      proxy and load-balancer configurations), the reset link in the email will point to the
+      attacker's domain, handing them the reset token.
+  - title: OAuth redirect_uri Manipulation
+    description: |
+      OAuth flows that use url_for(_external=True) to build the redirect_uri parameter can
+      be manipulated to point to attacker-controlled endpoints, capturing authorization codes
+      and access tokens.
+  - title: Cache Poisoning via Host Header
+    description: |
+      If the externally-generated URL is cached (CDN, application cache) with the attacker's
+      host value, subsequent users who receive the cached response will see URLs pointing to
+      the attacker's domain.
+
+secure_example: |
+  from flask import Flask, url_for, redirect, request
+  from urllib.parse import urlparse
+
+  app = Flask(__name__)
+
+  # SAFE approach 1: Use a configured SERVER_NAME rather than trusting Host header
+  app.config['SERVER_NAME'] = 'app.example.com'
+
+  @app.route('/reset-password')
+  def reset_password():
+      # url_for uses SERVER_NAME, not the Host header, when SERVER_NAME is configured
+      reset_link = url_for('reset_confirm', token='abc', _external=True)
+      send_email(reset_link)
+      return 'Email sent'
+
+  # SAFE approach 2: Build absolute URLs from a hardcoded base URL
+  BASE_URL = 'https://app.example.com'
+
+  @app.route('/redirect-after-login')
+  def post_login():
+      next_path = url_for('dashboard')  # relative URL, no _external
+      return redirect(BASE_URL + next_path)
+
+recommendations:
+  - Set app.config['SERVER_NAME'] to your production domain so Flask uses a fixed host for external URL generation rather than trusting the Host header.
+  - If you must generate external URLs without SERVER_NAME, validate that the generated URL's host matches an explicit allow-list of known-good domains before using it in redirects or emails.
+  - Prefer relative URLs (url_for() without _external=True) for internal redirects within the application.
+  - For email links, construct absolute URLs from a hardcoded BASE_URL configuration value rather than from request context.
+  - Add server-side Host header validation middleware if your deployment architecture sends the original Host header through proxies.
+
+detection_scope: |
+  This rule uses calls("url_for", match_name={"_external": True}) to match any call to the
+  url_for() function where the _external keyword argument is present and set to True. This is
+  a broad audit pattern -- it flags all such calls for manual review, not only those that
+  directly feed into redirect() or email sending. The rule does not perform dataflow analysis
+  from the generated URL to its use site. Use this finding as a signal to review each flagged
+  call and determine whether the generated URL reaches a redirect or email context without host
+  validation.
+
+# References
+references:
+  - title: "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+    url: https://cwe.mitre.org/data/definitions/601.html
+  - title: Flask url_for Documentation
+    url: https://flask.palletsprojects.com/en/stable/api/#flask.url_for
+  - title: OWASP Host Header Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection
+  - title: OWASP Unvalidated Redirects and Forwards Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+  - title: OWASP A01:2021 Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control: prevent open redirects to untrusted destinations"
+  - standard: CWE Top 25
+    requirement: "CWE-601 URL Redirection to Untrusted Site"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection and redirect attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- validate HTTP request headers"
+
+# FAQ
+faq:
+  - question: Is every url_for(_external=True) call a vulnerability?
+    answer: |
+      No. This is an audit-grade rule. url_for(_external=True) is vulnerable only when the
+      generated URL is used in a context that sends it to a user's browser (redirect, email
+      link, OAuth redirect_uri) and when the Host header is not validated. If you use
+      app.config['SERVER_NAME'] to fix the host, or if the generated URL is only used
+      server-side for logging or internal API calls, the risk is significantly reduced.
+
+  - question: How does setting SERVER_NAME help?
+    answer: |
+      When app.config['SERVER_NAME'] is set, Flask uses that value as the host for external
+      URL generation regardless of the incoming Host header. The Host header is not trusted
+      for URL construction, which eliminates the host header injection vector.
+
+  - question: Why is this rated LOW severity?
+    answer: |
+      The vulnerability requires the generated URL to reach a user-facing redirect or email
+      flow without host validation, which is not guaranteed by the call pattern alone. The
+      rule is a precision audit signal -- it identifies every location that warrants review,
+      but many flagged locations will be safe in context. LOW reflects that the pattern alone
+      is not sufficient to confirm exploitability.
+
+  - question: Can I suppress this finding for a specific call that I have verified is safe?
+    answer: |
+      Yes. Add a Code Pathfinder inline suppression comment on the line or add the file to
+      a path exclusion list in your configuration. Document why the suppression is safe --
+      for example, "SERVER_NAME is configured globally" or "URL is only used for logging,
+      never in responses."
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-AUDIT-005 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule catch _external=True set via a variable?
+    answer: |
+      No. The match_name={"_external": True} pattern matches only the literal boolean True.
+      If you pass _external=some_variable, the rule does not flag it. This keeps the rule
+      precise to the most common case where external URL generation is explicitly hardcoded.
+
+  - question: What is the relationship between this rule and open redirect rules?
+    answer: |
+      This rule audits the URL generation site. A complementary open redirect rule would trace
+      the flow from the generated URL into redirect() -- a dataflow analysis. Together they
+      cover both the source (url_for) and the sink (redirect), giving you defense in depth
+      in your static analysis pipeline.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-005
+  - PYTHON-FLASK-SEC-006
+  - PYTHON-FLASK-AUDIT-008
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

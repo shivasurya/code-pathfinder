@@ -1,0 +1,187 @@
+# Rule Identity
+id: PYTHON-CRYPTO-SEC-003
+name: IDEA Cipher Usage via cryptography Library
+short_description: Detects use of the IDEA cipher through the cryptography library, which has a 64-bit block size making it vulnerable to Sweet32 birthday attacks and is deprecated in modern cryptographic standards.
+
+# Classification
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - cryptography
+  - idea
+  - 64-bit-block
+  - sweet32
+  - deprecated-cipher
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects instantiation of the IDEA (International Data Encryption Algorithm)
+  cipher via the `cryptography` library's
+  `cryptography.hazmat.primitives.ciphers.algorithms.IDEA` class. IDEA operates on
+  64-bit blocks, subjecting it to the same Sweet32 birthday attack that affects
+  Blowfish, DES, and 3DES.
+
+  IDEA was designed in 1991 as part of the PGP encryption standard. It uses a 128-bit
+  key with an 8-round Feistel-like structure, providing reasonable key strength -- but
+  its 64-bit block size is fundamentally limiting. After 2^32 blocks (~32GB) under the
+  same key, block collisions become probable and ciphertext analysis can recover
+  plaintext. IDEA also carried Swiss patent protection until 2012, which restricted its
+  use in many jurisdictions.
+
+  The `cryptography` library's hazmat module includes IDEA only for legacy
+  interoperability. The rule matches `CryptoCipherAlgorithms.method("IDEA")`. There is
+  no block-size-safe way to use IDEA; replace it with AES-256-GCM.
+
+message: "IDEA cipher has a 64-bit block size and is deprecated. Replace with AES-256-GCM or ChaCha20-Poly1305."
+
+security_implications:
+  - title: 64-Bit Block Size -- Sweet32 Birthday Attack
+    description: |
+      IDEA's 64-bit block size creates the same birthday attack surface as Blowfish
+      and 3DES. After roughly 32GB of ciphertext under one key, the probability of
+      a block collision exceeds 50%. In CBC mode, a collision reveals the XOR of two
+      plaintext blocks, enabling gradual plaintext recovery from intercepted traffic
+      or stored data.
+  - title: No Authenticated Encryption
+    description: |
+      IDEA provides confidentiality only. Without a separate MAC or use of an AEAD
+      mode, any IDEA-encrypted ciphertext can be silently modified. Applications that
+      do not verify integrity before decrypting are exposed to chosen-ciphertext
+      attacks and padding oracle vulnerabilities depending on the block mode.
+  - title: Effectively Abandoned by Cryptographic Standards Bodies
+    description: |
+      IDEA does not appear in NIST SP 800-131A's list of approved algorithms, is not
+      permitted under FIPS 140-2/3, and has been removed from the TLS cipher suite
+      registry. Its presence in the `cryptography` library exists solely for
+      interoperability with old PGP-encrypted archives, not for new development.
+  - title: Historical Patent Restrictions Limited Audit and Deployment
+    description: |
+      Until 2012, IDEA was covered by Swiss and US patents, preventing royalty-free
+      use and limiting the breadth of public security analysis compared to open
+      algorithms like AES. The reduced scrutiny relative to AES means fewer known
+      attacks but also less assurance of long-term security.
+
+secure_example: |
+  from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  import os
+
+  # SECURE: AES-256-GCM provides both confidentiality and integrity
+  key = AESGCM.generate_key(bit_length=256)
+  aesgcm = AESGCM(key)
+  nonce = os.urandom(12)
+  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
+
+recommendations:
+  - Replace IDEA with AES-256-GCM (AESGCM from cryptography.hazmat.primitives.ciphers.aead) for new encryption
+  - Use ChaCha20-Poly1305 as an alternative AEAD cipher if AES hardware acceleration is unavailable
+  - If decrypting legacy IDEA-encrypted data, immediately re-encrypt the plaintext under AES-256-GCM and discard IDEA key material
+  - Enforce key rotation policies so that no single IDEA key is used to encrypt more than a conservative data volume
+  - Run this rule in CI to prevent IDEA from being introduced into new code paths while legacy migration is underway
+
+detection_scope: |
+  This rule matches calls to the IDEA constructor in the cryptography library's hazmat
+  algorithms module via the QueryType pattern `CryptoCipherAlgorithms.method("IDEA")`.
+  It fires on any IDEA cipher object instantiation regardless of key or mode. The
+  64-bit block size risk is inherent to the algorithm and cannot be configured away.
+  There is no companion PyCryptodome rule for IDEA as PyCryptodome does not include it.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Sweet32: Birthday attacks on 64-bit block ciphers in TLS and OpenVPN"
+    url: https://sweet32.info/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "IDEA Cipher -- Original Paper by Lai and Massey (1991)"
+    url: https://link.springer.com/chapter/10.1007/3-540-46877-3_35
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: IDEA uses a 128-bit key. Isn't that strong enough for modern use?
+    answer: |
+      IDEA's 128-bit key provides adequate key strength against brute-force attacks,
+      but the limiting factor is the 64-bit block size, not the key. The Sweet32
+      birthday attack does not target the key -- it exploits block collisions in the
+      ciphertext. After ~32GB under one key, these collisions leak plaintext regardless
+      of how strong the key is. AES-128 and above use a 128-bit block size, which
+      eliminates this entire class of attacks.
+
+  - question: We use IDEA only to decrypt old PGP archives. Should we still fix this?
+    answer: |
+      Decryption-only usage for existing archives is the legitimate use case for IDEA
+      in the cryptography library. However, the rule still fires because it cannot
+      distinguish decryption-only usage from encryption. If your code genuinely only
+      decrypts legacy archives and never encrypts new data, you can acknowledge the
+      finding with an inline suppression comment and a migration plan to re-encrypt
+      the archives under AES-256-GCM.
+
+  - question: Is IDEA still used in any current protocols or formats?
+    answer: |
+      IDEA was included in early versions of PGP and OpenPGP (RFC 2440). Modern
+      OpenPGP implementations (RFC 4880 and later) include AES as the primary cipher
+      and retain IDEA only for backwards compatibility with pre-2000 encrypted messages.
+      No active protocol negotiates IDEA for new connections.
+
+  - question: How does the IDEA patent history affect security?
+    answer: |
+      Until 2012, IDEA was patented in Switzerland and the United States. This
+      restricted broad deployment and limited the volume of independent public security
+      research compared to unencumbered algorithms like AES. While no practical attack
+      beyond the Sweet32 block size issue has been published, the reduced scrutiny means
+      less confidence in the algorithm's long-term security guarantees.
+
+  - question: Will this rule flag IDEA if it appears in a compatibility shim that only decrypts?
+    answer: |
+      Yes. The rule matches any IDEA constructor call. If the shim is genuinely
+      decryption-only and required for legacy archive access, add an inline suppression
+      with a comment explaining the business justification, and create a backlog item
+      to migrate the archives to AES-256-GCM. The finding is still valid as a risk
+      tracking item even if immediate remediation is not feasible.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-002
+  - PYTHON-CRYPTO-SEC-002a
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-005a
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

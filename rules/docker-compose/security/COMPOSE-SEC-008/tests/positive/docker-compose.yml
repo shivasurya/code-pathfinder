@@ -1,0 +1,6 @@
+services:
+  app:
+    image: myapp
+    cap_add:
+      - SYS_ADMIN  # DANGEROUS - Can escape container
+      - NET_ADMIN   # RISKY - Full network control

@@ -1,0 +1,244 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-004
+name: Flask Code Injection via eval()
+short_description: User input from Flask request parameters flows to eval(). Replace with ast.literal_eval() for data parsing or json.loads() for structured input.
+
+# Classification
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-004
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - code-injection
+  - eval
+  - eval-injection
+  - rce
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects eval injection in Flask applications where user-controlled input
+  from HTTP request parameters reaches Python's built-in eval() function. eval()
+  evaluates its argument as a Python expression and returns the result. When the
+  argument contains attacker-controlled data, the attacker can inject arbitrary
+  Python expressions including function calls, attribute access, and import
+  statements that lead to remote code execution.
+
+  Unlike OS command injection, eval injection executes within the Python interpreter
+  itself. The attacker has direct access to Python builtins, imported modules, and
+  the application's own namespaces. Common payloads access __import__('os').system()
+  or use __builtins__ to invoke any Python functionality available in the process.
+
+  The taint analysis traces data from Flask request sources through variable
+  assignments and function calls to the eval() sink at argument position 0. The
+  .tracks(0) parameter means only the expression string argument is tracked --
+  the optional globals and locals dictionaries at positions 1 and 2 are not
+  analyzed by this rule. Flows through ast.literal_eval() or json.loads() are
+  recognized as sanitizers because these functions evaluate only safe literal
+  types (strings, numbers, lists, dicts, tuples, booleans, None) without
+  executing arbitrary code.
+
+message: "User input flows to eval(). Use ast.literal_eval() for safe literal parsing or json.loads() for structured data."
+
+security_implications:
+  - title: Direct Remote Code Execution in the Python Interpreter
+    description: |
+      eval() has access to Python builtins by default. An attacker can call
+      __import__('subprocess').check_output(['id']) to execute OS commands,
+      __import__('socket') to establish network connections, or access the
+      application's database session objects via the interpreter's global namespace.
+      There is no sandbox -- the attacker operates with the full privileges of the
+      Flask process.
+  - title: Secret and Credential Extraction
+    description: |
+      The Python runtime holds application secrets in memory: database passwords,
+      API keys, JWT secrets, and OAuth tokens. An injected expression like
+      globals()['app'].config['SECRET_KEY'] or os.environ['DB_PASSWORD'] extracts
+      these values and returns them in the HTTP response body.
+  - title: Bypassing Authentication and Authorization
+    description: |
+      eval() can call application functions directly. An attacker who knows the
+      codebase (from source code exposure or error messages) can invoke admin
+      functions, reset passwords, or elevate privileges by calling internal Python
+      functions through the eval() context.
+  - title: Supply Chain Attacks via Injected Imports
+    description: |
+      __import__() inside eval() can load any installed Python package. In
+      environments with broad pip dependencies, attackers use eval injection to
+      instantiate classes from installed libraries in unexpected ways, reaching
+      attack surface that is not directly accessible from the Flask route handlers.
+
+secure_example: |
+  from flask import Flask, request
+  import ast
+  import json
+
+  app = Flask(__name__)
+
+  @app.route('/parse')
+  def parse_value():
+      value = request.args.get('value', '')
+      # SAFE: ast.literal_eval() evaluates only Python literals
+      # It raises ValueError for anything that is not a string, number,
+      # tuple, list, dict, set, boolean, or None
+      try:
+          result = ast.literal_eval(value)
+      except (ValueError, SyntaxError):
+          return {'error': 'Invalid literal'}, 400
+      return {'result': result}
+
+  @app.route('/config', methods=['POST'])
+  def load_config():
+      raw = request.get_data(as_text=True)
+      # SAFE: json.loads() for structured data -- JSON has no callable expressions
+      try:
+          config = json.loads(raw)
+      except json.JSONDecodeError:
+          return {'error': 'Invalid JSON'}, 400
+      return {'loaded': True}
+
+recommendations:
+  - Replace eval() with ast.literal_eval() when you need to parse Python literals (numbers, strings, lists, dicts) -- it rejects any expression that is not a safe literal type.
+  - Use json.loads() for structured data exchange instead of eval() -- JSON is a strict subset with no callable constructs.
+  - If you need to evaluate mathematical expressions, use a dedicated safe math library like simpleeval or numexpr instead of Python's eval().
+  - Never pass eval() a default globals or locals dict that contains application internals -- attackers can walk the object graph to reach sensitive state.
+  - Audit all uses of eval() in the codebase regardless of whether they currently receive user input -- refactor them out before new code paths introduce tainted data.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- all of which return attacker-controlled
+  strings that can contain Python expression syntax.
+
+  Sinks: eval(). The .tracks(0) parameter focuses on argument position 0, the
+  expression string. The optional globals and locals dictionaries at positions
+  1 and 2 are separate concerns and are not tracked by this rule.
+
+  Sanitizers: ast.literal_eval() and json.loads() are recognized as sanitizing
+  transformations. A value that passes through either function before reaching
+  eval() is treated as safe because those functions constrain the input to
+  non-executable data types.
+
+  The rule follows tainted values through assignments, return values, and
+  cross-file function calls, catching eval() injections in utility modules
+  and helper functions that receive data from Flask route handlers.
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: Python eval() built-in documentation
+    url: https://docs.python.org/3/library/functions.html#eval
+  - title: Python ast.literal_eval documentation
+    url: https://docs.python.org/3/library/ast.html#ast.literal_eval
+  - title: "Ned Batchelder: eval() really is dangerous"
+    url: https://nedbatchelder.com/blog/201206/eval_really_is_dangerous.html
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE Top 25
+    requirement: "CWE-95 -- Eval Injection in Dangerous Software Weaknesses list"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including code injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: SOC 2 Type II
+    requirement: "CC6.1 -- logical and physical access controls preventing unauthorized code execution"
+
+# FAQ
+faq:
+  - question: Is ast.literal_eval() truly safe for all user input?
+    answer: |
+      ast.literal_eval() evaluates only Python literals: strings, bytes, numbers,
+      tuples, lists, dicts, sets, booleans, and None. It raises ValueError for
+      anything that contains a function call, attribute access, or import statement.
+      It is safe for parsing structured data but is not a general-purpose alternative
+      to eval() -- if you need math expressions or more complex evaluation, use a
+      dedicated safe expression library.
+
+  - question: Can the attacker bypass ast.literal_eval() sanitization?
+    answer: |
+      No. ast.literal_eval() parses the input into an AST and then evaluates only
+      nodes that correspond to literal types. If the AST contains any non-literal
+      node, it raises ValueError before evaluation. There are no known bypasses.
+      The risk is calling ast.literal_eval() on the result of a manipulation that
+      turns a literal into an expression -- always apply it directly to the raw
+      user input.
+
+  - question: How does this rule handle eval() calls inside class methods or nested functions?
+    answer: |
+      The taint analysis follows data flow regardless of call depth or class
+      structure. If request.args.get() feeds a value through a class method, a
+      decorator, or a nested function that eventually calls eval(), the rule traces
+      the full chain. Scope boundaries within the same Python module and across
+      imported modules are both handled.
+
+  - question: What if I need a calculation engine for user-defined formulas?
+    answer: |
+      Use simpleeval (pip install simpleeval) for arithmetic expression evaluation.
+      It supports operators and basic math functions but restricts the expression
+      language to a safe subset. For spreadsheet-style formulas, formulaic is another
+      option. Both are designed specifically for safe user-defined expression
+      evaluation and do not expose Python's object model.
+
+  - question: How do I fix an existing eval() call that processes user input?
+    answer: |
+      Start by determining what the input is supposed to contain. If it is a number,
+      use int() or float(). If it is a Python literal (list, dict, tuple), use
+      ast.literal_eval(). If it is JSON, use json.loads(). If it is a mathematical
+      expression, use simpleeval. If no safe alternative covers the use case, the
+      feature needs to be redesigned to not require arbitrary expression evaluation.
+
+  - question: Will this rule flag eval() on hardcoded strings in tests?
+    answer: |
+      No. The rule only flags flows where the argument to eval() is reachable from
+      a Flask request source (request.args.get, etc.). eval('2 + 2') with a
+      hardcoded string literal does not create a tainted flow and will not be flagged.
+
+  - question: Does this rule cover compile() as well?
+    answer: |
+      No. compile() followed by exec() is covered by PYTHON-FLASK-SEC-005, which
+      tracks flows to exec() and compile() separately. SEC-004 covers eval() only.
+      Run both rules together for complete coverage of Python code injection patterns.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-005
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LANG-SEC-020
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

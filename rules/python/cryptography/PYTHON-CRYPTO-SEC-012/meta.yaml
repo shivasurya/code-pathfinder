@@ -1,0 +1,137 @@
+id: PYTHON-CRYPTO-SEC-012
+name: Insecure MD5 Hash (PyCryptodome)
+short_description: MD5 is cryptographically broken due to practical collision attacks since 2004. Use SHA-256 or SHA-3 via PyCryptodome instead.
+severity: MEDIUM
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-012
+cwe:
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: Use of Weak Hash
+    url: https://cwe.mitre.org/data/definitions/328.html
+tags:
+  - python
+  - pycryptodome
+  - md5
+  - weak-hash
+  - CWE-327
+  - OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: |
+  Detects usage of MD5 via the PyCryptodome or PyCrypto library's `Crypto.Hash.MD5.new()`
+  or `Cryptodome.Hash.MD5.new()` constructor. MD5 produces a 128-bit digest and has been
+  considered cryptographically broken since 2004 (Wang et al., chosen-prefix collision
+  attacks). In 2008 the Flame malware exploited MD5 weaknesses in a Windows Update
+  certificate to execute arbitrary code on patched systems.
+
+  PyCryptodome is commonly used in Python projects for cryptographic operations and is the
+  maintained successor to the original PyCrypto library. Both `Crypto.Hash.MD5` (PyCryptodome
+  in drop-in compatibility mode) and `Cryptodome.Hash.MD5` (PyCryptodome standalone) are
+  covered by this rule.
+
+  MD5 must not be used for digital signatures, data integrity verification, password hashing,
+  or HMAC-based authentication. It remains acceptable for non-security checksums such as
+  cache keys, file deduplication identifiers, or content-addressable storage where an
+  attacker producing a collision confers no security benefit.
+message: MD5 is cryptographically broken. Replace Crypto.Hash.MD5.new() with Crypto.Hash.SHA256.new() or Crypto.Hash.SHA3_256.new() for security-sensitive operations.
+detection_scope: |
+  Matches any call to `PyCryptoHashMD5.method("new")` where `PyCryptoHashMD5` is a
+  QueryType resolving fully-qualified names `Crypto.Hash.MD5` and `Cryptodome.Hash.MD5`.
+  This covers both the PyCryptodome drop-in compatibility namespace (`Crypto.*`) and the
+  standalone namespace (`Cryptodome.*`). The rule fires on `.new()` constructor invocation,
+  which is the standard PyCryptodome pattern for instantiating hash objects.
+secure_example: |
+  from Crypto.Hash import SHA256, SHA3_256
+
+  # SECURE: SHA-256 for integrity checking
+  h = SHA256.new()
+  h.update(b"data to hash")
+  digest = h.hexdigest()
+
+  # SECURE: SHA-3 for stronger collision resistance
+  h = SHA3_256.new()
+  h.update(b"document bytes")
+  digest = h.hexdigest()
+
+  # SECURE: HMAC with SHA-256 for message authentication
+  from Crypto.Hash import HMAC
+  import os
+  key = os.urandom(32)
+  mac = HMAC.new(key, digestmod=SHA256)
+  mac.update(b"message to authenticate")
+  tag = mac.hexdigest()
+security_implications:
+  - "Certificate and signature forgery: MD5 collision attacks allow an attacker to produce two messages with identical hashes, enabling substitution of a malicious payload for a legitimately signed document."
+  - "Password cracking: MD5 is extremely fast on modern hardware (billions of hashes per second on GPUs), making dictionary and brute-force attacks against MD5-stored passwords trivially fast."
+  - "Data integrity bypass: applications using MD5 to detect file tampering can be fooled by an attacker who engineers a modified file that collides with the original hash."
+  - "Compliance failure: PCI DSS v4.0, NIST SP 800-131A, and FIPS 140-3 disallow MD5 in new implementations, triggering findings during security audits in regulated industries."
+recommendations:
+  - "Replace Crypto.Hash.MD5.new() with Crypto.Hash.SHA256.new() for all integrity and authentication use cases."
+  - "For password hashing, do not use any raw hash function including SHA-256 — use Argon2 (argon2-cffi), bcrypt, or scrypt which are designed to be slow and memory-intensive."
+  - "For message authentication, use Crypto.Hash.HMAC with SHA-256 as the digest module instead of bare MD5."
+  - "MD5 may remain in non-security contexts (cache keys, deduplication) where collision resistance carries no security consequence — add an explicit comment documenting this intent."
+  - "When migrating stored MD5 checksums (e.g., in a database), rehash with SHA-256 on next verified access and deprecate the MD5 code path with a sunset date."
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography"
+  - standard: NIST SP 800-131A
+    requirement: "MD5 and SHA-1 disallowed for digital signatures"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+faq:
+  - question: "Is MD5 ever safe to use with PyCryptodome?"
+    answer: "MD5 is acceptable for non-security purposes such as cache keys, file deduplication, or content-addressable storage where an attacker benefiting from a collision is not a concern. It must not be used for signatures, integrity verification, password hashing, or authentication in security contexts."
+  - question: "What is the difference between this rule and PYTHON-CRYPTO-SEC-010?"
+    answer: "PYTHON-CRYPTO-SEC-010 targets MD5 used via the `cryptography` library hazmat interface (hashes.MD5()). This rule (PYTHON-CRYPTO-SEC-012) targets MD5 in PyCryptodome/PyCrypto (Crypto.Hash.MD5.new() or Cryptodome.Hash.MD5.new()). The underlying weakness is identical; the rules differ by library."
+  - question: "PyCryptodome still includes MD5 — does that mean it is safe?"
+    answer: "PyCryptodome includes MD5 for legacy compatibility and protocol support, not because it is safe for new security-sensitive applications. The presence of an algorithm in a library does not imply it is recommended."
+  - question: "Why not use SHA-256 for password hashing?"
+    answer: "SHA-256 is fast by design, which is a property attackers exploit for brute-force and dictionary attacks. Use Argon2id (argon2-cffi), bcrypt, or scrypt, which are deliberately slow and memory-intensive to limit attacker throughput."
+  - question: "Does this rule detect MD5 used inside another algorithm, such as PBKDF1?"
+    answer: "This rule specifically matches calls to Crypto.Hash.MD5.new(). If MD5 is used indirectly inside a higher-level PyCryptodome KDF, it would require a separate rule targeting that KDF."
+  - question: "How do I run this rule in CI/CD?"
+    answer: "Run `code-pathfinder scan --ruleset python/cryptography/PYTHON-CRYPTO-SEC-012 --path ./src` in your pipeline. Add `--format sarif` to produce SARIF output compatible with GitHub Advanced Security and similar platforms."
+  - question: "Should I prefer the cryptography library over PyCryptodome?"
+    answer: "The `cryptography` library is generally recommended for new Python projects due to its active maintenance and explicit hazmat separation. PyCryptodome is well-maintained and widely used, but either library is acceptable when strong algorithms (SHA-256, AES-GCM) are used correctly."
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "Wang et al. 2004: How to Break MD5 and Other Hash Functions"
+    url: https://link.springer.com/chapter/10.1007/978-3-540-28628-8_19
+  - title: "Stevens et al. 2009: Short Chosen-Prefix Collisions for MD5"
+    url: https://link.springer.com/chapter/10.1007/978-3-642-03356-8_8
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "NIST SP 800-107: Recommendation for Applications Using Approved Hash Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-107/rev-1/final
+  - title: "OWASP Cryptographic Failures (A02:2021)"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "PyCryptodome documentation: Crypto.Hash.MD5"
+    url: https://pycryptodome.readthedocs.io/en/latest/src/hash/md5.html
+similar_rules:
+  - id: PYTHON-CRYPTO-SEC-010
+    description: MD5 usage via the cryptography library hazmat primitives (hashes.MD5())
+  - id: PYTHON-CRYPTO-SEC-011
+    description: SHA-1 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-013
+    description: MD4 usage via PyCryptodome — rated HIGH severity
+  - id: PYTHON-CRYPTO-SEC-014
+    description: MD2 usage via PyCryptodome — rated HIGH severity
+  - id: PYTHON-CRYPTO-SEC-015
+    description: SHA-1 usage via PyCryptodome (Crypto.Hash.SHA / Crypto.Hash.SHA1)
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

@@ -1,0 +1,223 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-011
+name: Lambda SQL Injection via psycopg2 cursor.execute()
+short_description: Lambda event data flows to psycopg2 cursor.execute() without parameterization, enabling SQL injection against RDS PostgreSQL or Aurora PostgreSQL backends.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-011
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - psycopg2
+  - postgresql
+  - rds
+  - aurora
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into psycopg2 cursor.execute() calls without proper
+  parameterization, enabling SQL injection against RDS PostgreSQL, Aurora PostgreSQL,
+  or any PostgreSQL-compatible backend.
+
+  Lambda functions frequently connect to RDS PostgreSQL or Aurora PostgreSQL using
+  psycopg2, the standard Python PostgreSQL adapter. Event data from API Gateway,
+  SQS, SNS, S3, and other triggers (event.get("body"), event.get("queryStringParameters"),
+  event["Records"]) is attacker-controllable and must not be embedded in SQL strings.
+
+  When event data is concatenated or f-stringed into the SQL query string before being
+  passed as the first argument to cursor.execute(), an attacker can inject arbitrary
+  SQL. PostgreSQL is particularly powerful as an injection target: attackers can use
+  COPY TO/FROM PROGRAM to execute OS commands (on unmanaged PostgreSQL; RDS restricts
+  this but not all extensions), pg_read_file() to read server files, and UNION SELECT
+  to exfiltrate arbitrary tables. Lambda functions connecting to PostgreSQL typically
+  lack the ORM layer that encourages parameterization, making raw psycopg2 calls
+  a common source of injection vulnerabilities.
+
+message: "Lambda event data flows to psycopg2 cursor.execute() without parameterization. Pass user input as the second argument (parameters tuple), never in the SQL string."
+
+security_implications:
+  - title: Full Database Exfiltration via UNION SELECT
+    description: |
+      An attacker who controls any SQL fragment can use UNION SELECT to read from any
+      table accessible to the Lambda's database user, including user credentials, session
+      tokens, PII, and financial records stored in the RDS PostgreSQL database.
+  - title: PostgreSQL Extension Abuse
+    description: |
+      PostgreSQL supports extensions that can be leveraged via SQL injection. dblink
+      and postgres_fdw can be used to connect to other database servers. Large object
+      functions (lo_import, lo_export) can read and write server files on unmanaged
+      PostgreSQL. Even on RDS where these are restricted, schema enumeration and
+      data exfiltration remain fully possible.
+  - title: Authentication and Authorization Bypass
+    description: |
+      Lambda functions that validate user credentials or check authorization via
+      SQL queries are vulnerable to ' OR '1'='1 style bypasses that cause the query
+      to return all rows. This can grant attackers administrative access or allow
+      them to act as any user in the system.
+  - title: Second-Order Injection via Stored Data
+    description: |
+      Injection payloads stored in the database by one Lambda function can be triggered
+      by a different Lambda function that reads the data and passes it to another
+      cursor.execute() without re-parameterizing. This cross-function second-order
+      injection is harder to detect and requires end-to-end taint tracking.
+
+secure_example: |
+  import json
+  import psycopg2
+  import psycopg2.extras
+
+  def get_db_connection():
+      return psycopg2.connect(
+          host='rds-host.cluster.us-east-1.rds.amazonaws.com',
+          dbname='appdb',
+          user='lambda_user',
+          password='password',
+          sslmode='require'
+      )
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      username = params.get('username', '')
+      status = params.get('status', '')
+
+      # SECURE: Use %s placeholders and pass values as a tuple to cursor.execute()
+      conn = get_db_connection()
+      try:
+          with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+              cursor.execute(
+                  "SELECT id, username, email FROM users WHERE username = %s AND status = %s",
+                  (username, status)
+              )
+              rows = cursor.fetchall()
+      finally:
+          conn.close()
+      return {'statusCode': 200, 'body': json.dumps(rows, default=str)}
+
+recommendations:
+  - Always pass Lambda event data as the second argument to cursor.execute() as a tuple, never by concatenating it into the SQL string.
+  - Use psycopg2's %s placeholders for all parameterized queries; never use Python string formatting (%, .format(), f-strings) to build SQL strings.
+  - Grant the Lambda's PostgreSQL user the minimum necessary privileges (CONNECT, SELECT on specific tables) and avoid SUPERUSER or CREATEROLE grants.
+  - Enable RDS PostgreSQL's pg_stat_activity logging and set log_min_duration_statement to detect slow or unusual queries that may indicate injection.
+  - Use RDS Proxy for connection pooling to prevent connection exhaustion from Lambda's per-invocation connection model.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is calls("*.execute")
+  matching psycopg2 cursor objects with the tainted SQL string tracked via .tracks(0)
+  (the query string argument). Sanitizers include explicit int() or float() type
+  conversion. The analysis follows taint through string concatenation, f-string
+  interpolation, variable assignments, and function boundaries.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: psycopg2 Passing Parameters to SQL Queries
+    url: https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries
+  - title: AWS Lambda with RDS Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: Why does psycopg2 use %s as a placeholder rather than ? like some other drivers?
+    answer: |
+      psycopg2 implements the Python DB-API 2.0 with 'pyformat' paramstyle, using %s
+      as the placeholder regardless of the actual SQL parameter type. The %s is not
+      Python string formatting; it is a psycopg2-specific placeholder that is replaced
+      by the driver with properly escaped values. Never confuse this with Python's
+      %-string formatting, which would introduce injection risk. Always pass values
+      as the second tuple argument to cursor.execute(), not via Python string formatting.
+
+  - question: Is psycopg2's execute_values() or executemany() also safe for bulk inserts?
+    answer: |
+      Both are safe when values are passed as separate parameters, not embedded in the
+      SQL string. execute_values() takes a SQL template with %s placeholders and a
+      sequence of value tuples. As long as the SQL template is a static string and event
+      data appears only in the values sequence, injection is prevented. Never build the
+      SQL template string from event data.
+
+  - question: What if I need dynamic column names or ORDER BY directions from event data?
+    answer: |
+      Column names and ORDER BY directions cannot be parameterized in SQL. Use an
+      explicit allowlist: define a set of permitted column names and sort directions,
+      validate the event value against the allowlist, and use the validated value to
+      select from a pre-built dictionary of safe SQL fragments. Never interpolate event
+      data directly into column name or ORDER BY positions.
+
+  - question: Does RDS PostgreSQL restrict dangerous PostgreSQL extensions that could escalate injection?
+    answer: |
+      Amazon RDS restricts the most dangerous superuser-level operations. COPY TO/FROM
+      PROGRAM (server-side OS execution) is not available on RDS. However, many other
+      injection impacts remain fully exploitable on RDS: UNION SELECT for data exfiltration,
+      stacked queries for data modification, and schema enumeration via information_schema.
+      Parameterization is always required regardless of the database environment.
+
+  - question: How do I handle Lambda cold starts efficiently with psycopg2 connections?
+    answer: |
+      Initialize the database connection outside the lambda_handler() function at module
+      level, and reuse it across warm invocations. Test the connection before use and
+      reconnect if it has been closed. For high-concurrency Lambda functions, use RDS
+      Proxy to pool connections, as Lambda's scaling model can exhaust PostgreSQL's
+      connection limits quickly.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-015
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

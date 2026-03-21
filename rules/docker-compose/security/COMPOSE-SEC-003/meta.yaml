@@ -1,0 +1,49 @@
+id: COMPOSE-SEC-003
+name: Seccomp Confinement Disabled
+short_description: Service disables seccomp profile. Container can use all system calls, increasing attack
+  surface.
+severity: HIGH
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-003
+cwe:
+- id: CWE-284
+  name: Improper Access Control
+  url: https://cwe.mitre.org/data/definitions/284.html
+tags:
+- docker-compose
+- compose
+- seccomp
+- security
+- syscall
+- kernel
+- confinement
+- isolation
+- attack-surface
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects services with seccomp (secure computing mode) disabled via
+
+  `security_opt: seccomp:unconfined`. Seccomp is a Linux kernel feature that
+
+  restricts which system calls a process can make. Disabling it allows containers
+
+  to use ALL system calls, significantly increasing the attack surface.'
+message: Service disables seccomp profile. Container can use all system calls, increasing attack surface.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-284: Improper Access Control'
+  url: https://cwe.mitre.org/data/definitions/284.html
+- title: Docker Seccomp Security Profiles
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+- title: Linux Seccomp BPF Documentation
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

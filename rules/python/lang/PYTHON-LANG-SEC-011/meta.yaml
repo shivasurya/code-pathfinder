@@ -1,0 +1,193 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-011
+name: Dangerous os.exec*() Call
+short_description: os.exec*() replaces the current process image with a new program, enabling arbitrary program execution when arguments are untrusted.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-011
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - os-exec
+  - command-injection
+  - process-replacement
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's os.execl(), os.execle(), os.execlp(), os.execlpe(), os.execv(), os.execve(),
+  os.execvp(), and os.execvpe() functions replace the currently running Python process with
+  a new program. Unlike os.system() or subprocess, there is no return from these calls; the
+  Python runtime is completely replaced by the new process.
+
+  When the executable path or any argument passed to os.exec*() is derived from untrusted
+  input, an attacker can cause the process to execute arbitrary programs with the current
+  process's privileges, environment, file descriptors, and any capabilities it holds.
+
+  The os.exec*() variants that take a list of arguments (execv, execve, execvp, execvpe) do
+  not invoke a shell and are safer than os.system() when arguments are properly separated.
+  However, if the executable path itself is attacker-controlled, any program on the system
+  can be run.
+
+message: "os.exec*() detected. Ensure the executable path and arguments are not derived from untrusted input."
+
+security_implications:
+  - title: Arbitrary Program Execution
+    description: |
+      An attacker who controls the executable path can run any program accessible to the
+      process, including /bin/sh, python3, nc (netcat), or any other tool available on the
+      system, with the current process's effective UID, capabilities, and environment.
+  - title: Process Replacement Without Return
+    description: |
+      os.exec*() does not return; the Python runtime is completely replaced. Any cleanup code,
+      exception handlers, or security checks that would run after the call are bypassed. The
+      replaced process inherits open file descriptors and environment variables containing secrets.
+  - title: Environment Variable Injection
+    description: |
+      The execve and execvpe variants accept an explicit environment dictionary. If this
+      dictionary is constructed from user input, an attacker can set LD_PRELOAD, PATH, or
+      other sensitive environment variables to influence how the new process loads shared
+      libraries and resolves commands.
+  - title: Privilege Maintenance
+    description: |
+      Unlike spawning a subprocess, os.exec*() maintains the same PID, credentials, and
+      resource limits. On systems where the Python process has elevated privileges (setuid,
+      capabilities), the replacement program inherits those privileges.
+
+secure_example: |
+  import subprocess
+  import os
+
+  # SECURE: Use subprocess.run() with list arguments instead of os.exec*()
+  def run_converter(input_path: str, output_path: str) -> int:
+      import re
+      SAFE_PATH_RE = re.compile(r'^[/a-zA-Z0-9_\-\.]+$')
+      if not SAFE_PATH_RE.match(input_path) or not SAFE_PATH_RE.match(output_path):
+          raise ValueError("Invalid path characters")
+      result = subprocess.run(
+          ["/usr/bin/convert", input_path, output_path],
+          check=True,
+          timeout=60,
+      )
+      return result.returncode
+
+  # SECURE: If process replacement is truly needed, use hardcoded executable paths
+  # and validate all arguments
+  def replace_with_shell():
+      # Only use hardcoded, absolute paths for the executable
+      os.execv("/bin/bash", ["/bin/bash", "--restricted"])
+
+recommendations:
+  - Replace os.exec*() with subprocess.run() using a list of arguments to spawn a child process that can be monitored and does not replace the Python runtime.
+  - If process replacement is genuinely required, use hardcoded absolute paths for the executable and validate all argument values against strict allowlists.
+  - Never derive the executable path from user input; always use a hardcoded absolute path or a mapping from an allowlisted name to its absolute path.
+  - Use subprocess with a timeout, stdout/stderr capture, and check=True to handle errors gracefully rather than silently replacing the process.
+  - Ensure the current process runs with minimum required privileges to limit what an attacker can do by injecting an executable path.
+
+detection_scope: |
+  This rule detects calls to os.execl(), os.execle(), os.execlp(), os.execlpe(), os.execv(),
+  os.execve(), os.execvp(), and os.execvpe() from the Python os module. All variants are
+  flagged since they all ultimately execute an external program and can be exploited when
+  arguments are attacker-controlled.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: os.execl() and variants"
+    url: https://docs.python.org/3/library/os.html#os.execl
+  - title: "Python docs: subprocess module"
+    url: https://docs.python.org/3/library/subprocess.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: What is the difference between os.execv() and os.system()?
+    answer: |
+      os.system() forks a child process, runs the shell command, and returns the exit code
+      to the Python process which continues running. os.execv() replaces the current process
+      entirely and never returns. Both can execute arbitrary programs when given untrusted
+      arguments, but os.exec*() is more destructive since it eliminates any cleanup code.
+
+  - question: Are the argument-based exec variants (execv, execvp) safer than execl?
+    answer: |
+      The list-based variants do not invoke a shell, so they are not vulnerable to shell
+      metacharacter injection. However, they are still dangerous when the executable path
+      itself is attacker-controlled. An attacker can point the path to /bin/sh to get a
+      shell. Validate both the executable path and all arguments.
+
+  - question: When is os.exec*() used legitimately in Python?
+    answer: |
+      os.exec*() is used in low-level system programming such as implementing custom process
+      supervisors, security wrappers that need to replace themselves with a restricted process,
+      or setuid helpers that drop privileges and exec a target program. These use cases should
+      always use hardcoded executable paths and validated argument lists.
+
+  - question: Does os.exec*() inherit environment variables and file descriptors?
+    answer: |
+      Yes. The new process inherits all open file descriptors (including sockets, pipes, and
+      files containing credentials) and all environment variables unless explicitly replaced
+      using execve/execvpe with a custom environment dictionary. Close sensitive file
+      descriptors before calling exec*() using the close_fds parameter in subprocess or
+      explicit os.close() calls.
+
+  - question: What is the security implication of inheriting open file descriptors?
+    answer: |
+      An attacker-controlled executable receives all open file descriptors of the Python process,
+      which may include authenticated database connections, open SSL connections, file handles
+      to credential files, and IPC sockets. This can lead to credential theft and session
+      hijacking beyond the immediate command execution risk.
+
+  - question: How do I detect if os.exec*() is used with user-controlled paths in a large codebase?
+    answer: |
+      Code Pathfinder's taint analysis traces data flow from HTTP request parameters, os.environ,
+      file reads, and other external sources to os.exec*() call sites. Run the analysis with
+      inter-procedural mode enabled to catch cases where the executable path is constructed
+      in a helper function and passed to exec*() in another module.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-012
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-021
+  - PYTHON-LANG-SEC-022
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

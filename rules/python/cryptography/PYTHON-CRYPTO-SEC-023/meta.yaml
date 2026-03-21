@@ -1,0 +1,132 @@
+id: PYTHON-CRYPTO-SEC-023
+name: Insufficient RSA Key Size (PyCryptodome)
+short_description: RSA key size is less than 3072 bits in PyCryptodome. Use RSA.generate(3072) or higher.
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-023
+cwe:
+- id: CWE-326
+  name: Inadequate Encryption Strength
+  url: https://cwe.mitre.org/data/definitions/326.html
+tags:
+- python
+- pycryptodome
+- rsa
+- key-size
+- CWE-326
+- OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: >
+  Detects RSA key generation using `RSA.generate(bits)` from PyCryptodome where the first
+  positional argument (key size in bits) is less than 3072. This rule uses a
+  `.where(0, lt(3072))` predicate targeting position 0 of the call — it fires only on
+  provably undersized keys and does not flag 3072-bit or larger keys.
+
+  The 3072-bit threshold is deliberately stricter than the SEC-020 `cryptography` library rule
+  (which uses 2048 as the floor). PyCryptodome's own documentation recommends 3072-bit keys
+  for new applications to ensure adequate security beyond 2030. NIST SP 800-57 equates 3072-bit
+  RSA to 128-bit symmetric security. A 2048-bit RSA key provides only 112-bit security and
+  is scheduled for deprecation by NIST after 2030. RSA keys shorter than 3072 bits are
+  vulnerable to the General Number Field Sieve factorization algorithm given sufficient compute.
+  For new systems, consider ECDSA with SECP256R1 or SECP384R1 which provides equivalent or
+  stronger security with significantly shorter keys.
+message: RSA key size is less than 3072 bits. Use RSA.generate(3072) or RSA.generate(4096) per PyCryptodome recommendations.
+secure_example: |
+  from Crypto.PublicKey import RSA
+
+  # SECURE: RSA 3072-bit key (NIST 128-bit security, recommended minimum)
+  key = RSA.generate(3072)
+
+  # SECURE: RSA 4096-bit key (preferred for long-lived keys and certificates)
+  key = RSA.generate(4096)
+
+  # PREFERRED: Use ECDSA instead of RSA for new systems
+  from Crypto.PublicKey import ECC
+  key = ECC.generate(curve='P-384')
+recommendations:
+- Use RSA.generate(3072) as the minimum for PyCryptodome RSA key generation.
+- Use RSA.generate(4096) for long-lived keys such as CA certificates or signing keys.
+- Consider replacing RSA with ECC — ECC.generate(curve='P-256') provides equivalent security to RSA-3072 with a 256-bit key.
+- Note that this rule is stricter than SEC-020 (cryptography lib) which uses 2048 as the floor; aligning on 3072 ensures systems will remain compliant beyond 2030.
+- Audit all RSA key material in your infrastructure and schedule rotation of any keys below 3072 bits on a risk-based timeline.
+references:
+- title: 'CWE-326: Inadequate Encryption Strength'
+  url: https://cwe.mitre.org/data/definitions/326.html
+- title: 'NIST SP 800-57 Part 1 Rev 5: Recommendation for Key Management'
+  url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths'
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+- title: 'PyCryptodome Documentation: RSA.generate()'
+  url: https://pycryptodome.readthedocs.io/en/latest/src/public_key/rsa.html
+- title: OWASP Cryptographic Failures (A02:2021)
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography for transmission of cardholder data"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit RSA/DSA keys; 3072-bit required for security beyond 2030"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- 3072-bit RSA provides 128-bit security level, minimum for new systems"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and key sizes"
+faq:
+- question: Does this rule flag RSA.generate(2048)?
+  answer: >
+    Yes. This rule flags keys below 3072 bits, so RSA.generate(2048) will trigger a finding.
+    This is intentionally stricter than SEC-020 (which only flags below 2048). The 3072-bit
+    threshold reflects NIST's recommendation for systems expected to operate beyond 2030 and
+    PyCryptodome's own documentation guidance.
+- question: Why does SEC-023 flag below 3072 while SEC-020 flags below 2048?
+  answer: >
+    SEC-020 targets the `cryptography` library and uses 2048 bits as the hard regulatory
+    minimum per NIST SP 800-131A. SEC-023 targets PyCryptodome and applies a forward-looking
+    threshold of 3072 bits, reflecting PyCryptodome's own recommendation for new applications
+    and NIST's guidance that 2048-bit provides only 112-bit security (acceptable until 2030,
+    not beyond). This difference helps teams building new systems avoid creating key material
+    that will require imminent rotation.
+- question: What key size should I use for new applications?
+  answer: >
+    Use RSA.generate(3072) as the minimum for new PyCryptodome applications. Use
+    RSA.generate(4096) for long-lived certificates or any key protecting data beyond 2030.
+    Alternatively migrate to ECC — ECC.generate(curve='P-256') provides 128-bit security
+    with a much shorter key and faster operations.
+- question: Is RSA.generate(2048) safe right now?
+  answer: >
+    Technically 2048-bit RSA meets current NIST minimums and will until 2030. However,
+    PyCryptodome's documentation explicitly recommends 3072-bit for new applications, and
+    this rule enforces that recommendation. If you have 2048-bit keys in existing systems
+    you should plan rotation before 2030; do not generate new 2048-bit keys.
+- question: What attack does a sub-3072 RSA key enable?
+  answer: >
+    RSA keys are broken by factoring the modulus N = p * q. The General Number Field Sieve
+    (GNFS) algorithm has a sub-exponential runtime that makes 1024-bit keys factorable and
+    puts 2048-bit keys at increasing risk as compute costs fall. Once factored, all
+    past ciphertext encrypted with that key can be decrypted (no forward secrecy), and
+    signatures can be forged.
+- question: Does PyCryptodome enforce any minimum key size internally?
+  answer: >
+    PyCryptodome does not enforce a minimum key size by default. RSA.generate(512) will
+    succeed without warning. This rule compensates for that missing guard at the code
+    analysis layer.
+- question: How does this rule detect the key size in positional argument calls?
+  answer: >
+    PyCryptodome's `RSA.generate(bits)` accepts key size as position 0. The rule uses
+    `.where(0, lt(3072))` to filter on the first positional argument. If the key size is
+    passed as a variable whose value cannot be statically resolved, this rule may not fire
+    (under-approximation). Consider using named constants or literal values for key sizes.
+similar_rules:
+- PYTHON-CRYPTO-SEC-020
+- PYTHON-CRYPTO-SEC-021
+- PYTHON-CRYPTO-SEC-024
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

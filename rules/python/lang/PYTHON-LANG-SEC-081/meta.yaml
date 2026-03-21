@@ -1,0 +1,200 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-081
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
+name: asyncpg SQL Injection via String Formatting
+short_description: SQL query built with string formatting passed to asyncpg connection.execute() enables SQL injection. Use parameterized queries with $1, $2 placeholders.
+
+# Classification
+severity: CRITICAL
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-081
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - asyncpg
+  - sql-injection
+  - postgresql
+  - async
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  asyncpg is a high-performance asyncio-based PostgreSQL driver for Python. It uses
+  PostgreSQL's native binary protocol and supports parameterized queries with $1, $2, ...
+  numbered placeholders (unlike psycopg2's %s style).
+
+  SQL injection occurs when user-supplied data is embedded in the query string via string
+  formatting (f-strings, % operator, .format()) rather than being passed as separate
+  arguments to execute(). The async nature does not reduce the injection risk.
+
+  asyncpg's execute(), fetch(), fetchrow(), fetchval(), and executemany() methods all
+  support parameterized queries by passing values as positional arguments after the SQL
+  string: conn.execute("SELECT * FROM users WHERE id = $1", user_id).
+
+message: "asyncpg execute() with string-formatted SQL detected. Use parameterized queries: conn.execute(sql, param1, param2) with $1, $2 placeholders."
+
+security_implications:
+  - title: Database Records Exfiltration
+    description: |
+      UNION SELECT injection with asyncpg can retrieve data from any table in the
+      PostgreSQL database. In async web applications handling many concurrent requests,
+      a single injection vulnerability can be exploited at high concurrency.
+  - title: Authentication Bypass in Async Web Apps
+    description: |
+      FastAPI, aiohttp, and Starlette applications using asyncpg for database access
+      are vulnerable to login bypass if authentication queries are built with string
+      formatting. The async nature amplifies impact through concurrent exploitation.
+  - title: Concurrent Exploitation
+    description: |
+      Async applications handling thousands of concurrent connections allow an attacker
+      to send many injection payloads simultaneously, enabling faster data extraction
+      through time-based blind injection or error-based enumeration.
+  - title: PostgreSQL System Function Access
+    description: |
+      As with psycopg2, successful SQL injection via asyncpg can access PostgreSQL system
+      functions including pg_read_file() and COPY TO/FROM PROGRAM on superuser accounts,
+      potentially escalating to OS command execution.
+
+secure_example: |
+  import asyncpg
+
+  # INSECURE: String formatting in SQL
+  # await conn.execute(f"SELECT * FROM users WHERE email = '{email}'")
+  # await conn.fetch("SELECT * FROM orders WHERE id = " + str(order_id))
+
+  # SECURE: Parameterized queries with $1, $2 placeholders
+  async def get_user_by_email(conn: asyncpg.Connection, email: str) -> dict:
+      row = await conn.fetchrow(
+          "SELECT id, username, email FROM users WHERE email = $1",
+          email
+      )
+      return dict(row) if row else {}
+
+  async def search_products(conn: asyncpg.Connection,
+                            category: str, min_price: float) -> list:
+      rows = await conn.fetch(
+          "SELECT id, name, price FROM products "
+          "WHERE category = $1 AND price >= $2 ORDER BY price",
+          category, min_price
+      )
+      return [dict(row) for row in rows]
+
+  # SECURE: Use a connection pool in async applications
+  async def get_user_orders(pool: asyncpg.Pool, user_id: int) -> list:
+      async with pool.acquire() as conn:
+          rows = await conn.fetch(
+              "SELECT id, total, status FROM orders WHERE user_id = $1",
+              user_id
+          )
+          return [dict(row) for row in rows]
+
+recommendations:
+  - Always use asyncpg's parameterized query syntax with $1, $2, ... placeholders and pass values as positional arguments after the SQL string.
+  - Never construct SQL strings with f-strings, % operator, or .format() when user-supplied values are involved.
+  - Use asyncpg.Pool for connection pooling in high-concurrency async applications to efficiently manage database connections.
+  - Validate and type-check user inputs before using them as SQL parameters as an additional layer of defense.
+  - Grant the PostgreSQL database user the minimum required privileges appropriate for the application's data access needs.
+
+detection_scope: |
+  This rule performs taint analysis tracing user-controlled data through string formatting
+  operations to asyncpg connection.execute(), connection.fetch(), connection.fetchrow(),
+  connection.fetchval(), and connection.executemany() call sites. The first argument
+  (SQL string) is the sink.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against SQL injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "asyncpg documentation: Query arguments"
+    url: https://magicstack.github.io/asyncpg/current/usage.html#query-arguments
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "asyncpg GitHub repository"
+    url: https://github.com/MagicStack/asyncpg
+
+# FAQ
+faq:
+  - question: How does asyncpg's parameterization syntax differ from psycopg2?
+    answer: |
+      asyncpg uses PostgreSQL's native parameterization syntax: $1, $2, $3 for numbered
+      positional parameters. psycopg2 uses %s for positional parameters. asyncpg values
+      are passed as additional positional arguments: conn.execute(sql, val1, val2) rather
+      than psycopg2's tuple: cursor.execute(sql, (val1, val2)).
+
+  - question: Does asyncpg's binary protocol make SQL injection less likely?
+    answer: |
+      asyncpg uses PostgreSQL's binary protocol and prepared statements for parameterized
+      queries, which is more efficient than psycopg2's text protocol. However, if the SQL
+      string itself is constructed with user input (before parameterization), injection is
+      still possible. The binary protocol does not prevent injection in the SQL string.
+
+  - question: How do I handle dynamic column names or table names in asyncpg?
+    answer: |
+      asyncpg does not have an equivalent to psycopg2.sql.Identifier for safe dynamic
+      identifiers. For dynamic identifiers, validate the column/table name against an
+      explicit allowlist of known-valid names (from schema introspection or hardcoded
+      constants), then use string formatting only with the validated name.
+
+  - question: Is connection.execute() vs conn.fetch() safer for parameterization?
+    answer: |
+      All asyncpg query methods (execute, fetch, fetchrow, fetchval, executemany) support
+      parameterization identically. The choice between them depends on whether you need
+      the result rows, a single row, a single value, or just the execution status.
+      All are equally safe when used with proper parameterization.
+
+  - question: How do I use asyncpg with SQLAlchemy for async queries?
+    answer: |
+      SQLAlchemy 1.4+ with its async extension (create_async_engine with asyncpg backend)
+      provides ORM-level parameterization. SQLAlchemy's query building with bind parameters
+      is safe. Use SQLAlchemy's text() construct with bindparams() for raw SQL queries
+      rather than string formatting.
+
+  - question: Does this rule detect SQL injection in FastAPI endpoints using asyncpg?
+    answer: |
+      Yes. Code Pathfinder traces taint from FastAPI path parameters, query parameters,
+      and request body fields through variable assignments to asyncpg execute() calls.
+      Inter-procedural analysis catches patterns where request parameters are passed to
+      service layer functions that then build and execute SQL queries.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-080
+  - PYTHON-LANG-SEC-082
+  - PYTHON-LANG-SEC-083
+  - PYTHON-LANG-SEC-084
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

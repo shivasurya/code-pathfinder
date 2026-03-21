@@ -1,0 +1,252 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-014
+name: Flask Server-Side Template Injection (SSTI)
+short_description: User input from Flask request parameters flows to render_template_string() as part of the template source. Pass user data as template variables, never in the template string itself.
+
+# Classification
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-014
+
+# Vulnerability Details
+cwe:
+  - id: CWE-96
+    name: "Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection')"
+    url: https://cwe.mitre.org/data/definitions/96.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - ssti
+  - template-injection
+  - jinja2
+  - render-template-string
+  - rce
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-96
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Server-Side Template Injection (SSTI) in Flask applications where
+  user-controlled input from HTTP request parameters flows into render_template_string()
+  as part of the template source string. Unlike render_template() which loads templates
+  from files, render_template_string() compiles and renders a Jinja2 template from
+  a string argument at request time. When user input is embedded in that template
+  string before rendering, attackers inject Jinja2 template directives that execute
+  arbitrary Python code on the server.
+
+  SSTI in Jinja2 is especially powerful because Jinja2 templates have access to Python's
+  object model. Classic SSTI payloads traverse the class hierarchy:
+    {{''.__class__.__mro__[1].__subclasses__()}}
+  to find and instantiate classes that provide file access, subprocess execution, and
+  network connectivity. More targeted payloads reach os.system() or subprocess.Popen()
+  directly through the template's global context.
+
+  The vulnerability occurs when developers use render_template_string() to dynamically
+  compose templates (e.g., inserting a user-supplied greeting into a template string
+  before rendering). The correct pattern is to pass user data as keyword arguments to
+  render_template_string() or render_template() where Jinja2 handles it as data, not
+  as template syntax: render_template_string('<h1>{{ name }}</h1>', name=user_name).
+
+  The taint analysis traces data from Flask request sources through string operations
+  and function calls to the template string argument of render_template_string() at
+  position 0. There are no recognized sanitizers because there is no transformation
+  that makes user input safe to use as Jinja2 template syntax.
+
+message: "User input flows to render_template_string() as template source. Pass user data as template variables (name=value), never in the template string itself."
+
+security_implications:
+  - title: Full Remote Code Execution via Jinja2 Object Traversal
+    description: |
+      Jinja2's template syntax provides access to Python objects and their attributes.
+      A minimal SSTI payload like {{7*7}} confirms the injection. A full RCE payload
+      traverses __class__.__mro__[1].__subclasses__() to find Popen or subprocess.check_output
+      and executes arbitrary OS commands. The template engine runs with the same privileges
+      as the Flask application, meaning a successful SSTI compromises the entire server.
+  - title: Secret Key and Credential Extraction
+    description: |
+      Jinja2 templates have access to the application's config object through the
+      g, app, and config template globals. An attacker can extract Flask's SECRET_KEY,
+      database connection strings, API keys, and OAuth secrets directly from the
+      template context: {{config.SECRET_KEY}} or {{config['DATABASE_URL']}}.
+      These can be used to forge session cookies, access databases, and impersonate
+      the application to external services.
+  - title: Authentication Bypass via Forged Session Cookies
+    description: |
+      Flask's session is signed with SECRET_KEY using itsdangerous. An attacker who
+      extracts SECRET_KEY via SSTI can forge arbitrary session cookies, impersonating
+      any user including administrative accounts. This turns an SSTI finding into a
+      complete authentication bypass without needing separate session vulnerabilities.
+  - title: Persistent Backdoor via Module Modification
+    description: |
+      SSTI payloads can modify Python modules loaded in the current interpreter.
+      An attacker can inject code that patches application functions in memory,
+      creating a persistent backdoor in worker processes that survives across
+      requests without touching the filesystem.
+
+secure_example: |
+  from flask import Flask, request, render_template, render_template_string
+
+  app = Flask(__name__)
+
+  @app.route('/hello')
+  def hello():
+      name = request.args.get('name', 'World')
+      # SAFE Option 1: render_template() with a file-based template
+      # User data is passed as a variable, never in the template string
+      return render_template('hello.html', name=name)
+
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', 'World')
+      # SAFE Option 2: render_template_string() with user data as a VARIABLE
+      # The template string is hardcoded; {{ name }} is a Jinja2 variable reference
+      # that receives the safe escaped value -- it cannot contain template directives
+      return render_template_string('<h1>Hello, {{ name }}!</h1>', name=name)
+
+  # NEVER do this:
+  # template = f'<h1>Hello, {name}!</h1>'  # name injected INTO template source
+  # return render_template_string(template)  # now name is template syntax
+
+recommendations:
+  - Never interpolate user input into the template string before passing it to render_template_string() -- always keep the template string as a hardcoded literal.
+  - Pass user-supplied values as keyword arguments to render_template() or render_template_string() -- Jinja2 treats these as data values and applies autoescaping, not as template syntax.
+  - Use render_template() with file-based templates (.html files in the templates/ directory) as the default pattern -- file-based templates cannot be modified by request parameters at runtime.
+  - If dynamic template generation is required (e.g., CMS-style templates stored in the database), use Jinja2's SandboxedEnvironment which restricts access to dangerous attributes and built-ins.
+  - Audit all render_template_string() calls and verify the template string argument is a hardcoded literal with no request parameter interpolation.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- which can deliver attacker-controlled
+  strings containing Jinja2 template syntax ({{ }}, {% %}, {# #}).
+
+  Sinks: render_template_string(). The .tracks(0) parameter targets argument
+  position 0, the template source string. This is the argument where SSTI occurs --
+  when user input becomes part of the Jinja2 template that is compiled and rendered.
+  The keyword variable arguments (name=value, etc.) are not tracked because they
+  are safe template variables, not template source.
+
+  Sanitizers: None. There is no transformation that makes user input safe to embed
+  in Jinja2 template source code. Jinja2's SandboxedEnvironment reduces the impact
+  of SSTI but does not prevent template directive injection, so it is not recognized
+  as a sanitizer.
+
+  The rule follows tainted strings through f-string construction, concatenation,
+  format() calls, and cross-file function calls where template strings are assembled
+  before being passed to render_template_string().
+
+# References
+references:
+  - title: "CWE-96: Static Code Injection / Template Injection"
+    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: OWASP Server-Side Template Injection
+    url: https://owasp.org/www-community/attacks/Server_Side_Template_Injection
+  - title: Jinja2 SandboxedEnvironment documentation
+    url: https://jinja.palletsprojects.com/en/latest/sandbox/
+  - title: Flask render_template_string documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.render_template_string
+  - title: Portswigger SSTI Tutorial
+    url: https://portswigger.net/web-security/server-side-template-injection
+  - title: SSTI payload reference for Jinja2
+    url: https://pequalsnp-team.github.io/cheatsheet/flask-jinja2-ssti
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (template injection is server-side injection)"
+  - standard: CWE Top 25
+    requirement: "CWE-96 -- Improper Neutralization of Directives in Code"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including template injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SA-15: Development Process and Standards"
+  - standard: ASVS v4.0
+    requirement: "V5.3.4 -- verify that output encoding applies context-appropriate encoding for template rendering"
+
+# FAQ
+faq:
+  - question: render_template_string() is useful for dynamic templates. Can I use it safely?
+    answer: |
+      Yes, if you keep the template string hardcoded and pass user data as keyword arguments.
+      render_template_string('<h1>{{ name }}</h1>', name=user_name) is safe because
+      user_name is a template variable, not template syntax. Jinja2 autoescaping applies
+      to {{ name }} and user data cannot inject {{ }} directives. The vulnerability is
+      when you do render_template_string(f'<h1>{user_name}</h1>') -- the user input
+      becomes part of the template source before rendering.
+
+  - question: Does Jinja2's SandboxedEnvironment fix SSTI?
+    answer: |
+      SandboxedEnvironment restricts access to dangerous attributes (__class__,
+      __mro__, etc.) and Python built-ins within templates. It significantly raises
+      the bar for exploitation and prevents most known SSTI payloads. However, sandbox
+      escapes have been found in Jinja2's sandbox in the past. For production use,
+      do not pass user data as template source -- use SandboxedEnvironment only if
+      user-defined templates are a required feature and you accept the residual risk.
+
+  - question: Why is SSTI rated CRITICAL? Is it actually exploitable?
+    answer: |
+      SSTI in Jinja2 is consistently rated Critical because exploitation is reliable
+      and well-documented. Payloads that reach os.system() via __subclasses__() traversal
+      work in Flask/Jinja2 without requiring environment-specific knowledge. The Portswigger
+      SSTI tutorial demonstrates the technique step by step. Bug bounty programs
+      consistently award maximum payouts for confirmed SSTI findings.
+
+  - question: We use render_template_string() in error handlers with hardcoded templates. Is that flagged?
+    answer: |
+      No. The rule only flags flows where the first argument to render_template_string()
+      is tainted from a Flask request source. Hardcoded template strings like
+      render_template_string('<h1>Error: {{ message }}</h1>', message=error_msg) -- where
+      error_msg comes from the application itself, not from request parameters -- do not
+      create a tainted flow and will not trigger the rule.
+
+  - question: Our CMS stores user-authored templates in the database and renders them. How do we handle this?
+    answer: |
+      Use Jinja2's SandboxedEnvironment and restrict available filters and globals to
+      a safe subset. Treat template authors as untrusted users. Require template approval
+      before publishing. Consider using a restricted template language (Liquid, Mustache,
+      or a custom DSL) instead of Jinja2 for user-authored content -- these languages
+      do not have access to the Python object model.
+
+  - question: Does this rule catch SSTI in template strings built across multiple lines?
+    answer: |
+      Yes. The taint analysis follows the value through multi-step string construction:
+      assignments, f-string builds, string concatenation, .format() calls, and joins.
+      If user input from request.args.get() is incorporated into a string that eventually
+      becomes the first argument to render_template_string(), the full chain is flagged
+      regardless of how many intermediate steps are involved.
+
+  - question: How do I test for SSTI in a confirmed finding?
+    answer: |
+      Provide {{7*7}} as the parameter value. If the response contains 49 (not the
+      literal string {{7*7}}), template injection is confirmed. Then try
+      {{''.__class__}} -- if it returns <class 'str'>, Jinja2 attribute access is
+      available. From there, use the standard Jinja2 SSTI payload chain to verify
+      command execution. Document the full chain before reporting.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-004
+  - PYTHON-FLASK-SEC-005
+  - PYTHON-DJANGO-SEC-014
+  - PYTHON-LANG-SEC-080
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

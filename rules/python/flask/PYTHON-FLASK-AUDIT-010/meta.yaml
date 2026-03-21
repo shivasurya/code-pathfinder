@@ -1,0 +1,211 @@
+# Rule Identity
+id: PYTHON-FLASK-AUDIT-010
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
+name: Flask WTF CSRF Disabled
+short_description: Detects Flask configuration that explicitly disables Flask-WTF CSRF protection by setting WTF_CSRF_ENABLED to False.
+
+# Classification
+severity: HIGH
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-AUDIT-010
+
+# Vulnerability Details
+cwe:
+  - id: CWE-352
+    name: Cross-Site Request Forgery (CSRF)
+    url: https://cwe.mitre.org/data/definitions/352.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - flask
+  - csrf
+  - wtf
+  - flask-wtf
+  - configuration
+  - misconfiguration
+  - CWE-352
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Flask applications that explicitly disable Flask-WTF's CSRF protection by
+  setting app.config["WTF_CSRF_ENABLED"] = False (or the equivalent config.__setitem__ call).
+  CSRF protection is one of the core defenses provided by Flask-WTF. When it is disabled,
+  every state-changing form endpoint -- login, password change, account deletion, fund transfer,
+  settings update -- becomes vulnerable to cross-site request forgery attacks.
+
+  A CSRF attack works by tricking an authenticated user into visiting a malicious web page
+  that silently submits a form to the vulnerable application. Because the browser automatically
+  includes the user's session cookie with the request, the server processes it as a legitimate
+  authenticated action. Without a CSRF token in the form, the server cannot distinguish the
+  real user's form submission from the attacker's forged one.
+
+  WTF_CSRF_ENABLED = False is most commonly introduced for testing convenience (to avoid
+  handling CSRF tokens in test clients) but accidentally left in production configuration
+  files. The detection uses calls("*.config.__setitem__", match_position={0: "WTF_CSRF_ENABLED"})
+  to match the dictionary-style assignment app.config["WTF_CSRF_ENABLED"] = <any_value> and
+  flags any occurrence where this key is being set, regardless of the value, for manual review.
+
+message: "WTF_CSRF_ENABLED set to False. CSRF protection must be enabled in production. Use testing-only suppression patterns instead."
+
+security_implications:
+  - title: Unauthenticated State Changes via CSRF
+    description: |
+      With CSRF protection disabled, any web page visited by an authenticated user can
+      silently trigger state-changing actions: password changes, email address updates, data
+      deletion, fund transfers, or privilege escalation. The attacker's page simply includes
+      an auto-submitting form pointing to the Flask endpoint with the desired parameters.
+  - title: Account Takeover via Password or Email Change
+    description: |
+      CSRF attacks against password-change or email-change forms are a primary account
+      takeover vector. Without CSRF tokens, an attacker who can get a logged-in user to
+      visit a malicious page can change the user's email to one the attacker controls and
+      trigger a password reset.
+  - title: Privilege Escalation and Admin Actions
+    description: |
+      Admin endpoints that add users, grant roles, or change permissions are high-value CSRF
+      targets. A single CSRF attack against a logged-in administrator can create backdoor
+      admin accounts or escalate the attacker's privileges.
+  - title: Data Destruction
+    description: |
+      CSRF attacks against delete, archive, or bulk-update endpoints can result in
+      irreversible data loss. Unlike XSS, CSRF does not require injecting code -- just
+      a forged form submission that the server accepts as legitimate.
+
+secure_example: |
+  from flask import Flask
+  from flask_wtf.csrf import CSRFProtect
+
+  app = Flask(__name__)
+  app.config['SECRET_KEY'] = 'your-secret-key'
+
+  # SAFE: CSRF protection enabled (default; WTF_CSRF_ENABLED defaults to True)
+  csrf = CSRFProtect(app)
+
+  # For testing: use Flask-WTF's built-in testing bypass instead of disabling CSRF globally
+  # app.config['WTF_CSRF_ENABLED'] = True  # keep enabled in production
+
+  # In tests, use the test request context with the CSRF token:
+  # with app.test_client() as client:
+  #     with app.test_request_context():
+  #         token = generate_csrf()
+  #     client.post('/submit', data={'csrf_token': token, 'field': 'value'})
+
+  # Or disable CSRF only in the test configuration class, never in production config:
+  # class TestingConfig:
+  #     WTF_CSRF_ENABLED = False  # testing only
+  # class ProductionConfig:
+  #     WTF_CSRF_ENABLED = True
+
+recommendations:
+  - Never set WTF_CSRF_ENABLED = False in production, staging, or any environment that processes real user data.
+  - For testing, use Flask-WTF's built-in CSRF test utilities (generate_csrf()) or a dedicated TestingConfig class that is never loaded in production.
+  - If you need to exempt specific API endpoints from CSRF (e.g., JSON APIs using token authentication), use Flask-WTF's @csrf.exempt decorator on individual routes rather than disabling CSRF globally.
+  - Ensure CSRF tokens are included in all HTML forms using Flask-WTF's form.hidden_tag() or the {{ csrf_token() }} template global.
+  - Combine CSRF protection with the SameSite=Strict cookie attribute for defense in depth against CSRF attacks.
+
+detection_scope: |
+  This rule uses calls("*.config.__setitem__", match_position={0: "WTF_CSRF_ENABLED"}) to
+  match the dictionary assignment pattern app.config["WTF_CSRF_ENABLED"] = <value>, which
+  Python translates internally to app.config.__setitem__("WTF_CSRF_ENABLED", <value>). The
+  match_position={0: "WTF_CSRF_ENABLED"} constraint targets the first positional argument
+  (the key) being the string "WTF_CSRF_ENABLED". Any value for the second argument triggers
+  the finding -- the rule flags the key being set at all, since even WTF_CSRF_ENABLED = True
+  in a config file may indicate the codebase has logic that sets it to False elsewhere.
+  The rule operates at the call-site level without cross-file dataflow analysis.
+
+# References
+references:
+  - title: "CWE-352: Cross-Site Request Forgery (CSRF)"
+    url: https://cwe.mitre.org/data/definitions/352.html
+  - title: Flask-WTF CSRF Protection Documentation
+    url: https://flask-wtf.readthedocs.io/en/latest/csrf/
+  - title: OWASP CSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: OWASP A01:2021 Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  - title: OWASP Testing for CSRF
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/05-Testing_for_Cross_Site_Request_Forgery
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control: prevent unauthorized state-changing requests"
+  - standard: CWE Top 25
+    requirement: "CWE-352 Cross-Site Request Forgery (CSRF)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent cross-site request forgery attacks"
+  - standard: NIST SP 800-53
+    requirement: "SC-23: Session Authenticity -- implement CSRF countermeasures for web applications"
+
+# FAQ
+faq:
+  - question: Why is WTF_CSRF_ENABLED = False high severity if it is commonly used in tests?
+    answer: |
+      The severity reflects the impact when this configuration reaches production -- which is
+      the most common way this vulnerability is introduced. Developers disable CSRF for testing
+      convenience and the setting leaks into a shared config file or environment variable that
+      production also uses. The fix (using TestingConfig isolation or Flask-WTF's test helpers)
+      is straightforward and eliminates the risk.
+
+  - question: How do I handle CSRF tokens in a JSON API?
+    answer: |
+      JSON APIs using header-based token authentication (Bearer tokens, API keys) are not
+      typically vulnerable to CSRF because the browser's same-origin policy prevents
+      cross-site JavaScript from reading the token and including it in a custom header. Use
+      Flask-WTF's @csrf.exempt decorator on individual JSON API routes to exempt them from
+      CSRF validation while keeping the rest of the application protected.
+
+  - question: How does this rule's match_position pattern work?
+    answer: |
+      Python translates app.config["WTF_CSRF_ENABLED"] = False into a call to
+      app.config.__setitem__("WTF_CSRF_ENABLED", False). The match_position={0: "WTF_CSRF_ENABLED"}
+      constraint checks that the first positional argument (position 0) is the string
+      "WTF_CSRF_ENABLED". This matches the key regardless of what value is being assigned,
+      flagging any time the WTF_CSRF_ENABLED key is manipulated for review.
+
+  - question: What is the safest way to disable CSRF in tests?
+    answer: |
+      Create a TestingConfig class with WTF_CSRF_ENABLED = False and load it only in the test
+      runner via app.config.from_object(TestingConfig). Never load TestingConfig from an
+      environment variable or file that production reads. Alternatively, use Flask-WTF's
+      generate_csrf() to generate tokens in test requests, which avoids disabling CSRF at all.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-AUDIT-010 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule also detect CSRF_ENABLED = False for other CSRF libraries?
+    answer: |
+      No. This rule is specific to Flask-WTF's WTF_CSRF_ENABLED configuration key. Other
+      CSRF libraries (flask-seasurf, manual CSRF implementations) use different configuration
+      keys and would require separate rules.
+
+  - question: Can I use @csrf.exempt globally to disable CSRF instead?
+    answer: |
+      No. Applying @csrf.exempt to all routes is functionally equivalent to WTF_CSRF_ENABLED =
+      False and should be treated with the same concern. Route-level exemptions for specific
+      JSON API endpoints are appropriate; blanket exemption is not.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-001
+  - PYTHON-FLASK-AUDIT-009
+  - PYTHON-FLASK-SEC-004
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

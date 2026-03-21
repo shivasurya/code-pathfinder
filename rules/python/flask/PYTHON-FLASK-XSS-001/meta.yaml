@@ -1,0 +1,209 @@
+# Rule Identity
+id: PYTHON-FLASK-XSS-001
+name: Flask Direct Use of Jinja2
+short_description: Detects direct use of jinja2.Environment or jinja2.Template, which bypasses Flask's automatic HTML autoescaping and can lead to XSS vulnerabilities.
+
+# Classification
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-XSS-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - jinja2
+  - xss
+  - cross-site-scripting
+  - autoescaping
+  - template
+  - audit
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects direct instantiation of jinja2.Environment or jinja2.Template in Flask
+  applications. Flask wraps Jinja2 with a custom Environment that has autoescaping enabled
+  for HTML templates (files ending in .html, .htm, .xml, .xhtml). When developers create a
+  raw jinja2.Environment or jinja2.Template directly -- bypassing Flask's rendering pipeline --
+  they lose this autoescaping protection.
+
+  Without autoescaping, any template variable rendered with {{ variable }} is inserted into
+  the HTML output as a raw string. If variable contains HTML metacharacters (<, >, ", ', &)
+  from user input, those characters are rendered as HTML elements and attributes. An attacker
+  who can control the variable value can inject arbitrary JavaScript that executes in the
+  victim's browser -- a stored or reflected XSS vulnerability.
+
+  The autoescaping difference is subtle: Flask's render_template() renders {{ name }} as
+  &lt;script&gt; if name is "<script>". A raw jinja2.Environment without autoescaping renders
+  the same {{ name }} as <script>, which the browser executes.
+
+  The detection uses Or(calls("Environment"), calls("jinja2.Environment")) to match both
+  the directly imported constructor form and the module-qualified form. This is an audit-grade
+  rule that flags every direct Jinja2 Environment instantiation for manual review, since the
+  presence of a raw Environment is a strong signal that autoescaping may not be configured.
+
+message: "Direct jinja2.Environment() usage detected. This bypasses Flask's autoescaping. Use Flask's render_template() or explicitly enable autoescaping on the Environment."
+
+security_implications:
+  - title: Reflected XSS via Unescaped Template Variables
+    description: |
+      User input rendered through a raw Jinja2 Environment without autoescaping is inserted
+      directly into the HTML response. An attacker can craft a request with a parameter
+      containing <script>alert(document.cookie)</script> and the script will execute in the
+      victim's browser, stealing session cookies, redirecting to phishing pages, or performing
+      actions on behalf of the victim.
+  - title: Stored XSS via Database-Sourced Template Content
+    description: |
+      If templates are rendered from database content using a raw Jinja2 Environment, stored
+      XSS is possible. An attacker who can write malicious HTML to a database field (through
+      any injection or data import path) can have it rendered and executed in other users'
+      browsers when they view the affected content.
+  - title: Cookie Theft and Session Hijacking
+    description: |
+      XSS payloads can read document.cookie (for cookies without the HttpOnly flag) and
+      exfiltrate session tokens to attacker-controlled servers. A successful XSS attack in
+      a single unescaped template variable can compromise every active user session.
+  - title: DOM-Based Defacement and Phishing
+    description: |
+      Injected JavaScript can rewrite page content, insert fake login forms, redirect users
+      to phishing sites, or silently perform authenticated API calls on behalf of the victim.
+
+secure_example: |
+  from flask import Flask, render_template, request
+
+  app = Flask(__name__)
+
+  # SAFE: Use Flask's render_template() with a .html template file.
+  # Flask's Jinja2 environment has autoescaping enabled for .html files.
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', '')
+      # 'name' is passed as a context variable and auto-escaped by Jinja2.
+      # {{ name }} in the template renders as &lt;script&gt; if name contains HTML.
+      return render_template('greet.html', name=name)
+
+  # If you must use a raw Jinja2 Environment for non-Flask use cases,
+  # explicitly enable autoescaping:
+  from jinja2 import Environment, select_autoescape
+  env = Environment(
+      autoescape=select_autoescape(['html', 'xml'])
+  )
+  # Then always use env.get_template() or env.from_string() with autoescaping active.
+
+recommendations:
+  - Use Flask's render_template() with .html template files for all HTML responses. Flask's Jinja2 Environment has autoescaping enabled for HTML by default.
+  - If you need to render templates outside Flask's request context (e.g., for email generation), configure the raw Jinja2 Environment with explicit autoescaping: Environment(autoescape=select_autoescape(['html', 'xml'])).
+  - Never construct template strings by concatenating user input. Pass user data as context variables to templates, where Jinja2 handles escaping.
+  - If you need raw HTML output from a trusted source, use Flask's Markup() (see PYTHON-FLASK-XSS-002) explicitly and document why the content is trusted.
+  - Implement Content-Security-Policy (CSP) headers as defense in depth. Even if XSS occurs, a strict CSP can prevent script execution.
+
+detection_scope: |
+  This rule uses Or(calls("Environment"), calls("jinja2.Environment")) to match both the
+  directly imported constructor (from jinja2 import Environment; Environment(...)) and the
+  module-qualified form (jinja2.Environment(...)). This is a broad audit pattern -- every
+  direct Jinja2 Environment instantiation is flagged for review to determine whether
+  autoescaping is configured. Calls that explicitly pass autoescape=True or
+  autoescape=select_autoescape([...]) may still be flagged; reviewers should verify the
+  autoescaping configuration is correct for the use case. The rule operates at the call-site
+  level without cross-file dataflow analysis.
+
+# References
+references:
+  - title: "CWE-79: Improper Neutralization of Input During Web Page Generation (XSS)"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: Jinja2 Autoescaping Documentation
+    url: https://jinja.palletsprojects.com/en/stable/api/#autoescaping
+  - title: Flask Templating Documentation
+    url: https://flask.palletsprojects.com/en/stable/templating/
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: MDN Content Security Policy
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection: prevent cross-site scripting through proper output encoding"
+  - standard: CWE Top 25
+    requirement: "CWE-79 Improper Neutralization of Input During Web Page Generation (XSS)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including cross-site scripting"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- encode output to prevent script injection"
+
+# FAQ
+faq:
+  - question: When is it legitimate to use jinja2.Environment directly in a Flask application?
+    answer: |
+      Legitimate use cases include generating non-HTML content (plain text emails, CSV, Markdown)
+      where HTML autoescaping is irrelevant; using Jinja2 in non-request contexts like management
+      commands or background tasks; or using Jinja2-based templating in libraries that are
+      imported by Flask apps. In all cases, explicitly configure autoescaping for any output
+      that will be rendered as HTML.
+
+  - question: Does jinja2.Environment disable autoescaping by default?
+    answer: |
+      Yes. Raw jinja2.Environment() has autoescaping disabled by default -- autoescape=False.
+      Flask's own Jinja2 Environment enables autoescaping for .html, .htm, .xml, and .xhtml
+      file extensions. When you instantiate jinja2.Environment directly, you do not inherit
+      Flask's autoescaping configuration unless you pass autoescape=select_autoescape([...])
+      explicitly.
+
+  - question: How do I enable autoescaping on a raw Jinja2 Environment?
+    answer: |
+      from jinja2 import Environment, select_autoescape
+      env = Environment(autoescape=select_autoescape(['html', 'xml']))
+      This enables autoescaping for templates loaded from files with .html or .xml extensions.
+      For from_string() calls, autoescaping must be enabled per-template:
+      template = env.from_string(source, globals={"autoescape": True})
+
+  - question: What is the difference between this rule and PYTHON-FLASK-AUDIT-008 (render_template_string)?
+    answer: |
+      PYTHON-FLASK-AUDIT-008 flags uses of Flask's render_template_string(), which uses
+      Flask's autoescaping-enabled environment but is SSTI-adjacent. This rule (XSS-001)
+      flags direct instantiation of raw jinja2.Environment, which creates a new environment
+      without Flask's autoescaping. Both patterns are XSS-adjacent but through different
+      mechanisms: SSTI risk vs. missing autoescaping.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-XSS-001 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: Does this rule catch jinja2.Template() directly?
+    answer: |
+      The current rule pattern matches Environment() and jinja2.Environment(). jinja2.Template()
+      is a lower-level API that also bypasses autoescaping. If your codebase uses
+      jinja2.Template() directly, that pattern should be reviewed as well. The Or pattern
+      can be extended to cover Template() in a future revision.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-XSS-002
+  - PYTHON-FLASK-AUDIT-008
+  - PYTHON-FLASK-SEC-014
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

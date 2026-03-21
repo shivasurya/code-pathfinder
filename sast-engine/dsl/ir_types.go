@@ -41,6 +41,21 @@ type ArgumentConstraint struct {
 	Comparator string `json:"comparator,omitempty"`
 }
 
+// TrackedParam specifies a parameter that is taint-sensitive in dataflow analysis.
+// Exactly one of Index, Name, or Return should be set.
+type TrackedParam struct {
+	// Index is the 0-based positional parameter index.
+	// Pointer type so that index 0 is distinguishable from "not set".
+	Index *int `json:"index,omitempty"`
+
+	// Name is the parameter name (e.g., "query", "args").
+	// Resolved to a positional index at analysis time via function signature.
+	Name string `json:"name,omitempty"`
+
+	// Return is true when tracking the return value (used for source matchers).
+	Return bool `json:"return,omitempty"`
+}
+
 // CallMatcherIR represents call_matcher JSON IR.
 type CallMatcherIR struct {
 	Type      string   `json:"type"`      // "call_matcher"
@@ -58,6 +73,10 @@ type CallMatcherIR struct {
 	// Example: {"debug": ArgumentConstraint{Value: true}}
 	// This field is optional and will be omitted from JSON if empty.
 	KeywordArgs map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
+
+	// TrackedParams specifies which parameters are taint-sensitive.
+	// When empty, all parameters are considered sensitive (default).
+	TrackedParams []TrackedParam `json:"trackedParams,omitempty"`
 }
 
 // GetType returns the IR type.
@@ -101,11 +120,14 @@ type PropagationIR struct {
 
 // DataflowDetection represents a detected taint flow.
 type DataflowDetection struct {
-	FunctionFQN     string          // Function containing the vulnerability
+	FunctionFQN     string          // Function containing the vulnerability (sink function for cross-file)
+	SourceFunctionFQN string        // Function containing the source (may differ from FunctionFQN for cross-file)
 	SourceLine      int             // Line where taint originates
 	SourceColumn    int             // Column where taint originates
+	SourceFile      string          // File where taint originates (resolved by enricher)
 	SinkLine        int             // Line where taint reaches sink
 	SinkColumn      int             // Column where taint reaches sink
+	SinkFile        string          // File where taint reaches sink (resolved by enricher)
 	TaintedVar      string          // Variable name that is tainted
 	SinkCall        string          // Sink function name
 	Confidence      float64         // 0.0-1.0 confidence score
@@ -113,6 +135,14 @@ type DataflowDetection struct {
 	Scope           string          // "local" or "global"
 	MatchedCallSite *core.CallSite  // Internal: matched call site for DataflowExecutor use
 	MatchMethod     string          // How the match was made: "type_inference", "fqn_bridge", "fqn_prefix", "name_fallback"
+
+	// SinkParamIndex is the positional index of the tainted sink parameter.
+	// nil when parameter position could not be determined.
+	SinkParamIndex *int `json:"sinkParamIndex,omitempty"`
+
+	// SinkParamName is the name of the tainted sink parameter, if known.
+	// Deferred: not populated in v1, reserved for future use.
+	SinkParamName string `json:"sinkParamName,omitempty"`
 }
 
 // TypeConstrainedCallIR represents type_constrained_call JSON IR.
@@ -133,6 +163,10 @@ type TypeConstrainedCallIR struct {
 	// Argument matching (reuses ArgumentConstraint)
 	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
 	KeywordArgs    map[string]ArgumentConstraint `json:"keywordArgs,omitempty"`
+
+	// TrackedParams specifies which parameters are taint-sensitive.
+	// When empty, all parameters are considered sensitive (default).
+	TrackedParams []TrackedParam `json:"trackedParams,omitempty"`
 }
 
 // GetEffectiveReceiverTypes returns the receiver types, merging legacy single field.

@@ -1,0 +1,52 @@
+id: DOCKER-BP-009
+name: Avoid dnf update
+short_description: Avoid 'dnf update' in Dockerfiles. Use specific base image versions for reproducible
+  builds.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-009
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- dnf
+- package-manager
+- fedora
+- rhel
+- update
+- reproducibility
+- best-practice
+- anti-pattern
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of ''dnf update'' in Dockerfiles. Running system updates in Docker builds
+
+  creates unpredictable, non-reproducible images and can introduce breaking changes or
+
+  security vulnerabilities.'
+message: Avoid 'dnf update' in Dockerfiles. Use specific base image versions for reproducible builds.
+secure_example: 'FROM fedora:38  # Specific version
+
+  RUN dnf install -y nginx-1.24.0-1.fc38
+
+  # Or install latest from specific base image
+
+  RUN dnf install -y nginx'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Avoid dnf update"
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

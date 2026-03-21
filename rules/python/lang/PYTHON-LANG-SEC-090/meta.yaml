@@ -1,0 +1,192 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-090
+name: Insecure XML Parsing (XXE Vulnerability)
+short_description: xml.etree.ElementTree is vulnerable to XML External Entity (XXE) attacks. Use defusedxml for safe XML parsing.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-090
+
+# Vulnerability Details
+cwe:
+  - id: CWE-611
+    name: Improper Restriction of XML External Entity Reference
+    url: https://cwe.mitre.org/data/definitions/611.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - xml
+  - xxe
+  - xml-external-entity
+  - elementtree
+  - CWE-611
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's xml.etree.ElementTree and related modules (xml.dom.minidom, xml.sax, xml.parsers.expat)
+  are vulnerable to XML External Entity (XXE) injection by default. XXE attacks occur when
+  an XML parser processes external entity references in untrusted XML content.
+
+  A malicious XML document can define external entities that reference local files
+  (/etc/passwd, /etc/shadow, SSH private keys) or internal network resources. When the
+  parser resolves these entities, the file contents are embedded in the parsed XML and
+  returned to the attacker, or the parser makes HTTP/HTTPS requests to internal network
+  addresses for server-side request forgery (SSRF).
+
+  The defusedxml library provides safe drop-in replacements for all of Python's XML parsers
+  that disable external entities, DTD processing, and other dangerous XML features.
+
+message: "xml.etree.ElementTree detected. This parser is vulnerable to XXE attacks. Use defusedxml.ElementTree for safe XML parsing."
+
+security_implications:
+  - title: Local File Disclosure via XXE
+    description: |
+      An XXE payload with <!ENTITY xxe SYSTEM "file:///etc/passwd"> reads local files
+      and embeds their content in the parsed XML. Attackers can read application
+      configuration files, SSH private keys, database credentials, and any file
+      readable by the web server process.
+  - title: Server-Side Request Forgery (SSRF)
+    description: |
+      External entity references can point to internal network URLs (http://169.254.169.254/
+      for AWS metadata, http://10.0.0.1/admin). The XML parser makes HTTP requests to
+      these addresses, enabling internal network discovery and access to cloud metadata
+      credentials.
+  - title: Denial of Service via Billion Laughs
+    description: |
+      The "Billion Laughs" attack uses nested entity expansion to cause exponential memory
+      consumption and CPU usage. A small XML document of a few kilobytes can exhaust all
+      available memory, crashing the parser and the application.
+  - title: Blind XXE via Out-of-Band Channels
+    description: |
+      When error messages are suppressed, attackers use out-of-band XXE: the entity
+      references a URL they control (xxe.attacker.com), allowing them to see file contents
+      via DNS or HTTP requests to their server even without direct output.
+
+secure_example: |
+  # INSECURE: xml.etree.ElementTree vulnerable to XXE
+  # import xml.etree.ElementTree as ET
+  # tree = ET.parse(user_xml_file)
+  # root = ET.fromstring(user_xml_string)
+
+  # SECURE: Use defusedxml for safe XML parsing
+  import defusedxml.ElementTree as ET
+
+  def parse_xml_safely(xml_content: str):
+      try:
+          root = ET.fromstring(xml_content)
+          return root
+      except ET.ParseError as e:
+          raise ValueError(f"Invalid XML: {e}")
+
+  # SECURE: Parse XML files safely
+  def load_xml_file(file_path: str):
+      return ET.parse(file_path).getroot()
+
+  # SECURE: For configuration XML, use ElementTree with defusedxml
+  def parse_config_xml(xml_string: str) -> dict:
+      root = ET.fromstring(xml_string)
+      return {child.tag: child.text for child in root}
+
+recommendations:
+  - Replace xml.etree.ElementTree with defusedxml.ElementTree for all XML parsing of untrusted input.
+  - Install defusedxml: pip install defusedxml. It provides safe drop-in replacements for all standard library XML parsers.
+  - For configuration files or SOAP/REST XML responses, validate the XML schema after parsing with a schema validator (lxml's xmlschema).
+  - Limit the size of XML input accepted from external sources to prevent denial-of-service attacks.
+  - Use JSON instead of XML for new API designs to avoid XML security complexity entirely.
+
+detection_scope: |
+  This rule detects calls to xml.etree.ElementTree.parse(), xml.etree.ElementTree.fromstring(),
+  xml.etree.ElementTree.fromstringlist(), and xml.etree.ElementTree.iterparse() in Python
+  source code. These functions use the vulnerable default parser unless explicitly replaced.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration (XXE covered in A05 since OWASP 2021)"
+  - standard: CWE Top 25
+    requirement: "CWE-611 - Improper Restriction of XML External Entity Reference"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including XXE"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# References
+references:
+  - title: "CWE-611: Improper Restriction of XML External Entity Reference"
+    url: https://cwe.mitre.org/data/definitions/611.html
+  - title: "Python docs: xml.etree.ElementTree security note"
+    url: https://docs.python.org/3/library/xml.html#xml-vulnerabilities
+  - title: "defusedxml documentation"
+    url: https://github.com/tiran/defusedxml
+  - title: OWASP XXE Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+  - title: OWASP XML External Entities (XXE)
+    url: https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE)_Processing
+
+# FAQ
+faq:
+  - question: Is xml.etree.ElementTree always vulnerable to XXE?
+    answer: |
+      Python's xml.etree.ElementTree uses expat for parsing. expat does not support
+      external entities by default, which provides partial protection. However, other
+      XML attacks (Billion Laughs, quadratic blowup) still apply. For complete protection
+      against all XML attack vectors, use defusedxml which explicitly blocks all dangerous
+      features.
+
+  - question: What does defusedxml protect against?
+    answer: |
+      defusedxml protects against: XXE (external entity injection), DTD retrieval,
+      Billion Laughs (entity expansion DoS), quadratic blowup, and malicious namespace
+      expansion. It raises defusedxml.DTDForbidden, defusedxml.EntitiesForbidden, etc.
+      when these attacks are detected.
+
+  - question: Is lxml safe from XXE?
+    answer: |
+      lxml is not safe by default. By default, lxml's etree.parse() resolves external
+      entities. To use lxml safely, create a custom parser: parser = lxml.etree.XMLParser(
+      resolve_entities=False, no_network=True, load_dtd=False) and pass it to etree.parse().
+      defusedxml.lxml wraps this configuration.
+
+  - question: Can I check if my ElementTree usage is safe without defusedxml?
+    answer: |
+      Python's xml.etree.ElementTree with expat has some built-in protection but not complete
+      protection. The authoritative list of protections is in Python's xml module documentation.
+      For production code processing untrusted XML, defusedxml is the recommended solution
+      as it provides a complete, maintained defense.
+
+  - question: Does defusedxml have any performance impact?
+    answer: |
+      defusedxml's overhead is minimal. It adds checks before and during parsing to detect
+      dangerous patterns and raise exceptions. For well-formed, legitimate XML, the overhead
+      is negligible. For XML that triggers protections, it raises exceptions before completing
+      parsing, which may actually be faster than processing a malicious payload.
+
+  - question: What about XML parsing in XML-based APIs like SOAP or RSS feeds?
+    answer: |
+      SOAP APIs and RSS feeds often contain XML from partially trusted sources. Even if you
+      trust the source, a compromised upstream feed or a MITM attacker can inject XXE payloads.
+      Use defusedxml for all XML parsing regardless of the apparent trustworthiness of the
+      source, following the principle of defense in depth.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-091
+  - PYTHON-LANG-SEC-092
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

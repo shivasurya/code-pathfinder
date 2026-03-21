@@ -1,0 +1,226 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-015
+name: Lambda Tainted SQL String Construction
+short_description: Lambda event data is used in SQL string construction via f-strings or concatenation before being passed to a database execute call, enabling SQL injection.
+
+# Classification
+severity: HIGH
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-015
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - string-construction
+  - f-string
+  - concatenation
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data is used to construct a SQL query string via f-string interpolation
+  or string concatenation, and the resulting tainted string is subsequently passed to any
+  database execute() function.
+
+  This rule differs from driver-specific rules (SEC-010 through SEC-014) by focusing on
+  the intermediate SQL string construction step rather than the specific database driver.
+  It catches the pattern where a tainted SQL string is built in one variable or function
+  and then passed to execute() in another, which may span multiple helper functions or
+  modules in the Lambda codebase.
+
+  Lambda functions receive attacker-controllable event data from API Gateway, SQS, SNS,
+  S3, DynamoDB Streams, and other triggers (event.get("body"), event.get("queryStringParameters"),
+  event["Records"]). When this data is used to build SQL strings, the string becomes
+  tainted regardless of which database driver is used to execute it. Detecting the
+  tainted string construction step, rather than only the execute() call, catches
+  vulnerability patterns where the string is stored in a variable, passed through
+  helper functions, or assembled from multiple event fields before reaching the sink.
+
+message: "Lambda event data is used in SQL string construction. Use parameterized queries with placeholders instead of embedding event data in SQL strings."
+
+security_implications:
+  - title: Cross-Module Tainted SQL Propagation
+    description: |
+      SQL strings built from event data in one Lambda module (e.g., a query builder
+      utility) and executed in another module are vulnerable even when the execute()
+      call site appears to use safe patterns. This inter-module taint propagation is
+      the primary pattern that driver-specific rules miss.
+  - title: Multi-Driver Vulnerability Coverage
+    description: |
+      Lambda functions that connect to multiple databases via different drivers (e.g.,
+      PyMySQL for MySQL and psycopg2 for PostgreSQL) may construct SQL strings centrally
+      and execute them through different drivers. A tainted SQL string passed to any
+      driver's execute() is equally dangerous regardless of the driver.
+  - title: Stored Query Template Injection
+    description: |
+      Some Lambda functions build SQL query templates by combining event data with
+      stored query fragments, then execute the assembled template. The tainted
+      template construction step exposes the injection vulnerability even before
+      the execute() call.
+  - title: Dynamic WHERE Clause Construction
+    description: |
+      Lambda handlers that build dynamic WHERE clauses by appending conditions based
+      on event fields (e.g., adding AND column = 'value' for each filter parameter)
+      via string concatenation are particularly vulnerable, as each filter field is
+      an injection point and the vulnerability scales with the number of event fields
+      processed.
+
+secure_example: |
+  import json
+  import pymysql
+
+  def build_user_filter(filters):
+      # SECURE: Build a parameterized query — placeholders and values are kept separate
+      conditions = []
+      params = []
+      if 'username' in filters:
+          conditions.append("username = %s")
+          params.append(filters['username'])
+      if 'status' in filters:
+          conditions.append("status = %s")
+          params.append(filters['status'])
+      if 'min_age' in filters:
+          try:
+              conditions.append("age >= %s")
+              params.append(int(filters['min_age']))
+          except (ValueError, TypeError):
+              pass
+      where = " AND ".join(conditions) if conditions else "1=1"
+      return f"SELECT id, username FROM users WHERE {where}", params
+
+  def lambda_handler(event, context):
+      params_raw = event.get('queryStringParameters', {}) or {}
+      # SECURE: Build query with separate params list, never embed values in SQL string
+      query, params = build_user_filter(params_raw)
+      conn = pymysql.connect(host='rds-host', user='user', password='pass', db='db')
+      with conn.cursor() as cursor:
+          cursor.execute(query, params)
+          rows = cursor.fetchall()
+      return {'statusCode': 200, 'body': json.dumps(rows)}
+
+recommendations:
+  - Restructure SQL construction helpers to return a (query_template, params_list) tuple rather than a pre-built SQL string with embedded values.
+  - Use placeholders (%s for MySQL/psycopg2, :name for SQLAlchemy text()) in the SQL template and collect event values in a separate list or dictionary.
+  - For dynamic WHERE clause construction, append placeholders to the WHERE string and values to a separate list; never append event data to the SQL string directly.
+  - Validate and type-convert event fields before adding them to the parameters list as a defense-in-depth measure.
+  - Apply least-privilege database permissions to the Lambda's database user to limit the blast radius of any successful injection.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The rule tracks taint through
+  f-string interpolation and string concatenation operations to identify SQL string
+  variables that contain event data. The sink is any calls("*.execute") call where
+  the tainted SQL string variable is passed as the first argument (tracked via .tracks(0)).
+  Sanitizers include explicit int() or float() type conversion. The analysis follows
+  taint through variable assignments, function return values, and module boundaries.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: AWS Lambda with RDS Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+  - title: SQLAlchemy Using Textual SQL
+    url: https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: How does SEC-015 differ from the driver-specific SQL injection rules (SEC-010 to SEC-014)?
+    answer: |
+      The driver-specific rules (SEC-010 to SEC-014) flag taint that flows directly from
+      the Lambda event to a specific driver's execute() call. SEC-015 flags the intermediate
+      step: when event data is used to construct a SQL string variable via f-strings or
+      concatenation, and that tainted string variable is then passed to any execute() call.
+      SEC-015 catches cases where the SQL string is assembled in a helper function or stored
+      in a variable before being executed, which the driver-specific rules may miss.
+
+  - question: My Lambda builds dynamic SQL with an allowlisted column name and a parameterized value. Will this be flagged?
+    answer: |
+      If the column name comes from the event dictionary and is used in the SQL string
+      (even via an allowlist check), the SQL string is still tainted by the rule's analysis.
+      The recommended approach is to use a pre-built dictionary of safe SQL fragments keyed
+      by allowed column names, and use the event value only to select a key from that
+      dictionary, never to directly modify the SQL string. This keeps the SQL string as a
+      static literal and avoids taint entirely.
+
+  - question: Can I store SQL query templates in the Lambda event and execute them?
+    answer: |
+      No. Allowing event-controlled SQL templates is equivalent to allowing arbitrary SQL
+      execution. SQL query templates must always be static literals defined in the Lambda
+      code, never derived from event data. The only event data that should appear in
+      execute() calls is in the parameters tuple, never in the SQL string argument.
+
+  - question: How do I build a dynamic ORDER BY clause safely?
+    answer: |
+      Use an explicit allowlist dictionary: ALLOWED_SORT_COLUMNS = {'name': 'u.name',
+      'created': 'u.created_at'}. Validate the event's sort field against the dictionary
+      and use the dictionary's value (a pre-built safe column reference) in the SQL string.
+      For sort direction, validate the event value against {'asc', 'desc'}. Both the column
+      reference and direction come from hardcoded constants, not from the event data itself.
+
+  - question: Is there a Lambda-specific ORM or query builder that prevents this class of vulnerability?
+    answer: |
+      SQLAlchemy's ORM and Core expression language (select(), where(), filter()) build
+      parameterized queries programmatically and prevent SQL string injection by design.
+      AWS's built-in RDS Data Service API and its boto3 execute_statement() use named
+      parameters natively. For DynamoDB, the boto3 DynamoDB client's KeyConditionExpression
+      uses Attr() and Key() objects rather than SQL strings. All of these alternatives
+      eliminate tainted SQL string construction entirely.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

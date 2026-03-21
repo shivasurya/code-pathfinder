@@ -1,0 +1,219 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-003
+name: Django SQL Injection via QuerySet.extra()
+short_description: User input flows to QuerySet.extra() without parameterization, enabling SQL injection through Django's legacy ORM extension interface.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - sql-injection
+  - queryset-extra
+  - orm
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into the SQL string arguments of
+  QuerySet.extra() without proper parameterization.
+
+  Django's QuerySet.extra() is a legacy method that allows injecting raw SQL fragments
+  into queryset generation. It accepts params arguments for safe parameterization of
+  the where, select, and tables arguments. When developers embed request parameters
+  directly into these SQL strings, attackers can manipulate the generated SQL query.
+  The extra() method is particularly risky because its SQL fragments are injected
+  into different parts of the generated query (WHERE, SELECT, FROM clauses), giving
+  attackers multiple injection points.
+
+  Django's own documentation marks extra() as a last resort and recommends migrating to
+  annotate(), filter(), and RawSQL expressions. This rule helps identify both injection
+  vulnerabilities and opportunities to modernize the codebase.
+
+message: "User input flows to QuerySet.extra() without parameterization. Use annotate() with RawSQL or migrate to ORM equivalents."
+
+security_implications:
+  - title: Multi-Point SQL Injection
+    description: |
+      Unlike cursor.execute() which has a single SQL string, extra() has multiple
+      injection points: where, select, tables, and order_by. Each argument that accepts
+      user input without parameterization is a separate injection vector. An attacker
+      who controls any of these can manipulate the generated query.
+  - title: WHERE Clause Injection
+    description: |
+      Injecting into the where argument allows attackers to append OR conditions to
+      bypass filtering, add subqueries to exfiltrate data from other tables, or use
+      UNION-based attacks to return arbitrary database content disguised as model data.
+  - title: SELECT Injection and Data Leakage
+    description: |
+      The select argument adds extra columns to the queryset. An attacker who controls
+      this argument can make Django return sensitive columns from other tables or
+      subquery results embedded in the queryset response.
+  - title: FROM Clause Injection via Tables Parameter
+    description: |
+      The tables argument adds extra tables to the FROM clause. An attacker can use
+      this to perform cross-join attacks, access tables outside the application's normal
+      data scope, or exploit implicit joins to exfiltrate data.
+
+secure_example: |
+  from django.http import JsonResponse
+  from django.db.models import F, Q
+  from django.db.models.expressions import RawSQL
+  from myapp.models import Product
+
+  def search_by_score(request):
+      min_score = request.GET.get('min_score', '0')
+      try:
+          min_score = float(min_score)
+      except ValueError:
+          return JsonResponse({'error': 'Invalid score'}, status=400)
+      # SECURE: Use annotate() with RawSQL and params instead of extra()
+      products = Product.objects.annotate(
+          computed_score=RawSQL("score * %s", (min_score,))
+      ).filter(computed_score__gte=min_score)
+      return JsonResponse({'products': list(products.values('id', 'name'))})
+
+  def filter_by_category(request):
+      category = request.GET.get('category', '')
+      # SECURE: Use standard ORM filter instead of extra(where=...)
+      products = Product.objects.filter(category=category).values('id', 'name', 'price')
+      return JsonResponse({'products': list(products)})
+
+  def filter_with_extra_safe(request):
+      status = request.GET.get('status', '')
+      # SECURE: Use extra() with params argument for parameterized SQL fragments
+      products = Product.objects.extra(
+          where=["status = %s"],
+          params=[status]
+      ).values('id', 'name')
+      return JsonResponse({'products': list(products)})
+
+recommendations:
+  - Migrate extra() usages to modern ORM equivalents: filter() for WHERE conditions, annotate() for computed columns, and select_related() or prefetch_related() for joins.
+  - When extra() must be used, always pass user input through the params argument rather than embedding it in the SQL string arguments.
+  - Treat the where, select, and tables arguments of extra() as SQL templates that must never contain user-controlled content directly.
+  - Use Django's annotate() with RawSQL expressions as a safer alternative to extra(select=...) since RawSQL explicitly supports parameterization.
+  - Review all extra() calls during security audits as they represent legacy patterns that warrant modernization and carry heightened injection risk.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is any string argument to calls("*.extra") that contains tainted data
+  (tracked via .tracks(0) for the primary SQL string argument). The separate params
+  argument is not tracked. Sanitizers include int(), float(), and allowlist-based
+  validation. The rule follows taint across module and file boundaries.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django QuerySet.extra() documentation
+    url: https://docs.djangoproject.com/en/stable/ref/models/querysets/#extra
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+  - title: Django RawSQL expression
+    url: https://docs.djangoproject.com/en/stable/ref/models/expressions/#django.db.models.expressions.RawSQL
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web-facing applications against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: SANS Top 25
+    requirement: "Insecure Interaction Between Components"
+
+# FAQ
+faq:
+  - question: Why is extra() considered higher risk than cursor.execute() or raw()?
+    answer: |
+      extra() has multiple SQL injection surfaces: the where, select, tables, and
+      order_by arguments can all contain injected SQL. When a developer embeds user
+      input into any of these, the injection point is in a different part of the
+      generated query (WHERE, SELECT, or FROM clause). This multiplicity of injection
+      points makes extra() more dangerous than single-string methods like raw() or
+      cursor.execute().
+
+  - question: Can I migrate from extra() to standard ORM to fix this finding?
+    answer: |
+      Yes, and that is the preferred fix. Most extra(where=...) patterns can be
+      replaced with filter() or Q() objects. extra(select=...) patterns typically
+      migrate to annotate() with Value(), F() expressions, or RawSQL with params.
+      The Django documentation includes a migration guide from extra() to modern ORM
+      alternatives. This migration eliminates the vulnerability and improves code
+      maintainability.
+
+  - question: Does this rule trigger on extra() calls that use the params argument?
+    answer: |
+      No. When user input is passed as the params argument (not embedded in the SQL
+      strings), the taint analysis confirms the SQL strings are static literals and
+      will not flag the call. For example, extra(where=["col = %s"], params=[user_val])
+      is safe and will not be flagged.
+
+  - question: Are there cases where extra() is the only option in Django?
+    answer: |
+      In rare cases involving database-specific SQL features not exposed through the
+      ORM, extra() may still be used. In these cases, ensure all user-controlled values
+      go through the params argument. Consider whether the database-specific feature
+      can be moved to a stored procedure or handled with RawSQL expressions instead.
+
+  - question: What Django version introduced better alternatives to extra()?
+    answer: |
+      Django has been providing alternatives since version 1.8 with conditional
+      expressions and 2.0 with window functions. By Django 3.x, the ORM can handle
+      virtually all use cases that previously required extra(). The Django documentation
+      explicitly states that extra() may be deprecated in a future release, making
+      migration a maintenance priority in addition to a security priority.
+
+  - question: How do I handle dynamic ORDER BY direction (ASC/DESC) safely without extra()?
+    answer: |
+      Use an allowlist: validate that the direction string equals 'asc' or 'desc' (case
+      insensitive), then construct a string like '-field_name' for descending or 'field_name'
+      for ascending and pass it to order_by(). Never pass user-controlled column names or
+      directions directly to order_by() or extra() without allowlist validation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-DJANGO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

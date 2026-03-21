@@ -1,0 +1,190 @@
+# Rule Identity
+id: PYTHON-CRYPTO-SEC-004
+name: RC2 (ARC2) Cipher Usage via PyCryptodome
+short_description: Detects use of the RC2/ARC2 cipher through PyCryptodome, which has a weak key schedule and an effective key length that can be reduced to 40 bits by protocol negotiation, making it vulnerable to brute-force attacks.
+
+# Classification
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-004
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - pycryptodome
+  - rc2
+  - arc2
+  - weak-key-schedule
+  - effective-key-length
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.ARC2.new()` from the PyCryptodome library.
+  RC2 (also known as ARC2 to avoid trademark issues) is a 64-bit block cipher designed
+  in 1987. Its effective key length can be configured independently of its nominal key
+  size via the `effective_keylen` parameter, making it possible to silently operate
+  with only 40 bits of security -- a level brute-forceable in minutes with commodity
+  hardware.
+
+  RC2 was designed during the US export control era, when algorithms were deliberately
+  weakened to 40-bit effective strength for export. Many protocol implementations
+  default to or accept 40-bit effective key length. The algorithm also has a
+  known-plaintext attack that is more efficient than brute force for certain key
+  lengths. NIST SP 800-131A does not approve RC2 for any use case.
+
+  The rule matches `PyCryptoCipherARC2.method("new")`. Even at maximum effective key
+  strength, RC2 retains a 64-bit block size (Sweet32 risk) and an aging design.
+  There is no justification for RC2 in new code.
+
+message: "RC2 (ARC2) cipher has a configurable effective key length as low as 40 bits and a weak key schedule. Replace with AES-256-GCM."
+
+security_implications:
+  - title: Effective Key Length Configurable Down to 40 Bits
+    description: |
+      PyCryptodome's ARC2.new() accepts an `effective_keylen` parameter that controls
+      the actual security level independently of key length. The default and common
+      export-era setting is 40 bits -- a search space of 2^40, which a modern GPU
+      cluster can exhaust in minutes. Code that omits `effective_keylen` or sets it
+      to a low value provides minimal encryption strength regardless of how many
+      bytes the key contains.
+  - title: 64-Bit Block Size -- Sweet32 Birthday Attack
+    description: |
+      Like Blowfish, DES, and 3DES, RC2 uses 8-byte blocks. After approximately
+      32GB of ciphertext under the same key, block collisions become probable. In
+      CBC mode, these collisions can be exploited to recover plaintext segments,
+      particularly in long-lived encrypted channels or bulk data stores.
+  - title: Known-Plaintext Attacks More Efficient Than Brute Force
+    description: |
+      RC2's key schedule has structural weaknesses that allow related-key attacks
+      and known-plaintext attacks that reduce the effective search space below the
+      nominal key length. At 128-bit key length, the algorithm has not been
+      comprehensively vetted against modern cryptanalytic techniques the way AES has
+      been through its public competition and standardization process.
+  - title: Export Control Legacy -- Deliberate Weakening for Compliance
+    description: |
+      RC2 was designed in an era when US export regulations required algorithms to
+      be no stronger than 40-bit effective key length for non-US users. The algorithm
+      was intentionally designed with configurable weakening. Code that inherits
+      or copies RC2 usage from old sources may unknowingly retain 40-bit effective
+      key settings, providing nearly no cryptographic protection.
+
+secure_example: |
+  from Crypto.Cipher import AES
+  import os
+
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
+
+recommendations:
+  - Replace Crypto.Cipher.ARC2 with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for authenticated encryption
+  - Use ChaCha20-Poly1305 via the cryptography library as an alternative AEAD cipher
+  - Never use RC2 with effective_keylen below 128 -- even at maximum strength, RC2 is not recommended for new code
+  - Re-encrypt any data stored under RC2 using AES-256-GCM and rotate all key material
+  - Audit any protocol negotiation code to ensure 40-bit or 56-bit effective key lengths cannot be selected
+
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.ARC2.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherARC2.method("new")`. It fires on any ARC2 cipher
+  object instantiation regardless of the effective_keylen or mode parameter. Even at
+  maximum effective key length, RC2 retains a 64-bit block size and is not approved
+  for new use by any current standard. No sanitizer exclusions are defined.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Sweet32: Birthday attacks on 64-bit block ciphers"
+    url: https://sweet32.info/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "RFC 2268: A Description of the RC2(r) Encryption Algorithm"
+    url: https://www.rfc-editor.org/rfc/rfc2268
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: We set effective_keylen=128 in our ARC2 calls. Is that safe?
+    answer: |
+      Setting effective_keylen to 128 gives RC2 its maximum theoretical strength
+      and avoids the export-era weakening. However, RC2 still uses a 64-bit block
+      size (Sweet32 risk), has a comparatively unvetted key schedule, and is not
+      approved by NIST SP 800-131A for any use case. It provides weaker security
+      guarantees than AES-128-GCM, which has a 128-bit block size and has been
+      extensively analyzed through the AES competition and two decades of deployment.
+
+  - question: What is the default effective_keylen in PyCryptodome's ARC2, and is it dangerous?
+    answer: |
+      PyCryptodome defaults to effective_keylen equal to the actual key length, up to
+      128 bits. However, many legacy codebases and protocol implementations that
+      originally targeted 40-bit or 56-bit export strength may pass low values
+      explicitly. The risk is that the parameter is easy to overlook or misconfigure,
+      and there is no enforcement mechanism preventing weak settings in production.
+
+  - question: RC2 appears in our S/MIME or PKCS#12 handling code. How do we fix it?
+    answer: |
+      S/MIME and PKCS#12 (PFX files) historically defaulted to RC2-40 for content
+      encryption. Modern implementations should specify AES-128-CBC or AES-256-CBC
+      for PKCS#12 and AES-256-GCM for S/MIME content. Review the library or framework
+      you use for certificate packaging, as most modern versions support AES by default
+      when configured correctly.
+
+  - question: How does RC2 compare to RC4 in terms of severity?
+    answer: |
+      Both are broken legacy ciphers. RC4 is a stream cipher with fundamental keystream
+      biases. RC2 is a block cipher with a configurable weakness (effective key length)
+      and a 64-bit block size. RC4 is generally considered more immediately dangerous
+      due to the practical attacks demonstrated against it in TLS traffic. RC2 is
+      dangerous primarily due to the effective key length issue and 64-bit block size.
+      Neither should be used for new development.
+
+  - question: Are there compliance frameworks that specifically call out RC2?
+    answer: |
+      NIST SP 800-131A Rev 2 does not list RC2 among approved algorithms for any
+      security strength. PCI DSS v4.0 Requirement 4.2.1 requires "strong cryptography"
+      for cardholder data, and RC2 at typical key settings does not meet this bar.
+      Any system assessed under FIPS 140-2 or 140-3 cannot use RC2 for encryption
+      of sensitive data.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-001
+  - PYTHON-CRYPTO-SEC-001a
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

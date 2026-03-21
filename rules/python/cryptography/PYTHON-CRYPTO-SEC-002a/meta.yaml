@@ -1,0 +1,187 @@
+# Rule Identity
+id: PYTHON-CRYPTO-SEC-002a
+name: Blowfish Cipher Usage via PyCryptodome
+short_description: Detects use of the Blowfish cipher through PyCryptodome, which has a 64-bit block size making it vulnerable to Sweet32 birthday attacks after approximately 32GB of data.
+
+# Classification
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-002a
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - pycryptodome
+  - blowfish
+  - sweet32
+  - birthday-attack
+  - 64-bit-block
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.Blowfish.new()` from the PyCryptodome
+  library. Blowfish operates on 64-bit blocks, making it susceptible to the Sweet32
+  birthday attack (CVE-2016-2183) once approximately 32GB of data is encrypted under
+  the same key.
+
+  The birthday paradox dictates that with a 64-bit block cipher in CBC or CFB mode,
+  block collisions become probable after 2^32 encrypted blocks. An attacker who can
+  observe sufficient ciphertext can leverage these collisions to recover plaintext
+  segments, most notably session tokens in web traffic. Following the public disclosure
+  of Sweet32 in 2016, all major browsers and TLS stacks disabled 64-bit block cipher
+  suites.
+
+  The rule matches `PyCryptoCipherBlowfish.method("new")` -- any instantiation of a
+  Blowfish cipher object via PyCryptodome. Blowfish's wide key range (32 to 448 bits)
+  does not mitigate the block size problem. The companion rule PYTHON-CRYPTO-SEC-002
+  covers Blowfish in the `cryptography` library.
+
+message: "Blowfish (PyCryptodome) has a 64-bit block size vulnerable to Sweet32 birthday attacks. Replace with AES-GCM."
+
+security_implications:
+  - title: Sweet32 Birthday Attack After 32GB of Ciphertext
+    description: |
+      PyCryptodome's Blowfish operates on 8-byte blocks. After 2^32 blocks (~32GB)
+      under the same key, block collisions become statistically likely. In CBC mode,
+      a collision between two ciphertext blocks allows an attacker who knows one
+      corresponding plaintext to recover the other. For services encrypting session
+      data or bulk files with a persistent key, 32GB is reachable within hours.
+  - title: CBC Mode Without MAC Creates Padding Oracle Exposure
+    description: |
+      PyCryptodome's Blowfish in CBC mode without a separate HMAC produces unauthenticated
+      ciphertext. Applications that return different error responses for invalid padding
+      versus decryption failure inadvertently expose a padding oracle. An attacker can
+      decrypt arbitrary ciphertext blocks by sending carefully crafted inputs and
+      measuring response behavior.
+  - title: Superseded by AES Over Two Decades Ago
+    description: |
+      AES was standardized in 2001 specifically to replace aging 64-bit block ciphers.
+      PyCryptodome includes Blowfish only for legacy compatibility. Any new code that
+      selects Blowfish over AES is choosing a demonstrably weaker algorithm for no
+      technical benefit.
+  - title: No Hardware Acceleration Path
+    description: |
+      Modern CPUs include AES-NI instructions that make AES-GCM exceptionally fast.
+      Blowfish has no hardware acceleration path and is slower than AES-NI-accelerated
+      AES in typical deployments. There is no performance argument for Blowfish.
+
+secure_example: |
+  from Crypto.Cipher import AES
+  import os
+
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
+
+recommendations:
+  - Replace Crypto.Cipher.Blowfish with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for authenticated encryption
+  - Use ChaCha20-Poly1305 via the cryptography library if AES hardware acceleration is unavailable
+  - If a block cipher mode other than GCM is required, always pair it with HMAC-SHA256 to detect ciphertext tampering
+  - Re-encrypt any data stored with Blowfish under AES-256-GCM and rotate all Blowfish key material
+  - Confirm no Blowfish cipher suites remain enabled in TLS configuration alongside this code-level fix
+
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.Blowfish.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherBlowfish.method("new")`. It fires on any Blowfish
+  cipher object instantiation, regardless of key size or cipher mode (CBC, CFB, OFB,
+  ECB). The 64-bit block size vulnerability applies to all Blowfish configurations.
+  The companion rule PYTHON-CRYPTO-SEC-002 covers Blowfish in the `cryptography`
+  hazmat library.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Sweet32: Birthday attacks on 64-bit block ciphers in TLS and OpenVPN"
+    url: https://sweet32.info/
+  - title: "CVE-2016-2183: Sweet32 vulnerability"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2016-2183
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: PyCryptodome Blowfish Documentation
+    url: https://pycryptodome.readthedocs.io/en/latest/src/cipher/classic.html#blowfish
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: We use Blowfish with a unique key per file. Is the Sweet32 attack still relevant?
+    answer: |
+      If keys are truly unique per file and never reused, the risk from Sweet32 is
+      minimal for small files -- you need 32GB of ciphertext under one key for the
+      birthday bound to be significant. However, per-key uniqueness is operationally
+      difficult to guarantee, key management complexity increases, and there is still
+      no integrity protection without a separate MAC. AES-GCM solves all of this
+      cleanly with a single primitive.
+
+  - question: PyCryptodome still includes Blowfish -- doesn't that mean it's safe to use?
+    answer: |
+      PyCryptodome maintains Blowfish for interoperability with legacy systems that
+      require it for decryption of existing data. Inclusion in a library does not
+      indicate safety for new encryption. The library's own documentation marks
+      Blowfish as a legacy cipher and recommends AES for new applications.
+
+  - question: How do I migrate a file-encryption system from Blowfish to AES-GCM?
+    answer: |
+      Read each Blowfish-encrypted file, decrypt using the stored key, then
+      re-encrypt using AES.new(key256, AES.MODE_GCM) and store the new ciphertext
+      along with the nonce and authentication tag. Update your key storage to hold
+      32-byte AES keys instead of Blowfish keys. Delete the original Blowfish-
+      encrypted copies and the old keys after successful migration.
+
+  - question: What cipher modes are available for Blowfish in PyCryptodome, and are any of them safe?
+    answer: |
+      PyCryptodome supports Blowfish in CBC, CFB, OFB, and ECB modes. None of them
+      are safe for new code. ECB is the worst (identical plaintext blocks produce
+      identical ciphertext). CBC, CFB, and OFB are all affected by the Sweet32 block
+      size problem when sufficient data is encrypted. AES in GCM mode is the correct
+      replacement for all of these.
+
+  - question: Does this rule apply to bcrypt password hashing, which uses Blowfish internally?
+    answer: |
+      No. This rule targets `Crypto.Cipher.Blowfish.new()` -- the symmetric cipher.
+      PyCryptodome's bcrypt implementation (Crypto.Protocol.KDF) uses the Blowfish
+      key schedule as a one-way function for password hashing, which is a different
+      and appropriate use case. Bcrypt is not flagged by this rule.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-002
+  - PYTHON-CRYPTO-SEC-003
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-005a
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

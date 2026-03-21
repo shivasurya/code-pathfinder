@@ -1,0 +1,50 @@
+id: COMPOSE-SEC-006
+name: Container Filesystem is Writable
+short_description: Service has writable root filesystem. Consider making it read-only for better security.
+severity: LOW
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-006
+cwe:
+- id: CWE-732
+  name: Incorrect Permission Assignment for Critical Resource
+  url: https://cwe.mitre.org/data/definitions/732.html
+tags:
+- docker-compose
+- compose
+- filesystem
+- read-only
+- security
+- immutability
+- malware-prevention
+- hardening
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: "This rule detects services without `read_only: true` filesystem setting.\nWhile containers\
+  \ have writable filesystems by default for compatibility,\nmaking the root filesystem read-only significantly\
+  \ improves security by\npreventing attackers from modifying binaries, installing malware, or\npersisting\
+  \ backdoors within the container.\n\nSECURITY BENEFITS OF READ-ONLY FILESYSTEMS:\n\n1. **Prevents Malware\
+  \ Installation**:\n   Attackers cannot write persistent backdoors or rootkits to the filesystem.\n\n\
+  2. **Blocks Binary Modification**:\n   Cannot replace legitimate binaries with trojanized versions.\n\
+  \n3. **Immutable Infrastructure**:\n   Enforces that containers are disposable and stateless.\n\n4.\
+  \ **Reduces Attack Persistence**:\n   Malware must remain in memory only, lost on container restart."
+message: Service has writable root filesystem. Consider making it read-only for better security.
+secure_example: "services:\n  web:\n    image: nginx\n    read_only: true\n    tmpfs:\n      - /tmp\n\
+  \      - /var/run\n      - /var/cache/nginx"
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-732: Incorrect Permission Assignment'
+  url: https://cwe.mitre.org/data/definitions/732.html
+- title: Docker Security Best Practices
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+- title: Immutable Infrastructure Principles
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,54 @@
+id: DOCKER-BP-016
+name: Prefer JSON Notation for CMD/ENTRYPOINT
+short_description: Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-016
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- cmd
+- entrypoint
+- exec-form
+- json
+- signal-handling
+- best-practice
+- process-management
+- pid1
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects CMD or ENTRYPOINT using shell form instead of exec form (JSON array).
+
+  Shell form wraps commands in /bin/sh -c, which creates issues with signal handling,
+
+  process management, and adds an unnecessary shell layer.'
+message: Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling.
+secure_example: 'FROM nginx:alpine
+
+
+  # Good: Exec form (JSON) - proper signal handling
+
+  CMD ["nginx", "-g", "daemon off;"]
+
+  ENTRYPOINT ["/app/start.sh"]'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Use JSON notation for CMD/ENTRYPOINT"
+  url: ''
+- title: Docker ENTRYPOINT documentation
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

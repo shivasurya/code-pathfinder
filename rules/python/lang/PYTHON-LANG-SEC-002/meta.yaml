@@ -1,0 +1,194 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-002
+name: Dangerous exec() Usage Detected
+short_description: exec() executes arbitrary Python statements from strings or code objects, enabling remote code execution when called with untrusted input.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - exec
+  - code-injection
+  - dynamic-execution
+  - builtins
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's built-in exec() function executes dynamically constructed Python code including
+  full statements, class and function definitions, import statements, and control flow. Unlike
+  eval(), exec() is not restricted to expressions and can execute any valid Python code,
+  making it significantly more dangerous.
+
+  When exec() receives a string derived from untrusted input such as HTTP parameters, file
+  contents, environment variables, or inter-process messages, an attacker can inject arbitrary
+  Python statements that spawn shells, exfiltrate data, install backdoors, modify the global
+  state of the application, or execute any OS command on the host system.
+
+  There is no safe way to sandbox exec() using restricted namespace dictionaries — Python's
+  introspection capabilities have been used to escape all known namespace-based sandboxes.
+  The correct fix is always to avoid exec() on untrusted input entirely.
+
+message: "exec() detected. Never execute dynamically constructed code from untrusted sources."
+
+security_implications:
+  - title: Full Remote Code Execution
+    description: |
+      exec() can execute any valid Python statement, giving an attacker complete control over
+      the process. This includes defining functions, spawning threads, importing modules,
+      modifying global variables, and executing OS commands via os.system() or subprocess.
+  - title: Application State Corruption
+    description: |
+      exec() can redefine functions, classes, and module-level variables at runtime. An
+      attacker injecting code via exec() can replace authentication logic, disable security
+      checks, or corrupt application state in ways that persist for the lifetime of the process.
+  - title: Namespace Sandbox Escape
+    description: |
+      Attempts to restrict exec() by passing custom globals/locals dictionaries are
+      insufficient. Python's __subclasses__(), __mro__, and __builtins__ attributes provide
+      paths to escape any namespace restriction that has been attempted in practice.
+  - title: Persistence and Lateral Movement
+    description: |
+      Through exec(), an attacker can write files to disk, modify installed packages,
+      schedule cron jobs, and open persistent reverse shell connections that survive beyond
+      the current request or session.
+
+secure_example: |
+  import ast
+  import types
+
+  # SECURE: Use ast.literal_eval() for safe literal parsing
+  def parse_literal(user_input: str):
+      return ast.literal_eval(user_input)
+
+  # SECURE: Use explicit plugin loading via importlib with allowlist
+  ALLOWED_PLUGINS = {"plugin_a", "plugin_b", "plugin_c"}
+
+  def load_plugin(plugin_name: str):
+      if plugin_name not in ALLOWED_PLUGINS:
+          raise ValueError(f"Plugin not allowed: {plugin_name}")
+      import importlib
+      return importlib.import_module(f"myapp.plugins.{plugin_name}")
+
+  # SECURE: Use getattr() with an allowlist for dynamic method dispatch
+  ALLOWED_ACTIONS = {"start", "stop", "status"}
+
+  def run_action(obj, action: str):
+      if action not in ALLOWED_ACTIONS:
+          raise ValueError(f"Action not allowed: {action}")
+      return getattr(obj, action)()
+
+recommendations:
+  - Never pass user-controlled strings to exec(); there is no safe way to sandbox exec() on arbitrary input.
+  - Replace exec()-based plugin systems with importlib.import_module() restricted to an allowlist of module names.
+  - Use getattr() with explicit allowlists for dynamic method dispatch instead of constructing and exec()-ing code strings.
+  - If code generation is genuinely required, generate code at build time (not runtime) from trusted templates with no user-controlled content.
+  - Apply process isolation such as containers or separate processes with minimal privileges to limit the blast radius of any exec() exploitation.
+
+detection_scope: |
+  This rule detects all direct calls to the built-in exec() function anywhere in Python
+  source code, matching both unqualified exec() and builtins.exec() forms. The rule flags
+  every call site since exec() on any dynamically constructed string is a security concern
+  regardless of the apparent origin of the string.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "Python docs: built-in exec()"
+    url: https://docs.python.org/3/library/functions.html#exec
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python Security: Breaking Out of exec() Sandboxes"
+    url: https://nedbatchelder.com/blog/201206/eval_really_is_dangerous.html
+
+# FAQ
+faq:
+  - question: Is exec() more dangerous than eval()?
+    answer: |
+      Yes. eval() is restricted to single expressions while exec() can execute any valid
+      Python code including import statements, function definitions, class definitions, and
+      multi-line programs. exec() is essentially a full Python interpreter invocation on
+      an arbitrary string.
+
+  - question: Can I make exec() safe by restricting the globals and locals dictionaries?
+    answer: |
+      No. Namespace-based sandboxes for exec() have been broken repeatedly. Python's
+      introspection features such as __subclasses__(), object.__mro__, and __builtins__
+      provide multiple escape paths from any namespace restriction. Treat exec() on
+      untrusted input as unconditionally exploitable.
+
+  - question: What should I use instead of exec() for dynamic code loading?
+    answer: |
+      Use importlib.import_module() with a strict allowlist of permitted module names for
+      plugin systems. Use getattr() with allowlists for dynamic method dispatch. Use
+      ast.literal_eval() for data parsing. Use template engines for code generation that
+      runs at build time rather than runtime.
+
+  - question: Does this rule flag exec() used in legitimate build tools or metaprogramming?
+    answer: |
+      Yes. The rule flags all exec() call sites. Build tools that use exec() on trusted,
+      version-controlled code files are generally safe, but should be reviewed to ensure no
+      user-controlled data can influence the executed string. Document suppressed findings
+      with a clear explanation of the trust boundary.
+
+  - question: What is the risk of exec() in Jupyter notebooks or interactive shells?
+    answer: |
+      In a Jupyter notebook or interactive shell, exec() is less risky because the user
+      already has code execution. However, any server-side component that uses exec() to
+      execute notebook cell content received from a client is critically dangerous and should
+      use a proper sandboxed execution environment instead.
+
+  - question: How does Code Pathfinder detect taint flowing into exec()?
+    answer: |
+      The rule performs both pattern-based detection of all exec() calls and taint-aware
+      analysis that traces data flow from HTTP request parameters, os.environ, file reads,
+      and network input through variable assignments across function boundaries to the exec()
+      call site. Tainted flows are reported with higher severity.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-003
+  - PYTHON-LANG-SEC-005
+  - PYTHON-LANG-SEC-006
+  - PYTHON-LANG-SEC-023
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,195 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-060
+name: HTTP Request Without TLS (requests library)
+short_description: HTTP URLs in requests calls transmit data in plaintext without encryption. Use HTTPS URLs for sensitive data transmission.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-060
+
+# Vulnerability Details
+cwe:
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - requests
+  - http
+  - plaintext
+  - cleartext-transmission
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Using the requests library with http:// URLs transmits all request and response data
+  in plaintext over TCP without TLS encryption. Authentication headers, session tokens,
+  API keys, user data, and all other HTTP content are visible to network observers and
+  MITM attackers.
+
+  The requests library makes HTTPS requests trivially easy — simply use https:// in the
+  URL. The library handles TLS certificate verification by default. There is rarely a
+  legitimate reason to use http:// URLs in production application code, except for
+  localhost health checks or explicitly non-sensitive endpoints.
+
+  This rule audits requests.get(), requests.post(), requests.put(), requests.patch(),
+  requests.delete(), requests.head(), and requests.Session() calls to flag HTTP URLs.
+
+message: "HTTP URL detected in requests call. Use HTTPS to encrypt data in transit and authenticate the server."
+
+security_implications:
+  - title: API Key and Token Interception
+    description: |
+      API keys, OAuth tokens, and authentication headers transmitted in HTTP requests are
+      visible in plaintext to anyone on the network path, enabling immediate credential theft
+      and unauthorized API access.
+  - title: Sensitive Data Exposure
+    description: |
+      Request bodies, query parameters, and response data containing user information,
+      financial data, health records, or other sensitive content are exposed to network
+      observers without TLS encryption.
+  - title: HTTP Response Tampering
+    description: |
+      Without TLS, responses can be modified in transit. An attacker can inject malicious
+      content, alter API responses to change application behavior, or redirect to malicious
+      endpoints by manipulating redirect responses.
+  - title: Mixed Content and Redirect Downgrade
+    description: |
+      Applications that start with HTTPS but follow redirects to HTTP URLs can be downgraded
+      to HTTP mid-session. The requests library follows redirects by default, potentially
+      following a redirect from https:// to http:// and exposing session credentials.
+
+secure_example: |
+  import requests
+
+  # INSECURE: HTTP URL in requests call
+  # response = requests.get("http://api.example.com/data")
+  # response = requests.post("http://api.example.com/login", data=credentials)
+
+  # SECURE: Use HTTPS URLs
+  def fetch_api_data(resource_id: str) -> dict:
+      response = requests.get(
+          f"https://api.example.com/data/{resource_id}",
+          timeout=30,
+      )
+      response.raise_for_status()
+      return response.json()
+
+  # SECURE: Use a session with base URL and HTTPS only
+  class ApiClient:
+      BASE_URL = "https://api.example.com"
+
+      def __init__(self, api_key: str):
+          self.session = requests.Session()
+          self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+
+      def get(self, path: str) -> dict:
+          response = self.session.get(f"{self.BASE_URL}{path}", timeout=30)
+          response.raise_for_status()
+          return response.json()
+
+recommendations:
+  - Replace all http:// URLs with https:// URLs in requests calls.
+  - Use HTTPS for all API endpoints, even internal service-to-service communication.
+  - Set a base URL with HTTPS in requests.Session() and use relative paths to prevent accidentally mixing HTTP and HTTPS.
+  - Configure HSTS on your servers so clients are redirected to HTTPS even if they accidentally use HTTP URLs.
+  - Add URL validation in your application that rejects or upgrades HTTP URLs to HTTPS before making requests.
+
+detection_scope: |
+  This rule detects calls to requests.get(), requests.post(), requests.put(), requests.delete(),
+  requests.patch(), requests.head(), requests.options(), and requests.request() where the URL
+  argument starts with "http://" (not "https://"). This covers both literal HTTP URLs and
+  variable URLs that can be determined to use HTTP by taint analysis.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: HIPAA Security Rule
+    requirement: "45 CFR 164.312(e) - Technical safeguards for data in transit"
+  - standard: GDPR Article 32
+    requirement: "Appropriate technical measures including encryption of personal data in transit"
+
+# References
+references:
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python requests documentation"
+    url: https://requests.readthedocs.io/en/latest/
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "HTTP Strict Transport Security (HSTS)"
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
+
+# FAQ
+faq:
+  - question: Is there any legitimate reason to use http:// in a requests call?
+    answer: |
+      Very rarely. Legitimate exceptions include: connecting to localhost health check
+      endpoints that don't expose sensitive data, connecting to a local proxy that handles
+      TLS termination (though even then https:// is preferred), and testing HTTP redirect
+      behavior. Any http:// URL in production code should be explicitly documented with
+      the reason it cannot use HTTPS.
+
+  - question: Does the requests library follow HTTP redirects to HTTPS automatically?
+    answer: |
+      requests follows redirects by default (allow_redirects=True). If an HTTP URL redirects
+      to HTTPS, the library will follow the redirect. However, the initial HTTP request
+      including any headers sent with it is still transmitted in plaintext before the
+      redirect occurs. Always use the final HTTPS URL directly.
+
+  - question: What is HTTP Strict Transport Security and does it help here?
+    answer: |
+      HSTS is a server-side security header that tells browsers to always use HTTPS for
+      a domain. The requests library does not implement HSTS by default, so server-side
+      HSTS does not prevent the Python client from making an initial HTTP request. Fix
+      the URL in the client code rather than relying on server-side HSTS.
+
+  - question: How do I detect and alert on HTTP URLs in production?
+    answer: |
+      Add URL validation to your HTTP client wrapper that raises an error or logs a warning
+      when an HTTP (non-HTTPS) URL is used. This can be implemented as a custom requests
+      Session subclass that overrides request() to validate URLs before making calls.
+
+  - question: Does this rule catch HTTP URLs stored in environment variables?
+    answer: |
+      If the URL is read from an environment variable (os.environ.get("API_URL")), static
+      analysis cannot determine whether the URL uses HTTP or HTTPS at the call site.
+      Supplement static analysis with URL validation in the application code that rejects
+      or upgrades HTTP URLs at runtime.
+
+  - question: What about HTTP URLs for webhook receivers or test endpoints?
+    answer: |
+      Webhook receivers that accept incoming HTTP requests are different from outbound HTTP
+      requests. This rule covers outbound requests made by the Python application. Webhook
+      endpoints should be served over HTTPS to protect the webhook payload from interception.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-054
+  - PYTHON-LANG-SEC-061
+  - PYTHON-LANG-SEC-062
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

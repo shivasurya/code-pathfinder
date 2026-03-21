@@ -1,0 +1,163 @@
+# Rule Identity
+id: PYTHON-PYRAMID-SEC-002
+name: Pyramid Direct Response XSS
+short_description: Traces user input from Pyramid request objects to Response() constructors, enabling reflected cross-site scripting.
+
+# Classification
+severity: HIGH
+category: pyramid
+language: python
+ruleset: python/pyramid/PYTHON-PYRAMID-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - pyramid
+  - xss
+  - response
+  - taint-analysis
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule traces user input from Pyramid request parameters (request.params,
+  request.GET, request.POST, request.matchdict, request.json_body) directly into
+  Pyramid Response() constructors. When user input is placed into an HTML response
+  body without escaping, it creates a reflected XSS vulnerability.
+
+  Unlike Pyramid's template rendering (Chameleon, Jinja2, Mako) which auto-escapes
+  by default, constructing a Response() directly with string concatenation bypasses
+  all template-level escaping. An attacker can inject script tags through request
+  parameters that execute in the victim's browser.
+
+  The rule uses taint analysis with scope="local" to track data flow within
+  individual view functions. It recognizes escape() and markupsafe.escape() as
+  sanitizers.
+
+message: "User input flows directly to Response(). Use Pyramid templates with auto-escaping."
+
+security_implications:
+  - title: Reflected Cross-Site Scripting
+    description: |
+      An attacker crafts a URL with malicious JavaScript in a query parameter.
+      When the user clicks the link, the Pyramid view constructs a Response with
+      the unsanitized parameter value, and the script executes in the user's browser
+      with full access to their session cookies and DOM.
+  - title: Session Hijacking
+    description: |
+      Injected JavaScript can read document.cookie and send it to an attacker-controlled
+      server. The attacker then uses the stolen session cookie to impersonate the user.
+  - title: Credential Theft
+    description: |
+      XSS can overlay a fake login form on the page. The user sees what looks like a
+      legitimate login prompt, enters their credentials, and the attacker captures them.
+
+secure_example: |
+  from pyramid.response import Response
+  from markupsafe import escape
+
+  def search_view(request):
+      query = request.params.get('q', '')
+      # SECURE: Escape user input before including in HTML
+      safe_query = escape(query)
+      return Response(f'<h1>Results for: {safe_query}</h1>')
+
+  # BETTER: Use Pyramid templates with auto-escaping
+  def search_view_template(request):
+      return {'query': request.params.get('q', '')}
+
+recommendations:
+  - Use Pyramid's template renderers (Chameleon, Jinja2, Mako) instead of constructing Response() with string concatenation
+  - If you must build HTML in view code, escape all user input with markupsafe.escape() before including it
+  - Set Content-Type to application/json for API responses to prevent browsers from rendering HTML
+  - Implement Content-Security-Policy headers to limit the damage of any XSS that slips through
+  - Use the @view_config(renderer='templates/search.pt') pattern to separate view logic from HTML rendering
+
+detection_scope: |
+  This rule traces data from Pyramid request sources (request.params.get,
+  request.GET.get, request.POST.get, request.matchdict.get, request.json_body.get)
+  to Response constructors (Response(), pyramid.response.Response()). Sanitizers
+  include escape() and markupsafe.escape(). Uses scope="local" for intra-procedural
+  analysis.
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting (XSS)"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: Pyramid Security Documentation
+    url: https://docs.pylonsproject.org/projects/pyramid/en/latest/narr/security.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: MarkupSafe Documentation
+    url: https://markupsafe.palletsprojects.com/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - prevent cross-site scripting attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# FAQ
+faq:
+  - question: Do Pyramid templates auto-escape by default?
+    answer: |
+      Yes. Chameleon (the default Pyramid template engine) and Jinja2 both
+      auto-escape HTML by default. This rule only fires when you bypass templates
+      and construct Response() objects directly with user input.
+
+  - question: Is setting Content-Type to text/plain enough to prevent XSS?
+    answer: |
+      It helps but is not sufficient. Some older browsers may still render HTML
+      in text/plain responses. The correct fix is to escape user input with
+      markupsafe.escape() or use template rendering with auto-escaping enabled.
+
+  - question: Does this rule detect stored XSS?
+    answer: |
+      No. This rule detects reflected XSS where user input flows directly from
+      request parameters to the response within a single view function. Stored
+      XSS requires tracking data through database writes and reads, which needs
+      scope="global" analysis.
+
+  - question: Why does the rule use scope="local" instead of scope="global"?
+    answer: |
+      Pyramid view functions typically receive request data and return a response
+      within the same function. scope="local" covers this common pattern efficiently.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/pyramid --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-008
+  - PYTHON-FLASK-SEC-015
+  - PYTHON-DJANGO-SEC-050
+  - PYTHON-PYRAMID-SEC-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

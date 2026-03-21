@@ -96,6 +96,7 @@ type JSONDetection struct {
 
 // JSONTaintNode represents source or sink in taint flow.
 type JSONTaintNode struct {
+	File     string `json:"file,omitempty"`
 	Line     int    `json:"line"`
 	Variable string `json:"variable,omitempty"`
 	Call     string `json:"call,omitempty"`
@@ -220,10 +221,12 @@ func (f *JSONFormatter) buildDetection(det *dsl.EnrichedDetection) JSONDetection
 	if det.DetectionType == dsl.DetectionTypeTaintLocal || det.DetectionType == dsl.DetectionTypeTaintGlobal {
 		detection.Scope = det.Detection.Scope
 		detection.Source = &JSONTaintNode{
+			File:     det.Detection.SourceFile,
 			Line:     det.Detection.SourceLine,
 			Variable: det.Detection.TaintedVar,
 		}
 		detection.Sink = &JSONTaintNode{
+			File: det.Detection.SinkFile,
 			Line: det.Detection.SinkLine,
 			Call: det.Detection.SinkCall,
 		}

@@ -1,0 +1,190 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-043
+name: ruamel.yaml Unsafe Loader Configuration
+short_description: ruamel.yaml configured with typ='unsafe' can instantiate arbitrary Python objects during YAML parsing. Use typ='safe' or the default round-trip loader.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-043
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - ruamel-yaml
+  - unsafe-yaml
+  - deserialization
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  ruamel.yaml is a YAML parser that supports multiple loading modes via the typ parameter:
+  'rt' (round-trip, default), 'safe', 'base', 'unsafe', and 'full'. When configured with
+  typ='unsafe' or typ='full', ruamel.yaml enables Python-specific YAML tags (!!python/object,
+  !!python/apply) that can instantiate arbitrary Python classes during parsing.
+
+  Like PyYAML's unsafe loader, this creates a remote code execution vulnerability when
+  processing YAML from untrusted sources. An attacker who can control the YAML content can
+  craft a document that executes arbitrary Python code when the YAML object's load() method
+  is called.
+
+  The default typ='rt' (round-trip) loader does not support Python object instantiation and
+  is safe for parsing untrusted YAML content. Always use typ='safe' or the default when
+  processing external data.
+
+message: "ruamel.yaml with typ='unsafe' or typ='full' detected. Use typ='safe' or the default round-trip mode to prevent Python object instantiation."
+
+security_implications:
+  - title: Python Object Instantiation via YAML Tags
+    description: |
+      With typ='unsafe', ruamel.yaml processes !!python/object and !!python/apply YAML
+      tags that import and instantiate arbitrary Python classes. An attacker crafts YAML
+      with !!python/object/apply:os.system to execute system commands when the YAML is parsed.
+  - title: Configuration File Attack Surface
+    description: |
+      Infrastructure tools, DevOps scripts, and application configuration loaders that
+      use ruamel.yaml to process user-editable or network-sourced YAML files with typ='unsafe'
+      are vulnerable. This is especially common in Python-based configuration management tools.
+  - title: CI/CD Pipeline Exploitation
+    description: |
+      CI/CD tools written in Python that parse pipeline definition files or workflow
+      configurations using ruamel.yaml with unsafe mode allow users who can submit pipeline
+      files to execute code with the pipeline runner's privileges.
+  - title: Infrastructure-as-Code Attacks
+    description: |
+      Ansible, SaltStack, and similar Python-based IaC tools use YAML for playbooks and
+      configuration. If any component uses ruamel.yaml with unsafe mode to process playbooks,
+      submitted playbook content could execute code on the management node.
+
+secure_example: |
+  from ruamel.yaml import YAML
+
+  # INSECURE: ruamel.yaml with unsafe typ
+  # yaml = YAML(typ='unsafe')
+  # yaml = YAML(typ='full')
+  # data = yaml.load(user_input)
+
+  # SECURE: Use default round-trip loader (safe for standard YAML)
+  def parse_config(yaml_content: str) -> dict:
+      yaml = YAML()  # default typ='rt' - does not instantiate Python objects
+      import io
+      data = yaml.load(io.StringIO(yaml_content))
+      if not isinstance(data, dict):
+          raise ValueError("Expected YAML mapping")
+      return data
+
+  # SECURE: Explicitly use typ='safe' for maximum safety
+  def parse_user_yaml(yaml_content: str):
+      yaml = YAML(typ='safe')
+      import io
+      return yaml.load(io.StringIO(yaml_content))
+
+recommendations:
+  - Replace YAML(typ='unsafe') with YAML(typ='safe') or YAML() (default round-trip) for all external YAML parsing.
+  - Never use typ='full' or typ='unsafe' for YAML content that could be influenced by external users.
+  - If Python object serialization is required for internal use, consider alternative approaches such as explicit JSON schemas or Protocol Buffers.
+  - Audit all ruamel.yaml usage in CI/CD tools, configuration loaders, and infrastructure scripts.
+  - Validate YAML structure and types after safe loading to ensure the input matches the expected schema.
+
+detection_scope: |
+  This rule detects YAML() constructor calls where the typ parameter is set to 'unsafe' or
+  'full'. These are the ruamel.yaml modes that enable Python object instantiation during YAML
+  parsing and are dangerous when processing untrusted YAML content.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "ruamel.yaml documentation"
+    url: https://yaml.readthedocs.io/docs/
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "PyYAML vs ruamel.yaml security comparison"
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+# FAQ
+faq:
+  - question: What is the difference between ruamel.yaml typ values?
+    answer: |
+      'rt' (round-trip, default): preserves comments and formatting, does not instantiate
+      Python objects. 'safe': equivalent to PyYAML's SafeLoader, only standard YAML types.
+      'base': minimal loader for scalars only. 'unsafe': enables all Python tags including
+      !!python/object/apply. 'full': similar to unsafe, supports full Python type set. Use
+      'safe' or 'rt' (default) for untrusted data.
+
+  - question: Is ruamel.yaml's default mode safe?
+    answer: |
+      Yes. ruamel.yaml's default typ='rt' (round-trip) does not process Python-specific
+      YAML tags and is safe for parsing untrusted YAML. The vulnerability only occurs with
+      typ='unsafe' or typ='full'. If you're using YAML() without a typ argument, you are
+      using the safer round-trip loader.
+
+  - question: What is ruamel.yaml used for that requires the unsafe loader?
+    answer: |
+      The unsafe loader is intended for deserializing Python objects that were serialized
+      using ruamel.yaml's unsafe dumper, typically for Python-to-Python data exchange where
+      both ends are trusted. It is not intended for processing user-provided YAML or any
+      data from external sources.
+
+  - question: How does ruamel.yaml compare to PyYAML for security?
+    answer: |
+      Both have equivalent YAML deserialization risks when configured with unsafe loaders.
+      ruamel.yaml's default mode is safer than old PyYAML (pre-5.1) since it does not
+      process Python tags by default. When explicitly configured with typ='unsafe', they
+      have the same RCE risk. Prefer ruamel.yaml's default mode or typ='safe' for all
+      external YAML parsing.
+
+  - question: Can ruamel.yaml safe mode handle all standard YAML features?
+    answer: |
+      Yes. typ='safe' handles all standard YAML 1.1 and 1.2 features including anchors,
+      aliases, multi-document streams, and all standard scalar types (strings, integers,
+      floats, booleans, nulls, timestamps). The only restriction is Python-specific tags.
+
+  - question: How do I serialize Python objects safely if I can't use typ='unsafe'?
+    answer: |
+      Implement explicit serialization using typ='safe' YAML with manual dict/list conversion.
+      Use dataclasses or pydantic models with .model_dump() to convert to plain dicts before
+      YAML serialization. This produces portable YAML that can be loaded with any safe YAML
+      parser without Python-specific tag dependencies.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-041
+  - PYTHON-LANG-SEC-042
+  - PYTHON-LANG-SEC-044
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

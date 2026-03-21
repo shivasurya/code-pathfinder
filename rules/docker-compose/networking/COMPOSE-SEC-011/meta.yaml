@@ -1,0 +1,77 @@
+id: COMPOSE-SEC-011
+name: Missing no-new-privileges Security Option
+short_description: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+severity: MEDIUM
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-011
+cwe:
+- id: CWE-732
+  name: Incorrect Permission Assignment for Critical Resource
+  url: https://cwe.mitre.org/data/definitions/732.html
+tags:
+- docker-compose
+- compose
+- no-new-privileges
+- security
+- setuid
+- privilege-escalation
+- hardening
+- capabilities
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects docker-compose services that do not set the `no-new-privileges:true`
+
+  security option. This option prevents processes in the container from gaining additional
+
+  privileges through setuid or setgid binaries, which can be used for privilege escalation attacks.'
+message: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+secure_example: "version: '3'\nservices:\n  web:\n    image: nginx\n    user: www-data\n    security_opt:\n\
+  \      - no-new-privileges:true  # SECURE\n    # Process cannot gain additional privileges"
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
+  url: https://cwe.mitre.org/data/definitions/732.html
+- title: www.kernel.org
+  url: https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt
+- title: raesene.github.io
+  url: https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/
+- title: OWASP Docker Security Cheat Sheet#rule-4-add-no-new-privileges-flag
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag
+- title: OWASP A05:2021 - Security Misconfiguration
+  url: https://owasp.org/www-project-top-ten/
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Setuid Binary Exploitation
+  description: Exploit setuid/setgid binaries to escalate from a low-privilege user to root within the
+    container.
+- title: Capability Escalation
+  description: Use setuid binaries to acquire additional Linux capabilities that can be used for container
+    escape.
+- title: Binary Injection
+  description: 'Replace legitimate setuid binaries with malicious versions that grant root access to attackers.
+    Real-world attack scenario:
+
+    ```bash
+
+    # Attacker gains shell as www-data user
+
+    # Container has sudo with setuid bit
+
+    ls -la /usr/bin/sudo
+
+    -rwsr-xr-x 1 root root 157192 Jan 20  2021 /usr/bin/sudo # Without no-new-privileges, attacker can
+    escalate
+
+    /usr/bin/sudo /bin/bash
+
+    # Now root in container
+
+    ```'

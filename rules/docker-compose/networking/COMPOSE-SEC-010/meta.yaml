@@ -1,0 +1,58 @@
+id: COMPOSE-SEC-010
+name: Using Host IPC Mode
+short_description: Service uses host IPC namespace. Container shares inter-process communication with
+  host.
+severity: MEDIUM
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-010
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker-compose
+- compose
+- ipc
+- host-ipc
+- security
+- isolation
+- namespace
+- shared-memory
+- information-disclosure
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects services using `ipc: host`, which disables IPC (Inter-Process
+
+  Communication) namespace isolation. This allows the container to share shared
+
+  memory segments, semaphores, and message queues with the host system, potentially
+
+  enabling information disclosure and process interference.'
+message: Service uses host IPC namespace. Container shares inter-process communication with host.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: https://cwe.mitre.org/data/definitions/250.html
+- title: Docker IPC Namespace Documentation
+  url: ''
+- title: System V IPC man pages
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Semaphore Manipulation
+  description: '```bash ipcs -s  # List semaphores # Can potentially cause deadlocks or race conditions
+    ```'
+- title: Message Queue Interception
+  description: '```bash ipcs -q  # List message queues # Can read/modify IPC messages ```'
+- title: Information Disclosure
+  description: 'Shared memory may contain sensitive data like: - Database connection pools - Session data
+    - Cache contents - Cryptographic keys'

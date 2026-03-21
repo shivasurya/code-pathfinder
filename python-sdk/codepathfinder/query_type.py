@@ -26,19 +26,49 @@ class MethodMatcher:
         self.method_names = method_names
         self.positional_args = {}
         self.keyword_args = {}
+        self._tracked_params = []
 
-    def arg(self, position_or_name, constraint=None) -> "MethodMatcher":
-        """Add argument constraint. Chainable.
+    def where(self, position_or_name, constraint=None) -> "MethodMatcher":
+        """Filter call sites by argument value. Chainable.
 
         Args:
             position_or_name: int for positional, str for keyword argument
-            constraint: value, Qualifier, or None
+            constraint: expected value, Qualifier (lt, gt, regex, missing), or None
         """
         ac = self._make_constraint(constraint)
         if isinstance(position_or_name, int):
             self.positional_args[str(position_or_name)] = ac
         else:
             self.keyword_args[position_or_name] = ac
+        return self
+
+    def arg(self, position_or_name, constraint=None) -> "MethodMatcher":
+        """Alias for .where() — backward compatibility."""
+        return self.where(position_or_name, constraint)
+
+    def tracks(self, *positions_or_names) -> "MethodMatcher":
+        """Specify which parameters are taint-sensitive in dataflow analysis.
+
+        When used on a sink in flows(), only detections where tainted data
+        reaches a tracked parameter will be reported.
+
+        When not called, ALL parameters are considered taint-sensitive.
+
+        Args:
+            *positions_or_names: int for positional index, str for parameter name,
+                                 or "return" for return value tracking.
+        """
+        for p in positions_or_names:
+            if isinstance(p, int):
+                self._tracked_params.append({"index": p})
+            elif p == "return":
+                self._tracked_params.append({"return": True})
+            elif isinstance(p, str):
+                self._tracked_params.append({"name": p})
+            else:
+                raise TypeError(
+                    f"tracks() accepts int, str, or 'return', got {type(p)}"
+                )
         return self
 
     def _make_constraint(self, value):
@@ -62,6 +92,8 @@ class MethodMatcher:
             ir["positionalArgs"] = self.positional_args
         if self.keyword_args:
             ir["keywordArgs"] = self.keyword_args
+        if self._tracked_params:
+            ir["trackedParams"] = self._tracked_params
         return ir
 
     def __repr__(self) -> str:

@@ -49,7 +49,9 @@ func CSVHeaders() []string {
 		"message",
 		"detection_type",
 		"detection_scope",
+		"source_file",
 		"source_line",
+		"sink_file",
 		"sink_line",
 		"tainted_var",
 		"sink_call",
@@ -107,7 +109,9 @@ func (f *CSVFormatter) buildRow(det *dsl.EnrichedDetection) []string {
 		det.Rule.Description,                   // message
 		string(det.DetectionType),              // detection_type
 		det.Detection.Scope,                    // detection_scope
+		det.Detection.SourceFile,               // source_file
 		intToString(det.Detection.SourceLine),  // source_line
+		det.Detection.SinkFile,                 // sink_file
 		intToString(det.Detection.SinkLine),    // sink_line
 		det.Detection.TaintedVar,               // tainted_var
 		det.Detection.SinkCall,                 // sink_call

@@ -1,0 +1,191 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-041
+name: PyYAML Unsafe Load Function
+short_description: yaml.load() and yaml.unsafe_load() can execute arbitrary Python objects during YAML parsing. Use yaml.safe_load() instead.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-041
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - yaml
+  - pyyaml
+  - unsafe-load
+  - deserialization
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  PyYAML's yaml.load() function, when called without an explicit Loader argument or with
+  Loader=yaml.Loader/yaml.UnsafeLoader, can instantiate arbitrary Python objects during
+  parsing using YAML's !!python/object and !!python/object/apply tags. This enables
+  remote code execution when processing YAML from untrusted sources.
+
+  The vulnerability is triggered by YAML content such as:
+    !!python/object/apply:os.system ["id"]
+  or more sophisticated payloads using subprocess or socket. PyYAML versions before 5.1
+  used the unsafe loader by default; since 5.1 a warning is issued unless an explicit
+  Loader is provided.
+
+  The safe alternative is yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader),
+  which only processes YAML scalars, sequences, and mappings without instantiating Python
+  objects.
+
+message: "yaml.load() or yaml.unsafe_load() detected. Use yaml.safe_load() to prevent arbitrary Python object instantiation."
+
+security_implications:
+  - title: Remote Code Execution via !!python Tags
+    description: |
+      The !!python/object/apply tag in YAML invokes arbitrary Python callables. An attacker
+      who can control YAML input can execute os.system(), subprocess.Popen(), or any other
+      callable, achieving full RCE with a single YAML document.
+  - title: Configuration File Injection
+    description: |
+      Applications that load YAML configuration files and process them with yaml.load() are
+      vulnerable if an attacker can modify the configuration file, inject content through
+      environment variable expansion, or write to the configuration directory.
+  - title: API and Webhook Payload Injection
+    description: |
+      REST APIs, CI/CD pipelines, and infrastructure-as-code tools that accept YAML input
+      from users and parse it with yaml.load() are directly exploitable. This is a common
+      vector in DevOps tooling.
+  - title: Kubernetes and Helm Chart Injection
+    description: |
+      Tools that process Kubernetes manifests or Helm chart values using PyYAML's unsafe
+      loader can be exploited through crafted chart values or manifest files submitted by
+      unprivileged users.
+
+secure_example: |
+  import yaml
+
+  # INSECURE: yaml.load() without SafeLoader
+  # data = yaml.load(user_input)
+  # data = yaml.load(user_input, Loader=yaml.Loader)
+  # data = yaml.unsafe_load(user_input)
+
+  # SECURE: Always use yaml.safe_load() for untrusted input
+  def parse_config(yaml_content: str) -> dict:
+      data = yaml.safe_load(yaml_content)
+      if not isinstance(data, dict):
+          raise ValueError("Expected YAML mapping at top level")
+      return data
+
+  # SECURE: Explicit SafeLoader for clarity
+  def load_yaml_document(content: str):
+      return yaml.load(content, Loader=yaml.SafeLoader)
+
+  # SECURE: For trusted internal configuration, still use safe_load
+  # Unsafe loading is almost never needed for legitimate application config
+  def load_app_config(config_path: str) -> dict:
+      with open(config_path) as f:
+          return yaml.safe_load(f)
+
+recommendations:
+  - Replace all yaml.load() calls with yaml.safe_load() or yaml.load(data, Loader=yaml.SafeLoader).
+  - Never use yaml.unsafe_load() or yaml.load() with yaml.Loader/yaml.UnsafeLoader on external input.
+  - If custom Python objects must be serialized to YAML, use explicit schema validation rather than relying on YAML's !!python tags.
+  - Audit all YAML parsing in CI/CD pipelines, configuration loaders, and API endpoints that accept YAML input.
+  - Consider restricting YAML features to a safe subset (scalars, sequences, mappings) by using yaml.safe_load() universally.
+
+detection_scope: |
+  This rule detects calls to yaml.load() without an explicit Loader argument or with unsafe
+  Loader values, and calls to yaml.unsafe_load(). The rule flags these patterns as they enable
+  Python object instantiation during YAML parsing.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "PyYAML documentation: yaml.safe_load()"
+    url: https://pyyaml.org/wiki/PyYAMLDocumentation
+  - title: "PyYAML CVE-2017-18342"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2017-18342
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: "Exploiting Python YAML deserialization"
+    url: https://www.exploit-db.com/docs/english/47655-yaml-deserialization-attack-in-python.pdf
+
+# FAQ
+faq:
+  - question: What is the difference between yaml.load() and yaml.safe_load()?
+    answer: |
+      yaml.safe_load() uses SafeLoader which only supports standard YAML tags and Python
+      built-in types (str, int, float, list, dict, None, bool, datetime). yaml.load() with
+      yaml.Loader uses the full loader that supports !!python/object and !!python/apply
+      tags, allowing arbitrary Python objects to be instantiated during parsing.
+
+  - question: Is yaml.load(data, Loader=yaml.BaseLoader) safe?
+    answer: |
+      yaml.BaseLoader loads all values as strings without interpreting any YAML tags. It is
+      safe but does not perform type coercion (numbers remain strings). yaml.SafeLoader is
+      usually the right choice as it handles type coercion for standard YAML types while
+      blocking Python-specific tags.
+
+  - question: What does a YAML deserialization attack payload look like?
+    answer: |
+      A simple payload: !!python/object/apply:os.system ["id"]. More sophisticated payloads
+      use subprocess.Popen with encoded commands, or construct chains through __reduce__
+      methods. The !! prefix denotes a YAML tag, and python/object/apply invokes the
+      specified callable with the given arguments during parsing.
+
+  - question: Does PyYAML's yaml.load() warn about unsafe usage?
+    answer: |
+      Since PyYAML 5.1, calling yaml.load() without an explicit Loader argument raises a
+      YAMLLoadWarning. However, the warning is often ignored or suppressed in practice. The
+      rule flags the call regardless of whether the Loader is explicitly specified, since the
+      absence of an explicit SafeLoader indicates potential risk.
+
+  - question: What about ruamel.yaml — is it affected?
+    answer: |
+      ruamel.yaml has its own unsafe loading behavior when configured with typ='unsafe'.
+      See PYTHON-LANG-SEC-043 for ruamel.yaml-specific guidance. When using ruamel.yaml,
+      always use the default or safe round-trip loader.
+
+  - question: Should I use yaml.CSafeLoader for performance?
+    answer: |
+      yaml.CSafeLoader is the C-accelerated version of SafeLoader and is both safe and
+      faster when the libyaml C extension is available. Use yaml.load(data, Loader=yaml.CSafeLoader)
+      for production performance or yaml.safe_load() (which uses CSafeLoader when available).
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-043
+  - PYTHON-LANG-SEC-042
+  - PYTHON-LANG-SEC-044
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,200 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-005
+name: Non-literal Dynamic Import Detected
+short_description: __import__() or importlib.import_module() with a non-literal argument can import arbitrary modules when called with untrusted input.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - dynamic-import
+  - import-injection
+  - __import__
+  - importlib
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's __import__() built-in and importlib.import_module() allow modules to be loaded
+  by name at runtime. When the module name argument is derived from untrusted external input
+  such as HTTP parameters, configuration files, or user-provided data, an attacker can import
+  malicious modules, access sensitive built-in modules such as os or subprocess, or perform
+  path traversal to load modules from unexpected filesystem locations.
+
+  Common vulnerable patterns include plugin systems that load user-specified modules by name,
+  serialization systems that reconstruct classes using stored module paths, and configuration-
+  driven dispatch tables that resolve handler names from external data.
+
+  The fix is always to validate the module name against an explicit allowlist of permitted
+  module names before calling import_module(), ensuring no user-controlled value can cause
+  an unexpected module to be loaded.
+
+message: "__import__() or importlib.import_module() with non-literal argument detected. Validate the module name against an allowlist."
+
+security_implications:
+  - title: Arbitrary Module Execution
+    description: |
+      An attacker who controls the module name can import os, subprocess, socket, or any
+      other standard library module and immediately call dangerous functions on it. Module-level
+      code is executed on import, so importing a malicious module can trigger code execution
+      before any function is called.
+  - title: Plugin System Exploitation
+    description: |
+      Plugin systems using import_module() to load user-specified plugins are vulnerable to
+      loading attacker-controlled modules from the Python path. If the attacker can place a
+      file on the server or influence sys.path, they can execute arbitrary code through the
+      plugin loader.
+  - title: Pickle-like Class Reconstruction Attacks
+    description: |
+      Serialization formats that store class locations as module:classname strings and use
+      import_module() to reconstruct them are vulnerable to the same class of attacks as
+      pickle deserialization. An attacker who controls the stored class location can cause
+      any callable to be invoked during deserialization.
+  - title: Path Traversal to Sensitive Modules
+    description: |
+      Depending on sys.path configuration, an attacker may be able to use relative module
+      names or dotted paths to traverse to modules outside the intended plugin directory,
+      potentially loading internal utility modules that expose sensitive operations.
+
+secure_example: |
+  import importlib
+
+  # SECURE: Validate module name against an explicit allowlist
+  ALLOWED_PLUGINS = {
+      "csv_processor",
+      "json_processor",
+      "xml_processor",
+  }
+
+  def load_processor(plugin_name: str):
+      if plugin_name not in ALLOWED_PLUGINS:
+          raise ValueError(f"Plugin not allowed: {plugin_name}")
+      module = importlib.import_module(f"myapp.processors.{plugin_name}")
+      return module.Processor()
+
+  # SECURE: Use a registry pattern to avoid dynamic imports entirely
+  from myapp.processors import csv_processor, json_processor, xml_processor
+
+  PROCESSOR_REGISTRY = {
+      "csv": csv_processor.Processor,
+      "json": json_processor.Processor,
+      "xml": xml_processor.Processor,
+  }
+
+  def get_processor(format_name: str):
+      if format_name not in PROCESSOR_REGISTRY:
+          raise ValueError(f"Unknown format: {format_name}")
+      return PROCESSOR_REGISTRY[format_name]()
+
+recommendations:
+  - Always validate the module name against an explicit allowlist before calling import_module() or __import__().
+  - Prefer a static import registry (dict mapping names to already-imported classes) over dynamic imports to avoid the risk entirely.
+  - Restrict plugin directories and sys.path to prevent loading of modules outside the intended scope.
+  - Use __import__() only with hardcoded string literals; use importlib.import_module() for dynamic imports with proper validation.
+  - Log all dynamic module imports with the caller context to detect attempts to load unauthorized modules.
+
+detection_scope: |
+  This rule detects calls to __import__() and importlib.import_module() where the module name
+  argument is not a string literal. It flags all such calls since the module name may be
+  influenced by external input at runtime. Calls with hardcoded string literals are considered
+  lower risk but are still flagged for review.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in the MITRE CWE Top 25 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "Python docs: importlib.import_module()"
+    url: https://docs.python.org/3/library/importlib.html#importlib.import_module
+  - title: "Python docs: built-in __import__()"
+    url: https://docs.python.org/3/library/functions.html#import__
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: Python Import System Documentation
+    url: https://docs.python.org/3/reference/import.html
+
+# FAQ
+faq:
+  - question: Is all dynamic importing dangerous or only when using untrusted input?
+    answer: |
+      Dynamic importing is only dangerous when the module name can be influenced by untrusted
+      input. Plugin systems that load modules from a fixed list of developer-defined names are
+      safe. The risk arises when an HTTP parameter, file path, or environment variable value
+      reaches the module name argument without validation.
+
+  - question: What is the difference between __import__() and importlib.import_module()?
+    answer: |
+      Both ultimately load Python modules, but importlib.import_module() is the recommended
+      public API for dynamic imports since Python 3. __import__() is the lower-level built-in
+      that import statements compile to. Both are equally dangerous when called with untrusted
+      arguments. Prefer importlib.import_module() with an allowlist when dynamic loading is
+      genuinely required.
+
+  - question: Can an attacker import standard library modules and use them for attacks?
+    answer: |
+      Yes. Standard library modules such as os, subprocess, socket, shutil, and ctypes all
+      provide capabilities that can be used for attacks. Importing os and calling os.system()
+      or os.environ is a common technique for exploiting dynamic import vulnerabilities. An
+      allowlist must not include any module with dangerous capabilities.
+
+  - question: Does this rule flag importlib usage in package __init__.py files?
+    answer: |
+      Yes, all non-literal dynamic imports are flagged. Package initialization code that uses
+      importlib to load sub-modules can typically be rewritten with explicit static imports or
+      a module registry pattern. Suppressed findings should document the trust boundary and
+      explain why the module name cannot be attacker-controlled.
+
+  - question: What about pickle and similar serializers that use import_module() internally?
+    answer: |
+      Serializers that reconstruct objects by dynamically importing their class module are
+      vulnerable to this class of attack when the serialized data comes from untrusted sources.
+      See PYTHON-LANG-SEC-040 through PYTHON-LANG-SEC-046 for deserialization-specific rules.
+
+  - question: How should I handle plugin systems that genuinely need dynamic imports?
+    answer: |
+      Maintain an allowlist of permitted plugin module names, ideally populated from a
+      developer-controlled configuration file (not user input). Validate the requested plugin
+      name against this list before calling import_module(). Consider using Python's entry_points
+      mechanism (setuptools) for plugin discovery, which limits loading to installed packages.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-004
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

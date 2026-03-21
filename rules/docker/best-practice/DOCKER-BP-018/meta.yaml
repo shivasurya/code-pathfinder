@@ -1,0 +1,51 @@
+id: DOCKER-BP-018
+name: Use Absolute Path in WORKDIR
+short_description: WORKDIR should use absolute paths starting with /.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-018
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- workdir
+- path
+- absolute-path
+- best-practice
+- clarity
+- maintainability
+- filesystem
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects WORKDIR instructions using relative paths instead of absolute paths.
+
+  Relative paths can lead to confusion about the actual working directory and
+
+  make Dockerfiles harder to understand and maintain.'
+message: WORKDIR should use absolute paths starting with /.
+secure_example: 'FROM node:18
+
+
+  # Good: Absolute path - clear and unambiguous
+
+  WORKDIR /app
+
+  WORKDIR /app/src  # Clear full path'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Use absolute WORKDIR"
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

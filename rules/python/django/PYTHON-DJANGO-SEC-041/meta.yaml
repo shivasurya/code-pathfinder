@@ -1,0 +1,220 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-041
+name: Django Path Traversal via os.path.join()
+short_description: User input flows to os.path.join() leading to file operations, enabling path traversal to access files outside the intended directory.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-041
+
+# Vulnerability Details
+cwe:
+  - id: CWE-22
+    name: "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - django
+  - path-traversal
+  - directory-traversal
+  - os-path-join
+  - file-access
+  - taint-analysis
+  - inter-procedural
+  - CWE-22
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects path traversal vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into os.path.join() before being used in
+  file system operations.
+
+  os.path.join() is commonly believed to be safe for constructing file paths because it
+  handles path separator differences. However, os.path.join() has a critical security
+  behavior: if any component is an absolute path (starts with /), it discards all
+  previous components and uses the absolute path as the new base. This means
+  os.path.join('/var/uploads', '/etc/passwd') returns '/etc/passwd'.
+
+  Additionally, os.path.join() does not strip or normalize '../' traversal sequences,
+  so os.path.join('/var/uploads', '../../../etc/passwd') returns a path that resolves
+  outside the intended directory. These behaviors make os.path.join() with user input
+  a path traversal vulnerability unless the result is validated with os.path.realpath().
+
+message: "User input flows to os.path.join(). Validate with os.path.realpath() and verify the result starts with the expected base directory."
+
+security_implications:
+  - title: Absolute Path Override via os.path.join() Semantics
+    description: |
+      os.path.join('/uploads', user_input) where user_input is '/etc/passwd' returns
+      '/etc/passwd' -- the upload directory prefix is silently discarded. This is a
+      common misunderstanding of os.path.join() safety. Attackers who know this
+      behavior can supply absolute paths to bypass any attempt to restrict access
+      to a subdirectory.
+  - title: Relative Traversal via ../ Sequences
+    description: |
+      os.path.join('/uploads', '../../../etc/shadow') returns a path that, when
+      passed to open(), resolves to /etc/shadow. Standard traversal payloads work
+      unchanged through os.path.join() because the function makes no attempt to
+      normalize or restrict component values.
+  - title: Symlink-Based Escape Even After basename()
+    description: |
+      If symbolic links are present within the intended directory, a path constructed
+      with os.path.join() may resolve outside it even when basename() was applied
+      first. The realpath() check is essential to catch symlink-based traversal
+      that escapes the intended directory boundary.
+  - title: Write Access to Critical Files
+    description: |
+      If os.path.join() output feeds into open() in write mode, log rotation scripts,
+      or file deletion operations, path traversal enables overwriting configuration
+      files, log files, or application code. Writing to .py files in auto-reload
+      servers causes code execution.
+
+secure_example: |
+  from django.http import FileResponse, JsonResponse, Http404
+  import os
+
+  MEDIA_ROOT = '/var/www/app/media'
+
+  def serve_user_file(request):
+      filename = request.GET.get('filename', '')
+      # SECURE step 1: Strip directory traversal sequences with basename
+      safe_filename = os.path.basename(filename)
+      if not safe_filename:
+          raise Http404("File not found")
+      # SECURE step 2: Join with base directory
+      candidate_path = os.path.join(MEDIA_ROOT, safe_filename)
+      # SECURE step 3: Resolve realpath and verify it is within MEDIA_ROOT
+      real_candidate = os.path.realpath(candidate_path)
+      real_media_root = os.path.realpath(MEDIA_ROOT)
+      if not real_candidate.startswith(real_media_root + os.sep):
+          raise Http404("File not found")
+      if not os.path.isfile(real_candidate):
+          raise Http404("File not found")
+      return FileResponse(open(real_candidate, 'rb'))
+
+  def list_allowed_exports(request):
+      export_name = request.GET.get('export', '')
+      # SECURE ALTERNATIVE: Use allowlist to eliminate path construction entirely
+      ALLOWED_EXPORTS = {'users', 'orders', 'products'}
+      if export_name not in ALLOWED_EXPORTS:
+          return JsonResponse({'error': 'Export not found'}, status=404)
+      filepath = os.path.join('/app/exports', f'{export_name}.csv')
+      with open(filepath) as f:
+          return JsonResponse({'data': f.read()})
+
+recommendations:
+  - After os.path.join(), always call os.path.realpath() to resolve symlinks and normalize the path, then verify the result starts with the intended base directory + os.sep.
+  - Apply os.path.basename() to user-provided filename components before passing them to os.path.join() to strip absolute path and traversal sequences.
+  - Use an explicit allowlist of permitted filenames or file IDs stored in the database rather than constructing paths from user input at all.
+  - Avoid accepting file paths as request parameters; instead, accept file IDs that map to paths stored securely in the database.
+  - When serving media files, use Django's storage API (default_storage.url()) rather than constructing raw filesystem paths.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is calls("os.path.join") where any tainted value appears in the arguments
+  (tracked via .tracks(0)), with the resulting path subsequently used in file operations.
+  The rule also tracks the result of os.path.join() forward to file operation functions.
+  Sanitizers include os.path.basename() applied before join plus os.path.realpath() with
+  startswith verification. The rule follows taint across file and module boundaries.
+
+# References
+references:
+  - title: "CWE-22: Path Traversal"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: OWASP Path Traversal
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: Python os.path.join() documentation
+    url: https://docs.python.org/3/library/os.path.html#os.path.join
+  - title: Python os.path.realpath() documentation
+    url: https://docs.python.org/3/library/os.path.html#os.path.realpath
+  - title: Django File Storage API
+    url: https://docs.djangoproject.com/en/stable/topics/files/
+  - title: OWASP File Upload Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-22 ranked #8 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against path traversal attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; AC-3: Access Enforcement"
+  - standard: ISO 27001
+    requirement: "A.9.4.1: Information access restriction"
+
+# FAQ
+faq:
+  - question: Why is os.path.join() not safe with user input if it handles separators correctly?
+    answer: |
+      os.path.join() handles path separators for portability, not for security. Its
+      documented behavior includes: if an argument is an absolute path (starts with /
+      on Unix), all preceding components are discarded. And it does not strip ../ 
+      components. So os.path.join('/safe/dir', '/etc/passwd') returns '/etc/passwd'
+      and os.path.join('/safe/dir', '../../etc/passwd') returns a path outside /safe/dir.
+      Neither is safe with user input without realpath verification.
+
+  - question: Does os.path.normpath() prevent path traversal instead of realpath()?
+    answer: |
+      os.path.normpath() collapses ../ sequences but does not resolve symbolic links.
+      An attacker can use a symlink within the allowed directory that points outside it.
+      os.path.realpath() resolves all symlinks to their true filesystem locations,
+      making the startswith() check reliable. Use realpath() not normpath() for
+      security-critical path validation.
+
+  - question: Our application uses os.path.join() extensively for static file serving. Is all of that at risk?
+    answer: |
+      Only usages where user-controlled data is an argument to os.path.join() are at
+      risk. If the paths are constructed entirely from configuration constants and
+      hardcoded strings, they are not vulnerable. This rule only flags cases where
+      tainted data from request parameters reaches os.path.join() arguments.
+
+  - question: Can I use Django's django.utils.safestring or URL encoding to sanitize the filename?
+    answer: |
+      No. HTML/URL escaping functions are for preventing XSS or URL-encoding issues,
+      not path traversal. They do not strip ../ or absolute path prefixes from filenames.
+      The correct sanitizers for path traversal are os.path.basename() and
+      os.path.realpath() with a directory boundary check.
+
+  - question: What is the best approach for file download features in Django?
+    answer: |
+      Store files using Django's FileField with UUID-based names (use upload_to with
+      a callable that generates UUIDs). Serve downloads by looking up the FileField
+      value from the model (which contains a safe, validated storage path) using the
+      file ID from the URL, not a user-provided filename. This design eliminates the
+      need for any path construction from user input.
+
+  - question: How do we handle os.path.join() in custom storage backends?
+    answer: |
+      Custom storage backends that use os.path.join() for path construction should
+      implement the same basename + realpath + startswith validation pattern. Django's
+      built-in FileSystemStorage does this correctly; custom backends should follow
+      the same pattern. Review any custom storage backend implementations for path
+      traversal vulnerabilities during security audits.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-040
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

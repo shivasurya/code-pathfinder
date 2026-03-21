@@ -1,0 +1,179 @@
+# Rule Identity
+id: PYTHON-PYRAMID-SEC-003
+name: Pyramid SQLAlchemy SQL Injection
+short_description: Traces user input from Pyramid request parameters to SQLAlchemy query methods (.filter, .execute, .order_by) without parameterization.
+
+# Classification
+severity: CRITICAL
+category: pyramid
+status: disabled  # Engine limitation: chained method calls (session.query().filter()) not resolved yet
+language: python
+ruleset: python/pyramid/PYTHON-PYRAMID-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - pyramid
+  - sqlalchemy
+  - sql-injection
+  - taint-analysis
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule traces user input from Pyramid request parameters directly into
+  SQLAlchemy query methods (.filter(), .order_by(), .group_by(), .having(),
+  .execute()) where raw SQL strings are constructed through concatenation or
+  format strings.
+
+  Pyramid applications commonly use SQLAlchemy as the ORM layer. When developers
+  bypass SQLAlchemy's parameterized query interface and build SQL strings manually
+  with user input, they create SQL injection vulnerabilities. The safe approach is
+  to use SQLAlchemy's expression language with bound parameters.
+
+  The rule recognizes bindparams() as a sanitizer. If the user input passes
+  through a bindparams() call before reaching the query method, the finding is
+  suppressed.
+
+message: "User input flows to SQLAlchemy query without parameterization. Use bindparams() or the ORM expression API."
+
+security_implications:
+  - title: Data Exfiltration
+    description: |
+      SQL injection allows an attacker to extract your entire database contents.
+      UNION-based injection pulls data from other tables. Blind injection extracts
+      data one bit at a time. One vulnerable endpoint can leak every row in every
+      table.
+  - title: Authentication Bypass
+    description: |
+      SQL injection in login queries returns all users, logging the attacker in
+      as the first result (usually admin). No credentials required.
+  - title: Data Manipulation
+    description: |
+      Injected INSERT, UPDATE, or DELETE statements modify records, create backdoor
+      accounts, or corrupt data. In financial applications, this means altered
+      transactions.
+  - title: Remote Code Execution via Database Features
+    description: |
+      Some databases support OS command execution. PostgreSQL has COPY and
+      pg_read_file. SQLite has load_extension. SQL injection on these backends
+      can escalate to full server compromise.
+
+secure_example: |
+  from sqlalchemy import text
+  from pyramid.view import view_config
+
+  @view_config(route_name='search', renderer='json')
+  def search_view(request):
+      name = request.params.get('name', '')
+      # SECURE: Use parameterized query with bound parameters
+      result = request.dbsession.execute(
+          text("SELECT * FROM users WHERE name = :name"),
+          {"name": name}
+      )
+      return {'users': [dict(row) for row in result]}
+
+  # BETTER: Use SQLAlchemy ORM expressions
+  @view_config(route_name='search_orm', renderer='json')
+  def search_orm(request):
+      name = request.params.get('name', '')
+      users = request.dbsession.query(User).filter(User.name == name).all()
+      return {'users': [u.to_dict() for u in users]}
+
+recommendations:
+  - Use SQLAlchemy's ORM expression API (Model.query.filter(Model.field == value)) instead of raw SQL strings
+  - When raw SQL is necessary, use text() with named parameters and pass values as a dict
+  - Never concatenate or f-string user input into SQL queries
+  - Use bindparams() to safely bind user values into SQLAlchemy text() expressions
+  - Configure SQLAlchemy logging in development to inspect generated queries for concatenated user input
+
+detection_scope: |
+  This rule traces data from Pyramid request sources (request.params.get,
+  request.GET.get, request.POST.get, request.matchdict.get, request.json_body.get)
+  to SQLAlchemy query methods (*.filter, *.order_by, *.group_by, *.having,
+  *.execute). Sanitizers include bindparams() and *.bindparams(). Uses scope="local"
+  for intra-procedural analysis within view functions.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: SQLAlchemy Using Textual SQL
+    url: https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Pyramid + SQLAlchemy Cookbook
+    url: https://docs.pylonsproject.org/projects/pyramid-cookbook/en/latest/database/sqlalchemy.html
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - prevent injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# FAQ
+faq:
+  - question: Does SQLAlchemy's ORM prevent SQL injection automatically?
+    answer: |
+      Yes, when used correctly. SQLAlchemy's expression language
+      (Model.query.filter(Model.field == value)) generates parameterized queries
+      automatically. The risk arises when developers use text() with string
+      concatenation or pass raw SQL strings to .filter() or .execute().
+
+  - question: Is SQLAlchemy text() safe?
+    answer: |
+      text() itself is safe when used with named parameters:
+      text("SELECT * FROM users WHERE name = :name") with {"name": user_input}.
+      It becomes dangerous when combined with string concatenation:
+      text(f"SELECT * FROM users WHERE name = '{user_input}'").
+
+  - question: Does this rule catch .filter() with raw strings?
+    answer: |
+      Yes. The rule tracks user input flowing to .filter(), .order_by(),
+      .group_by(), .having(), and .execute(). If the input reaches any of these
+      methods through string concatenation, it produces a finding.
+
+  - question: What about SQLAlchemy's .filter_by() method?
+    answer: |
+      filter_by() uses keyword arguments (filter_by(name=value)) which are always
+      parameterized. This rule does not flag filter_by() calls because they are
+      inherently safe.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/pyramid --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-003
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-PYRAMID-SEC-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

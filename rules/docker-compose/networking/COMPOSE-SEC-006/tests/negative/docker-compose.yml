@@ -1,0 +1,8 @@
+services:
+  web:
+    image: nginx
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx

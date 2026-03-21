@@ -1,0 +1,223 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-002
+name: Django SQL Injection via QuerySet.raw()
+short_description: User input flows to QuerySet.raw() without parameterization, enabling SQL injection through Django's ORM raw query interface.
+
+# Classification
+severity: CRITICAL
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - sql-injection
+  - raw-queryset
+  - orm
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into the SQL string argument of
+  Model.objects.raw() without proper parameterization.
+
+  Django's Model.objects.raw() provides a way to execute raw SQL queries while returning
+  model instances. It accepts an optional params argument for safe parameterization,
+  similar to cursor.execute(). When developers bypass this by embedding request parameters
+  directly into the SQL string through f-strings or concatenation, attackers can inject
+  arbitrary SQL. Since raw() operates at the ORM level, developers often have a false sense
+  of security, not realizing that the SQL string is passed directly to the database driver
+  without any escaping.
+
+  The rule uses inter-procedural taint analysis to follow data from Django request accessors
+  through helper functions to the raw() call across file and module boundaries.
+
+message: "User input flows to Model.objects.raw() without parameterization. Pass user values via the params argument."
+
+security_implications:
+  - title: ORM-Level SQL Injection
+    description: |
+      Developers using raw() sometimes believe the ORM provides automatic protection.
+      It does not for the SQL string argument. An attacker can inject UNION SELECT
+      clauses to return rows from arbitrary tables, bypassing any model-level access
+      control the application enforces.
+  - title: Mass Data Exfiltration
+    description: |
+      Because raw() returns model instances, injected UNION queries that match the
+      expected column structure can make the application silently serve attacker-chosen
+      data. This is particularly dangerous in APIs where the full response is serialized
+      and returned to the caller.
+  - title: Authentication and Authorization Bypass
+    description: |
+      If raw() is used in authentication-related queries, injection can bypass login
+      checks or privilege verification, granting attackers access to admin functionality
+      or other users' accounts without valid credentials.
+  - title: Schema Discovery via Information Schema
+    description: |
+      Attackers can query information_schema tables through injection to enumerate all
+      tables, columns, and relationships in the database, providing a blueprint for
+      further targeted attacks against sensitive data.
+
+secure_example: |
+  from django.http import JsonResponse
+  from myapp.models import Product, User
+
+  def search_products(request):
+      category = request.GET.get('category', '')
+      # SECURE: Pass user input via the params argument, not in the SQL string
+      products = Product.objects.raw(
+          "SELECT * FROM myapp_product WHERE category = %s",
+          [category]
+      )
+      return JsonResponse({'products': [{'id': p.id, 'name': p.name} for p in products]})
+
+  def find_user_by_email(request):
+      email = request.GET.get('email', '')
+      # SECURE ALTERNATIVE: Use Django ORM filter instead of raw()
+      users = User.objects.filter(email=email).values('id', 'username')
+      return JsonResponse({'users': list(users)})
+
+  def complex_report(request):
+      department = request.GET.get('department', '')
+      # SECURE: Named %(name)s parameters also work with raw()
+      results = User.objects.raw(
+          "SELECT * FROM auth_user WHERE department = %(dept)s",
+          {'dept': department}
+      )
+      return JsonResponse({'results': [{'id': u.id, 'name': u.username} for u in results]})
+
+recommendations:
+  - Always pass user-controlled values via the params argument of raw() as a list or dict, never by embedding them in the SQL string itself.
+  - Prefer standard Django ORM queryset methods such as filter(), exclude(), and annotate() over raw() to eliminate this vulnerability class entirely.
+  - When raw() is required for complex queries, keep the SQL template as a static string literal and never construct it dynamically from user input.
+  - Validate the type and format of parameters before passing them to raw(), particularly enforcing integer types for ID fields using int() conversion.
+  - Review all occurrences of .raw() in the codebase during security reviews to ensure every call uses the params argument.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is the first argument (SQL string, tracked via .tracks(0)) of calls("*.raw").
+  The second argument (params list) is explicitly not tracked, avoiding false positives
+  on correctly parameterized raw() calls. Sanitizers include int(), float(), and explicit
+  allowlist validation functions. The rule follows taint across file boundaries and through
+  intermediate variable assignments and function call chains.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django Performing Raw SQL Queries
+    url: https://docs.djangoproject.com/en/stable/topics/db/sql/#performing-raw-queries
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web-facing applications against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: ISO 27001
+    requirement: "A.14.2.5 - Secure system engineering principles"
+
+# FAQ
+faq:
+  - question: Is raw() inherently unsafe compared to cursor.execute()?
+    answer: |
+      Neither is inherently unsafe. Both raw() and cursor.execute() support safe
+      parameterization. The difference is that raw() returns model instances while
+      cursor.execute() returns raw rows. Both are vulnerable when user input is embedded
+      directly in the SQL string. Both are safe when user input is passed as a separate
+      params argument.
+
+  - question: Does this rule flag raw() calls that use the params argument correctly?
+    answer: |
+      No. The rule uses .tracks(0) to monitor only the first argument (the SQL string).
+      A call like Model.objects.raw("SELECT * FROM t WHERE id = %s", [user_id]) passes
+      the tainted value as the second argument (params list), so it will not be flagged.
+      Only calls where the tainted value is embedded into the SQL string itself trigger
+      a finding.
+
+  - question: How does this differ from PYTHON-DJANGO-SEC-001 targeting cursor.execute()?
+    answer: |
+      SEC-001 targets the lower-level cursor.execute() path which operates on raw rows
+      and requires database connection management. SEC-002 targets the ORM-level raw()
+      path which returns Django model instances. Codebases using raw() often have a
+      mistaken belief that ORM usage implies safety, making SEC-002 findings particularly
+      important to highlight and remediate.
+
+  - question: Can I use raw() safely for queries with dynamic ORDER BY clauses?
+    answer: |
+      For ORDER BY direction and column names, use an allowlist approach since these
+      cannot be parameterized in most databases. Validate the column name against a
+      hardcoded set of allowed column names before including it in the SQL string. For
+      LIMIT and OFFSET values, cast to int() to ensure they are numeric. Never pass raw
+      user input for these structural parts of the query.
+
+  - question: What should I do if raw() is used in a third-party Django package I depend on?
+    answer: |
+      Check whether the package's raw() calls use the params argument. If a package
+      passes user-controlled data directly into the SQL string, report it as a security
+      vulnerability to the package maintainer. In the meantime, consider whether you can
+      avoid passing user-controlled data to that specific package API, or whether a safer
+      alternative package exists.
+
+  - question: Does this rule work with Django REST Framework views that use raw()?
+    answer: |
+      Yes. Django REST Framework views ultimately access Django's request object.
+      Whether the source is request.GET, request.data, or request.query_params, the rule
+      traces the taint chain to the raw() call. DRF's serializer validation does not
+      automatically prevent injection into raw SQL -- you must still use the params
+      argument.
+
+  - question: How do I run this rule in CI to catch regressions?
+    answer: |
+      Run: pathfinder scan --ruleset python/django/PYTHON-DJANGO-SEC-002 --project .
+      This emits SARIF output suitable for GitHub Advanced Security, GitLab SAST, or
+      any SARIF-compatible platform. Running it as a required check on pull requests
+      prevents new raw() injection patterns from merging into the main branch.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-003
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-DJANGO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

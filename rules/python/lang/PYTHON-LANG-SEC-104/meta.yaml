@@ -1,0 +1,158 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-104
+name: logging.config.listen() Eval Risk
+short_description: Detects logging.config.listen() which opens a socket that accepts and executes arbitrary logging configuration, enabling remote code execution.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-104
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - logging
+  - code-execution
+  - network
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to logging.config.listen(), which starts a socket server
+  that accepts logging configuration over the network. By default, the received
+  configuration is processed using logging.config.dictConfig() or
+  logging.config.fileConfig(), which can execute arbitrary Python code through
+  handler class references and filter callables.
+
+  An attacker who can connect to the listening port can send a configuration dict
+  that specifies a handler class like os.system, effectively achieving remote code
+  execution. Python's own documentation warns that "this function is useful for
+  updating logging configuration from a remote machine, but it is not secure."
+
+  The rule matches LoggingConfig.method("listen") and fires on any invocation.
+
+message: "logging.config.listen() accepts remote config that can execute code. Restrict network access or remove."
+
+security_implications:
+  - title: Remote Code Execution via Configuration
+    description: |
+      The listener accepts dictConfig-format payloads over TCP. A crafted config
+      can specify arbitrary Python callables as handler classes, filter functions,
+      or formatter factories. This executes code in the context of the application
+      process with its full permissions.
+  - title: No Authentication by Default
+    description: |
+      logging.config.listen() binds to a port with no authentication, encryption,
+      or access control. Any process that can connect to the port can send config.
+      On a server with a public IP, this is directly exploitable from the internet.
+  - title: Privilege Escalation
+    description: |
+      If the application runs as root or with elevated permissions, an attacker
+      who sends a malicious config gains those same permissions. In containerized
+      environments, this can lead to container escape.
+
+secure_example: |
+  import logging
+  import logging.config
+
+  # SECURE: Use static configuration, not network-based
+  logging.config.dictConfig({
+      'version': 1,
+      'handlers': {
+          'console': {
+              'class': 'logging.StreamHandler',
+              'level': 'INFO',
+          },
+      },
+      'root': {
+          'handlers': ['console'],
+          'level': 'INFO',
+      },
+  })
+
+  # If you need remote config updates, use a configuration management
+  # system (environment variables, config files) with proper access controls
+
+recommendations:
+  - Remove logging.config.listen() from production code entirely
+  - Use static logging configuration via dictConfig() or fileConfig() loaded at startup
+  - If remote logging reconfiguration is needed, implement it through your application's authenticated API, not through logging.config.listen()
+  - Bind logging listeners to localhost only if they must exist, and restrict access via firewall rules
+  - Use Python 3.2+ verify parameter to provide a verification function that validates configs before applying
+
+detection_scope: |
+  This rule matches calls to logging.config.listen() via the QueryType pattern
+  LoggingConfig.method("listen"). It fires on any invocation regardless of
+  arguments, since the function opens a network socket that accepts executable
+  configuration by default.
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: "Python logging.config.listen() documentation"
+    url: https://docs.python.org/3/library/logging.config.html#logging.config.listen
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE
+    requirement: "CWE-95 - Eval Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# FAQ
+faq:
+  - question: Why is logging.config.listen() dangerous?
+    answer: |
+      It opens a TCP socket that accepts Python logging configuration dicts.
+      Those dicts can specify arbitrary Python callables as handler classes.
+      Anyone who connects to the port can send a config that executes code.
+
+  - question: Can I use the verify parameter to make it safe?
+    answer: |
+      Python 3.2+ added a verify parameter that lets you provide a function to
+      validate incoming configs. This helps but is difficult to get right since
+      you'd need to whitelist safe handler classes and reject everything else.
+      Removing listen() entirely is safer.
+
+  - question: Is this only a risk on internet-facing servers?
+    answer: |
+      No. Any process on the same network (or localhost) can connect. In cloud
+      environments with flat networks, a compromised adjacent service can reach
+      the listener. Defense in depth means not relying solely on network isolation.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/lang --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+  - PYTHON-LANG-SEC-105
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

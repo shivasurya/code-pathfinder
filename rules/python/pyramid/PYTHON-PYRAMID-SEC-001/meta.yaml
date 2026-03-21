@@ -1,0 +1,149 @@
+# Rule Identity
+id: PYTHON-PYRAMID-SEC-001
+name: Pyramid CSRF Check Disabled Globally
+short_description: Detects calls to set_default_csrf_options() which can globally disable CSRF protection in Pyramid applications.
+
+# Classification
+severity: HIGH
+category: pyramid
+language: python
+ruleset: python/pyramid/PYTHON-PYRAMID-SEC-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-352
+    name: "Cross-Site Request Forgery (CSRF)"
+    url: https://cwe.mitre.org/data/definitions/352.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - pyramid
+  - csrf
+  - security-misconfiguration
+  - CWE-352
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to Configurator.set_default_csrf_options() in Pyramid
+  applications. This method controls CSRF protection globally. When called with
+  require_csrf=False, it disables CSRF token validation across every view in the
+  application, leaving all state-changing endpoints vulnerable to cross-site request
+  forgery attacks.
+
+  Pyramid's CSRF protection works by requiring a valid token on POST, PUT, DELETE,
+  and PATCH requests. Disabling it means any website can craft a form that submits
+  to your application using the victim's browser cookies, performing actions on
+  their behalf without their knowledge.
+
+message: "set_default_csrf_options() detected. Ensure require_csrf is not set to False."
+
+security_implications:
+  - title: Cross-Site Request Forgery on All Endpoints
+    description: |
+      With CSRF protection disabled, an attacker can create a malicious page that
+      submits forms to your Pyramid application. When an authenticated user visits
+      the attacker's page, their browser sends cookies automatically, and the
+      forged request executes with the victim's session.
+  - title: Account Takeover via Password Change
+    description: |
+      A common CSRF attack target is the password change form. The attacker's page
+      submits a hidden form to /change-password with a new password. Without CSRF
+      protection, the request succeeds and the attacker owns the account.
+  - title: Compliance Violations
+    description: |
+      PCI DSS, SOC 2, and OWASP all require CSRF protection for web applications
+      handling sensitive data. Globally disabling it will fail any security audit.
+
+secure_example: |
+  from pyramid.config import Configurator
+
+  config = Configurator()
+
+  # SECURE: Enable CSRF protection globally (default behavior)
+  config.set_default_csrf_options(require_csrf=True)
+
+  # Per-view exemption if needed (rare, document why)
+  # @view_config(route_name='webhook', require_csrf=False)
+
+recommendations:
+  - Never call set_default_csrf_options(require_csrf=False) in production. Pyramid enables CSRF protection by default.
+  - If specific views need CSRF exemption (webhooks, API endpoints with token auth), exempt them individually with require_csrf=False in the @view_config decorator
+  - Use Pyramid's built-in CSRF token mechanism with session.get_csrf_token() in templates
+  - For API endpoints using Bearer token authentication, exempt per-view rather than disabling globally
+  - Review all calls to set_default_csrf_options() in code review to confirm the configuration is intentional
+
+detection_scope: |
+  This rule matches all calls to set_default_csrf_options() via the pattern
+  calls("*.set_default_csrf_options"). It fires on any invocation regardless of
+  the arguments passed, since the presence of this call warrants review.
+
+# References
+references:
+  - title: "CWE-352: Cross-Site Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/352.html
+  - title: Pyramid CSRF Protection Documentation
+    url: https://docs.pylonsproject.org/projects/pyramid/en/latest/narr/security.html
+  - title: OWASP CSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: OWASP A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: CWE Top 25
+    requirement: "CWE-352 ranked in Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - prevent cross-site request forgery attacks"
+  - standard: NIST SP 800-53
+    requirement: "SC-23: Session Authenticity"
+
+# FAQ
+faq:
+  - question: Does Pyramid have CSRF protection enabled by default?
+    answer: |
+      Yes. Starting in Pyramid 1.7, CSRF checks are enabled by default for POST,
+      PUT, DELETE, and PATCH. You have to explicitly disable it. This rule catches
+      that explicit disabling.
+
+  - question: How do I exempt a webhook endpoint from CSRF without disabling it globally?
+    answer: |
+      Use require_csrf=False in the @view_config decorator for that specific view.
+      This keeps CSRF protection active for all other views.
+
+  - question: Our API uses Bearer token auth. Do we need CSRF?
+    answer: |
+      No. CSRF exploits cookie-based auth. If your API uses Bearer tokens in
+      the Authorization header, CSRF is not a threat. Exempt API views individually.
+
+  - question: Does this rule fire even if require_csrf=True is passed?
+    answer: |
+      Yes. Any call to set_default_csrf_options() is flagged for review to confirm
+      the configuration is intentional.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/pyramid --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-AUDIT-010
+  - PYTHON-DJANGO-SEC-071
+  - PYTHON-PYRAMID-SEC-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

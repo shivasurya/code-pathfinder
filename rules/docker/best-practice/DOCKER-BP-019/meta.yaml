@@ -1,0 +1,52 @@
+id: DOCKER-BP-019
+name: Avoid zypper update
+short_description: Avoid 'zypper update' in Dockerfiles. Use specific base image versions for reproducible
+  builds.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-019
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- zypper
+- package-manager
+- opensuse
+- suse
+- update
+- reproducibility
+- best-practice
+- anti-pattern
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of ''zypper update'' in Dockerfiles. Running system updates in Docker builds
+
+  creates unpredictable, non-reproducible images and can introduce breaking changes or
+
+  security vulnerabilities.'
+message: Avoid 'zypper update' in Dockerfiles. Use specific base image versions for reproducible builds.
+secure_example: 'FROM opensuse/leap:15.4  # Specific version
+
+  RUN zypper install -y nginx-1.21.6-1
+
+  # Or install latest from specific base image
+
+  RUN zypper install -y nginx'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Avoid zypper update"
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

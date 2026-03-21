@@ -1,0 +1,194 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-091
+name: Insecure xml.dom.minidom Usage (XXE)
+short_description: xml.dom.minidom is vulnerable to XML External Entity (XXE) attacks. Use defusedxml.minidom for safe XML parsing.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-091
+
+# Vulnerability Details
+cwe:
+  - id: CWE-611
+    name: Improper Restriction of XML External Entity Reference
+    url: https://cwe.mitre.org/data/definitions/611.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - minidom
+  - xml
+  - xxe
+  - xml-external-entity
+  - CWE-611
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's xml.dom.minidom provides a DOM-based XML parser that is vulnerable to XML
+  External Entity (XXE) injection. minidom uses the expat parser internally but may
+  resolve external entity references depending on the Python version and configuration.
+
+  minidom is commonly used for XML generation and pretty-printing (toprettyxml()) as
+  well as parsing. When used to parse untrusted XML input via minidom.parse() or
+  minidom.parseString(), XXE attacks can lead to local file disclosure, server-side
+  request forgery, and denial-of-service.
+
+  defusedxml.minidom provides a safe replacement that prevents XXE and other XML attacks
+  while maintaining API compatibility.
+
+message: "xml.dom.minidom.parse() or parseString() detected. Use defusedxml.minidom for safe parsing to prevent XXE attacks."
+
+security_implications:
+  - title: File Disclosure via External Entities
+    description: |
+      XXE in minidom allows reading local files through entity references. The minidom
+      DOM structure includes entity content, which is then returned when the application
+      accesses text nodes or attributes.
+  - title: SSRF via External Entity URLs
+    description: |
+      External entities referencing http:// or https:// URLs cause the parser to make
+      outbound HTTP requests. This enables SSRF attacks against internal services,
+      cloud metadata endpoints, and internal APIs.
+  - title: Out-of-Band Data Exfiltration
+    description: |
+      Parameterized XXE using XML parameter entities can exfiltrate file contents to
+      attacker-controlled servers even when the parsed XML result is not directly returned
+      to the attacker.
+  - title: Denial of Service via DTD Attacks
+    description: |
+      DTD-based attacks (Billion Laughs, quadratic blowup) cause exponential or quadratic
+      memory consumption during parsing, crashing the application and potentially affecting
+      other services on the same host.
+
+secure_example: |
+  # INSECURE: xml.dom.minidom vulnerable to XXE
+  # from xml.dom import minidom
+  # doc = minidom.parse("input.xml")
+  # doc = minidom.parseString(user_xml)
+
+  # SECURE: Use defusedxml.minidom
+  import defusedxml.minidom
+
+  def parse_xml_dom(xml_content: str):
+      try:
+          doc = defusedxml.minidom.parseString(xml_content.encode())
+          return doc
+      except Exception as e:
+          raise ValueError(f"Invalid or dangerous XML: {e}")
+
+  def read_xml_file_dom(file_path: str):
+      return defusedxml.minidom.parse(file_path)
+
+  # SECURE: For XML generation (toprettyxml is safe, only parsing is dangerous)
+  from xml.dom.minidom import Document
+
+  def generate_xml(data: dict) -> str:
+      doc = Document()  # Safe: we are generating, not parsing
+      root = doc.createElement("data")
+      doc.appendChild(root)
+      for key, value in data.items():
+          elem = doc.createElement(key)
+          text = doc.createTextNode(str(value))
+          elem.appendChild(text)
+          root.appendChild(elem)
+      return doc.toprettyxml(indent="  ")
+
+recommendations:
+  - Replace xml.dom.minidom.parse() and minidom.parseString() with defusedxml.minidom.parse() and defusedxml.minidom.parseString().
+  - Install defusedxml: pip install defusedxml. The API is compatible with standard minidom.
+  - Note that xml.dom.minidom.Document() for XML generation (not parsing) is safe and does not need to be replaced.
+  - Validate the XML structure and content after safe parsing to ensure it meets expected schema constraints.
+  - For large XML documents, consider SAX-based parsing (defusedxml.sax) which uses less memory than DOM parsing.
+
+detection_scope: |
+  This rule detects calls to xml.dom.minidom.parse(), xml.dom.minidom.parseString(), and
+  the abbreviated import forms in Python source code. XML generation via Document() is
+  not flagged.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration (XXE)"
+  - standard: CWE Top 25
+    requirement: "CWE-611 - Improper Restriction of XML External Entity Reference"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including XXE"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# References
+references:
+  - title: "CWE-611: Improper Restriction of XML External Entity Reference"
+    url: https://cwe.mitre.org/data/definitions/611.html
+  - title: "Python docs: xml.dom.minidom"
+    url: https://docs.python.org/3/library/xml.dom.minidom.html
+  - title: "defusedxml documentation"
+    url: https://github.com/tiran/defusedxml
+  - title: OWASP XXE Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+  - title: OWASP Top 10 A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+# FAQ
+faq:
+  - question: Is toprettyxml() safe to call on user-provided content?
+    answer: |
+      toprettyxml() serializes a DOM tree to a string. If the DOM was created by parsing
+      untrusted XML using defusedxml.minidom, the output is safe since XXE was blocked
+      during parsing. If the DOM was created from unsafe minidom parsing, the XXE payload
+      has already been executed. The safety depends on how the DOM was created, not on
+      toprettyxml() itself.
+
+  - question: Does minidom support schema validation?
+    answer: |
+      xml.dom.minidom does not include built-in XML schema validation. For schema validation
+      with DOM-style parsing, use lxml with an XMLSchema object. Alternatively, parse with
+      defusedxml.ElementTree and validate the resulting element tree against an expected
+      structure.
+
+  - question: Is minidom deprecated in Python?
+    answer: |
+      xml.dom.minidom is not deprecated as of Python 3.12 but it is considered a legacy
+      API. For new XML processing code, xml.etree.ElementTree (or defusedxml.ElementTree)
+      is generally preferred for its simpler API and better performance.
+
+  - question: What is the performance difference between minidom and ElementTree for parsing?
+    answer: |
+      ElementTree is generally faster and uses less memory than minidom for both parsing
+      and traversal. minidom loads the entire document into a full DOM tree with Node objects,
+      while ElementTree uses a lighter-weight element representation. For performance-
+      sensitive parsing, prefer defusedxml.ElementTree over defusedxml.minidom.
+
+  - question: How do I use defusedxml with existing minidom code?
+    answer: |
+      Replace the import: instead of from xml.dom import minidom, use import defusedxml.minidom
+      as minidom. The parse() and parseString() APIs are compatible. The Document class
+      for XML generation is still imported from xml.dom.minidom directly.
+
+  - question: Does this rule flag minidom used in XML generation (not parsing)?
+    answer: |
+      The rule flags minidom.parse() and minidom.parseString() which are the parsing
+      functions vulnerable to XXE. xml.dom.minidom.Document() and the DOM manipulation
+      API used for XML generation are not flagged as they do not parse external input.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-090
+  - PYTHON-LANG-SEC-092
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,235 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-013
+name: Lambda SQL Injection via PyMySQL cursor.execute()
+short_description: Lambda event data flows to PyMySQL cursor.execute() without parameterization, enabling SQL injection against RDS MySQL or Aurora MySQL backends via the pure-Python driver.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-013
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - pymysql
+  - mysql
+  - rds
+  - aurora
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into PyMySQL cursor.execute() calls without proper
+  parameterization, enabling SQL injection against RDS MySQL, Aurora MySQL, or any
+  MySQL-compatible backend accessed via the pure-Python PyMySQL driver.
+
+  PyMySQL is the most commonly used MySQL driver in AWS Lambda functions because it
+  is a pure-Python library that requires no compiled extensions, making it easy to
+  package as a Lambda deployment artifact or Lambda Layer. Lambda functions triggered
+  by API Gateway, SQS, SNS, S3, and other sources receive attacker-controllable event
+  data (event.get("body"), event.get("queryStringParameters"), event["Records"]).
+
+  When this event data is concatenated or f-stringed into the SQL string before being
+  passed to cursor.execute(), the PyMySQL driver receives a pre-built SQL string with
+  the injected payload already embedded. PyMySQL's own escaping (connection.escape())
+  is only applied when values are passed through the parameters mechanism. Embedding
+  values in the SQL string bypasses all driver-level protection.
+
+message: "Lambda event data flows to PyMySQL cursor.execute() without parameterization. Pass user input as the second argument (parameters tuple), never in the SQL string."
+
+security_implications:
+  - title: Full Database Exfiltration
+    description: |
+      An attacker who controls any SQL fragment can use UNION SELECT to read from any
+      table accessible to the Lambda's MySQL user. PyMySQL provides no protection when
+      event data is embedded in the SQL string, making all accessible tables vulnerable
+      to exfiltration in a single injected query.
+  - title: Authentication Bypass in Serverless Authentication Flows
+    description: |
+      Lambda functions often implement stateless authentication by querying user records
+      via PyMySQL. Injecting ' OR '1'='1'-- into username or password fields causes the
+      query to return all rows, bypassing authentication for any user account in the table.
+  - title: Data Modification via Stacked Queries
+    description: |
+      PyMySQL can execute multiple statements when execute_multiple is enabled. An attacker
+      can inject additional INSERT, UPDATE, or DELETE statements after the original query
+      to modify application data, create backdoor accounts, or corrupt records. Even
+      without stacked queries, subquery injection can achieve data modification in some
+      contexts.
+  - title: Lambda Warm Instance Exploitation
+    description: |
+      PyMySQL connections cached across warm Lambda invocations mean that a successful
+      injection in one invocation can observe the results of data modifications made in
+      subsequent invocations using the same connection, enabling multi-step attacks across
+      what appear to be independent Lambda executions.
+
+secure_example: |
+  import json
+  import pymysql
+
+  # Connection cached at module level for warm reuse
+  _conn = None
+
+  def get_connection():
+      global _conn
+      try:
+          _conn.ping(reconnect=True)
+      except Exception:
+          _conn = pymysql.connect(
+              host='rds-host.cluster.us-east-1.rds.amazonaws.com',
+              user='lambda_user',
+              password='password',
+              db='appdb',
+              charset='utf8mb4',
+              ssl={'ssl': True}
+          )
+      return _conn
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      product_id = params.get('product_id', '')
+      category = params.get('category', '')
+
+      # SECURE: Validate numeric ID
+      try:
+          product_id = int(product_id)
+      except (ValueError, TypeError):
+          return {'statusCode': 400, 'body': 'Invalid product ID'}
+
+      # SECURE: Use %s placeholders and pass values as a tuple to cursor.execute()
+      conn = get_connection()
+      with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+          cursor.execute(
+              "SELECT id, name, price FROM products WHERE id = %s AND category = %s",
+              (product_id, category)
+          )
+          row = cursor.fetchone()
+      return {'statusCode': 200, 'body': json.dumps(row)}
+
+recommendations:
+  - Always pass Lambda event data as the second argument to cursor.execute() as a tuple, never by concatenating it into the SQL string.
+  - Use PyMySQL's DictCursor for named column access rather than index-based access, which reduces the risk of using wrong column values in query construction.
+  - Grant the Lambda's MySQL user the minimum necessary privileges (SELECT on specific tables) and avoid GRANT ALL or SUPER privileges.
+  - Cache the PyMySQL connection at module level and use connection.ping(reconnect=True) to reuse it across warm invocations without re-authenticating.
+  - Enable RDS MySQL general query logging selectively or use Performance Schema to audit queries and detect injection patterns.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is calls("*.execute")
+  matching PyMySQL cursor objects with the tainted SQL string tracked via .tracks(0)
+  (the query string argument). Sanitizers include explicit int() or float() type
+  conversion and connection.escape() when correctly applied. The analysis follows taint
+  through string concatenation, f-string interpolation, variable assignments, and
+  function boundaries.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: PyMySQL documentation
+    url: https://pymysql.readthedocs.io/en/latest/user/examples.html
+  - title: AWS Lambda with RDS Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: Why is PyMySQL particularly common in Lambda and what are the injection risks specific to it?
+    answer: |
+      PyMySQL is a pure-Python implementation of the MySQL protocol, requiring no
+      compiled C extensions. This makes it ideal for Lambda deployments because it
+      packages cleanly as a zip archive or Lambda Layer without platform-specific
+      binary dependencies. The injection risk is identical to other MySQL drivers:
+      when event data is embedded in the SQL string rather than passed as parameters,
+      PyMySQL receives a pre-built injected query and executes it as-is.
+
+  - question: Does PyMySQL's connection.escape() function make embedding event data safe?
+    answer: |
+      connection.escape() applies MySQL escaping to a value, but using it correctly
+      requires escaping every single piece of user data, applying it at the right point
+      in string construction, and never missing any input. The parameterization mechanism
+      (second argument to execute()) handles this automatically and correctly for all
+      values. Parameterization is always preferred over manual escaping.
+
+  - question: What is the PyMySQL equivalent of a prepared statement?
+    answer: |
+      PyMySQL does not implement true prepared statements (compile-once, execute-many
+      server-side prepared statements). Instead, it uses client-side escaping when values
+      are passed as the second argument to cursor.execute(). This is still safe against
+      injection because the escaping is applied by the driver before the SQL is sent to
+      MySQL. For batch operations, use cursor.executemany() with a SQL template and a
+      list of value tuples.
+
+  - question: How should Lambda functions handle PyMySQL connections given Lambda's concurrency model?
+    answer: |
+      Initialize the connection at module level (outside lambda_handler) and reuse it
+      across warm invocations using connection.ping(reconnect=True). Lambda functions
+      share no state between concurrent invocations (each invocation runs in its own
+      execution environment), so connection limits are a function of concurrent Lambda
+      instances, not request throughput. Use RDS Proxy to pool connections and prevent
+      exhausting MySQL's max_connections limit at high concurrency.
+
+  - question: How do I parameterize queries with IN clauses when the list size is determined by event data?
+    answer: |
+      For dynamic IN clauses, build the placeholder string programmatically and pass
+      the values as a flat tuple: placeholders = ','.join(['%s'] * len(ids_list)),
+      then cursor.execute(f"SELECT * FROM t WHERE id IN ({placeholders})", tuple(ids_list)).
+      Validate that ids_list contains only integers before use. Never format the actual
+      values into the SQL string, only the placeholder count.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-015
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

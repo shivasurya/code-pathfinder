@@ -1,0 +1,51 @@
+id: DOCKER-BP-028
+name: Avoid apk upgrade
+short_description: Avoid 'apk upgrade' in Dockerfiles. Use specific base image versions instead for reproducible
+  builds.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-028
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- apk
+- package-manager
+- alpine
+- upgrade
+- reproducibility
+- best-practice
+- anti-pattern
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: Avoid 'apk upgrade' in Dockerfiles. Use specific base image versions instead for reproducible
+  builds.
+message: Avoid 'apk upgrade' in Dockerfiles. Use specific base image versions instead for reproducible
+  builds.
+secure_example: '# Good: Use specific base image version
+
+  FROM alpine:3.19.0
+
+
+  # Install packages without upgrading
+
+  RUN apk add --no-cache nginx=1.24.0-r15
+
+
+  # If you need latest packages, update the base image version
+
+  # FROM alpine:3.20.0'
+recommendations: []
+detection_scope: ''
+references: []
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

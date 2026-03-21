@@ -1,0 +1,191 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-014
+name: Python Reverse Shell Pattern Detected
+short_description: Reverse shell pattern detected using socket connections with subprocess or exec(). This is a strong indicator of malicious code or a backdoor.
+
+# Classification
+severity: CRITICAL
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-014
+
+# Vulnerability Details
+cwe:
+  - id: CWE-506
+    name: Embedded Malicious Code
+    url: https://cwe.mitre.org/data/definitions/506.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - reverse-shell
+  - backdoor
+  - malicious-code
+  - socket
+  - CWE-506
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  A reverse shell is a type of backdoor in which the compromised host initiates an outbound
+  network connection to an attacker-controlled server and then redirects its stdin, stdout,
+  and stderr over that connection, giving the attacker an interactive shell session on the host.
+
+  Common Python reverse shell patterns include creating a socket connection to a remote IP
+  and port, then either passing the socket file descriptor to subprocess (subprocess.call(["/bin/sh", "-i"]),
+  or duplicating the file descriptor over stdin/stdout/stderr using os.dup2(), or executing
+  the socket through exec()/eval() with __builtins__ access.
+
+  Finding this pattern in production code is a critical security incident indicator. It may
+  represent active compromise of the codebase, a supply chain attack through a dependency,
+  a malicious insider contribution, or a legitimate security testing tool that was accidentally
+  included in production code.
+
+message: "Reverse shell pattern detected. This is a critical security finding that requires immediate investigation."
+
+security_implications:
+  - title: Complete Host Compromise
+    description: |
+      A reverse shell gives the attacker an interactive command line on the host with the
+      privileges of the Python process. All data, credentials, certificates, and capabilities
+      of the process are immediately accessible to the attacker.
+  - title: Persistent Access
+    description: |
+      Unlike a one-shot command injection, a reverse shell provides an ongoing interactive
+      session. The attacker can install additional backdoors, lateral movement tools, and
+      persistence mechanisms during the session.
+  - title: Firewall Bypass via Outbound Connection
+    description: |
+      Reverse shells initiate outbound connections from the compromised host to the attacker.
+      Most network perimeters allow outbound connections, so this technique bypasses inbound
+      firewall rules that would block a traditional bind shell.
+  - title: Supply Chain Compromise Indicator
+    description: |
+      Reverse shell code found in a third-party dependency or unexpected location in the
+      codebase may indicate a supply chain attack. This requires forensic analysis to determine
+      when and how the code was introduced and which systems may have executed it.
+
+secure_example: |
+  # There is no legitimate use of reverse shell code in production application code.
+  # If network connectivity testing is required, use purpose-built tools:
+
+  import socket
+  import ssl
+
+  # SECURE: Legitimate network connectivity check using a controlled connection
+  def check_service_connectivity(host: str, port: int, timeout: int = 5) -> bool:
+      """
+      Test TCP connectivity to a known, trusted service endpoint.
+      This is NOT a reverse shell: it connects, checks, and disconnects.
+      """
+      try:
+          with socket.create_connection((host, port), timeout=timeout) as sock:
+              return True
+      except (socket.timeout, ConnectionRefusedError, OSError):
+          return False
+
+  # For security testing environments, use dedicated penetration testing
+  # frameworks in isolated, authorized test environments — never in production code.
+
+recommendations:
+  - Immediately quarantine and investigate any codebase containing a reverse shell pattern; treat it as an active security incident.
+  - Audit git history and dependency lockfiles to determine when the reverse shell code was introduced and trace the source.
+  - Scan all deployed instances for active outbound connections to unexpected IP addresses and ports.
+  - Implement code review policies that flag any use of socket combined with subprocess or os.dup2() for review by the security team.
+  - Use software composition analysis (SCA) tools to scan third-party dependencies for malicious code patterns before installation.
+
+detection_scope: |
+  This rule detects patterns combining socket module calls (socket.socket, socket.connect)
+  with process execution (subprocess.call, os.dup2, exec) that match known Python reverse
+  shell templates. The pattern is highly specific to malicious code and has very few legitimate
+  uses in production application code.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-506 - Embedded Malicious Code"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-3: Malicious Code Protection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 5.2 - Protect all system components from malware"
+
+# References
+references:
+  - title: "CWE-506: Embedded Malicious Code"
+    url: https://cwe.mitre.org/data/definitions/506.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "NIST SP 800-53 SI-3: Malicious Code Protection"
+    url: https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final
+  - title: Python Reverse Shell Techniques Reference
+    url: https://www.revshells.com/
+  - title: OWASP Software Component Verification Standard
+    url: https://owasp.org/www-project-software-component-verification-standard/
+
+# FAQ
+faq:
+  - question: Is there any legitimate use of reverse shell code in production applications?
+    answer: |
+      Almost never. Reverse shell patterns combining socket connections with stdin/stdout
+      redirection to a subprocess have no legitimate use in production web services, APIs,
+      data processing pipelines, or any normal application. If found in production code,
+      treat it as a security incident until proven otherwise through forensic analysis.
+
+  - question: Could this be a false positive from a legitimate network library?
+    answer: |
+      Legitimate network libraries do not combine socket file descriptor duplication with
+      subprocess stdin/stdout redirection. The specific combination of socket.connect(),
+      os.dup2(), and subprocess/exec that characterizes a reverse shell is not present in
+      well-known libraries. Investigate any flagged code regardless of its apparent context.
+
+  - question: What should I do immediately when this rule fires?
+    answer: |
+      First, do not dismiss or suppress the finding. Quarantine the affected codebase,
+      notify your security incident response team, audit git history for unauthorized commits,
+      check running processes for active outbound connections, and rotate all credentials
+      the compromised process had access to. Treat it as a potential breach until investigation
+      concludes otherwise.
+
+  - question: How could reverse shell code end up in a Python project?
+    answer: |
+      Common paths include: malicious commits from compromised developer accounts, supply
+      chain attacks through third-party packages (typosquatting, dependency confusion,
+      compromised maintainer accounts), malicious pull requests that slipped through code
+      review, and attackers who achieved code execution and wrote a persistence mechanism.
+
+  - question: What forensic steps should I take after finding this pattern?
+    answer: |
+      Preserve logs and process state before taking remediation actions. Check outbound
+      network connections for the time period since the code was deployed. Review git blame
+      and commit signatures. Check package integrity hashes against known-good versions.
+      Rotate all secrets that were accessible to the compromised process.
+
+  - question: Should this rule fire in test/security research code?
+    answer: |
+      Security research and penetration testing code may contain reverse shell implementations,
+      but this code should never be in the same repository as production application code.
+      Maintain strict separation between security tooling and application code, and ensure
+      security tools are never deployed to production environments.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-070
+  - PYTHON-LANG-SEC-072
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

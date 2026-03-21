@@ -1,0 +1,200 @@
+# Rule Identity
+id: PYTHON-CRYPTO-SEC-006
+name: XOR Cipher Usage via PyCryptodome
+short_description: Detects use of the XOR cipher through PyCryptodome, which is not encryption -- it is trivially reversible with no key material and provides zero confidentiality against any attacker.
+
+# Classification
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-006
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - pycryptodome
+  - xor
+  - xor-cipher
+  - no-encryption
+  - trivially-reversible
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.XOR.new()` from the PyCryptodome library.
+  The XOR cipher is not a cryptographic algorithm in any meaningful sense. It XORs
+  the plaintext byte-by-byte with a repeating key. Recovering the plaintext requires
+  only the key, and recovering the key requires only a known plaintext segment --
+  which is almost always available given the structured nature of most data formats.
+
+  A single-byte XOR key has only 256 possible values. Even a 32-byte key can be
+  recovered through frequency analysis if sufficient ciphertext is available. Unlike
+  the one-time pad (which requires a truly random key as long as the message and never
+  reused), the XOR cipher in PyCryptodome operates with an arbitrary, typically short,
+  reused key -- providing essentially no security.
+
+  PyCryptodome includes XOR for educational purposes and for use as a building block
+  in custom cipher construction, not for data protection. The rule matches
+  `PyCryptoCipherXOR.method("new")`. Any use of XOR for protecting real data should
+  be replaced with AES-GCM immediately.
+
+message: "XOR cipher (PyCryptodome) provides no real encryption. Replace with AES-256-GCM or ChaCha20-Poly1305."
+
+security_implications:
+  - title: Known-Plaintext Immediately Recovers the Key
+    description: |
+      If an attacker knows any segment of the plaintext -- which is trivial for
+      structured data like JSON, HTTP headers, file format magic bytes, or XML --
+      XORing the known plaintext with the corresponding ciphertext directly reveals
+      the key bytes for that segment. If the key is shorter than the message (which
+      it always is with repeating XOR), the entire key can be recovered from a
+      small known-plaintext window.
+  - title: Frequency Analysis Recovers Key Without Known Plaintext
+    description: |
+      For natural language or structured data, statistical frequency analysis
+      (the same technique used to break Vigenere ciphers) can recover the XOR key
+      without any known plaintext. The attacker only needs sufficient ciphertext.
+      This attack runs in seconds with publicly available tools against any
+      multi-byte XOR key used to encrypt realistic data.
+  - title: No Authentication or Integrity Protection
+    description: |
+      XOR provides no integrity checking whatsoever. An attacker who knows the
+      plaintext structure (which is typically easy to infer) can flip any bit in
+      the ciphertext and produce a predictable change in the decrypted output.
+      This enables undetected message forgery and data manipulation.
+  - title: Provides Only Obfuscation, Not Encryption
+    description: |
+      Using XOR creates a false sense of security. Data "encrypted" with XOR will
+      pass casual inspection but provides no protection against any technical
+      adversary. Code that uses XOR to protect sensitive data has effectively no
+      access control on that data -- it is equivalent to storing it in plaintext
+      from a security perspective.
+
+secure_example: |
+  from Crypto.Cipher import AES
+  import os
+
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
+
+recommendations:
+  - Replace Crypto.Cipher.XOR with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for actual encryption
+  - Use ChaCha20-Poly1305 via the cryptography library as an alternative authenticated cipher
+  - If data obfuscation is the only goal (e.g., obscuring values in memory temporarily), use a proper cryptographic primitive rather than XOR
+  - Treat any data previously protected only with XOR as if it were stored in plaintext and assess exposure accordingly
+  - For performance-sensitive use cases where XOR seems attractive, AES-GCM with AES-NI hardware acceleration is both faster and cryptographically sound
+
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.XOR.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherXOR.method("new")`. It fires on any XOR cipher
+  object instantiation regardless of key length or context. There is no safe use of
+  the XOR cipher for data protection. No sanitizer exclusions apply. This rule has
+  no companion rule in the `cryptography` library as that library does not expose an
+  XOR cipher primitive.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "Vigenere Cipher Cryptanalysis -- Frequency Analysis and Kasiski Examination"
+    url: https://en.wikipedia.org/wiki/Vigen%C3%A8re_cipher#Cryptanalysis
+  - title: PyCryptodome XOR Documentation
+    url: https://pycryptodome.readthedocs.io/en/latest/src/cipher/XOR.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: We use XOR just to obscure configuration values in memory, not for real encryption. Is that still a problem?
+    answer: |
+      Yes, for two reasons. First, any attacker with access to the process memory or
+      a memory dump can recover the key and plaintext trivially. Second, code reviewers
+      and auditors will flag XOR as non-compliant regardless of the intended use case.
+      If you need to protect configuration values in memory, use OS-level secrets
+      management (environment variables, secrets managers, keychain APIs) rather than
+      application-layer obfuscation. XOR provides no meaningful protection.
+
+  - question: What makes XOR fundamentally different from RC4, which also uses XOR internally?
+    answer: |
+      RC4 generates a pseudorandom keystream using a complex internal state machine
+      before XORing with the plaintext. The security of RC4 relies on the difficulty
+      of predicting or distinguishing that keystream from random. PyCryptodome's XOR
+      cipher simply repeats the literal key bytes in a cycle -- there is no
+      pseudorandom generation, no security margin, and no key expansion. RC4 is a
+      broken cipher; XOR is not a cipher at all.
+
+  - question: Is there any legitimate use for Crypto.Cipher.XOR in production code?
+    answer: |
+      PyCryptodome documents XOR as a tool for building and testing custom ciphers,
+      not for protecting data. The only production-adjacent use case is operating
+      as a component inside a larger, carefully designed cipher construction --
+      and even then, the design must be reviewed by a cryptographer. Any use of
+      XOR to protect sensitive data at rest or in transit is inappropriate.
+
+  - question: How quickly can an attacker break XOR-encrypted data?
+    answer: |
+      For a single-byte key: instantly, by trying all 256 values. For a multi-byte
+      repeating key: within seconds using the Kasiski examination or Index of
+      Coincidence method to determine key length, followed by frequency analysis on
+      each key-length-offset position. Automated tools available online will break
+      most XOR-obfuscated data without any manual cryptanalysis. The data should be
+      treated as plaintext.
+
+  - question: Our DevOps pipeline uses XOR to "encrypt" deployment secrets in config files. How urgent is this?
+    answer: |
+      Extremely urgent. Deployment secrets (API keys, database credentials, signing
+      keys) protected only with XOR are functionally unprotected. Any developer with
+      access to the config file and knowledge of one expected value (such as a
+      known API key prefix) can recover the XOR key and decrypt all other secrets
+      in seconds. Replace with a proper secrets manager (HashiCorp Vault, AWS Secrets
+      Manager, GCP Secret Manager) and rotate all secrets immediately.
+
+  - question: Does this rule fire on Python's built-in ^ operator or only on PyCryptodome?
+    answer: |
+      This rule specifically matches `Crypto.Cipher.XOR.new()` via PyCryptodome.
+      It does not flag general use of the ^ bitwise XOR operator in Python code.
+      Other rules cover hardcoded secrets and insecure key derivation patterns,
+      but this specific rule targets the XOR cipher primitive in PyCryptodome.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-001
+  - PYTHON-CRYPTO-SEC-001a
+  - PYTHON-CRYPTO-SEC-004
+  - PYTHON-CRYPTO-SEC-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

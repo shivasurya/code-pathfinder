@@ -1,0 +1,202 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-101
+name: Insecure File Permissions via os.chmod
+short_description: os.chmod() or os.fchmod() sets overly permissive file permissions that allow unauthorized read, write, or execute access.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-101
+
+# Vulnerability Details
+cwe:
+  - id: CWE-732
+    name: "Incorrect Permission Assignment for Critical Resource"
+    url: https://cwe.mitre.org/data/definitions/732.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - file-permissions
+  - os-chmod
+  - os-fchmod
+  - world-writable
+  - world-readable
+  - CWE-732
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's os.chmod() and os.fchmod() functions set the permission bits on files and
+  directories. Setting permissions that are too broad — for example, 0o777 (world-readable,
+  world-writable, world-executable) or 0o666 (world-readable and world-writable) — allows
+  any user on the system to read, modify, or execute the file. This can lead to unauthorized
+  data access, privilege escalation, or injection of malicious content into files that are
+  later executed or interpreted by a privileged process.
+
+  Common dangerous patterns include using octal literals like 0o777, 0o666, 0o644 on sensitive
+  files, or using stat constants like stat.S_IWOTH (world-write) and stat.S_IROTH (world-read)
+  on configuration files, temporary files containing secrets, or executable scripts.
+
+  The principle of least privilege dictates that files should be given only the minimum
+  permissions necessary. Configuration files should typically be 0o600 (owner read/write only),
+  scripts should be 0o700 (owner execute only), and shared files should not be world-writable.
+
+message: "os.chmod() sets overly permissive file permissions. Use restrictive permissions such as 0o600 for sensitive files."
+
+security_implications:
+  - title: Sensitive Data Exposure
+    description: |
+      Files containing credentials, private keys, API tokens, or user data that are
+      made world-readable (permissions including o+r) can be read by any user on the
+      system. In multi-tenant environments or on compromised hosts, this directly exposes
+      secrets to other users or processes.
+  - title: Privilege Escalation via World-Writable Files
+    description: |
+      World-writable files (permissions including o+w) that are later read and executed
+      by a privileged process — such as a cron job, init script, or SUID binary — can
+      be modified by a low-privilege attacker to inject arbitrary commands. This is a
+      classic Unix privilege escalation vector.
+  - title: Log Tampering and Evidence Destruction
+    description: |
+      Log files or audit trails set to world-writable permissions allow any user to modify
+      or truncate log content, destroying evidence of malicious activity. Attackers routinely
+      clear or modify logs after compromise to hinder incident response.
+  - title: Configuration Injection
+    description: |
+      Configuration files with world-write permissions can be modified by any local user
+      to change application behavior, inject malicious settings, or redirect processing to
+      attacker-controlled resources. This is particularly dangerous for web server configs,
+      database connection strings, and application settings files.
+
+secure_example: |
+  import os
+  import stat
+  import tempfile
+
+  # SECURE: Restrict config files to owner read/write only
+  def write_config(path: str, content: str) -> None:
+      with open(path, 'w') as f:
+          f.write(content)
+      os.chmod(path, 0o600)  # owner rw only
+
+  # SECURE: Scripts executable only by owner
+  def write_script(path: str, content: str) -> None:
+      with open(path, 'w') as f:
+          f.write(content)
+      os.chmod(path, 0o700)  # owner rwx only
+
+  # SECURE: Temporary files with restrictive permissions
+  def create_temp_file() -> str:
+      fd, path = tempfile.mkstemp()
+      os.fchmod(fd, 0o600)  # restrictive before writing any data
+      os.close(fd)
+      return path
+
+  # SECURE: Shared files readable by group but not world
+  def write_shared_file(path: str, content: str) -> None:
+      with open(path, 'w') as f:
+          f.write(content)
+      os.chmod(path, 0o640)  # owner rw, group r, no world access
+
+recommendations:
+  - Use 0o600 for files containing secrets, credentials, private keys, or sensitive configuration — owner read/write only.
+  - Use 0o700 for executable scripts that should only be run by their owner, and 0o750 if group execution is needed.
+  - Never use 0o777 or 0o666 in production code; if a file must be shared, use group permissions (e.g., 0o660) rather than world permissions.
+  - Set the umask appropriately at process startup (os.umask(0o077)) to ensure files are created with restrictive defaults.
+  - Audit existing files with overly broad permissions using find with -perm -o+w or equivalent and restrict them.
+
+detection_scope: |
+  This rule detects calls to os.chmod() and os.fchmod() where the permission argument
+  includes world-write (o+w) bits. Specifically, it flags octal literals where the least
+  significant octet has the write bit set (second bit of the last octal digit), including
+  0o777, 0o666, 0o776, 0o667, 0o757, and similar patterns. Calls using stat module
+  constants that include stat.S_IWOTH or stat.S_IRWXO are also flagged. The rule matches
+  both the os.chmod() and os.fchmod() forms.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-732 - Incorrect Permission Assignment for Critical Resource"
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: NIST SP 800-53
+    requirement: "AC-3: Access Enforcement; files must have minimum necessary permissions"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 7.2 - Restrict access to system components based on least privilege"
+  - standard: CIS Benchmark
+    requirement: "Ensure no world-writable files exist on the system"
+
+# References
+references:
+  - title: "Python docs: os.chmod()"
+    url: https://docs.python.org/3/library/os.html#os.chmod
+  - title: "CWE-732: Incorrect Permission Assignment"
+    url: https://cwe.mitre.org/data/definitions/732.html
+  - title: OWASP Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - title: "Unix File Permissions Reference"
+    url: https://www.gnu.org/software/coreutils/manual/html_node/File-permissions.html
+  - title: "Python tempfile module — secure temporary files"
+    url: https://docs.python.org/3/library/tempfile.html
+
+# FAQ
+faq:
+  - question: What permission values are considered insecure?
+    answer: |
+      Any permission that grants write access to "others" (the world) is considered insecure.
+      In octal notation, the last digit controls world permissions: digits 2, 3, 6, and 7 all
+      include world-write. So 0o777, 0o776, 0o666, 0o667, 0o757, 0o646, etc. are all flagged.
+      World-readable (0o644, 0o444) may be acceptable for public files but is flagged for
+      sensitive files. The rule focuses primarily on world-writable permissions as the highest risk.
+
+  - question: What about shared directories that need broad permissions?
+    answer: |
+      For directories that need to be shared between users, prefer group permissions over world
+      permissions. Add all relevant users to a shared group and use 0o770 (owner and group
+      read/write/execute) instead of 0o777. The sticky bit (0o1777) on shared directories
+      prevents users from deleting each other's files without granting unnecessary write access.
+
+  - question: Is 0o644 safe for configuration files?
+    answer: |
+      0o644 (owner read/write, group and world read-only) is acceptable for non-sensitive
+      configuration files that need to be readable by multiple users. However, for files
+      containing passwords, API keys, TLS private keys, or other secrets, use 0o600
+      (owner read/write only). The presence of world-readable permissions on secret files
+      is a security risk in multi-user or shared environments.
+
+  - question: How should I handle file permissions for web-served static files?
+    answer: |
+      Static files served by a web server should typically be owned by the web server user
+      or a deployment user with group read permission, not world-writable. A common pattern
+      is 0o644 for files and 0o755 for directories, where the web server runs as a specific
+      user/group. Avoid making web-served directories world-writable as this allows any
+      local user to plant malicious files.
+
+  - question: Does this rule flag os.chmod calls in test code?
+    answer: |
+      Yes. Test code that uses overly permissive permissions to set up test fixtures can
+      create security risks if the tests run in shared CI environments or leave files behind.
+      It is good practice to use restrictive permissions even in tests and explicitly set
+      permissions in setup/teardown to ensure test isolation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-100
+  - PYTHON-LANG-SEC-102
+  - PYTHON-LANG-SEC-105
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

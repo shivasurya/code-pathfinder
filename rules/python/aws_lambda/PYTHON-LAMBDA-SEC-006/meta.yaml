@@ -1,0 +1,232 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-006
+status: disabled  # Sandbox detection not working - disabled until rule query is fixed
+name: Lambda Command Injection via loop.subprocess_exec()
+short_description: Lambda event data flows to loop.subprocess_exec(), enabling argument injection through the asyncio event loop in Lambda handlers.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-006
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - asyncio-loop
+  - loop-subprocess-exec
+  - argument-injection
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into loop.subprocess_exec() calls via the asyncio event
+  loop API.
+
+  loop.subprocess_exec() is the low-level event loop method underlying
+  asyncio.create_subprocess_exec(). It creates a subprocess transport and protocol
+  directly on the event loop. While it does not invoke a shell (making classic shell
+  metacharacter injection ineffective), it is still vulnerable to argument injection
+  when event data controls the executable path or any argument passed to the process.
+
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other triggers. There is no sanitization layer
+  between the event payload and application code. Developers using the low-level event
+  loop API directly (e.g., for custom protocol implementations or performance
+  optimization) may be less likely to apply the same input validation discipline as
+  with higher-level subprocess APIs, increasing the risk of unvalidated event data
+  reaching the subprocess call.
+
+  In Lambda, successful argument injection can lead to exfiltration of the execution
+  role's AWS credentials stored in environment variables, access to VPC-internal
+  resources, and modification of the /tmp filesystem.
+
+message: "Lambda event data flows to loop.subprocess_exec(). Validate all arguments from the event before passing to the event loop subprocess API."
+
+security_implications:
+  - title: Low-Level API Bypasses Higher-Level Guardrails
+    description: |
+      Developers using loop.subprocess_exec() directly typically do so for advanced
+      use cases and may skip the input validation patterns common with higher-level
+      APIs. This increases the probability that event data reaches subprocess arguments
+      without validation, making loop.subprocess_exec() a higher-risk sink in practice.
+  - title: Executable Path Injection
+    description: |
+      If event data controls the executable argument (first positional argument after
+      the protocol factory) of loop.subprocess_exec(), an attacker can redirect
+      execution to any binary accessible in the Lambda filesystem, including scripts
+      written to /tmp by previous invocations.
+  - title: Argument Injection via Flag-Like Event Values
+    description: |
+      Command-line tools invoked via loop.subprocess_exec() interpret argument strings
+      starting with '-' as flags. Event data values like '--exec', '--output=file',
+      or '-rf' can activate unintended behaviors in the target binary without any
+      shell metacharacter injection.
+  - title: AWS Credential Exfiltration
+    description: |
+      The Lambda execution environment exposes temporary AWS credentials as environment
+      variables. Argument injection via loop.subprocess_exec() can cause the spawned
+      process to read and transmit these credentials to attacker-controlled
+      infrastructure, compromising the IAM role's full permission set.
+
+secure_example: |
+  import asyncio
+  import re
+  import json
+
+  ALLOWED_EXECUTABLES = {
+      'convert': '/usr/bin/convert',
+  }
+
+  async def run_convert(executable, input_path, output_path):
+      loop = asyncio.get_event_loop()
+      # SECURE: Use asyncio.create_subprocess_exec as higher-level safe alternative
+      process = await asyncio.create_subprocess_exec(
+          executable, '--', input_path, output_path,
+          stdout=asyncio.subprocess.PIPE,
+          stderr=asyncio.subprocess.PIPE
+      )
+      return await process.communicate()
+
+  async def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      tool = body.get('tool', '')
+      input_file = body.get('input', '')
+
+      # SECURE: Validate tool against hardcoded allowlist
+      if tool not in ALLOWED_EXECUTABLES:
+          return {'statusCode': 400, 'body': 'Unknown tool'}
+
+      # SECURE: Validate filename with strict regex
+      if not re.match(r'^[a-zA-Z0-9_.\-]+$', input_file):
+          return {'statusCode': 400, 'body': 'Invalid filename'}
+
+      stdout, stderr = await run_convert(
+          ALLOWED_EXECUTABLES[tool],
+          f'/tmp/{input_file}',
+          f'/tmp/out_{input_file}'
+      )
+      return {'statusCode': 200, 'body': stdout.decode()}
+
+recommendations:
+  - Prefer asyncio.create_subprocess_exec() over loop.subprocess_exec() for subprocess management, as the higher-level API is more familiar to most developers and equally safe when used with validated arguments.
+  - Validate the executable argument against a hardcoded allowlist of absolute paths; never derive the executable from event data.
+  - Prefix user-controlled filename arguments with '--' to prevent flag injection.
+  - Validate all event fields with strict allowlists or regular expressions before they appear in any argument position.
+  - Apply least-privilege IAM policies to the Lambda execution role to limit the blast radius of successful exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is
+  calls("loop.subprocess_exec") with tainted values tracked via .tracks(0) for the
+  executable argument and additional argument positions. The analysis follows taint
+  through async function calls, await expressions, variable assignments, and module
+  boundaries.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: Python loop.subprocess_exec documentation
+    url: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.subprocess_exec
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: Python asyncio event loop subprocess API
+    url: https://docs.python.org/3/library/asyncio-eventloop.html#subprocess
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: What is the difference between loop.subprocess_exec() and asyncio.create_subprocess_exec()?
+    answer: |
+      asyncio.create_subprocess_exec() is a high-level coroutine that internally calls
+      loop.subprocess_exec() to create the subprocess transport. loop.subprocess_exec()
+      is the low-level event loop method that requires a protocol factory and returns
+      a (transport, protocol) tuple. Both do not invoke a shell, making them safer than
+      their _shell counterparts. However, both are vulnerable to argument injection when
+      event data reaches argument positions without validation.
+
+  - question: Why would a Lambda function use loop.subprocess_exec() instead of the higher-level API?
+    answer: |
+      Developers use loop.subprocess_exec() directly when they need custom protocol
+      implementations for stdin/stdout handling, or for advanced streaming use cases
+      where the default Process API is insufficient. Some older Lambda code may also
+      use this API before asyncio.create_subprocess_exec() was available. In most
+      cases, the higher-level API is preferable.
+
+  - question: How do I get the current event loop in a Lambda handler?
+    answer: |
+      In modern Python (3.10+), the preferred pattern is asyncio.get_event_loop() inside
+      an async function. For subprocess operations, prefer asyncio.create_subprocess_exec()
+      which handles the event loop internally. Avoid storing and reusing event loop
+      references across Lambda invocations, as the execution environment may be reused
+      with a different event loop state.
+
+  - question: Can this rule detect injection when the loop is obtained via asyncio.get_running_loop()?
+    answer: |
+      Yes. The rule tracks taint to the subprocess_exec call regardless of how the loop
+      object is obtained. Whether the loop is obtained via asyncio.get_event_loop(),
+      asyncio.get_running_loop(), or stored in a variable, the taint tracking follows
+      the event data to the subprocess_exec call site.
+
+  - question: What AWS services are most at risk from Lambda command injection?
+    answer: |
+      The immediate risk is credential exfiltration: the execution role's IAM permissions
+      determine what AWS APIs can be called with the stolen credentials. Lambda functions
+      commonly have access to S3 (read/write), DynamoDB, SQS, SNS, Secrets Manager,
+      and RDS. Functions inside a VPC can also reach private endpoints. Apply least-
+      privilege IAM to limit the blast radius to only the specific resources the function
+      requires.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LAMBDA-SEC-004
+  - PYTHON-LAMBDA-SEC-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

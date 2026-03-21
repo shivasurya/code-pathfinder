@@ -1,0 +1,250 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-011
+name: Flask SSRF via Tainted URL Host
+short_description: User input from Flask request parameters is used to construct the host component of an outbound HTTP request URL. Validate the host against an explicit allowlist before making server-side requests.
+
+# Classification
+severity: HIGH
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-011
+
+# Vulnerability Details
+cwe:
+  - id: CWE-918
+    name: Server-Side Request Forgery (SSRF)
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
+tags:
+  - python
+  - flask
+  - ssrf
+  - url-host
+  - host-injection
+  - requests
+  - urllib
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-918
+  - OWASP-A10
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Server-Side Request Forgery (SSRF) in Flask applications where
+  user-controlled input from HTTP request parameters is used as the host component
+  of a URL that is then passed to outbound HTTP request functions (requests.get,
+  requests.post, requests.put, requests.delete, and stdlib urllib equivalents).
+
+  This is distinct from PYTHON-FLASK-SEC-006, which covers cases where the entire
+  URL is user-supplied. This rule covers a subtler pattern: the application constructs
+  a URL with an attacker-controlled hostname, for example:
+    host = request.args.get('service')
+    url = f'https://{host}/api/data'
+    response = requests.get(url)
+
+  The developer may believe this pattern is safe because the scheme and path are
+  hardcoded. However, the attacker controls where the request is sent. By supplying
+  169.254.169.254 as the host, they redirect the request to the cloud metadata endpoint.
+  By supplying an internal service hostname, they pivot to unexposed internal APIs.
+
+  The taint analysis traces the host value from Flask request sources through string
+  interpolation and f-string construction to the URL argument of requests functions
+  at position 0. Flows through validate_host() or is_safe_url() are recognized as
+  sanitizers because these functions typically implement hostname allowlist checks.
+
+message: "User input is used as the URL host for an outbound HTTP request. Validate the host against an explicit allowlist of trusted hostnames."
+
+security_implications:
+  - title: Cloud Metadata Service Credential Theft
+    description: |
+      An attacker supplies 169.254.169.254 (AWS/GCP/Azure metadata endpoint) as the
+      host parameter. The Flask server makes a request to its own metadata service,
+      receives IAM credentials (AWS: /latest/meta-data/iam/security-credentials/),
+      and the application may return this response to the attacker. This is one of
+      the highest-impact SSRF attacks in cloud-hosted applications.
+  - title: Internal Service Discovery
+    description: |
+      The attacker iterates internal hostnames and IP addresses. Services that
+      are not exposed to the internet -- databases, admin panels, internal APIs,
+      container orchestration endpoints -- respond to requests from the Flask
+      container because they trust traffic from within the internal network.
+      The attacker maps the internal topology through timing and response differences.
+  - title: Authentication Bypass on Internal Services
+    description: |
+      Internal services often trust requests from the application server by source
+      IP. An attacker who controls the host parameter can make the Flask server
+      request any internal endpoint with the server's trusted identity, bypassing
+      network-level access controls that would otherwise block external access.
+  - title: Server-Side Port Scanning via Error Differentiation
+    description: |
+      Different error responses for connection refused, connection timeout, and
+      successful connection reveal which ports are open on internal hosts. An
+      attacker who can control the host (and optionally port) component of the
+      URL can build a comprehensive port map of the internal network through the
+      Flask endpoint.
+
+secure_example: |
+  from flask import Flask, request, abort
+  import requests
+
+  app = Flask(__name__)
+
+  # Explicit allowlist of trusted service hostnames
+  ALLOWED_SERVICE_HOSTS = frozenset({
+      'api.payments.internal',
+      'inventory.service.internal',
+      'auth.service.internal',
+  })
+
+  def validate_host(host):
+      """Allowlist-based host validation. Raises ValueError for untrusted hosts."""
+      if host not in ALLOWED_SERVICE_HOSTS:
+          raise ValueError(f'Host {host!r} is not in the trusted service allowlist')
+      return host
+
+  @app.route('/proxy')
+  def proxy_service():
+      service_host = request.args.get('service', '')
+      try:
+          # SAFE: validate_host() checks against explicit allowlist before URL construction
+          safe_host = validate_host(service_host)
+      except ValueError as e:
+          abort(400, str(e))
+      url = f'https://{safe_host}/api/data'
+      response = requests.get(url, timeout=10)
+      return response.json()
+
+recommendations:
+  - Maintain an explicit allowlist of service hostnames that the application is permitted to call and reject any host not on the list before constructing the URL.
+  - Consider removing the host parameter entirely if the set of callable services is small and known at deployment time -- hardcode the URLs in configuration rather than accepting them from HTTP requests.
+  - After allowlist validation, resolve the hostname to an IP address and verify it is not in a private, loopback, or link-local range to prevent DNS rebinding attacks that bypass hostname allowlists.
+  - Use a service registry or service discovery mechanism (Consul, Kubernetes service names) that constrains reachable services at the infrastructure level rather than relying on application validation alone.
+  - Set a short timeout and response size limit on all server-side HTTP requests to limit the impact of SSRF to slow or large internal services.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- which can deliver attacker-controlled
+  hostname strings.
+
+  Sinks: requests.get(), requests.post(), requests.put(), requests.delete() --
+  and urllib.request.urlopen() and urllib.request.Request(). The .tracks(0)
+  parameter targets the URL argument at position 0. This rule specifically
+  catches patterns where user input is interpolated into a URL string (f-string,
+  .format(), concatenation) before reaching the HTTP client function.
+
+  Sanitizers: validate_host() and is_safe_url() are recognized as sanitizing
+  functions. These are expected to implement allowlist validation against a
+  set of trusted hostnames. A host value that passes through either function
+  before being used in URL construction is treated as sanitized.
+
+  The rule follows host values through f-string construction, string concatenation,
+  and cross-file function calls where the URL is assembled in a utility module
+  before being passed to the HTTP client.
+
+# References
+references:
+  - title: "CWE-918: Server-Side Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: OWASP SSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: AWS IMDSv2 and SSRF protection
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+  - title: GCP metadata server and SSRF
+    url: https://cloud.google.com/compute/docs/metadata/overview
+  - title: requests library documentation
+    url: https://requests.readthedocs.io/en/latest/
+  - title: Portswigger SSRF lab
+    url: https://portswigger.net/web-security/ssrf
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 - Server-Side Request Forgery (dedicated category)"
+  - standard: CWE Top 25
+    requirement: "CWE-918 -- Server-Side Request Forgery"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- protect against SSRF; Requirement 1.3 -- restrict outbound network access"
+  - standard: NIST SP 800-53
+    requirement: "SC-7: Boundary Protection -- restrict outbound connections to authorized destinations"
+  - standard: Cloud Security Alliance CCM
+    requirement: "IVS-09 -- network segmentation and traffic control for cloud workloads"
+
+# FAQ
+faq:
+  - question: How is this different from PYTHON-FLASK-SEC-006?
+    answer: |
+      SEC-006 catches cases where the entire URL is user-supplied (e.g., requests.get(user_url)).
+      SEC-011 catches cases where only the host component is user-supplied and the
+      application constructs the URL by interpolating the host into a template string
+      (e.g., requests.get(f'https://{user_host}/api')). The latter is often mistakenly
+      considered safe because the scheme and path are hardcoded. Both rules should run
+      together for complete SSRF coverage.
+
+  - question: The host comes from a dropdown on the frontend. Is that safe?
+    answer: |
+      Frontend validation is bypassed by sending raw HTTP requests. An attacker can send
+      any string as the host parameter regardless of what the dropdown contains. Server-side
+      allowlist validation is mandatory. The dropdown limits what legitimate users submit;
+      it does not limit what attackers submit.
+
+  - question: We use IMDSv2 on AWS. Does that prevent SSRF to the metadata endpoint?
+    answer: |
+      IMDSv2 requires a PUT request with a session token before GET requests. A naive
+      requests.get('http://169.254.169.254/...') fails under IMDSv2. However, more
+      sophisticated SSRF payloads that perform the two-step IMDSv2 flow can still
+      succeed. IMDSv2 raises the bar for exploitation but does not eliminate the need
+      for host allowlist validation.
+
+  - question: Does this rule fire when the host is extracted from a config file rather than the request?
+    answer: |
+      No. The rule only tracks taint from Flask request sources (request.args.get,
+      request.form.get, etc.). A host value read from a config file, environment variable,
+      or database that is not tainted from a request source does not trigger the rule.
+
+  - question: Can I use a regex to validate the hostname instead of an allowlist?
+    answer: |
+      Regex-based hostname validation is fragile and error-prone. A regex that matches
+      valid hostnames may also match 169.254.169.254 or internal service names depending
+      on how it is written. An explicit allowlist (frozenset of trusted hostnames) is
+      simpler, easier to audit, and has no edge cases. Use the allowlist approach.
+
+  - question: How should I handle the case where the set of valid service hosts changes at runtime?
+    answer: |
+      Store the allowlist in a configuration file or environment variable that is loaded
+      at startup. If it needs to change at runtime (e.g., in a microservice environment
+      with dynamic service discovery), use a trusted service registry like Consul or
+      Kubernetes service names and validate against the registry's response -- never trust
+      the client to tell you what service to call.
+
+  - question: Does DNS-based validation (resolve and check IP range) replace the hostname allowlist?
+    answer: |
+      DNS-based IP range validation (reject private IPs after resolution) is a useful
+      defense-in-depth layer but does not replace the allowlist. An attacker who
+      controls a publicly routable domain can point it to any IP, including private
+      ranges via DNS rebinding after the initial validation. Both controls together
+      provide stronger protection.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-006
+  - PYTHON-DJANGO-SEC-006
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LANG-SEC-031
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

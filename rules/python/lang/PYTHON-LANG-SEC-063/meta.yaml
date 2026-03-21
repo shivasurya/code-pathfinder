@@ -1,0 +1,198 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-063
+name: FTP Without TLS (ftplib.FTP)
+short_description: ftplib.FTP() transmits data and credentials in plaintext. Use ftplib.FTP_TLS() or SFTP (via paramiko) for secure file transfer.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-063
+
+# Vulnerability Details
+cwe:
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - ftp
+  - ftplib
+  - plaintext
+  - file-transfer
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's ftplib.FTP() class implements the FTP protocol, which transmits all data
+  including login credentials (username and password), commands, and file contents in
+  plaintext. FTP was designed in an era when network security was not a concern and
+  has never supported encryption natively in its base form.
+
+  An attacker who can observe network traffic (on the same network segment, via ARP
+  poisoning, or at any network hop between client and server) can capture FTP credentials
+  and all transferred file contents.
+
+  Secure alternatives include:
+  - ftplib.FTP_TLS(): FTP over TLS (FTPS/FTPES), which encrypts the control connection
+    and can encrypt the data connection. Requires server support.
+  - paramiko (SSH/SFTP): SFTP over SSH is generally more secure and widely supported.
+  - HTTPS-based file transfer for web-accessible files.
+
+message: "ftplib.FTP() detected. FTP transmits credentials and data in plaintext. Use ftplib.FTP_TLS() or paramiko SFTP instead."
+
+security_implications:
+  - title: Plaintext Credential Transmission
+    description: |
+      FTP LOGIN command transmits the username and password in plaintext. Any network
+      observer can capture these credentials and use them to access the FTP server,
+      modify files, exfiltrate data, or plant malicious files.
+  - title: File Content Interception
+    description: |
+      All files transferred via FTP (uploads and downloads) are transmitted without
+      encryption. Sensitive documents, configuration files, database backups, and
+      any other file content is visible to network observers.
+  - title: Command Injection via Plaintext Control Channel
+    description: |
+      FTP uses a separate control channel for commands. An attacker who can intercept
+      and modify the control channel can inject arbitrary FTP commands, redirect file
+      transfers to attacker-controlled locations, or delete files.
+  - title: Passive Mode Data Connection Hijacking
+    description: |
+      In passive mode FTP, the server provides an IP and port for the data connection.
+      An attacker with network access can intercept the passive mode response and
+      replace the data connection endpoint, hijacking the file transfer.
+
+secure_example: |
+  import ftplib
+  import ssl
+
+  # INSECURE: Plain FTP
+  # ftp = ftplib.FTP("ftp.example.com")
+  # ftp.login(user="username", passwd="password")
+
+  # SECURE: FTP over TLS (FTPS)
+  def upload_file_ftps(host: str, username: str, password: str,
+                       local_path: str, remote_path: str) -> None:
+      ctx = ssl.create_default_context()
+      ftp = ftplib.FTP_TLS(host=host, context=ctx)
+      ftp.login(user=username, passwd=password)
+      ftp.prot_p()  # Enable TLS for data connection as well
+      with open(local_path, "rb") as f:
+          ftp.storbinary(f"STOR {remote_path}", f)
+      ftp.quit()
+
+  # PREFERRED: SFTP via paramiko (SSH-based, more widely supported)
+  import paramiko
+
+  def upload_file_sftp(host: str, username: str, key_path: str,
+                       local_path: str, remote_path: str) -> None:
+      ssh = paramiko.SSHClient()
+      ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+      ssh.connect(host, username=username, key_filename=key_path)
+      with ssh.open_sftp() as sftp:
+          sftp.put(local_path, remote_path)
+      ssh.close()
+
+recommendations:
+  - Replace ftplib.FTP() with ftplib.FTP_TLS() for encrypted FTP, and call ftp.prot_p() to enable TLS on the data connection as well as the control connection.
+  - Prefer SFTP (SSH File Transfer Protocol) via paramiko over FTPS for new implementations, as SSH key-based authentication is more secure than FTP passwords.
+  - If the FTP server does not support TLS, migrate the server to support FTPS or SFTP rather than accepting plaintext FTP.
+  - Never transmit credentials over plain FTP; use key-based authentication with SFTP or TLS certificates with FTPS.
+  - Consider HTTPS-based file transfer (S3, web API) as a modern alternative that avoids FTP protocol complexity entirely.
+
+detection_scope: |
+  This rule detects calls to ftplib.FTP() constructor in Python source code. All call
+  sites are flagged since plain FTP always transmits credentials and data in plaintext.
+  ftplib.FTP_TLS() is the secure alternative and is not flagged.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission; FTP is explicitly prohibited"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "Only approved encrypted protocols permitted for sensitive data transmission"
+  - standard: HIPAA Security Rule
+    requirement: "45 CFR 164.312(e) - Technical safeguards for data in transit"
+
+# References
+references:
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python docs: ftplib module"
+    url: https://docs.python.org/3/library/ftplib.html
+  - title: "Python docs: ftplib.FTP_TLS"
+    url: https://docs.python.org/3/library/ftplib.html#ftplib.FTP_TLS
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: What is the difference between FTPS and SFTP?
+    answer: |
+      FTPS (FTP over SSL/TLS) is FTP with TLS added to the control and data connections.
+      It uses ports 21 (explicit TLS via AUTH TLS) or 990 (implicit TLS). SFTP is the
+      SSH File Transfer Protocol and runs over SSH (port 22). They are completely different
+      protocols. SFTP is generally preferred for new implementations due to SSH's mature
+      security model and widespread key-based authentication support.
+
+  - question: Is ftplib.FTP_TLS() always safe?
+    answer: |
+      FTP_TLS() with ssl.create_default_context() is much safer than plain FTP. However,
+      ensure ftp.prot_p() is called to enable TLS on the data connection in addition to
+      the control connection. Without prot_p(), only the control connection (credentials
+      and commands) is encrypted; file contents may still be transmitted in plaintext.
+
+  - question: Why is FTP still used if it is insecure?
+    answer: |
+      FTP has decades of legacy support in file sharing, hosting control panels, and
+      industrial equipment. Many legacy systems support only FTP. For legacy integration,
+      use FTPS if the server supports it. If the server only supports plain FTP, document
+      the risk and limit the sensitive data transmitted over FTP, then plan migration.
+
+  - question: Does PCI DSS prohibit FTP?
+    answer: |
+      Yes. PCI DSS v4.0 Requirement 4.2.1 prohibits unencrypted protocols including
+      FTP for transmitting cardholder data. Systems in scope for PCI DSS must use
+      FTPS, SFTP, or HTTPS for all file transfers involving cardholder data.
+
+  - question: How do I migrate an existing FTP-based workflow?
+    answer: |
+      Step 1: Check if the FTP server supports FTPS (try connecting with FTP_TLS()). If yes,
+      migrate to FTP_TLS() immediately. Step 2: If the server supports SSH, use paramiko SFTP.
+      Step 3: For web-accessible files, use HTTPS-based upload/download APIs. Step 4: For
+      legacy systems that only support plain FTP, isolate them on a private network, use
+      a VPN/SSH tunnel, and plan server migration.
+
+  - question: Can I use a VPN or SSH tunnel to make plain FTP safe?
+    answer: |
+      Tunneling FTP through SSH (ssh -L) provides encryption for the control connection.
+      However, passive mode FTP data connections may bypass the tunnel depending on
+      configuration. SFTP is simpler and more reliable than FTP-over-SSH-tunnel.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-060
+  - PYTHON-LANG-SEC-064
+  - PYTHON-LANG-SEC-054
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -40,6 +40,30 @@ func (e *Enricher) EnrichDetection(detection dsl.DataflowDetection, rule dsl.Rul
 	loc := e.extractLocation(detection)
 	enriched.Location = loc
 
+	// Resolve source/sink file paths for taint flows
+	if enriched.DetectionType == dsl.DetectionTypeTaintLocal || enriched.DetectionType == dsl.DetectionTypeTaintGlobal {
+		// Sink file = finding location file (already resolved)
+		enriched.Detection.SinkFile = loc.RelPath
+		if enriched.Detection.SinkFile == "" {
+			enriched.Detection.SinkFile = loc.FilePath
+		}
+
+		// Source file: use SourceFunctionFQN if different from FunctionFQN
+		if detection.SourceFunctionFQN != "" && detection.SourceFunctionFQN != detection.FunctionFQN {
+			sourceLoc := e.extractLocation(dsl.DataflowDetection{
+				FunctionFQN: detection.SourceFunctionFQN,
+				SinkLine:    detection.SourceLine,
+			})
+			enriched.Detection.SourceFile = sourceLoc.RelPath
+			if enriched.Detection.SourceFile == "" {
+				enriched.Detection.SourceFile = sourceLoc.FilePath
+			}
+		} else {
+			// Same file for source and sink
+			enriched.Detection.SourceFile = enriched.Detection.SinkFile
+		}
+	}
+
 	// Extract code snippet
 	snippet, err := e.extractSnippet(loc)
 	if err == nil {

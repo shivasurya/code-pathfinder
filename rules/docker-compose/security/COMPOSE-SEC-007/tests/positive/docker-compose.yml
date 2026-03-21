@@ -1,0 +1,4 @@
+services:
+  app:
+    image: myapp
+    network_mode: host  # DANGEROUS - No network isolation

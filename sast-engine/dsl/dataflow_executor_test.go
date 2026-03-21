@@ -191,7 +191,7 @@ func TestDataflowExecutor_Global(t *testing.T) {
 		assert.NotEmpty(t, detections)
 		found := false
 		for _, d := range detections {
-			if d.FunctionFQN == "test.source_func" && d.Scope == "global" {
+			if d.FunctionFQN == "test.sink_func" && d.Scope == "global" {
 				found = true
 				assert.Equal(t, 10, d.SourceLine)
 				assert.Equal(t, 20, d.SinkLine)

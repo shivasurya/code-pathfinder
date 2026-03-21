@@ -1,0 +1,193 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-061
+name: Insecure urllib.request.urlopen() Usage
+short_description: urllib.request.urlopen() over HTTP transmits data in plaintext. Verify HTTPS URLs are used and SSL context is properly configured.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-061
+
+# Vulnerability Details
+cwe:
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - urllib
+  - urlopen
+  - plaintext
+  - http
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  urllib.request.urlopen() is Python's standard library function for making HTTP and HTTPS
+  requests. When called with an HTTP (non-HTTPS) URL, all data is transmitted in plaintext.
+  When called with an HTTPS URL but with an insecure SSL context (e.g., one created with
+  ssl._create_unverified_context()), certificate verification is bypassed.
+
+  Unlike the requests library, urllib.request.urlopen() does not provide as clear a safety
+  indicator for certificate verification. The SSL context must be explicitly created and
+  passed, making it easier to accidentally use an insecure context.
+
+  This rule audits all urlopen() calls to ensure HTTPS URLs are used and that custom SSL
+  contexts passed to the function do not disable certificate verification.
+
+message: "urllib.request.urlopen() detected. Ensure HTTPS URLs are used and the SSL context has certificate verification enabled."
+
+security_implications:
+  - title: Plaintext HTTP Transmission
+    description: |
+      When urlopen() is called with http:// URLs, all data including headers, authentication,
+      and request/response bodies is transmitted without encryption, exposing it to network
+      observers and MITM attackers.
+  - title: Insecure SSL Context Bypass
+    description: |
+      Passing an SSL context created with ssl._create_unverified_context() to urlopen()
+      disables certificate verification. The connection is encrypted but the server is not
+      authenticated, enabling MITM attacks.
+  - title: Redirect Following to HTTP
+    description: |
+      urllib.request.urlopen() follows HTTP redirects by default. An HTTPS connection that
+      redirects to an HTTP URL may transmit the subsequent request (including cookies and
+      headers) in plaintext.
+  - title: No Timeout Default
+    description: |
+      urlopen() has no timeout by default, which can cause the application to hang
+      indefinitely on slow or unresponsive servers, potentially enabling denial-of-service
+      through resource exhaustion.
+
+secure_example: |
+  import ssl
+  import urllib.request
+
+  # INSECURE: HTTP URL or unverified context
+  # response = urllib.request.urlopen("http://api.example.com/data")
+  # response = urllib.request.urlopen(url, context=ssl._create_unverified_context())
+
+  # SECURE: HTTPS URL with default SSL context (certificate verification enabled)
+  def fetch_data(url: str) -> bytes:
+      if not url.startswith("https://"):
+          raise ValueError("Only HTTPS URLs are allowed")
+      ctx = ssl.create_default_context()
+      with urllib.request.urlopen(url, context=ctx, timeout=30) as response:
+          return response.read()
+
+  # SECURE: With custom CA for corporate environments
+  def fetch_with_custom_ca(url: str, ca_cert: str) -> bytes:
+      if not url.startswith("https://"):
+          raise ValueError("Only HTTPS URLs are allowed")
+      ctx = ssl.create_default_context(cafile=ca_cert)
+      with urllib.request.urlopen(url, context=ctx, timeout=30) as response:
+          return response.read()
+
+  # PREFERRED: Use the requests library for simpler, safer HTTP
+  import requests
+
+  def fetch_resource(url: str) -> bytes:
+      response = requests.get(url, timeout=30)
+      response.raise_for_status()
+      return response.content
+
+recommendations:
+  - Ensure all urlopen() calls use https:// URLs; validate the URL scheme before calling urlopen().
+  - Always pass a timeout argument to urlopen() to prevent hanging connections from causing resource exhaustion.
+  - Pass an explicitly created ssl.create_default_context() to urlopen() for HTTPS requests to ensure certificate verification.
+  - Consider using the requests library instead, which has cleaner API, better defaults, and easier certificate configuration.
+  - Never pass ssl._create_unverified_context() or any context with verify_mode=CERT_NONE to urlopen().
+
+detection_scope: |
+  This rule detects calls to urllib.request.urlopen() and urllib.urlopen() in Python source
+  code. All call sites are flagged to prompt review of the URL scheme and SSL context
+  configuration to ensure secure usage.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for cardholder data transmission"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "TLS with certificate validation required for all sensitive data transmission"
+  - standard: GDPR Article 32
+    requirement: "Appropriate technical measures including encryption of personal data in transit"
+
+# References
+references:
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python docs: urllib.request.urlopen()"
+    url: https://docs.python.org/3/library/urllib.request.html#urllib.request.urlopen
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: "Python docs: ssl.create_default_context()"
+    url: https://docs.python.org/3/library/ssl.html#ssl.create_default_context
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: Does urllib.request.urlopen() verify certificates by default for HTTPS URLs?
+    answer: |
+      Yes. Since Python 3.4.3, urllib.request.urlopen() with an HTTPS URL verifies
+      certificates using the system CA store by default. However, if a custom SSL context
+      is passed (especially one created with ssl._create_unverified_context()), verification
+      is whatever the context specifies. Always use ssl.create_default_context() for custom
+      contexts to maintain the secure default.
+
+  - question: Should I use urllib.request or the requests library?
+    answer: |
+      For application code, the requests library provides a cleaner API with better defaults
+      for authentication, session management, retries, and certificate configuration. urllib.request
+      is more appropriate for scripts where minimizing dependencies is important or when
+      using urllib-specific features like custom handlers and openers.
+
+  - question: How do I add authentication headers with urllib.request?
+    answer: |
+      Use urllib.request.Request() with a headers dict: req = Request(url, headers={"Authorization": f"Bearer {token}"}), then pass it to urlopen(). Alternatively, use urllib.request.HTTPBasicAuthHandler for basic auth, or the requests library which makes header management much simpler.
+
+  - question: What timeout value should I use for urlopen()?
+    answer: |
+      Use a timeout appropriate for the expected response time: 10-30 seconds for typical
+      web APIs, up to 60-120 seconds for large file downloads or slow services. Always
+      handle socket.timeout exceptions. Never omit the timeout parameter in production code.
+
+  - question: Does this rule flag urlopen() for local file:// URLs?
+    answer: |
+      urllib.request.urlopen() also supports file:// URLs for local filesystem access.
+      Local file URLs do not involve network transmission and have different security
+      considerations (path traversal). This rule focuses on HTTP/HTTPS security, but
+      file:// URLs in urlopen() should also be reviewed for path traversal risks.
+
+  - question: How does urllib.request.urlretrieve() compare in security?
+    answer: |
+      urllib.request.urlretrieve() has the same HTTP/HTTPS considerations as urlopen()
+      and is additionally deprecated in Python 3. Replace it with urlopen() or the
+      requests library. PYTHON-LANG-SEC-061 covers urlretrieve() as well.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-060
+  - PYTHON-LANG-SEC-062
+  - PYTHON-LANG-SEC-054
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

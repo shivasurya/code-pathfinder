@@ -1,0 +1,185 @@
+# Rule Identity
+id: PYTHON-CRYPTO-SEC-001a
+name: RC4 (ARC4) Cipher Usage via PyCryptodome
+short_description: Detects use of the RC4 stream cipher through PyCryptodome's ARC4 module, which has known keystream biases and is prohibited by RFC 7465.
+
+# Classification
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-001a
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - pycryptodome
+  - rc4
+  - arc4
+  - stream-cipher
+  - broken-crypto
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to `Crypto.Cipher.ARC4.new()` from the PyCryptodome library.
+  RC4 (marketed under the alias ARC4 to avoid trademark issues) is a stream cipher
+  that has been cryptographically broken since the early 2000s and explicitly prohibited
+  in TLS by RFC 7465 since 2015.
+
+  PyCryptodome's ARC4 module is a direct implementation of the RC4 keystream generator.
+  It produces a statistically biased output: the first 256 bytes of keystream are
+  strongly correlated with the key, making it possible to recover the key or plaintext
+  from sufficient ciphertext. The RC4NOMORE attack demonstrated full HTTP session cookie
+  recovery within 75 hours against live HTTPS traffic using RC4 cipher suites.
+
+  The rule matches `PyCryptoCipherARC4.method("new")` -- the constructor call for ARC4
+  cipher objects in PyCryptodome. No mode or key size makes RC4 safe. The companion
+  rule PYTHON-CRYPTO-SEC-001 covers the same algorithm in the `cryptography` library.
+
+message: "RC4 (ARC4) via PyCryptodome is cryptographically broken. Replace with AES-256-GCM or ChaCha20-Poly1305."
+
+security_implications:
+  - title: Biased Keystream Enables Statistical Plaintext Recovery
+    description: |
+      RC4's keystream generator produces output with measurable statistical biases,
+      particularly in the first 256 bytes. An attacker who can collect multiple
+      ciphertexts encrypted under the same key -- or in the case of web sessions,
+      repeated encryptions of the same secret -- can recover the plaintext using
+      known-plaintext or distinguishing attacks within a practical time frame.
+  - title: Prohibited in TLS by RFC 7465
+    description: |
+      RFC 7465 (2015) forbids the negotiation of any RC4-based TLS cipher suite.
+      If PyCryptodome ARC4 is used in a transport encryption context, it violates
+      this requirement outright. Systems subject to PCI DSS, HIPAA, or government
+      security frameworks will receive mandatory findings for RC4 usage.
+  - title: No Integrity Protection -- Bit-Flip Attacks Apply
+    description: |
+      ARC4 in PyCryptodome operates as a raw XOR stream cipher with no MAC or
+      authentication tag. An attacker with write access to the ciphertext can flip
+      any bit and the corresponding plaintext bit will flip predictably, enabling
+      undetected modification of encrypted content.
+  - title: Key Reuse Reveals Both Plaintexts
+    description: |
+      Reusing an ARC4 key across two plaintexts produces two ciphertexts whose XOR
+      equals the XOR of the two plaintexts. Standard crib-dragging techniques can
+      then recover both messages without the key. Any code that wraps ARC4 in a
+      loop or reuses key material is immediately vulnerable.
+
+secure_example: |
+  from Crypto.Cipher import AES
+  import os
+
+  # SECURE: AES-GCM provides authenticated encryption
+  key = os.urandom(32)  # 256-bit key
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"sensitive data")
+
+recommendations:
+  - Replace Crypto.Cipher.ARC4 with AES in GCM mode (AES.new(key, AES.MODE_GCM)) for authenticated encryption
+  - Use the cryptography library's ChaCha20Poly1305 AEAD primitive as an alternative to AES-GCM
+  - Never reuse a key with ARC4 or any stream cipher -- always derive a fresh key per encryption session
+  - If migrating from ARC4, re-encrypt all stored data with AES-256-GCM and rotate the key material
+  - Enable this rule in CI/CD pipelines to catch any re-introduction of ARC4 through library version changes
+
+detection_scope: |
+  This rule matches calls to `Crypto.Cipher.ARC4.new()` in PyCryptodome via the
+  QueryType pattern `PyCryptoCipherARC4.method("new")`. It fires on any instantiation
+  of an ARC4 cipher object, regardless of the key length passed. There is no safe usage
+  of RC4, so no sanitizer exclusions are defined. The companion rule
+  PYTHON-CRYPTO-SEC-001 covers the same algorithm in the `cryptography` hazmat library.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "RFC 7465: Prohibiting RC4 Cipher Suites"
+    url: https://www.rfc-editor.org/rfc/rfc7465
+  - title: "RC4NOMORE: Practically breaking WPA-TKIP and TLS using RC4 biases"
+    url: https://www.rc4nomore.com/
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: OWASP Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: PyCryptodome ARC4 Documentation
+    url: https://pycryptodome.readthedocs.io/en/latest/src/cipher/arc4.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography for data protection"
+  - standard: NIST SP 800-131A
+    requirement: "Transitioning to approved algorithms -- RC4/DES/3DES disallowed"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+  - standard: RFC 7465
+    requirement: "RC4 cipher suites are prohibited in all versions of TLS"
+
+# FAQ
+faq:
+  - question: We use PyCryptodome across our codebase. Does this rule flag every import of Crypto.Cipher?
+    answer: |
+      No. The rule specifically matches calls to ARC4.new(), not generic imports of
+      the Crypto.Cipher package. Only the instantiation of an ARC4 cipher object
+      triggers a finding. Other PyCryptodome ciphers (AES, ChaCha20) are not flagged
+      by this rule.
+
+  - question: What is the practical attack timeline against ARC4-encrypted data?
+    answer: |
+      The RC4NOMORE research (2015) demonstrated full cookie recovery in approximately
+      75 hours of sustained traffic against a target using RC4 in TLS. For offline
+      attacks against stored data where an attacker controls the plaintext partially
+      (known-plaintext scenario), recovery can be significantly faster depending on
+      data volume and keystream reuse.
+
+  - question: Does switching from PyCryptodome ARC4 to PyCryptodome AES require a full rewrite?
+    answer: |
+      No. PyCryptodome's AES in GCM mode has a very similar API: AES.new(key, AES.MODE_GCM),
+      followed by encrypt_and_digest(). The key size changes from 5-16 bytes (RC4 accepts
+      variable lengths) to a fixed 16, 24, or 32 bytes (128/192/256-bit AES). The main
+      change is storing and verifying the authentication tag, which ARC4 does not produce.
+
+  - question: How do I handle the authentication tag in AES-GCM versus the lack of one in ARC4?
+    answer: |
+      With AES-GCM, encrypt_and_digest() returns both the ciphertext and a 16-byte
+      authentication tag. Store both. On decryption, pass the tag to decrypt_and_verify()
+      -- it raises ValueError if the tag does not match, indicating tampering. This is
+      strictly better than RC4, which gives you no tamper detection at all.
+
+  - question: Is this a concern only for internet-facing systems, or also for internal tools?
+    answer: |
+      Both. Internal tools that encrypt data at rest or in transit using RC4 are
+      vulnerable to insider threat and lateral movement scenarios. An attacker who
+      compromises any internal system can collect RC4-encrypted traffic and process
+      it offline. Compliance frameworks like SOC 2 and ISO 27001 require strong
+      cryptography for all sensitive data, regardless of whether the system is
+      internet-facing.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-CRYPTO-SEC-001
+  - PYTHON-CRYPTO-SEC-002a
+  - PYTHON-CRYPTO-SEC-005
+  - PYTHON-CRYPTO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

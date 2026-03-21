@@ -56,6 +56,7 @@ class CallMatcher:
         self.wildcard = any("*" in p for p in patterns)
         self.match_position = match_position or {}
         self.match_name = match_name or {}
+        self._tracked_params: List[Dict[str, Any]] = []
 
     def _make_constraint(self, value: ArgumentValue) -> Dict[str, Any]:
         """
@@ -82,6 +83,24 @@ class CallMatcher:
             )
 
         return {"value": value, "wildcard": has_wildcard}
+
+    def tracks(self, *positions_or_names) -> "CallMatcher":
+        """Specify which parameters are taint-sensitive in dataflow analysis.
+
+        Same API as MethodMatcher.tracks(). See MethodMatcher for full docs.
+        """
+        for p in positions_or_names:
+            if isinstance(p, int):
+                self._tracked_params.append({"index": p})
+            elif p == "return":
+                self._tracked_params.append({"return": True})
+            elif isinstance(p, str):
+                self._tracked_params.append({"name": p})
+            else:
+                raise TypeError(
+                    f"tracks() accepts int, str, or 'return', got {type(p)}"
+                )
+        return self
 
     def to_ir(self) -> dict:
         """
@@ -125,6 +144,9 @@ class CallMatcher:
                     constraint["wildcard"] = True
                 keyword_args[name] = constraint
             ir["keywordArgs"] = keyword_args
+
+        if self._tracked_params:
+            ir["trackedParams"] = self._tracked_params
 
         return ir
 

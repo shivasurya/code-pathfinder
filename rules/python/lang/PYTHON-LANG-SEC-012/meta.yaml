@@ -1,0 +1,191 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-012
+name: Dangerous os.spawn*() Call
+short_description: os.spawn*() spawns a new process and can execute arbitrary programs when the executable path or arguments are derived from untrusted input.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-012
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - os-spawn
+  - process-spawn
+  - command-injection
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's os.spawnl(), os.spawnle(), os.spawnlp(), os.spawnlpe(), os.spawnv(), os.spawnve(),
+  os.spawnvp(), and os.spawnvpe() functions spawn a new process to execute an external program.
+  These functions are an older API for process creation and have been superseded by the
+  subprocess module, which provides more control, better error handling, and a safer interface.
+
+  The spawn functions with the 'p' suffix (spawnlp, spawnvp) search PATH for the executable,
+  which introduces additional risk if PATH can be manipulated. The 'e' suffix variants accept
+  an explicit environment, which can be exploited if constructed from user input.
+
+  When the executable path or any argument is derived from untrusted input, an attacker can
+  cause arbitrary program execution. Even the list-based variants (spawnv) that do not invoke
+  a shell are dangerous when the executable path is attacker-controlled.
+
+message: "os.spawn*() detected. Use subprocess.run() with a list of arguments instead of the deprecated os.spawn*() API."
+
+security_implications:
+  - title: Arbitrary Program Execution
+    description: |
+      An attacker controlling the executable path argument can run any program on the system.
+      The spawned process runs with the same user credentials as the Python process, giving the
+      attacker the same filesystem and network access.
+  - title: PATH-Based Executable Hijacking
+    description: |
+      The spawnlp and spawnvp variants search PATH to find the executable. If PATH can be
+      manipulated via environment injection or if the current working directory is included
+      in PATH, an attacker can place a malicious binary named after the target executable
+      to intercept the spawn call.
+  - title: Environment Variable Injection
+    description: |
+      The spawnle and spawnve variants accept a custom environment dictionary. If this
+      dictionary incorporates user-supplied values, an attacker can set LD_PRELOAD to inject
+      shared library code, or manipulate PATH to control which binaries are found.
+  - title: Resource Leak and Missing Error Handling
+    description: |
+      os.spawn*() provides less robust error handling than subprocess. Failures may leave
+      zombie processes, uncollected exit codes, and unclosed file descriptors, which can
+      be exploited for denial-of-service through resource exhaustion.
+
+secure_example: |
+  import subprocess
+
+  # SECURE: Use subprocess.run() with a list of arguments
+  def run_image_processor(input_file: str, output_file: str) -> int:
+      import re
+      SAFE_FILENAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+      if not SAFE_FILENAME.match(input_file) or not SAFE_FILENAME.match(output_file):
+          raise ValueError("Invalid filename")
+      result = subprocess.run(
+          ["/usr/bin/convert", input_file, output_file],
+          check=True,
+          capture_output=True,
+          timeout=30,
+      )
+      return result.returncode
+
+  # SECURE: Use absolute paths for executables, never rely on PATH search
+  def compress_file(filename: str) -> None:
+      import re
+      if not re.match(r'^[a-zA-Z0-9_\-\.]+$', filename):
+          raise ValueError("Invalid filename")
+      subprocess.run(["/bin/gzip", "-k", filename], check=True, timeout=60)
+
+recommendations:
+  - Replace all os.spawn*() calls with subprocess.run() using a list of arguments, which is more secure, more portable, and better maintained.
+  - Use absolute paths for executables instead of relying on PATH search to prevent executable hijacking via PATH manipulation.
+  - Validate all input that becomes an argument to any process-spawning call against a strict allowlist before use.
+  - Set explicit timeouts on subprocess.run() to prevent resource exhaustion from long-running or hung child processes.
+  - Capture stdout and stderr from spawned processes to prevent information leakage through process output.
+
+detection_scope: |
+  This rule detects calls to os.spawnl(), os.spawnle(), os.spawnlp(), os.spawnlpe(), os.spawnv(),
+  os.spawnve(), os.spawnvp(), and os.spawnvpe() from the Python os module. All variants are
+  flagged since the spawn API is deprecated and all variants can execute arbitrary programs
+  when given untrusted arguments.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: os.spawnl() and variants"
+    url: https://docs.python.org/3/library/os.html#os.spawnl
+  - title: "Python docs: subprocess module"
+    url: https://docs.python.org/3/library/subprocess.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# FAQ
+faq:
+  - question: What is the difference between os.spawn*() and os.exec*()?
+    answer: |
+      os.exec*() replaces the current process with a new program and never returns. os.spawn*()
+      creates a new child process while the Python process continues running. Both can execute
+      arbitrary programs when given untrusted arguments, but os.spawn*() is less destructive
+      since the Python process survives and can handle errors.
+
+  - question: Why is os.spawn*() deprecated in favor of subprocess?
+    answer: |
+      The subprocess module provides a unified, cross-platform interface with better control
+      over stdin/stdout/stderr, timeout handling, proper error propagation, and safer defaults.
+      os.spawn*() was included for POSIX compatibility but lacks these features and is not
+      recommended for use in new Python code.
+
+  - question: Are the spawnvp and spawnlp variants more dangerous than spawnv?
+    answer: |
+      Yes. The 'p' variants search PATH to find the executable, which introduces PATH
+      manipulation as an additional attack vector. Using spawnv with an absolute path is
+      slightly safer because it avoids PATH search, but is still dangerous when the absolute
+      path is attacker-controlled.
+
+  - question: Does os.spawn*() invoke a shell?
+    answer: |
+      No, os.spawn*() does not invoke a shell by default, unlike os.system(). The program
+      and arguments are passed directly to the OS. This means shell metacharacter injection
+      is not possible, but arbitrary program execution is still possible when the executable
+      path or arguments are attacker-controlled.
+
+  - question: What mode argument should I use with os.spawn*()?
+    answer: |
+      os.spawn*() accepts a mode argument: os.P_NOWAIT returns the child PID immediately
+      while the parent continues, and os.P_WAIT blocks until the child exits. For new code,
+      always use subprocess.run() instead, which handles both cases more cleanly with proper
+      timeout and error handling.
+
+  - question: How should I migrate from os.spawn*() to subprocess?
+    answer: |
+      Replace os.spawnv(os.P_WAIT, path, args) with subprocess.run([path] + args[1:], check=True).
+      Replace os.spawnve(os.P_WAIT, path, args, env) with subprocess.run([path] + args[1:], env=env, check=True).
+      Ensure all paths are absolute, add timeouts, and capture output as needed.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-011
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-021
+  - PYTHON-LANG-SEC-022
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

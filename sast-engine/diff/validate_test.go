@@ -81,7 +81,7 @@ func TestValidateGitRef_MultipleValidRefs(t *testing.T) {
 	dir := setupTestRepo(t)
 
 	// Create a tag and branch using the shared helper.
-	runGit(t, dir, "tag", "v1.0.0")
+	runGit(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
 	runGit(t, dir, "branch", "develop")
 
 	tests := []struct {

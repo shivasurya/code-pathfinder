@@ -203,11 +203,19 @@ func (f *TextFormatter) writeTaintFlow(det *dsl.EnrichedDetection) {
 		return
 	}
 
-	fmt.Fprintf(f.writer, "    Flow: %s (line %d) -> %s (line %d)\n",
+	sourceRef := fmt.Sprintf("line %d", det.Detection.SourceLine)
+	if det.Detection.SourceFile != "" {
+		sourceRef = fmt.Sprintf("%s:%d", det.Detection.SourceFile, det.Detection.SourceLine)
+	}
+	sinkRef := fmt.Sprintf("line %d", det.Detection.SinkLine)
+	if det.Detection.SinkFile != "" {
+		sinkRef = fmt.Sprintf("%s:%d", det.Detection.SinkFile, det.Detection.SinkLine)
+	}
+	fmt.Fprintf(f.writer, "    Flow: %s (%s) -> %s (%s)\n",
 		det.Detection.TaintedVar,
-		det.Detection.SourceLine,
+		sourceRef,
 		det.Detection.SinkCall,
-		det.Detection.SinkLine)
+		sinkRef)
 
 	fmt.Fprintf(f.writer, "    Tainted variable '%s' reaches dangerous sink without sanitization\n",
 		det.Detection.TaintedVar)

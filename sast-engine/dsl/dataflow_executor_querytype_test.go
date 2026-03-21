@@ -1271,3 +1271,596 @@ func TestQueryType_TenFile_TypeConstrainedSource_Sanitized(t *testing.T) {
 	}
 	assert.Equal(t, 0, unsanitizedGlobal, "Q2: 10-file chain with sanitizer MUST NOT detect")
 }
+
+// --- Tracked Parameter Tests ---
+
+// intPtr is a helper to create *int for TrackedParam.Index.
+func intPtr(i int) *int { return &i }
+
+func TestTrackedParam_LocalVDG_PositionalMatch(t *testing.T) {
+	// Taint flows to param 0 of execute, tracks(0) → should detect
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "query", IsVariable: true, Position: 0},
+				{Value: "params", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "query", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"query", "params"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	require.Len(t, detections, 1, "taint reaches tracked param 0")
+	assert.NotNil(t, detections[0].SinkParamIndex)
+	assert.Equal(t, 0, *detections[0].SinkParamIndex)
+}
+
+func TestTrackedParam_LocalVDG_PositionalReject(t *testing.T) {
+	// Taint flows to param 1 of execute, tracks(0) → should NOT detect
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "safe_sql", IsVariable: true, Position: 0},
+				{Value: "tainted", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "tainted", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"safe_sql", "tainted"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 0, "taint reaches param 1 but only param 0 is tracked")
+}
+
+func TestTrackedParam_LocalVDG_NoTracksAllMatch(t *testing.T) {
+	// Taint flows to param 1, no tracks() → should detect (backward compat)
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "safe_sql", IsVariable: true, Position: 0},
+				{Value: "tainted", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "tainted", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"safe_sql", "tainted"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 1, "no tracks() = all params sensitive (backward compat)")
+}
+
+func TestTrackedParam_MultipleTracked(t *testing.T) {
+	// tracks(0, 1) — taint reaches param 1 → should detect
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "execvp",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "safe", IsVariable: true, Position: 0},
+				{Value: "tainted", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "tainted", "get", []string{}),
+		makeTestCallStmt(8, "execvp", []string{"safe", "tainted"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execvp"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}, {Index: intPtr(1)}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 1, "taint reaches tracked param 1")
+}
+
+func TestTrackedParam_VarRenamedBeforeSink(t *testing.T) {
+	// q = input(); sql = q; execute(sql) — tracks(0) should detect via SinkVar
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 10},
+			Arguments: []core.Argument{
+				{Value: "sql", IsVariable: true, Position: 0},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "q", "get", []string{}),
+		{Type: core.StatementTypeAssignment, LineNumber: 7, Def: "sql", Uses: []string{"q"}},
+		makeTestCallStmt(10, "execute", []string{"sql"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 1, "SinkVar=sql matches arg at position 0")
+}
+
+func TestTrackedParam_Sanitized(t *testing.T) {
+	// Taint reaches tracked param 0 but is sanitized → should NOT detect
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{Target: "escape", Location: core.Location{Line: 7}},
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 10},
+			Arguments: []core.Argument{
+				{Value: "safe_query", IsVariable: true, Position: 0},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "raw", "get", []string{}),
+		makeTestAssignStmt(7, "safe_query", "escape", []string{"raw"}),
+		makeTestCallStmt(10, "execute", []string{"safe_query"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}}})},
+		Sanitizers: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"escape"}}),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 0, "sanitized before reaching tracked param")
+}
+
+func TestTrackedParam_NonexistentName(t *testing.T) {
+	// tracks("nonexistent") — name doesn't resolve → should NOT detect
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:    "execute",
+			TargetFQN: "db.execute",
+			Location:  core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "query", IsVariable: true, Position: 0},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "query", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"query"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Name: "nonexistent"}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 0, "nonexistent param name resolves to no indices")
+}
+
+func TestTrackedParam_NilCallSite(t *testing.T) {
+	// CallSite exists for pattern matching but has no Arguments.
+	// matchesTrackedParams finds the CallSite but no args match → conservative accept
+	// because findCallSiteAtLine returns a CallSite with empty Arguments.
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		// CallSite for execute exists but at line 9 (different from VDG sink line 8)
+		// so findCallSiteAtLine returns nil → conservative acceptance
+		{Target: "execute", Location: core.Location{Line: 9}},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "query", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"query"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	// Without TrackedParams, detection should pass through (backward compat)
+	assert.Len(t, detections, 1, "no TrackedParams: accept detection even with mismatched CallSite line")
+}
+
+func TestTrackedParam_TypeConstrainedCall(t *testing.T) {
+	// TrackedParams on TypeConstrainedCallIR — positional match
+	funcFQN := "app.views.sql_handler"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{
+			Target:                   "get",
+			TargetFQN:                "flask.Request.get",
+			Location:                 core.Location{Line: 5},
+			InferredType:             "flask.Request",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.8,
+		},
+		{
+			Target:                   "execute",
+			TargetFQN:                "sqlite3.Cursor.execute",
+			Location:                 core.Location{Line: 10},
+			InferredType:             "sqlite3.Cursor",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.8,
+			Arguments: []core.Argument{
+				{Value: "query", IsVariable: true, Position: 0},
+				{Value: "safe_params", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "query", "get", []string{}),
+		makeTestCallStmt(10, "execute", []string{"query", "safe_params"}),
+	}
+
+	ir := &DataflowIR{
+		Sources: []json.RawMessage{mustMarshal(TypeConstrainedCallIR{
+			Type: "type_constrained_call", ReceiverTypes: []string{"flask.Request"},
+			MethodNames: []string{"get"}, MinConfidence: 0.5, FallbackMode: "name",
+		})},
+		Sinks: []json.RawMessage{mustMarshal(TypeConstrainedCallIR{
+			Type: "type_constrained_call", ReceiverTypes: []string{"sqlite3.Cursor"},
+			MethodNames: []string{"execute"}, MinConfidence: 0.5, FallbackMode: "name",
+			TrackedParams: []TrackedParam{{Index: intPtr(0)}},
+		})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	require.Len(t, detections, 1, "type-constrained sink with tracks(0)")
+	assert.NotNil(t, detections[0].SinkParamIndex)
+	assert.Equal(t, 0, *detections[0].SinkParamIndex)
+}
+
+func TestTrackedParam_TypeConstrainedCall_Reject(t *testing.T) {
+	// TypeConstrainedCallIR — taint at param 1, tracks(0) → no detection
+	funcFQN := "app.views.sql_handler"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{
+			Target:                   "get",
+			TargetFQN:                "flask.Request.get",
+			Location:                 core.Location{Line: 5},
+			InferredType:             "flask.Request",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.8,
+		},
+		{
+			Target:                   "execute",
+			TargetFQN:                "sqlite3.Cursor.execute",
+			Location:                 core.Location{Line: 10},
+			InferredType:             "sqlite3.Cursor",
+			ResolvedViaTypeInference: true,
+			TypeConfidence:           0.8,
+			Arguments: []core.Argument{
+				{Value: "safe_sql", IsVariable: true, Position: 0},
+				{Value: "tainted", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "tainted", "get", []string{}),
+		makeTestCallStmt(10, "execute", []string{"safe_sql", "tainted"}),
+	}
+
+	ir := &DataflowIR{
+		Sources: []json.RawMessage{mustMarshal(TypeConstrainedCallIR{
+			Type: "type_constrained_call", ReceiverTypes: []string{"flask.Request"},
+			MethodNames: []string{"get"}, MinConfidence: 0.5, FallbackMode: "name",
+		})},
+		Sinks: []json.RawMessage{mustMarshal(TypeConstrainedCallIR{
+			Type: "type_constrained_call", ReceiverTypes: []string{"sqlite3.Cursor"},
+			MethodNames: []string{"execute"}, MinConfidence: 0.5, FallbackMode: "name",
+			TrackedParams: []TrackedParam{{Index: intPtr(0)}},
+		})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 0, "taint at param 1, tracked param 0 only")
+}
+
+func TestTrackedParam_LocalVDG_ByName(t *testing.T) {
+	// tracks("query") — name resolves to param index 0 → should detect
+	funcFQN := "app.views.handle"
+	calleeFQN := "db.module.execute"
+	cg := core.NewCallGraph()
+
+	cg.Parameters[calleeFQN+".query"] = &core.ParameterSymbol{
+		Name: "query", ParentFQN: calleeFQN, Line: 1,
+	}
+	cg.Parameters[calleeFQN+".params"] = &core.ParameterSymbol{
+		Name: "params", ParentFQN: calleeFQN, Line: 1,
+	}
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:    "execute",
+			TargetFQN: calleeFQN,
+			Location:  core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "q", IsVariable: true, Position: 0},
+				{Value: "safe", IsVariable: true, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "q", "get", []string{}),
+		makeTestCallStmt(8, "execute", []string{"q", "safe"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Name: "query"}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	require.Len(t, detections, 1, "name 'query' resolves to index 0, taint at index 0")
+}
+
+func TestTrackedParam_ReturnSource(t *testing.T) {
+	// Source with tracks("return") — no-op in v1, flow still detected
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "eval",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "data", IsVariable: true, Position: 0},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "data", "get", []string{}),
+		makeTestCallStmt(8, "eval", []string{"data"}),
+	}
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}, TrackedParams: []TrackedParam{{Return: true}}})},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 1, "tracks('return') on source is no-op in v1")
+}
+
+func TestTrackedParam_CombinedPositionalArgAndTracks(t *testing.T) {
+	// PositionalArgs constraint (arg 1 = "True") + tracks(0)
+	// Both the arg constraint and tracked param filtering must work together.
+	funcFQN := "app.views.handle"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{
+			Target:   "call",
+			Location: core.Location{Line: 8},
+			Arguments: []core.Argument{
+				{Value: "cmd", IsVariable: true, Position: 0},
+				{Value: "True", IsVariable: false, Position: 1},
+			},
+		},
+	}
+	cg.Statements[funcFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "cmd", "get", []string{}),
+		makeTestCallStmt(8, "call", []string{"cmd"}),
+	}
+
+	ir := &DataflowIR{
+		Sources: toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks: []json.RawMessage{mustMarshal(CallMatcherIR{
+			Type: "call_matcher", Patterns: []string{"call"},
+			PositionalArgs: map[string]ArgumentConstraint{"1": {Value: "True"}},
+			TrackedParams:  []TrackedParam{{Index: intPtr(0)}},
+		})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.Len(t, detections, 1, "positional arg constraint + tracks(0): taint at tracked param 0")
+}
+
+func TestTrackedParam_Global_SummaryFiltered(t *testing.T) {
+	// Inter-procedural: taint to param 0, tracks(0) → should detect
+	callerFQN := "app.views.handler"
+	calleeFQN := "app.db.run_query"
+	cg := core.NewCallGraph()
+
+	cg.CallSites[callerFQN] = []core.CallSite{
+		{Target: "get", TargetFQN: "request.get", Location: core.Location{Line: 5}},
+		{Target: "run_query", TargetFQN: calleeFQN, Location: core.Location{Line: 8}},
+	}
+	cg.Statements[callerFQN] = []*core.Statement{
+		makeTestAssignStmt(5, "data", "get", []string{}),
+		makeTestCallStmt(8, "run_query", []string{"data"}),
+	}
+	cg.CallSites[calleeFQN] = []core.CallSite{
+		{
+			Target:   "execute",
+			Location: core.Location{Line: 20},
+			Arguments: []core.Argument{
+				{Value: "q", IsVariable: true, Position: 0},
+			},
+		},
+	}
+	cg.Statements[calleeFQN] = []*core.Statement{
+		makeTestCallStmt(20, "execute", []string{"q"}),
+	}
+	cg.Edges[callerFQN] = []string{calleeFQN}
+	cg.ReverseEdges[calleeFQN] = []string{callerFQN}
+
+	ir := &DataflowIR{
+		Sources:    toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"get"}}),
+		Sinks:      []json.RawMessage{mustMarshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"execute"}, TrackedParams: []TrackedParam{{Index: intPtr(0)}}})},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "global",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.GreaterOrEqual(t, len(detections), 1, "inter-proc: taint reaches tracked param 0")
+}
+
+func TestTrackedParam_SummaryConfirmsFlow_Filtered(t *testing.T) {
+	// Unit test for summaryConfirmsFlow with TrackedParams.
+	// Summary has ParamToSink: {0: false, 1: true} — only param 1 reaches sink.
+	// tracks(0) should reject because param 0 doesn't flow to sink.
+	cg := core.NewCallGraph()
+	cg.Edges["source_func"] = []string{"sink_func"}
+
+	executor := &DataflowExecutor{
+		IR:          &DataflowIR{},
+		CallGraph:   cg,
+		Config:      DefaultConfig(),
+		Diagnostics: NewDiagnosticCollector(),
+	}
+
+	source := CallSiteMatch{FunctionFQN: "source_func", Line: 5}
+	sink := CallSiteMatch{
+		FunctionFQN:   "sink_func",
+		Line:          10,
+		TrackedParams: []TrackedParam{{Index: intPtr(0)}},
+	}
+
+	summaries := map[string]*taint.TaintTransferSummary{
+		"source_func": {
+			FunctionFQN:            "source_func",
+			IsSource:               true,
+			ReturnTaintedBySource:  true,
+			ParamNames:             []string{"input"},
+			ParamToReturn:          map[int]bool{0: true},
+			ParamToSink:            map[int]bool{},
+		},
+		"sink_func": {
+			FunctionFQN: "sink_func",
+			ParamNames:  []string{"safe_param", "tainted_param"},
+			ParamToSink: map[int]bool{0: false, 1: true},
+		},
+	}
+
+	// tracks(0) but only param 1 flows to sink → should reject
+	result := executor.summaryConfirmsFlow(source, sink, summaries)
+	assert.False(t, result, "tracks(0) rejects when only param 1 flows to sink")
+
+	// tracks(1) should accept since param 1 flows to sink
+	sink.TrackedParams = []TrackedParam{{Index: intPtr(1)}}
+	result = executor.summaryConfirmsFlow(source, sink, summaries)
+	assert.True(t, result, "tracks(1) accepts when param 1 flows to sink")
+
+	// No TrackedParams (backward compat) → should accept any param flowing
+	sink.TrackedParams = nil
+	result = executor.summaryConfirmsFlow(source, sink, summaries)
+	assert.True(t, result, "no TrackedParams: any param to sink counts")
+}
