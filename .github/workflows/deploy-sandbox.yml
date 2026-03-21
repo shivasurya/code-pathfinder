@@ -7,9 +7,6 @@ on:
         description: 'Pathfinder version to deploy (e.g., 1.3.7)'
         required: true
         type: string
-  pull_request:
-    paths:
-      - '.github/workflows/deploy-sandbox.yml'
 
 permissions:
   contents: read
