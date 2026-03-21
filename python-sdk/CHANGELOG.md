@@ -5,6 +5,26 @@ All notable changes to the codepathfinder Python SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-03-21
+
+### Added
+- Inter-procedural taint analysis with `scope="global"` for cross-file dataflow tracking
+- Source and sink file paths in JSON, SARIF, CSV, and text output for cross-file findings
+- 190+ security rules across Python, Docker, and Docker Compose
+- `PropagationPresets.standard()` for common taint propagation patterns
+- QueryType system for type-aware detection replacing pattern-based matching
+- `.tracks(N)` parameter targeting on sinks for precise argument-position filtering
+- GitHub Actions deploy workflow for sandbox server
+
+### Fixed
+- Cross-file taint findings now report the correct sink file instead of the source file
+- Fallback sink matchers now try when tracked params reject on type-constrained calls
+- Dedup identical findings from multiple matcher paths in global analysis
+- F-string and concat expression taint propagation in function arguments
+
+### Changed
+- Default dev version bumped from 1.2.2 to 2.0.0
+
 ## [1.3.2] - 2026-01-29
 
 ### Fixed
