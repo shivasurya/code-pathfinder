@@ -266,16 +266,17 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 			}
 
 			detections = append(detections, DataflowDetection{
-				FunctionFQN:  source.FunctionFQN,
-				SourceLine:   source.Line,
-				SourceColumn: source.CallSite.Location.Column,
-				SinkLine:     sink.Line,
-				SinkColumn:   sink.CallSite.Location.Column,
-				SinkCall:     sink.CallSite.Target,
-				Confidence:   e.confidenceForMethod("interprocedural_vdg"),
-				Sanitized:    false,
-				Scope:        "global",
-				MatchMethod:  "interprocedural_vdg",
+				FunctionFQN:       sink.FunctionFQN,
+				SourceFunctionFQN: source.FunctionFQN,
+				SourceLine:        source.Line,
+				SourceColumn:      source.CallSite.Location.Column,
+				SinkLine:          sink.Line,
+				SinkColumn:        sink.CallSite.Location.Column,
+				SinkCall:          sink.CallSite.Target,
+				Confidence:        e.confidenceForMethod("interprocedural_vdg"),
+				Sanitized:         false,
+				Scope:             "global",
+				MatchMethod:       "interprocedural_vdg",
 			})
 		}
 	}
