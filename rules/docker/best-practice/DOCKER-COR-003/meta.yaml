@@ -50,8 +50,6 @@ detection_scope: ''
 references:
 - title: 'Docker Documentation: CMD instruction'
   url: ''
-- title: hadolint DL4004
-  url: ''
 - title: Docker Best Practices
   url: ''
 compliance: []

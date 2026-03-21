@@ -49,8 +49,6 @@ detection_scope: ''
 references:
 - title: Docker Content Trust
   url: ''
-- title: hadolint DL3026
-  url: ''
 - title: Supply Chain Security Best Practices
   url: ''
 compliance: []
