@@ -33,7 +33,7 @@ def detect_django_rawsql_sqli():
     return flows(
         from_sources=_DJANGO_SOURCES,
         to_sinks=[
-            DjangoExpressions.method("RawSQL").tracks(0),
+            DjangoExpressions.method("RawSQL"),
             calls("RawSQL"),
             calls("*.RawSQL"),
         ],

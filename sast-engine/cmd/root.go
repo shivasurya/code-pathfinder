@@ -12,7 +12,7 @@ import (
 
 var (
 	verboseFlag bool
-	Version     = "1.2.2"
+	Version     = "1.3.7"
 	GitCommit   = "HEAD"
 )
 

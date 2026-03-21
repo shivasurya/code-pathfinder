@@ -32,7 +32,7 @@ def detect_django_os_system_injection():
     return flows(
         from_sources=_DJANGO_SOURCES,
         to_sinks=[
-            OSModule.method("system", "popen", "popen2", "popen3", "popen4").tracks(0),
+            OSModule.method("system", "popen", "popen2", "popen3", "popen4"),
         ],
         sanitized_by=[
             calls("shlex.quote"),
