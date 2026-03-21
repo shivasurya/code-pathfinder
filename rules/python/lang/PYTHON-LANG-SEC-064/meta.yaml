@@ -1,0 +1,194 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-064
+name: telnetlib Usage Detected
+short_description: telnetlib.Telnet() transmits all data including credentials in plaintext. Replace with SSH (paramiko) for remote command execution.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-064
+
+# Vulnerability Details
+cwe:
+  - id: CWE-319
+    name: Cleartext Transmission of Sensitive Information
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - telnet
+  - telnetlib
+  - plaintext
+  - remote-access
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  telnetlib.Telnet() implements the Telnet protocol, a legacy remote terminal protocol
+  that transmits all data including usernames, passwords, commands, and command output
+  in plaintext over TCP. Telnet was deprecated in Python 3.11 and removed in Python 3.13
+  due to its security problems.
+
+  Any credentials used to authenticate to a Telnet service are transmitted in plaintext
+  and can be captured by any observer on the network. Commands executed via Telnet and
+  their output are also visible, potentially exposing sensitive system information.
+
+  SSH is the universally accepted secure replacement for Telnet. Python's paramiko library
+  provides a complete SSH client implementation that supports password and key-based
+  authentication, command execution, SFTP, and port forwarding.
+
+message: "telnetlib.Telnet() detected. Telnet transmits data in plaintext and is deprecated in Python 3.11+. Use paramiko SSH instead."
+
+security_implications:
+  - title: Plaintext Credential Transmission
+    description: |
+      Telnet login username and password are transmitted in plaintext, one character at a
+      time due to Telnet's character-mode protocol. An attacker observing the TCP stream
+      can reassemble and read the complete credentials.
+  - title: Session Hijacking
+    description: |
+      The entire Telnet session (commands and output) is transmitted in plaintext. An
+      attacker who can intercept the TCP stream can inject arbitrary commands into the
+      session, capturing or modifying the remote system state.
+  - title: Network Infrastructure Attack
+    description: |
+      Routers, switches, and embedded devices that expose Telnet management interfaces
+      are particularly vulnerable. Python scripts automating network device management
+      via Telnet expose device credentials and configuration to network observers.
+  - title: Deprecated API with Removal Risk
+    description: |
+      telnetlib was deprecated in Python 3.11 and removed in Python 3.13. Code using
+      telnetlib will fail on Python 3.13+ and must be migrated regardless of the security
+      concern.
+
+secure_example: |
+  # INSECURE: telnetlib for remote access
+  # import telnetlib
+  # tn = telnetlib.Telnet("host.example.com")
+  # tn.read_until(b"login: ")
+  # tn.write(username.encode() + b"\n")
+
+  # SECURE: Use paramiko SSH for remote command execution
+  import paramiko
+
+  def execute_remote_command(host: str, username: str,
+                             key_path: str, command: str) -> str:
+      """Execute a command on a remote host via SSH."""
+      ssh = paramiko.SSHClient()
+      ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+      ssh.connect(host, username=username, key_filename=key_path)
+      stdin, stdout, stderr = ssh.exec_command(command)
+      output = stdout.read().decode()
+      error = stderr.read().decode()
+      ssh.close()
+      if error:
+          raise RuntimeError(f"Command failed: {error}")
+      return output
+
+  # SECURE: Netmiko for network device automation (uses SSH)
+  # from netmiko import ConnectHandler
+  # device = ConnectHandler(device_type="cisco_ios", host=host,
+  #                         username=username, use_keys=True, key_file=key_path)
+
+recommendations:
+  - Replace telnetlib with paramiko for SSH-based remote command execution on Linux/Unix systems.
+  - For network device automation (Cisco, Juniper, etc.), use netmiko or NAPALM which use SSH instead of Telnet.
+  - Use SSH key-based authentication instead of password-based authentication when connecting to remote systems.
+  - Disable Telnet on all managed network devices and require SSH-only access.
+  - Migrate any telnetlib-dependent code before upgrading to Python 3.13, where telnetlib has been removed.
+
+detection_scope: |
+  This rule detects calls to telnetlib.Telnet() constructor and related telnetlib usage in
+  Python source code. All call sites are flagged since Telnet inherently transmits all data
+  in plaintext and is deprecated/removed in modern Python versions.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 2.2.7 - All non-console administrative access encrypted using strong cryptography; Telnet explicitly prohibited"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "Only approved encrypted protocols permitted for administrative access"
+  - standard: DISA STIG
+    requirement: "V-72221: Telnet must not be used for interactive login by authorized users"
+
+# References
+references:
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Python docs: telnetlib deprecated in 3.11"
+    url: https://docs.python.org/3.11/library/telnetlib.html
+  - title: "paramiko documentation"
+    url: https://www.paramiko.org/
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+
+# FAQ
+faq:
+  - question: When was telnetlib deprecated and removed from Python?
+    answer: |
+      telnetlib was deprecated in Python 3.11 (released October 2022) with a planned removal.
+      It was removed in Python 3.13 (released October 2024). Code using telnetlib must be
+      migrated before upgrading to Python 3.13 or later.
+
+  - question: Are there legitimate uses for Telnet in 2025?
+    answer: |
+      Legacy network infrastructure, some industrial control systems (ICS/OT), and certain
+      embedded devices may still expose only Telnet management interfaces. These represent
+      legacy integration requirements, not good practice. In all such cases, use a dedicated
+      VPN or SSH tunnel to isolate and encrypt Telnet traffic, and plan migration to SSH.
+
+  - question: How does paramiko compare to telnetlib for automation?
+    answer: |
+      paramiko provides SSH (Secure Shell) which is the secure successor to Telnet. SSH
+      encrypts all traffic, supports key-based authentication, provides host key verification
+      to prevent MITM, and supports SFTP, port forwarding, and X11 forwarding. paramiko
+      implements the full SSH protocol in pure Python with optional C acceleration.
+
+  - question: What is netmiko and when should I use it?
+    answer: |
+      netmiko is a Python library built on paramiko that simplifies SSH connections to
+      network devices (Cisco IOS, Juniper JunOS, Arista EOS, etc.). It handles device-
+      specific command modes, paging, and prompt detection. Use netmiko instead of
+      telnetlib for all network device automation tasks.
+
+  - question: Can I use SSH for Telnet-only devices via a proxy?
+    answer: |
+      If a device only supports Telnet, use a dedicated terminal server or out-of-band
+      management device that accepts SSH and proxies to the device via Telnet over a
+      physically secured local network. This protects credentials on the network-accessible
+      portion while acknowledging the local Telnet limitation.
+
+  - question: Does this rule apply to custom Telnet implementations not using telnetlib?
+    answer: |
+      This rule detects telnetlib.Telnet() usage. Custom Telnet implementations using
+      raw sockets have the same security risks but would be detected by other rules
+      (PYTHON-LANG-SEC-070 for socket bind, PYTHON-LANG-SEC-014 for reverse shell patterns).
+      Manual review of any code implementing Telnet-like protocols is recommended.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-063
+  - PYTHON-LANG-SEC-071
+  - PYTHON-LANG-SEC-072
+  - PYTHON-LANG-SEC-060
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

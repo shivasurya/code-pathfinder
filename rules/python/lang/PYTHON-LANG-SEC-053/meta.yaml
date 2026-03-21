@@ -1,0 +1,194 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-053
+name: Certificate Validation Disabled (verify=False)
+short_description: TLS certificate validation is explicitly disabled via verify=False or CERT_NONE, making connections vulnerable to man-in-the-middle attacks.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-053
+
+# Vulnerability Details
+cwe:
+  - id: CWE-295
+    name: Improper Certificate Validation
+    url: https://cwe.mitre.org/data/definitions/295.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - ssl
+  - tls
+  - verify-false
+  - cert-validation
+  - mitm
+  - CWE-295
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Setting verify=False in HTTP library calls (requests, httpx, aiohttp) or setting
+  ssl.CERT_NONE on an SSL context explicitly disables TLS certificate verification.
+  Without certificate verification, TLS connections are encrypted but not authenticated,
+  enabling man-in-the-middle attacks.
+
+  This parameter is commonly added as a quick fix for certificate errors in development
+  environments and accidentally deployed to production, or deliberately disabled in
+  production to work around certificate issues instead of fixing the underlying problem.
+
+  verify=False in the requests library or CERT_NONE in ssl.SSLContext both have the
+  same effect: the server can present any certificate and the client will accept it,
+  allowing network attackers to intercept and modify all traffic.
+
+message: "Certificate validation disabled (verify=False or ssl.CERT_NONE). Enable certificate verification to prevent MITM attacks."
+
+security_implications:
+  - title: Man-in-the-Middle Attack
+    description: |
+      With verify=False, an attacker on the network can present any TLS certificate and
+      intercept the connection. The client accepts the fraudulent certificate and transmits
+      data (credentials, tokens, private data) to the attacker's server.
+  - title: Authentication Bypass
+    description: |
+      In mutual TLS (mTLS) or certificate-pinning scenarios, disabling verification
+      bypasses the server authentication entirely. An attacker can impersonate any server
+      and receive authentication tokens or session data intended for the legitimate server.
+  - title: Silent Production Deployment of Debug Setting
+    description: |
+      verify=False is a common debugging shortcut that is frequently committed and deployed
+      to production accidentally. Unlike obvious code changes, it is a single parameter
+      that may be overlooked in code review.
+  - title: Data Integrity Failure
+    description: |
+      MITM attackers can modify API responses in transit, injecting malicious data,
+      altering financial values, or replacing file downloads with malicious content. The
+      client has no way to detect the tampering without valid certificate verification.
+
+secure_example: |
+  import requests
+  import ssl
+
+  # INSECURE: Disabling certificate verification
+  # response = requests.get(url, verify=False)
+  # ctx.verify_mode = ssl.CERT_NONE
+
+  # SECURE: Default requests behavior (verify=True is the default)
+  def make_api_call(url: str, token: str) -> dict:
+      response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+      response.raise_for_status()
+      return response.json()
+
+  # SECURE: Custom CA for corporate or internal services
+  def call_internal_api(url: str, ca_bundle: str = "/etc/ssl/corporate-ca.crt") -> dict:
+      response = requests.get(url, verify=ca_bundle)
+      response.raise_for_status()
+      return response.json()
+
+  # SECURE: SSL context with verification enabled
+  def create_verified_context() -> ssl.SSLContext:
+      ctx = ssl.create_default_context()
+      # verify_mode is CERT_REQUIRED by default
+      return ctx
+
+recommendations:
+  - Remove verify=False from all requests, httpx, and aiohttp calls; certificate verification is enabled by default and should remain so.
+  - If connecting to a server with a private or corporate CA certificate, use verify='/path/to/ca-bundle.crt' instead of verify=False.
+  - Fix the underlying certificate error (expired, wrong hostname, untrusted CA) rather than disabling verification as a workaround.
+  - Use ssl.create_default_context() which sets CERT_REQUIRED by default, instead of manually configuring ssl.CERT_NONE.
+  - Add linting rules to your CI/CD pipeline to prevent verify=False from being merged into main branches.
+
+detection_scope: |
+  This rule detects calls to requests.get(), requests.post(), requests.put(), requests.delete(),
+  requests.patch(), requests.head(), and requests.Session() calls with verify=False, and
+  ssl.SSLContext configurations that set verify_mode = ssl.CERT_NONE or check_hostname = False.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for sensitive data transmission (certificate validation required)"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "Certificate validation required for all TLS connections"
+  - standard: HIPAA Security Rule
+    requirement: "45 CFR 164.312(e) - Technical safeguards for data in transit"
+
+# References
+references:
+  - title: "CWE-295: Improper Certificate Validation"
+    url: https://cwe.mitre.org/data/definitions/295.html
+  - title: "Python requests documentation: SSL Cert Verification"
+    url: https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+  - title: "Python docs: ssl.CERT_NONE"
+    url: https://docs.python.org/3/library/ssl.html#ssl.CERT_NONE
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: Is verify=False ever acceptable in tests?
+    answer: |
+      In unit tests that mock network calls, verify=False is never reached in practice.
+      In integration tests against a local test server, use a test CA certificate with
+      verify='/path/to/test-ca.crt' or use mkcert to generate locally trusted certificates.
+      This ensures tests validate the same TLS configuration as production and prevents
+      test code with verify=False from being accidentally used in production.
+
+  - question: Why does verify=False even work in the requests library?
+    answer: |
+      The requests library includes it as an escape hatch for development and for connecting
+      to services in environments where proper certificate deployment is not possible.
+      It explicitly warns in documentation that disabling verification is a security risk.
+      The existence of the option is not an endorsement of its use in production.
+
+  - question: How do I fix a "certificate verify failed" error without using verify=False?
+    answer: |
+      The error indicates a real certificate problem. Common causes and fixes: (1) Expired
+      certificate: renew it. (2) Hostname mismatch: use the correct hostname or update the
+      certificate SAN. (3) Self-signed certificate: pass verify='/path/to/selfsigned.crt'.
+      (4) Corporate proxy MITM: add verify='/path/to/corporate-ca.crt'. (5) Missing
+      intermediate CA: install the full certificate chain on the server.
+
+  - question: Does this rule catch ctx.check_hostname = False as well?
+    answer: |
+      Yes. Setting check_hostname = False on an SSLContext disables hostname verification,
+      which is also a critical MITM enabler. Combined with CERT_REQUIRED, an attacker can
+      present any valid certificate for any hostname. Both patterns are detected.
+
+  - question: What about using urllib3's InsecureRequestWarning suppression?
+    answer: |
+      Code that suppresses urllib3.exceptions.InsecureRequestWarning using
+      urllib3.disable_warnings() is also a sign of disabled certificate verification.
+      This pattern often accompanies verify=False calls and should be audited as part
+      of the same finding.
+
+  - question: Is verify=False safe for connecting to localhost?
+    answer: |
+      For localhost connections to services you control, the MITM risk is low. However,
+      even localhost TLS should use proper certificates for consistency with production
+      configuration. Use mkcert to generate locally trusted localhost certificates instead
+      of disabling verification.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-050
+  - PYTHON-LANG-SEC-051
+  - PYTHON-LANG-SEC-052
+  - PYTHON-LANG-SEC-060
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

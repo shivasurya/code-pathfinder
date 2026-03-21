@@ -1,0 +1,78 @@
+id: DOCKER-SEC-005
+name: Secret in Build Argument
+short_description: Build argument name suggests it contains a secret. ARG values are visible in image
+  history via 'docker history'.
+severity: CRITICAL
+category: security
+language: docker
+ruleset: docker/DOCKER-SEC-005
+cwe:
+- id: CWE-538
+  name: Insertion of Sensitive Information into Externally-Accessible File or Directory
+  url: https://cwe.mitre.org/data/definitions/538.html
+tags:
+- docker
+- dockerfile
+- secrets
+- credentials
+- security
+- arg
+- build-arg
+- password
+- token
+- api-key
+- sensitive-data
+- information-disclosure
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects ARG instructions with names that suggest they contain sensitive
+
+  information such as passwords, API keys, tokens, or credentials. Build arguments are
+
+  permanently stored in the Docker image metadata and can be retrieved by anyone with
+
+  access to the image using ''docker history'', making them unsuitable for secrets.'
+message: Build argument name suggests it contains a secret. ARG values are visible in image history via
+  'docker history'.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-538: Insertion of Sensitive Information into Externally-Accessible File'
+  url: https://cwe.mitre.org/data/definitions/538.html
+- title: Docker BuildKit Secret Mounts
+  url: https://docs.docker.com/build/building/secrets/
+- title: OWASP Docker Security Cheat Sheet
+  url: https://owasp.org/www-project-top-ten/
+- title: 'NIST SP 800-190: Application Container Security Guide'
+  url: https://csrc.nist.gov/publications
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Persistent in Image Layers
+  description: ARG values are baked into the image metadata and remain accessible even if the layer is
+    deleted or the secret is "removed" later
+- title: Visible in Image History
+  description: Anyone with access to the image can run 'docker history' or 'docker inspect' to retrieve
+    all build arguments
+- title: Supply Chain Exposure
+  description: Images pushed to registries expose these secrets to anyone who pulls the image
+- title: No Encryption
+  description: Build args are stored in plaintext within the image metadata
+- title: CI/CD Leakage
+  description: 'Build logs often echo ARG values, exposing them in CI/CD systems Real-world attack scenario:
+
+    - Developer passes database password as build arg: --build-arg DB_PASSWORD=secret123
+
+    - Image is pushed to Docker Hub or private registry
+
+    - Attacker pulls image and runs: docker history image:tag --no-trunc
+
+    - Attacker extracts DB_PASSWORD from build history
+
+    - Attacker uses credentials to access production database'

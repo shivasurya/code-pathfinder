@@ -1,0 +1,226 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-012
+name: Lambda SQL Injection via pymssql cursor.execute()
+short_description: Lambda event data flows to pymssql cursor.execute() without parameterization, enabling SQL injection against RDS SQL Server backends.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-012
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - sql-injection
+  - pymssql
+  - sql-server
+  - rds
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into pymssql cursor.execute() calls without proper
+  parameterization, enabling SQL injection against RDS for SQL Server backends.
+
+  Lambda functions connecting to RDS for SQL Server (Microsoft SQL Server) via pymssql
+  receive event data from API Gateway, SQS, SNS, S3, and other triggers. Fields like
+  event.get("body"), event.get("queryStringParameters"), and event["Records"] are
+  attacker-controllable in public-facing deployments. pymssql uses %s (or %d, %f for
+  typed parameters) as placeholders; when these placeholders are bypassed by embedding
+  event data directly in the SQL string via concatenation or f-strings, injection
+  becomes possible.
+
+  SQL Server injection is particularly dangerous due to xp_cmdshell, a stored procedure
+  that executes OS commands. While RDS restricts xp_cmdshell, unrestricted SQL Server
+  instances allow full OS command execution through SQL injection. Even on RDS, data
+  exfiltration, authentication bypass, and data manipulation remain fully exploitable.
+  Lambda functions lack the ORM safety layer that web frameworks provide, making raw
+  pymssql calls a common injection vector in serverless SQL Server integrations.
+
+message: "Lambda event data flows to pymssql cursor.execute() without parameterization. Pass user input as the second argument (parameters tuple), never in the SQL string."
+
+security_implications:
+  - title: Full Database Exfiltration
+    description: |
+      An attacker who controls any SQL fragment can use UNION SELECT or error-based
+      extraction techniques to read from any table accessible to the Lambda's SQL Server
+      database user, including user credentials, financial records, session tokens,
+      and other sensitive data.
+  - title: xp_cmdshell OS Command Execution (Unrestricted SQL Server)
+    description: |
+      On unrestricted SQL Server instances (not RDS), an attacker with sufficient
+      database permissions gained through injection can enable and execute xp_cmdshell
+      to run arbitrary OS commands on the database server. RDS for SQL Server disables
+      xp_cmdshell, but this risk applies to self-managed SQL Server instances accessible
+      from Lambda.
+  - title: Linked Server Pivoting
+    description: |
+      SQL Server supports linked servers that allow cross-database queries. SQL injection
+      through a Lambda can exploit linked server configurations to pivot to other database
+      servers accessible from the SQL Server instance, potentially accessing systems
+      outside the intended Lambda attack surface.
+  - title: Authentication Bypass
+    description: |
+      Lambda functions that verify credentials or check authorization via SQL queries
+      are vulnerable to ' OR '1'='1'-- style bypasses. This can grant attackers
+      administrative access by causing the query to return rows regardless of the
+      actual credential values.
+
+secure_example: |
+  import json
+  import pymssql
+
+  def get_db_connection():
+      return pymssql.connect(
+          server='rds-sqlserver.us-east-1.rds.amazonaws.com',
+          user='lambda_user',
+          password='password',
+          database='appdb'
+      )
+
+  def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      order_id = body.get('order_id', '')
+
+      # SECURE: Validate type before query
+      try:
+          order_id = int(order_id)
+      except (ValueError, TypeError):
+          return {'statusCode': 400, 'body': 'Invalid order ID'}
+
+      conn = get_db_connection()
+      cursor = conn.cursor(as_dict=True)
+
+      # SECURE: Use %d placeholder and pass value as a tuple — never in the SQL string
+      cursor.execute(
+          "SELECT id, product, amount FROM orders WHERE id = %d",
+          (order_id,)
+      )
+      row = cursor.fetchone()
+      conn.close()
+      return {'statusCode': 200, 'body': json.dumps(row)}
+
+recommendations:
+  - Always pass Lambda event data as the second argument to cursor.execute() as a tuple, never by concatenating it into the SQL string.
+  - Use pymssql's typed placeholders (%s for strings, %d for integers, %f for floats) appropriately to benefit from driver-level type enforcement.
+  - Grant the Lambda's SQL Server database login the minimum necessary permissions (SELECT on specific tables) and avoid sysadmin or db_owner role membership.
+  - Store SQL Server credentials in AWS Secrets Manager with automatic rotation rather than in Lambda environment variables.
+  - Enable RDS SQL Server audit logging to detect unusual query patterns that may indicate active exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is calls("*.execute")
+  matching pymssql cursor objects with the tainted SQL string tracked via .tracks(0)
+  (the query string argument). Sanitizers include explicit int() or float() type
+  conversion. The analysis follows taint through string concatenation, f-string
+  interpolation, variable assignments, and function boundaries.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: pymssql documentation
+    url: https://www.pymssql.org/pymssql_documentation.html
+  - title: AWS RDS for SQL Server
+    url: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_SQLServer.html
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Python DB-API 2.0 Parameterized Queries
+    url: https://peps.python.org/pep-0249/#paramstyle
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege database permissions"
+
+# FAQ
+faq:
+  - question: What placeholder syntax does pymssql use and how does it differ from other drivers?
+    answer: |
+      pymssql supports typed placeholders: %s for strings/general values, %d for integers,
+      %f for floats, and %b for binary data. Like other DB-API drivers, these placeholders
+      must be used by passing values as the second tuple argument to cursor.execute(),
+      not by using Python's built-in string formatting. Passing values via Python %
+      string formatting ("%s" % value) performs string substitution at the Python level
+      before pymssql sees the query, bypassing the driver's parameterization entirely.
+
+  - question: Is RDS for SQL Server vulnerable to xp_cmdshell exploitation via injection?
+    answer: |
+      Amazon RDS for SQL Server disables xp_cmdshell and prevents it from being enabled.
+      However, the other impacts of SQL injection (data exfiltration, authentication bypass,
+      data modification) remain fully applicable on RDS. If your Lambda connects to a
+      self-managed SQL Server instance (e.g., on EC2), xp_cmdshell exploitation is possible
+      if the database user has sufficient permissions.
+
+  - question: Should I use pymssql or a different driver for SQL Server in Lambda?
+    answer: |
+      Both pymssql and pyodbc (with Microsoft ODBC Driver for SQL Server) are commonly
+      used. Both support parameterized queries via DB-API 2.0. The security principle is
+      identical for both: pass event data as parameters, never in the SQL string. Consider
+      SQLAlchemy as an abstraction layer over either driver, which encourages ORM usage
+      and provides a uniform parameterization interface.
+
+  - question: How do I handle SQL Server-specific syntax like TOP, WITH (NOLOCK), or OFFSET FETCH?
+    answer: |
+      Static SQL clauses like TOP n, WITH (NOLOCK), or OFFSET n ROWS FETCH NEXT m ROWS
+      ONLY are fine in the SQL string when n and m are validated integers from event data
+      passed as parameters (for the actual values). For clauses where only the value
+      varies, use a %d placeholder. For clauses where the structure varies based on event
+      input (e.g., dynamic ORDER BY), use an allowlist of permitted values and select
+      from a pre-built dictionary of safe SQL fragments.
+
+  - question: Can this rule detect injection through Lambda functions that build queries in helper modules?
+    answer: |
+      Yes. The rule performs inter-procedural analysis and follows taint from the
+      Lambda event dictionary through utility functions, query builders, and return
+      values across file and module boundaries. If event data flows through a
+      build_filter_clause() helper in a separate module to cursor.execute(), the
+      finding is still reported.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-015
+  - PYTHON-LAMBDA-SEC-016
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

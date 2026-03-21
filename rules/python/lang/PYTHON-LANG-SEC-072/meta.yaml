@@ -1,0 +1,210 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-072
+name: Paramiko exec_command() Usage
+short_description: paramiko exec_command() runs commands on a remote host. Audit that command arguments are not derived from untrusted input to prevent command injection.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-072
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - paramiko
+  - ssh
+  - exec-command
+  - command-injection
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  paramiko's SSHClient.exec_command() executes a shell command on the remote server via
+  the SSH exec channel. The command is passed to the remote shell (/bin/sh by default)
+  which interprets shell metacharacters. When the command string is constructed from
+  untrusted user input, an attacker can inject shell metacharacters to execute additional
+  commands on the remote host.
+
+  The risk pattern is the same as local OS command injection but the impact is remote:
+  the injected commands execute on the SSH server with the SSH user's privileges on
+  that system.
+
+  SSH exec_command() sends a single command to the remote shell without an interactive
+  session. Use paramiko's invoke_shell() only when an interactive session is genuinely
+  required, and use exec_command() with validated, sanitized arguments for automation.
+
+message: "paramiko exec_command() detected. Audit that the command string does not include untrusted input to prevent remote command injection."
+
+security_implications:
+  - title: Remote Command Injection
+    description: |
+      Shell metacharacters in user-controlled content injected into exec_command() execute
+      additional commands on the remote SSH server. Semicolons, pipes, backticks, and
+      dollar signs are all interpreted by the remote shell, enabling injection of arbitrary
+      remote commands.
+  - title: Remote System Compromise
+    description: |
+      Injected commands execute with the SSH user's privileges on the remote server. If the
+      SSH user has sudo rights or the server runs other sensitive services, command injection
+      can escalate to full remote system compromise.
+  - title: Lateral Movement
+    description: |
+      SSH automation scripts that execute commands on multiple servers are particularly
+      dangerous when compromised. Command injection in one server's exec_command() call
+      can affect all servers in the automation pool.
+  - title: Sensitive Output Capture
+    description: |
+      If the injected command outputs sensitive data (credentials, private keys, configuration)
+      and stdout is captured, the attacker can extract this data through the command output
+      returned to the Python application.
+
+secure_example: |
+  import paramiko
+  import shlex
+
+  # INSECURE: exec_command with user-controlled content
+  # ssh.exec_command(f"grep {user_pattern} /var/log/app.log")
+
+  # SECURE: Validate input and use shlex.quote() for shell argument safety
+  import re
+
+  def search_remote_log(ssh_client: paramiko.SSHClient,
+                        pattern: str, log_file: str) -> str:
+      SAFE_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.@]+$')
+      if not SAFE_PATTERN.match(pattern):
+          raise ValueError(f"Invalid search pattern: {pattern}")
+      quoted_pattern = shlex.quote(pattern)
+      quoted_log = shlex.quote(log_file)
+      _, stdout, stderr = ssh_client.exec_command(
+          f"grep -F {quoted_pattern} {quoted_log}"
+      )
+      output = stdout.read().decode()
+      error = stderr.read().decode()
+      if error:
+          raise RuntimeError(f"Command error: {error}")
+      return output
+
+  # SECURE: Use an allowlist of pre-defined commands
+  ALLOWED_COMMANDS = {
+      "disk_usage": "df -h /",
+      "memory_info": "free -m",
+      "cpu_info": "nproc",
+  }
+
+  def run_allowed_command(ssh_client: paramiko.SSHClient, cmd_name: str) -> str:
+      if cmd_name not in ALLOWED_COMMANDS:
+          raise ValueError(f"Command not allowed: {cmd_name}")
+      _, stdout, _ = ssh_client.exec_command(ALLOWED_COMMANDS[cmd_name])
+      return stdout.read().decode()
+
+recommendations:
+  - Validate all user-controlled values that appear in exec_command() arguments against strict allowlists or regex patterns before use.
+  - Use shlex.quote() to properly quote arguments that must be included in shell commands executed via exec_command().
+  - Prefer a fixed allowlist of pre-defined commands over dynamic command construction; store full commands as constants and look them up by validated name.
+  - Capture and validate the exit code and stderr from exec_command() to detect errors and potential injection attempts.
+  - Use SFTP for file operations instead of exec_command() with cp/mv/cat to eliminate shell involvement entirely.
+
+detection_scope: |
+  This rule detects calls to exec_command() on paramiko SSHClient and Channel objects.
+  All call sites are flagged since exec_command() executes commands on remote systems
+  via a shell, and the command argument requires review to ensure no user-controlled
+  content can inject shell metacharacters.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "paramiko docs: SSHClient.exec_command()"
+    url: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.SSHClient.exec_command
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python docs: shlex.quote()"
+    url: https://docs.python.org/3/library/shlex.html#shlex.quote
+
+# FAQ
+faq:
+  - question: Does exec_command() use a shell or exec() directly?
+    answer: |
+      exec_command() sends an SSH "exec" request to the remote server, which is typically
+      handled by the SSH server's shell (sshd runs the command via /bin/sh -c "command").
+      This means shell metacharacters in the command string are interpreted. Unlike
+      subprocess.run() with a list, there is no equivalent shell-free mode for exec_command().
+
+  - question: How does shlex.quote() help with exec_command() security?
+    answer: |
+      shlex.quote() wraps the argument in single quotes and escapes any internal single
+      quotes, producing a shell-safe string. Using shlex.quote() on each user-supplied
+      argument before including it in the command string prevents most shell injection.
+      However, it does not protect against argument injection (flags starting with "-")
+      or against choosing the command itself from user input.
+
+  - question: Is there a way to use paramiko without a shell for executing commands?
+    answer: |
+      paramiko's Transport and Channel API allows sending "exec" requests without shell
+      interpretation in theory, but the SSH server-side daemon (sshd) typically still
+      passes the command to a shell via -c. For truly shell-free execution, use SFTP
+      for file operations or consider a dedicated protocol (gRPC, REST over SSH tunnel)
+      for application commands.
+
+  - question: What is the difference between exec_command() and invoke_shell()?
+    answer: |
+      exec_command() opens a new channel, runs a single command, and closes. It is non-
+      interactive and suitable for automation. invoke_shell() opens an interactive terminal
+      emulator session that persists until explicitly closed. exec_command() is preferred
+      for automation; invoke_shell() has additional complexity and fewer use cases.
+
+  - question: How do I handle long-running commands with exec_command()?
+    answer: |
+      exec_command() returns immediately with stdin, stdout, stderr channels. For long-
+      running commands, use stdout.channel.recv_exit_status() to wait for completion
+      and check the exit code. Set a timeout using the get_transport().global_request_timeout
+      or read with a timeout to prevent indefinite blocking.
+
+  - question: Should I use exec_command() or SFTP for remote file operations?
+    answer: |
+      Use SFTP (ssh.open_sftp()) for file operations such as reading, writing, listing
+      directories, and transferring files. SFTP does not involve a shell and is not
+      vulnerable to shell injection. Use exec_command() only when you need to run actual
+      commands and cannot accomplish the task via SFTP.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-071
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-073
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,232 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-030
+name: Django SSRF via requests Library
+short_description: User input flows to requests.get/post/put/delete/head(), enabling the server to make HTTP requests to attacker-controlled URLs.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-030
+
+# Vulnerability Details
+cwe:
+  - id: CWE-918
+    name: Server-Side Request Forgery (SSRF)
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
+tags:
+  - python
+  - django
+  - ssrf
+  - requests
+  - http-client
+  - taint-analysis
+  - inter-procedural
+  - CWE-918
+  - OWASP-A10
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Server-Side Request Forgery (SSRF) vulnerabilities in Django
+  applications where untrusted user input from HTTP request parameters flows into
+  the URL argument of the requests library (requests.get(), requests.post(),
+  requests.put(), requests.delete(), requests.head(), requests.Session().get()).
+
+  SSRF occurs when an application fetches resources from a URL that an attacker
+  controls. The server-side HTTP request originates from inside the application's
+  network, allowing attackers to: access cloud provider metadata endpoints
+  (http://169.254.169.254/), reach internal services not exposed to the internet,
+  bypass network firewalls that trust the application server, scan the internal
+  network topology, and in some cases read sensitive files via file:// URLs.
+
+  In cloud environments (AWS, GCP, Azure), the instance metadata service is a
+  particularly dangerous target. An attacker can use SSRF to retrieve IAM credentials,
+  user-data scripts containing secrets, and other sensitive configuration from the
+  metadata endpoint.
+
+message: "User input flows to requests HTTP call. Validate URLs against an allowlist and block internal network ranges."
+
+security_implications:
+  - title: Cloud Metadata Service Credential Theft
+    description: |
+      Cloud providers expose instance metadata at http://169.254.169.254/ (AWS, GCP)
+      or http://169.254.169.254/metadata/ (Azure). An attacker who controls the URL
+      can make the application fetch its own IAM credentials, which can then be used
+      to access all AWS S3 buckets, RDS databases, and other cloud resources the
+      application role can access.
+  - title: Internal Network Service Scanning and Access
+    description: |
+      The application server typically has access to internal services like Redis,
+      Elasticsearch, databases, and admin panels that are not exposed to the internet.
+      SSRF enables attackers to send requests to these internal services, potentially
+      triggering unauthenticated operations on Redis (FLUSHALL), Elasticsearch
+      (index deletion), or internal admin endpoints.
+  - title: Sensitive File Read via file:// Scheme
+    description: |
+      Some HTTP client libraries honor file:// URLs, allowing SSRF to read local
+      files from the application server, including /etc/passwd, application secrets,
+      private keys, and Django settings files containing database credentials.
+  - title: Security Control Bypass via Internal Endpoints
+    description: |
+      Internal microservices often skip authentication for requests from trusted
+      internal IP ranges. SSRF bypasses perimeter security by making the trusted
+      application server send the request, allowing attackers to invoke privileged
+      internal API endpoints without credentials.
+
+secure_example: |
+  from django.http import JsonResponse
+  import requests
+  from urllib.parse import urlparse
+  import ipaddress
+
+  ALLOWED_DOMAINS = frozenset({'api.trusted-partner.com', 'cdn.example.com'})
+  BLOCKED_NETWORKS = [
+      ipaddress.ip_network('10.0.0.0/8'),
+      ipaddress.ip_network('172.16.0.0/12'),
+      ipaddress.ip_network('192.168.0.0/16'),
+      ipaddress.ip_network('169.254.0.0/16'),  # Link-local / cloud metadata
+      ipaddress.ip_network('127.0.0.0/8'),     # Loopback
+      ipaddress.ip_network('::1/128'),          # IPv6 loopback
+  ]
+
+  def is_safe_url(url):
+      parsed = urlparse(url)
+      if parsed.scheme not in ('http', 'https'):
+          return False
+      if not parsed.hostname:
+          return False
+      if parsed.hostname in ALLOWED_DOMAINS:
+          return True
+      try:
+          ip = ipaddress.ip_address(parsed.hostname)
+          return not any(ip in net for net in BLOCKED_NETWORKS)
+      except ValueError:
+          return False
+
+  def fetch_external_resource(request):
+      url = request.GET.get('url', '')
+      # SECURE: Validate URL against allowlist and blocked networks
+      if not is_safe_url(url):
+          return JsonResponse({'error': 'URL not permitted'}, status=400)
+      response = requests.get(url, timeout=10, allow_redirects=False)
+      return JsonResponse({'status': response.status_code, 'content': response.text[:1000]})
+
+recommendations:
+  - Validate user-supplied URLs against a strict allowlist of trusted domains before making server-side HTTP requests.
+  - Block all requests to private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), loopback (127.0.0.0/8), and link-local (169.254.0.0/16) addresses.
+  - Restrict allowed URL schemes to http and https only, blocking file://, gopher://, ftp://, and other schemes.
+  - Set allow_redirects=False and validate redirect targets separately, as redirects can bypass initial URL validation.
+  - Consider using an egress proxy or network-level controls to restrict outbound HTTP requests to known-safe destinations regardless of application logic.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  Sinks include calls("requests.get"), calls("requests.post"), calls("requests.put"),
+  calls("requests.delete"), calls("requests.head"), calls("requests.request"),
+  and calls("requests.Session.get") with tainted URL argument tracked via .tracks(0).
+  Sanitizers include URL validation functions that check against allowlists and
+  block private IP ranges. The rule follows taint across file and module boundaries.
+
+# References
+references:
+  - title: "CWE-918: Server-Side Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: OWASP SSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: OWASP Server-Side Request Forgery
+    url: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery
+  - title: PortSwigger SSRF Attacks
+    url: https://portswigger.net/web-security/ssrf
+  - title: requests library documentation
+    url: https://requests.readthedocs.io/en/latest/
+  - title: AWS IMDSv2 documentation
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 - Server-Side Request Forgery (SSRF) - standalone category since 2021"
+  - standard: CWE Top 25
+    requirement: "CWE-918 - Server-Side Request Forgery in dangerous weaknesses list"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks including SSRF"
+  - standard: NIST SP 800-53
+    requirement: "SC-7: Boundary Protection; SI-10: Information Input Validation"
+  - standard: AWS Well-Architected Framework
+    requirement: "SEC 5: Protect network resources - prevent unauthorized outbound requests"
+
+# FAQ
+faq:
+  - question: What makes SSRF particularly dangerous in cloud environments?
+    answer: |
+      Cloud providers expose instance metadata at a well-known link-local address
+      (169.254.169.254 on AWS and GCP). This service returns IAM credentials,
+      user-data scripts, and other sensitive configuration. An SSRF vulnerability
+      can fetch these credentials in a single request, giving attackers access to
+      all cloud resources the application role can access.
+
+  - question: Can DNS rebinding bypass URL allowlist validation?
+    answer: |
+      Yes. DNS rebinding attacks involve a domain that initially resolves to a safe
+      IP but subsequently resolves to an internal IP after validation. To protect
+      against this, resolve the hostname to an IP at validation time and block requests
+      if the resolved IP falls in a protected range. Re-validate after any redirect.
+      Alternatively, use an egress proxy that enforces destination restrictions at
+      the network level.
+
+  - question: Does setting a timeout on requests prevent SSRF?
+    answer: |
+      No. Timeout prevents the application from waiting too long for a response but
+      the request still reaches its destination. A short timeout reduces the window
+      for slow responses but does not prevent the attacker's target from processing
+      the request or returning credentials from the metadata service.
+
+  - question: Should we block redirects to prevent SSRF bypass?
+    answer: |
+      Yes. Set allow_redirects=False and if your use case requires following redirects,
+      validate each redirect destination against the same URL policy as the original
+      request. Attackers use open redirectors on trusted domains to bypass URL
+      allowlists: the initial request goes to allowed-domain.com/redirect?url=169.254.169.254.
+
+  - question: How do we handle legitimate use cases where users provide webhook URLs?
+    answer: |
+      Implement a webhook URL registration and verification flow: users register a URL
+      through a separate authenticated endpoint, the application sends a one-time
+      verification token to that URL to confirm ownership, and only verified URLs are
+      accepted for future webhook deliveries. This prevents SSRF while allowing
+      legitimate webhook functionality.
+
+  - question: What is the difference between this rule and PYTHON-DJANGO-SEC-031?
+    answer: |
+      SEC-030 targets the popular third-party requests library, which is used by the
+      majority of Django applications that make outbound HTTP calls. SEC-031 targets
+      Python's standard library urllib.request.urlopen(). Both are SSRF vectors but
+      require separate sink patterns in the rule engine to detect.
+
+  - question: Does this rule detect SSRF when the URL is stored in the database and fetched later?
+    answer: |
+      The current rule traces taint from HTTP request parameters in real-time flows.
+      Second-order SSRF (where a URL is stored from user input and later fetched) is
+      a separate detection challenge. Audit all places where database-stored URLs are
+      passed to requests calls as a complementary manual review step.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-031
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

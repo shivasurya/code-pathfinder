@@ -1,0 +1,55 @@
+id: DOCKER-BP-027
+name: Avoid --platform Flag with FROM
+short_description: FROM with --platform flag reduces portability. Let Docker handle platform selection.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-027
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- from
+- platform
+- multi-arch
+- portability
+- buildx
+- architecture
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects use of --platform flag in FROM instructions. Hardcoding platform
+
+  reduces portability and prevents Docker from automatically selecting the
+
+  appropriate platform for multi-architecture builds.'
+message: FROM with --platform flag reduces portability. Let Docker handle platform selection.
+secure_example: '# Good: Let Docker handle platform selection automatically
+
+  FROM ubuntu:22.04
+
+  RUN apt-get update && apt-get install -y nginx
+
+
+  # Docker automatically pulls correct image for:
+
+  # - linux/amd64 on x86_64 systems
+
+  # - linux/arm64 on ARM systems'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: Docker Buildx documentation
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

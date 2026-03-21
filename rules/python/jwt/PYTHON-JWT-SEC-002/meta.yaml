@@ -1,0 +1,194 @@
+# Rule Identity
+id: PYTHON-JWT-SEC-002
+name: JWT None Algorithm
+short_description: Detects jwt.encode() calls using algorithm='none', which creates unsigned tokens that anyone can forge.
+
+# Classification
+severity: CRITICAL
+category: jwt
+language: python
+ruleset: python/jwt/PYTHON-JWT-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-345
+    name: "Insufficient Verification of Data Authenticity"
+    url: https://cwe.mitre.org/data/definitions/345.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - jwt
+  - pyjwt
+  - none-algorithm
+  - unsigned-token
+  - token-forgery
+  - cryptographic-failure
+  - CWE-327
+  - CWE-345
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects jwt.encode() calls that explicitly set algorithm="none". The "none"
+  algorithm produces unsigned JWT tokens -- the token has no signature at all, which
+  means anyone can modify the payload (change user IDs, add admin roles, extend
+  expiration) and the receiving service has no way to tell.
+
+  This is one of the most exploited JWT vulnerabilities. The "none" algorithm was
+  originally intended for cases where the token integrity was already guaranteed by
+  the transport layer (e.g., mutual TLS). In practice, it became an attack vector:
+  libraries that accepted "none" as a valid algorithm allowed attackers to strip the
+  signature from a legitimately signed token and re-submit it.
+
+  The rule uses .where("algorithm", "none") for precise matching. It only fires when
+  the algorithm keyword argument is literally "none" -- it will not flag jwt.encode()
+  calls using HS256, RS256, ES256, or any other real algorithm. Zero false positives
+  on properly configured encode calls.
+
+message: "jwt.encode() using algorithm='none' produces unsigned tokens. Use HS256, RS256, or ES256."
+
+security_implications:
+  - title: Complete Token Forgery
+    description: |
+      With algorithm="none", there is no signature. An attacker can create a JWT
+      with any payload -- admin privileges, any user identity, any expiration date --
+      and the server will accept it if it doesn't enforce algorithm verification.
+  - title: Privilege Escalation
+    description: |
+      An attacker takes a valid low-privilege token, decodes the payload (JWT payloads
+      are just base64), changes "role" from "user" to "admin", re-encodes with
+      algorithm="none", and submits it. If the server accepts unsigned tokens, the
+      attacker is now admin.
+  - title: Authentication Bypass
+    description: |
+      An unsigned token can impersonate any user. The attacker doesn't need the
+      victim's password, the signing key, or any other credential. They just need
+      to know the expected payload structure.
+
+secure_example: |
+  import jwt
+  import os
+
+  SECRET = os.environ["JWT_SECRET_KEY"]
+
+  # SECURE: Use HS256 with a strong secret
+  token = jwt.encode(
+      {"user_id": 123, "role": "user"},
+      SECRET,
+      algorithm="HS256"
+  )
+
+  # SECURE: Use RS256 for distributed systems
+  with open("private_key.pem", "rb") as f:
+      private_key = f.read()
+  token = jwt.encode({"sub": "user123"}, private_key, algorithm="RS256")
+
+recommendations:
+  - Never use algorithm="none" in production code -- there is no legitimate use case for unsigned tokens in a web application
+  - Use HS256 for single-service architectures where the same service signs and verifies tokens
+  - Use RS256 or ES256 for microservice architectures where multiple services need to verify tokens
+  - On the verification side, always pass an explicit algorithms list to jwt.decode() to prevent algorithm confusion attacks
+  - Add a linter rule or pre-commit check to catch "none" algorithm usage before it reaches production
+
+detection_scope: |
+  This rule matches jwt.encode() calls where the keyword argument algorithm is set to
+  "none". It uses QueryType resolution to identify the jwt module by its fully qualified
+  name and the .where("algorithm", "none") qualifier to precisely match only the unsafe
+  algorithm value. Calls with algorithm="HS256", "RS256", "ES256", or any other value
+  are not flagged.
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "RFC 8725: JSON Web Token Best Current Practices (Section 3.2 - Use and Verify Algorithm)"
+    url: https://tools.ietf.org/html/rfc8725#section-3.2
+  - title: OWASP JWT Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+  - title: "Auth0: Critical Vulnerabilities in JSON Web Token Libraries"
+    url: https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/
+  - title: PyJWT Algorithm Documentation
+    url: https://pyjwt.readthedocs.io/en/stable/algorithms.html
+  - title: "RFC 7518: JSON Web Algorithms (JWA)"
+    url: https://tools.ietf.org/html/rfc7518
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-327 ranked in Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- strong cryptography for transmission of sensitive data"
+  - standard: NIST SP 800-63B
+    requirement: "Section 7.1 -- signed assertions must use approved algorithms"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+
+# FAQ
+faq:
+  - question: Why is algorithm="none" so dangerous?
+    answer: |
+      Because it removes the only thing that makes a JWT trustworthy -- the signature.
+      JWTs are just base64-encoded JSON. Anyone can read and create them. The signature
+      is what proves the token was created by your server. Remove the signature and the
+      token is just a JSON string that anyone can modify.
+
+  - question: Does this rule also detect "none" in jwt.decode(algorithms=["none"])?
+    answer: |
+      Not currently. The rule precisely matches jwt.encode() with algorithm="none". The
+      decode variant uses algorithms (plural) which takes a list value like ["none"].
+      Matching values inside list arguments requires a contains() qualifier that the
+      engine doesn't support yet. This is tracked as a product roadmap item.
+
+  - question: Is there ever a legitimate use of algorithm="none"?
+    answer: |
+      In theory, RFC 7518 defines "none" for cases where integrity is provided by the
+      transport layer. In practice, there is no real-world web application scenario
+      where unsigned tokens are safe. Even in testing, use a test-specific HS256 secret
+      instead of disabling signing entirely.
+
+  - question: Can an attacker change a signed token to use algorithm="none"?
+    answer: |
+      Yes -- this is the classic algorithm confusion attack. The attacker takes a valid
+      RS256-signed token, changes the header to {"alg": "none"}, strips the signature,
+      and submits it. If the server's jwt.decode() doesn't enforce an algorithms whitelist,
+      it will accept the unsigned token. This is why you should always pass
+      algorithms=["RS256"] (or whichever algorithm you use) to jwt.decode().
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/jwt --project .
+      It outputs SARIF, JSON, or CSV. On GitHub, it posts inline review comments directly
+      on pull requests pointing to the exact lines. No dashboard needed.
+
+  - question: What algorithm should I use instead?
+    answer: |
+      For most applications, HS256 (HMAC-SHA256) is the right default. It's fast, widely
+      supported, and secure with a 256-bit key. For microservices where you want to
+      distribute verification without sharing the signing key, use RS256 (RSA-SHA256) or
+      ES256 (ECDSA-P256). ES256 produces smaller tokens than RS256.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-JWT-SEC-001
+  - PYTHON-JWT-SEC-003
+  - PYTHON-CRYPTO-SEC-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

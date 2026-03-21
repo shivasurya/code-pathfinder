@@ -1,0 +1,165 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-105
+name: Logger Credential Leak Risk
+short_description: Detects logging calls (info, debug, warning, error, critical) that should be audited for accidental credential or secret leakage in log output.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-105
+
+# Vulnerability Details
+cwe:
+  - id: CWE-532
+    name: "Insertion of Sensitive Information into Log File"
+    url: https://cwe.mitre.org/data/definitions/532.html
+
+owasp:
+  - id: A09:2021
+    name: Security Logging and Monitoring Failures
+    url: https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/
+
+tags:
+  - python
+  - logging
+  - credentials
+  - information-disclosure
+  - audit
+  - CWE-532
+  - OWASP-A09
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule flags calls to logging.info(), logging.debug(), logging.warning(),
+  logging.error(), logging.critical(), logging.exception(), and logging.log() as
+  audit items. Log statements are a common vector for accidentally exposing
+  passwords, API keys, session tokens, database connection strings, and other
+  secrets.
+
+  Developers often add verbose logging during debugging and forget to remove it
+  before shipping. A single logging.debug(f"Connecting with password={password}")
+  can expose credentials to anyone with access to log files, log aggregation
+  services, or error tracking tools.
+
+  The rule operates at audit level because most logging calls are harmless. Review
+  each flagged call to ensure no sensitive data appears in the format string or
+  arguments.
+
+message: "Logging call detected. Audit for credential or secret leakage in log output."
+
+security_implications:
+  - title: Credential Exposure in Log Files
+    description: |
+      Passwords, API keys, and tokens logged in plaintext persist in log files,
+      log aggregation services (ELK, Datadog, Splunk), and error tracking tools
+      (Sentry). Anyone with access to logs can extract credentials without
+      accessing the application database or config.
+  - title: Compliance Violations
+    description: |
+      PCI DSS explicitly prohibits logging authentication credentials (Requirement
+      8.5). GDPR and HIPAA require protecting personal data in all storage
+      locations including logs. A single logged password can result in a
+      compliance finding.
+  - title: Lateral Movement via Log Access
+    description: |
+      In cloud environments, log storage (CloudWatch, GCP Logging, Azure Monitor)
+      is often accessible to broader teams than application secrets. A credential
+      in a log file has a larger blast radius than one in a secrets manager.
+
+secure_example: |
+  import logging
+
+  logger = logging.getLogger(__name__)
+
+  # SECURE: Log the action, not the credentials
+  logger.info("User %s authenticated successfully", user.username)
+
+  # SECURE: Redact sensitive fields
+  logger.debug("Database connection established to %s", db_host)
+
+  # NEVER do this:
+  # logger.debug("Connecting with password=%s", password)
+  # logger.info("API key: %s", api_key)
+
+recommendations:
+  - Never log passwords, API keys, session tokens, or database connection strings
+  - Use structured logging with explicit field names so sensitive fields can be filtered by log pipelines
+  - Implement a log redaction layer that scrubs known secret patterns (Bearer tokens, AWS keys, passwords) before output
+  - Set production log level to INFO or WARNING to prevent debug-level credential logs from reaching production
+  - Review logging statements in code review with the same scrutiny as security-sensitive code
+
+detection_scope: |
+  This rule matches all standard logging method calls via the QueryType pattern
+  LoggingModule.method("info", "debug", "warning", "error", "critical",
+  "exception", "log"). It operates as an audit rule that flags all logging calls
+  for manual review of the message content.
+
+# References
+references:
+  - title: "CWE-532: Insertion of Sensitive Information into Log File"
+    url: https://cwe.mitre.org/data/definitions/532.html
+  - title: OWASP Logging Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html
+  - title: OWASP A09:2021 Security Logging and Monitoring Failures
+    url: https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/
+  - title: "Python logging module documentation"
+    url: https://docs.python.org/3/library/logging.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A09:2021 - Security Logging and Monitoring Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.5 - do not log authentication credentials"
+  - standard: GDPR
+    requirement: "Article 32 - appropriate technical measures to protect personal data"
+  - standard: NIST SP 800-53
+    requirement: "AU-3: Content of Audit Records"
+
+# FAQ
+faq:
+  - question: Does this rule flag every logging call as a vulnerability?
+    answer: |
+      No. This is an audit rule. Most logging calls are harmless. It flags all
+      logging calls so you can review them for sensitive data. If the log message
+      only contains operational information (request IDs, timing, status codes),
+      it's fine.
+
+  - question: How do I prevent credentials from appearing in logs?
+    answer: |
+      Use structured logging with explicit fields. Never interpolate secrets
+      into log messages. Implement a log filter that redacts patterns like
+      password=, Bearer, sk-, AKIA (AWS keys), etc.
+
+  - question: What about exception logging that includes stack traces?
+    answer: |
+      Stack traces can expose local variable values, including secrets passed
+      as function arguments. Use logging.exception() carefully and consider a
+      custom exception handler that redacts sensitive variables.
+
+  - question: Why is this MEDIUM severity?
+    answer: |
+      Logging credential exposure requires access to log files to exploit.
+      It's not directly exploitable from the network. However, in environments
+      with centralized logging (which is most production systems), the blast
+      radius can be significant.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/lang --project .
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-102
+  - PYTHON-LANG-SEC-104
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

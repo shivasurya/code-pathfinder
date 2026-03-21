@@ -1,0 +1,226 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-072
+name: Django Insecure Deserialization of Request Data
+short_description: User input flows to unsafe deserialization functions (pickle, yaml.load, dill, shelve), enabling arbitrary code execution during deserialization.
+
+# Classification
+severity: CRITICAL
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-072
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - django
+  - deserialization
+  - pickle
+  - yaml
+  - dill
+  - insecure-deserialization
+  - rce
+  - taint-analysis
+  - inter-procedural
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects insecure deserialization vulnerabilities in Django applications
+  where untrusted user input from HTTP request parameters flows into unsafe
+  deserialization functions: pickle.loads(), yaml.load(), dill.loads(), shelve.open()
+  with user-controlled keys, or similar functions that execute code during deserialization.
+
+  Python's pickle module, by design, executes arbitrary code during deserialization.
+  YAML's yaml.load() with the default Loader executes Python constructors (!!python/object)
+  during loading. These are not bugs -- they are features for legitimate internal use --
+  but they become critical vulnerabilities when applied to user-controlled data.
+
+  An attacker who can supply a crafted pickle or YAML payload can execute arbitrary
+  Python code on the server during the deserialization call, with the same privileges
+  as the Django process. This is equivalent in severity to eval() or exec() injection.
+
+message: "User input flows to unsafe deserialization (pickle/yaml.load/dill). Use json.loads() for data exchange or yaml.safe_load() for YAML."
+
+security_implications:
+  - title: Direct Remote Code Execution via Pickle
+    description: |
+      Python's pickle module executes __reduce__ methods during deserialization.
+      A crafted pickle payload can define a __reduce__ that calls os.system(),
+      subprocess.Popen(), or any other function at deserialization time. This is
+      one of the most well-known RCE vectors in Python web applications.
+  - title: YAML Deserialization RCE via Python Tags
+    description: |
+      yaml.load() with the default or FullLoader can execute Python constructors
+      using YAML tags like !!python/object/apply:os.system ['whoami']. An attacker
+      who controls YAML input can execute arbitrary OS commands at load time.
+      yaml.safe_load() restricts to standard YAML types only and is not vulnerable.
+  - title: dill and shelve Deserialization
+    description: |
+      The dill library is a superset of pickle with even more serialization
+      capabilities, making dill.loads() with user input equally dangerous.
+      shelve.open() uses pickle internally, so opening shelve databases with
+      user-controlled keys against user-provided data creates the same risk.
+  - title: Persistent Backdoor Installation
+    description: |
+      Deserialization RCE can be used to install persistent backdoors: writing
+      malicious code to application directories, modifying the codebase, adding
+      admin accounts, or establishing reverse shell connections that persist
+      after the initial attack.
+
+secure_example: |
+  from django.http import JsonResponse
+  import json
+  import yaml
+
+  def process_config(request):
+      data_str = request.body.decode('utf-8', errors='replace')
+      # SECURE: Use json.loads() which only parses data structures, no code execution
+      try:
+          config = json.loads(data_str)
+      except json.JSONDecodeError:
+          return JsonResponse({'error': 'Invalid JSON'}, status=400)
+      # Validate structure
+      if not isinstance(config, dict):
+          return JsonResponse({'error': 'Config must be an object'}, status=400)
+      return JsonResponse({'status': 'processed', 'keys': list(config.keys())})
+
+  def process_yaml_config(request):
+      yaml_str = request.body.decode('utf-8', errors='replace')
+      # SECURE: yaml.safe_load() only parses standard YAML types, no Python constructors
+      try:
+          config = yaml.safe_load(yaml_str)
+      except yaml.YAMLError:
+          return JsonResponse({'error': 'Invalid YAML'}, status=400)
+      if not isinstance(config, dict):
+          return JsonResponse({'error': 'Config must be a mapping'}, status=400)
+      return JsonResponse({'config': config})
+
+  def load_preferences(request):
+      # SECURE: Store preferences as JSON in the database, not as serialized objects
+      from myapp.models import UserPreference
+      prefs = UserPreference.objects.filter(user=request.user).values('key', 'value')
+      return JsonResponse({'preferences': list(prefs)})
+
+recommendations:
+  - Replace pickle.loads(), dill.loads(), and similar calls with json.loads() for data exchange between systems.
+  - When YAML is required, always use yaml.safe_load() which restricts parsing to standard YAML types and does not execute Python constructors.
+  - Never deserialize data from HTTP requests using pickle, dill, or yaml.load() with any Loader that supports Python object construction.
+  - Store application state and user data in the database using Django's ORM, not as serialized Python objects.
+  - If pickle must be used for caching or internal IPC, sign the serialized data with HMAC and verify the signature before deserializing to prevent tampering.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  Sinks include calls("pickle.loads"), calls("pickle.load"), calls("dill.loads"),
+  calls("dill.load"), calls("yaml.load"), calls("yaml.full_load"), and
+  calls("yaml.unsafe_load") with tainted input tracked via .tracks(0).
+  Sanitizers include calls("yaml.safe_load") and calls("json.loads") which parse
+  data safely without code execution. The rule follows taint across file and module
+  boundaries.
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: Python pickle security warning
+    url: https://docs.python.org/3/library/pickle.html#module-pickle
+  - title: PyYAML safe_load vs load
+    url: https://pyyaml.org/wiki/PyYAMLDocumentation
+  - title: OWASP Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: Exploiting Python Deserialization Vulnerabilities
+    url: https://davidhamann.de/2020/04/05/exploiting-python-pickle/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 ranked in Most Dangerous Software Weaknesses list"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures (includes insecure deserialization)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against all known attack types including deserialization"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: SOC 2 Type II
+    requirement: "CC6.1 - Logical access controls; CC7.1 - System components monitored for threats"
+
+# FAQ
+faq:
+  - question: Why is pickle.loads() with user input always critical regardless of context?
+    answer: |
+      Python's pickle documentation explicitly states: "The pickle module is not
+      secure. Only unpickle data you trust." pickle.loads() executes __reduce__
+      methods during deserialization. A crafted payload with a custom __reduce__
+      can call os.system(), exec(), or any other function. There is no safe way
+      to call pickle.loads() on data from untrusted sources -- the only fix is
+      to use a different serialization format.
+
+  - question: What is the difference between yaml.load() and yaml.safe_load()?
+    answer: |
+      yaml.load() with most Loaders (default, FullLoader) processes YAML Python-specific
+      tags like !!python/object and !!python/object/apply that instantiate Python objects
+      and call functions during loading. yaml.safe_load() restricts parsing to standard
+      YAML types: mappings, sequences, strings, numbers, booleans, null. It raises a
+      ConstructorError for any !!python/ tags, making it safe for user-controlled input.
+
+  - question: Are there cases where pickle is safe to use in Django applications?
+    answer: |
+      Pickle is safe for internal use: caching Python objects in Redis or Memcached where
+      the data never leaves the application's trust boundary, deserializing objects that
+      the application itself serialized in the same request or trusted internal pipeline,
+      and scientific computing workflows where data provenance is controlled. The key
+      requirement is that the serialized data must never be influenced by user input.
+
+  - question: Can signing pickle data with HMAC make it safe to deserialize from users?
+    answer: |
+      HMAC signing provides integrity protection: it ensures the data was not modified
+      after signing. If users can receive a signed pickle blob and send it back, HMAC
+      prevents them from modifying the blob but does not prevent them from replaying
+      it. More importantly, if users ever obtain the signing key or a signing oracle,
+      the protection is lost. For external data exchange, JSON is always safer.
+
+  - question: Is Django's built-in session framework vulnerable to this?
+    answer: |
+      Django's database-backed session backend stores session data as JSON by default,
+      which is safe. Older Django configurations may use pickle for session serialization
+      (configured via SESSION_SERIALIZER), but current Django defaults to JSON. If your
+      settings include SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer',
+      change it to the JSON serializer immediately.
+
+  - question: How does this vulnerability compare to SQL injection in severity?
+    answer: |
+      Insecure deserialization via pickle is generally more severe than SQL injection.
+      SQL injection is limited to database operations (unless the database has OS-level
+      features). Pickle deserialization executes arbitrary Python code in the application
+      process directly, with access to all imports, environment variables, the filesystem,
+      and network. It is equivalent to eval() injection -- direct Remote Code Execution.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-020
+  - PYTHON-DJANGO-SEC-021
+  - PYTHON-DJANGO-SEC-071
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

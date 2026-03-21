@@ -1,0 +1,196 @@
+# Rule Identity
+id: PYTHON-JWT-SEC-003
+name: Unverified JWT Decode
+short_description: Detects jwt.decode() calls that may bypass signature verification, allowing tampered tokens to be accepted.
+
+# Classification
+severity: HIGH
+category: jwt
+language: python
+ruleset: python/jwt/PYTHON-JWT-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-287
+    name: "Improper Authentication"
+    url: https://cwe.mitre.org/data/definitions/287.html
+  - id: CWE-345
+    name: "Insufficient Verification of Data Authenticity"
+    url: https://cwe.mitre.org/data/definitions/345.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - python
+  - jwt
+  - pyjwt
+  - unverified-decode
+  - signature-bypass
+  - authentication
+  - token-verification
+  - CWE-287
+  - CWE-345
+  - OWASP-A07
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects jwt.decode() calls where signature verification might be disabled.
+  The dangerous pattern is passing options={"verify_signature": False} to jwt.decode(),
+  which tells PyJWT to skip signature checking entirely. The result is the same as
+  using algorithm="none" -- any token, forged or modified, will be accepted.
+
+  This pattern appears more often than you'd expect. Developers disable verification
+  during debugging ("I just want to read the claims"), forget to re-enable it, and ship
+  it to production. Or they disable it because they're "verifying the token elsewhere"
+  -- but that elsewhere doesn't exist or has its own bugs.
+
+  The rule currently operates at audit level, flagging all jwt.decode() calls for review.
+  This is because the insecure configuration is a nested dict value
+  (options={"verify_signature": False}) that the engine can't precisely match yet.
+  Future engine updates will add nested keyword matching to flag only the unsafe
+  configuration.
+
+message: "jwt.decode() call detected. Ensure verify_signature is not set to False in options."
+
+security_implications:
+  - title: Token Tampering
+    description: |
+      Without signature verification, an attacker can modify any field in the JWT
+      payload -- user ID, role, permissions, expiration -- and the application will
+      accept the modified token as valid. The signature exists specifically to prevent
+      this.
+  - title: Identity Spoofing
+    description: |
+      An attacker can decode their own low-privilege token, change the subject claim
+      to another user's ID, and submit it. Without signature verification, the
+      application can't tell the difference between a legitimate token and a forged one.
+  - title: Session Hijacking
+    description: |
+      If tokens aren't verified, an attacker doesn't even need to steal a valid token.
+      They can create one from scratch with any claims they want. This bypasses all
+      session management controls.
+  - title: Expiration Bypass
+    description: |
+      Disabling verify_signature often disables expiration checking too, depending on
+      the options dict. An attacker with an expired token can keep using it indefinitely.
+
+secure_example: |
+  import jwt
+  import os
+
+  SECRET = os.environ["JWT_SECRET_KEY"]
+
+  # SECURE: Verify signature and specify allowed algorithms
+  payload = jwt.decode(
+      token,
+      SECRET,
+      algorithms=["HS256"],
+      options={"require": ["exp", "iat"]}
+  )
+
+  # SECURE: RS256 verification with public key
+  with open("public_key.pem", "rb") as f:
+      public_key = f.read()
+  payload = jwt.decode(token, public_key, algorithms=["RS256"])
+
+recommendations:
+  - "Never set verify_signature to False in production -- if you need to read claims without verification, use jwt.decode(token, options={\"verify_signature\": False}) only in debug/test code and gate it behind an environment check"
+  - Always pass an explicit algorithms list to jwt.decode() to prevent algorithm confusion attacks
+  - "Use options={\"require\": [\"exp\", \"iat\"]} to ensure tokens have required claims"
+  - Consider wrapping jwt.decode() in a helper function that enforces verification, so individual call sites can't accidentally disable it
+  - "In PyJWT 1.x, the parameter was verify=False -- if you're migrating from 1.x to 2.x, search for both patterns"
+
+detection_scope: |
+  This rule matches all jwt.decode() calls resolved through the PyJWT library using
+  QueryType-based type inference. It currently operates as an audit rule that flags
+  all jwt.decode() calls for review. The rule cannot yet distinguish between safe
+  decodes (with verification) and unsafe decodes (with verify_signature=False) because
+  this requires nested keyword argument matching into the options dict.
+
+# References
+references:
+  - title: "CWE-287: Improper Authentication"
+    url: https://cwe.mitre.org/data/definitions/287.html
+  - title: "RFC 8725: JSON Web Token Best Current Practices"
+    url: https://tools.ietf.org/html/rfc8725
+  - title: PyJWT API Reference -- jwt.decode()
+    url: https://pyjwt.readthedocs.io/en/stable/api.html#jwt.decode
+  - title: OWASP Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - title: OWASP JWT Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+  - title: PyJWT 2.x Migration Guide
+    url: https://pyjwt.readthedocs.io/en/stable/changelog.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-287 ranked #13 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A07:2021 - Identification and Authentication Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3 -- strong authentication for access to system components"
+  - standard: NIST SP 800-63B
+    requirement: "Section 7.1 -- verify signed assertions before accepting claims"
+  - standard: SOC 2
+    requirement: "CC6.1 -- logical access controls and authentication mechanisms"
+
+# FAQ
+faq:
+  - question: When is it safe to use verify_signature=False?
+    answer: |
+      Almost never in production. The only legitimate use is reading claims from a token
+      you've already verified elsewhere -- for example, extracting the "sub" claim for
+      logging after the API gateway already verified the signature. Even then, it's safer
+      to pass the verified payload object rather than re-decoding the raw token.
+
+  - question: Why does this rule flag all jwt.decode() calls, not just the unsafe ones?
+    answer: |
+      The insecure configuration is a nested dict value -- options={"verify_signature": False}.
+      The engine can match simple keyword arguments like algorithm="none", but can't yet
+      inspect values inside dict arguments. This is tracked as a product roadmap item.
+      For now, the rule flags all jwt.decode() calls so you can review each one.
+
+  - question: What changed between PyJWT 1.x and 2.x for verification?
+    answer: |
+      In PyJWT 1.x, you disabled verification with jwt.decode(token, verify=False). In
+      PyJWT 2.x, it moved to jwt.decode(token, options={"verify_signature": False}). If
+      you're migrating a codebase, search for both patterns. Both are equally dangerous.
+
+  - question: Does jwt.decode() verify the signature by default?
+    answer: |
+      Yes. In PyJWT 2.x, signature verification is enabled by default. You have to
+      explicitly disable it by passing options={"verify_signature": False}. This means
+      the vulnerability requires an intentional (though misguided) code change.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/jwt --project .
+      It outputs SARIF, JSON, or CSV. On GitHub, it posts inline review comments directly
+      on pull requests pointing to the exact lines. No dashboard needed.
+
+  - question: What's the difference between this rule and SEC-002 (none algorithm)?
+    answer: |
+      SEC-002 catches unsigned tokens at creation time (jwt.encode with algorithm="none").
+      This rule catches disabled verification at decode time (jwt.decode with
+      verify_signature=False). Both result in the same outcome -- unverified tokens -- but
+      at different points in the token lifecycle. You need both rules for complete coverage.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-JWT-SEC-002
+  - PYTHON-JWT-SEC-001
+  - PYTHON-FLASK-SEC-003
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

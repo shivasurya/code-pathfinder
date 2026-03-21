@@ -1,0 +1,60 @@
+id: COMPOSE-SEC-002
+name: Docker Socket Exposed to Container
+short_description: Service mounts Docker socket. The owner of this socket is root. Giving container access
+  to it is equivalent to giving unrestricted root access to host.
+severity: CRITICAL
+category: security
+language: docker-compose
+ruleset: docker-compose/COMPOSE-SEC-002
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker-compose
+- compose
+- docker-socket
+- volume
+- security
+- privilege-escalation
+- container-escape
+- daemon
+- critical
+- host-access
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects docker-compose services that mount the Docker socket
+
+  (/var/run/docker.sock or /run/docker.sock) as a volume. The Docker socket is
+
+  owned by root and provides complete control over the Docker daemon. Giving a
+
+  container access to it is equivalent to giving unrestricted root access to the
+
+  host system.
+
+
+  This is identical to DOCKER-SEC-006 but for docker-compose configurations.'
+message: Service mounts Docker socket. The owner of this socket is root. Giving container access to it
+  is equivalent to giving unrestricted root access to host.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: https://cwe.mitre.org/data/definitions/250.html
+- title: Docker Socket Security Advisory
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+- title: 'CIS Docker Benchmark: Section 5.31'
+  url: ''
+- title: OWASP Docker Security Cheat Sheet
+  url: https://owasp.org/www-project-top-ten/
+- title: Tecnativa Docker Socket Proxy documentation
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,45 @@
+id: DOCKER-BP-015
+name: Missing Image Version
+short_description: FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible
+  builds.
+severity: HIGH
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-015
+cwe:
+- id: CWE-1188
+  name: CWE 1188
+  url: https://cwe.mitre.org/data/definitions/1188.html
+tags:
+- docker
+- dockerfile
+- from
+- image
+- tag
+- version
+- latest
+- reproducibility
+- best-practice
+- supply-chain
+- dependency-management
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects FROM instructions using ''latest'' tag or no tag at all.
+
+  Using latest or untagged images creates non-reproducible builds and
+
+  potential security/stability issues.'
+message: FROM instruction uses 'latest' tag or no tag. Specify explicit versions for reproducible builds.
+secure_example: 'FROM ubuntu:22.04
+
+  FROM nginx:1.24.0-alpine'
+recommendations: []
+detection_scope: ''
+references: []
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

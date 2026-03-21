@@ -1,0 +1,232 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-021
+name: Django Code Injection via exec()
+short_description: User input flows to exec(), enabling arbitrary Python statement execution on the server.
+
+# Classification
+severity: CRITICAL
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-021
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - code-injection
+  - exec
+  - rce
+  - taint-analysis
+  - inter-procedural
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects code injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into Python's exec() function.
+
+  Python's exec() executes its string argument as arbitrary Python statements, including
+  imports, function definitions, class definitions, assignments, and any other Python code.
+  Unlike eval() which is limited to expressions, exec() can execute complete programs.
+  When user-controlled data reaches exec(), an attacker can inject any Python code to
+  execute with the full privileges of the application process.
+
+  exec() is more powerful than eval() because it accepts statements (not just expressions),
+  enabling attackers to define persistent functions, import modules, modify global state,
+  and execute multi-line attack payloads. The same sandbox escape techniques that break
+  eval() restrictions also apply to exec().
+
+  Django applications should never call exec() with user-controlled input. If dynamic
+  code execution is genuinely needed for a use case, it should be implemented in a
+  sandboxed subprocess with no access to application secrets or the database.
+
+message: "User input flows to exec(). Remove exec() with untrusted input. Use an allowlist dispatch pattern instead."
+
+security_implications:
+  - title: Full Remote Code Execution with Persistent State
+    description: |
+      exec() can define functions, modify global variables, and inject persistent
+      code into the application's runtime. An attacker could redefine Django view
+      functions, add malicious middleware, or modify model methods -- changes that
+      persist until the process restarts.
+  - title: Multi-Statement Attack Payloads
+    description: |
+      Unlike eval() which is limited to single expressions, exec() accepts multi-line
+      Python code including loops, conditional blocks, and exception handlers. This
+      allows attackers to write sophisticated attack scripts that can probe the
+      environment, conditionally exfiltrate data, and cover their tracks.
+  - title: Module Import and Capability Expansion
+    description: |
+      exec() can execute import statements, giving attackers access to any Python
+      module available in the environment. exec("import socket; socket.connect(...)") or
+      exec("import subprocess; subprocess.run(...)") are trivial attack payloads once
+      exec() with user input is reachable.
+  - title: Data Corruption and Database Manipulation
+    description: |
+      With access to Django's ORM through exec(), an attacker can query, modify, or
+      delete any database record. They can also access Django's settings module to
+      extract database credentials and use them to connect directly to the database
+      outside the application.
+
+secure_example: |
+  from django.http import JsonResponse
+
+  # SECURE: Use an explicit allowlist dispatch instead of exec()
+  def list_items(request):
+      from myapp.models import Item
+      items = Item.objects.all().values('id', 'name')
+      return JsonResponse({'items': list(items)})
+
+  def search_items(request):
+      query = request.GET.get('q', '')
+      from myapp.models import Item
+      items = Item.objects.filter(name__icontains=query).values('id', 'name')
+      return JsonResponse({'items': list(items)})
+
+  ALLOWED_ACTIONS = {
+      'list': list_items,
+      'search': search_items,
+  }
+
+  def dispatch_action(request):
+      action = request.GET.get('action', '')
+      # SECURE: Map string action names to pre-defined functions, no exec() needed
+      handler = ALLOWED_ACTIONS.get(action)
+      if handler is None:
+          return JsonResponse({'error': 'Unknown action'}, status=400)
+      return handler(request)
+
+  def run_analysis(request):
+      # SECURE: If dynamic code execution is truly needed, run in isolated subprocess
+      import subprocess
+      script_name = request.POST.get('script', '')
+      ALLOWED_SCRIPTS = {'report_daily', 'report_weekly', 'cleanup_temp'}
+      if script_name not in ALLOWED_SCRIPTS:
+          return JsonResponse({'error': 'Unknown script'}, status=400)
+      result = subprocess.run(
+          ['python', f'scripts/{script_name}.py'],
+          capture_output=True, text=True, timeout=60
+      )
+      return JsonResponse({'output': result.stdout})
+
+recommendations:
+  - Remove all exec() calls that process user-controlled input; replace with explicit allowlist dispatch patterns using pre-defined functions.
+  - If dynamic behavior is needed, encode it as data (configuration, feature flags, rule sets) rather than as executable code from user input.
+  - For plugin or extension systems, load code from trusted, authenticated sources on the filesystem, never from HTTP request parameters.
+  - Use Django's URL routing, middleware, and signal systems for dynamic dispatch rather than exec() or eval().
+  - If untrusted code must be executed for testing or educational purposes, use a fully isolated subprocess with no access to application secrets, a read-only filesystem, and network isolation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is calls("exec") with tainted input tracked via .tracks(0). There are no
+  recognized sanitizers for exec() -- any user-controlled input reaching exec() is a
+  confirmed critical vulnerability. The rule follows taint across file and module
+  boundaries including through string concatenation and f-string construction.
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+  - title: Python exec() documentation
+    url: https://docs.python.org/3/library/functions.html#exec
+  - title: Django Security
+    url: https://docs.djangoproject.com/en/stable/topics/security/
+  - title: Python sandbox escape techniques
+    url: https://book.hacktricks.xyz/generic-methodologies-and-resources/python/bypass-python-sandboxes
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-95 - Eval Injection in Most Dangerous Software Weaknesses list"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; CM-7: Least Functionality"
+  - standard: SOC 2 Type II
+    requirement: "CC6.1 - Logical access controls to prevent unauthorized data access"
+
+# FAQ
+faq:
+  - question: How does exec() injection differ from eval() injection?
+    answer: |
+      eval() is limited to Python expressions (things that produce a value), while
+      exec() executes arbitrary statements including import, def, class, for, while,
+      and assignment statements. exec() injection is therefore more powerful: attackers
+      can define persistent functions, import modules, and execute multi-line programs.
+      Both are critical vulnerabilities; exec() is slightly worse due to the statement-
+      level access it provides.
+
+  - question: We use exec() to implement a scripting feature in our Django admin. How should we redesign it?
+    answer: |
+      Options from safest to most complex: (1) Replace the scripting feature with a
+      configuration-based system where users configure behavior via structured data
+      (JSON rules, feature flags) rather than code. (2) Restrict available operations
+      to a fixed set of pre-defined actions users can combine. (3) If code execution
+      is truly required, run scripts as separate isolated subprocess calls with no
+      access to the application's Django process, environment, or database credentials.
+
+  - question: Can adding try/except around exec() prevent the vulnerability?
+    answer: |
+      No. try/except catches exceptions but the injected code already executes before
+      any exception could be raised. An attacker can write code that produces no
+      exception while still reading secrets, making outbound network connections, or
+      modifying application state. Exception handling is not a security control for
+      code injection.
+
+  - question: What about using exec() only with code from the database, not from request parameters?
+    answer: |
+      Database-stored code is a form of second-order injection. If an attacker can
+      write to the database through another vulnerability (e.g., insufficient access
+      controls, another injection vulnerability), they can plant malicious code that
+      exec() later executes. Never execute code from the database with exec() or eval().
+
+  - question: Is there a performance reason teams use exec() that a safer approach would match?
+    answer: |
+      exec() is sometimes used for dynamic code generation for performance optimization
+      (e.g., NumPy uses it internally for generated C extensions). In web applications,
+      this use case almost never applies to user-facing request handling. If exec() is
+      used for code generation from static templates, ensure the templates never include
+      user-controlled values in code positions.
+
+  - question: How does this finding affect our security audit or penetration test results?
+    answer: |
+      exec() with user input is one of the most severe findings a penetration test can
+      report -- it is Direct Remote Code Execution. It will always be classified as
+      Critical severity. Any audit, compliance review, or bug bounty program will treat
+      it as an immediate remediation priority that blocks deployment.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-020
+  - PYTHON-DJANGO-SEC-022
+  - PYTHON-DJANGO-SEC-010
+  - PYTHON-DJANGO-SEC-011
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

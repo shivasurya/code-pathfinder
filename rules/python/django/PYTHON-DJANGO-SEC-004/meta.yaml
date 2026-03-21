@@ -1,0 +1,213 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-004
+name: Django SQL Injection via RawSQL Expression
+short_description: User input flows to RawSQL() expression without parameterization, enabling SQL injection through Django's annotation system.
+
+# Classification
+severity: CRITICAL
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-004
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - sql-injection
+  - rawsql
+  - annotations
+  - orm
+  - taint-analysis
+  - inter-procedural
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SQL injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters flows into the SQL string argument of
+  RawSQL() expressions without proper parameterization.
+
+  Django's RawSQL() expression allows embedding raw SQL fragments within ORM querysets
+  using annotate(), filter(), and order_by(). It is designed as a safe replacement for
+  the deprecated extra() method and explicitly supports a params argument for
+  parameterized values. When developers embed request parameters directly into the SQL
+  string of a RawSQL() expression instead of using the params argument, they introduce
+  SQL injection at the ORM annotation level.
+
+  RawSQL injection is particularly insidious because the expression appears in a modern,
+  ORM-integrated pattern, leading developers to assume ORM-level protection exists.
+  The SQL string is passed verbatim to the database query builder without escaping.
+
+message: "User input flows to RawSQL() without parameterization. Pass user values via the params tuple argument."
+
+security_implications:
+  - title: Annotation-Level Data Exfiltration
+    description: |
+      An attacker who controls the SQL string of a RawSQL() annotation can use
+      subqueries to exfiltrate data from arbitrary tables, embedding the results as
+      annotation values in the queryset response. The application may serialize these
+      attacker-controlled annotation values back to the client.
+  - title: WHERE Clause Manipulation via Filtered Annotations
+    description: |
+      When RawSQL() is used in filter() conditions, injection into the SQL string allows
+      attackers to append OR conditions, bypass access controls, or read records belonging
+      to other users by escaping the intended filter logic.
+  - title: ORDER BY Injection
+    description: |
+      RawSQL() used in order_by() with user-controlled SQL strings enables ORDER BY
+      injection attacks. On some databases, injection here can trigger time-based blind
+      SQL injection using CASE WHEN and sleep-like functions, allowing data extraction
+      character by character.
+  - title: Stacked Query Execution
+    description: |
+      On database backends that support multiple statements (e.g., PostgreSQL with
+      certain drivers), injection into RawSQL() may enable stacked queries, allowing
+      attackers to execute INSERT, UPDATE, DELETE, or DDL statements alongside the
+      intended query.
+
+secure_example: |
+  from django.http import JsonResponse
+  from django.db.models.expressions import RawSQL
+  from myapp.models import Product, Order
+
+  def get_products_with_discount(request):
+      discount_rate = request.GET.get('discount', '0.1')
+      try:
+          discount_rate = float(discount_rate)
+          if not 0.0 <= discount_rate <= 1.0:
+              raise ValueError("Out of range")
+      except ValueError:
+          return JsonResponse({'error': 'Invalid discount rate'}, status=400)
+      # SECURE: Pass user input via the params tuple, not in the SQL string
+      products = Product.objects.annotate(
+          discounted_price=RawSQL("price * (1 - %s)", (discount_rate,))
+      ).values('id', 'name', 'discounted_price')
+      return JsonResponse({'products': list(products)})
+
+  def get_orders_summary(request):
+      currency = request.GET.get('currency', 'USD')
+      # SECURE ALTERNATIVE: Use Django ORM expressions instead of RawSQL
+      from django.db.models import F, ExpressionWrapper, DecimalField
+      orders = Order.objects.annotate(
+          converted=ExpressionWrapper(F('total'), output_field=DecimalField())
+      ).values('id', 'converted')
+      return JsonResponse({'orders': list(orders)})
+
+recommendations:
+  - Always pass user-controlled values via the params tuple (second argument) of RawSQL(), never by embedding them in the SQL string.
+  - Consider using Django ORM expressions (F(), Value(), Case(), When(), ExpressionWrapper()) as type-safe alternatives to RawSQL() that require no parameterization.
+  - Validate and cast numeric parameters with int() or float() before using them in queries, even when they will be parameterized.
+  - Treat the SQL string argument of RawSQL() as a static template constant -- if it contains runtime values, those must go in params.
+  - Review all RawSQL() usages during code review to verify the params argument is used for any values that could be user-influenced.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is the first argument (SQL string, tracked via .tracks(0)) of calls("RawSQL").
+  The second argument (params tuple) is not tracked. Sanitizers include int(), float(),
+  and explicit allowlist validation. The analysis follows taint chains across file and
+  module boundaries to catch multi-hop flows.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django RawSQL Expression
+    url: https://docs.djangoproject.com/en/stable/ref/models/expressions/#django.db.models.expressions.RawSQL
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+  - title: Django Database Functions
+    url: https://docs.djangoproject.com/en/stable/ref/models/database-functions/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect web-facing applications against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: SOC 2 Type II
+    requirement: "CC6.1 - Logical access controls to protect against unauthorized data access"
+
+# FAQ
+faq:
+  - question: RawSQL() was introduced to replace extra() for safety. Can it still be unsafe?
+    answer: |
+      Yes. RawSQL() is designed to be used safely by putting user values in the params
+      tuple. The SQL string itself is still passed as a raw fragment to the database query
+      builder. If you embed user input into that string via f-strings or concatenation
+      instead of using params, you have the same SQL injection vulnerability as extra().
+      RawSQL() is only safe when the SQL string is a static literal.
+
+  - question: How does RawSQL() injection differ from other Django SQL injection vectors?
+    answer: |
+      RawSQL() operates within the ORM annotation system, meaning injection here
+      affects annotations, filters, and ordering computed within queryset chain calls.
+      Unlike cursor.execute(), the injected SQL is a fragment embedded inside a
+      larger ORM-generated query, which can make extraction more complex for attackers
+      but does not reduce the fundamental risk.
+
+  - question: Does using RawSQL() in annotate() give any additional protection?
+    answer: |
+      No. annotate() processes the RawSQL() expression object, which includes the
+      SQL string verbatim in the generated query. The ORM does not inspect or escape
+      the string. All safety guarantees come from proper use of the params argument.
+
+  - question: What is the performance impact of replacing RawSQL() with ORM expressions?
+    answer: |
+      Django's built-in ORM expressions (F(), Value(), Case(), When(), Coalesce()) are
+      compiled to the same SQL as equivalent RawSQL() calls, often with identical
+      execution plans. For complex database-specific functions not in Django's built-in
+      set, use database functions (Func subclasses) which are also parameterizable.
+      Profile both approaches in your specific environment if performance is a concern.
+
+  - question: Can I use RawSQL() safely with ORDER BY for user-specified sort columns?
+    answer: |
+      For sort direction (ASC/DESC), use Django's standard order_by() with F() and the
+      descending() method. For user-specified column names, validate against an allowlist
+      of permitted field names before including them in the RawSQL() SQL string -- column
+      names cannot be parameterized in SQL. Never pass raw user input as a column name.
+
+  - question: How do I detect all RawSQL() usages in my codebase beyond this rule?
+    answer: |
+      Run: pathfinder scan --ruleset python/django/PYTHON-DJANGO-SEC-004 for injection
+      flows. For a full audit of all RawSQL() calls regardless of taint, use
+      PYTHON-DJANGO-SEC-005 (raw SQL audit rule) which performs a pattern match on
+      DjangoExpressions.method("RawSQL") without requiring taint analysis.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-DJANGO-SEC-003
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-DJANGO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

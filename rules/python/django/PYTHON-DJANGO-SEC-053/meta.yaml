@@ -1,0 +1,211 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-053
+name: Django SafeString Subclass Audit
+short_description: Class extends SafeString or SafeData, bypassing Django's auto-escaping for all instances. Audit to confirm the class properly sanitizes content.
+
+# Classification
+severity: MEDIUM
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-053
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - xss
+  - safestring
+  - safedata
+  - subclass
+  - audit
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This audit rule flags all class definitions that extend SafeString or SafeData
+  from django.utils.safestring. Classes that inherit from SafeString are treated
+  as pre-validated safe HTML by Django's template engine, bypassing automatic
+  escaping when their instances are rendered in templates.
+
+  SafeString is the internal type returned by mark_safe() and format_html(). It is
+  designed for use within Django's own utilities, not as a base class for
+  application code. Subclassing SafeString is an unusual pattern that bypasses
+  auto-escaping at the class inheritance level, meaning all instances and operations
+  on instances inherit the "safe" designation.
+
+  This rule surfaces all such subclasses for security review to verify that the
+  class does not allow user-controlled data to flow through without escaping, and
+  that the subclassing is intentional and justified.
+
+message: "Class extends SafeString/SafeData, bypassing auto-escaping for all instances. Verify this class never incorporates user-controlled content without escaping."
+
+security_implications:
+  - title: Inherited Safety Bypass for All Instances
+    description: |
+      Unlike mark_safe() which marks a specific string value as safe, subclassing
+      SafeString marks the entire class as safe. Any string operation on a SafeString
+      subclass instance that incorporates user-controlled content will produce an
+      output that is treated as safe by the template engine, potentially rendering
+      XSS payloads without escaping.
+  - title: String Operations Propagate Safety Flag
+    description: |
+      SafeString overrides string concatenation and other operations such that
+      SafeString + regular_string returns a SafeString. This means user input
+      concatenated onto a SafeString subclass instance inherits the safety flag
+      and is rendered without escaping in templates.
+  - title: Widespread Impact from Shared Types
+    description: |
+      SafeString subclasses are often used as shared utility types across the
+      application. A vulnerability in the class definition affects every view,
+      template, and component that uses that type, potentially exposing the
+      entire application to XSS.
+  - title: Difficult-to-Audit Safety Inheritance
+    description: |
+      SafeString subclassing creates implicit auto-escaping bypass that is not
+      obvious at template rendering time. Unlike mark_safe() which appears inline
+      where the unsafe content is introduced, SafeString inheritance separates
+      the escape bypass declaration from the template rendering site by potentially
+      many files and call stacks.
+
+secure_example: |
+  from django.utils.html import escape, format_html
+  from django.utils.safestring import SafeString
+
+  # SECURE: Use SafeString only for pre-validated static content
+  class SvgIcon(SafeString):
+      ALLOWED_ICONS = {'home', 'user', 'settings', 'help'}
+
+      def __new__(cls, icon_name):
+          # Validate icon_name before constructing a SafeString instance
+          if icon_name not in cls.ALLOWED_ICONS:
+              raise ValueError(f"Unknown icon: {icon_name}")
+          # Static template with no user data -- safe to store as SafeString
+          svg = f'<svg class="icon-{icon_name}" aria-hidden="true"></svg>'
+          instance = super().__new__(cls, svg)
+          return instance
+
+  # BETTER ALTERNATIVE: Avoid subclassing SafeString entirely
+  # Use a plain class with format_html() for HTML generation
+  class UserLink:
+      def __init__(self, username, url):
+          self.username = username  # User-controlled
+          self.url = url            # User-controlled
+
+      def render(self):
+          # format_html() escapes both username and url
+          return format_html('<a href="{}">{}</a>', self.url, self.username)
+
+recommendations:
+  - Avoid subclassing SafeString or SafeData in application code; use mark_safe() or format_html() at the specific point where content is validated to be safe instead.
+  - If a SafeString subclass is unavoidable, ensure the constructor validates all input against an allowlist or escapes all user-controlled values before calling super().__new__().
+  - Review all string operations on SafeString subclass instances to ensure user-controlled strings are never concatenated onto them without prior escaping.
+  - Consider replacing SafeString subclasses with plain classes that have a render() method using format_html(), which makes the escaping explicit and local.
+  - Add unit tests for SafeString subclasses that verify HTML-special characters in constructor arguments are properly escaped in the output.
+
+detection_scope: |
+  This rule uses QueryType pattern matching rather than taint analysis. It matches all
+  class definitions where the base class is SafeString or SafeData (checked via
+  DjangoClasses.extends("SafeString") and DjangoClasses.extends("SafeData")). This
+  is an audit rule providing visibility for manual review. Use PYTHON-DJANGO-SEC-050
+  for taint-based XSS detection in CI. The .where() clause constrains matches to
+  Python files in Django project structures.
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: Django safestring module
+    url: https://docs.djangoproject.com/en/stable/ref/utils/#module-django.utils.safestring
+  - title: Django Template Auto-escaping
+    url: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping
+  - title: Django mark_safe() documentation
+    url: https://docs.djangoproject.com/en/stable/ref/utils/#django.utils.html.mark_safe
+  - title: OWASP XSS Attack
+    url: https://owasp.org/www-community/attacks/xss/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 and 6.3.2 - inventory of custom code; protect against XSS"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-15: Information Output Filtering"
+  - standard: ISO 27001
+    requirement: "A.14.2.5 - Secure system engineering principles; A.14.2.8 - System security testing"
+
+# FAQ
+faq:
+  - question: Why would anyone subclass SafeString instead of using mark_safe()?
+    answer: |
+      SafeString subclassing is used to create custom string types that are always
+      treated as safe HTML without needing to call mark_safe() at each use site.
+      Examples include custom icon renderers, HTML widget types, and reusable UI
+      components. The pattern trades convenience for safety -- the safety bypass
+      is in the class definition, not at the rendering point, making it harder to
+      audit.
+
+  - question: Is there any legitimate reason to subclass SafeString?
+    answer: |
+      Rarely. Django's own codebase uses SafeString internally as the return type
+      of mark_safe() and format_html(). For application code, there is almost always
+      a better pattern: a class with a render() method that returns format_html()
+      output, or a custom template tag that handles escaping. If you find a SafeString
+      subclass in your codebase, consider whether it can be refactored to a safer
+      design.
+
+  - question: How do string operations on SafeString subclass instances affect safety?
+    answer: |
+      Django's SafeString overrides __add__, __radd__, and other string operations.
+      SafeString + str returns a SafeString (inherits safe flag). str + SafeString
+      returns a regular str (does not inherit safe flag). This asymmetry means
+      that appending user input to a SafeString instance produces output that is
+      still treated as safe and rendered without escaping in templates.
+
+  - question: Can I detect SafeString subclass XSS with PYTHON-DJANGO-SEC-050?
+    answer: |
+      PYTHON-DJANGO-SEC-050 detects flows from request parameters to HttpResponse.
+      SafeString subclass XSS typically flows through the template rendering system
+      rather than HttpResponse directly, so it may require SEC-051 or this audit
+      rule (SEC-053) for detection. Both the audit rules and taint rules complement
+      each other for complete XSS coverage.
+
+  - question: Do third-party Django packages use SafeString subclasses?
+    answer: |
+      Some do. Django's own form widgets use SafeString internally. Third-party
+      widget libraries and rich text editors sometimes use SafeString subclasses.
+      If a third-party package's SafeString subclass is flagged, review whether
+      user input can influence the string content before escaping.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-050
+  - PYTHON-DJANGO-SEC-051
+  - PYTHON-DJANGO-SEC-052
+  - PYTHON-DJANGO-SEC-060
+  - PYTHON-DJANGO-SEC-061
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

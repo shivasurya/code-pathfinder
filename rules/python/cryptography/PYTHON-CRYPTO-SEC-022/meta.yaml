@@ -1,0 +1,128 @@
+id: PYTHON-CRYPTO-SEC-022
+name: EC Key Generation Audit (cryptography lib)
+short_description: Audit all EC key generation calls — verify the curve is SECP256R1, SECP384R1, or stronger. Weak curves like SECP192R1 must not be used.
+severity: MEDIUM
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-022
+cwe:
+- id: CWE-326
+  name: Inadequate Encryption Strength
+  url: https://cwe.mitre.org/data/definitions/326.html
+tags:
+- python
+- cryptography
+- ec
+- elliptic-curve
+- key-size
+- audit
+- CWE-326
+- OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: >
+  Audit rule that flags all calls to `ec.generate_private_key()` in the `cryptography` library
+  to prompt review of the curve argument. Unlike SEC-020 and SEC-021, this is not a precise
+  detection rule — it matches `CryptoEC.method("generate_private_key")` without filtering on
+  the curve type, because the analysis engine cannot currently inspect the curve object passed
+  as an argument to distinguish approved curves from deprecated ones. The intent is to surface
+  all EC key generation for mandatory human review.
+
+  Not all curves are equally secure. SECP192R1 (NIST P-192) provides only 96-bit security and
+  is deprecated by NIST SP 800-131A. SECP224R1 (112-bit security) is also deprecated for use
+  after 2030. By contrast, SECP256R1 (128-bit), SECP384R1 (192-bit), and SECP521R1 (260-bit)
+  are all NIST-approved. This rule generates expected false positives for code using approved
+  curves — treat findings as a mandatory audit checkpoint rather than confirmed vulnerabilities.
+message: >
+  Audit: verify the elliptic curve used here is SECP256R1, SECP384R1, or SECP521R1. Weak
+  curves (SECP192R1, SECP224R1) are deprecated by NIST SP 800-131A and must not be used.
+secure_example: |
+  from cryptography.hazmat.primitives.asymmetric import ec
+  from cryptography.hazmat.backends import default_backend
+
+  # SECURE: NIST P-256 (SECP256R1) — 128-bit security, widely supported
+  private_key = ec.generate_private_key(ec.SECP256R1(), backend=default_backend())
+
+  # SECURE: NIST P-384 (SECP384R1) — 192-bit security, recommended for high-value keys
+  private_key = ec.generate_private_key(ec.SECP384R1(), backend=default_backend())
+
+  # SECURE: NIST P-521 (SECP521R1) — 260-bit security, for maximum assurance
+  private_key = ec.generate_private_key(ec.SECP521R1(), backend=default_backend())
+
+  # NOT SECURE — deprecated by NIST SP 800-131A, only 96-bit security
+  # private_key = ec.generate_private_key(ec.SECP192R1())  # DO NOT USE
+recommendations:
+- Use SECP256R1 (NIST P-256) as the baseline for new EC keys — it is universally supported and provides 128-bit security.
+- Use SECP384R1 or SECP521R1 for high-value keys or applications requiring compliance with NSA CNSA 2.0.
+- Never use SECP192R1 or SECP224R1 — both are deprecated by NIST SP 800-131A.
+- For new applications, consider X25519 for key agreement and Ed25519 for signatures — both are modern audited curves with no parameter-based weaknesses.
+- Document the curve selection rationale in your security design document for each EC key generation call site.
+references:
+- title: 'CWE-326: Inadequate Encryption Strength'
+  url: https://cwe.mitre.org/data/definitions/326.html
+- title: 'NIST SP 800-186: Recommendations for Discrete Logarithm-Based Cryptography — Elliptic Curve Domain Parameters'
+  url: https://csrc.nist.gov/publications/detail/sp/800-186/final
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths'
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+- title: 'SafeCurves: Choosing Safe Curves for Elliptic-Curve Cryptography'
+  url: https://safecurves.cr.yp.to/
+- title: OWASP Cryptographic Failures (A02:2021)
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography; minimum 256-bit ECC equivalent"
+- standard: NIST SP 800-131A
+  requirement: "SECP192R1 and SECP224R1 deprecated; SECP256R1 and higher approved"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- 128-bit minimum security level; P-256 provides 128-bit"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and parameters"
+faq:
+- question: Why does this rule flag my SECP256R1 code if P-256 is secure?
+  answer: >
+    This is an intentional audit-level rule. The analysis engine matches all calls to
+    `ec.generate_private_key()` because it cannot currently inspect the curve object to
+    distinguish SECP256R1 from SECP192R1 at analysis time. Findings here require human
+    review — confirm the curve is an approved NIST curve and suppress the finding with an
+    inline annotation if your organization's policy permits it.
+- question: Which curves are safe to use?
+  answer: >
+    NIST-approved curves safe for new systems: SECP256R1 (P-256), SECP384R1 (P-384),
+    SECP521R1 (P-521). Deprecated curves that must NOT be used: SECP192R1 (P-192) and
+    SECP224R1 (P-224). For key agreement X25519 is widely recommended; for signatures
+    Ed25519 is preferred in modern protocols.
+- question: What is the security level provided by different curves?
+  answer: >
+    SECP192R1: 96-bit security (deprecated). SECP224R1: 112-bit security (deprecated after 2030).
+    SECP256R1: 128-bit security (approved). SECP384R1: 192-bit security (approved).
+    SECP521R1: 260-bit security (approved). X25519/Ed25519: approximately 128-bit security (approved).
+- question: Are non-NIST curves like Brainpool curves safe?
+  answer: >
+    Brainpool curves (brainpoolP256r1, etc.) are standardized by IETF and used in European
+    government contexts, but are not FIPS-approved by NIST and may not satisfy US federal
+    compliance requirements. Evaluate against your specific compliance framework.
+- question: Why should I prefer EC over RSA for new systems?
+  answer: >
+    EC provides equivalent security with much shorter keys: SECP256R1 (256-bit) matches
+    the security of 3072-bit RSA. Shorter keys mean faster key generation, smaller signatures,
+    and lower bandwidth. EC is the recommended approach in TLS 1.3, modern SSH, and FIDO2.
+- question: What attack does a weak EC curve enable?
+  answer: >
+    Weak curves with insufficient security parameters are vulnerable to the Pohlig-Hellman
+    algorithm and index calculus variants. For SECP192R1 an attacker can compute discrete
+    logarithms and recover the private key, enabling signature forgery and decryption of
+    ECDH-established sessions.
+similar_rules:
+- PYTHON-CRYPTO-SEC-020
+- PYTHON-CRYPTO-SEC-021
+- PYTHON-CRYPTO-SEC-023
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

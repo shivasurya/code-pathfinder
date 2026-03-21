@@ -1,0 +1,223 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-023
+name: Lambda Remote Code Execution via Pickle Deserialization
+short_description: Lambda event data flows to pickle.loads() or pickle.load(), enabling arbitrary Python code execution during deserialization of attacker-controlled bytes.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-023
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: "Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - deserialization
+  - pickle
+  - rce
+  - taint-analysis
+  - inter-procedural
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects unsafe deserialization vulnerabilities in AWS Lambda functions
+  where attacker-controlled event data flows into pickle.loads(), pickle.load(),
+  cPickle.loads(), or related pickle deserialization functions.
+
+  Python's pickle module serializes and deserializes arbitrary Python objects. The
+  pickle protocol can encode __reduce__() method calls on arbitrary classes, allowing
+  a crafted pickle payload to execute any Python code during deserialization. This is
+  documented behavior: the pickle documentation explicitly states "The pickle module
+  is not secure. Only unpickle data you trust."
+
+  Lambda functions that receive pickle-encoded data via the event dictionary are
+  completely compromised if an attacker can control the bytes being deserialized. Event
+  sources including API Gateway request bodies (event.get("body")), SQS message bodies
+  (event["Records"][0]["body"]), S3 object contents fetched based on event metadata,
+  and SNS message bodies are all attacker-controllable in public-facing deployments.
+
+  In the Lambda environment, pickle deserialization of attacker-controlled data
+  immediately gives the attacker the full capabilities of the execution environment:
+  the execution role's AWS credentials, boto3 SDK access, the /tmp filesystem, and
+  outbound network access. The attack completes during the deserialization call, before
+  any application logic runs.
+
+message: "Lambda event data flows to pickle.loads(). Never deserialize pickle data from Lambda event sources. Use JSON or another safe serialization format."
+
+security_implications:
+  - title: Code Execution During Deserialization
+    description: |
+      Pickle deserialization executes Python code encoded in the payload during the
+      loads() call itself. No application logic needs to run; the attacker's code
+      executes before the deserialized object is even used. This makes pickle
+      deserialization of event data an unconditional RCE with no mitigating conditions.
+  - title: Immediate AWS Credential Exfiltration
+    description: |
+      A crafted pickle payload can import os, read the Lambda's environment variables
+      (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN), and exfiltrate
+      them via an outbound HTTP request — all within the deserialization call before
+      lambda_handler() returns. The execution role's permissions are compromised
+      immediately.
+  - title: Persistent Compromise of Warm Execution Environments
+    description: |
+      Pickle deserialization can modify the Lambda process's global state, install hooks
+      in imported modules, or write files to /tmp that persist across warm invocations.
+      An attacker can install persistence mechanisms that affect all subsequent requests
+      processed by the same execution environment until it is recycled.
+  - title: SQS and SNS Trigger Exploitation
+    description: |
+      Lambda functions triggered by SQS queues or SNS topics may process base64-encoded
+      message bodies. If the Lambda decodes and deserializes message bodies with pickle,
+      an attacker who can publish to the SQS queue or SNS topic (which may be publicly
+      accessible) can execute arbitrary code in the Lambda without ever sending an API
+      Gateway request.
+
+secure_example: |
+  import json
+  import base64
+  import struct
+
+  def lambda_handler(event, context):
+      body = event.get('body', '')
+
+      # SECURE: Use JSON for data exchange — json.loads() cannot execute code
+      try:
+          data = json.loads(body)
+      except json.JSONDecodeError:
+          return {'statusCode': 400, 'body': 'Invalid JSON'}
+
+      # SECURE: For binary data, use struct or a well-defined binary format
+      binary_data = event.get('binary_field', '')
+      if binary_data:
+          try:
+              raw_bytes = base64.b64decode(binary_data)
+              # Parse with struct using a known fixed format, not pickle
+              if len(raw_bytes) >= 8:
+                  x, y = struct.unpack('!II', raw_bytes[:8])
+              else:
+                  return {'statusCode': 400, 'body': 'Invalid binary data'}
+          except Exception:
+              return {'statusCode': 400, 'body': 'Invalid binary data'}
+
+      return {'statusCode': 200, 'body': json.dumps({'received': data})}
+
+recommendations:
+  - Replace all pickle deserialization of Lambda event data with json.loads() or another safe serialization format (msgpack, protobuf, avro) that does not execute code during parsing.
+  - Never use pickle to deserialize data received from any AWS event source (API Gateway, SQS, SNS, S3, DynamoDB Streams) regardless of whether the source appears trusted.
+  - For internal Lambda-to-Lambda communication that currently uses pickle, replace with JSON serialization or AWS-native formats (EventBridge schema registry, SQS with JSON).
+  - If pickle must be used for internal state (e.g., ML model objects in /tmp), ensure the pickle data is written by the Lambda itself and never derived from event input.
+  - Apply least-privilege IAM policies to the Lambda execution role to limit the AWS APIs accessible if exploitation occurs.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. Sinks are calls("pickle.loads"),
+  calls("pickle.load"), calls("cPickle.loads"), and calls("cPickle.load") with tainted
+  input tracked via .tracks(0). There are no recognized sanitizers for pickle
+  deserialization — any Lambda event data reaching pickle.loads() is a confirmed
+  critical vulnerability. The analysis follows taint through base64.b64decode(),
+  bytes conversions, variable assignments, and module boundaries.
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: Python pickle security warning
+    url: https://docs.python.org/3/library/pickle.html#module-pickle
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: AWS Lambda Execution Environment
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection and deserialization attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: AWS Security Best Practices
+    requirement: "Never deserialize untrusted data with pickle; use safe formats"
+
+# FAQ
+faq:
+  - question: Why is pickle deserialization always dangerous regardless of input validation?
+    answer: |
+      Pickle deserialization executes Python code during the loads() call itself,
+      before the deserialized object is returned. Even if input validation runs before
+      the loads() call, the validation must correctly detect all possible malicious pickle
+      payloads to be effective, which is not feasible. The pickle format is complex and
+      attacker-controlled bytes can encode arbitrary __reduce__() calls that execute
+      code. The only safe approach is to never call pickle.loads() on untrusted bytes.
+
+  - question: Is pickle safe when the data comes from a supposedly trusted SQS queue?
+    answer: |
+      No. SQS queues can receive messages from multiple sources, and queue access policies
+      may be broader than intended. If any entity that can publish to the SQS queue is
+      untrusted (or could be compromised), pickle deserialization of queue messages is
+      unsafe. For internal SQS communication where only specific Lambda functions publish,
+      using JSON is still strongly recommended as defense-in-depth.
+
+  - question: What are safe alternatives to pickle for Lambda data serialization?
+    answer: |
+      For structured data: json.loads() and json.dumps() are safe and human-readable.
+      For binary-efficient formats: msgpack provides compact serialization without code
+      execution. For schema-defined formats: protobuf and Apache Avro with a fixed schema
+      registry prevent arbitrary object deserialization. For ML model exchange between
+      Lambda functions, use ONNX, TensorFlow SavedModel, or joblib only on data written
+      by the Lambda itself (never from event input).
+
+  - question: Our Lambda receives base64-encoded pickle data from a trusted internal service. Is this safe?
+    answer: |
+      Base64 encoding does not provide any security for pickle data; it is merely a
+      transport encoding. If the Lambda receives base64-encoded bytes and calls
+      base64.b64decode() followed by pickle.loads(), an attacker who can influence the
+      bytes (even indirectly through the upstream service) can execute arbitrary code.
+      Replace the inter-service serialization format with JSON or another safe format.
+
+  - question: Can cryptographic signatures on pickle payloads make deserialization safe?
+    answer: |
+      Cryptographic signatures (e.g., HMAC over the pickle bytes) can verify that the
+      payload was produced by a trusted party, making exploitation much harder if the
+      signing key is secret. However, this approach has significant operational risk:
+      if the signing key is compromised (e.g., via Lambda environment variable exfiltration
+      from a different vulnerability), all signed pickle payloads become exploitable.
+      Using JSON eliminates the risk entirely without key management complexity.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-022
+  - PYTHON-LAMBDA-SEC-020
+  - PYTHON-LAMBDA-SEC-021
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

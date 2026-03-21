@@ -1,0 +1,221 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-005
+name: Lambda Command Injection via asyncio.create_subprocess_exec()
+short_description: Lambda event data flows to asyncio.create_subprocess_exec(), enabling argument injection in async Lambda handlers.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - asyncio
+  - create-subprocess-exec
+  - argument-injection
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into asyncio.create_subprocess_exec() calls within async
+  Lambda handlers.
+
+  asyncio.create_subprocess_exec() does not invoke a shell and passes arguments
+  directly to the process via execve(), making it the safer async subprocess API.
+  However, it is still vulnerable to argument injection when event data controls the
+  executable path (first argument) or argument values that the target binary interprets
+  as flags or commands. Classic examples include passing attacker-controlled strings as
+  filenames to tools like rsync, wget, or curl that interpret certain argument patterns
+  as additional operations.
+
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other triggers. Fields such as event.get("body"),
+  event.get("queryStringParameters"), and event["Records"] are fully attacker-
+  controllable in public-facing deployments.
+
+  While the shell injection risk is reduced compared to create_subprocess_shell(),
+  the risk of argument injection and executable path manipulation remains when event
+  data is used in any argument position without validation.
+
+message: "Lambda event data flows to asyncio.create_subprocess_exec(). Validate all arguments from the event before passing to subprocess exec."
+
+security_implications:
+  - title: Executable Path Hijacking
+    description: |
+      If event data controls the first argument (the executable path) of
+      create_subprocess_exec(), an attacker can point the execution to any binary
+      accessible in the Lambda filesystem, including user-written scripts in /tmp.
+      Always use hardcoded, absolute executable paths from an allowlist.
+  - title: Argument Injection via Flag-Like Values
+    description: |
+      Many command-line tools interpret arguments beginning with '-' as flags.
+      If event data is passed as an argument without the '--' separator, values like
+      '--exec', '--output', or '-rf' may activate unintended behaviors in the target
+      binary. Prefix user-provided arguments with '--' when the target tool supports it.
+  - title: AWS Credential Access via Argument Injection
+    description: |
+      Argument injection can cause tools like curl, wget, or rsync to write output
+      files, follow redirects, or establish connections in ways that expose the
+      Lambda execution environment's AWS credentials stored in environment variables.
+  - title: /tmp Exfiltration and Modification
+    description: |
+      Argument injection into file processing tools can redirect output to attacker-
+      controlled destinations, read arbitrary /tmp files, or overwrite Lambda
+      deployment package files if /tmp is used for code storage.
+
+secure_example: |
+  import asyncio
+  import re
+  import json
+
+  ALLOWED_EXECUTABLES = {
+      'convert': '/usr/bin/convert',
+      'ffmpeg': '/opt/bin/ffmpeg',
+  }
+
+  async def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      tool = body.get('tool', '')
+      input_file = body.get('input', '')
+
+      # SECURE: Validate executable against a hardcoded allowlist with full paths
+      if tool not in ALLOWED_EXECUTABLES:
+          return {'statusCode': 400, 'body': 'Unknown tool'}
+
+      # SECURE: Validate filename with strict regex
+      if not re.match(r'^[a-zA-Z0-9_.\-]+$', input_file):
+          return {'statusCode': 400, 'body': 'Invalid filename'}
+
+      # SECURE: Use create_subprocess_exec with validated, prefixed arguments
+      process = await asyncio.create_subprocess_exec(
+          ALLOWED_EXECUTABLES[tool], '--', f'/tmp/{input_file}',
+          stdout=asyncio.subprocess.PIPE,
+          stderr=asyncio.subprocess.PIPE
+      )
+      stdout, stderr = await process.communicate()
+      return {'statusCode': 200, 'body': stdout.decode()}
+
+recommendations:
+  - Validate the executable argument against a hardcoded allowlist of absolute paths; never derive the executable from event data.
+  - Prefix user-controlled filename arguments with '--' to prevent the target binary from interpreting them as flags.
+  - Validate all event fields with strict allowlists or regular expressions before they appear in any argument position.
+  - Apply least-privilege IAM policies to the Lambda execution role to minimize the AWS APIs accessible if exploitation occurs.
+  - Prefer native Python libraries over subprocess calls wherever possible to eliminate the subprocess attack surface.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is
+  calls("asyncio.create_subprocess_exec") with tainted values tracked via .tracks(0)
+  for the executable argument and additional argument positions. The analysis follows
+  taint through async function calls, await expressions, list construction, and
+  module boundaries.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: Python asyncio.create_subprocess_exec documentation
+    url: https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.create_subprocess_exec
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: Python asyncio subprocess documentation
+    url: https://docs.python.org/3/library/asyncio-subprocess.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: If create_subprocess_exec() doesn't invoke a shell, why is it still dangerous?
+    answer: |
+      create_subprocess_exec() bypasses the shell, so classic shell injection with
+      semicolons, pipes, and $() does not work. However, argument injection remains
+      a risk: if event data controls the executable path, it can point to any binary
+      in the Lambda filesystem. If event data controls argument values, many tools
+      interpret arguments starting with '-' as flags, potentially activating unintended
+      behaviors. Always validate executable paths and argument values from allowlists.
+
+  - question: How does this rule differ from SEC-004 which covers create_subprocess_shell()?
+    answer: |
+      SEC-004 covers create_subprocess_shell(), which always invokes the shell and is
+      vulnerable to shell metacharacter injection. SEC-005 covers create_subprocess_exec(),
+      which does not invoke a shell but is still vulnerable to argument injection when
+      event data controls argument positions. Both rules are needed because developers
+      sometimes switch from shell to exec thinking it eliminates all injection risk,
+      when argument injection remains possible without input validation.
+
+  - question: What is the '--' argument separator and when should I use it?
+    answer: |
+      The '--' argument is a POSIX convention that signals the end of flag arguments
+      to most command-line tools. Arguments after '--' are treated as positional
+      arguments (filenames, etc.) rather than flags. Prefixing user-provided filenames
+      with '--' prevents the tool from interpreting values like '--delete' or '-rf' as
+      flags. Use '--' before any argument derived from event data in all subprocess calls.
+
+  - question: Can I use event data as the executable path if it's validated with a regex?
+    answer: |
+      No. Even a strict regex validation on an executable path does not guarantee safety,
+      because an attacker may craft a path that passes the regex but still points to an
+      unintended binary. Always use a hardcoded dictionary or set of allowed executables
+      with their full absolute paths, and use the event data only to select a key from
+      that allowlist, never to construct the path itself.
+
+  - question: How should I handle Lambda functions that use asyncio to process SQS batches?
+    answer: |
+      For SQS batch processing, iterate over event["Records"] and process each record
+      in separate async tasks. Validate each record's fields individually before use in
+      subprocess calls. Implement SQS batch item failure reporting so that a single
+      malformed record that fails validation does not cause the entire batch to be retried.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LAMBDA-SEC-004
+  - PYTHON-LAMBDA-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

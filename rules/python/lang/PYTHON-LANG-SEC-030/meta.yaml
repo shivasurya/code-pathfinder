@@ -1,0 +1,193 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-030
+name: Insecure MD5 Hash Usage
+short_description: MD5 is cryptographically broken and unsuitable for security-sensitive purposes. Use SHA-256 or SHA-3 instead.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-030
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - md5
+  - weak-hash
+  - cryptography
+  - hashlib
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  MD5 (Message Digest Algorithm 5) was once widely used for cryptographic hashing but is now
+  considered cryptographically broken. Practical collision attacks against MD5 were demonstrated
+  in 2004, and chosen-prefix collision attacks are feasible in under an hour on consumer hardware.
+  MD5 should not be used for any security-sensitive purpose.
+
+  MD5 is broken for: digital signatures (collision attacks allow forging signatures), certificate
+  fingerprinting (collisions allow creating malicious certificates with the same fingerprint),
+  password storage (rainbow tables and GPU cracking reduce MD5 passwords to seconds), and file
+  integrity verification when the attacker can choose file content.
+
+  MD5 remains suitable for non-security purposes such as checksums to detect accidental
+  corruption (not adversarial modification), content-addressed storage keys where collision
+  resistance is not required, and hash table keys. However, it must never be used where an
+  adversary could craft colliding inputs.
+
+message: "hashlib.md5() detected. MD5 is cryptographically broken. Use hashlib.sha256() or hashlib.sha3_256() for security-sensitive hashing."
+
+security_implications:
+  - title: Collision Attacks
+    description: |
+      An attacker can generate two different inputs with the same MD5 hash in seconds to
+      minutes on modern hardware. This allows forging digital signatures, creating malicious
+      files that match expected checksums, and bypassing integrity checks.
+  - title: Password Cracking
+    description: |
+      MD5 is extremely fast (billions of hashes per second on GPUs) and has no salt or
+      stretching by default. MD5-hashed passwords are trivially cracked using rainbow tables,
+      dictionary attacks, or brute force.
+  - title: Certificate Forgery
+    description: |
+      MD5 collisions have been used to forge X.509 certificates and create rogue CA
+      certificates. Applications using MD5 for certificate fingerprinting or verification
+      can be deceived by crafted certificates.
+  - title: Integrity Check Bypass
+    description: |
+      File or message integrity checks using MD5 can be bypassed by an attacker who can
+      influence the content being hashed. The attacker crafts a malicious file that has
+      the same MD5 hash as the legitimate file.
+
+secure_example: |
+  import hashlib
+
+  # INSECURE: MD5 for any security-sensitive use
+  # digest = hashlib.md5(data).hexdigest()
+
+  # SECURE: SHA-256 for general cryptographic hashing
+  def hash_file_content(data: bytes) -> str:
+      return hashlib.sha256(data).hexdigest()
+
+  # SECURE: SHA-3 for post-quantum forward security
+  def hash_document(data: bytes) -> str:
+      return hashlib.sha3_256(data).hexdigest()
+
+  # SECURE: Use hashlib.blake2b() for high-performance secure hashing
+  def compute_checksum(data: bytes) -> str:
+      return hashlib.blake2b(data, digest_size=32).hexdigest()
+
+  # NOTE: MD5 is still acceptable for non-security purposes
+  # such as content-addressed cache keys where collision resistance
+  # is not a security requirement and performance matters.
+  def generate_cache_key(data: bytes) -> str:
+      # ACCEPTABLE: cache key, not used for security
+      return hashlib.md5(data).hexdigest()  # noqa: S324
+
+recommendations:
+  - Replace hashlib.md5() with hashlib.sha256() or hashlib.sha3_256() for all security-sensitive hashing operations.
+  - For password hashing specifically, use hashlib.pbkdf2_hmac(), bcrypt, scrypt, or argon2 — never bare MD5 or any fast hash.
+  - For file integrity verification against adversarial modification, use SHA-256 or SHA-512.
+  - Reserve MD5 only for non-security checksums where collision resistance is not a security requirement, and document why it is acceptable.
+  - Audit all places where MD5 digests are compared to expected values to determine if they are security-sensitive.
+
+detection_scope: |
+  This rule detects calls to hashlib.md5() in Python source code. All call sites are flagged
+  since the security-sensitivity of each use requires human review to determine. Non-security
+  uses may be suppressed with documentation explaining the acceptable use case.
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A
+    requirement: "Revision 2: MD5 is disallowed for digital signatures and key derivation"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for data in transit"
+  - standard: FIPS 140-3
+    requirement: "MD5 is not an approved hash algorithm for security applications"
+
+# References
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "Python docs: hashlib module"
+    url: https://docs.python.org/3/library/hashlib.html
+  - title: "MD5 Collision Attacks - Wang et al. 2004"
+    url: https://www.iacr.org/archive/crypto2004/31520017/31520017.pdf
+  - title: OWASP Cryptographic Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+  - title: NIST SP 800-107 Revision 1 - Secure Hash Standard
+    url: https://csrc.nist.gov/publications/detail/sp/800-107/rev-1/final
+
+# FAQ
+faq:
+  - question: Is MD5 completely forbidden or are there acceptable uses?
+    answer: |
+      MD5 is broken for security purposes: passwords, digital signatures, certificate
+      fingerprints, and integrity verification against adversarial attacks. It remains
+      acceptable for non-security checksums (detecting accidental file corruption),
+      content-addressed storage keys (deduplication), and hash table keys where an
+      attacker cannot control input and collision resistance is not security-critical.
+
+  - question: What should I use instead of MD5 for password hashing?
+    answer: |
+      Never use bare MD5 (or any other general-purpose hash) for password hashing. Use
+      memory-hard key derivation functions: argon2-cffi (recommended), bcrypt, or
+      hashlib.scrypt(). These functions are specifically designed to be slow and memory-
+      intensive to resist GPU-based brute force attacks.
+
+  - question: Is MD5 safe with a salt?
+    answer: |
+      Adding a salt prevents rainbow table attacks but does not fix MD5's collision
+      vulnerability or its excessive speed. Salted MD5 is still trivially brute-forced
+      with GPUs. Use a proper password hashing function instead.
+
+  - question: How do I migrate existing MD5 hashes in a database?
+    answer: |
+      For password hashes: implement a migration that rehashes passwords using a secure
+      algorithm when users next log in. For file checksums: recompute checksums for all
+      files using SHA-256 and update the stored values. Maintain backward compatibility
+      during the transition period by accepting both old MD5 and new SHA-256 hashes.
+
+  - question: Is HMAC-MD5 safe?
+    answer: |
+      HMAC-MD5 is considered computationally secure against known attacks and is used in
+      legacy protocols such as TLS 1.0's MAC. However, it is deprecated in modern standards
+      and should be replaced with HMAC-SHA-256 in new code. The collision properties of
+      MD5 do not directly apply to HMAC constructions, but SHA-256 is strongly preferred.
+
+  - question: Does hashlib.md5(usedforsecurity=False) suppress this finding?
+    answer: |
+      Python 3.9+ added the usedforsecurity=False parameter to hashlib constructors for
+      use in FIPS mode systems. Code using this parameter explicitly acknowledges that
+      MD5 is not being used for security. This is appropriate for non-security checksums
+      and may be used to document and suppress findings for legitimate MD5 uses.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-032
+  - PYTHON-LANG-SEC-033
+  - PYTHON-LANG-SEC-034
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

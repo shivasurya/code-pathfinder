@@ -1,0 +1,209 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-050
+name: Django XSS via Direct HttpResponse with User Input
+short_description: User input flows directly to HttpResponse without HTML escaping, enabling Cross-Site Scripting (XSS) attacks.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-050
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - xss
+  - httpresponse
+  - html-injection
+  - taint-analysis
+  - inter-procedural
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Cross-Site Scripting (XSS) vulnerabilities in Django applications
+  where untrusted user input from HTTP request parameters flows directly into HttpResponse()
+  without HTML escaping.
+
+  Django's template engine provides automatic HTML escaping by default, which is why
+  rendering user input through templates is safe. However, when developers bypass the
+  template system and construct HTML strings manually in views, passing them to
+  HttpResponse(), they take on the responsibility of escaping user input that the
+  template engine would otherwise handle automatically.
+
+  XSS vulnerabilities allow attackers to inject malicious JavaScript that executes in
+  the victim's browser context, enabling session theft, credential harvesting, keylogging,
+  DOM manipulation, and phishing within the legitimate application's origin.
+
+message: "User input flows to HttpResponse() without escaping. Use Django templates with auto-escaping or django.utils.html.escape()."
+
+security_implications:
+  - title: Session Cookie Theft and Account Takeover
+    description: |
+      Injected JavaScript can access document.cookie and send session cookies to
+      attacker-controlled servers. If the application's session cookies do not have
+      the HttpOnly flag set, this leads to complete account takeover without
+      requiring the user's credentials.
+  - title: Credential Harvesting via DOM Manipulation
+    description: |
+      Injected scripts can dynamically modify the page DOM to add fake login forms
+      or overlay phishing content within the trusted application domain. Users filling
+      out these fake forms send credentials directly to the attacker, bypassing
+      browser security warnings about fake sites.
+  - title: Stored XSS as a Secondary Vector
+    description: |
+      If the user-controlled value eventually flows from the database to HttpResponse
+      (second-order XSS), the injection payload persists and executes every time any
+      user views the affected page, amplifying the attack across the entire user base.
+  - title: CSRF Token Exfiltration
+    description: |
+      XSS can extract CSRF tokens from the page and use them to submit state-changing
+      requests with full CSRF protection bypassed, enabling fund transfers, account
+      changes, and other sensitive operations on behalf of authenticated users.
+
+secure_example: |
+  from django.http import HttpResponse
+  from django.shortcuts import render
+  from django.utils.html import escape
+
+  def greet_user(request):
+      name = request.GET.get('name', '')
+      # SECURE OPTION 1: Use Django template system with automatic auto-escaping
+      return render(request, 'greet.html', {'name': name})
+      # In greet.html: <h1>Hello, {{ name }}</h1> -- auto-escaped by Django template
+
+  def search_results(request):
+      query = request.GET.get('q', '')
+      # SECURE OPTION 2: Explicitly escape before including in HttpResponse
+      escaped_query = escape(query)
+      html = f'<h1>Results for: {escaped_query}</h1>'
+      return HttpResponse(html)
+
+  def api_view(request):
+      name = request.GET.get('name', '')
+      # SECURE OPTION 3: Return JSON for API responses -- no HTML rendering needed
+      from django.http import JsonResponse
+      return JsonResponse({'greeting': f'Hello, {name}'})
+
+recommendations:
+  - Use Django's template system (render() or TemplateResponse) for all HTML responses; templates auto-escape variables by default.
+  - When HttpResponse must be used with dynamic content, escape all user-controlled values with django.utils.html.escape() before inclusion.
+  - For API responses that do not render HTML, use JsonResponse which escapes HTML entities in JSON values.
+  - Never concatenate request parameters directly into HTML strings, even for "simple" values like names or IDs.
+  - Ensure response Content-Type is set appropriately (text/html for templates, application/json for APIs) to prevent MIME sniffing-based XSS.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is the first argument (HTML content, tracked via .tracks(0)) of
+  calls("HttpResponse") and calls("django.http.HttpResponse"). Sanitizers include
+  calls("django.utils.html.escape"), calls("django.utils.html.strip_tags"), and
+  calls("bleach.clean"). The rule follows taint across file and module boundaries.
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: Django Template Auto-escaping
+    url: https://docs.djangoproject.com/en/stable/ref/templates/language/#automatic-html-escaping
+  - title: Django Security - Cross-site Scripting Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#cross-site-scripting-xss-protection
+  - title: django.utils.html module
+    url: https://docs.djangoproject.com/en/stable/ref/utils/#module-django.utils.html
+  - title: OWASP XSS Attack
+    url: https://owasp.org/www-community/attacks/xss/
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS is a sub-category)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against XSS attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-15: Information Output Filtering"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure security of processing including protection of user data"
+
+# FAQ
+faq:
+  - question: Why does Django template auto-escaping not protect my HttpResponse code?
+    answer: |
+      Django's template engine escapes variables when rendering template files ({{ variable }}).
+      When you construct HTML strings in Python code and pass them to HttpResponse() directly,
+      the template engine never sees the data. Auto-escaping only applies within the template
+      rendering system. Raw HttpResponse() with concatenated strings receives no automatic
+      escaping.
+
+  - question: Does escape() from django.utils.html escape all XSS vectors?
+    answer: |
+      django.utils.html.escape() converts the five HTML special characters: <, >, &,
+      single quote, and double quote to their HTML entity equivalents. This is sufficient
+      to prevent XSS in HTML content and attribute values when applied to user input.
+      It does not prevent XSS in JavaScript contexts (inside <script> tags) or CSS
+      contexts -- for those, use different escaping strategies or avoid including
+      user input in those contexts entirely.
+
+  - question: Can I mark a string as safe with mark_safe() after escaping it?
+    answer: |
+      Yes, if you have properly escaped the string first. The pattern escape(user_input)
+      followed by mark_safe() of the result is safe because escape() has already
+      converted all dangerous characters. However, applying mark_safe() first and then
+      concatenating unescaped user input is unsafe -- mark_safe() on a partial string
+      does not protect subsequent concatenation.
+
+  - question: Is this rule triggered by admin views or Django's built-in views?
+    answer: |
+      Django's built-in views and the admin interface use the template system for all
+      HTML rendering, so they do not trigger this rule. The rule specifically targets
+      cases where user input reaches HttpResponse() through code paths that bypass
+      the template engine, which typically means custom views that return inline HTML.
+
+  - question: How do I fix this if my view returns HTML constructed from multiple user inputs?
+    answer: |
+      Either migrate to a template (create an HTML template file, pass all dynamic
+      values as context, and use render()) or escape each user-controlled value with
+      escape() before incorporating it into the HTML string. If the HTML structure
+      itself is complex, the template approach is safer and more maintainable.
+
+  - question: Does using Content-Security-Policy headers eliminate the need to fix this?
+    answer: |
+      CSP is a defense-in-depth measure that can mitigate XSS impact but is not a
+      substitute for fixing the underlying vulnerability. CSP can be misconfigured,
+      bypassed through allowed script sources, or absent in older browsers. Fix the
+      source of the vulnerability by escaping output, and add CSP as an additional
+      protection layer.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-051
+  - PYTHON-DJANGO-SEC-052
+  - PYTHON-DJANGO-SEC-053
+  - PYTHON-DJANGO-SEC-060
+  - PYTHON-DJANGO-SEC-061
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

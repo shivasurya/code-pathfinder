@@ -1,0 +1,208 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-034
+name: MD5 Used for Password Hashing
+short_description: MD5 is being used to hash passwords. MD5 is cryptographically broken and orders of magnitude too fast for password hashing. Use bcrypt, scrypt, or argon2.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-034
+
+# Vulnerability Details
+cwe:
+  - id: CWE-916
+    name: Use of Password Hash With Insufficient Computational Effort
+    url: https://cwe.mitre.org/data/definitions/916.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - md5
+  - password-hashing
+  - weak-password-storage
+  - credentials
+  - CWE-916
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Using MD5 to hash passwords is a critical vulnerability. MD5 has two fatal properties for
+  password hashing: it is cryptographically broken (collision attacks exist) and it is
+  extremely fast (modern GPUs can compute billions of MD5 hashes per second).
+
+  Password hashing requires a slow, memory-hard function specifically designed to resist
+  brute-force attacks. bcrypt, scrypt, and Argon2 are purpose-built for this: they are
+  deliberately slow, use significant memory, and have configurable work factors that can
+  be increased as hardware improves.
+
+  This rule detects patterns where hashlib.md5() is called in proximity to password-related
+  variables, functions, or context, indicating MD5 is being used for credential storage.
+  Even salted MD5 is insufficient — a salted MD5 database can be cracked in hours using
+  GPU clusters.
+
+message: "MD5 used for password hashing. MD5 is not a password hashing function. Use bcrypt, scrypt, or argon2 instead."
+
+security_implications:
+  - title: Trivial Database Cracking After Breach
+    description: |
+      A leaked database of MD5-hashed passwords can be completely cracked in hours to days
+      using GPU-based tools like hashcat. Modern GPUs compute 50+ billion MD5 hashes per
+      second, making even complex passwords vulnerable to brute force within hours.
+  - title: Rainbow Table Attacks on Unsalted Passwords
+    description: |
+      Without a unique per-user salt, common passwords have identical MD5 hashes across all
+      users. Precomputed rainbow tables covering hundreds of millions of common passwords are
+      freely available, enabling instant cracking of any password whose MD5 hash is in the table.
+  - title: Credential Stuffing Risk
+    description: |
+      Once cracked from a MD5 hash database, plaintext passwords can be used in credential
+      stuffing attacks against other services where users reuse passwords, amplifying the
+      damage beyond the original breach.
+  - title: Compliance Violations
+    description: |
+      Storing passwords with MD5 violates PCI DSS, NIST SP 800-63B, and most data protection
+      regulations that mandate strong, modern password hashing. A breach of MD5-hashed
+      passwords triggers mandatory notification requirements under GDPR and similar laws.
+
+secure_example: |
+  # INSECURE: MD5 for password hashing
+  # import hashlib
+  # password_hash = hashlib.md5(password.encode()).hexdigest()
+
+  # SECURE: Use bcrypt (via bcrypt library)
+  import bcrypt
+
+  def hash_password(password: str) -> bytes:
+      salt = bcrypt.gensalt(rounds=12)
+      return bcrypt.hashpw(password.encode(), salt)
+
+  def verify_password(password: str, hashed: bytes) -> bool:
+      return bcrypt.checkpw(password.encode(), hashed)
+
+  # SECURE: Use argon2 (via argon2-cffi library) - current best practice
+  from argon2 import PasswordHasher
+
+  ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2)
+
+  def hash_password_argon2(password: str) -> str:
+      return ph.hash(password)
+
+  def verify_password_argon2(hashed: str, password: str) -> bool:
+      try:
+          return ph.verify(hashed, password)
+      except Exception:
+          return False
+
+  # SECURE: Use hashlib.scrypt() from the standard library
+  import hashlib
+  import os
+
+  def hash_password_scrypt(password: str) -> bytes:
+      salt = os.urandom(32)
+      key = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
+      return salt + key
+
+recommendations:
+  - Replace MD5 password hashing with argon2-cffi (Argon2id algorithm), which is the current OWASP and NIST recommendation for new systems.
+  - If argon2 is not available, use bcrypt with a work factor of at least 12 or hashlib.scrypt() from the Python standard library.
+  - Never use bare MD5, SHA-1, SHA-256, or any general-purpose hash function for password storage, even with a salt.
+  - Implement a migration path for existing MD5 password hashes: rehash with a secure algorithm when users next authenticate.
+  - Ensure each password has a unique random salt (all three recommended libraries handle this automatically).
+
+detection_scope: |
+  This rule detects hashlib.md5() calls in contexts that suggest password hashing usage,
+  such as proximity to variables named password, passwd, pwd, credential, or auth, and
+  function names containing these terms. The rule is intentionally broad to catch all
+  patterns where MD5 is applied to credentials.
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-63B
+    requirement: "Section 5.1.1.2: Use a suitable one-way key derivation function (Argon2, bcrypt, scrypt, PBKDF2)"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3.2: Passwords protected using strong cryptography"
+  - standard: GDPR Article 32
+    requirement: "Appropriate technical measures including pseudonymisation and encryption of personal data"
+
+# References
+references:
+  - title: "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+    url: https://cwe.mitre.org/data/definitions/916.html
+  - title: OWASP Password Storage Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+  - title: "NIST SP 800-63B: Digital Identity Guidelines"
+    url: https://pages.nist.gov/800-63-3/sp800-63b.html
+  - title: argon2-cffi documentation
+    url: https://argon2-cffi.readthedocs.io/
+  - title: bcrypt Python library documentation
+    url: https://pypi.org/project/bcrypt/
+
+# FAQ
+faq:
+  - question: Is salted MD5 good enough for password hashing?
+    answer: |
+      No. A salt prevents rainbow table attacks but does not fix the core problem: MD5 is
+      too fast. With a unique salt per user, an attacker must crack each hash individually,
+      but at billions of hashes per second on GPUs, even complex passwords are crackable
+      in hours. A proper password hashing function like argon2 is designed to be thousands
+      of times slower and memory-intensive to prevent this.
+
+  - question: What is the difference between a hash function and a password hashing function?
+    answer: |
+      General-purpose hash functions (MD5, SHA-256) are designed to be fast for tasks like
+      file integrity checking. Password hashing functions (argon2, bcrypt, scrypt) are
+      designed to be slow and memory-intensive, making brute-force attacks impractical.
+      The deliberate slowness is a feature, not a bug — use a password hashing function
+      whenever storing credentials.
+
+  - question: Which password hashing algorithm should I choose?
+    answer: |
+      For new systems: Argon2id (OWASP and NIST recommended). For systems where Argon2 is
+      unavailable: bcrypt with rounds >= 12. For standard library only: hashlib.scrypt() with
+      appropriate parameters (n=16384, r=8, p=1 minimum). Never PBKDF2-MD5; use PBKDF2-SHA256
+      if PBKDF2 is required by compliance, with at least 310,000 iterations.
+
+  - question: How do I migrate an existing database of MD5 hashes?
+    answer: |
+      Use a rehashing strategy: when a user logs in with the old MD5 hash successfully,
+      immediately rehash their password with argon2 and store the new hash. Mark old hashes
+      as needing migration. After a transition period, force-reset passwords for users who
+      haven't logged in. Never store both hashes simultaneously in the same field.
+
+  - question: Does this rule catch MD5 password hashing through all patterns?
+    answer: |
+      The rule detects contextual indicators that MD5 is being used for passwords. It may
+      miss cases where MD5 is applied to passwords through multiple variable assignments
+      without clear naming conventions. Supplement with a manual code review of all
+      authentication and user registration code paths.
+
+  - question: What work factor should I use for bcrypt and argon2?
+    answer: |
+      For bcrypt: use at least rounds=12. For Argon2id: OWASP recommends m=19456 KB memory,
+      t=2 iterations, p=1 parallelism as a minimum. Tune the work factor so that hashing
+      takes 0.5-1 second on your target hardware. Re-evaluate the work factor every few
+      years as hardware improves.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-032
+  - PYTHON-LANG-SEC-033
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

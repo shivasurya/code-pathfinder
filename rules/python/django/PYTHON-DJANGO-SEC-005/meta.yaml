@@ -1,0 +1,204 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-005
+name: Raw SQL Usage Audit via RawSQL Expression
+short_description: RawSQL() expression detected. Audit this usage to confirm parameterized queries are used for all user-controlled values.
+
+# Classification
+severity: MEDIUM
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - sql-injection
+  - rawsql
+  - audit
+  - orm
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This audit rule flags all usages of the RawSQL() expression in Django applications
+  regardless of whether tainted data is detected flowing into the SQL string. It is a
+  visibility rule designed to surface all raw SQL expressions for manual security review.
+
+  Django's RawSQL() allows embedding raw SQL fragments in ORM querysets via annotate(),
+  filter(), and order_by(). When used correctly with a static SQL string and all
+  dynamic values passed via the params tuple, it is safe. However, these usages are
+  frequently modified by developers who later add dynamic values without realizing they
+  must also update the params argument.
+
+  This rule uses pattern matching on DjangoExpressions.method("RawSQL") rather than
+  taint analysis, providing full coverage of all RawSQL() call sites in the codebase.
+  This makes it suitable for security audits and compliance reviews where a complete
+  inventory of raw SQL usage is required.
+
+message: "RawSQL() expression detected. Ensure all dynamic values are passed via the params argument, never embedded in the SQL string."
+
+security_implications:
+  - title: Latent Injection Risk from Future Modifications
+    description: |
+      Even currently-safe RawSQL() calls with static SQL strings represent a latent
+      risk. Developers who later modify these calls to include dynamic values may
+      inadvertently embed them in the SQL string instead of the params tuple, introducing
+      injection vulnerabilities that are not immediately obvious during code review.
+  - title: Audit Coverage for Compliance
+    description: |
+      Security audits, penetration testing reports, and compliance frameworks often
+      require a complete inventory of raw SQL usage. This rule provides that inventory
+      for RawSQL() specifically, complementing taint-based rules that only flag confirmed
+      injection flows.
+  - title: Injection via Third-Party Code
+    description: |
+      RawSQL() usages in shared utility functions or mixins may be called from multiple
+      views, some of which may pass user-controlled data as the SQL string. Auditing
+      all call sites identifies these shared functions that need careful review of all
+      their callers.
+  - title: Database-Specific SQL in Annotations
+    description: |
+      RawSQL() is often used for database-specific functions not available in Django's
+      ORM. These usages may be less scrutinized during code review because they are
+      seen as necessary technical debt, making them a common location for overlooked
+      injection vulnerabilities.
+
+secure_example: |
+  from django.http import JsonResponse
+  from django.db.models.expressions import RawSQL
+  from myapp.models import Product
+
+  def get_products_with_rank(request):
+      # SECURE: SQL string is a static literal, dynamic values use params tuple
+      products = Product.objects.annotate(
+          weighted_rank=RawSQL(
+              "price * weight_factor + %s",
+              (10.0,)  # Static constant in params is fine; user values must also go here
+          )
+      ).order_by('-weighted_rank').values('id', 'name', 'weighted_rank')
+      return JsonResponse({'products': list(products)})
+
+  def get_products_safe(request):
+      # BEST PRACTICE: Use ORM expressions to avoid raw SQL entirely
+      from django.db.models import F, ExpressionWrapper, FloatField
+      products = Product.objects.annotate(
+          computed=ExpressionWrapper(
+              F('price') * F('weight_factor'),
+              output_field=FloatField()
+          )
+      ).values('id', 'name', 'computed')
+      return JsonResponse({'products': list(products)})
+
+recommendations:
+  - Treat every RawSQL() call site as requiring security review to confirm the SQL string is a static literal.
+  - Migrate RawSQL() usages to equivalent Django ORM expressions (F(), Value(), Case(), database functions) wherever possible to eliminate the audit surface.
+  - Document the reason for each RawSQL() call in a code comment explaining why ORM alternatives are insufficient.
+  - Enforce code review policy requiring security sign-off on new RawSQL() additions.
+  - Use PYTHON-DJANGO-SEC-004 (taint-based rule) in CI to catch actual injection flows, and this audit rule for periodic compliance reviews.
+
+detection_scope: |
+  This rule uses QueryType pattern matching rather than taint analysis. It matches all
+  calls to DjangoExpressions.method("RawSQL") regardless of whether user-controlled data
+  flows into the arguments. The .where() clause constrains matches to Python files in
+  Django projects. This rule is intended as an audit/inventory tool and will produce
+  findings for all RawSQL() usages including correctly-parameterized ones. Use it for
+  security audits and compliance reviews. For CI-integrated injection detection, use
+  PYTHON-DJANGO-SEC-004 instead to avoid noise from safe usages.
+
+# References
+references:
+  - title: "CWE-89: SQL Injection"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: Django RawSQL Expression Documentation
+    url: https://docs.djangoproject.com/en/stable/ref/models/expressions/#django.db.models.expressions.RawSQL
+  - title: OWASP SQL Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: Django Security - SQL Injection Protection
+    url: https://docs.djangoproject.com/en/stable/topics/security/#sql-injection-protection
+  - title: Django Database Expressions
+    url: https://docs.djangoproject.com/en/stable/ref/models/expressions/
+  - title: OWASP SQL Injection
+    url: https://owasp.org/www-community/attacks/SQL_Injection
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-89 ranked #3 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 and 6.3.2 - inventory of custom code and protection against injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; RA-5: Vulnerability Monitoring and Scanning"
+  - standard: ISO 27001
+    requirement: "A.14.2.8 - System security testing"
+
+# FAQ
+faq:
+  - question: Why does this rule flag my RawSQL() call even though I'm using params correctly?
+    answer: |
+      This is an audit rule, not a taint-based injection rule. It flags all RawSQL()
+      usages regardless of whether they are safe. This is intentional: it creates an
+      inventory of all raw SQL usage for security review. Use PYTHON-DJANGO-SEC-004
+      for taint-based injection detection in CI. This rule is better suited for periodic
+      security audits and compliance reviews.
+
+  - question: How do I suppress findings from this rule for verified-safe RawSQL() calls?
+    answer: |
+      Add a comment documenting why the RawSQL() usage is safe and configure a
+      suppression annotation. Alternatively, maintain an allowlist of approved RawSQL()
+      calls in your security documentation. The goal of this audit rule is visibility,
+      not zero findings -- all findings should be reviewed and disposition documented.
+
+  - question: What is the difference between this rule and PYTHON-DJANGO-SEC-004?
+    answer: |
+      SEC-004 uses taint analysis to detect confirmed injection flows from request
+      parameters to RawSQL() SQL strings. SEC-005 uses pattern matching to flag all
+      RawSQL() usages regardless of data flow. SEC-004 has fewer false positives and
+      is appropriate for CI gates. SEC-005 has higher coverage and is appropriate for
+      security audits where completeness matters more than precision.
+
+  - question: Can I configure this rule to only run during security audits, not on every PR?
+    answer: |
+      Yes. Configure two separate rule sets in your CI pipeline: one for PR checks
+      that includes only taint-based rules like SEC-004, and one for scheduled security
+      scans or release gates that includes audit rules like SEC-005. This gives you
+      fast PR feedback without noise while maintaining complete audit coverage.
+
+  - question: What percentage of RawSQL() usages typically contain injection vulnerabilities?
+    answer: |
+      In practice, most RawSQL() usages that are flagged by this audit rule are safe
+      because they use the params argument correctly. The value of this rule is in
+      catching the minority that do not, and in ensuring all usages are documented and
+      reviewed. Teams maintaining large Django codebases often discover 5-15% of
+      RawSQL() calls lack proper parameterization when running this audit.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-001
+  - PYTHON-DJANGO-SEC-002
+  - PYTHON-DJANGO-SEC-003
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-DJANGO-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

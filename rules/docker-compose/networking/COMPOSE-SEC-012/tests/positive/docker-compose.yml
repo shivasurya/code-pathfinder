@@ -1,0 +1,7 @@
+version: '3'
+services:
+  web:
+    image: nginx
+    security_opt:
+      - label:disable  # CRITICAL: Disables SELinux protection
+    # Container can now bypass SELinux MAC controls

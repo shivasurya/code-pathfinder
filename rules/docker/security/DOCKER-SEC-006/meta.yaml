@@ -1,0 +1,87 @@
+id: DOCKER-SEC-006
+name: Docker Socket Mounted as Volume
+short_description: Dockerfile mounts Docker socket. This gives the container full control over the host
+  Docker daemon, equivalent to root access.
+severity: CRITICAL
+category: security
+language: docker
+ruleset: docker/DOCKER-SEC-006
+cwe:
+- id: CWE-250
+  name: Execution with Unnecessary Privileges
+  url: https://cwe.mitre.org/data/definitions/250.html
+tags:
+- docker
+- dockerfile
+- docker-socket
+- volume
+- security
+- privilege-escalation
+- container-escape
+- daemon
+- host-access
+- critical
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects VOLUME instructions that mount the Docker socket into a container.
+
+  Mounting the Docker socket (/var/run/docker.sock or /run/docker.sock) gives a container
+
+  full control over the host''s Docker daemon, which is equivalent to unrestricted root
+
+  access on the host machine.'
+message: Dockerfile mounts Docker socket. This gives the container full control over the host Docker daemon,
+  equivalent to root access.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: 'CWE-250: Execution with Unnecessary Privileges'
+  url: https://cwe.mitre.org/data/definitions/250.html
+- title: Docker Socket Security Advisory
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+- title: 'NIST SP 800-190: Application Container Security Guide'
+  url: https://csrc.nist.gov/publications
+- title: 'CIS Docker Benchmark: Section 5.31'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+security_implications:
+- title: Container Escape
+  description: 'Create privileged containers that mount the host filesystem: ```bash docker run -v /:/host
+    --privileged alpine chroot /host /bin/sh ``` This gives the attacker a root shell on the host.'
+- title: Privilege Escalation
+  description: Start containers with any user ID, including UID 0 (root), and mount any host directory
+    as a volume.
+- title: Persistence
+  description: Deploy malicious containers that persist across reboots by modifying host systemd services
+    or cron jobs.
+- title: Data Exfiltration
+  description: Access all volumes, images, and containers on the host, including those containing sensitive
+    data from other applications.
+- title: Resource Hijacking
+  description: Deploy cryptocurrency miners or consume all host resources to cause denial of service.
+- title: Lateral Movement
+  description: 'Access other containers'' filesystems and networks, potentially compromising the entire
+    infrastructure. Real-world attack chain:
+
+    ```bash
+
+    # Attacker gains shell in container with Docker socket mounted
+
+    # Step 1: List all containers
+
+    docker ps -a # Step 2: Create privileged container mounting host root
+
+    docker run -it -v /:/host --privileged alpine /bin/sh # Step 3: Chroot into host filesystem
+
+    chroot /host /bin/bash # Step 4: Now has root access to host - install backdoor
+
+    echo "* * * * * root /tmp/backdoor.sh" >> /etc/crontab
+
+    ```'

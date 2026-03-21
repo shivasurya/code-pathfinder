@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -102,18 +103,35 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 
 		if summary != nil {
 			for _, det := range summary.Detections {
-				// Find the sink match for this detection's sink line
+				// Find a sink match for this detection's sink line.
+				// Try all matchers at this line — if one rejects via tracked params,
+				// try the next matcher (e.g., type_constrained may reject but
+				// call_matcher at the same line may accept).
 				var matchedSink *CallSiteMatch
 				for i, sm := range sinkCalls {
 					if sm.Line == int(det.SinkLine) {
+						if len(sm.TrackedParams) > 0 && !e.matchesTrackedParams(det, sm) {
+							continue // This matcher rejects, try next
+						}
 						matchedSink = &sinkCalls[i]
 						break
 					}
 				}
 
-				// Filter by tracked parameter constraints
-				if matchedSink != nil && !e.matchesTrackedParams(det, *matchedSink) {
-					continue
+				// No matcher accepted this detection
+				if matchedSink == nil {
+					// Check if any sink was at this line but all rejected by tracked params
+					hasSinkAtLine := false
+					for _, sm := range sinkCalls {
+						if sm.Line == int(det.SinkLine) {
+							hasSinkAtLine = true
+							break
+						}
+					}
+					if hasSinkAtLine {
+						continue // All matchers at this line rejected
+					}
+					// No sink matcher at this line — keep detection without param filtering
 				}
 
 				detection := DataflowDetection{
@@ -266,21 +284,32 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 			}
 
 			detections = append(detections, DataflowDetection{
-				FunctionFQN:  source.FunctionFQN,
-				SourceLine:   source.Line,
-				SourceColumn: source.CallSite.Location.Column,
-				SinkLine:     sink.Line,
-				SinkColumn:   sink.CallSite.Location.Column,
-				SinkCall:     sink.CallSite.Target,
-				Confidence:   e.confidenceForMethod("interprocedural_vdg"),
-				Sanitized:    false,
-				Scope:        "global",
-				MatchMethod:  "interprocedural_vdg",
+				FunctionFQN:       sink.FunctionFQN,
+				SourceFunctionFQN: source.FunctionFQN,
+				SourceLine:        source.Line,
+				SourceColumn:      source.CallSite.Location.Column,
+				SinkLine:          sink.Line,
+				SinkColumn:        sink.CallSite.Location.Column,
+				SinkCall:          sink.CallSite.Target,
+				Confidence:        e.confidenceForMethod("interprocedural_vdg"),
+				Sanitized:         false,
+				Scope:             "global",
+				MatchMethod:       "interprocedural_vdg",
 			})
 		}
 	}
 
-	return detections
+	// Dedup: multiple matchers can produce identical findings for the same flow
+	seen := make(map[string]bool)
+	deduped := make([]DataflowDetection, 0, len(detections))
+	for _, det := range detections {
+		key := fmt.Sprintf("%s:%d:%d:%s", det.FunctionFQN, det.SourceLine, det.SinkLine, det.SinkCall)
+		if !seen[key] {
+			seen[key] = true
+			deduped = append(deduped, det)
+		}
+	}
+	return deduped
 }
 
 // summaryConfirmsFlow checks whether VDG transfer summaries confirm that

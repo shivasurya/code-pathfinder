@@ -1,0 +1,213 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-022
+name: Django globals() Misuse for Arbitrary Code Execution
+short_description: User input is used to index globals(), enabling arbitrary function dispatch and potential code execution.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-022
+
+# Vulnerability Details
+cwe:
+  - id: CWE-96
+    name: "Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection')"
+    url: https://cwe.mitre.org/data/definitions/96.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - django
+  - code-injection
+  - globals
+  - function-dispatch
+  - taint-analysis
+  - inter-procedural
+  - CWE-96
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects code injection vulnerabilities in Django applications where untrusted
+  user input from HTTP request parameters is used as a key to index the globals()
+  dictionary for dynamic function dispatch.
+
+  Python's globals() returns the current module's global namespace as a dictionary.
+  Using user-controlled input to retrieve entries from globals() (e.g., globals()[user_input])
+  and then calling the result allows an attacker to invoke any globally accessible callable,
+  including imported functions, class constructors, and module-level objects. Depending on
+  what is in scope, this can lead to OS command execution, file system access, database
+  manipulation, or escalation to full code execution.
+
+  This pattern is sometimes used as an ad-hoc dispatch mechanism, but it exposes the
+  entire global namespace to attackers. The correct approach is an explicit allowlist
+  dictionary mapping safe string names to specific callable objects.
+
+message: "User input flows to globals() indexing. Replace with an explicit allowlist dispatch dict to limit callable scope."
+
+security_implications:
+  - title: Unrestricted Function Dispatch
+    description: |
+      globals() exposes every name in the module's global scope: imported functions,
+      class definitions, module references, and built-in references. An attacker can
+      call os.system, subprocess.run, open, or any other global, not just the intended
+      dispatch targets. The attack surface is the entire module namespace.
+  - title: Imported Module Access
+    description: |
+      If the module imports os, subprocess, shutil, or other powerful modules, their
+      functions are accessible through globals(). An attacker supplying os as the
+      function name gets the entire os module, from which they can call os.system(),
+      os.remove(), or os.environ to access any OS function.
+  - title: Class Constructor Invocation
+    description: |
+      Model classes, form classes, and serializer classes are typically in scope.
+      An attacker who invokes a class constructor via globals() with crafted arguments
+      can create arbitrary model instances, potentially bypassing validation logic
+      that is enforced at the view layer but not at the model constructor level.
+  - title: Chained Code Execution via Callable Objects
+    description: |
+      Callable objects retrieved through globals() can be chained. If the attacker
+      retrieves a partial or lambda that leads to a code path with further dynamic
+      execution, the initial globals() access becomes the entry point for a more
+      complex attack chain.
+
+secure_example: |
+  from django.http import JsonResponse
+  from myapp.models import Item, Order, Report
+
+  # SECURE: Explicit allowlist mapping user-visible names to specific handlers
+  def list_items(request):
+      return JsonResponse({'items': list(Item.objects.values('id', 'name'))})
+
+  def list_orders(request):
+      return JsonResponse({'orders': list(Order.objects.values('id', 'total'))})
+
+  def generate_report(request):
+      return JsonResponse({'report': Report.objects.latest('created_at').summary})
+
+  ACTION_DISPATCH = {
+      'items': list_items,
+      'orders': list_orders,
+      'report': generate_report,
+  }
+
+  def dispatch_view(request):
+      action = request.GET.get('action', '')
+      # SECURE: Only pre-approved functions are callable via user input
+      handler = ACTION_DISPATCH.get(action)
+      if handler is None:
+          return JsonResponse({'error': 'Unknown action'}, status=404)
+      return handler(request)
+
+recommendations:
+  - Replace globals()[user_input] dispatch with an explicit dict mapping permitted string keys to specific callable objects.
+  - The allowlist dict should contain only the specific functions intended to be callable -- not entire modules or class hierarchies.
+  - Validate the action name is in the allowlist before attempting to call anything; return a 404 or 400 for unknown actions.
+  - Never expose the globals() or locals() namespace to user input, even indirectly through getattr() on modules.
+  - Audit all uses of getattr(module, user_input) for the same vulnerability pattern, as it is equivalent to globals()[user_input] for imported modules.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources include
+  calls("request.GET.get"), calls("request.POST.get"), calls("request.GET.__getitem__"),
+  calls("request.POST.__getitem__"), calls("request.body"), and calls("request.read").
+  The sink is calls("globals") where the return value is indexed with a tainted key,
+  tracked via .tracks(0). The rule also detects calls("getattr") where the attribute
+  name argument is tainted (also equivalent to namespace traversal with user input).
+  No sanitizers are recognized -- any user-controlled globals() indexing is flagged.
+
+# References
+references:
+  - title: "CWE-96: Static Code Injection"
+    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+  - title: Django Security
+    url: https://docs.djangoproject.com/en/stable/topics/security/
+  - title: Python globals() documentation
+    url: https://docs.python.org/3/library/functions.html#globals
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-96 - Static Code Injection in software weaknesses list"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; CM-7: Least Functionality"
+  - standard: ISO 27001
+    requirement: "A.14.2.5 - Secure system engineering principles"
+
+# FAQ
+faq:
+  - question: Why is globals()[user_input] dangerous if I only put safe functions in globals?
+    answer: |
+      You cannot control what is in globals() at runtime -- it includes everything the
+      module imports, defines, and references. Even if you only intend to dispatch to
+      a few view functions, globals() also contains os, sys, django.conf.settings,
+      and any other imports. An attacker who knows Python will try globals()['os']
+      and if the os module is imported anywhere in the module, it is accessible.
+
+  - question: What about using hasattr() checks before calling globals()[user_input]?
+    answer: |
+      hasattr() (or 'key in globals()') checks only confirm that the name exists in
+      the namespace -- they do not restrict which names are accessible. An attacker
+      can supply any name that exists in globals(), including os, subprocess, or
+      settings. The fix is not to add a hasattr() check but to use an explicit allowlist.
+
+  - question: Is getattr(module, user_input) the same vulnerability?
+    answer: |
+      Yes. getattr(some_module, user_input) where user_input is tainted is equivalent
+      to accessing the module's attribute namespace with user-controlled names. If the
+      module has dangerous functions (like a utils module that imports subprocess), an
+      attacker can access them. The fix is the same: use an explicit allowlist dict.
+
+  - question: Our Django app has a plugin system that uses globals() for dynamic loading. How do we fix it?
+    answer: |
+      Replace the globals()-based lookup with a plugin registry. Each plugin registers
+      itself in a dictionary at import time (a pattern called "registry" or "service
+      locator"). The dispatch function looks up the plugin by name in this registry.
+      The registry is populated at startup from trusted code, not from user input at
+      runtime. This provides the same extensibility without exposing the full namespace.
+
+  - question: Can type checking or isinstance() guards make globals()[user_input] safe?
+    answer: |
+      Not reliably. Even if you check isinstance(result, SomeBaseClass), an attacker
+      who can place a malicious object with the right class hierarchy into globals()
+      (through a second-order injection or import manipulation) can bypass the check.
+      Strict allowlisting by name is the only reliable protection.
+
+  - question: How does this finding compare to eval() and exec() findings in severity?
+    answer: |
+      globals() misuse is generally rated as High rather than Critical because the
+      exploit requires knowledge of what names are in scope and may require chaining
+      multiple calls. eval() and exec() are Critical because they directly execute
+      arbitrary code strings. However, all three are Remote Code Execution vectors
+      and require immediate remediation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-020
+  - PYTHON-DJANGO-SEC-021
+  - PYTHON-DJANGO-SEC-010
+  - PYTHON-DJANGO-SEC-011
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

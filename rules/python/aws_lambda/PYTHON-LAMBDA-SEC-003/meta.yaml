@@ -1,0 +1,220 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-003
+name: Lambda Command Injection via os.spawn*()
+short_description: Lambda event data flows to os.spawn*() functions, enabling process execution with attacker-controlled arguments in the Lambda execution environment.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - os-spawn
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects OS command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into os.spawn*() family functions: os.spawnl(),
+  os.spawnle(), os.spawnlp(), os.spawnlpe(), os.spawnv(), os.spawnve(), os.spawnvp(),
+  and os.spawnvpe().
+
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other AWS triggers. Fields such as
+  event.get("body"), event.get("queryStringParameters"), and event["Records"] are
+  fully attacker-controllable in public-facing deployments. There is no sanitization
+  layer between the raw event payload and application code.
+
+  The os.spawn*() family is a lower-level process spawning API that predates the
+  subprocess module. Variants ending in 'p' (spawnlp, spawnvp) search PATH for the
+  executable, making them susceptible to PATH manipulation attacks when combined with
+  user-controlled executable names. The 'l' variants take arguments as individual
+  strings; when any argument position contains attacker-controlled event data, the
+  attacker controls a process argument. In Lambda, successful exploitation yields
+  access to the execution role's AWS credentials stored in environment variables,
+  enabling further attacks against the broader AWS environment.
+
+message: "Lambda event data flows to os.spawn*(). Replace with subprocess.run() using a validated list of arguments."
+
+security_implications:
+  - title: Direct Process Spawning with Attacker-Controlled Arguments
+    description: |
+      os.spawn*() spawns a new process directly. When event data controls argument
+      positions, an attacker can influence the behavior of the spawned process.
+      Argument injection remains possible if the target binary interprets
+      attacker-controlled flags as commands (e.g., passing '-e cmd' to certain binaries).
+  - title: PATH Manipulation via spawnlp/spawnvp Variants
+    description: |
+      The 'p' variants (spawnlp, spawnvp, spawnlpe, spawnvpe) search the PATH
+      environment variable for the executable. If an attacker can control the executable
+      name argument and the PATH contains writable directories, the spawn can be
+      redirected to an attacker-controlled binary in /tmp.
+  - title: AWS Credential Exfiltration
+    description: |
+      Spawned processes in the Lambda environment inherit the parent's environment
+      variables, including AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and
+      AWS_SESSION_TOKEN. An attacker who controls process arguments can spawn a
+      process that reads and exfiltrates these credentials via the network.
+  - title: Execution Environment Reconnaissance
+    description: |
+      Injected arguments can cause spawned processes to list filesystem contents, read
+      configuration files, or probe the network. Lambda execution environments contain
+      deployed code, environment variables with secrets, and /tmp data that can be
+      enumerated and exfiltrated through injected process arguments.
+
+secure_example: |
+  import subprocess
+  import re
+  import json
+
+  ALLOWED_BINARIES = {
+      'convert': '/usr/bin/convert',
+      'ffmpeg': '/usr/bin/ffmpeg',
+  }
+
+  def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      binary = body.get('tool', '')
+      input_file = body.get('input', '')
+
+      # SECURE: Validate binary against a hardcoded allowlist with full paths
+      if binary not in ALLOWED_BINARIES:
+          return {'statusCode': 400, 'body': 'Unknown tool'}
+
+      # SECURE: Validate filename with strict regex
+      if not re.match(r'^[a-zA-Z0-9_.\-]+$', input_file):
+          return {'statusCode': 400, 'body': 'Invalid filename'}
+
+      # SECURE: Use subprocess.run with list — no os.spawn*, no shell
+      result = subprocess.run(
+          [ALLOWED_BINARIES[binary], '--', f'/tmp/{input_file}'],
+          capture_output=True,
+          text=True,
+          timeout=30
+      )
+      return {'statusCode': 200, 'body': result.stdout}
+
+recommendations:
+  - Replace all os.spawn*() calls with subprocess.run() using a list of arguments and shell=False to use the modern, well-documented safe API.
+  - When using spawn variants that search PATH ('p' variants), always pass the full absolute path to the executable instead of relying on PATH lookup.
+  - Validate all event fields with strict allowlists or regular expressions before they appear in any argument position of a spawn or subprocess call.
+  - Apply least-privilege IAM policies to the Lambda execution role to minimize the scope of credential exfiltration if injection occurs.
+  - Monitor Lambda CloudWatch logs for unexpected process output or error patterns that may indicate active exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. Sinks are calls("os.spawnl"),
+  calls("os.spawnle"), calls("os.spawnlp"), calls("os.spawnlpe"), calls("os.spawnv"),
+  calls("os.spawnve"), calls("os.spawnvp"), and calls("os.spawnvpe") with tainted
+  values tracked via .tracks(0) for the executable argument and additional argument
+  positions. The analysis follows taint through variable assignments, list construction,
+  and function boundaries.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: Python os.spawn* documentation
+    url: https://docs.python.org/3/library/os.html#os.spawnl
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: Python subprocess — Recommended replacement for os.spawn*
+    url: https://docs.python.org/3/library/subprocess.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: How does os.spawn*() differ from os.system() in terms of injection risk?
+    answer: |
+      os.system() always invokes the shell, so any shell metacharacter in user input
+      can chain additional commands. os.spawn*() does not invoke a shell by default,
+      so traditional shell metacharacter injection does not work in the same way.
+      However, spawn is still dangerous when event data controls argument positions:
+      the target binary may interpret injected flags as commands, and PATH-searching
+      variants (spawnlp, spawnvp) can be directed to attacker-controlled executables.
+
+  - question: When should I use os.spawn*() versus subprocess?
+    answer: |
+      Python's official documentation recommends using the subprocess module in
+      preference to os.spawn*(). subprocess.run() with a list provides the same
+      process-spawning capability with a cleaner interface, better error handling,
+      and well-documented security considerations. There is no modern use case where
+      os.spawn*() is preferable to subprocess.run().
+
+  - question: Are the 'p' variants of os.spawn more dangerous than non-'p' variants?
+    answer: |
+      The 'p' variants (spawnlp, spawnvp, spawnlpe, spawnvpe) search the PATH
+      environment variable for the executable. This creates an additional attack vector:
+      if the executable name is attacker-controlled or if /tmp appears in PATH, the
+      spawn can execute an unintended binary. Non-'p' variants require the full path,
+      limiting this specific risk. Both variants are dangerous when argument positions
+      contain event data.
+
+  - question: What if I need to spawn a process from Lambda that processes an S3 object?
+    answer: |
+      Download the S3 object to /tmp using the boto3 S3 client with a sanitized,
+      hardcoded local filename. Then pass that known-safe local path to subprocess.run()
+      with a list. Never derive the local filename or subprocess arguments directly
+      from the S3 key, bucket name, or event metadata without strict validation.
+
+  - question: How do I audit existing Lambda functions for os.spawn*() usage?
+    answer: |
+      Search all Lambda function source files for 'os.spawn'. Review each call site to
+      determine whether any argument position can be influenced by event data,
+      environment variables, or database values. For each finding, replace the spawn
+      call with subprocess.run() using a list and add input validation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LAMBDA-SEC-004
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LAMBDA-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -245,10 +245,19 @@ func (f *SARIFFormatter) addCodeFlow(det *dsl.EnrichedDetection, result *sarif.R
 		sinkMsg += ": " + det.Detection.SinkCall
 	}
 
+	sourceFilePath := filePath
+	if det.Detection.SourceFile != "" {
+		sourceFilePath = det.Detection.SourceFile
+	}
+	sinkFilePath := filePath
+	if det.Detection.SinkFile != "" {
+		sinkFilePath = det.Detection.SinkFile
+	}
+
 	sourceLocation := sarif.NewLocation().
 		WithPhysicalLocation(
 			sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(filePath)).
+				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(sourceFilePath)).
 				WithRegion(sarif.NewRegion().WithStartLine(det.Detection.SourceLine)),
 		).
 		WithMessage(sarif.NewTextMessage(sourceMsg))
@@ -256,7 +265,7 @@ func (f *SARIFFormatter) addCodeFlow(det *dsl.EnrichedDetection, result *sarif.R
 	sinkLocation := sarif.NewLocation().
 		WithPhysicalLocation(
 			sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(filePath)).
+				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(sinkFilePath)).
 				WithRegion(sarif.NewRegion().WithStartLine(det.Detection.SinkLine)),
 		).
 		WithMessage(sarif.NewTextMessage(sinkMsg))
@@ -278,7 +287,7 @@ func (f *SARIFFormatter) addCodeFlow(det *dsl.EnrichedDetection, result *sarif.R
 	relatedLocation := sarif.NewLocation().
 		WithPhysicalLocation(
 			sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(filePath)).
+				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(sourceFilePath)).
 				WithRegion(sarif.NewRegion().WithStartLine(det.Detection.SourceLine)),
 		).
 		WithMessage(sarif.NewTextMessage(sourceMsg))

@@ -1,0 +1,217 @@
+# Rule Identity
+id: PYTHON-FLASK-001
+name: Flask Debug Mode Enabled
+short_description: Detects Flask applications started with debug=True, which enables the interactive Werkzeug debugger and must never run in production.
+
+# Classification
+severity: HIGH
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-489
+    name: Active Debug Code
+    url: https://cwe.mitre.org/data/definitions/489.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - flask
+  - debug-mode
+  - configuration
+  - information-disclosure
+  - werkzeug
+  - production
+  - misconfiguration
+  - remote-code-execution
+  - CWE-489
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Flask applications that call app.run(debug=True), enabling the interactive
+  Werkzeug debugger. When debug mode is active, any unhandled exception opens an interactive
+  Python console directly in the browser. An attacker who can trigger a 500 error -- by sending
+  malformed input, hitting an edge case, or guessing a route -- gains the ability to execute
+  arbitrary Python code in the server process. This is unauthenticated remote code execution,
+  not a theoretical risk.
+
+  Beyond the debugger itself, debug mode also exposes full stack traces with local variable
+  values in HTTP responses, enables the auto-reloader, and disables several Flask security
+  hardening behaviors. Stack traces leak framework versions, file system paths, configuration
+  values, and application logic that attackers use to plan further exploitation.
+
+  The detection uses FlaskApp.method("run").where("debug", True) -- a QueryType-based precise
+  match. FlaskApp declares fqns=["flask"], so the engine only matches objects actually imported
+  from the flask package. The .where("debug", True) filter means only calls where the debug
+  keyword argument is explicitly the boolean True are flagged. Calls with debug=False,
+  debug=os.getenv(...), or no debug argument at all are not flagged. This precision delivers
+  zero false positives on properly configured applications.
+
+message: "Flask debug mode enabled. Never use debug=True in production. Use a production WSGI server like Gunicorn or uWSGI."
+
+security_implications:
+  - title: Unauthenticated Remote Code Execution via Werkzeug Debugger
+    description: |
+      The Werkzeug interactive debugger opens a Python console on every unhandled exception.
+      Any visitor who can trigger a 500 error can execute arbitrary Python in the server
+      process. There is a PIN mechanism in Werkzeug 0.11+, but it is derived from machine
+      details (hostname, MAC address, process ID, app path) that are frequently leaked through
+      stack traces or accessible via /proc on Linux. Do not treat the PIN as a security control.
+  - title: Full Stack Traces Leaked in HTTP Responses
+    description: |
+      Debug mode returns detailed exception tracebacks to the browser, including local variable
+      values, function call chains, and source file paths. Attackers use this to map the
+      application's internal structure, identify library versions with known CVEs, and locate
+      exact lines of code to target with follow-up attacks.
+  - title: Secret and Configuration Disclosure
+    description: |
+      Stack traces frequently capture the values of configuration variables, database
+      connection strings, API keys, and Flask's SECRET_KEY at the moment of the exception.
+      A single triggered error can expose credentials that give an attacker direct database
+      access or the ability to forge session cookies.
+  - title: Persistent Exposure Through Reloader
+    description: |
+      The debug reloader watches the file system for source changes and restarts the app
+      automatically. In containerized environments with mounted volumes, this can expose
+      file system paths, trigger import errors that produce verbose stack traces, and create
+      timing side-channels that reveal the application's directory structure.
+
+secure_example: |
+  import os
+  from flask import Flask
+
+  app = Flask(__name__)
+
+  @app.route('/api/users')
+  def get_users():
+      return {'users': []}
+
+  if __name__ == '__main__':
+      # SAFE: Debug mode disabled explicitly
+      app.run(debug=False)
+
+      # BETTER: Drive debug mode from an environment variable.
+      # Ensure FLASK_DEBUG is never set to 'true' in production.
+      debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+      app.run(debug=debug_mode)
+
+      # BEST: Use a production WSGI server instead of app.run() entirely.
+      # Gunicorn: gunicorn -w 4 -b 0.0.0.0:8000 app:app
+      # uWSGI:    uwsgi --http 0.0.0.0:8000 --module app:app
+      # Waitress: waitress-serve --port=8000 app:app
+
+recommendations:
+  - Remove debug=True from all app.run() calls. The default is False -- omitting the argument is safe and explicit.
+  - Drive debug mode through an environment variable (FLASK_DEBUG) and verify it is set to 0 or false in every production, staging, and CI environment.
+  - Replace app.run() with a production WSGI server such as Gunicorn, uWSGI, or Waitress. These servers never expose the Werkzeug debugger regardless of configuration.
+  - Implement a global exception handler (app.errorhandler(500)) that returns a generic error page to users and logs the full traceback server-side only.
+  - Add a pre-deployment check in CI -- run this rule with pathfinder ci -- to catch accidental re-introduction of debug=True before it reaches production.
+
+detection_scope: |
+  This rule uses a QueryType-based precise match: FlaskApp.method("run").where("debug", True).
+  FlaskApp declares fqns=["flask"], restricting matches to objects imported from the flask
+  package. The .method("run") step targets the run() method call on that object. The
+  .where("debug", True) step filters to calls where the keyword argument debug is explicitly
+  the boolean True. Calls with debug=False, debug=0, debug=variable_name, or no debug
+  argument are not flagged. This precision eliminates false positives from correctly configured
+  applications. The rule operates at the call-site level without cross-file dataflow analysis.
+
+# References
+references:
+  - title: "CWE-489: Active Debug Code"
+    url: https://cwe.mitre.org/data/definitions/489.html
+  - title: "CVE-2015-5306: Werkzeug Debug PIN Weakness"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2015-5306
+  - title: Flask Security Considerations
+    url: https://flask.palletsprojects.com/en/stable/security/
+  - title: Flask Deploying to Production
+    url: https://flask.palletsprojects.com/en/stable/deploying/
+  - title: Werkzeug Debugger Documentation
+    url: https://werkzeug.palletsprojects.com/en/stable/debug/
+  - title: OWASP A05:2021 Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration: disable debug features in production"
+  - standard: CWE Top 25
+    requirement: "CWE-489 Active Debug Code -- shipping debug-enabled code to production"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent information disclosure through error messages"
+  - standard: NIST SP 800-53
+    requirement: "SI-11: Error Handling -- error messages must not expose system internals"
+
+# FAQ
+faq:
+  - question: Why is debug=True dangerous if Werkzeug has a PIN protecting the debugger?
+    answer: |
+      The Werkzeug debugger PIN is computed from the machine's hostname, the first network
+      interface's MAC address, the process ID, and the app's root path. These values are
+      frequently leaked through stack traces, accessible via /proc on Linux containers, or
+      guessable on shared hosting. Researchers have demonstrated PIN bypasses against real
+      deployments. The PIN is a speed bump, not a security boundary.
+
+  - question: How does this rule know the app object is from Flask and not some other library?
+    answer: |
+      The QueryType FlaskApp declares fqns=["flask"], so the engine traces the import of the
+      object back to the flask package. A custom class with a run(debug=True) method that is
+      not imported from flask will not be flagged. This import-aware matching is what makes the
+      .where() approach produce zero false positives.
+
+  - question: My local development setup uses app.run(debug=True). Will that be flagged?
+    answer: |
+      Yes. The rule cannot distinguish development files from production code without path-based
+      filtering. You can suppress findings in local scripts by adding a path exclusion in your
+      Code Pathfinder configuration, or by switching local development to use Flask's built-in
+      test client (app.test_client()) which never starts the HTTP server.
+
+  - question: What is the difference between FLASK_DEBUG=1 in the environment and debug=True in code?
+    answer: |
+      FLASK_DEBUG is an environment variable Flask reads at startup. This rule catches debug=True
+      in the Python source code -- a hardcoded value. If you rely solely on environment variables,
+      this rule will not flag your code, but you still need to ensure FLASK_DEBUG is not set to 1
+      in production. Use environment variable auditing as a complementary control.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-001 --project .
+      The rule outputs SARIF, JSON, or CSV. On GitHub Actions it can post inline pull request
+      comments pointing to the exact line where debug=True appears, blocking the merge before
+      the misconfiguration reaches production.
+
+  - question: Does this rule catch app.config["DEBUG"] = True as well?
+    answer: |
+      No. This rule specifically matches the app.run(debug=True) call-site pattern. Configuration
+      set via app.config["DEBUG"] = True is a separate pattern not covered here. For comprehensive
+      debug-mode coverage, combine this rule with a configuration assignment audit rule.
+
+  - question: What WSGI servers should I use instead of app.run()?
+    answer: |
+      Gunicorn (gunicorn app:app) is the most common choice. uWSGI, Waitress (pure Python, works
+      on Windows), and Hypercorn (supports ASGI) are also solid options. All of them ignore
+      Flask's debug setting -- the Werkzeug development server that app.run() starts is never
+      invoked in these deployments.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-AUDIT-003
+  - PYTHON-FLASK-AUDIT-010
+  - PYTHON-FLASK-SEC-004
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

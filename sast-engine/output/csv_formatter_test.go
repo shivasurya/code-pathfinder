@@ -21,8 +21,8 @@ func TestNewCSVFormatter(t *testing.T) {
 
 func TestCSVHeaders(t *testing.T) {
 	headers := CSVHeaders()
-	if len(headers) != 17 {
-		t.Errorf("expected 17 headers, got %d", len(headers))
+	if len(headers) != 19 {
+		t.Errorf("expected 19 headers, got %d", len(headers))
 	}
 
 	// Verify key headers exist
@@ -141,17 +141,17 @@ func TestCSVFormatterOutput(t *testing.T) {
 	if row[12] != "local" {
 		t.Errorf("detection_scope: got %q", row[12])
 	}
-	if row[13] != "10" {
-		t.Errorf("source_line: got %q", row[13])
+	if row[14] != "10" {
+		t.Errorf("source_line: got %q", row[14])
 	}
-	if row[14] != "20" {
-		t.Errorf("sink_line: got %q", row[14])
+	if row[16] != "20" {
+		t.Errorf("sink_line: got %q", row[16])
 	}
-	if row[15] != "user_input" {
-		t.Errorf("tainted_var: got %q", row[15])
+	if row[17] != "user_input" {
+		t.Errorf("tainted_var: got %q", row[17])
 	}
-	if row[16] != "eval" {
-		t.Errorf("sink_call: got %q", row[16])
+	if row[18] != "eval" {
+		t.Errorf("sink_call: got %q", row[18])
 	}
 }
 
@@ -259,8 +259,8 @@ func TestCSVFormatterMultipleRows(t *testing.T) {
 
 	// Verify each data row has 17 columns
 	for i := 1; i < len(records); i++ {
-		if len(records[i]) != 17 {
-			t.Errorf("row %d: expected 17 columns, got %d", i, len(records[i]))
+		if len(records[i]) != 19 {
+			t.Errorf("row %d: expected 19 columns, got %d", i, len(records[i]))
 		}
 	}
 }
@@ -324,11 +324,11 @@ func TestCSVFormatterZeroValues(t *testing.T) {
 	if row[8] != "" { // column
 		t.Errorf("column should be empty for 0, got %q", row[8])
 	}
-	if row[13] != "" { // source_line
-		t.Errorf("source_line should be empty for 0, got %q", row[13])
+	if row[16] != "" { // source_line
+		t.Errorf("source_line should be empty for 0, got %q", row[14])
 	}
-	if row[14] != "" { // sink_line
-		t.Errorf("sink_line should be empty for 0, got %q", row[14])
+	if row[16] != "" { // sink_line
+		t.Errorf("sink_line should be empty for 0, got %q", row[16])
 	}
 }
 
@@ -404,17 +404,17 @@ func TestCSVFormatterTaintDetection(t *testing.T) {
 	if row[12] != "global" {
 		t.Errorf("detection_scope: got %q", row[12])
 	}
-	if row[13] != "5" {
-		t.Errorf("source_line: got %q", row[13])
+	if row[14] != "5" {
+		t.Errorf("source_line: got %q", row[14])
 	}
-	if row[14] != "15" {
-		t.Errorf("sink_line: got %q", row[14])
+	if row[16] != "15" {
+		t.Errorf("sink_line: got %q", row[16])
 	}
-	if row[15] != "tainted_data" {
-		t.Errorf("tainted_var: got %q", row[15])
+	if row[17] != "tainted_data" {
+		t.Errorf("tainted_var: got %q", row[17])
 	}
-	if row[16] != "dangerous_sink" {
-		t.Errorf("sink_call: got %q", row[16])
+	if row[18] != "dangerous_sink" {
+		t.Errorf("sink_call: got %q", row[18])
 	}
 }
 

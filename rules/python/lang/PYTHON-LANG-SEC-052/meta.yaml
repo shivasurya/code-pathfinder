@@ -1,0 +1,198 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-052
+name: Deprecated ssl.wrap_socket() Usage
+short_description: ssl.wrap_socket() is deprecated since Python 3.7 and should be replaced with SSLContext.wrap_socket() for proper TLS configuration.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-052
+
+# Vulnerability Details
+cwe:
+  - id: CWE-326
+    name: Inadequate Encryption Strength
+    url: https://cwe.mitre.org/data/definitions/326.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - ssl
+  - wrap-socket
+  - deprecated-api
+  - tls-configuration
+  - CWE-326
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  ssl.wrap_socket() is a deprecated convenience function that wraps a plain socket with
+  TLS. It was deprecated in Python 3.7 because it has limited configurability, poor
+  defaults, and does not provide the same level of TLS security control as the SSLContext
+  API.
+
+  The function has several security concerns: it defaults to ssl.PROTOCOL_TLS which
+  may allow older protocol versions, it does not enforce certificate verification by
+  default (unlike SSLContext(PROTOCOL_TLS_CLIENT)), and it provides limited control over
+  cipher suites, protocol versions, and other TLS parameters.
+
+  The replacement is to create an ssl.SSLContext() with the appropriate protocol constant,
+  configure it with minimum protocol version, cipher suites, and certificate requirements,
+  then call context.wrap_socket() on the socket.
+
+message: "ssl.wrap_socket() is deprecated since Python 3.7. Use ssl.SSLContext.wrap_socket() with an explicitly configured secure context."
+
+security_implications:
+  - title: Weak Default Configuration
+    description: |
+      ssl.wrap_socket() may not enforce certificate verification or hostname checking by
+      default, depending on the Python version and how it is called. This can silently
+      create insecure TLS connections that appear to be secured.
+  - title: No Minimum Protocol Version Enforcement
+    description: |
+      Without an explicit SSLContext, ssl.wrap_socket() relies on OpenSSL defaults, which
+      may permit negotiation of TLS 1.0 or 1.1 in some configurations. An explicit context
+      allows setting minimum_version = ssl.TLSVersion.TLSv1_2.
+  - title: Limited Cipher Suite Control
+    description: |
+      The function parameters do not expose all cipher suite configuration options available
+      in SSLContext. Weak cipher suites from OpenSSL defaults may be negotiated without
+      explicit restriction.
+  - title: Deprecated API with Reduced Security Maintenance
+    description: |
+      Deprecated APIs receive less security review and may not benefit from future TLS
+      hardening improvements applied to the SSLContext API. Using SSLContext ensures access
+      to all current and future TLS security controls.
+
+secure_example: |
+  import ssl
+  import socket
+
+  # INSECURE/DEPRECATED: ssl.wrap_socket()
+  # raw_socket = socket.create_connection((host, port))
+  # secure_socket = ssl.wrap_socket(raw_socket, server_hostname=host)
+
+  # SECURE: Use SSLContext.wrap_socket() with explicit configuration
+  def create_secure_client_socket(host: str, port: int) -> ssl.SSLSocket:
+      ctx = ssl.create_default_context()
+      # create_default_context() sets up verification and minimum TLS version
+      raw_socket = socket.create_connection((host, port))
+      return ctx.wrap_socket(raw_socket, server_hostname=host)
+
+  # SECURE: For server sockets with custom configuration
+  def create_secure_server_socket(
+      bind_addr: str, port: int, certfile: str, keyfile: str
+  ) -> ssl.SSLSocket:
+      ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+      ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+      ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+      ctx.set_ciphers("ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20")
+      raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      raw_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      raw_socket.bind((bind_addr, port))
+      raw_socket.listen(5)
+      return ctx.wrap_socket(raw_socket, server_side=True)
+
+recommendations:
+  - Replace ssl.wrap_socket() with ssl.create_default_context().wrap_socket() for client connections, which enforces certificate verification and hostname checking.
+  - For server sockets, create an explicit SSLContext(PROTOCOL_TLS_SERVER) with minimum_version set to TLSv1_2, then call context.wrap_socket().
+  - Set ctx.minimum_version = ssl.TLSVersion.TLSv1_2 explicitly on all SSLContext objects to prevent negotiation of older protocol versions.
+  - Configure cipher suites via ctx.set_ciphers() to exclude weak algorithms including RC4, DES, and export-grade ciphers.
+  - Use ctx.load_verify_locations() or ssl.create_default_context(cafile=...) for custom CA certificates.
+
+detection_scope: |
+  This rule detects calls to the top-level ssl.wrap_socket() function from the ssl module.
+  This is distinct from SSLContext.wrap_socket() (which is the recommended replacement).
+  All call sites are flagged since the top-level function is deprecated and has weaker
+  default security properties.
+
+# Compliance
+compliance:
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Use strong cryptography for sensitive data transmission"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-52 Revision 2
+    requirement: "Use of properly configured TLS with minimum version requirements"
+  - standard: NIST SP 800-57
+    requirement: "Adequate key lengths and algorithms for encryption strength"
+
+# References
+references:
+  - title: "CWE-326: Inadequate Encryption Strength"
+    url: https://cwe.mitre.org/data/definitions/326.html
+  - title: "Python docs: ssl.wrap_socket() deprecation"
+    url: https://docs.python.org/3/library/ssl.html#ssl.wrap_socket
+  - title: "Python docs: ssl.SSLContext"
+    url: https://docs.python.org/3/library/ssl.html#ssl.SSLContext
+  - title: OWASP TLS Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: OWASP Top 10 A02:2021 Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# FAQ
+faq:
+  - question: When was ssl.wrap_socket() deprecated and when will it be removed?
+    answer: |
+      ssl.wrap_socket() was deprecated in Python 3.7 (2018). It was marked for removal
+      but has not yet been removed as of Python 3.12. Code relying on it will eventually
+      break and should be migrated to SSLContext.wrap_socket() now to avoid future
+      compatibility issues.
+
+  - question: What is the simplest migration path from ssl.wrap_socket()?
+    answer: |
+      For client code: replace ssl.wrap_socket(sock, server_hostname=host) with
+      ssl.create_default_context().wrap_socket(sock, server_hostname=host). This is
+      a one-line change that also improves security by enforcing certificate verification.
+      For server code: create an explicit SSLContext and call wrap_socket() on it.
+
+  - question: Does ssl.create_default_context().wrap_socket() handle certificate verification?
+    answer: |
+      Yes. ssl.create_default_context() creates a context with check_hostname=True and
+      verify_mode=ssl.CERT_REQUIRED by default. The subsequent wrap_socket() call uses
+      these settings. This is more secure than ssl.wrap_socket() which does not enforce
+      these by default.
+
+  - question: Is this rule about security or just about API modernization?
+    answer: |
+      Both. The immediate concern is API modernization since ssl.wrap_socket() is deprecated
+      and may be removed. The security concern is that ssl.wrap_socket() has weaker defaults
+      than SSLContext.wrap_socket() and provides less control over TLS configuration.
+      Migrating to SSLContext improves both correctness and security.
+
+  - question: Are there third-party libraries that use ssl.wrap_socket() internally?
+    answer: |
+      Some older versions of HTTP and network libraries use ssl.wrap_socket(). If a
+      third-party library triggers this rule, check whether the library has been updated
+      and consider upgrading to a version that uses SSLContext. Report the issue to the
+      library maintainer if it has not been fixed.
+
+  - question: How do I add client certificate authentication (mTLS) with SSLContext?
+    answer: |
+      Create the SSLContext, then call ctx.load_cert_chain(certfile=cert, keyfile=key)
+      before wrapping the socket. For servers requiring client certificates, also set
+      ctx.verify_mode = ssl.CERT_REQUIRED and ctx.load_verify_locations(cafile=client_ca).
+      This bidirectional certificate verification is not easily configurable with the
+      deprecated ssl.wrap_socket() API.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-050
+  - PYTHON-LANG-SEC-051
+  - PYTHON-LANG-SEC-053
+  - PYTHON-LANG-SEC-054
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,221 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-017
+name: Flask Insecure Static File Serve
+short_description: Detects use of send_file() and send_from_directory() which serve files from the server's file system and are vulnerable to path traversal when the filename argument comes from user input.
+
+# Classification
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-017
+
+# Vulnerability Details
+cwe:
+  - id: CWE-73
+    name: External Control of File Name or Path
+    url: https://cwe.mitre.org/data/definitions/73.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - flask
+  - path-traversal
+  - static-files
+  - file-disclosure
+  - send-file
+  - send-from-directory
+  - audit
+  - CWE-73
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects calls to Flask's send_file() and send_from_directory() functions, which
+  serve files directly from the server's file system in HTTP responses. When the filename or
+  path argument to these functions originates from user input (request parameters, URL path
+  segments, form fields), the application is vulnerable to path traversal attacks.
+
+  Path traversal (also called directory traversal) occurs when an attacker supplies sequences
+  like ../../../etc/passwd or URL-encoded equivalents (%2e%2e%2f) as the filename. If the
+  application does not sanitize the filename before passing it to send_from_directory() or
+  send_file(), the server will read and return files outside the intended directory -- including
+  application source code, configuration files, private keys, and system files.
+
+  send_from_directory() provides partial protection by joining the directory and filename
+  arguments, but it does not prevent traversal if the filename itself contains ../ sequences
+  unless werkzeug.utils.safe_join() or secure_filename() is applied first. send_file() with
+  an absolute path constructed from user input is even more dangerous.
+
+  The detection uses Or(calls("send_from_directory"), calls("flask.send_from_directory"),
+  calls("send_file"), calls("flask.send_file")) to flag any use of these functions for
+  manual review. Not every call is vulnerable -- serving a hardcoded filename is safe -- but
+  every call warrants inspection to verify the filename argument cannot be user-controlled.
+
+message: "send_file()/send_from_directory() detected. Verify the filename argument cannot be controlled by user input. Use werkzeug.utils.secure_filename() to sanitize filenames."
+
+security_implications:
+  - title: Arbitrary File Read via Path Traversal
+    description: |
+      An attacker who can control the filename argument can read any file readable by the
+      web server process. Common targets include /etc/passwd, /etc/shadow (if the server
+      runs as root), application source code, .env files with credentials, SSL private keys,
+      and database files. In Flask applications, the config object and SECRET_KEY are
+      frequently stored in files adjacent to the application.
+  - title: Source Code and Configuration Disclosure
+    description: |
+      Flask applications commonly store configuration in app.cfg, .env, or config.py files
+      in the project root. A path traversal in a file-serving route can expose these files
+      directly, leaking database credentials, API keys, and Flask's SECRET_KEY (which enables
+      session forgery).
+  - title: Private Key and Certificate Theft
+    description: |
+      Web servers often store TLS private keys, SSH keys, or JWT signing keys on disk. A
+      path traversal vulnerability can expose these keys, enabling an attacker to impersonate
+      the server, decrypt captured traffic, or forge authentication tokens.
+  - title: Denial of Service via Large File Reads
+    description: |
+      An attacker can cause the server to read and stream large files (disk images, log files,
+      binary blobs), consuming server memory and network bandwidth and degrading availability
+      for legitimate users.
+
+secure_example: |
+  import os
+  from flask import Flask, request, send_from_directory, abort
+  from werkzeug.utils import secure_filename
+
+  app = Flask(__name__)
+  UPLOAD_FOLDER = '/var/app/uploads'
+
+  @app.route('/download/<filename>')
+  def download_file(filename):
+      # SAFE: Sanitize the filename to remove path traversal sequences.
+      # secure_filename() strips directory components and dangerous characters.
+      safe_name = secure_filename(filename)
+      if not safe_name:
+          abort(400)  # Reject empty or fully-stripped filenames
+
+      # Verify the file exists in the intended directory before serving
+      file_path = os.path.join(UPLOAD_FOLDER, safe_name)
+      if not os.path.exists(file_path):
+          abort(404)
+
+      # send_from_directory is safer than send_file because it joins
+      # the directory path server-side, but still requires a sanitized filename.
+      return send_from_directory(UPLOAD_FOLDER, safe_name, as_attachment=True)
+
+  # NEVER do this:
+  # return send_file(request.args.get('file'))  # Direct user input to send_file
+
+recommendations:
+  - Always sanitize filenames from user input with werkzeug.utils.secure_filename() before passing to send_file() or send_from_directory(). secure_filename() strips all directory components and dangerous characters.
+  - Verify that the resolved file path is inside the intended directory by checking os.path.realpath(path).startswith(os.path.realpath(base_dir)) after joining.
+  - Prefer serving user-uploaded files by a server-generated identifier (UUID) stored in a database rather than by the original filename. Map UUID to filename server-side.
+  - Set the as_attachment=True flag when serving user-uploaded files to force the browser to download rather than render them, reducing the risk of stored XSS via uploaded HTML/SVG files.
+  - Use a dedicated file storage service (object storage) or a web server (nginx) for static file serving instead of routing all file downloads through Flask application code.
+
+detection_scope: |
+  This rule uses Or(calls("send_from_directory"), calls("flask.send_from_directory"),
+  calls("send_file"), calls("flask.send_file")) to match both the directly imported function
+  forms and the module-qualified forms. This is a broad audit pattern -- every call to these
+  functions is flagged for manual review, regardless of whether the filename argument is
+  demonstrably user-controlled. The rule surfaces all file-serving locations for inspection.
+  For a dataflow rule that specifically traces user input from Flask request parameters into
+  send_file() or send_from_directory(), a taint-analysis companion rule would complement this
+  audit coverage.
+
+# References
+references:
+  - title: "CWE-73: External Control of File Name or Path"
+    url: https://cwe.mitre.org/data/definitions/73.html
+  - title: Flask send_from_directory Documentation
+    url: https://flask.palletsprojects.com/en/stable/api/#flask.send_from_directory
+  - title: Werkzeug secure_filename Documentation
+    url: https://werkzeug.palletsprojects.com/en/stable/utils/#werkzeug.utils.secure_filename
+  - title: OWASP Path Traversal
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: OWASP A01:2021 Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  - title: OWASP File Upload Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control: prevent path traversal to files outside intended directories"
+  - standard: CWE Top 25
+    requirement: "CWE-73 External Control of File Name or Path"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent path traversal and unauthorized file access"
+  - standard: NIST SP 800-53
+    requirement: "AC-3: Access Enforcement -- restrict file system access to authorized paths"
+
+# FAQ
+faq:
+  - question: Is every send_from_directory() call vulnerable to path traversal?
+    answer: |
+      No. If the filename is a hardcoded string or a server-generated UUID with no user input,
+      there is no path traversal risk. This is an audit-grade rule -- it flags every call for
+      review to verify the filename source. Only calls where the filename comes from
+      request.args, request.form, URL path parameters, or other user-controlled sources are
+      actually vulnerable.
+
+  - question: Does send_from_directory() protect against path traversal on its own?
+    answer: |
+      send_from_directory() joins the directory and filename using werkzeug's safe_join()
+      internally, which does provide some protection. However, if the filename contains
+      URL-encoded traversal sequences (%2e%2e%2f) that are decoded before reaching
+      safe_join(), or if the filename is joined with other user-controlled path segments
+      before being passed, traversal is still possible. Always apply secure_filename() first.
+
+  - question: What does secure_filename() actually do?
+    answer: |
+      werkzeug.utils.secure_filename() strips all directory components (/ and \), removes
+      leading dots, and replaces dangerous characters with underscores. The result is a
+      filename that is safe to use as a file system path component. Note that it does not
+      validate that the file exists or that the caller has permission to access it -- those
+      checks are separate.
+
+  - question: What happens if secure_filename() returns an empty string?
+    answer: |
+      secure_filename() returns an empty string if the input contains no safe characters.
+      Always check for an empty result and abort with a 400 error. Passing an empty string
+      to send_from_directory() will raise an error, but it is better to handle this explicitly.
+
+  - question: Should I use send_file() or send_from_directory()?
+    answer: |
+      Prefer send_from_directory() because it always takes a directory and filename as
+      separate arguments and uses safe_join() internally. send_file() accepts an absolute
+      path string, which is more dangerous if any part of the path is user-controlled.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-017 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: What is the best architecture for serving user-uploaded files?
+    answer: |
+      Store user-uploaded files in object storage (S3, GCS, Azure Blob) and serve them via
+      pre-signed URLs. This removes the Flask application entirely from the file-serving path,
+      eliminates path traversal risk, and scales independently of the application server.
+      If local storage is required, serve files through a dedicated nginx location block
+      with the X-Accel-Redirect pattern rather than through Flask application code.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-008
+  - PYTHON-FLASK-SEC-009
+  - PYTHON-FLASK-AUDIT-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

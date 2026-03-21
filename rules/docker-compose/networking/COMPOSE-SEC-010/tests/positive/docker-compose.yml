@@ -1,0 +1,4 @@
+services:
+  app:
+    image: myapp
+    ipc: host  # Shares IPC namespace with host

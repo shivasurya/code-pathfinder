@@ -1,0 +1,142 @@
+id: PYTHON-CRYPTO-SEC-030
+name: ECB Mode Usage (cryptography lib)
+short_description: ECB mode is deterministic and leaks plaintext patterns. Use AES-GCM or AES-CTR+HMAC instead.
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-030
+cwe:
+- id: CWE-327
+  name: Use of a Broken or Risky Cryptographic Algorithm
+  url: https://cwe.mitre.org/data/definitions/327.html
+tags:
+- python
+- cryptography
+- ecb
+- cipher-mode
+- weak-mode
+- CWE-327
+- OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: >
+  Detects usage of ECB (Electronic Codebook) mode via `modes.ECB()` from the `cryptography`
+  library. ECB is the simplest block cipher mode and is fundamentally insecure for any
+  practical use: it encrypts each block of plaintext independently, so identical plaintext
+  blocks always produce identical ciphertext blocks under the same key. This deterministic
+  property means ECB encryption preserves patterns in the plaintext and provides no semantic
+  security.
+
+  The "ECB penguin" is the canonical demonstration: encrypting a bitmap image with ECB mode
+  produces a ciphertext image where the penguin outline is still clearly visible, despite
+  using AES (a strong cipher). ECB provides no protection against chosen-plaintext attacks
+  and allows partial plaintext recovery through pattern analysis. ECB also provides no
+  ciphertext integrity or authentication, making it vulnerable to arbitrary block substitution
+  without detection.
+
+  This is a hard vulnerability rule, not an audit rule. There is no legitimate use of ECB
+  mode for encrypting non-trivial data — replace it with AES-GCM (confidentiality +
+  authentication in one primitive) or AES-CTR with HMAC (Encrypt-then-MAC).
+message: ECB mode is deterministic and leaks plaintext patterns. Replace with AES-GCM for authenticated encryption or AES-CTR+HMAC for Encrypt-then-MAC.
+secure_example: |
+  from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+  import os
+
+  # SECURE: AES-GCM provides confidentiality + authentication in one primitive
+  key = AESGCM.generate_key(bit_length=256)
+  aesgcm = AESGCM(key)
+  nonce = os.urandom(12)
+  ct = aesgcm.encrypt(nonce, b"sensitive data", associated_data=None)
+  # Tampered ciphertext raises InvalidTag on decrypt — no silent corruption
+
+  # SECURE: AES-CTR + HMAC (Encrypt-then-MAC) if you need raw cipher control
+  from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+  from cryptography.hazmat.primitives import hmac, hashes
+  key_enc = os.urandom(32)
+  key_mac = os.urandom(32)
+  nonce = os.urandom(16)
+  cipher = Cipher(algorithms.AES(key_enc), modes.CTR(nonce))
+  enc = cipher.encryptor()
+  ct = enc.update(b"sensitive data") + enc.finalize()
+  h = hmac.HMAC(key_mac, hashes.SHA256())
+  h.update(nonce + ct)
+  tag = h.finalize()
+  # Verify tag before decrypting
+recommendations:
+- Replace `modes.ECB()` with `AESGCM` from `cryptography.hazmat.primitives.ciphers.aead` — it provides authenticated encryption (confidentiality + integrity) in a single API.
+- If you need unauthenticated stream encryption, use `modes.CTR()` and add a separate HMAC over the ciphertext (Encrypt-then-MAC pattern). Never decrypt before verifying the MAC.
+- For PyCryptodome callers, use `AES.new(key, AES.MODE_GCM)` and call `encrypt_and_digest()` to get both ciphertext and authentication tag.
+- Never use ECB mode for any real data — even a single block. Databases, file encryption, key wrapping, and token generation that use ECB are all vulnerable.
+references:
+- title: 'CWE-327: Use of a Broken or Risky Cryptographic Algorithm'
+  url: https://cwe.mitre.org/data/definitions/327.html
+- title: 'The ECB Penguin: Why ECB mode is insecure (Filippo Valsorda)'
+  url: https://blog.filippo.io/the-ecb-penguin/
+- title: 'NIST SP 800-38A: Recommendation for Block Cipher Modes of Operation'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38a/final
+- title: 'NIST SP 800-38D: Recommendation for GCM Mode'
+  url: https://csrc.nist.gov/publications/detail/sp/800-38d/final
+- title: OWASP Cryptographic Failures (A02:2021)
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography; ECB is not considered strong cryptography"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit RSA/DSA keys; guidance covers algorithm and mode selection"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- minimum key strengths for security levels"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and modes"
+faq:
+- question: Why is ECB bad if AES itself is secure?
+  answer: >
+    AES is a secure block cipher — it provides a strong pseudorandom permutation for each
+    128-bit block in isolation. ECB mode applies AES independently to each block with no
+    interaction between blocks. This means two identical 16-byte plaintext blocks encrypted
+    with the same key always produce identical ciphertext blocks. An attacker can detect
+    block repetitions, infer structure, and partially recover plaintext through pattern
+    analysis — all without breaking AES itself. The mode is the vulnerability, not the cipher.
+- question: Is there any safe use of ECB mode?
+  answer: >
+    ECB is safe only for encrypting a single block of truly random data (e.g., wrapping a
+    random AES key). For any structured data, multi-block data, or data containing attacker-
+    influenced values, ECB is insecure. In practice, the only correct answer is to replace
+    ECB with GCM or CTR+HMAC — there is no scenario where you should choose ECB for new code.
+- question: Does ECB provide any authentication?
+  answer: >
+    No. ECB provides only confidentiality (and weak confidentiality at that). An attacker can
+    rearrange, replace, or duplicate ciphertext blocks without any detection. This enables
+    block substitution attacks where an attacker can swap encrypted records or replay encrypted
+    tokens without knowing the key.
+- question: Is CBC safer than ECB?
+  answer: >
+    Yes — CBC adds an XOR with the previous ciphertext block (chaining), which breaks the
+    identical-block pattern leakage. However, CBC without a MAC is still vulnerable to padding
+    oracle attacks (POODLE, Lucky13) and ciphertext manipulation. See SEC-031 for audit
+    coverage of unauthenticated CBC usage.
+- question: What is the ECB penguin?
+  answer: >
+    The ECB penguin is a famous demonstration where the Linux mascot (Tux) is encrypted with
+    AES-ECB. The resulting ciphertext, when rendered as an image, still clearly shows the
+    penguin outline because identical blocks of pixels produce identical encrypted blocks.
+    The original image by Philip Levis and adapted as a cryptography teaching tool makes the
+    vulnerability immediately intuitive.
+- question: Are there CVEs related to ECB misuse?
+  answer: >
+    Yes. Notable examples include Adobe's 2013 password database breach (150M+ accounts
+    encrypted with 3DES-ECB, allowing password frequency analysis from ciphertext alone)
+    and numerous token-based authentication systems where ECB-encrypted session tokens
+    allowed forging of privileged session identifiers.
+similar_rules:
+- PYTHON-CRYPTO-SEC-031
+- PYTHON-CRYPTO-SEC-032
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

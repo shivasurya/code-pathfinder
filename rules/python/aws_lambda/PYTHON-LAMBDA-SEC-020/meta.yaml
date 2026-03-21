@@ -1,0 +1,219 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-020
+name: Lambda XSS via Tainted HTML Response Body
+short_description: Lambda event data is embedded directly in an HTML response body returned to API Gateway, enabling Cross-Site Scripting attacks against end users.
+
+# Classification
+severity: HIGH
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-020
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - xss
+  - html-response
+  - api-gateway
+  - taint-analysis
+  - inter-procedural
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Cross-Site Scripting (XSS) vulnerabilities in AWS Lambda functions
+  where untrusted event data is embedded directly in the HTML response body returned to
+  API Gateway without HTML-escaping.
+
+  Lambda functions acting as API Gateway backends frequently generate HTML responses
+  dynamically. When the response body (the 'body' key in the Lambda return value) is
+  set to Content-Type: text/html and contains unescaped event data, the browser renders
+  any injected HTML or JavaScript. Event sources include event.get("queryStringParameters"),
+  event.get("body"), event["pathParameters"], and event["headers"], all of which are
+  attacker-controllable through API Gateway requests.
+
+  Unlike web frameworks that escape template variables by default, Lambda handlers
+  that construct HTML strings manually have no automatic escaping layer. The developer
+  must explicitly call html.escape() on every piece of event data embedded in an HTML
+  response. Failure to do so enables reflected XSS, where an attacker crafts a URL
+  or form that causes the Lambda to reflect malicious script back to the victim's
+  browser.
+
+message: "Lambda event data is embedded in an HTML response body without html.escape(). Escape all event data with html.escape() before embedding in HTML responses."
+
+security_implications:
+  - title: Reflected XSS via API Gateway
+    description: |
+      An attacker who controls any query parameter, path parameter, or request body
+      field can inject <script> tags or event handler attributes (onerror, onload)
+      into the HTML response. The victim's browser executes the injected JavaScript
+      when they visit the attacker-crafted URL, enabling session hijacking, credential
+      theft, and malicious redirects.
+  - title: Session Token Theft
+    description: |
+      JavaScript injected via Lambda XSS can read document.cookie, localStorage, and
+      sessionStorage to steal session tokens and authentication credentials. These
+      tokens can be exfiltrated to attacker-controlled infrastructure in a single
+      request, giving the attacker persistent access to the victim's account.
+  - title: Phishing and Content Injection
+    description: |
+      XSS allows attackers to modify the DOM to display fake login forms, error
+      messages, or instructions that trick users into submitting credentials or
+      installing malware. The attack occurs on the legitimate domain served by the
+      Lambda-backed API, making it harder for users to recognize.
+  - title: SameSite Cookie Bypass
+    description: |
+      Lambda-backed APIs that rely on SameSite=Lax cookie protections against CSRF
+      are still vulnerable to XSS, because XSS executes in the same origin context
+      and can make authenticated requests directly without triggering CSRF protections.
+
+secure_example: |
+  import html
+  import json
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      name = params.get('name', 'World')
+      message = params.get('message', '')
+
+      # SECURE: Escape all event data with html.escape() before embedding in HTML
+      safe_name = html.escape(name)
+      safe_message = html.escape(message)
+
+      body = f'''<!DOCTYPE html>
+  <html>
+  <head><title>Greeting</title></head>
+  <body>
+    <h1>Hello, {safe_name}!</h1>
+    <p>{safe_message}</p>
+  </body>
+  </html>'''
+
+      return {
+          'statusCode': 200,
+          'headers': {
+              'Content-Type': 'text/html; charset=utf-8',
+              'X-Content-Type-Options': 'nosniff',
+              'X-XSS-Protection': '1; mode=block',
+              'Content-Security-Policy': "default-src 'self'"
+          },
+          'body': body
+      }
+
+recommendations:
+  - Call html.escape() on every piece of Lambda event data before embedding it in an HTML response body.
+  - Add a Content-Security-Policy header to API Gateway responses to limit the impact of any XSS that bypasses output escaping.
+  - Set X-Content-Type-Options: nosniff to prevent MIME type sniffing that could enable XSS via non-HTML responses.
+  - Return JSON responses instead of HTML wherever possible; if the client needs HTML, render it client-side with a trusted JavaScript framework that escapes content automatically.
+  - Validate and restrict the format of event fields that appear in HTML responses to further reduce the injection surface.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["headers"]. The sink is the HTML response
+  body string that flows into the Lambda return value's 'body' key when the
+  Content-Type is text/html (tracked via .tracks(0)). Sanitizers include html.escape()
+  applied to individual values before embedding. The analysis follows taint through
+  f-string interpolation, string concatenation, variable assignments, and function
+  boundaries.
+
+# References
+references:
+  - title: "CWE-79: Cross-Site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: OWASP XSS Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: OWASP Cross Site Scripting
+    url: https://owasp.org/www-community/attacks/xss/
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: Python html.escape() documentation
+    url: https://docs.python.org/3/library/html.html#html.escape
+  - title: Content Security Policy
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-79 ranked #2 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks including XSS"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate and sanitize all event data before including in responses"
+
+# FAQ
+faq:
+  - question: Why doesn't Lambda automatically escape HTML in response bodies?
+    answer: |
+      Lambda returns response bodies as strings without any processing. Unlike template
+      engines (Jinja2, Django templates) that escape variables by default, Lambda handlers
+      that construct HTML manually have no automatic escaping layer. The developer must
+      explicitly call html.escape() on every piece of event data. Lambda's design as a
+      generic compute service means it does not impose any output encoding conventions.
+
+  - question: Is XSS in a Lambda-backed API as dangerous as XSS in a traditional web application?
+    answer: |
+      Yes. The XSS vulnerability exists in the browser, not the server. When the Lambda
+      returns an HTML response that the browser renders, injected scripts execute in the
+      context of the application's origin. Session cookies, localStorage data, and API
+      tokens accessible to that origin are all at risk. The Lambda execution model
+      on the server side is irrelevant to the browser-side XSS impact.
+
+  - question: Can I use Content-Security-Policy headers to prevent XSS instead of html.escape()?
+    answer: |
+      CSP is a valuable defense-in-depth measure, but it is not a substitute for output
+      encoding. CSP can be bypassed in various scenarios (JSONP endpoints, allowed CDN
+      domains, policy misconfigurations). The correct primary defense is html.escape()
+      applied to all event data before embedding in HTML. Add CSP headers as an
+      additional layer of protection.
+
+  - question: What if my Lambda uses a Jinja2 template to generate HTML?
+    answer: |
+      Jinja2's autoescaping feature, when enabled (Environment(autoescape=True) or
+      using the select_autoescape helper), HTML-escapes variables automatically.
+      If autoescaping is enabled and you are not using the |safe filter on untrusted
+      data, Jinja2 prevents XSS. If autoescaping is disabled or you use |safe on
+      event data, the vulnerability remains.
+
+  - question: My Lambda returns JSON. Is it still vulnerable to XSS?
+    answer: |
+      If the response uses Content-Type: application/json, browsers typically do not
+      render it as HTML and XSS is unlikely. However, if the JSON response is later
+      rendered by a client-side JavaScript framework that uses innerHTML or similar
+      DOM manipulation without escaping, XSS can still occur on the client side.
+      Set Content-Type correctly and avoid application/json responses with Content-Type:
+      text/html to prevent browser misinterpretation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-021
+  - PYTHON-LAMBDA-SEC-022
+  - PYTHON-LAMBDA-SEC-023
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

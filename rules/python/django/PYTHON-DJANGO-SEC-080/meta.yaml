@@ -1,0 +1,229 @@
+# Rule Identity
+id: PYTHON-DJANGO-SEC-080
+name: Django Empty Password in set_password()
+short_description: Empty string passed to set_password() creates an account with no password protection. Use None or set_unusable_password() instead.
+
+# Classification
+severity: HIGH
+category: django
+language: python
+ruleset: python/django/PYTHON-DJANGO-SEC-080
+
+# Vulnerability Details
+cwe:
+  - id: CWE-521
+    name: Weak Password Requirements
+    url: https://cwe.mitre.org/data/definitions/521.html
+  - id: CWE-258
+    name: Empty Password in Configuration File
+    url: https://cwe.mitre.org/data/definitions/258.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - python
+  - django
+  - password
+  - authentication
+  - empty-password
+  - set-password
+  - audit
+  - CWE-521
+  - CWE-258
+  - OWASP-A07
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects cases in Django applications where set_password() is called with
+  an empty string literal ('') as the password argument, which creates user accounts
+  with no password protection.
+
+  Django's set_password() stores a hashed version of the provided password in the
+  database. When called with an empty string, it stores a valid hash of the empty string,
+  meaning the account is accessible without providing any password. This is distinctly
+  different from the correct way to create passwordless accounts: using None (which
+  Django stores as an unusable password hash "!") or calling set_unusable_password()
+  explicitly.
+
+  The rule uses both pattern matching (calls("*.set_password") audit) and taint analysis
+  to catch cases where the empty string default value flows from request.POST.get('password', '')
+  into set_password().
+
+message: "Empty string passed to set_password() creates an unprotected account. Use None to disable password login or set_unusable_password() for explicit intent."
+
+security_implications:
+  - title: Authentication Bypass via Empty Password
+    description: |
+      An account created with set_password('') allows anyone to log in by submitting
+      an empty password field. Depending on the application's authentication flow,
+      this may allow unauthorized access to admin accounts, service accounts, or
+      user accounts created through automated workflows.
+  - title: Privilege Escalation via Service Account Takeover
+    description: |
+      Service accounts or integration accounts sometimes have passwords set to empty
+      strings during development or provisioning. If these accounts have elevated
+      privileges (staff=True, is_superuser=True), an empty password creates a trivial
+      privilege escalation vector for any authenticated or unauthenticated user.
+  - title: Password Reset Flow Bypass
+    description: |
+      If a password reset workflow calls set_password('') as an intermediate step
+      (e.g., to "clear" the password before sending a reset link), the account is
+      unprotected during the time between clearing and the user setting a new password.
+  - title: Automated Account Provisioning Vulnerability
+    description: |
+      Automated user provisioning scripts that create accounts with empty passwords
+      as placeholders create a window of vulnerability. If a provisioning job runs
+      but the user setup is never completed, the empty-password account remains
+      accessible indefinitely.
+
+secure_example: |
+  from django.contrib.auth.models import User
+  from django.contrib.auth.password_validation import validate_password
+  from django.core.exceptions import ValidationError
+  from django.http import JsonResponse
+
+  def create_user(request):
+      username = request.POST.get('username', '')
+      password = request.POST.get('password')  # No default -- require explicit value
+      if not password:
+          return JsonResponse({'error': 'Password is required'}, status=400)
+      # SECURE: Validate password strength before setting
+      try:
+          validate_password(password)
+      except ValidationError as e:
+          return JsonResponse({'error': list(e.messages)}, status=400)
+      user = User.objects.create_user(username=username, password=password)
+      return JsonResponse({'user_id': user.id})
+
+  def create_service_account(request):
+      username = request.POST.get('username', '')
+      user = User.objects.create(username=username)
+      # SECURE: Use set_unusable_password() to explicitly disable password login
+      user.set_unusable_password()
+      user.save()
+      return JsonResponse({'user_id': user.id, 'password_login': False})
+
+  def reset_password(request):
+      password = request.POST.get('new_password')
+      if not password:
+          return JsonResponse({'error': 'New password is required'}, status=400)
+      user = request.user
+      # SECURE: Set the actual provided password, validated for strength
+      try:
+          validate_password(password, user)
+      except ValidationError as e:
+          return JsonResponse({'error': list(e.messages)}, status=400)
+      user.set_password(password)
+      user.save()
+      return JsonResponse({'status': 'Password updated'})
+
+recommendations:
+  - Never call set_password('') with an empty string; use set_unusable_password() when password-based login should be disabled.
+  - Use None as the password value when creating accounts that should not be accessible via password, as Django stores this as the unusable password marker.
+  - Always validate password input with validate_password() before calling set_password() to enforce minimum strength requirements.
+  - Use request.POST.get('password') without a default value (or default to None) so that missing passwords are caught as an error rather than silently set to empty.
+  - Add Django's built-in password validators in AUTH_PASSWORD_VALIDATORS settings to enforce complexity requirements application-wide.
+
+detection_scope: |
+  This rule uses QueryType pattern matching on calls("*.set_password") to audit all
+  set_password() call sites, specifically detecting calls where the argument is a
+  literal empty string '' (tracked via .where() on the argument value). It also
+  performs taint analysis to detect flows where request.POST.get('password', '')
+  (the empty string default case) flows into set_password() without an intervening
+  null/empty check. The .where() clause constrains matches to Python files in Django
+  project structures.
+
+# References
+references:
+  - title: "CWE-521: Weak Password Requirements"
+    url: https://cwe.mitre.org/data/definitions/521.html
+  - title: "CWE-258: Empty Password in Configuration File"
+    url: https://cwe.mitre.org/data/definitions/258.html
+  - title: OWASP Authentication Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+  - title: Django Password Management
+    url: https://docs.djangoproject.com/en/stable/topics/auth/passwords/
+  - title: Django Password Validators
+    url: https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
+  - title: Django set_unusable_password()
+    url: https://docs.djangoproject.com/en/stable/ref/contrib/auth/#django.contrib.auth.models.User.set_unusable_password
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A07:2021 - Identification and Authentication Failures"
+  - standard: CWE Top 25
+    requirement: "CWE-521 - Weak Password Requirements in dangerous weaknesses list"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3.1 - all user IDs and authentication factors managed per security policy"
+  - standard: NIST SP 800-53
+    requirement: "IA-5: Authenticator Management"
+  - standard: SOC 2 Type II
+    requirement: "CC6.1 - Logical access controls including authentication strength"
+
+# FAQ
+faq:
+  - question: What is the actual security difference between set_password('') and set_unusable_password()?
+    answer: |
+      set_password('') hashes the empty string and stores it as a valid password hash.
+      Any authentication attempt with an empty password field will succeed against this
+      hash. set_unusable_password() stores '!' as the password hash, which never matches
+      any real password string. Django's authentication backend explicitly checks for
+      unusable passwords and returns False for any authenticate() call, even with an
+      empty password argument.
+
+  - question: Can this vulnerability be triggered unintentionally through form processing?
+    answer: |
+      Yes. The common pattern request.POST.get('password', '') passes an empty string
+      default. If this value is used directly in set_password() without checking
+      whether the field was actually submitted, and if the form is submitted without
+      a password value, the account receives an empty password. Always use None as
+      the default and check for None before calling set_password().
+
+  - question: Does Django's password validation prevent setting an empty password?
+    answer: |
+      Only if validate_password() is called explicitly before set_password(). Django's
+      MinimumLengthValidator (minimum 8 characters) raises a ValidationError for empty
+      strings. However, validate_password() is not called automatically by set_password()
+      -- it must be called explicitly in the view. This is why the bug can occur even
+      in applications that have password validators configured in AUTH_PASSWORD_VALIDATORS.
+
+  - question: Are there legitimate use cases for set_password('') in tests?
+    answer: |
+      No. In tests, use User.objects.create_user(username='test', password='testpass123')
+      which creates an account with a known password for testing. For testing scenarios
+      where you need an unusable password, use user.set_unusable_password(). Never use
+      set_password('') even in tests, as it can propagate to production if test helpers
+      are reused in deployment scripts.
+
+  - question: How does Django detect that a password is unusable?
+    answer: |
+      Django's AbstractBaseUser.has_usable_password() returns False if the password
+      field starts with '!'. set_unusable_password() stores UNUSABLE_PASSWORD_PREFIX + 
+      UNUSABLE_PASSWORD_SUFFIX as the hash. Django's check_password() and authenticate()
+      use has_usable_password() to short-circuit before checking the hash, ensuring
+      accounts with unusable passwords can never be authenticated via password.
+
+  - question: What should we do about existing accounts that have empty passwords?
+    answer: |
+      Run a database query to find all accounts where the password hash matches the hash
+      of an empty string (Python: check(make_password('')) against stored hashes). Force
+      password resets for all such accounts immediately, or call set_unusable_password()
+      on them and require them to go through a password creation flow on next login.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-DJANGO-SEC-081
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

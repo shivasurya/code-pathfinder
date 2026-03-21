@@ -1,0 +1,253 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-010
+name: Flask NaN Injection via float()
+short_description: User input from Flask request parameters flows to float() which can produce NaN or Inf values. Validate and reject non-finite float values with math.isnan() and math.isinf().
+
+# Classification
+severity: LOW
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-010
+
+# Vulnerability Details
+cwe:
+  - id: CWE-704
+    name: Incorrect Type Conversion or Cast
+    url: https://cwe.mitre.org/data/definitions/704.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - nan-injection
+  - type-confusion
+  - float-conversion
+  - numeric-validation
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-704
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects NaN (Not a Number) injection in Flask applications where user-
+  controlled input from HTTP request parameters flows to Python's float() built-in
+  without subsequent validation for non-finite values. Python's float() accepts the
+  special string literals "nan", "inf", "-inf", "infinity", and "+infinity"
+  (case-insensitive) and converts them to the IEEE 754 special float values NaN and
+  Infinity.
+
+  These special float values propagate through arithmetic in unexpected ways: NaN
+  comparisons always return False (NaN != NaN, NaN < 0 is False, NaN > 0 is False),
+  Inf causes overflow in operations expecting bounded values, and NaN serialized to
+  JSON via Python's json module produces invalid JSON (json.dumps({'x': float('nan')})
+  outputs {"x": NaN} which is not valid JSON and may cause downstream parsing failures
+  or type confusion in JavaScript consumers).
+
+  The rule traces tainted strings from Flask request sources to the float() call at
+  argument position 0. Using int() on the result is recognized as a sanitizer because
+  int(float('nan')) raises ValueError, effectively rejecting NaN. The correct fix is
+  to validate the result of float() with math.isnan() and math.isinf() before using
+  the value in calculations, storage, or serialization.
+
+message: "User input flows to float() which can produce NaN or Inf. Validate with math.isnan() and math.isinf() after conversion."
+
+security_implications:
+  - title: Invalid JSON Output Causing API Client Failures
+    description: |
+      Python's json module serializes float('nan') as NaN and float('inf') as Infinity,
+      both of which are not valid JSON (RFC 8259). API clients that use strict JSON
+      parsers throw exceptions on these values. An attacker who can supply "nan" as a
+      numeric parameter can cause downstream service failures by forcing invalid JSON
+      responses from the Flask application.
+  - title: Arithmetic Logic Bypass via NaN Comparisons
+    description: |
+      NaN comparisons always return False in Python. Code like
+      if price < 0: raise ValueError fails silently when price is NaN because
+      NaN < 0 is False and NaN >= 0 is also False. An attacker who injects NaN
+      into a price or quantity field may bypass validation logic that relies on
+      numeric comparisons, potentially submitting orders with NaN prices to
+      financial systems.
+  - title: Database and ORM Type Errors
+    description: |
+      Storing NaN or Inf in database columns typed as NUMERIC, DECIMAL, or FLOAT
+      causes constraint violations in strict databases (PostgreSQL rejects NaN in
+      some contexts) or silent corruption in lenient ones. This can cause cascading
+      failures in reporting, aggregation queries, and data exports.
+  - title: Denial of Service via Propagating NaN
+    description: |
+      NaN and Inf propagate silently through calculations. A NaN that enters a
+      statistical computation (average, standard deviation, percentile) corrupts
+      the entire result without raising an exception, potentially causing the
+      application to return None or crash in downstream code that does not expect
+      these values.
+
+secure_example: |
+  from flask import Flask, request, abort
+  import math
+
+  app = Flask(__name__)
+
+  @app.route('/calculate')
+  def calculate():
+      value_str = request.args.get('value', '')
+      try:
+          value = float(value_str)
+      except (ValueError, TypeError):
+          abort(400, 'Invalid number')
+
+      # SAFE: Reject NaN and Inf before using the value
+      if math.isnan(value) or math.isinf(value):
+          abort(400, 'Value must be a finite number')
+
+      result = value * 2.5
+      return {'result': result}
+
+  @app.route('/price')
+  def get_price():
+      price_str = request.args.get('price', '')
+      try:
+          price = float(price_str)
+      except (ValueError, TypeError):
+          abort(400, 'Invalid price')
+
+      # SAFE: int() raises ValueError for NaN and Inf
+      try:
+          price_cents = int(price * 100)
+      except (ValueError, OverflowError):
+          abort(400, 'Price out of range')
+
+      return {'price_cents': price_cents}
+
+recommendations:
+  - After calling float() on user input, always validate the result with math.isfinite() (which rejects both NaN and Inf in a single call) before using the value in calculations or storage.
+  - Use int() conversion after float() when integer precision is required -- int() raises ValueError for NaN and OverflowError for Inf, both of which reject the problematic values.
+  - When serializing numeric values to JSON, use a custom JSON encoder that raises an error on non-finite floats rather than producing invalid JSON output.
+  - Validate numeric bounds (minimum and maximum acceptable values) in addition to finiteness -- this catches values that are technically finite but outside valid business ranges.
+  - Consider using Pydantic or marshmallow for request data validation -- both libraries reject NaN and Inf by default when validating float fields.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get() -- which deliver string representations of user-supplied
+  values that may include "nan", "inf", or "-inf".
+
+  Sinks: float(). The .tracks(0) parameter targets argument position 0, the
+  string value being converted to a float. This is where the NaN/Inf injection
+  occurs -- float() accepts these special string values without error.
+
+  Sanitizers: int() is recognized as a sanitizer because int(float('nan'))
+  raises ValueError, effectively validating that the float is a normal finite
+  integer-representable number. Flows through int() are treated as sanitized
+  because the ValueError propagation forces the application to handle the
+  invalid input explicitly.
+
+  The rule traces tainted strings through variable assignments and function
+  calls to the float() sink, catching patterns where the conversion happens
+  in a utility function separate from the Flask route handler.
+
+# References
+references:
+  - title: "CWE-704: Incorrect Type Conversion or Cast"
+    url: https://cwe.mitre.org/data/definitions/704.html
+  - title: Python float() documentation and special values
+    url: https://docs.python.org/3/library/functions.html#float
+  - title: Python math.isnan and math.isinf documentation
+    url: https://docs.python.org/3/library/math.html#math.isnan
+  - title: IEEE 754 NaN propagation rules
+    url: https://en.wikipedia.org/wiki/NaN#Operations_generating_NaN
+  - title: Python json module and non-finite float handling
+    url: https://docs.python.org/3/library/json.html#json.dumps
+  - title: OWASP Input Validation Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (type coercion injection via numeric inputs)"
+  - standard: CWE Top 25
+    requirement: "CWE-704 -- Incorrect Type Conversion/Cast in software weakness catalog"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- validate numeric inputs for acceptable ranges"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- validate all input data types including numeric fields"
+  - standard: ASVS v4.0
+    requirement: "V5.1.3 -- verify that all input validation is performed server-side"
+
+# FAQ
+faq:
+  - question: Why is this severity LOW when it can bypass validation logic?
+    answer: |
+      NaN injection is LOW severity because it requires specific downstream code patterns
+      to be exploitable (comparisons that assume finite values, JSON serialization without
+      validation). It is not directly exploitable for code execution or data theft in most
+      cases. However, it is worth fixing because the bugs it enables -- silent validation
+      bypasses, invalid JSON output, database errors -- are subtle and hard to diagnose.
+
+  - question: How does NaN bypass comparison-based validation?
+    answer: |
+      In Python, any comparison involving NaN returns False: float('nan') > 0 is False,
+      float('nan') < 0 is False, float('nan') == 0 is False, float('nan') != 0 is True.
+      Code like if value < 0: raise ValueError('negative not allowed') silently accepts
+      NaN because NaN < 0 is False. The validator logic assumes finite values.
+
+  - question: Does math.isfinite() replace both math.isnan() and math.isinf()?
+    answer: |
+      Yes. math.isfinite(x) returns True only if x is a regular finite number (not NaN,
+      not +Inf, not -Inf). It is equivalent to not math.isnan(x) and not math.isinf(x)
+      in a single call. Use math.isfinite() as the primary validation check.
+
+  - question: What happens when float('nan') is stored in a PostgreSQL NUMERIC column?
+    answer: |
+      PostgreSQL's NUMERIC and DECIMAL types do accept NaN (it represents "not a number"
+      in SQL numeric contexts). However, NaN in a NUMERIC column causes unexpected behavior
+      in aggregate functions (SUM, AVG return NaN), ORDER BY comparisons (NaN sorts
+      inconsistently), and application code that reads the value and applies comparisons.
+      FLOAT/DOUBLE columns in PostgreSQL also accept NaN. Prevent storage of NaN with
+      a CHECK constraint or application-level validation.
+
+  - question: Does this rule fire on float() calls that already validate input elsewhere?
+    answer: |
+      The rule fires on tainted flows to float() at position 0. If the input is validated
+      against an allowlist or pattern before the taint reaches float(), and the analysis
+      recognizes that validation as sanitizing, no finding is reported. If the validation
+      happens after float() (e.g., check math.isfinite after converting), the finding still
+      fires because the risky conversion happens before validation -- though the code may
+      be correct, adding the check after conversion is the right pattern.
+
+  - question: Can I fix this by catching ValueError from float()?
+    answer: |
+      Catching ValueError from float() handles invalid strings (e.g., "abc") but does not
+      help with NaN and Inf because float('nan') and float('inf') do not raise ValueError --
+      they succeed and return the special float values. You need an explicit check with
+      math.isfinite() after the float() call.
+
+  - question: We use Pydantic for request validation. Does Pydantic reject NaN?
+    answer: |
+      Pydantic v2 with strict mode rejects NaN and Inf for float fields by default.
+      Pydantic v1 allows NaN in float fields unless you add a validator. If you use
+      Pydantic for request parsing, verify your model's behavior by passing "nan" as
+      a float field value in your tests. If the model accepts it, add a
+      @validator that calls math.isfinite().
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-009
+  - PYTHON-DJANGO-SEC-010
+  - PYTHON-LANG-SEC-060
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

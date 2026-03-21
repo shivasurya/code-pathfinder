@@ -1,0 +1,199 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-045
+name: shelve Module Usage Detected
+short_description: shelve.open() uses pickle internally for value serialization and is not safe for storing or retrieving data from untrusted sources.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-045
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - shelve
+  - pickle
+  - deserialization
+  - file-storage
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's shelve module provides a persistent dictionary interface backed by a dbm file.
+  Values stored in a shelve database are serialized using pickle when written and deserialized
+  using pickle when read. This means that reading values from a shelve database is equivalent
+  to calling pickle.loads() on those values.
+
+  If an attacker can write data to the shelve database file (via file upload, directory
+  traversal, shared filesystem access, or any other means), they can cause arbitrary code
+  execution the next time any value is read from the database using shelve.open().
+
+  Shelve databases are also not portable between Python versions or platforms due to their
+  reliance on pickle and dbm. For persistent data storage, use SQLite, JSON files, or a
+  proper database engine.
+
+message: "shelve.open() detected. shelve uses pickle internally and is not safe for data from untrusted sources. Use SQLite or JSON for persistent storage."
+
+security_implications:
+  - title: Pickle-based Deserialization Risk
+    description: |
+      Every shelve[key] read operation calls pickle.loads() on the stored value. An attacker
+      who can write to the shelve database file can plant malicious pickle payloads that
+      execute arbitrary code when read. The innocent-looking shelf access hides the
+      underlying pickle deserialization.
+  - title: Shared Filesystem Attack
+    description: |
+      Applications using shelve on shared filesystems (NFS, container-shared volumes,
+      cloud storage) are vulnerable if other tenants or processes with filesystem access
+      can modify the database files. The attacker replaces a legitimate entry with a
+      malicious pickle payload.
+  - title: Backup and Restore Injection
+    description: |
+      Restoring a shelve database from an attacker-controlled backup source triggers
+      pickle deserialization of all stored values, enabling code execution through the
+      restore process.
+  - title: Unpredictable File Format
+    description: |
+      shelve uses dbm which has multiple backends (ndbm, gdbm, dumbdbm) with different
+      file extensions and compatibility. Switching platforms or Python versions may silently
+      fail or corrupt data, making it unsuitable for reliable production use.
+
+secure_example: |
+  import json
+  import sqlite3
+  from pathlib import Path
+
+  # INSECURE: shelve for persistent storage (uses pickle internally)
+  # import shelve
+  # with shelve.open("mydata") as db:
+  #     db["key"] = user_data  # pickle.dumps() internally
+  #     val = db["key"]        # pickle.loads() internally - UNSAFE
+
+  # SECURE: Use SQLite for persistent key-value or structured storage
+  def create_storage(db_path: str):
+      conn = sqlite3.connect(db_path)
+      conn.execute("CREATE TABLE IF NOT EXISTS store (key TEXT PRIMARY KEY, value TEXT)")
+      conn.commit()
+      return conn
+
+  def store_value(conn: sqlite3.Connection, key: str, value: dict) -> None:
+      conn.execute(
+          "INSERT OR REPLACE INTO store (key, value) VALUES (?, ?)",
+          (key, json.dumps(value))
+      )
+      conn.commit()
+
+  def get_value(conn: sqlite3.Connection, key: str) -> dict:
+      row = conn.execute("SELECT value FROM store WHERE key = ?", (key,)).fetchone()
+      if row is None:
+          raise KeyError(key)
+      return json.loads(row[0])
+
+recommendations:
+  - Replace shelve with SQLite + JSON for persistent key-value storage, which is portable, safe, and version-independent.
+  - If shelve must be used, ensure the database files are stored on a filesystem accessible only to the application process with no external write access.
+  - Never restore shelve database files from untrusted or external backup sources without treating the restore as equivalent to executing arbitrary code.
+  - Consider using a proper database (SQLite, PostgreSQL) for production data storage instead of file-based shelve.
+  - For simple configuration persistence, use JSON files with appropriate filesystem permissions.
+
+detection_scope: |
+  This rule detects calls to shelve.open() from the Python shelve module. All call sites
+  are flagged since shelve uses pickle for all value serialization, and any shelve database
+  that can be written to by untrusted parties enables code execution through subsequent reads.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against deserialization attacks"
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "Python docs: shelve module"
+    url: https://docs.python.org/3/library/shelve.html
+  - title: "Python docs: pickle security warning"
+    url: https://docs.python.org/3/library/pickle.html#restricting-globals
+  - title: OWASP Deserialization Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html
+  - title: OWASP Top 10 A08:2021 Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+# FAQ
+faq:
+  - question: Is shelve dangerous to use at all, or only with untrusted data?
+    answer: |
+      shelve is safe when the database file is: (1) only written by trusted application code,
+      (2) stored on a filesystem with strict permissions preventing external writes, (3) never
+      restored from untrusted backup sources, and (4) not used to store data derived from
+      external input. In practice, these constraints are difficult to guarantee reliably,
+      making SQLite + JSON a safer alternative for most use cases.
+
+  - question: What makes shelve different from a regular dictionary?
+    answer: |
+      shelve provides persistence — data is stored to disk and survives process restarts.
+      It has the same interface as a dict but is backed by a dbm file. The key difference
+      from a security perspective is that reading from shelve implicitly calls pickle.loads(),
+      making every read a potential deserialization attack vector if the storage is compromised.
+
+  - question: Can I use shelve for storing session data in a web application?
+    answer: |
+      No. Web session storage requires concurrent access safety, proper expiry, and protection
+      from session fixation. shelve provides none of these. Use a proper session backend such
+      as Redis, memcached, or database-backed sessions through your web framework. All of these
+      avoid pickle-based deserialization of user-controlled data.
+
+  - question: Is dbm.open() also dangerous like shelve?
+    answer: |
+      dbm.open() stores raw bytes and does not use pickle, so it is safer than shelve.
+      However, dbm still has the same portability issues and limited functionality. For
+      production use, SQLite via the sqlite3 module provides a more robust and portable
+      alternative to both shelve and raw dbm.
+
+  - question: What is the performance difference between shelve and SQLite?
+    answer: |
+      For single-threaded small datasets, shelve and SQLite have comparable performance.
+      SQLite has advantages for concurrent access, complex queries, transactions, and larger
+      datasets. The security benefits of SQLite + JSON (no pickle deserialization, portable
+      format, explicit schema) justify any minor performance tradeoff for most applications.
+
+  - question: How do I migrate existing shelve data to SQLite?
+    answer: |
+      Open the shelve database, iterate over all keys, and insert each key-value pair into
+      SQLite with json.dumps() for serialization. Ensure the migration script runs in a
+      controlled environment where the shelve database is known to be untampered. After
+      migration, delete the shelve database files and update all code to use SQLite.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-044
+  - PYTHON-LANG-SEC-046
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

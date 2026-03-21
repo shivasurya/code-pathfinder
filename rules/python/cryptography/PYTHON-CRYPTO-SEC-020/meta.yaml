@@ -1,0 +1,131 @@
+id: PYTHON-CRYPTO-SEC-020
+name: Insufficient RSA Key Size (cryptography lib)
+short_description: RSA key size is less than 2048 bits. NIST minimum is 2048 bits; 3072+ recommended for new systems.
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-020
+cwe:
+- id: CWE-326
+  name: Inadequate Encryption Strength
+  url: https://cwe.mitre.org/data/definitions/326.html
+tags:
+- python
+- cryptography
+- rsa
+- key-size
+- CWE-326
+- OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: >
+  Detects RSA key generation using `rsa.generate_private_key()` from the `cryptography` library
+  where the `key_size` argument is less than 2048 bits. This rule uses a `.where("key_size", lt(2048))`
+  predicate so it fires only on provably undersized keys and does not flag 2048-bit or larger
+  keys. RSA keys shorter than 2048 bits are vulnerable to integer factorization: a 1024-bit
+  RSA key can be factored with sustained effort and widely available cloud compute. NIST formally
+  deprecated 1024-bit RSA in 2013 (SP 800-131A) and requires 2048-bit minimum through 2030,
+  after which 3072-bit keys will be the minimum for new systems. Use 3072-bit or 4096-bit RSA
+  for new applications, or prefer ECDSA with SECP256R1/SECP384R1 which provides equivalent
+  security with significantly shorter keys.
+message: RSA key size is less than 2048 bits. Use at least 2048-bit keys (3072+ recommended for new systems per NIST SP 800-57).
+secure_example: |
+  from cryptography.hazmat.primitives.asymmetric import rsa, ec
+  from cryptography.hazmat.backends import default_backend
+
+  # SECURE: RSA 3072-bit key (NIST minimum after 2030)
+  private_key = rsa.generate_private_key(
+      public_exponent=65537,
+      key_size=3072,
+      backend=default_backend()
+  )
+
+  # SECURE: RSA 4096-bit key (long-lived certificates)
+  private_key = rsa.generate_private_key(
+      public_exponent=65537,
+      key_size=4096,
+      backend=default_backend()
+  )
+
+  # SECURE: EC P-384 — equivalent to 7680-bit RSA, preferred for new systems
+  private_key = ec.generate_private_key(ec.SECP384R1(), backend=default_backend())
+recommendations:
+- Use RSA key_size=3072 or key_size=4096 for any new application.
+- NIST SP 800-57 equates 2048-bit RSA to only 112-bit security; 3072-bit RSA provides 128-bit security.
+- Prefer ECDSA (SECP256R1 or SECP384R1) over RSA for new systems — same security level with shorter keys and faster operations.
+- Audit existing certificates and key material to identify keys below 2048 bits and schedule rotation.
+- Set a key expiry policy so that any 2048-bit keys currently in use are rotated before NIST's 2030 deprecation deadline.
+references:
+- title: 'CWE-326: Inadequate Encryption Strength'
+  url: https://cwe.mitre.org/data/definitions/326.html
+- title: 'NIST SP 800-57 Part 1 Rev 5: Recommendation for Key Management'
+  url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+- title: 'NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths'
+  url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+- title: 'RSA Factoring Challenge History and Key Size Recommendations'
+  url: https://www.keylength.com/
+- title: OWASP Cryptographic Failures (A02:2021)
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+compliance:
+- standard: OWASP Top 10
+  requirement: "A02:2021 - Cryptographic Failures"
+- standard: PCI DSS v4.0
+  requirement: "Requirement 4.2.1 -- use strong cryptography for transmission of cardholder data"
+- standard: NIST SP 800-131A
+  requirement: "Minimum 2048-bit RSA/DSA keys; 3072-bit required for security beyond 2030"
+- standard: NIST SP 800-57
+  requirement: "Key Management -- minimum key strengths for equivalent security levels"
+- standard: NIST SP 800-53
+  requirement: "SC-13: Cryptographic Protection -- use FIPS-approved algorithms and key sizes"
+faq:
+- question: Does this rule flag 2048-bit RSA keys?
+  answer: >
+    No. The rule uses `.where("key_size", lt(2048))` which only fires when the key_size
+    argument is strictly less than 2048 bits. A key_size=2048 call does NOT trigger this rule.
+    See PYTHON-CRYPTO-SEC-023 for the stricter PyCryptodome rule that flags below 3072.
+- question: What key size should I use for new applications?
+  answer: >
+    Use 3072-bit RSA for any new system. NIST equates 2048-bit RSA to 112-bit symmetric security
+    and states that 112-bit is acceptable only until 2030. For long-lived keys or certificates,
+    use 4096-bit RSA or switch to ECDSA with SECP384R1 (equivalent to 7680-bit RSA).
+- question: Why does this rule flag below 2048 while SEC-023 flags below 3072?
+  answer: >
+    SEC-020 targets the `cryptography` library and applies the NIST 2013 minimum of 2048 bits
+    as the hard floor. SEC-023 targets PyCryptodome and uses 3072 bits as the threshold,
+    reflecting the NIST recommendation for systems expected to operate beyond 2030. You can
+    configure your organization's acceptable threshold accordingly.
+- question: Is a 1024-bit RSA key actually exploitable?
+  answer: >
+    Yes. The RSA-1024 challenge was factored in academic research environments. With modern
+    cloud compute, a dedicated attacker with sufficient budget can factor 1024-bit moduli.
+    The cost continues to decrease as hardware improves. NIST deprecated 1024-bit RSA in 2013
+    precisely because it no longer provides adequate security margins.
+- question: Can I suppress this finding if I'm using 1024-bit keys for testing only?
+  answer: >
+    Test code that generates weak keys can be suppressed using inline annotations supported
+    by the engine. However, ensure that test keys cannot be accidentally reused in production.
+    A better practice is to use 2048-bit or higher keys even in tests to prevent key reuse.
+- question: What attack does a small RSA key enable?
+  answer: >
+    Insufficient RSA key sizes are vulnerable to the General Number Field Sieve (GNFS)
+    factorization algorithm. Once an attacker factors the RSA modulus into its prime components,
+    they can reconstruct the private key and decrypt all past ciphertext encrypted under that
+    key (no forward secrecy), forge signatures, and impersonate the key holder.
+- question: Does this rule check the public_exponent value?
+  answer: >
+    No. This rule only checks key_size. The public exponent should always be 65537 (0x10001).
+    Using a small exponent like 3 or 17 introduces separate vulnerabilities (Coppersmith
+    attacks) that are covered by other rules in this ruleset.
+similar_rules:
+- PYTHON-CRYPTO-SEC-021
+- PYTHON-CRYPTO-SEC-022
+- PYTHON-CRYPTO-SEC-023
+- PYTHON-CRYPTO-SEC-024
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+- id: A02:2021
+  name: Cryptographic Failures
+  url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

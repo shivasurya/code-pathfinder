@@ -1,0 +1,144 @@
+id: PYTHON-CRYPTO-SEC-011
+name: Insecure SHA1 Hash (cryptography)
+short_description: SHA-1 was broken by the SHAttered collision attack in 2017 and is deprecated by NIST for all digital signature uses. Use SHA-256 or SHA-3 instead.
+severity: MEDIUM
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-011
+cwe:
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: Use of Weak Hash
+    url: https://cwe.mitre.org/data/definitions/328.html
+tags:
+  - python
+  - cryptography
+  - sha1
+  - weak-hash
+  - CWE-327
+  - OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: |
+  Detects usage of SHA-1 via the `cryptography` library's hazmat primitives interface
+  (`hashes.SHA1()`). SHA-1 produces a 160-bit digest and was formally broken in 2017 when
+  the SHAttered attack (Stevens et al., CWI/Google) produced the first known SHA-1 collision
+  using approximately 6,500 CPU-years of computation. Chosen-prefix collisions, which are
+  more dangerous in practice, were demonstrated in 2020 at lower cost.
+
+  NIST deprecated SHA-1 for digital signatures in SP 800-131A and disallowed its use in
+  federal agencies after 2013. Browser vendors removed SHA-1 certificate trust in 2017.
+  Major Certificate Authorities have been prohibited from issuing SHA-1-signed certificates
+  since 2016.
+
+  SHA-1 must not be used for digital signatures, TLS certificates, code signing, or any
+  protocol where collision resistance is a security property. It retains limited legacy
+  compatibility use in non-security contexts such as Git object addressing, though even
+  there SHA-256 migration is underway. This rule targets the hazmat layer of the
+  `cryptography` library, indicating intentional low-level cryptographic use.
+message: SHA-1 is deprecated for security use. The SHAttered attack (2017) demonstrated practical SHA-1 collisions. Replace with hashes.SHA256() or hashes.SHA3_256().
+detection_scope: |
+  Matches any call to `CryptoHashes.method("SHA1")` where `CryptoHashes` is a QueryType
+  resolving fully-qualified names under `cryptography.hazmat.primitives.hashes`. This
+  catches `hashes.SHA1()` regardless of import aliasing. The rule fires on instantiation
+  of the SHA1 hash object within the cryptography library's hazmat primitives layer, not
+  on the PyCryptodome SHA1 equivalent (see PYTHON-CRYPTO-SEC-015 for that).
+secure_example: |
+  from cryptography.hazmat.primitives import hashes
+  from cryptography.hazmat.primitives.hmac import HMAC
+  from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+  import os
+
+  # SECURE: SHA-256 for general integrity checking
+  digest = hashes.Hash(hashes.SHA256())
+  digest.update(b"data to hash")
+  result = digest.finalize()
+
+  # SECURE: SHA-3 for stronger collision resistance
+  digest = hashes.Hash(hashes.SHA3_256())
+  digest.update(b"data to hash")
+  result = digest.finalize()
+
+  # SECURE: HMAC-SHA256 for message authentication
+  key = os.urandom(32)
+  h = HMAC(key, hashes.SHA256())
+  h.update(b"message to authenticate")
+  signature = h.finalize()
+
+  # SECURE: PBKDF2 with SHA-256 for password-derived keys (600k+ iterations per NIST)
+  salt = os.urandom(16)
+  kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=600000)
+  key = kdf.derive(b"my password")
+security_implications:
+  - "Certificate forgery: SHA-1 TLS/code-signing certificates are vulnerable to collision-based forgery, enabling impersonation of trusted entities in TLS handshakes or bypassing software integrity checks."
+  - "Signature malleability: chosen-prefix collision attacks allow an attacker to craft two documents with the same SHA-1 hash, one benign and one malicious, undermining document authenticity guarantees."
+  - "Protocol downgrade exploitation: legacy systems that still accept SHA-1 in TLS, S/MIME, or XML signatures become targets for active downgrade and collision attacks."
+  - "Compliance failure: use of SHA-1 violates PCI DSS v4.0, NIST SP 800-131A, and FIPS 186-5, triggering audit findings in regulated environments."
+recommendations:
+  - "Replace hashes.SHA1() with hashes.SHA256() for general-purpose hashing and integrity verification."
+  - "Use hashes.SHA3_256() or hashes.SHA3_512() when stronger collision resistance is required or as a hedge against future weaknesses in SHA-2."
+  - "For password hashing, do not use SHA-1 or any raw hash — use Argon2 (argon2-cffi), bcrypt, or scrypt."
+  - "For HMAC-based message authentication, use HMAC with SHA-256 (cryptography.hazmat.primitives.hmac.HMAC with hashes.SHA256())."
+  - "When SHA-1 appears in a legacy protocol or file format you do not control, isolate the usage and layer a SHA-256 HMAC or signature over the output as a compensating control."
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography"
+  - standard: NIST SP 800-131A
+    requirement: "MD5 and SHA-1 disallowed for digital signatures"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+faq:
+  - question: "Is SHA-1 ever safe to use in 2024?"
+    answer: "SHA-1 is acceptable only for non-security-sensitive legacy compatibility contexts where collision resistance is irrelevant — for example, computing Git-style content hashes for deduplication when an attacker cannot influence the input. It must not be used for digital signatures, TLS certificates, HMAC, or password hashing."
+  - question: "How is SHA-1 different from MD5 in terms of weakness?"
+    answer: "Both are broken for collision resistance. SHA-1 collisions required significantly more computation than MD5 and were demonstrated later (2017 vs 2004). MD5 collisions are now trivially fast; SHA-1 collisions require tens of thousands of CPU-core hours but are within reach of well-resourced attackers. Neither should be used for security."
+  - question: "Why is SHA-1 still used in Git?"
+    answer: "Git uses SHA-1 as a content-addressable identifier, not as a security primitive — the threat model does not require collision resistance for most Git operations. Git has been migrating to SHA-256 since 2021. This does not make SHA-1 acceptable for security-sensitive applications."
+  - question: "Why not use SHA-256 for password hashing?"
+    answer: "SHA-256 is designed to be fast. An attacker with GPU hardware can compute billions of SHA-256 hashes per second, making brute-force attacks trivial. Use Argon2id, bcrypt, or scrypt, which are specifically designed to be slow and memory-intensive, limiting attack throughput."
+  - question: "Does this rule fire on HMAC-SHA1?"
+    answer: "Yes, if hashes.SHA1() is passed to an HMAC constructor via the hazmat interface. While HMAC-SHA1 has not been broken in the same way as bare SHA-1, it is deprecated in current standards and should be replaced with HMAC-SHA256."
+  - question: "How do I run this rule in CI/CD?"
+    answer: "Run `code-pathfinder scan --ruleset python/cryptography/PYTHON-CRYPTO-SEC-011 --path ./src` in your pipeline. Add `--format sarif` to produce SARIF output compatible with GitHub Advanced Security and similar platforms."
+  - question: "What is the SHAttered attack exactly?"
+    answer: "SHAttered (2017) was the first public demonstration of a SHA-1 chosen-prefix collision by Stevens et al. at CWI Amsterdam and Google. They produced two distinct PDF files with identical SHA-1 hashes. The attack required approximately 6,500 CPU-years and 110 GPU-years. In 2020, Leurent and Peyrin demonstrated chosen-prefix SHA-1 collisions at a cost of roughly 900 GPU-years."
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "SHAttered: First SHA-1 Collision (Stevens et al., 2017)"
+    url: https://shattered.io/
+  - title: "Leurent & Peyrin 2020: SHA-1 is a Shambles — Chosen-Prefix Collisions"
+    url: https://eprint.iacr.org/2020/014.pdf
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "FIPS 186-5: Digital Signature Standard — SHA-1 removed"
+    url: https://csrc.nist.gov/publications/detail/fips/186/5/final
+  - title: "OWASP Cryptographic Failures (A02:2021)"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "cryptography library hazmat hashes documentation"
+    url: https://cryptography.io/en/latest/hazmat/primitives/cryptographic-hashes/
+similar_rules:
+  - id: PYTHON-CRYPTO-SEC-010
+    description: MD5 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-015
+    description: SHA-1 usage via PyCryptodome (Crypto.Hash.SHA / Crypto.Hash.SHA1)
+  - id: PYTHON-CRYPTO-SEC-012
+    description: MD5 usage via PyCryptodome — same weakness, different library
+  - id: PYTHON-CRYPTO-SEC-013
+    description: MD4 usage via PyCryptodome — rated HIGH severity
+  - id: PYTHON-CRYPTO-SEC-014
+    description: MD2 usage via PyCryptodome — rated HIGH severity
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

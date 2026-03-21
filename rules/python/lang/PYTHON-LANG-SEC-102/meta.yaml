@@ -1,0 +1,207 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-102
+name: Hardcoded Password in Default Function Argument
+short_description: A function defines a default argument whose name suggests a password or secret but whose value is a hardcoded string literal.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-102
+
+# Vulnerability Details
+cwe:
+  - id: CWE-259
+    name: "Use of Hard-coded Password"
+    url: https://cwe.mitre.org/data/definitions/259.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - python
+  - hardcoded-password
+  - default-argument
+  - secret-in-code
+  - credentials
+  - CWE-259
+  - OWASP-A07
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python functions can define default values for parameters. When a parameter name
+  suggests a credential — such as password, passwd, pwd, secret, api_key, token,
+  auth_key, or passphrase — and the default value is a non-empty string literal, the
+  credential is hardcoded into the source code.
+
+  Hardcoded credentials are a severe security risk because the source code may be stored
+  in version control, distributed as part of a package, included in error messages, or
+  accessed by developers who should not have the credential. Even if the repository is
+  private, any developer with read access to the code gains the credential, and the
+  credential cannot be rotated without a code change and deployment cycle.
+
+  Default function arguments with hardcoded credentials are especially dangerous because
+  callers may rely on the default without realizing it is a real credential, and the
+  credential persists in git history even after it is removed from the current codebase.
+
+  Credentials should always be loaded from environment variables, secret management
+  systems, or configuration files outside the source tree. Default values for credential
+  parameters should be None, forcing the caller to explicitly provide a value.
+
+message: "Hardcoded password or secret in default function argument. Load credentials from environment variables or a secret manager, not source code."
+
+security_implications:
+  - title: Credential Exposure in Version Control
+    description: |
+      Hardcoded credentials committed to version control are visible to all developers
+      with repository access. Once committed, the credential remains in git history
+      permanently even if the line is later deleted. Public repository exposure makes
+      the credential available to the entire internet within minutes of the first push.
+  - title: Shared Credentials Across All Deployments
+    description: |
+      A hardcoded default credential is identical across every deployment — development,
+      staging, and production. Compromise of any single environment or developer machine
+      gives the attacker the production credential without needing to target production
+      specifically.
+  - title: Silent Use of Default Credentials
+    description: |
+      Callers who do not explicitly pass the credential parameter silently use the hardcoded
+      default. This can result in production systems connecting to databases or external
+      services with a well-known default password that was intended only for local
+      development, with no visible indication of the misconfiguration.
+  - title: Inability to Rotate Credentials
+    description: |
+      Hardcoded credentials cannot be rotated without a code change and full deployment
+      cycle. During a security incident requiring immediate credential rotation, this
+      dependency on code deployment introduces dangerous delay. Dynamic credential loading
+      from environment variables or secret managers allows rotation without any code change.
+
+secure_example: |
+  import os
+  from typing import Optional
+
+  # SECURE: Use None as default, require caller to provide credential
+  def connect_to_database(
+      host: str,
+      username: str,
+      password: Optional[str] = None,
+  ) -> None:
+      if password is None:
+          # Load from environment at call time, not as a default
+          password = os.environ.get("DB_PASSWORD")
+          if not password:
+              raise ValueError("DB_PASSWORD environment variable is not set")
+      # ... connect using password
+
+  # SECURE: Load all credentials from environment in a config object
+  class DatabaseConfig:
+      def __init__(self) -> None:
+          self.host = os.environ["DB_HOST"]
+          self.username = os.environ["DB_USER"]
+          self.password = os.environ["DB_PASSWORD"]  # raises if not set
+
+  # SECURE: Use a secret manager client
+  def get_api_client(api_key: Optional[str] = None):
+      if api_key is None:
+          api_key = _load_from_secret_manager("myservice/api_key")
+      return ApiClient(api_key=api_key)
+
+recommendations:
+  - Never use string literals as default values for parameters named password, passwd, pwd, secret, api_key, token, auth, or similar credential names.
+  - Use None as the default value for credential parameters and load the real value from os.environ or a secret manager when None is received.
+  - Require credential parameters explicitly by using keyword-only arguments without defaults, forcing all callers to provide the credential from their own environment.
+  - Audit git history for previously hardcoded credentials and rotate any that were exposed, even if they have since been removed from the codebase.
+  - Use environment-specific configuration files (not committed to version control) or a dedicated secrets manager such as HashiCorp Vault, AWS Secrets Manager, or Azure Key Vault.
+
+detection_scope: |
+  This rule detects Python function definitions where a parameter whose name matches
+  credential patterns (password, passwd, pwd, secret, api_key, apikey, token, auth_key,
+  passphrase, private_key) has a non-empty string literal as its default value. Both
+  regular function definitions and class method definitions are checked. The rule does
+  not flag parameters whose default is None, an empty string, or a non-string literal.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-259 - Use of Hard-coded Password"
+  - standard: OWASP Top 10
+    requirement: "A07:2021 - Identification and Authentication Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3.6 - Passwords must not be hardcoded in scripts or source files"
+  - standard: NIST SP 800-53
+    requirement: "IA-5: Authenticator Management — prohibit embedding credentials in code"
+  - standard: GDPR Article 32
+    requirement: "Technical measures to ensure appropriate security of personal data"
+
+# References
+references:
+  - title: "CWE-259: Use of Hard-coded Password"
+    url: https://cwe.mitre.org/data/definitions/259.html
+  - title: OWASP Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - title: "OWASP Secrets Management Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+  - title: "Python-dotenv for environment variable management"
+    url: https://pypi.org/project/python-dotenv/
+  - title: "12-Factor App: Config"
+    url: https://12factor.net/config
+
+# FAQ
+faq:
+  - question: Why flag default arguments specifically rather than all string literals near credential names?
+    answer: |
+      Default arguments are particularly dangerous because they are silently used when the
+      caller omits the parameter. A hardcoded credential string in a regular assignment at
+      least requires explicit code to use it. A default argument means every call that
+      omits the parameter is using the hardcoded credential, potentially including production
+      code that was intended to pass a real credential but has a bug.
+
+  - question: What if the default password is just for local development or testing?
+    answer: |
+      Even development and test credentials hardcoded in source code are a risk because
+      developers commonly reuse passwords across environments, and the development credential
+      may work in staging or production. The correct approach is to use a .env file for
+      local development (excluded from version control via .gitignore) and have CI inject
+      test credentials through environment variables.
+
+  - question: How do I handle the case where a function must have a usable default for backward compatibility?
+    answer: |
+      If backward compatibility requires a default, use a sentinel value like None and
+      document that None means "read from environment variable DATABASE_PASSWORD". This
+      preserves the API while moving the actual credential out of source code. Add a
+      deprecation warning if the credential is not found in the environment, guiding
+      users toward proper credential management.
+
+  - question: My credential is already encrypted or hashed — is it still flagged?
+    answer: |
+      Yes. Even encrypted or hashed credential strings in source code are flagged because
+      the encryption key or hash may be derivable, or the encrypted form itself may be
+      directly usable for authentication in some protocols. More importantly, the presence
+      of any credential-like string in source code sets a bad precedent and violates the
+      principle of separating code from configuration.
+
+  - question: How do I suppress this finding for test code that genuinely uses fake credentials?
+    answer: |
+      If the parameter name is truly a credential name but the default value is intentionally
+      a test fixture (like "test_password" or "FAKE_PASSWORD_DO_NOT_USE"), rename the
+      parameter to something that does not match credential patterns (e.g., test_auth_value)
+      or add a suppression comment. However, ensure the fake credential cannot accidentally
+      work in any environment before suppressing the finding.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-101
+  - PYTHON-LANG-SEC-105
+  - PYTHON-DJANGO-SEC-010
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

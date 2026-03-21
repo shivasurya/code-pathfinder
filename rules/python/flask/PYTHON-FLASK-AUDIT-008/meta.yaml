@@ -1,0 +1,208 @@
+# Rule Identity
+id: PYTHON-FLASK-AUDIT-008
+name: Flask render_template_string Usage
+short_description: Detects any use of render_template_string(), which renders Jinja2 templates from Python strings and is inherently adjacent to Server-Side Template Injection (SSTI) vulnerabilities.
+
+# Classification
+severity: MEDIUM
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-AUDIT-008
+
+# Vulnerability Details
+cwe:
+  - id: CWE-96
+    name: Improper Neutralization of Directives in Statically Saved Code (Static Code Injection)
+    url: https://cwe.mitre.org/data/definitions/96.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - template
+  - ssti
+  - server-side-template-injection
+  - jinja2
+  - audit
+  - render-template-string
+  - CWE-96
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects any use of render_template_string() or flask.render_template_string() in
+  Flask applications. Unlike render_template(), which loads templates from files on disk,
+  render_template_string() compiles and renders a Jinja2 template from a Python string passed
+  at runtime. This creates a structural risk: if any portion of that string originates from
+  user input, the application has a Server-Side Template Injection (SSTI) vulnerability.
+
+  SSTI in Jinja2 is critical-severity. Jinja2 templates have access to Python's object model,
+  and attackers can use template expressions like {{ config }} to leak configuration, or
+  {{ ''.__class__.__mro__[1].__subclasses__() }} to traverse the class hierarchy and reach
+  os.system or subprocess for remote code execution.
+
+  This is an audit-grade rule. Not every render_template_string() call is vulnerable -- if the
+  template string is a hardcoded literal with no user-controlled components, there is no SSTI
+  risk. However, every use of render_template_string() is worth reviewing to confirm that the
+  template string is fully controlled by the developer and never interpolated with user data.
+
+  The detection uses Or(calls("render_template_string"), calls("flask.render_template_string"))
+  to catch both the directly imported function and the module-qualified call form.
+
+message: "render_template_string() detected. Verify the template string contains no user-controlled content. Prefer render_template() with static template files."
+
+security_implications:
+  - title: Server-Side Template Injection Leading to Remote Code Execution
+    description: |
+      If user input is included in the template string passed to render_template_string(),
+      an attacker can inject Jinja2 expressions that traverse Python's object hierarchy to
+      reach os.system, subprocess.Popen, or other code execution primitives. This is a
+      critical-severity vulnerability with widespread exploitation.
+  - title: Configuration and Secret Leakage via Template Expressions
+    description: |
+      Even without achieving code execution, an attacker can inject {{ config }} or
+      {{ config.SECRET_KEY }} to extract Flask's full configuration dictionary from the
+      running application, including secret keys, database URIs, and API credentials.
+  - title: File System Read Access
+    description: |
+      Jinja2 template injection can be chained to read arbitrary files: by reaching Python's
+      open() built-in through the class hierarchy, an attacker can read /etc/passwd,
+      application source code, or private key files.
+  - title: Harder to Audit Than File-Based Templates
+    description: |
+      Template strings defined in Python code are harder to audit than template files in
+      a dedicated directory. Security reviewers scanning the templates/ directory for unsafe
+      patterns will miss vulnerabilities in render_template_string() calls in Python source.
+
+secure_example: |
+  from flask import Flask, render_template, request
+
+  app = Flask(__name__)
+
+  # SAFE: Use render_template() with a static template file.
+  # The template file is on disk under templates/ and never constructed from user input.
+  @app.route('/greet')
+  def greet():
+      name = request.args.get('name', 'World')
+      # User input is passed as a context variable, not embedded in the template string.
+      # Jinja2 auto-escaping handles HTML encoding of 'name' in the template file.
+      return render_template('greet.html', name=name)
+
+  # templates/greet.html:
+  # <h1>Hello, {{ name }}!</h1>  <- Jinja2 auto-escapes 'name' here
+
+  # UNSAFE (do not do this):
+  # return render_template_string(f"<h1>Hello, {name}!</h1>")  # SSTI risk
+  # return render_template_string("<h1>Hello, {{ name }}!</h1>", name=name)  # safe but risky pattern
+
+recommendations:
+  - Replace render_template_string() with render_template() using a static HTML file in the templates/ directory. User input is passed as context variables, not embedded in the template.
+  - If you must use render_template_string() for dynamically constructed templates (e.g., email templates stored in a database), ensure the template string comes from a trusted internal source and is never derived from user input, even partially.
+  - Audit every render_template_string() call to trace the origin of the template argument. If any f-string interpolation, .format(), or string concatenation with a user-derived value is present, the call is vulnerable.
+  - Enable Jinja2 sandboxing (SandboxedEnvironment) if you genuinely need to render user-provided template content.
+  - Add automated SSTI testing to your security test suite for any endpoint that uses render_template_string().
+
+detection_scope: |
+  This rule uses Or(calls("render_template_string"), calls("flask.render_template_string")) to
+  match both the direct import form (from flask import render_template_string; render_template_string(...))
+  and the module-qualified form (flask.render_template_string(...)). This is a broad audit pattern --
+  every call to render_template_string() is flagged regardless of whether user input is demonstrably
+  present in the template string. The rule surfaces all uses for manual review rather than attempting
+  dataflow analysis of the template string argument. For a dataflow rule that specifically traces user
+  input into render_template_string(), see PYTHON-FLASK-SEC-014 (SSTI via tainted template string).
+
+# References
+references:
+  - title: "CWE-96: Improper Neutralization of Directives in Statically Saved Code"
+    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: OWASP Server-Side Template Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server-Side_Template_Injection
+  - title: Flask render_template_string Documentation
+    url: https://flask.palletsprojects.com/en/stable/api/#flask.render_template_string
+  - title: PortSwigger SSTI Research
+    url: https://portswigger.net/research/server-side-template-injection
+  - title: Jinja2 Sandbox Documentation
+    url: https://jinja.palletsprojects.com/en/stable/sandbox/
+  - title: OWASP A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection: prevent server-side template injection"
+  - standard: CWE Top 25
+    requirement: "CWE-96 Improper Neutralization of Directives in Statically Saved Code"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including template injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation -- prevent injection via template content"
+
+# FAQ
+faq:
+  - question: Is render_template_string() always vulnerable?
+    answer: |
+      No. If the template string is a hardcoded literal with no user-controlled components --
+      for example, render_template_string("<h1>Hello!</h1>") -- there is no SSTI risk. The
+      vulnerability only arises when user-controlled data appears inside the template string
+      itself (via f-strings, .format(), or concatenation). This rule flags all uses for
+      review; you must inspect each call to determine if user input can reach the template
+      string.
+
+  - question: Why flag render_template_string() at all if it can be safe?
+    answer: |
+      render_template_string() is a pattern that grows riskier over time. Code starts safe
+      (hardcoded template), then someone adds f-string interpolation for convenience, and
+      SSTI is introduced. Auditing every use at review time prevents the safe-to-unsafe
+      drift. There is almost always a better alternative (render_template() with a file),
+      and the few legitimate uses of render_template_string() deserve explicit documentation
+      of why they are safe.
+
+  - question: What does a Jinja2 SSTI attack payload look like?
+    answer: |
+      A basic payload to leak configuration: {{ config.SECRET_KEY }}. A payload to reach
+      code execution: {{ ''.__class__.__mro__[1].__subclasses__()[X]('id', shell=True,
+      stdout=-1).communicate() }}. The exact subclass index varies by Python version and
+      installed packages, but automated SSTI tools enumerate it quickly.
+
+  - question: I store email templates in a database and render them with render_template_string(). What should I do?
+    answer: |
+      If the template content comes from an internal, trusted source (e.g., an admin-managed
+      database table with no user-editable content), document that clearly and consider
+      suppressing the finding with an inline comment. If users can edit template content,
+      use Jinja2's SandboxedEnvironment to restrict what expressions can be evaluated, and
+      treat all template content from the database as untrusted.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/flask/PYTHON-FLASK-AUDIT-008 --project .
+      The rule outputs SARIF, JSON, or CSV and can post inline pull request comments on GitHub.
+
+  - question: What is the difference between this audit rule and a taint-analysis SSTI rule?
+    answer: |
+      This audit rule flags every render_template_string() call regardless of whether user
+      input reaches it -- it is a broad signal for manual review. A taint-analysis SSTI rule
+      would trace user input from Flask request parameters through function calls until it
+      reaches the template string argument of render_template_string(), producing only
+      confirmed-vulnerable findings. Both approaches are valuable: the audit rule catches
+      risky patterns early; the taint rule confirms exploitability.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-014
+  - PYTHON-FLASK-XSS-001
+  - PYTHON-FLASK-XSS-002
+  - PYTHON-FLASK-AUDIT-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

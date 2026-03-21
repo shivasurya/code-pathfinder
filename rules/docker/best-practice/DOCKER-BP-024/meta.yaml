@@ -1,0 +1,55 @@
+id: DOCKER-BP-024
+name: Install Only One of wget or curl
+short_description: Installing both wget and curl wastes space. Choose one tool for downloads.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-024
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- wget
+- curl
+- download
+- tools
+- optimization
+- image-size
+- redundancy
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects installation of both wget and curl in the same Dockerfile.
+
+  Both tools serve the same purpose (downloading files), so installing both
+
+  wastes image space. Choose one tool and use it consistently.'
+message: Installing both wget and curl wastes space. Choose one tool for downloads.
+secure_example: 'FROM ubuntu:22.04
+
+
+  # Good: Choose one tool (curl is more feature-rich)
+
+  RUN apt-get update && apt-get install -y curl
+
+
+  # Or use wget if you prefer
+
+  # RUN apt-get update && apt-get install -y wget'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Use set -o pipefail with pipes"
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

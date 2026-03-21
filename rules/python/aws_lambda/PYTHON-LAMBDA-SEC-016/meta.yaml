@@ -1,0 +1,233 @@
+# Rule Identity
+id: PYTHON-LAMBDA-SEC-016
+name: Lambda DynamoDB FilterExpression Injection
+short_description: Lambda event data flows to a DynamoDB FilterExpression string, enabling expression manipulation in serverless DynamoDB scan and query operations.
+
+# Classification
+severity: HIGH
+category: aws_lambda
+language: python
+ruleset: python/aws_lambda/PYTHON-LAMBDA-SEC-016
+
+# Vulnerability Details
+cwe:
+  - id: CWE-943
+    name: "Improper Neutralization of Special Elements in Data Query Logic"
+    url: https://cwe.mitre.org/data/definitions/943.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - aws
+  - lambda
+  - dynamodb
+  - nosql-injection
+  - filter-expression
+  - serverless
+  - taint-analysis
+  - inter-procedural
+  - CWE-943
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects injection vulnerabilities unique to serverless DynamoDB integrations
+  in AWS Lambda functions, where untrusted event data flows into a DynamoDB FilterExpression
+  string passed to table.scan() or table.query() calls.
+
+  DynamoDB is the most commonly used database for AWS Lambda functions due to its
+  serverless scaling model, IAM-based access control, and native AWS integration. When
+  Lambda functions use the low-level DynamoDB API with raw expression strings (rather
+  than the high-level boto3 Attr() and Key() condition builder), event data can be
+  injected into the FilterExpression string parameter.
+
+  Unlike SQL injection, DynamoDB FilterExpression injection does not enable arbitrary
+  data access (DynamoDB does not support cross-table operations or nested expression
+  execution). However, attackers can manipulate filter logic to bypass intended access
+  controls, cause denial-of-service by injecting always-false conditions that return
+  empty results, enumerate attribute names via error-based probing, or modify scan
+  behavior to expose data that should be filtered out.
+
+  This vulnerability is specific to the serverless ecosystem: Lambda functions commonly
+  skip the extra abstraction layer that would prevent it, and DynamoDB's expression
+  language is less widely understood than SQL, making developers less likely to recognize
+  injection patterns.
+
+message: "Lambda event data flows to a DynamoDB FilterExpression string. Use Attr() condition expressions with explicit values rather than constructing filter strings from event data."
+
+security_implications:
+  - title: Filter Logic Bypass via Expression Injection
+    description: |
+      An attacker who controls part of the FilterExpression string can inject expression
+      syntax to bypass intended data access controls. For example, injecting OR
+      attribute_exists(id) into a filter intended to restrict results to a specific
+      user's records can cause the filter to return all items in the table rather than
+      only the intended subset.
+  - title: Access Control Bypass in Multi-Tenant Data
+    description: |
+      DynamoDB tables in Lambda applications often store multi-tenant data separated
+      by a tenant_id attribute. FilterExpression injection can bypass tenant isolation
+      by modifying the filter to include OR conditions that match items from other
+      tenants, exposing cross-tenant data to attackers.
+  - title: Denial of Service via Always-False Filters
+    description: |
+      Injecting always-false conditions (e.g., attribute_not_exists(id) when id always
+      exists) causes table.scan() to consume all DynamoDB read capacity units while
+      returning no results. For large tables with high read capacity costs, this can
+      generate significant AWS charges and degrade application performance.
+  - title: Attribute Name Enumeration via Error Probing
+    description: |
+      DynamoDB returns specific error messages for invalid expression attribute names.
+      By injecting probe expressions and observing error responses, an attacker can
+      enumerate the attribute names present in the DynamoDB table, revealing the
+      data schema for use in more targeted attacks.
+
+secure_example: |
+  import json
+  import boto3
+  from boto3.dynamodb.conditions import Key, Attr
+
+  dynamodb = boto3.resource('dynamodb')
+  table = dynamodb.Table('orders')
+
+  def lambda_handler(event, context):
+      params = event.get('queryStringParameters', {}) or {}
+      user_id = params.get('user_id', '')
+      status = params.get('status', '')
+
+      # SECURE: Validate user_id format
+      if not user_id or not user_id.isalnum():
+          return {'statusCode': 400, 'body': 'Invalid user_id'}
+
+      # SECURE: Use Key() for partition key conditions in query()
+      # SECURE: Use Attr() for filter conditions — SDK handles value escaping
+      ALLOWED_STATUSES = {'pending', 'shipped', 'delivered', 'cancelled'}
+      if status and status not in ALLOWED_STATUSES:
+          return {'statusCode': 400, 'body': 'Invalid status'}
+
+      query_kwargs = {
+          'KeyConditionExpression': Key('user_id').eq(user_id)
+      }
+      if status:
+          query_kwargs['FilterExpression'] = Attr('status').eq(status)
+
+      response = table.query(**query_kwargs)
+      return {'statusCode': 200, 'body': json.dumps(response['Items'], default=str)}
+
+recommendations:
+  - Use boto3's Attr() and Key() condition expression builders instead of raw FilterExpression strings; the SDK handles value escaping and expression syntax automatically.
+  - Always use ExpressionAttributeValues and ExpressionAttributeNames for substitution when FilterExpression strings must be constructed programmatically.
+  - Validate event fields against strict allowlists before using them in any DynamoDB expression, particularly for attribute names that cannot be parameterized by the SDK.
+  - Apply DynamoDB IAM policies that restrict the Lambda's access to specific tables and operations (e.g., GetItem, Query only; no Scan on production tables).
+  - Prefer table.query() with KeyConditionExpression over table.scan() with FilterExpression; queries are more efficient and inherently scope to a partition key value.
+
+detection_scope: |
+  This rule performs inter-procedural taint analysis with global scope. Sources are
+  Lambda event dictionary access calls: calls("event.get"), calls("event.__getitem__"),
+  including event.get("body"), event.get("queryStringParameters"),
+  event.get("pathParameters"), and event["Records"]. The sink is calls("*.scan") and
+  calls("*.query") on DynamoDB Table objects when the tainted value reaches the
+  FilterExpression string argument (tracked via .tracks(0)). The rule specifically
+  flags raw string FilterExpression arguments that contain event data, not Attr()-based
+  condition expressions. The analysis follows taint through f-string interpolation,
+  string concatenation, variable assignments, and function boundaries.
+
+# References
+references:
+  - title: "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+    url: https://cwe.mitre.org/data/definitions/943.html
+  - title: AWS DynamoDB FilterExpression documentation
+    url: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.FilterExpression.html
+  - title: boto3 DynamoDB Conditions
+    url: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/customizations/dynamodb.html#boto3.dynamodb.conditions.Attr
+  - title: OWASP NoSQL Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05.6-Testing_for_NoSQL_Injection
+  - title: AWS Lambda Security Best Practices
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: DynamoDB Expression Attribute Names and Values
+    url: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.ExpressionAttributeValues.html
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-943 - Improper Neutralization of Special Elements in Data Query Logic"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - protect against injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: AWS Security Best Practices
+    requirement: "Validate all inputs; apply least-privilege DynamoDB IAM policies"
+
+# FAQ
+faq:
+  - question: Is DynamoDB FilterExpression injection as severe as SQL injection?
+    answer: |
+      DynamoDB FilterExpression injection is less severe than SQL injection because
+      DynamoDB's expression language does not support cross-table operations, subqueries,
+      OS commands, or file access. However, it can still enable data access control bypass
+      (exposing rows that should be filtered), multi-tenant data leakage, and denial-of-
+      service via always-false conditions that waste read capacity units. The impact is
+      scoped to the table being queried.
+
+  - question: What is the difference between FilterExpression as a string versus Attr() conditions?
+    answer: |
+      FilterExpression as a raw string (e.g., "status = :s") requires manually specifying
+      ExpressionAttributeValues (:s mapping) and is vulnerable to injection when event
+      data is embedded in the expression string itself. Attr("status").eq(status) uses
+      the boto3 condition builder, which generates the expression string and attribute
+      value mapping internally. The value (status) is passed as a Python object and the
+      SDK ensures it is properly represented as an ExpressionAttributeValue, preventing
+      injection of expression syntax.
+
+  - question: Why is this vulnerability unique to serverless DynamoDB Lambda integrations?
+    answer: |
+      DynamoDB is the default database for Lambda functions due to its native AWS
+      integration and serverless scaling. Unlike relational databases where ORMs are
+      the standard abstraction, DynamoDB is often accessed via the low-level boto3 API
+      directly in Lambda handlers, which requires developers to construct expression
+      strings manually. The expression language is less familiar than SQL, making
+      developers less likely to recognize injection risks when building filter strings
+      from event data.
+
+  - question: Can I use ExpressionAttributeNames and ExpressionAttributeValues to safely inject event data into FilterExpression strings?
+    answer: |
+      Yes, if done correctly. ExpressionAttributeValues safely substitutes placeholder
+      values (e.g., :val) with actual values in the expression. ExpressionAttributeNames
+      safely substitutes placeholder names (e.g., #attr) with actual attribute names.
+      If both the expression structure and the values use this substitution mechanism
+      rather than direct string embedding, injection is prevented. However, the boto3
+      Attr() builder is simpler and less error-prone for most use cases.
+
+  - question: How do I handle dynamic FilterExpression conditions where the number of filters varies?
+    answer: |
+      Build a list of Attr() conditions and combine them with the & operator:
+      filter_expr = Attr('status').eq(status) & Attr('region').eq(region). For
+      a variable number of conditions, start with the first Attr() condition and
+      use reduce() or a loop to & additional conditions. This approach builds a
+      complete parameterized expression using only boto3's condition builder and
+      never embeds event data in expression strings.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LAMBDA-SEC-010
+  - PYTHON-LAMBDA-SEC-011
+  - PYTHON-LAMBDA-SEC-012
+  - PYTHON-LAMBDA-SEC-013
+  - PYTHON-LAMBDA-SEC-014
+  - PYTHON-LAMBDA-SEC-015
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

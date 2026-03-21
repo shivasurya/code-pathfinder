@@ -1,0 +1,249 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-005
+name: Flask Code Injection via exec()
+short_description: User input from Flask request parameters flows to exec() or compile(). exec() cannot be safely sanitized -- redesign the feature to avoid dynamic code execution.
+
+# Classification
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-95
+    name: "Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+    url: https://cwe.mitre.org/data/definitions/95.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - code-injection
+  - exec
+  - compile
+  - rce
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-95
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects code injection in Flask applications where user-controlled input
+  from HTTP request parameters reaches exec() or compile(). exec() is more dangerous
+  than eval() because it executes full Python statements, not just expressions. It can
+  define classes, import modules, modify global state, spawn threads, and run arbitrary
+  multi-line code blocks. compile() generates a code object that is typically passed
+  to exec() or eval() -- tainted input to compile() is a precursor to the same attack.
+
+  Unlike eval injection (PYTHON-FLASK-SEC-004), exec() injection has no safe sanitizer.
+  ast.literal_eval() does not help because exec() accepts statements, not literals.
+  Sandboxing exec() with restricted globals/locals dictionaries is notoriously difficult
+  to get right -- numerous Python sandbox escapes exist that allow attackers to
+  reach the unrestricted interpreter from a sandboxed exec() call.
+
+  The only correct fix is to eliminate exec() from code paths that process user input.
+  This rule uses taint analysis to find those paths: it traces data from Flask request
+  sources through assignments and function calls to exec() and compile() at argument
+  position 0, flagging every reachable path regardless of how many intermediate
+  steps are involved.
+
+message: "User input flows to exec() or compile(). Remove exec() from this code path -- there is no safe way to execute user-supplied Python code."
+
+security_implications:
+  - title: Unrestricted Python Statement Execution
+    description: |
+      exec() executes any valid Python statement. Unlike eval(), which is limited to
+      expressions, exec() can run import statements, define and call functions, modify
+      global and local variables, and execute multi-line code blocks. An attacker who
+      controls exec() input has the same capabilities as a developer with write access
+      to the codebase.
+  - title: Persistent Backdoor Installation
+    description: |
+      exec() can write files, install packages (subprocess + pip), modify Python module
+      caches, and alter loaded module objects in memory. An attacker can inject code
+      that installs a backdoor into the application's module namespace, persisting
+      across requests without touching the filesystem.
+  - title: Complete Secret Extraction
+    description: |
+      exec() has access to the application's global namespace. Injected code can
+      iterate globals(), find database connections, configuration objects, and
+      in-memory caches containing session tokens and API keys, and exfiltrate them
+      via an HTTP request made from within the exec() call.
+  - title: Sandbox Escape
+    description: |
+      Attempts to restrict exec() by passing a limited globals dict are broken by
+      well-known Python sandbox escapes: ().__class__.__mro__[1].__subclasses__()
+      gives access to all loaded classes, from which file objects, socket objects,
+      and subprocess handles can be obtained. There is no reliable way to sandbox
+      exec() against a determined attacker.
+
+secure_example: |
+  from flask import Flask, request
+  import ast
+  import json
+
+  app = Flask(__name__)
+
+  # UNSAFE pattern replaced below:
+  # @app.route('/run')
+  # def run_code():
+  #     code = request.args.get('code')
+  #     exec(code)  # NEVER do this
+
+  # SAFE alternatives for common use cases:
+
+  @app.route('/calculate')
+  def calculate():
+      # For math expressions, restrict to literals via ast.literal_eval()
+      expression = request.args.get('expr', '')
+      try:
+          result = ast.literal_eval(expression)
+          if not isinstance(result, (int, float)):
+              return {'error': 'Numbers only'}, 400
+      except (ValueError, SyntaxError):
+          return {'error': 'Invalid expression'}, 400
+      return {'result': result}
+
+  @app.route('/template', methods=['POST'])
+  def render_template_safe():
+      # For dynamic rendering, use a template engine with autoescaping
+      from flask import render_template_string
+      from markupsafe import Markup
+      # Use render_template() with static template files, not user-supplied strings
+      # Never pass user input to render_template_string()
+      return render_template_string('Hello {{ name }}!', name=request.form.get('name'))
+
+recommendations:
+  - Eliminate exec() entirely from any code path that can be reached with user-controlled input -- there is no sanitizer that makes exec(user_input) safe.
+  - If you need user-defined computation, use a restricted expression language (simpleeval for math, jsonata for JSON transformations) rather than Python's full exec() surface.
+  - If exec() is used to load configuration, replace it with a structured configuration format (YAML with yaml.safe_load(), TOML, JSON) that cannot execute code.
+  - If exec() is used for plugin loading, switch to a proper plugin architecture (importlib.import_module() with a controlled plugin directory and signature verification).
+  - Audit all exec() and compile() calls in the codebase and document the reason each exists -- any that process external input must be removed or redesigned.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- all of which deliver attacker-
+  controlled strings that may contain valid Python statement syntax.
+
+  Sinks: exec() and compile(). The .tracks(0) parameter focuses on argument
+  position 0, the code string. compile() at position 0 is included because
+  it is the standard way to create a code object for subsequent exec() or
+  eval() calls -- a tainted compile() call is a precursor to tainted execution.
+
+  Sanitizers: None. There is no recognized sanitizer for exec() because no
+  transformation of user input makes it safe to execute as Python code.
+  Flows that pass through any intermediate function still trigger a finding
+  unless the intermediate function completely replaces the value with a
+  non-tainted result.
+
+  The rule follows tainted values through assignments, return values, and
+  cross-file function calls.
+
+# References
+references:
+  - title: "CWE-95: Eval Injection"
+    url: https://cwe.mitre.org/data/definitions/95.html
+  - title: OWASP Code Injection
+    url: https://owasp.org/www-community/attacks/Code_Injection
+  - title: Python exec() built-in documentation
+    url: https://docs.python.org/3/library/functions.html#exec
+  - title: Python compile() built-in documentation
+    url: https://docs.python.org/3/library/functions.html#compile
+  - title: Python sandbox escape research
+    url: https://book.hacktricks.xyz/generic-methodologies-and-resources/python/bypass-python-sandboxes
+  - title: OWASP Injection Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE Top 25
+    requirement: "CWE-95 -- Dynamically Evaluated Code Injection"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks including code injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation; SA-15: Development Process Controls"
+  - standard: ISO 27001
+    requirement: "A.14.2.5 -- secure system engineering principles"
+
+# FAQ
+faq:
+  - question: Why is there no sanitizer for exec() when there is one for eval()?
+    answer: |
+      eval() is limited to expressions. ast.literal_eval() can filter its input to
+      safe literal types because literals are a well-defined subset of expressions.
+      exec() accepts full Python statements -- imports, function definitions, loops,
+      assignments -- and there is no meaningful subset of statements that is both
+      useful to users and safe to execute. Python sandbox escapes allow attackers
+      to reach unrestricted Python from any exec() call with limited globals.
+
+  - question: I use exec() to dynamically load plugin code from the database. What should I do?
+    answer: |
+      Move plugins to the filesystem and load them with importlib.import_module().
+      Sign plugin files and verify signatures before loading. This gives you dynamic
+      extensibility without passing user-HTTP-controlled strings to exec(). If plugins
+      must come from the database, treat the plugin directory as trusted infrastructure
+      and never allow HTTP requests to influence which plugin code gets stored.
+
+  - question: My code uses compile() then exec() for template caching. Is that flagged?
+    answer: |
+      Yes, if the source string passed to compile() is tainted. The rule tracks taint
+      to compile() at argument position 0. If the template source comes from a static
+      file or a trusted configuration store (not from HTTP input), the flow is not
+      tainted and will not be flagged.
+
+  - question: How does this differ from PYTHON-FLASK-SEC-004 (eval injection)?
+    answer: |
+      SEC-004 covers eval(), which executes Python expressions. SEC-005 covers exec()
+      and compile(), which execute Python statements. exec() is strictly more powerful
+      than eval() -- every expression is a valid statement but not vice versa. Run
+      both rules to cover the complete dynamic code execution surface.
+
+  - question: We use exec() in admin-only endpoints behind authentication. Is that acceptable?
+    answer: |
+      Authenticated endpoints are still reachable via stolen credentials, session
+      fixation, or CSRF. exec() behind authentication reduces the attack surface
+      but does not eliminate it. The rule will still flag authenticated endpoints
+      because the authentication gate is not a sanitizer for the tainted value.
+      Remove exec() from all HTTP-reachable code paths.
+
+  - question: Does this rule fire on exec() in unit tests?
+    answer: |
+      Only if the test creates a tainted flow from a Flask request source (e.g., via
+      the test client) to exec(). Hardcoded exec('code_string') in test files does not
+      create a tainted flow and is not flagged.
+
+  - question: Can I allowlist specific patterns to prevent false positives?
+    answer: |
+      If there is a code path where exec() receives only values from a trusted,
+      non-HTTP-controlled source that incorrectly appears tainted (e.g., a constant
+      loaded from a config file that the analysis cannot distinguish from request data),
+      you can add a # pathfinder: ignore PYTHON-FLASK-SEC-005 comment at the exec()
+      call site with a written explanation.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-004
+  - PYTHON-DJANGO-SEC-005
+  - PYTHON-LAMBDA-SEC-003
+  - PYTHON-LANG-SEC-021
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

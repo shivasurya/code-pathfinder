@@ -1,0 +1,241 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-002
+name: Flask Command Injection via subprocess
+short_description: User input from Flask request parameters flows to subprocess functions with shell=True or as a command string. Use list arguments without shell=True.
+
+# Classification
+severity: CRITICAL
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - flask
+  - command-injection
+  - subprocess
+  - shell-injection
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects OS command injection in Flask applications where user-controlled
+  input from HTTP request parameters reaches subprocess module functions: subprocess.call(),
+  subprocess.check_call(), subprocess.check_output(), subprocess.run(), subprocess.Popen(),
+  subprocess.getoutput(), and subprocess.getstatusoutput().
+
+  The subprocess module is safer than os.system() when used with list arguments, but
+  becomes equally dangerous when user input is passed as part of a command string,
+  especially when shell=True is set. subprocess.getoutput() and subprocess.getstatusoutput()
+  always invoke a shell and are functionally equivalent to os.popen() for injection purposes.
+
+  The rule traces tainted data from Flask request sources through variable assignments,
+  helper functions, and module boundaries to the command argument at position 0. It
+  distinguishes between subprocess.run(['cmd', user_input], ...) -- safe, the user input
+  is a separate argument to the program -- and subprocess.run(f'cmd {user_input}', shell=True)
+  -- dangerous, the shell interprets the whole string. The .tracks(0) parameter targets
+  the command argument specifically, not flags or environment dictionaries passed in
+  other positions.
+
+message: "User input flows to subprocess command. Use list arguments without shell=True and apply shlex.quote() if a shell string is unavoidable."
+
+security_implications:
+  - title: Shell Injection via String Interpolation
+    description: |
+      When subprocess.run() receives a formatted string and shell=True, the shell
+      parses the entire string. A user-supplied value of "host; cat /etc/passwd"
+      causes two commands to run. The Flask application returns the first command's
+      output, while the attacker's injected command executes silently in the same
+      process context.
+  - title: Unrestricted Process Spawning
+    description: |
+      subprocess.Popen() gives the attacker a handle to a spawned process. With
+      stdin/stdout/stderr piped, an attacker can establish a bidirectional channel
+      to an injected process -- effectively an interactive shell -- through the
+      Flask endpoint's request/response cycle.
+  - title: Environment Variable Leakage
+    description: |
+      subprocess.check_output() captures stdout, which the Flask route often returns
+      directly. Injected commands like "env" or "printenv AWS_SECRET_ACCESS_KEY"
+      cause the response body to contain cloud credentials, database passwords, and
+      other secrets stored in the process environment.
+  - title: Chained Exploitation with Internal Services
+    description: |
+      In Kubernetes or Docker environments, the Flask container has network access
+      to internal services not exposed to the internet. An injected curl or wget
+      command reaches internal APIs, metadata endpoints, and databases that the
+      public internet cannot touch.
+
+secure_example: |
+  from flask import Flask, request
+  import subprocess
+  import shlex
+
+  app = Flask(__name__)
+
+  @app.route('/convert')
+  def convert_file():
+      filename = request.args.get('filename', '')
+      output_format = request.args.get('format', '')
+
+      # SAFE: list arguments -- each element is a separate token, no shell involved
+      # The program receives filename and output_format as literal strings
+      result = subprocess.run(
+          ['convert', filename, f'output.{output_format}'],
+          capture_output=True, text=True, timeout=30
+      )
+      return result.stdout
+
+  @app.route('/grep')
+  def search_file():
+      pattern = request.args.get('pattern', '')
+      # SAFE: shlex.quote() when a shell string is truly required
+      safe_pattern = shlex.quote(pattern)
+      output = subprocess.check_output(
+          f'grep -r {safe_pattern} /var/log/app/',
+          shell=True, text=True
+      )
+      return output
+
+recommendations:
+  - Pass commands as a list to subprocess functions -- ['program', 'arg1', 'arg2'] -- and never set shell=True when user input is involved. List arguments bypass the shell entirely.
+  - Avoid subprocess.getoutput() and subprocess.getstatusoutput() for user-influenced commands -- they always invoke a shell with no way to opt out.
+  - When shell=True is truly required (e.g., pipeline with pipes), wrap every user-supplied token with shlex.quote() before interpolation into the command string.
+  - Validate input against a strict allowlist before it reaches any subprocess call -- reject requests that contain characters outside [a-zA-Z0-9._-] for filenames and identifiers.
+  - Set timeout and resource limits on subprocess calls to prevent DoS through long-running injected commands consuming all Flask worker threads.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json(), request.cookies.get(),
+  request.headers.get() -- all of which deliver attacker-controlled strings.
+
+  Sinks: subprocess.call(), subprocess.check_call(), subprocess.check_output(),
+  subprocess.run(), subprocess.Popen(), subprocess.getoutput(),
+  subprocess.getstatusoutput(). The .tracks(0) setting targets argument position 0,
+  the command string or command list. This is where injection occurs. The env
+  dictionary and other keyword arguments at different positions are not tracked.
+
+  Sanitizers: shlex.quote() and shlex.split() are recognized as sanitizing
+  transformations. A tainted value that passes through shlex.quote() before
+  reaching the sink is treated as safe. Note that simply splitting input with
+  shlex.split() and passing the result as a list to subprocess removes the
+  shell-string injection risk but does not prevent argument injection to the
+  subprocess itself.
+
+  The rule follows data through assignments, return values, and cross-file function
+  calls, so injection chains that pass through utility modules are detected.
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: Python subprocess security considerations
+    url: https://docs.python.org/3/library/subprocess.html#security-considerations
+  - title: Python shlex documentation
+    url: https://docs.python.org/3/library/shlex.html
+  - title: OWASP Testing for Command Injection
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/12-Testing_for_Command_Injection
+  - title: subprocess shell=True security warning
+    url: https://docs.python.org/3/library/subprocess.html#frequently-used-arguments
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection attacks in bespoke and custom software"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: ASVS v4.0
+    requirement: "V5.2.2 -- verify that application protects against OS command injection"
+
+# FAQ
+faq:
+  - question: I pass user input as part of a list to subprocess.run(). Is that safe?
+    answer: |
+      Generally yes, as long as shell=False (the default). When subprocess.run()
+      receives a list, each element becomes a separate argument to the program via
+      exec(). The program receives them as distinct argv entries, so there is no
+      shell to interpret metacharacters. The risk is argument injection to the
+      child program itself (e.g., a user-supplied --config flag), which is a
+      different vulnerability this rule does not cover.
+
+  - question: Why does this rule flag subprocess.getoutput()?
+    answer: |
+      subprocess.getoutput() is a convenience wrapper around subprocess.check_output()
+      with shell=True hardcoded. There is no way to call it without invoking a shell,
+      so it is always dangerous when user input reaches it. Use subprocess.run() with
+      a list instead.
+
+  - question: How does this rule differ from PYTHON-FLASK-SEC-001?
+    answer: |
+      SEC-001 covers the os module (os.system, os.popen). SEC-002 covers the subprocess
+      module. Both result in OS command execution but through different Python APIs.
+      Running both rules together gives complete coverage of the Python shell-execution
+      surface area in Flask applications.
+
+  - question: Can I use shell=True with a hardcoded command string and inject only specific parts?
+    answer: |
+      If every user-supplied value is wrapped with shlex.quote() before interpolation,
+      the rule will not flag it. However, the safer approach is to use list arguments
+      without shell=True. Shell string construction with shlex.quote() is easy to get
+      wrong -- one forgotten quote() call on a new code path reintroduces the vulnerability.
+
+  - question: Does this rule fire on subprocess calls inside test fixtures?
+    answer: |
+      Only if the test code calls request.args.get() or other Flask request source
+      methods that produce tainted data. Hardcoded string arguments to subprocess
+      in test files are not tainted and will not trigger a finding.
+
+  - question: What is the difference between shell injection and argument injection?
+    answer: |
+      Shell injection means the shell itself interprets metacharacters in user input,
+      running additional commands. Argument injection means the user controls a flag
+      or argument to the subprocess that changes its behavior (e.g., passing --exec
+      to find). This rule detects shell injection via tainted argument position 0.
+      Argument injection requires separate validation logic.
+
+  - question: How do I integrate this rule into a GitHub Actions workflow?
+    answer: |
+      Add a step that runs: pathfinder ci --ruleset python/flask/PYTHON-FLASK-SEC-002
+      --format sarif --output results.sarif. Then upload the SARIF file using the
+      github/codeql-action/upload-sarif action. Findings appear as inline annotations
+      on pull request diffs.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-001
+  - PYTHON-DJANGO-SEC-004
+  - PYTHON-LAMBDA-SEC-002
+  - PYTHON-LANG-SEC-011
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

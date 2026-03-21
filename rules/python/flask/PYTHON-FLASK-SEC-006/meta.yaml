@@ -1,0 +1,253 @@
+# Rule Identity
+id: PYTHON-FLASK-SEC-006
+name: Flask SSRF via requests Library
+short_description: User input from Flask request parameters flows to outbound HTTP request URLs via the requests library. Validate and allowlist target hosts before making server-side requests.
+
+# Classification
+severity: HIGH
+category: flask
+language: python
+ruleset: python/flask/PYTHON-FLASK-SEC-006
+
+# Vulnerability Details
+cwe:
+  - id: CWE-918
+    name: Server-Side Request Forgery (SSRF)
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
+tags:
+  - python
+  - flask
+  - ssrf
+  - requests
+  - urllib
+  - server-side-request-forgery
+  - cloud-metadata
+  - cross-file
+  - inter-procedural
+  - taint-analysis
+  - CWE-918
+  - OWASP-A10
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects Server-Side Request Forgery (SSRF) in Flask applications where
+  user-controlled input from HTTP request parameters flows into outbound HTTP request
+  URLs via the requests library (requests.get, requests.post, requests.put,
+  requests.delete, requests.patch, requests.head, requests.options) or the standard
+  library (urllib.request.urlopen, urllib.request.Request).
+
+  SSRF allows attackers to instruct the application server to make HTTP requests to
+  destinations of the attacker's choosing. The server then acts as a proxy, forwarding
+  the response to the attacker. This is particularly severe in cloud environments
+  where the EC2/ECS/GKE metadata endpoint (169.254.169.254) returns instance
+  credentials without authentication when reached from the instance itself.
+
+  The rule uses taint analysis to trace the URL argument from Flask request sources
+  through variable assignments and function calls. The .tracks(0) parameter targets
+  the URL positional argument to requests functions, where SSRF occurs. Flows through
+  validate_url() or is_safe_url() are recognized as sanitizers because these functions
+  typically implement allowlist-based URL validation.
+
+message: "User input flows to outbound HTTP request URL. Validate the URL against an allowlist of trusted hosts before making server-side requests."
+
+security_implications:
+  - title: Cloud Instance Credential Theft
+    description: |
+      In AWS, GCP, and Azure, the instance metadata service is accessible at
+      http://169.254.169.254/ (or http://169.254.169.254/latest/meta-data/iam/
+      security-credentials/ on AWS). An attacker who controls the URL parameter
+      causes the Flask server to fetch its own IAM credentials and return them
+      in the response. These credentials give the attacker full API access to
+      the cloud account.
+  - title: Internal Service Discovery and Exploitation
+    description: |
+      The application server can reach internal services on the private network that
+      are not exposed to the internet: internal APIs, admin dashboards, Kubernetes
+      API servers, Redis instances, and Elasticsearch clusters. SSRF turns an external
+      attacker into an internal network attacker with the server's identity.
+  - title: Port Scanning and Network Topology Mapping
+    description: |
+      Timing differences in SSRF responses reveal which internal hosts and ports are
+      open. An attacker iterates RFC 1918 addresses and observes connection timeouts
+      vs. refused connections to map the internal network topology, identifying
+      targets for subsequent exploitation.
+  - title: Bypassing IP-Based Access Controls
+    description: |
+      Many internal services restrict access by source IP address, trusting requests
+      from the application server. SSRF bypasses this control because the request
+      originates from the trusted server. Admin interfaces that are secure against
+      external access become reachable via the vulnerable Flask endpoint.
+
+secure_example: |
+  from flask import Flask, request, abort
+  from urllib.parse import urlparse
+  import requests
+  import ipaddress
+
+  app = Flask(__name__)
+
+  ALLOWED_HOSTS = {'api.partner.com', 'cdn.example.com', 'webhook.example.org'}
+
+  def validate_url(url):
+      """Allowlist-based URL validation. Raises ValueError on disallowed URLs."""
+      parsed = urlparse(url)
+      if parsed.scheme not in ('http', 'https'):
+          raise ValueError(f'Scheme {parsed.scheme!r} not allowed')
+      hostname = parsed.hostname
+      if hostname not in ALLOWED_HOSTS:
+          raise ValueError(f'Host {hostname!r} not in allowlist')
+      # Block SSRF via DNS rebinding to private IPs
+      try:
+          ip = ipaddress.ip_address(hostname)
+          if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+              raise ValueError('Private/reserved IP not allowed')
+      except ValueError:
+          pass  # hostname is not a raw IP -- DNS resolves at request time
+      return url
+
+  @app.route('/fetch')
+  def fetch_resource():
+      url = request.args.get('url', '')
+      try:
+          safe_url = validate_url(url)
+      except ValueError as e:
+          abort(400, str(e))
+      # SAFE: URL validated against allowlist of known trusted hosts
+      response = requests.get(safe_url, timeout=10)
+      return response.text
+
+recommendations:
+  - Implement an allowlist of trusted hostnames that the application is permitted to request, and reject any URL whose host is not on the list.
+  - Resolve the DNS name to an IP address after allowlist validation and verify the resolved IP is not in a private, loopback, or link-local range to prevent DNS rebinding attacks.
+  - Disable redirects or validate redirect destinations against the allowlist -- requests follows redirects by default and a redirect to 169.254.169.254 bypasses the initial URL check.
+  - Use a dedicated HTTP client configured to reject private IP ranges at the network level (e.g., SSRF-aware proxy like Smokescreen) rather than relying solely on application-level validation.
+  - Set short timeouts and response size limits on outbound requests to limit damage from requests to slow internal services.
+
+detection_scope: |
+  Scope: global (cross-file taint tracking across the entire project).
+
+  Sources: Flask HTTP input methods -- request.args.get(), request.form.get(),
+  request.values.get(), request.get_json() -- all of which can deliver attacker-
+  controlled URL strings.
+
+  Sinks: requests.get(), requests.post(), requests.put(), requests.delete(),
+  requests.patch(), requests.head(), requests.options() -- and stdlib equivalents
+  urllib.request.urlopen() and urllib.request.Request(). The .tracks(0) parameter
+  targets the URL argument at position 0, the destination that determines where
+  the server sends the request.
+
+  Sanitizers: validate_url() and is_safe_url() are recognized as sanitizing
+  functions. These typically implement allowlist checks against a set of trusted
+  hostnames. A flow through either function before reaching a requests sink is
+  treated as sanitized.
+
+  The rule follows URL values through variable assignments and cross-file function
+  calls, catching SSRF patterns where the URL is assembled in a utility function
+  separate from the Flask route handler.
+
+# References
+references:
+  - title: "CWE-918: Server-Side Request Forgery"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: OWASP SSRF Prevention Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: OWASP Testing for SSRF
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery
+  - title: AWS IMDSv2 SSRF Protection
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+  - title: requests library documentation
+    url: https://requests.readthedocs.io/en/latest/
+  - title: Portswigger SSRF Tutorial
+    url: https://portswigger.net/web-security/ssrf
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 - Server-Side Request Forgery (SSRF) -- standalone category since 2021"
+  - standard: CWE Top 25
+    requirement: "CWE-918 -- Server-Side Request Forgery in dangerous weaknesses list"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- protect against SSRF and injection attacks"
+  - standard: NIST SP 800-53
+    requirement: "SC-7: Boundary Protection; SI-10: Information Input Validation"
+  - standard: Cloud Security Alliance
+    requirement: "CCM IVS-09 -- network segmentation controls for cloud workloads"
+
+# FAQ
+faq:
+  - question: Why is SSRF its own OWASP Top 10 category and not just another injection?
+    answer: |
+      SSRF was promoted to its own category in OWASP Top 10 2021 (A10) because of its
+      outsized impact in cloud-native architectures. Traditional injection attacks target
+      the application itself. SSRF weaponizes the application's network position -- the
+      server can reach internal services, cloud metadata endpoints, and private networks
+      that the attacker cannot touch directly. The cloud metadata attack alone justifies
+      a CRITICAL finding in AWS/GCP/Azure deployments.
+
+  - question: Does disabling redirects in requests fix SSRF?
+    answer: |
+      Disabling redirects (allow_redirects=False) prevents the attacker from redirecting
+      through 169.254.169.254 after an initial allowed URL. But it does not prevent
+      SSRF when the initial URL itself is attacker-controlled. Both controls are
+      needed: allowlist validation of the initial URL AND redirect validation if
+      redirects are enabled.
+
+  - question: How does DNS rebinding bypass URL allowlist checks?
+    answer: |
+      An attacker controls a domain on the allowlist (or tricks you into allowlisting
+      it) and sets its DNS TTL to 0. The validation resolves it to a legitimate IP.
+      By the time requests.get() resolves it for the actual connection, the attacker
+      has changed the DNS record to 169.254.169.254. The fix is to resolve DNS once,
+      validate the resolved IP, and use the IP for the actual connection.
+
+  - question: Does this rule cover urllib as well as requests?
+    answer: |
+      Yes. The sink list includes urllib.request.urlopen() and urllib.request.Request()
+      in addition to all requests library methods. Both libraries are tracked because
+      real codebases mix them, especially when requests is not available or when
+      interacting with Python standard library code.
+
+  - question: We have a URL-fetching feature that only accepts http/https URLs. Is that enough?
+    answer: |
+      Scheme validation is necessary but not sufficient. http://169.254.169.254/ is a
+      valid http:// URL. After validating the scheme, you must also validate the resolved
+      hostname against an allowlist and check that the resolved IP is not in a private
+      or reserved range.
+
+  - question: PYTHON-FLASK-SEC-011 also covers SSRF. How are the two rules different?
+    answer: |
+      SEC-006 focuses on SSRF via the requests and urllib libraries -- the most common
+      Python HTTP clients. SEC-011 focuses on tainted URL host components specifically,
+      covering cases where the attacker controls only the hostname portion of a URL that
+      is otherwise application-constructed. Running both rules provides broader coverage
+      across different code patterns.
+
+  - question: How do I test a confirmed finding in a safe environment?
+    answer: |
+      Use a local HTTP server on 127.0.0.1:8080 and supply http://127.0.0.1:8080/ as
+      the URL parameter. A successful response from your own server confirms the SSRF
+      is real. For cloud metadata testing, use a mock endpoint that returns a fake
+      credential response instead of the actual metadata service.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-FLASK-SEC-011
+  - PYTHON-DJANGO-SEC-006
+  - PYTHON-LAMBDA-SEC-005
+  - PYTHON-LANG-SEC-030
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,142 @@
+id: PYTHON-CRYPTO-SEC-014
+name: Insecure MD2 Hash (PyCryptodome)
+short_description: MD2 is an obsolete 1989 algorithm with known preimage attacks, extremely poor performance, and no valid modern use case. Use SHA-256 or SHA-3 instead.
+severity: HIGH
+category: cryptography
+language: python
+ruleset: python/cryptography/PYTHON-CRYPTO-SEC-014
+cwe:
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: Use of Weak Hash
+    url: https://cwe.mitre.org/data/definitions/328.html
+tags:
+  - python
+  - pycryptodome
+  - md2
+  - weak-hash
+  - CWE-327
+  - OWASP-A02
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: |
+  Detects usage of MD2 via PyCryptodome's `Crypto.Hash.MD2.new()` or `Cryptodome.Hash.MD2.new()`
+  constructor. MD2 was designed by Ron Rivest in 1989 and is the oldest of the MD family.
+  It was deprecated by the IETF in RFC 6149 in 2011 with the explicit recommendation that
+  it "SHOULD NOT be used."
+
+  MD2 produces a 128-bit digest but uses an 8-bit oriented design with a permutation table
+  that makes it extremely slow compared to all modern alternatives. Muller (2004) demonstrated
+  a preimage attack reducing work to 2^104, well below MD2's intended 2^128 security level.
+  Knudsen and Mathiassen published further weaknesses. The algorithm has no collision
+  resistance properties appropriate for modern use.
+
+  Unlike MD5 which sees legitimate non-security use as a fast checksum, MD2 is so slow and
+  so thoroughly analyzed for weaknesses that there is no context in which it is preferable
+  to a modern algorithm. Any appearance of MD2 in a codebase indicates either extreme
+  legacy code (e.g., old X.509 certificate parsing from early-1990s PKI) or a mistake.
+
+  This rule is rated HIGH severity because MD2 combines known cryptographic weaknesses
+  with zero remaining legitimate use cases and no performance rationale for its selection.
+message: MD2 is an obsolete 1989 algorithm deprecated by RFC 6149 with known preimage attacks. Replace Crypto.Hash.MD2.new() with Crypto.Hash.SHA256.new() or Crypto.Hash.SHA3_256.new() immediately.
+detection_scope: |
+  Matches any call to `PyCryptoHashMD2.method("new")` where `PyCryptoHashMD2` is a
+  QueryType resolving fully-qualified names `Crypto.Hash.MD2` and `Cryptodome.Hash.MD2`.
+  This covers both the PyCryptodome drop-in compatibility namespace (`Crypto.*`) and the
+  standalone namespace (`Cryptodome.*`). The rule fires on `.new()` constructor invocation.
+  Any detection of this rule in production code warrants immediate review — legitimate
+  current uses of MD2.new() are virtually nonexistent outside of legacy protocol parsers
+  for early-1990s X.509 formats.
+secure_example: |
+  from Crypto.Hash import SHA256, SHA3_256
+
+  # SECURE: SHA-256 for general integrity checking
+  h = SHA256.new()
+  h.update(b"data to hash")
+  digest = h.hexdigest()
+
+  # SECURE: SHA-3 for applications requiring stronger collision resistance
+  h = SHA3_256.new()
+  h.update(b"document bytes")
+  digest = h.hexdigest()
+
+  # SECURE: HMAC with SHA-256 for message authentication
+  from Crypto.Hash import HMAC
+  import os
+  key = os.urandom(32)
+  mac = HMAC.new(key, digestmod=SHA256)
+  mac.update(b"message to authenticate")
+  tag = mac.hexdigest()
+security_implications:
+  - "Preimage vulnerability: Muller (2004) reduced MD2 preimage resistance from 2^128 to approximately 2^104 operations, meaning an attacker with sufficient resources can find an input that hashes to a target digest."
+  - "Certificate forgery in legacy PKI: early X.509 v1 certificates from the early 1990s were signed with MD2withRSA. While modern systems reject these, software that still parses or validates such certificates may inherit MD2 weaknesses in its trust chain."
+  - "Zero performance advantage: unlike MD5 which was faster than alternatives at the time, MD2 was already slow when designed and offers no speed benefit over SHA-256 on any modern hardware."
+  - "Regulatory and compliance failure: no current cryptographic standard permits MD2 for any security-sensitive use, and its presence in a code review is an automatic finding."
+recommendations:
+  - "Replace Crypto.Hash.MD2.new() with Crypto.Hash.SHA256.new() — SHA-256 is faster, stronger, and universally supported."
+  - "For password hashing, use Argon2id (argon2-cffi), bcrypt, or scrypt rather than any raw hash function including SHA-256."
+  - "If the code is parsing legacy X.509 certificates that use MD2withRSA signatures, use a modern TLS/PKI library that correctly rejects MD2-signed certificates rather than reimplementing the verification."
+  - "Audit all call sites thoroughly — any code using MD2 is likely very old and may contain other cryptographic weaknesses worth reviewing."
+  - "Use Crypto.Hash.HMAC with SHA-256 as the digest module for message authentication codes rather than any MD-family algorithm."
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 -- use strong cryptography"
+  - standard: NIST SP 800-131A
+    requirement: "MD5 and SHA-1 disallowed for digital signatures"
+  - standard: NIST SP 800-53
+    requirement: "SC-13: Cryptographic Protection"
+faq:
+  - question: "Is MD2 ever safe to use?"
+    answer: "No. MD2 has known preimage attacks, no performance advantage, and was formally deprecated by RFC 6149 in 2011. There is no context — including non-security checksums — where MD2 is preferable to a modern algorithm. Replace all uses unconditionally."
+  - question: "How is MD2 different from MD4 and MD5?"
+    answer: "MD2 is the oldest (1989) and uses an 8-bit oriented design with a permutation lookup table. It is significantly slower than MD4 and MD5 on general-purpose hardware. It also has weaker preimage resistance due to Muller's 2004 attack. MD4 and MD5 were designed as faster, more modern alternatives to MD2 but are themselves now broken."
+  - question: "Why would MD2 appear in a modern Python codebase?"
+    answer: "Most commonly: (1) copied from extremely old legacy code without review, (2) parsing or re-implementing early-1990s X.509 certificate formats, or (3) academic or protocol testing code. None of these justify using MD2 in production security paths."
+  - question: "What does RFC 6149 say about MD2?"
+    answer: "RFC 6149 (2011) titled 'MD2 to Historic Status' explicitly states that MD2 'SHOULD NOT be used' and that 'It is not suitable for use in new applications.' This is the IETF's strongest deprecation language short of 'MUST NOT.'"
+  - question: "Why is this rated HIGH while MD5 is MEDIUM?"
+    answer: "MD5 retains limited legitimate non-security uses (fast checksums) and its collision attacks, while practical, require more effort than MD2 attacks. MD2 has known preimage attacks (not just collision attacks), no performance benefits, and zero legitimate modern use cases. The combination of deeper weakness and no redemptive use case justifies HIGH severity."
+  - question: "How do I run this rule in CI/CD?"
+    answer: "Run `code-pathfinder scan --ruleset python/cryptography/PYTHON-CRYPTO-SEC-014 --path ./src` in your pipeline. Add `--format sarif` to produce SARIF output compatible with GitHub Advanced Security and similar platforms."
+  - question: "I found MD2 in a third-party library I depend on — what should I do?"
+    answer: "Check whether the library uses MD2 in a security-sensitive path. If it does, file a bug with the library maintainer, pin to a version that does not use MD2 if possible, or replace the dependency. If the library uses MD2 only for parsing legacy formats and your code does not pass untrusted data through that path, document the residual risk."
+references:
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "RFC 6149: MD2 to Historic Status (IETF, 2011)"
+    url: https://www.rfc-editor.org/rfc/rfc6149
+  - title: "RFC 1319: The MD2 Message-Digest Algorithm (original spec)"
+    url: https://www.rfc-editor.org/rfc/rfc1319
+  - title: "Muller 2004: The MD2 Hash Function Is Not One-Way"
+    url: https://link.springer.com/chapter/10.1007/978-3-540-30539-2_30
+  - title: "NIST SP 800-131A Rev 2: Transitioning the Use of Cryptographic Algorithms"
+    url: https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final
+  - title: "OWASP Cryptographic Failures (A02:2021)"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - title: "PyCryptodome documentation: Crypto.Hash.MD2"
+    url: https://pycryptodome.readthedocs.io/en/latest/src/hash/md2.html
+similar_rules:
+  - id: PYTHON-CRYPTO-SEC-013
+    description: MD4 usage via PyCryptodome — also rated HIGH, broken since 1995 with collision attacks
+  - id: PYTHON-CRYPTO-SEC-012
+    description: MD5 usage via PyCryptodome — same library, slightly less broken MD5
+  - id: PYTHON-CRYPTO-SEC-010
+    description: MD5 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-011
+    description: SHA-1 usage via the cryptography library hazmat primitives
+  - id: PYTHON-CRYPTO-SEC-015
+    description: SHA-1 usage via PyCryptodome
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/

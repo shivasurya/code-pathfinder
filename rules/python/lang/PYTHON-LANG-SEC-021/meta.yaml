@@ -1,0 +1,195 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-021
+name: subprocess Called with shell=True
+short_description: subprocess called with shell=True passes the command through the system shell, enabling command injection when any part of the command contains untrusted input.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-021
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - subprocess
+  - shell-true
+  - command-injection
+  - shell-injection
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Calling subprocess functions with shell=True passes the command to the system shell
+  (/bin/sh on Unix, cmd.exe on Windows) for interpretation before execution. This means
+  all shell metacharacters — semicolons, pipes, backticks, dollar signs, redirections,
+  and command substitutions — are interpreted by the shell.
+
+  When any component of the command string is derived from untrusted input, an attacker
+  can inject shell metacharacters to execute additional commands, redirect output, or
+  access the shell's full feature set. This is equivalent in risk to calling os.system()
+  with user input.
+
+  The fix is to remove shell=True and pass the command as a list of arguments. When a
+  shell pipeline is genuinely required, ensure every element is either a hardcoded literal
+  or validated against a strict allowlist.
+
+message: "subprocess with shell=True detected. Remove shell=True and use a list of arguments to prevent shell injection."
+
+security_implications:
+  - title: Shell Metacharacter Injection
+    description: |
+      With shell=True, characters like ; | && || ` $() >> < and newlines are interpreted
+      by the shell. An attacker injecting these characters into any part of the command
+      string can chain additional commands, redirect output to arbitrary files, or access
+      subshell features.
+  - title: Environment Variable Expansion
+    description: |
+      The shell expands $VAR and ${VAR} expressions in the command string. If user input
+      contains these patterns, the shell may expand them to sensitive environment variable
+      values, leak credentials, or change command behavior based on environment state.
+  - title: Glob and Brace Expansion
+    description: |
+      Shell glob expansion (*, ?, []) and brace expansion ({a,b}) in user input can
+      cause the command to process unintended files or generate unexpected argument lists,
+      leading to information disclosure or unintended file operations.
+  - title: Bypass of Input Validation
+    description: |
+      Input validation for shell=True is extremely difficult to implement correctly because
+      shell quoting rules vary by shell, context, and locale. Validation based on blocklists
+      of shell metacharacters routinely misses edge cases. The only reliable mitigation is
+      to remove shell=True.
+
+secure_example: |
+  import subprocess
+
+  # INSECURE: subprocess with shell=True and user input
+  # subprocess.run(f"grep {user_query} /var/log/app.log", shell=True)
+
+  # SECURE: subprocess with shell=False and list arguments
+  def search_logs(user_query: str, log_file: str = "/var/log/app.log") -> str:
+      import re
+      if not re.match(r'^[a-zA-Z0-9_\-\.@]+$', user_query):
+          raise ValueError("Query contains invalid characters")
+      result = subprocess.run(
+          ["/bin/grep", "--", user_query, log_file],
+          capture_output=True,
+          text=True,
+          timeout=10,
+          check=False,
+      )
+      return result.stdout
+
+  # SECURE: For pipelines, use Python pipes instead of shell=True
+  def count_matches(pattern: str, filename: str) -> int:
+      import re
+      if not re.match(r'^[a-zA-Z0-9_\.]+$', pattern):
+          raise ValueError("Invalid pattern")
+      proc1 = subprocess.run(["/bin/grep", pattern, filename], capture_output=True, text=True)
+      return proc1.stdout.count("\n")
+
+recommendations:
+  - Remove shell=True from all subprocess calls that process any user-controlled input; use a list of arguments with shell=False instead.
+  - For shell pipelines, implement the pipeline in Python using subprocess.PIPE to connect processes without invoking a shell.
+  - If shell=True is unavoidable, ensure every component of the command string is a hardcoded literal with no user-controlled content.
+  - Use shlex.split() to tokenize a trusted shell command string into a list for use with shell=False.
+  - Set the input, stdout, stderr, and timeout parameters explicitly on all subprocess calls to prevent resource leaks and information exposure.
+
+detection_scope: |
+  This rule detects calls to subprocess.run(), subprocess.call(), subprocess.check_call(),
+  subprocess.check_output(), and subprocess.Popen() that include the keyword argument shell=True
+  or a positional True value in the shell parameter position. The rule flags all such calls
+  since shell=True always routes the command through the system shell.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-78 ranked #5 in 2023 Most Dangerous Software Weaknesses"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against injection attacks"
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "Python docs: subprocess security considerations"
+    url: https://docs.python.org/3/library/subprocess.html#security-considerations
+  - title: OWASP OS Command Injection Defense Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: OWASP Top 10 A03:2021 Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python docs: shlex.split()"
+    url: https://docs.python.org/3/library/shlex.html#shlex.split
+
+# FAQ
+faq:
+  - question: Is subprocess with shell=True and a hardcoded string safe?
+    answer: |
+      Yes, if the entire command string is a hardcoded literal with no user-controlled
+      components, variables, or format strings, shell=True is safe. However, it is still
+      better practice to use a list with shell=False to prevent future changes from
+      accidentally introducing user input into the command string.
+
+  - question: How do I implement a shell pipeline without shell=True?
+    answer: |
+      Use subprocess.Popen() with stdout=subprocess.PIPE and pass the output of the first
+      process to the stdin of the second: proc1 = Popen([cmd1], stdout=PIPE); proc2 = Popen([cmd2], stdin=proc1.stdout, stdout=PIPE). Alternatively, process the data in Python between subprocess calls, which is often more readable and maintainable.
+
+  - question: Does shell=True work differently on Windows than Linux?
+    answer: |
+      Yes. On Linux/macOS, shell=True uses /bin/sh. On Windows, it uses cmd.exe. The injection
+      techniques differ: Windows cmd.exe uses different metacharacters (& | ^). Code that
+      uses shell=True should be audited on all target platforms, but the safe fix (removing
+      shell=True) is the same on all platforms.
+
+  - question: What about subprocess.run() with shell=True for running .sh scripts?
+    answer: |
+      For running shell scripts, use subprocess.run(["/bin/bash", "script.sh", arg1, arg2])
+      with shell=False. Pass script arguments as additional list elements. Only use hardcoded,
+      version-controlled script paths — never user-supplied script names.
+
+  - question: Can I use shlex.quote() to make shell=True safe with user input?
+    answer: |
+      shlex.quote() provides reasonable protection for simple cases on POSIX systems but is
+      not a complete guarantee. It handles most metacharacters but has edge cases in non-
+      standard shells, non-ASCII input, and complex quoting contexts. The reliable solution
+      is to remove shell=True and use a list of arguments.
+
+  - question: How do I detect shell=True usage in a large codebase?
+    answer: |
+      Code Pathfinder's PYTHON-LANG-SEC-021 rule uses .where("shell", True) to detect all
+      subprocess calls with shell=True. Additionally, search for the string shell=True in
+      the codebase and review each occurrence. Pay special attention to calls where the
+      command is not a hardcoded string literal.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-010
+  - PYTHON-LANG-SEC-020
+  - PYTHON-LANG-SEC-022
+  - PYTHON-LANG-SEC-013
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

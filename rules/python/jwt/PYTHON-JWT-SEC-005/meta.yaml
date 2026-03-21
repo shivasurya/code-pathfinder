@@ -1,0 +1,216 @@
+# Rule Identity
+id: PYTHON-JWT-SEC-005
+name: JWT User Input in Payload
+short_description: Traces user-controlled input from Flask/Django request parameters into jwt.encode() payloads using taint analysis.
+
+# Classification
+severity: LOW
+category: jwt
+language: python
+ruleset: python/jwt/PYTHON-JWT-SEC-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-522
+    name: "Insufficiently Protected Credentials"
+    url: https://cwe.mitre.org/data/definitions/522.html
+  - id: CWE-200
+    name: "Exposure of Sensitive Information to an Unauthorized Actor"
+    url: https://cwe.mitre.org/data/definitions/200.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - id: A04:2021
+    name: Insecure Design
+    url: https://owasp.org/Top10/A04_2021-Insecure_Design/
+
+tags:
+  - python
+  - jwt
+  - pyjwt
+  - data-exposure
+  - taint-analysis
+  - user-input
+  - flask
+  - django
+  - request-data
+  - CWE-522
+  - CWE-200
+  - OWASP-A02
+  - OWASP-A04
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule uses taint analysis to trace user-controlled data from web framework request
+  objects into jwt.encode() calls. When user input flows directly into a JWT payload
+  without validation, two things can go wrong: the user might submit sensitive data
+  (passwords, personal information) that ends up base64-encoded in a readable token,
+  or an attacker might inject claims that affect authorization decisions.
+
+  Unlike the other JWT rules that use pattern matching, this rule tracks actual data
+  flow. It starts from Flask request methods (request.args.get, request.form.get) and
+  Django request methods (request.GET.get, request.POST.get), follows the data through
+  variable assignments, and flags when it reaches jwt.encode(). It uses standard
+  propagation presets to track how data moves through the code.
+
+  This is the most precise JWT rule in the set -- it only fires when there's a proven
+  data flow from user input to token creation. No data flow, no finding.
+
+message: "User-controlled input flows into jwt.encode() payload. Validate and sanitize before including in JWT."
+
+security_implications:
+  - title: Sensitive Data Exposure via Token
+    description: |
+      If a user submits their password, SSN, or credit card number through a form,
+      and that data flows into jwt.encode(), it ends up in a JWT that's visible to
+      anyone who intercepts it. JWTs are not encrypted -- the payload is just
+      base64-encoded JSON.
+  - title: Claim Injection
+    description: |
+      If user input becomes a JWT claim without validation, an attacker could inject
+      authorization-relevant claims. For example, if the "role" field comes from user
+      input, the attacker can set it to "admin". The token will be validly signed
+      because the server created it, but with attacker-controlled claims.
+  - title: Token Size Attacks
+    description: |
+      Unsanitized user input in JWT payloads can make tokens arbitrarily large.
+      Large tokens can cause issues with cookie size limits (4KB), header size limits
+      in proxies and load balancers, and increased bandwidth usage.
+
+secure_example: |
+  from flask import Flask, request
+  import jwt
+  import os
+
+  app = Flask(__name__)
+  SECRET = os.environ["JWT_SECRET_KEY"]
+
+  @app.route('/token')
+  def create_token():
+      username = request.args.get('username')
+
+      # SECURE: Validate input, then use only known-safe identifiers
+      user = db.get_user_by_username(username)
+      if not user:
+          return {"error": "User not found"}, 404
+
+      # SECURE: Build payload from validated server-side data, not raw input
+      token = jwt.encode(
+          {"user_id": user.id, "role": user.role, "exp": expires_at},
+          SECRET,
+          algorithm="HS256"
+      )
+      return {"token": token}
+
+recommendations:
+  - Never pass raw user input directly into jwt.encode() -- validate it against your database or business logic first
+  - Build JWT payloads from server-side data, not from request parameters -- look up the user by their input, then use the server's record of their ID and role
+  - Whitelist which fields can appear in the JWT payload and reject anything else
+  - Validate input types and lengths before including them in any token
+  - Consider whether the data needs to be in the token at all -- can the consuming service look it up by user_id instead?
+
+detection_scope: |
+  This rule uses intra-procedural taint analysis (scope=local) to trace data from
+  Flask request methods (request.args.get, request.form.get, request.GET.get,
+  request.POST.get) to jwt.encode() as a sink. It uses standard propagation presets
+  to track how tainted data flows through variable assignments. The flow must be within
+  a single function -- cross-function flows require scope=global.
+
+# References
+references:
+  - title: "CWE-522: Insufficiently Protected Credentials"
+    url: https://cwe.mitre.org/data/definitions/522.html
+  - title: "CWE-200: Exposure of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/200.html
+  - title: "RFC 8725: JSON Web Token Best Current Practices"
+    url: https://tools.ietf.org/html/rfc8725
+  - title: OWASP Input Validation Cheat Sheet
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html
+  - title: Flask Request Object Documentation
+    url: https://flask.palletsprojects.com/en/latest/api/#flask.Request
+  - title: PyJWT Documentation
+    url: https://pyjwt.readthedocs.io/en/stable/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: OWASP Top 10
+    requirement: "A04:2021 - Insecure Design"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 -- prevent injection and data exposure attacks"
+  - standard: GDPR
+    requirement: "Article 32 -- appropriate technical measures to protect personal data"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# FAQ
+faq:
+  - question: How does this rule differ from a simple grep for jwt.encode?
+    answer: |
+      This rule uses taint analysis -- it tracks where the data comes from, not just
+      where it ends up. It starts at Flask/Django request methods, follows the data
+      through variable assignments, and only flags when that user-controlled data
+      actually reaches jwt.encode(). If jwt.encode() uses server-side data that
+      doesn't come from user input, this rule won't flag it.
+
+  - question: Does this rule work across multiple files?
+    answer: |
+      Currently it uses scope=local, which tracks data flow within a single function.
+      If the Flask route calls a helper function that does the jwt.encode(), the flow
+      won't be detected at local scope. Switch to scope=global for cross-function
+      tracking, but note this requires the inter-procedural analysis engine.
+
+  - question: What request methods does this rule track as sources?
+    answer: |
+      Flask: request.args.get, request.form.get. Django: request.GET.get,
+      request.POST.get. These cover query parameters and form data. To add more
+      sources (request.json, request.cookies, request.headers), modify the
+      from_sources list in the rule file.
+
+  - question: Is it always wrong to put user input in a JWT?
+    answer: |
+      Not always, but it requires care. A validated username that maps to a known user
+      is fine -- as long as you look up the user server-side and use your own data for
+      the payload (user.id, user.role). What's dangerous is taking raw input like
+      request.args.get("data") and putting it directly into the token without
+      validation.
+
+  - question: How do I run this rule in CI/CD?
+    answer: |
+      Run: pathfinder ci --ruleset python/jwt --project .
+      It outputs SARIF, JSON, or CSV. On GitHub, it posts inline review comments directly
+      on pull requests pointing to the exact lines. No dashboard needed.
+
+  - question: Can I add custom sources and sinks to this rule?
+    answer: |
+      Yes. The rule file is plain Python. Fork it and add your custom input methods to
+      from_sources (e.g., calls("request.json.get"), calls("request.cookies.get")),
+      your encoding functions to to_sinks, or your validation functions to sanitized_by.
+      You can version-control the modified rule alongside your app code.
+
+  - question: Why is this rule LOW severity?
+    answer: |
+      The data exposure depends on what the user submits. If it's just a username,
+      the risk is low. If it's a password or credit card number, the risk is high.
+      Since the rule can't determine what data is in the input, it's classified as
+      LOW to avoid alert fatigue. The finding still deserves review to confirm what
+      data flows through.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-JWT-SEC-004
+  - PYTHON-FLASK-SEC-003
+  - PYTHON-DJANGO-SEC-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

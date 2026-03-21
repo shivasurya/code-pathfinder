@@ -1,0 +1,51 @@
+id: DOCKER-BP-003
+name: Deprecated MAINTAINER Instruction
+short_description: MAINTAINER instruction is deprecated. Use LABEL org.opencontainers.image.authors instead.
+severity: INFO
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-003
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- maintainer
+- label
+- deprecated
+- metadata
+- best-practice
+- oci
+- standards
+- legacy
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'This rule detects usage of the deprecated MAINTAINER instruction. The MAINTAINER
+
+  instruction has been deprecated since Docker 1.13 (January 2017) in favor of using
+
+  LABEL instructions with standardized metadata keys. Using deprecated features can
+
+  lead to compatibility issues with newer Docker versions and tooling.'
+message: MAINTAINER instruction is deprecated. Use LABEL org.opencontainers.image.authors instead.
+secure_example: ''
+recommendations: []
+detection_scope: ''
+references:
+- title: OCI Image Specification - Annotations
+  url: ''
+- title: Docker LABEL documentation
+  url: ''
+- title: Docker Deprecated Features
+  url: ''
+- title: Label Schema Convention (historical reference)
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

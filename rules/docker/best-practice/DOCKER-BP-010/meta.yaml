@@ -1,0 +1,46 @@
+id: DOCKER-BP-010
+name: Missing pipefail in Shell Commands
+short_description: RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped
+  commands.
+severity: MEDIUM
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-010
+cwe:
+- id: CWE-703
+  name: CWE 703
+  url: https://cwe.mitre.org/data/definitions/703.html
+tags:
+- docker
+- dockerfile
+- shell
+- bash
+- pipefail
+- error-handling
+- best-practice
+- reliability
+- build
+- pipes
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects RUN instructions using shell pipes without `set -o pipefail`.
+
+  Without pipefail, a command pipeline only returns the exit code of the last command,
+
+  masking failures in earlier commands.'
+message: RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands.
+secure_example: 'RUN set -o pipefail && wget -O - https://example.com | tar xz  # ✅ Catches wget failures'
+recommendations: []
+detection_scope: ''
+references:
+- title: "Dockerfile Best Practice: Set SHELL with pipefail for RUN pipes"
+  url: ''
+- title: 'Bash Manual: set builtin'
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,51 @@
+id: DOCKER-BP-020
+name: Missing zypper clean
+short_description: RUN uses 'zypper install' without 'zypper clean'. This increases image size.
+severity: LOW
+category: best-practice
+language: docker
+ruleset: docker/DOCKER-BP-020
+cwe:
+- id: CWE-710
+  name: Improper Adherence to Coding Standards
+  url: https://cwe.mitre.org/data/definitions/710.html
+tags:
+- docker
+- dockerfile
+- zypper
+- package-manager
+- opensuse
+- suse
+- cache
+- cleanup
+- image-size
+- optimization
+- best-practice
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+description: 'Detects ''zypper install'' commands without subsequent ''zypper clean''.
+
+  Package manager caches unnecessarily increase image size by storing package metadata
+
+  and repository information that is not needed at runtime.'
+message: RUN uses 'zypper install' without 'zypper clean'. This increases image size.
+secure_example: 'FROM opensuse/leap:15.4
+
+
+  # Good: Cleans cache in same layer
+
+  RUN zypper install -y nginx && zypper clean'
+recommendations: []
+detection_scope: ''
+references:
+- title: Docker Best Practices
+  url: ''
+- title: "Dockerfile Best Practice: Avoid zypper clean all"
+  url: ''
+compliance: []
+faq: []
+similar_rules: []
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
