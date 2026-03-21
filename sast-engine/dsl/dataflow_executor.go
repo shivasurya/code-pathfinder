@@ -102,18 +102,35 @@ func (e *DataflowExecutor) executeLocal() []DataflowDetection {
 
 		if summary != nil {
 			for _, det := range summary.Detections {
-				// Find the sink match for this detection's sink line
+				// Find a sink match for this detection's sink line.
+				// Try all matchers at this line — if one rejects via tracked params,
+				// try the next matcher (e.g., type_constrained may reject but
+				// call_matcher at the same line may accept).
 				var matchedSink *CallSiteMatch
 				for i, sm := range sinkCalls {
 					if sm.Line == int(det.SinkLine) {
+						if len(sm.TrackedParams) > 0 && !e.matchesTrackedParams(det, sm) {
+							continue // This matcher rejects, try next
+						}
 						matchedSink = &sinkCalls[i]
 						break
 					}
 				}
 
-				// Filter by tracked parameter constraints
-				if matchedSink != nil && !e.matchesTrackedParams(det, *matchedSink) {
-					continue
+				// No matcher accepted this detection
+				if matchedSink == nil {
+					// Check if any sink was at this line but all rejected by tracked params
+					hasSinkAtLine := false
+					for _, sm := range sinkCalls {
+						if sm.Line == int(det.SinkLine) {
+							hasSinkAtLine = true
+							break
+						}
+					}
+					if hasSinkAtLine {
+						continue // All matchers at this line rejected
+					}
+					// No sink matcher at this line — keep detection without param filtering
 				}
 
 				detection := DataflowDetection{
