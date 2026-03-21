@@ -1,0 +1,97 @@
+name: Deploy Sandbox Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Pathfinder version to deploy (e.g., 1.3.7)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Prevent concurrent deployments
+concurrency:
+  group: deploy-sandbox
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.repository == 'shivasurya/code-pathfinder'
+    timeout-minutes: 15
+    steps:
+      - name: Validate version format
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format. Expected: X.Y.Z"
+            exit 1
+          fi
+
+      - name: Validate release exists
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://github.com/shivasurya/code-pathfinder/releases/tag/v${VERSION}")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Release not found on GitHub"
+            exit 1
+          fi
+          echo "Release verified"
+
+      - name: Checkout cpf-registry-server
+        uses: actions/checkout@v4
+        with:
+          repository: shivasurya/cpf-registry-server
+          token: ${{ secrets.REGISTRY_SERVER_PAT }}
+          path: server
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/backend/go.mod
+
+      - name: Build sandbox-api binary
+        working-directory: server/backend
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o sandbox-api ./cmd/api
+          echo "Binary size: $(ls -lh sandbox-api | awk '{print $5}')"
+
+      - name: Deploy to server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          # Mask deploy target info from logs
+          echo "::add-mask::${DEPLOY_HOST}"
+          echo "::add-mask::${DEPLOY_USER}"
+
+          # Setup SSH key
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Add host key without leaking host info
+          ssh-keyscan "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Upload binary (suppress verbose output)
+          scp -i ~/.ssh/deploy_key -o LogLevel=ERROR -q \
+            server/backend/sandbox-api "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/sandbox-api" \
+            || { echo "::error::Binary upload failed"; exit 1; }
+
+          # Run deploy script on server
+          ssh -i ~/.ssh/deploy_key -o LogLevel=ERROR \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "bash /opt/cpf-registry-server/backend/deploy/ci-deploy.sh '${VERSION}'" \
+            || { echo "::error::Deploy script failed"; exit 1; }
+
+          # Cleanup SSH key from runner
+          rm -f ~/.ssh/deploy_key
+          echo "Deployment complete"
