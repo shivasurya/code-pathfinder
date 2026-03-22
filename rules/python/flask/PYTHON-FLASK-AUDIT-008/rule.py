@@ -7,8 +7,8 @@ from codepathfinder import calls, Or, QueryType
     name="Flask render_template_string Usage",
     severity="MEDIUM",
     category="flask",
-    cwe="CWE-96",
-    tags="python,flask,template,ssti,audit,cwe-96",
+    cwe="CWE-1336",
+    tags="python,flask,template,ssti,audit,cwe-1336",
     message="render_template_string() detected. Prefer render_template() with separate template files.",
     owasp="A03:2021",
 )
