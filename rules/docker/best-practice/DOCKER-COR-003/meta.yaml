@@ -49,11 +49,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'Docker Documentation: CMD instruction'
-  url: ''
+  url: https://docs.docker.com/reference/dockerfile/#cmd
 - title: "Dockerfile Best Practice: Multiple ENTRYPOINT instructions"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#entrypoint
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 compliance: []
 faq: []
 similar_rules: []

@@ -58,13 +58,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'pip documentation: Caching'
-  url: ''
+  url: https://pip.pypa.io/en/stable/topics/caching/
 - title: 'Docker Best Practices: Python Applications'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: Python Official Docker Images Best Practices
-  url: ''
+  url: https://hub.docker.com/_/python
 - title: 'PEP 517: Build System Independence'
-  url: ''
+  url: https://peps.python.org/pep-0517/
 compliance: []
 faq: []
 similar_rules: []

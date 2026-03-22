@@ -48,11 +48,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Content Trust
-  url: ''
+  url: https://docs.docker.com/engine/security/trust/
 - title: "Dockerfile Best Practice: Pin image digests for reproducibility"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#from
 - title: Supply Chain Security Best Practices
-  url: ''
+  url: https://docs.docker.com/build/building/best-practices/
 compliance: []
 faq: []
 similar_rules: []

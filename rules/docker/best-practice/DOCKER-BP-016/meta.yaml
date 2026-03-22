@@ -41,11 +41,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Use JSON notation for CMD/ENTRYPOINT"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#cmd
 - title: Docker ENTRYPOINT documentation
-  url: ''
+  url: https://docs.docker.com/reference/dockerfile/#entrypoint
 compliance: []
 faq: []
 similar_rules: []

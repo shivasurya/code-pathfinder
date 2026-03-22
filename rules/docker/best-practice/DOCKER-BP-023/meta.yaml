@@ -40,11 +40,11 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Avoid apt instead of apt-get"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#apt-get
 - title: Debian apt vs apt-get documentation
-  url: ''
+  url: https://wiki.debian.org/AptCLI
 compliance: []
 faq: []
 similar_rules: []

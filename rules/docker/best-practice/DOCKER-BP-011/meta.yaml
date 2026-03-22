@@ -36,9 +36,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Use COPY instead of ADD for files"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#add-or-copy
 compliance: []
 faq: []
 similar_rules: []

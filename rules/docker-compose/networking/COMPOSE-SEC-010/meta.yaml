@@ -38,9 +38,9 @@ references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
   url: https://cwe.mitre.org/data/definitions/250.html
 - title: Docker IPC Namespace Documentation
-  url: ''
+  url: https://docs.docker.com/engine/security/#ipc-mode
 - title: System V IPC man pages
-  url: ''
+  url: https://man7.org/linux/man-pages/man7/sysvipc.7.html
 compliance: []
 faq: []
 similar_rules: []

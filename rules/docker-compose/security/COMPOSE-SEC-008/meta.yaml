@@ -39,7 +39,7 @@ references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
   url: https://cwe.mitre.org/data/definitions/250.html
 - title: Linux Capabilities man page
-  url: ''
+  url: https://man7.org/linux/man-pages/man7/capabilities.7.html
 - title: Docker Security Best Practices
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 compliance: []

@@ -39,13 +39,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Alpine Linux Package Management
-  url: ''
+  url: https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper
 - title: 'Docker Official Images: Alpine Best Practices'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: 'Alpine Linux Wiki: Package Management'
-  url: ''
+  url: https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper
 - title: Docker Multi-Stage Builds with Alpine
-  url: ''
+  url: https://docs.docker.com/build/building/multi-stage/
 compliance: []
 faq: []
 similar_rules: []

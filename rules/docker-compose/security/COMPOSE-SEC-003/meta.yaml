@@ -40,7 +40,7 @@ references:
 - title: Docker Seccomp Security Profiles
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: Linux Seccomp BPF Documentation
-  url: ''
+  url: https://www.kernel.org/doc/html/latest/userspace-api/seccomp_filter.html
 compliance: []
 faq: []
 similar_rules: []

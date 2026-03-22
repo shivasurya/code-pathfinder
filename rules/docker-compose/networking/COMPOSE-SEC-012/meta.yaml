@@ -1,6 +1,6 @@
 id: COMPOSE-SEC-012
 name: SELinux Separation Disabled
-short_description: 'Service has ''label:disable'' in security_opt, which disables SELinux mandatory '
+short_description: 'Service has label:disable in security_opt, which disables SELinux mandatory access control. This removes an important defense-in-depth layer for container isolation.'
 severity: MEDIUM
 category: security
 language: docker-compose
@@ -29,7 +29,7 @@ description: 'This rule detects docker-compose services that explicitly disable 
   (MAC) that acts as an additional security layer beyond traditional discretionary access
 
   control, significantly limiting the impact of container compromises.'
-message: 'Service has ''label:disable'' in security_opt, which disables SELinux mandatory '
+message: 'Service has label:disable in security_opt, which disables SELinux mandatory access control. This removes an important defense-in-depth layer for container isolation.'
 secure_example: ''
 recommendations: []
 detection_scope: ''

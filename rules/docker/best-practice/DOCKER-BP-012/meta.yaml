@@ -42,9 +42,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Clean package manager cache"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#apt-get
 compliance: []
 faq: []
 similar_rules: []

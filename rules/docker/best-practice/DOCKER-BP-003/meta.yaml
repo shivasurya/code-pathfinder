@@ -36,13 +36,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: OCI Image Specification - Annotations
-  url: ''
+  url: https://github.com/opencontainers/image-spec/blob/main/annotations.md
 - title: Docker LABEL documentation
-  url: ''
+  url: https://docs.docker.com/reference/dockerfile/#label
 - title: Docker Deprecated Features
-  url: ''
+  url: https://docs.docker.com/engine/deprecated/
 - title: Label Schema Convention (historical reference)
-  url: ''
+  url: https://label-schema.org/
 compliance: []
 faq: []
 similar_rules: []

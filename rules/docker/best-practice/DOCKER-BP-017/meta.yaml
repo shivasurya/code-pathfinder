@@ -44,9 +44,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Use WORKDIR instead of cd"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#workdir
 compliance: []
 faq: []
 similar_rules: []

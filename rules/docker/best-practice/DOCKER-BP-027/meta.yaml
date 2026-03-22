@@ -44,9 +44,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: Docker Buildx documentation
-  url: ''
+  url: https://docs.docker.com/build/buildx/
 compliance: []
 faq: []
 similar_rules: []

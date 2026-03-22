@@ -48,7 +48,7 @@ references:
 - title: Docker Security Best Practices
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: Principle of Least Privilege (PoLP)
-  url: ''
+  url: https://csrc.nist.gov/glossary/term/least_privilege
 compliance: []
 faq: []
 similar_rules: []

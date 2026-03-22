@@ -61,13 +61,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'Docker Best Practices: Image Tagging'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: '12-Factor App: Dependencies'
-  url: ''
+  url: https://12factor.net/dependencies
 - title: 'NIST SP 800-190: Container Image Integrity'
   url: https://csrc.nist.gov/publications
 - title: 'CIS Docker Benchmark: Section 4.1'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 compliance: []
 faq: []
 similar_rules: []

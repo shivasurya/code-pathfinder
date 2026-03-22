@@ -1,6 +1,6 @@
 id: COMPOSE-SEC-011
 name: Missing no-new-privileges Security Option
-short_description: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+short_description: 'Service does not have no-new-privileges security option. Without this, processes inside the container can gain additional privileges via setuid binaries or capability escalation.'
 severity: MEDIUM
 category: security
 language: docker-compose
@@ -26,7 +26,7 @@ description: 'This rule detects docker-compose services that do not set the `no-
   security option. This option prevents processes in the container from gaining additional
 
   privileges through setuid or setgid binaries, which can be used for privilege escalation attacks.'
-message: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+message: 'Service does not have no-new-privileges security option. Without this, processes inside the container can gain additional privileges via setuid binaries or capability escalation.'
 secure_example: "version: '3'\nservices:\n  web:\n    image: nginx\n    user: www-data\n    security_opt:\n\
   \      - no-new-privileges:true  # SECURE\n    # Process cannot gain additional privileges"
 recommendations: []

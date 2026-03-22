@@ -40,9 +40,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Avoid zypper clean all"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 compliance: []
 faq: []
 similar_rules: []

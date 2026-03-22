@@ -42,13 +42,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: 'Debian Policy Manual: Dependencies'
-  url: ''
+  url: https://www.debian.org/doc/debian-policy/ch-relationships.html
 - title: 'Docker Best Practices: Minimize Layer Size'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: Ubuntu Package Management Guide
-  url: ''
+  url: https://help.ubuntu.com/community/AptGet/Howto
 - title: 'CIS Docker Benchmark: Image Optimization'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 compliance: []
 faq: []
 similar_rules: []

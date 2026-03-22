@@ -35,9 +35,9 @@ recommendations: []
 detection_scope: ''
 references:
 - title: "Dockerfile Best Practice: Set SHELL with pipefail for RUN pipes"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 - title: 'Bash Manual: set builtin'
-  url: ''
+  url: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 compliance: []
 faq: []
 similar_rules: []

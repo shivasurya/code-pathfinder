@@ -38,9 +38,9 @@ references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
   url: https://cwe.mitre.org/data/definitions/250.html
 - title: Docker Network Drivers Documentation
-  url: ''
+  url: https://docs.docker.com/network/drivers/
 - title: 'CIS Docker Benchmark: Section 5.10'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 compliance: []
 faq: []
 similar_rules: []

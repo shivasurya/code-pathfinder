@@ -41,13 +41,13 @@ recommendations: []
 detection_scope: ''
 references:
 - title: Docker HEALTHCHECK documentation
-  url: ''
+  url: https://docs.docker.com/reference/dockerfile/#healthcheck
 - title: Kubernetes Liveness and Readiness Probes
-  url: ''
+  url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 - title: '12-Factor App: Admin Processes'
-  url: ''
+  url: https://12factor.net/admin-processes
 - title: Production-Ready Health Checks (Microsoft)
-  url: ''
+  url: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/monitor-app-health
 compliance: []
 faq: []
 similar_rules: []

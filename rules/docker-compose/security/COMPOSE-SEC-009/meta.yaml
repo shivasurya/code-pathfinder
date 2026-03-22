@@ -37,9 +37,9 @@ references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
   url: https://cwe.mitre.org/data/definitions/250.html
 - title: Docker PID Namespace Documentation
-  url: ''
+  url: https://docs.docker.com/engine/security/#pid-mode
 - title: 'CIS Docker Benchmark: Section 5.15'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 compliance: []
 faq: []
 similar_rules: []

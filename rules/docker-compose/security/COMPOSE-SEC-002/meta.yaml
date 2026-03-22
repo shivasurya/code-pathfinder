@@ -47,11 +47,11 @@ references:
 - title: Docker Socket Security Advisory
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: 'CIS Docker Benchmark: Section 5.31'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 - title: OWASP Docker Security Cheat Sheet
   url: https://owasp.org/www-project-top-ten/
 - title: Tecnativa Docker Socket Proxy documentation
-  url: ''
+  url: https://github.com/Tecnativa/docker-socket-proxy
 compliance: []
 faq: []
 similar_rules: []
