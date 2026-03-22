@@ -45,7 +45,10 @@ secure_example: 'FROM ubuntu:22.04
   FROM ubuntu:22.04 AS runtime
 
   CMD ["nginx", "-g", "daemon off;"]'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the multiple cmd instructions issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'Docker Documentation: CMD instruction'
@@ -55,7 +58,11 @@ references:
 - title: Docker Best Practices
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag multiple cmd instructions?"
+    answer: "Multiple CMD instructions detected. Only the last one takes effect."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

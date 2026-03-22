@@ -31,7 +31,10 @@ description: 'This rule detects services using `pid: host`, which disables PID n
   command lines, and potentially injecting code.'
 message: Service uses host PID namespace. Container can see and potentially signal host processes.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the using host pid mode issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -41,7 +44,11 @@ references:
 - title: 'CIS Docker Benchmark: Section 5.15'
   url: https://www.cisecurity.org/benchmark/docker
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag using host pid mode?"
+    answer: "Service uses host PID namespace. Container can see and potentially signal host processes."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

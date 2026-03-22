@@ -44,7 +44,10 @@ secure_example: '# Good: Digest pinning ensures immutable reference
   FROM node:18@sha256:abc123... AS builder
 
   FROM nginx:alpine@sha256:def456... AS runtime'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the dockerfile source not pinned issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Content Trust
@@ -54,7 +57,11 @@ references:
 - title: Supply Chain Security Best Practices
   url: https://docs.docker.com/build/building/best-practices/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag dockerfile source not pinned?"
+    answer: "FROM instruction without digest pinning. Consider using @sha256:... for immutable builds."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

@@ -36,7 +36,10 @@ secure_example: 'FROM opensuse/leap:15.4
   # Good: Cleans cache in same layer
 
   RUN zypper install -y nginx && zypper clean'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing zypper clean issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -44,7 +47,11 @@ references:
 - title: "Dockerfile Best Practice: Avoid zypper clean all"
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing zypper clean?"
+    answer: "RUN uses 'zypper install' without 'zypper clean'. This increases image size."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

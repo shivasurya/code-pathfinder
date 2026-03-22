@@ -36,7 +36,10 @@ secure_example: 'FROM node:18
   WORKDIR /app
 
   WORKDIR /app/src  # Clear full path'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the use absolute path in workdir issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -44,7 +47,11 @@ references:
 - title: "Dockerfile Best Practice: Use absolute WORKDIR"
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#workdir
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag use absolute path in workdir?"
+    answer: "WORKDIR should use absolute paths starting with /."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

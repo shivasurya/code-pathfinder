@@ -32,7 +32,10 @@ description: 'This rule detects services using `ipc: host`, which disables IPC (
   enabling information disclosure and process interference.'
 message: Service uses host IPC namespace. Container shares inter-process communication with host.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the using host ipc mode issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -42,7 +45,11 @@ references:
 - title: System V IPC man pages
   url: https://man7.org/linux/man-pages/man7/sysvipc.7.html
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag using host ipc mode?"
+    answer: "Service uses host IPC namespace. Container shares inter-process communication with host."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

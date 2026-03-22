@@ -32,7 +32,10 @@ description: 'This rule detects usage of the deprecated MAINTAINER instruction. 
   lead to compatibility issues with newer Docker versions and tooling.'
 message: MAINTAINER instruction is deprecated. Use LABEL org.opencontainers.image.authors instead.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the deprecated maintainer instruction issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: OCI Image Specification - Annotations
@@ -44,7 +47,11 @@ references:
 - title: Label Schema Convention (historical reference)
   url: https://label-schema.org/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag deprecated maintainer instruction?"
+    answer: "MAINTAINER instruction is deprecated. Use LABEL org.opencontainers.image.authors instead."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

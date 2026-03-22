@@ -34,7 +34,10 @@ description: 'This rule detects VOLUME instructions that mount the Docker socket
 message: Dockerfile mounts Docker socket. This gives the container full control over the host Docker daemon,
   equivalent to root access.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Never mount the Docker socket into application containers"
+  - "Use the Docker API over TLS with client certificates if remote access is needed"
+  - "Consider rootless Docker or Podman to reduce socket exposure risk"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -46,7 +49,11 @@ references:
 - title: 'CIS Docker Benchmark: Section 5.31'
   url: https://www.cisecurity.org/benchmark/docker
 compliance: []
-faq: []
+faq:
+  - question: "Why is mounting docker.sock dangerous?"
+    answer: "The Docker socket gives unrestricted access to the Docker daemon. A container with the socket mounted can create privileged containers, access host filesystems, and effectively gain root on the host."
+  - question: "What if I need Docker-in-Docker for CI/CD?"
+    answer: "Use Docker-in-Docker (dind) with TLS enabled, or use Kaniko/Buildah for building images without requiring Docker socket access."
 similar_rules: []
 tests:
   positive: tests/positive/

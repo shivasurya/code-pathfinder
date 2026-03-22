@@ -32,7 +32,10 @@ description: 'This rule detects services using `network_mode: host`, which disab
   and allows the container to bind to any host port.'
 message: Service uses host network mode. Container shares host network stack, bypassing network isolation.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the using host network mode issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -42,7 +45,11 @@ references:
 - title: 'CIS Docker Benchmark: Section 5.10'
   url: https://www.cisecurity.org/benchmark/docker
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag using host network mode?"
+    answer: "Service uses host network mode. Container shares host network stack, bypassing network isolation."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

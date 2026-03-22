@@ -37,7 +37,10 @@ secure_example: 'FROM fedora:38  # Specific version
   # Or install latest from specific base image
 
   RUN dnf install -y nginx'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the avoid dnf update issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -45,7 +48,11 @@ references:
 - title: "Dockerfile Best Practice: Avoid dnf update"
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag avoid dnf update?"
+    answer: "Avoid 'dnf update' in Dockerfiles. Use specific base image versions for reproducible builds."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

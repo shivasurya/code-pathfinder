@@ -38,7 +38,11 @@ secure_example: "FROM ubuntu:22.04\n\n# Good: Only install required packages\nRU
   \n    apt-get install -y --no-install-recommends \\\n      nginx \\\n      curl \\\n      ca-certificates\
   \ && \\\n    # Clean up apt cache to further reduce size\n    rm -rf /var/lib/apt/lists/*\n\n# Result:\
   \ Smaller, more secure image"
-recommendations: []
+recommendations:
+  - "Use apt-get instead of apt in Dockerfiles for stable CLI behavior"
+  - "Always run apt-get update && apt-get install in the same RUN instruction"
+  - "Add --no-install-recommends to minimize installed packages"
+  - "Clean up with rm -rf /var/lib/apt/lists/* in the same layer"
 detection_scope: ''
 references:
 - title: 'Debian Policy Manual: Dependencies'
@@ -50,7 +54,11 @@ references:
 - title: 'CIS Docker Benchmark: Image Optimization'
   url: https://www.cisecurity.org/benchmark/docker
 compliance: []
-faq: []
+faq:
+  - question: "Why use apt-get instead of apt?"
+    answer: "apt is designed for interactive use and its output format may change between versions. apt-get provides a stable CLI interface suitable for scripting and Dockerfiles."
+  - question: "Why combine update and install in one RUN?"
+    answer: "Docker caches layers. If apt-get update is in a separate RUN, the package index cache may be stale when install runs, causing package-not-found errors."
 similar_rules: []
 tests:
   positive: tests/positive/

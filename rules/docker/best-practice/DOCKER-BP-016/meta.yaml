@@ -37,7 +37,10 @@ secure_example: 'FROM nginx:alpine
   CMD ["nginx", "-g", "daemon off;"]
 
   ENTRYPOINT ["/app/start.sh"]'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the prefer json notation for cmd/entrypoint issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -47,7 +50,11 @@ references:
 - title: Docker ENTRYPOINT documentation
   url: https://docs.docker.com/reference/dockerfile/#entrypoint
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag prefer json notation for cmd/entrypoint?"
+    answer: "Use JSON notation (exec form) for CMD/ENTRYPOINT for proper signal handling."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

@@ -33,7 +33,10 @@ description: 'This rule detects services that add dangerous Linux capabilities v
 message: Service adds dangerous capability. These capabilities can be used for container escape or privilege
   escalation.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the dangerous capability added issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -43,7 +46,11 @@ references:
 - title: Docker Security Best Practices
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag dangerous capability added?"
+    answer: "Service adds dangerous capability. These capabilities can be used for container escape or privilege escalation."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

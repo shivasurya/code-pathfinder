@@ -31,7 +31,10 @@ description: 'Detects RUN instructions using shell pipes without `set -o pipefai
   masking failures in earlier commands.'
 message: RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands.
 secure_example: 'RUN set -o pipefail && wget -O - https://example.com | tar xz  # ✅ Catches wget failures'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing pipefail in shell commands issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: "Dockerfile Best Practice: Set SHELL with pipefail for RUN pipes"
@@ -39,7 +42,11 @@ references:
 - title: 'Bash Manual: set builtin'
   url: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing pipefail in shell commands?"
+    answer: "RUN instruction uses pipes without 'set -o pipefail'. This masks failures in piped commands."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

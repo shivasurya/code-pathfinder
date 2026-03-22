@@ -40,7 +40,10 @@ secure_example: 'FROM node:18
   RUN npm install
 
   RUN npm build  # Already in /app directory'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the use workdir instead of cd issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -48,7 +51,11 @@ references:
 - title: "Dockerfile Best Practice: Use WORKDIR instead of cd"
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#workdir
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag use workdir instead of cd?"
+    answer: "Use WORKDIR instruction instead of 'cd' in RUN commands."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

@@ -31,7 +31,10 @@ description: 'This rule detects docker-compose services that explicitly disable 
   control, significantly limiting the impact of container compromises.'
 message: 'Service has label:disable in security_opt, which disables SELinux mandatory access control. This removes an important defense-in-depth layer for container isolation.'
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the selinux separation disabled issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
@@ -45,7 +48,11 @@ references:
 - title: OWASP A05:2021 - Security Misconfiguration
   url: https://owasp.org/www-project-top-ten/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag selinux separation disabled?"
+    answer: "Service has label:disable in security_opt, which disables SELinux mandatory access control. This removes an important defense-in-depth layer for container isolation."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

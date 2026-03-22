@@ -36,7 +36,10 @@ secure_example: 'FROM fedora:38
   # Good: Cleans cache in same layer
 
   RUN dnf install -y nginx && dnf clean all'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing dnf clean all issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -44,7 +47,11 @@ references:
 - title: "Dockerfile Best Practice: Clean package manager cache"
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#apt-get
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing dnf clean all?"
+    answer: "RUN uses 'dnf install' without 'dnf clean all'. This increases image size."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

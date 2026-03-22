@@ -40,7 +40,10 @@ secure_example: '# Good: Let Docker handle platform selection automatically
   # - linux/amd64 on x86_64 systems
 
   # - linux/arm64 on ARM systems'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the avoid --platform flag with from issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
@@ -48,7 +51,11 @@ references:
 - title: Docker Buildx documentation
   url: https://docs.docker.com/build/buildx/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag avoid --platform flag with from?"
+    answer: "FROM with --platform flag reduces portability. Let Docker handle platform selection."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

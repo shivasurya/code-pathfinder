@@ -33,7 +33,10 @@ description: "This rule detects services without `read_only: true` filesystem se
 message: Service has writable root filesystem. Consider making it read-only for better security.
 secure_example: "services:\n  web:\n    image: nginx\n    read_only: true\n    tmpfs:\n      - /tmp\n\
   \      - /var/run\n      - /var/cache/nginx"
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the container filesystem is writable issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-732: Incorrect Permission Assignment'
@@ -43,7 +46,11 @@ references:
 - title: Immutable Infrastructure Principles
   url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag container filesystem is writable?"
+    answer: "Service has writable root filesystem. Consider making it read-only for better security."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

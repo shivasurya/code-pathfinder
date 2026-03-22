@@ -40,11 +40,18 @@ secure_example: '# Good: Use specific base image version
   # If you need latest packages, update the base image version
 
   # FROM alpine:3.20.0'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the avoid apk upgrade issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references: []
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag avoid apk upgrade?"
+    answer: "Avoid 'apk upgrade' in Dockerfiles. Use specific base image versions instead for reproducible builds."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/
