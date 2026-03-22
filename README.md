@@ -20,18 +20,25 @@
 
 ## Quick Start
 
+**Install:**
+
 ```bash
-# Install
 brew install shivasurya/tap/pathfinder
+```
 
-# Scan a Python project for security issues (rules download automatically)
+**Scan a Python project** (rules download automatically):
+
+```bash
 pathfinder scan --ruleset python/all --project .
+```
 
-# Scan Dockerfiles
+**Scan Dockerfiles:**
+
+```bash
 pathfinder scan --ruleset docker/all --project .
 ```
 
-That's it. No config files, no API keys, no cloud accounts. Results in your terminal in seconds.
+No config files, no API keys, no cloud accounts. Results in your terminal in seconds.
 
 ---
 
@@ -109,30 +116,46 @@ The MCP server exposes tools for querying the code graph: find callers/callees, 
 
 ## Write Custom Rules
 
-Security rules are Python scripts using the [PathFinder SDK](https://codepathfinder.dev/docs/rules). Query the code graph, trace data flows, and report findings.
+Security rules are Python scripts using the [PathFinder SDK](https://codepathfinder.dev/docs/rules). Define sources, sinks, and sanitizers — the dataflow engine handles the analysis.
+
+Here's a real rule from the repo ([`PYTHON-DJANGO-SEC-001`](./rules/python/django/PYTHON-DJANGO-SEC-001/rule.py)) that detects SQL injection in Django:
 
 ```python
-from codepathfinder import rule, dataflow
+from codepathfinder import calls, flows, QueryType
+from codepathfinder.presets import PropagationPresets
 
-@rule(
-    id="CUSTOM-SEC-001",
-    name="SQL Injection via string formatting",
-    severity="critical",
+class DBCursor(QueryType):
+    fqns = ["sqlite3.Cursor", "psycopg2.extensions.cursor"]
+    match_subclasses = True
+
+@python_rule(
+    id="PYTHON-DJANGO-SEC-001",
+    name="Django SQL Injection via cursor.execute()",
+    severity="CRITICAL",
     cwe="CWE-89",
 )
-@dataflow(
-    sources=call_matcher(pattern="request.get|request.form"),
-    sinks=call_matcher(pattern="execute|executemany").tracks(0),
-    scope="global",  # cross-file analysis
-)
-def detect(context):
-    pass  # dataflow engine handles detection
+def detect_django_cursor_sqli():
+    return flows(
+        from_sources=[
+            calls("request.GET.get"),
+            calls("request.POST.get"),
+        ],
+        to_sinks=[
+            DBCursor.method("execute").tracks(0),
+            calls("cursor.execute"),
+        ],
+        sanitized_by=[calls("escape"), calls("escape_string")],
+        propagates_through=PropagationPresets.standard(),
+        scope="global",  # cross-file taint analysis
+    )
 ```
 
 ```bash
 # Run your custom rules
 pathfinder scan --rules ./my_rules/ --project .
 ```
+
+Explore all 190 rules in the [`rules/`](./rules) directory or browse the [Rule Registry](https://codepathfinder.dev/registry). See the [rule writing guide](https://codepathfinder.dev/docs/rules) and [dataflow documentation](https://codepathfinder.dev/docs/dataflow) to write your own.
 
 See the [rule writing guide](https://codepathfinder.dev/docs/rules) and [dataflow documentation](https://codepathfinder.dev/docs/dataflow) for more.
 
@@ -204,23 +227,32 @@ pathfinder scan --ruleset python/all --project . --verbose
 
 ```yaml
 name: Security Scan
-on: [push, pull_request]
+
+on:
+  pull_request:
+    branches: [main, master]
 
 permissions:
   security-events: write
   contents: read
+  pull-requests: write
 
 jobs:
-  scan:
+  security-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Run Security Scan
         uses: shivasurya/code-pathfinder@v2.0.0
         with:
-          ruleset: python/all
-          fail-on: critical,high
+          ruleset: python/django, python/flask, docker/security, docker/best-practice
+          verbose: true
+          pr-comment: ${{ github.event_name == 'pull_request' }}
+          pr-inline: ${{ github.event_name == 'pull_request' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -229,21 +261,29 @@ jobs:
           sarif_file: pathfinder-results.sarif
 ```
 
+See the full example: [`.github/workflows/example-security-scan.yml`](.github/workflows/example-security-scan.yml)
+
 <details>
 <summary><strong>Action Inputs</strong></summary>
 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `rules` | Path to local Python rule files or directory | - |
-| `ruleset` | Remote ruleset(s) (e.g., `python/all`, `docker/security`) | - |
+| `ruleset` | Remote ruleset(s), comma-separated (e.g., `python/all`, `docker/security`) | - |
 | `project` | Path to source code | `.` |
-| `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
+| `output` | Output format: `sarif`, `json`, or `csv` | `sarif` |
 | `output-file` | Output file path | `pathfinder-results.sarif` |
 | `fail-on` | Fail on severities (e.g., `critical,high`) | - |
-| `verbose` | Verbose output with progress and statistics | `false` |
-| `debug` | Debug diagnostics with timestamps | `false` |
+| `verbose` | Enable verbose output | `false` |
+| `debug` | Enable debug diagnostics with timestamps | `false` |
 | `skip-tests` | Skip test files | `true` |
 | `refresh-rules` | Force refresh cached rulesets | `false` |
+| `disable-metrics` | Disable anonymous usage metrics | `false` |
+| `python-version` | Python version to use | `3.12` |
+| `pr-comment` | Post summary comment on pull request | `false` |
+| `pr-inline` | Post inline review comments for critical/high findings | `false` |
+| `github-token` | GitHub token (required when `pr-comment` or `pr-inline` is enabled) | - |
+| `no-diff` | Disable diff-aware scanning (scan all files) | `false` |
 
 Either `rules` or `ruleset` is required.
 
