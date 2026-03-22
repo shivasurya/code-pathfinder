@@ -223,4 +223,4 @@ Feel free to modify and improve!
 
 ## License
 
-Same as code-pathfinder project (AGPL-3.0).
+Same as code-pathfinder project (Apache-2.0).

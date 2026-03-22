@@ -1,83 +1,144 @@
 <div align="center">
-  <img src="./assets/banner.png" alt="Code Pathfinder - AI-Native static code analysis security scanner" width="100%">
+  <img src="./assets/banner.png" alt="Code Pathfinder - Open-source SAST with cross-file dataflow analysis" width="100%">
 </div>
 
 <div align="center">
 
-[Website](https://codepathfinder.dev/) • [Installation](https://codepathfinder.dev/docs/quickstart) • [Rule Registry](https://codepathfinder.dev/registry) • [How to write rule?](https://codepathfinder.dev/docs/rules) • [VS Code](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) • [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow)
+<h3>Open-source SAST engine that traces vulnerabilities across files and functions</h3>
+
+[Website](https://codepathfinder.dev/) · [Docs](https://codepathfinder.dev/docs/quickstart) · [Rule Registry](https://codepathfinder.dev/registry) · [MCP Server](https://codepathfinder.dev/mcp) · [Blog](https://codepathfinder.dev/blog)
 
 [![Build](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml/badge.svg)](https://github.com/shivasurya/code-pathfinder/actions/workflows/build.yml)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/codepathfinder.secureflow?label=VS%20Code&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow)
-[![Open VSX](https://img.shields.io/open-vsx/v/codepathfinder/secureflow?label=Open%20VSX&logo=vscodium)](https://open-vsx.org/extension/codepathfinder/secureflow)
-[![AGPL-3.0 License](https://img.shields.io/github/license/shivasurya/code-pathfinder)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/shivasurya/code-pathfinder?label=release)](https://github.com/shivasurya/code-pathfinder/releases)
+[![Apache-2.0 License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/shivasurya/code-pathfinder?style=flat)](https://github.com/shivasurya/code-pathfinder/stargazers)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shivasurya/code-pathfinder)
 
-<br />    
-          
 </div>
 
-### Supported Programming Languages
+---
 
-<img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original-wordmark.svg" height=50 width=50 />    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/docker/docker-original-wordmark.svg" height=50 width=50  />     <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/go/go-original-wordmark.svg" height=50 width=50 />
+## Quick Start
 
-# [Code Pathfinder](https://codepathfinder.dev)
+```bash
+# Install
+brew install shivasurya/tap/pathfinder
 
-AI-Native static code analysis for modern security teams.
+# Scan a Python project for security issues (rules download automatically)
+pathfinder scan --ruleset python/all --project .
 
-Code Pathfinder is an open-source security scanner that builds a queryable graph of your codebase. It parses code into Abstract Syntax Trees (AST), builds Control Flow Graphs (CFG) to track execution paths, and constructs Data Flow Graphs (DFG) to trace how data moves through your application. Instead of regex pattern matching per language, it indexes the entire codebase as structured data and lets you write queries that trace data flows across Python, [Dockerfiles](https://codepathfinder.dev/registry), and [docker-compose](https://codepathfinder.dev/blog/announcing-docker-compose-security-rules) files in a single rule.
+# Scan Dockerfiles
+pathfinder scan --ruleset docker/all --project .
+```
 
-**Use it for:**
-- **CVE detection and vulnerability research**: Understand how dependencies are used, what privileges they run with, and what attack surface they expose
-- **[MCP server](https://codepathfinder.dev/mcp) for AI coding assistants**: Provides code intelligence to Claude, GPT, and other AI assistants - more context than LSP, focused on security and data flow
-- **In-editor security checks**: Catch vulnerable patterns as you write code in VS Code
-- **CI/CD pipelines**: Automated security scanning with SARIF output for GitHub Advanced Security, DefectDojo integration
-- **Custom security rules**: Write project-specific rules in Python to detect patterns that matter to your team
+That's it. No config files, no API keys, no cloud accounts. Results in your terminal in seconds.
 
-## What it does
+---
 
-- **Structural analysis**: Builds call graphs, dataflow graphs, and taint tracking to [find exploit paths](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking) through your code, not just pattern matches.
-- **AI-powered triage**: [SecureFlow](https://codepathfinder.dev/secureflow-ai) runs LLMs (Claude, GPT, Gemini, Grok, Ollama, etc.) on top of the structural analysis for [context-aware validation](https://codepathfinder.dev/blog/introducing-secureflow-cli-to-hunt-vuln).
-- **IDE and CLI**: Works in [VS Code](https://codepathfinder.dev/docs/quickstart), from the command line, and in CI/CD pipelines.
+<!-- TODO: Add demo video/GIF here -->
 
-## How it's different
+## What is Code Pathfinder?
 
-- **Call graphs and dataflow**: Indexes [functions, endpoints, DB calls, and dataflows](https://codepathfinder.dev/blog/static-analysis-isnt-enough-understanding-library-interactions-for-effective-data-flow-tracking) to trace source-to-sink vulnerabilities instead of matching syntax patterns.
-- **LLMs validate, don't detect**: The structural analysis finds potential issues; [LLMs explain and prioritize](https://github.blog/ai-and-ml/llms/how-ai-enhances-static-application-security-testing-sast/) them. This keeps results reproducible.
-- **Your code stays local**: You [bring your own API keys](https://codepathfinder.dev/secureflow-ai) and talk directly to providers. No vendor-side code ingestion.
+Code Pathfinder is an open-source static analysis engine that builds a graph of your codebase and traces how data flows through it. It parses source code into Abstract Syntax Trees, constructs call graphs across files, and runs taint analysis to find source-to-sink vulnerabilities that span multiple files and function boundaries.
 
-## Where to use it
+**v2.0** introduces **cross-file dataflow analysis**: trace user input from an HTTP handler in one file through helper functions and into a SQL query in another file. This is the kind of analysis that pattern-matching tools miss entirely.
 
-- **AI coding assistants**: Run as an [MCP server](https://codepathfinder.dev/mcp) to give Claude Code, Cline, or other AI assistants deep code intelligence (call graphs, data flows, security patterns) beyond what LSP provides
-- **In-editor**: SecureFlow VS Code extension ([VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow)) runs security checks as you type and catches vulnerable patterns before commit
-- **Command line**: [SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli) runs agentic loops over your repo to profile, read, trace, and validate vulnerabilities
-- **CI/CD pipelines**: Exports to SARIF for [GitHub Advanced Security](https://github.com/shivasurya/code-pathfinder), integrates with DefectDojo, and supports custom rules for automated security gates
+### Cross-File Taint Analysis
 
-## Tools and workflows
+Most open-source SAST tools operate on single files. Code Pathfinder v2.0 tracks tainted data across file boundaries:
 
-**[Code Pathfinder CLI](https://codepathfinder.dev/blog/codeql-oss-alternative)**
-The core scanner and query engine. Run it three ways: `scan` mode for security analysis with custom rules, `serve` mode as an [MCP server](https://codepathfinder.dev/mcp) for AI coding assistants (Claude Code, Cline), or `ci` mode in GitHub Actions and CI/CD pipelines. Indexes your codebase into call graphs and data flows, then runs Python-based security rules to find source-to-sink vulnerabilities.
+```
+app.py:5    user_input = request.get("query")     ← Source: user-controlled input
+  ↓ calls
+db.py:12    cursor.execute(query)                  ← Sink: SQL execution
+```
 
-**[SecureFlow CLI](https://www.npmjs.com/package/@codepathfinder/secureflow-cli)**
-AI-powered vulnerability scanner that runs multi-turn analysis loops. First profiles your project to detect the stack (Django, Flask, FastAPI, etc.), then iteratively requests relevant files, traces data flows, and uses LLMs (Claude, GPT, Gemini, Grok, Ollama) to identify and explain security issues. Exports findings to JSON, SARIF, or DefectDojo format.
+The engine builds a Variable Dependency Graph (VDG) per function, then connects them through inter-procedural taint transfer summaries. When `user_input` flows into a function parameter in another file, the taint propagates through the call graph to the sink.
 
-**SecureFlow VS Code extension** ([Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) | [Open VSX](https://open-vsx.org/extension/codepathfinder/secureflow))
-In-editor security analysis. Right-click to scan files or profiles, review findings in a sidebar with severity levels, file locations, and fix recommendations. Uses the same AI models as SecureFlow CLI. Catches SQL injection, XSS, deserialization bugs, and other OWASP Top 10 issues as you code.
+### How It Works
 
-**[Custom Rules](https://codepathfinder.dev/docs/rules)**
-Write security rules in Python using the PathFinder SDK. Query the code graph with `find_symbol()`, trace calls with `get_callees()` and `get_callers()`, check for vulnerable patterns. Rules run during `scan` or `ci` commands. See [rule registry](https://codepathfinder.dev/registry) for 50+ examples (SQL injection, RCE, privilege escalation, container misconfigurations).
+```
+Source Code → Tree-sitter AST → Call Graph → Variable Dependency Graph → Taint Analysis → Findings
+                                     ↓
+                              Inter-procedural
+                              Taint Summaries
+                              (cross-file flows)
+```
 
-## Supported Languages
+1. **Parse**: Tree-sitter builds ASTs for Python, Dockerfiles, and Docker Compose files
+2. **Index**: Extract functions, call sites, parameters, and assignments into a queryable call graph
+3. **Analyze**: Build VDGs per function, resolve inter-procedural flows, run taint analysis
+4. **Detect**: Python-based security rules query the graph to find source-to-sink paths
+5. **Report**: Output findings as text, JSON, SARIF (GitHub Code Scanning), or CSV
 
-- **[Python](https://codepathfinder.dev/registry/python)**: Full support for security analysis and vulnerability detection
-- **[Docker](https://codepathfinder.dev/registry/docker)**: Dockerfile security scanning
-- **[Docker Compose](https://codepathfinder.dev/registry/docker-compose)**: Configuration analysis and security checks
-- **Go**: Coming soon
+## 190 Security Rules, Ready to Use
+
+Rules download from CDN automatically. No need to clone the repo or manage rule files.
+
+| Language | Bundles | Rules | Coverage |
+|----------|---------|-------|----------|
+| **[Python](https://codepathfinder.dev/registry/python)** | django, flask, aws_lambda, cryptography, jwt, lang, deserialization, pyramid | 158 | SQL injection, RCE, SSRF, path traversal, XSS, deserialization, crypto misuse, JWT vulnerabilities |
+| **[Docker](https://codepathfinder.dev/registry/docker)** | security, best-practice, performance | 37 | Root user, exposed secrets, image pinning, multi-stage builds, layer optimization |
+| **[Docker Compose](https://codepathfinder.dev/registry/docker-compose)** | security, networking | 10 | Privileged mode, socket exposure, capability escalation, network isolation |
+
+```bash
+# Scan with a specific bundle
+pathfinder scan --ruleset python/django --project .
+
+# Scan with multiple bundles
+pathfinder scan --ruleset python/flask --ruleset python/jwt --project .
+
+# Scan a single rule
+pathfinder scan --ruleset python/PYTHON-DJANGO-SEC-001 --project .
+
+# Scan all rules for a language
+pathfinder scan --ruleset python/all --project .
+```
+
+Browse all rules with examples and test cases at the [Rule Registry](https://codepathfinder.dev/registry).
+
+## MCP Server for AI Coding Assistants
+
+Code Pathfinder runs as an [MCP server](https://codepathfinder.dev/mcp), giving Claude Code, Cursor, Cline, and other AI assistants access to call graphs, data flows, and security analysis. More context than LSP, focused on security and code structure.
+
+```bash
+pathfinder serve --project .
+```
+
+The MCP server exposes tools for querying the code graph: find callers/callees, trace data flows, search for patterns, and run security rules — all available to the AI assistant during code review or development.
+
+## Write Custom Rules
+
+Security rules are Python scripts using the [PathFinder SDK](https://codepathfinder.dev/docs/rules). Query the code graph, trace data flows, and report findings.
+
+```python
+from codepathfinder import rule, dataflow
+
+@rule(
+    id="CUSTOM-SEC-001",
+    name="SQL Injection via string formatting",
+    severity="critical",
+    cwe="CWE-89",
+)
+@dataflow(
+    sources=call_matcher(pattern="request.get|request.form"),
+    sinks=call_matcher(pattern="execute|executemany").tracks(0),
+    scope="global",  # cross-file analysis
+)
+def detect(context):
+    pass  # dataflow engine handles detection
+```
+
+```bash
+# Run your custom rules
+pathfinder scan --rules ./my_rules/ --project .
+```
+
+See the [rule writing guide](https://codepathfinder.dev/docs/rules) and [dataflow documentation](https://codepathfinder.dev/docs/dataflow) for more.
 
 ## Installation
 
 ### Homebrew (Recommended)
-
-The easiest way to install on macOS or Linux. Available from version 0.0.34 onwards.
 
 ```bash
 brew install shivasurya/tap/pathfinder
@@ -85,51 +146,27 @@ brew install shivasurya/tap/pathfinder
 
 ### pip
 
-Install via pip to get both the CLI binary and Python SDK for writing security rules.
+Installs the CLI binary and Python SDK for writing rules.
 
 ```bash
 pip install codepathfinder
 ```
 
-**Verify installation:**
-
-```bash
-# Test CLI binary
-pathfinder --version
-
-# Test Python SDK
-python -c "from codepathfinder import rule, calls; print('SDK OK')"
-```
-
-**Supported platforms:** Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), Windows (x64)
-
-> **Migrating from npm?** The npm package is deprecated. Run `npm uninstall -g codepathfinder` then `pip install codepathfinder`.
-
 ### Docker
-
-Ideal for CI/CD pipelines and containerized workflows.
 
 ```bash
 docker pull shivasurya/code-pathfinder:stable-latest
 
-# Run a scan
-docker run --rm -v "./src:/src" \
+docker run --rm -v "$(pwd):/src" \
   shivasurya/code-pathfinder:stable-latest \
-  scan --project /src --rules /src/rules
+  scan --ruleset python/all --project /src
 ```
 
 ### Pre-Built Binaries
 
-Download platform-specific binaries from [GitHub Releases](https://github.com/shivasurya/code-pathfinder/releases). Available for Linux (amd64, arm64), macOS (Intel, Apple Silicon), and Windows (x64).
-
-```bash
-chmod u+x pathfinder
-./pathfinder --help
-```
+Download from [GitHub Releases](https://github.com/shivasurya/code-pathfinder/releases) for Linux (amd64, arm64), macOS (Intel, Apple Silicon), and Windows (x64).
 
 ### From Source
-
-Build from source for the latest features. Requires Gradle and Go.
 
 ```bash
 git clone https://github.com/shivasurya/code-pathfinder
@@ -138,47 +175,35 @@ gradle buildGo
 ./build/go/pathfinder --help
 ```
 
-
 ## Usage
 
-### Scan Command (Interactive)
-
 ```bash
-# Basic scan (text output to console)
-pathfinder scan --rules rules/ --project /path/to/project
+# Scan with text output (default)
+pathfinder scan --ruleset python/all --project .
 
-# With verbose output
-pathfinder scan --rules rules/ --project . --verbose
+# JSON output
+pathfinder scan --ruleset python/all --project . --output json --output-file results.json
 
-# With debug output
-pathfinder scan --rules rules/ --project . --debug
+# SARIF output (GitHub Code Scanning)
+pathfinder scan --ruleset python/all --project . --output sarif --output-file results.sarif
 
-# JSON output to file
-pathfinder scan --rules rules/ --project . --output json --output-file results.json
+# CSV output
+pathfinder scan --ruleset python/all --project . --output csv --output-file results.csv
 
-# SARIF output to file (GitHub Code Scanning compatible)
-pathfinder scan --rules rules/ --project . --output sarif --output-file results.sarif
+# Fail CI on critical/high findings
+pathfinder scan --ruleset python/all --project . --fail-on=critical,high
 
-# CSV output to file
-pathfinder scan --rules rules/ --project . --output csv --output-file results.csv
+# MCP server mode
+pathfinder serve --project .
 
-# JSON output to stdout (for piping)
-pathfinder scan --rules rules/ --project . --output json | jq .
-
-# Fail on specific severities
-pathfinder scan --rules rules/ --project . --fail-on=critical,high
+# Verbose output with statistics
+pathfinder scan --ruleset python/all --project . --verbose
 ```
 
 ## GitHub Action
 
-Add security scanning to your CI/CD pipeline.
-
-**Best Practice:** Pin to a specific version (e.g., `@v1.2.0`) instead of `@main` to avoid breaking changes.
-
 ```yaml
-# .github/workflows/security-scan.yml
 name: Security Scan
-
 on: [push, pull_request]
 
 permissions:
@@ -189,13 +214,12 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      # Scan with remote Python rulesets
-      - name: Run Python Security Scan
-        uses: shivasurya/code-pathfinder@v1.2.0
+      - name: Run Security Scan
+        uses: shivasurya/code-pathfinder@v2.0.0
         with:
-          ruleset: python/deserialization, python/django, python/flask
+          ruleset: python/all
           fail-on: critical,high
 
       - name: Upload SARIF
@@ -205,56 +229,45 @@ jobs:
           sarif_file: pathfinder-results.sarif
 ```
 
-**Scan Dockerfiles:**
-```yaml
-      - name: Run Docker Security Scan
-        uses: shivasurya/code-pathfinder@v1.2.0
-        with:
-          ruleset: docker/security, docker/best-practice
-```
-
-**Use local rules:**
-```yaml
-      - name: Run Custom Rules
-        uses: shivasurya/code-pathfinder@v1.2.0
-        with:
-          rules: python-sdk/examples/owasp_top10.py
-```
-
-### Action Inputs
+<details>
+<summary><strong>Action Inputs</strong></summary>
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `rules` | Path to Python SDK rules file or directory | - |
-| `ruleset` | Remote ruleset(s) to use (e.g., `python/deserialization, docker/security`). Supports bundles or individual rule IDs. | - |
-| `project` | Path to source code to scan | `.` |
+| `rules` | Path to local Python rule files or directory | - |
+| `ruleset` | Remote ruleset(s) (e.g., `python/all`, `docker/security`) | - |
+| `project` | Path to source code | `.` |
 | `output` | Output format: `sarif`, `json`, `csv`, `text` | `sarif` |
 | `output-file` | Output file path | `pathfinder-results.sarif` |
 | `fail-on` | Fail on severities (e.g., `critical,high`) | - |
-| `verbose` | Enable verbose output with progress and statistics | `false` |
-| `debug` | Enable debug diagnostics with timestamps | `false` |
-| `skip-tests` | Skip scanning test files (test_*.py, *_test.py, etc.) | `true` |
-| `refresh-rules` | Force refresh of cached rulesets (bypasses cache) | `false` |
-| `disable-metrics` | Disable anonymous usage metrics collection | `false` |
-| `python-version` | Python version to use | `3.12` |
+| `verbose` | Verbose output with progress and statistics | `false` |
+| `debug` | Debug diagnostics with timestamps | `false` |
+| `skip-tests` | Skip test files | `true` |
+| `refresh-rules` | Force refresh cached rulesets | `false` |
 
-**Note:** Either `rules` or `ruleset` must be specified.
+Either `rules` or `ruleset` is required.
 
-### Available Remote Rulesets
+</details>
 
-**Python:**
-- `python/deserialization` - Unsafe pickle.loads RCE detection
-- `python/django` - Django SQL injection patterns
-- `python/flask` - Flask security misconfigurations
+## Supported Languages
 
-**Docker:**
-- `docker/security` - Critical and high-severity security issues
-- `docker/best-practice` - Dockerfile optimization and best practices
-- `docker/performance` - Performance optimization for container images
+| Language | Analysis | Status |
+|----------|----------|--------|
+| **Python** | Cross-file dataflow, taint analysis, call graphs | Stable |
+| **Dockerfile** | Instruction analysis, security patterns | Stable |
+| **Docker Compose** | Configuration analysis, security patterns | Stable |
+| **Go** | AST analysis, call graphs | Coming soon |
 
-## Acknowledgements
-Code Pathfinder uses tree-sitter for all language parsers.
+## Contributing
+
+Contributions are welcome. Read the [Contributing Guide](./CONTRIBUTING.md) for setup instructions, how to run tests locally, and the PR process.
+
+All contributors must sign the [Contributor License Agreement (CLA)](./CLA.md) before any pull request can be merged.
+
+- [Report bugs or request features](https://github.com/shivasurya/code-pathfinder/issues)
+- [Ask questions or start a discussion](https://github.com/shivasurya/code-pathfinder/discussions)
+- [Write security rules](https://codepathfinder.dev/docs/rules)
 
 ## License
 
-Licensed under [AGPL-3.0](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE).
+[Apache-2.0](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)

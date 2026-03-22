@@ -75,4 +75,4 @@ For detailed documentation, visit https://codepathfinder.dev/
 
 ## License
 
-AGPL-3.0 - GNU Affero General Public License v3
+Apache-2.0 - Apache License, Version 2.0
