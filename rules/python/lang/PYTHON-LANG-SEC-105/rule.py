@@ -11,7 +11,7 @@ class LoggingModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-532",
-    tags="python,logging,credentials,information-disclosure,cwe-532",
+    tags="python,logging,credentials,information-disclosure,CWE-532",
     message="Logging call detected. Audit log statements for credential/secret leakage.",
     owasp="A09:2021",
 )

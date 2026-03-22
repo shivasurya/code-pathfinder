@@ -11,7 +11,7 @@ class CSVModule(QueryType):
     severity="LOW",
     category="lang",
     cwe="CWE-1236",
-    tags="python,csv,csv-injection,defusedcsv,cwe-1236",
+    tags="python,csv,csv-injection,defusedcsv,CWE-1236",
     message="csv.writer() detected. Consider defusedcsv to prevent formula injection.",
     owasp="A03:2021",
 )

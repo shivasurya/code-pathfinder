@@ -24,7 +24,7 @@ _DJANGO_SOURCES = [
     severity="CRITICAL",
     category="django",
     cwe="CWE-89",
-    tags="python,django,sql-injection,rawsql,owasp-a03,cwe-89",
+    tags="python,django,sql-injection,rawsql,OWASP-A03,CWE-89",
     message="User input flows to RawSQL() expression. Use parameterized queries.",
     owasp="A03:2021",
 )

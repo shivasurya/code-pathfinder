@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-918",
-    tags="python,django,ssrf,urllib,owasp-a10,cwe-918",
+    tags="python,django,ssrf,urllib,OWASP-A10,CWE-918",
     message="User input flows to urllib.request.urlopen(). Validate and restrict URLs.",
     owasp="A10:2021",
 )

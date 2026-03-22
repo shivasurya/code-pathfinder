@@ -11,7 +11,7 @@ class FtplibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-319",
-    tags="python,ftp,insecure-transport,cwe-319",
+    tags="python,ftp,insecure-transport,CWE-319",
     message="ftplib.FTP() without TLS. Use ftplib.FTP_TLS() instead.",
     owasp="A02:2021",
 )

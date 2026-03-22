@@ -12,7 +12,7 @@ class RequestsLib(QueryType):
     severity="HIGH",
     category="flask",
     cwe="CWE-918",
-    tags="python,flask,ssrf,url-host,owasp-a10,cwe-918",
+    tags="python,flask,ssrf,url-host,OWASP-A10,CWE-918",
     message="User input used in URL host construction. Validate against an allowlist of hosts.",
     owasp="A10:2021",
 )

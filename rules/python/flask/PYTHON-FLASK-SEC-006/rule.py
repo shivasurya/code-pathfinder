@@ -15,7 +15,7 @@ class UrllibRequest(QueryType):
     severity="HIGH",
     category="flask",
     cwe="CWE-918",
-    tags="python,flask,ssrf,requests,owasp-a10,cwe-918",
+    tags="python,flask,ssrf,requests,OWASP-A10,CWE-918",
     message="User input flows to HTTP request URL. Validate and allowlist target URLs.",
     owasp="A10:2021",
 )

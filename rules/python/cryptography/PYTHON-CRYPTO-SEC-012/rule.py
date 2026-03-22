@@ -12,7 +12,7 @@ class PyCryptoHashMD5(QueryType):
     severity="MEDIUM",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,md5,weak-hash,cwe-327",
+    tags="python,pycryptodome,md5,weak-hash,CWE-327",
     message="MD5 is cryptographically broken. Use SHA-256 or SHA-3 instead.",
     owasp="A02:2021",
 )

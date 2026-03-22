@@ -11,7 +11,7 @@ class XMLRPCModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-611",
-    tags="python,xmlrpc,xxe,cwe-611",
+    tags="python,xmlrpc,xxe,CWE-611",
     message="xmlrpc is vulnerable to XXE. Use defusedxml.xmlrpc instead.",
     owasp="A05:2021",
 )

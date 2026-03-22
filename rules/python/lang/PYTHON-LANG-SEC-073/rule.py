@@ -8,7 +8,7 @@ from codepathfinder import calls, QueryType
     severity="MEDIUM",
     category="lang",
     cwe="CWE-502",
-    tags="python,multiprocessing,recv,deserialization,cwe-502",
+    tags="python,multiprocessing,recv,deserialization,CWE-502",
     message="Connection.recv() uses pickle internally. Not safe for untrusted connections.",
     owasp="A08:2021",
 )

@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="MEDIUM",
     category="lang",
     cwe="CWE-95",
-    tags="python,import,dynamic-import,cwe-95",
+    tags="python,import,dynamic-import,CWE-95",
     message="__import__() or importlib.import_module() with non-literal argument detected.",
     owasp="A03:2021",
 )

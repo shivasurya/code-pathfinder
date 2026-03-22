@@ -20,7 +20,7 @@ _PYRAMID_SOURCES = [
     severity="HIGH",
     category="pyramid",
     cwe="CWE-352",
-    tags="python,pyramid,csrf,security,owasp-a05,cwe-352",
+    tags="python,pyramid,csrf,security,OWASP-A05,CWE-352",
     message="CSRF protection disabled globally via set_default_csrf_options(require_csrf=False).",
     owasp="A05:2021",
 )

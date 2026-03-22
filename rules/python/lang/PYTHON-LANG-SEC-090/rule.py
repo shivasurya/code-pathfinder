@@ -11,7 +11,7 @@ class XMLModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-611",
-    tags="python,xml,xxe,defusedxml,owasp-a05,cwe-611",
+    tags="python,xml,xxe,defusedxml,OWASP-A05,CWE-611",
     message="xml.etree.ElementTree is vulnerable to XXE. Use defusedxml instead.",
     owasp="A05:2021",
 )

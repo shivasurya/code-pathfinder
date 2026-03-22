@@ -14,7 +14,7 @@ class Pg8000Cursor(QueryType):
     severity="CRITICAL",
     category="lang",
     cwe="CWE-89",
-    tags="python,pg8000,sql-injection,database,cwe-89",
+    tags="python,pg8000,sql-injection,database,CWE-89",
     message="String formatting in pg8000 query. Use parameterized queries.",
     owasp="A03:2021",
 )

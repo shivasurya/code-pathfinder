@@ -12,7 +12,7 @@ class CryptoModes(QueryType):
     severity="MEDIUM",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,cryptography,cipher-mode,unauthenticated,cwe-327",
+    tags="python,cryptography,cipher-mode,unauthenticated,CWE-327",
     message="CBC/CTR/CFB/OFB without authentication (HMAC). Use GCM or add HMAC.",
     owasp="A02:2021",
 )

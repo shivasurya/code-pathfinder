@@ -24,7 +24,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-89",
-    tags="python,django,sql-injection,raw-sql,audit,cwe-89",
+    tags="python,django,sql-injection,raw-sql,audit,CWE-89",
     message="Raw SQL usage detected. Ensure parameterized queries are used.",
     owasp="A03:2021",
 )

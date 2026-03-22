@@ -11,7 +11,7 @@ class HashlibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-327",
-    tags="python,sha1,weak-hash,cryptography,owasp-a02,cwe-327",
+    tags="python,sha1,weak-hash,cryptography,OWASP-A02,CWE-327",
     message="SHA-1 is cryptographically weak. Use SHA-256 or SHA-3 instead.",
     owasp="A02:2021",
 )

@@ -21,7 +21,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-89",
-    tags="python,django,sql-injection,string-format,owasp-a03,cwe-89",
+    tags="python,django,sql-injection,string-format,OWASP-A03,CWE-89",
     message="User input used in SQL string construction. Use parameterized queries.",
     owasp="A03:2021",
 )

@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-22",
-    tags="python,django,path-traversal,open,owasp-a01,cwe-22",
+    tags="python,django,path-traversal,open,OWASP-A01,CWE-22",
     message="User input flows to open(). Validate file paths with os.path.realpath().",
     owasp="A01:2021",
 )

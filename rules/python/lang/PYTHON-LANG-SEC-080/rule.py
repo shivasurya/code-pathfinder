@@ -14,7 +14,7 @@ class Psycopg2Cursor(QueryType):
     severity="CRITICAL",
     category="lang",
     cwe="CWE-89",
-    tags="python,psycopg2,sql-injection,database,owasp-a03,cwe-89",
+    tags="python,psycopg2,sql-injection,database,OWASP-A03,CWE-89",
     message="String formatting in psycopg2 query. Use parameterized queries: cursor.execute(sql, params).",
     owasp="A03:2021",
 )

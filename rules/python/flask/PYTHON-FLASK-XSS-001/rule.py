@@ -8,7 +8,7 @@ from codepathfinder import calls, Or, QueryType
     severity="MEDIUM",
     category="flask",
     cwe="CWE-79",
-    tags="python,flask,jinja2,xss,audit,cwe-79",
+    tags="python,flask,jinja2,xss,audit,CWE-79",
     message="Direct Jinja2 Environment usage bypasses Flask's auto-escaping. Use Flask's render_template().",
     owasp="A07:2021",
 )

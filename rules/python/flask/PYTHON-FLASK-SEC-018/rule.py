@@ -11,7 +11,7 @@ class HashidsModule(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-330",
-    tags="python,flask,hashids,secret-key,cwe-330",
+    tags="python,flask,hashids,secret-key,CWE-330",
     message="Flask SECRET_KEY used as Hashids salt. Use a separate salt value.",
     owasp="A02:2021",
 )

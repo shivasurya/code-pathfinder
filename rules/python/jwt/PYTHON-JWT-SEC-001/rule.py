@@ -12,7 +12,7 @@ class JWTModule(QueryType):
     severity="HIGH",
     category="jwt",
     cwe="CWE-522",
-    tags="python,jwt,hardcoded-secret,credentials,owasp-a02,cwe-522",
+    tags="python,jwt,hardcoded-secret,credentials,OWASP-A02,CWE-522",
     message="Hardcoded string used as JWT signing secret. Use environment variables or key management.",
     owasp="A02:2021",
 )

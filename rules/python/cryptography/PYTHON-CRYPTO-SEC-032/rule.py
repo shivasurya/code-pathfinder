@@ -12,7 +12,7 @@ class PyCryptoAES(QueryType):
     severity="MEDIUM",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,cipher-mode,unauthenticated,cwe-327",
+    tags="python,pycryptodome,cipher-mode,unauthenticated,CWE-327",
     message="AES in non-GCM/EAX/SIV mode may lack authentication. Use MODE_GCM or MODE_EAX.",
     owasp="A02:2021",
 )

@@ -12,7 +12,7 @@ class OSModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,os-spawn,process-spawn,owasp-a03,cwe-78",
+    tags="python,os-spawn,process-spawn,OWASP-A03,CWE-78",
     message="os.spawn*() detected. Use subprocess module instead.",
     owasp="A03:2021",
 )

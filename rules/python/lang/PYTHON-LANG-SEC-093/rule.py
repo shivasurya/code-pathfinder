@@ -11,7 +11,7 @@ class MakoModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-94",
-    tags="python,mako,template,ssti,cwe-94",
+    tags="python,mako,template,ssti,CWE-94",
     message="Mako templates do not sandbox expressions. Ensure templates are trusted.",
     owasp="A03:2021",
 )

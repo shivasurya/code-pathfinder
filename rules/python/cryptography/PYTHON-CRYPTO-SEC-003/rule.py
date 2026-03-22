@@ -12,7 +12,7 @@ class CryptoCipherAlgorithms(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,cryptography,idea,weak-cipher,cwe-327",
+    tags="python,cryptography,idea,weak-cipher,CWE-327",
     message="IDEA cipher is deprecated. Use AES instead.",
     owasp="A02:2021",
 )

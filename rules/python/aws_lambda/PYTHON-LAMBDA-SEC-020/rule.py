@@ -16,7 +16,7 @@ _LAMBDA_SOURCES = [
     severity="MEDIUM",
     category="aws_lambda",
     cwe="CWE-79",
-    tags="python,aws,lambda,xss,html,owasp-a03,cwe-79",
+    tags="python,aws,lambda,xss,html,OWASP-A03,CWE-79",
     message="Lambda event data in HTML response body. Sanitize output with html.escape().",
     owasp="A03:2021",
 )

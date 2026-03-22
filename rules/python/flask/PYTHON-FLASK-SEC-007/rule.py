@@ -15,7 +15,7 @@ class IOModule(QueryType):
     severity="HIGH",
     category="flask",
     cwe="CWE-22",
-    tags="python,flask,path-traversal,file-access,owasp-a01,cwe-22",
+    tags="python,flask,path-traversal,file-access,OWASP-A01,CWE-22",
     message="User input flows to open(). Use os.path.basename() or werkzeug.utils.secure_filename().",
     owasp="A01:2021",
 )

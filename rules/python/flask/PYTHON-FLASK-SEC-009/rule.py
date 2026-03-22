@@ -14,7 +14,7 @@ class CSVWriter(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-1236",
-    tags="python,flask,csv-injection,cwe-1236",
+    tags="python,flask,csv-injection,CWE-1236",
     message="User input flows to CSV writer. Sanitize by removing leading =, +, -, @ characters.",
     owasp="A03:2021",
 )

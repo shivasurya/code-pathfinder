@@ -12,7 +12,7 @@ class SubprocessModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,subprocess,command-injection,owasp-a03,cwe-78",
+    tags="python,subprocess,command-injection,OWASP-A03,CWE-78",
     message="subprocess call detected. Ensure arguments are not user-controlled.",
     owasp="A03:2021",
 )

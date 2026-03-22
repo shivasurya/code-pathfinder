@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="HIGH",
     category="lang",
     cwe="CWE-89",
-    tags="python,sql-injection,formatted-query,cwe-89",
+    tags="python,sql-injection,formatted-query,CWE-89",
     message="SQL query built with string formatting detected. Use parameterized queries instead.",
     owasp="A03:2021",
 )

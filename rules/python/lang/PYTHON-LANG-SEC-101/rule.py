@@ -11,7 +11,7 @@ class OSModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-732",
-    tags="python,file-permissions,chmod,cwe-732",
+    tags="python,file-permissions,chmod,CWE-732",
     message="Overly permissive file permissions detected. Restrict to minimum required permissions.",
     owasp="A05:2021",
 )

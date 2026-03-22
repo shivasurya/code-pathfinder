@@ -11,7 +11,7 @@ class TelnetModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-319",
-    tags="python,telnet,insecure-transport,plaintext,cwe-319",
+    tags="python,telnet,insecure-transport,plaintext,CWE-319",
     message="telnetlib transmits data in plaintext. Use SSH (paramiko) instead.",
     owasp="A02:2021",
 )

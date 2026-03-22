@@ -11,7 +11,7 @@ class PickleModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-502",
-    tags="python,pickle,deserialization,rce,owasp-a08,cwe-502",
+    tags="python,pickle,deserialization,rce,OWASP-A08,CWE-502",
     message="pickle.loads/load detected. Pickle can execute arbitrary code. Use json or msgpack instead.",
     owasp="A08:2021",
 )

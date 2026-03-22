@@ -20,7 +20,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-352",
-    tags="python,django,csrf,security,owasp-a05,cwe-352",
+    tags="python,django,csrf,security,OWASP-A05,CWE-352",
     message="@csrf_exempt disables CSRF protection. Ensure this is intentional.",
     owasp="A05:2021",
 )

@@ -12,7 +12,7 @@ class Builtins(QueryType):
     severity="LOW",
     category="flask",
     cwe="CWE-704",
-    tags="python,flask,nan-injection,type-confusion,cwe-704",
+    tags="python,flask,nan-injection,type-confusion,CWE-704",
     message="User input flows to float() which may produce NaN/Inf. Validate numeric input.",
     owasp="A03:2021",
 )

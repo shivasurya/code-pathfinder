@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="MEDIUM",
     category="lang",
     cwe="CWE-95",
-    tags="python,annotations,pep-563,cwe-95",
+    tags="python,annotations,pep-563,CWE-95",
     message="typing.get_type_hints() may execute string annotations. Be cautious with untrusted code.",
     owasp="A03:2021",
 )

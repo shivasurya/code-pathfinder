@@ -8,7 +8,7 @@ from codepathfinder import calls, Or, QueryType
     severity="MEDIUM",
     category="flask",
     cwe="CWE-614",
-    tags="python,flask,cookie,secure,httponly,cwe-614",
+    tags="python,flask,cookie,secure,httponly,CWE-614",
     message="Cookie set without secure=True or httponly=True. Set both flags for session cookies.",
     owasp="A05:2021",
 )

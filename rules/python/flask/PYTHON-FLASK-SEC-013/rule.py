@@ -18,7 +18,7 @@ class MarshalModule(QueryType):
     severity="CRITICAL",
     category="flask",
     cwe="CWE-502",
-    tags="python,flask,deserialization,pickle,yaml,rce,owasp-a08,cwe-502",
+    tags="python,flask,deserialization,pickle,yaml,rce,OWASP-A08,CWE-502",
     message="User input flows to unsafe deserialization (pickle/yaml). Use json.loads() or yaml.safe_load().",
     owasp="A08:2021",
 )

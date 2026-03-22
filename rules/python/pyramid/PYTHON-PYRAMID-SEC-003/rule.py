@@ -20,7 +20,7 @@ _PYRAMID_SOURCES = [
     severity="CRITICAL",
     category="pyramid",
     cwe="CWE-89",
-    tags="python,pyramid,sqlalchemy,sql-injection,owasp-a03,cwe-89",
+    tags="python,pyramid,sqlalchemy,sql-injection,OWASP-A03,CWE-89",
     message="User input flows to raw SQL in SQLAlchemy. Use parameterized queries with bindparams().",
     owasp="A03:2021",
 )

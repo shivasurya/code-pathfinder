@@ -11,7 +11,7 @@ class DillModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-502",
-    tags="python,dill,deserialization,rce,cwe-502",
+    tags="python,dill,deserialization,rce,CWE-502",
     message="dill.loads/load detected. dill extends pickle and can execute arbitrary code.",
     owasp="A08:2021",
 )

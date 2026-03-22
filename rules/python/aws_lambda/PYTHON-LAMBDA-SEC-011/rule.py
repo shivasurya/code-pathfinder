@@ -22,7 +22,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-89",
-    tags="python,aws,lambda,sql-injection,psycopg2,owasp-a03,cwe-89",
+    tags="python,aws,lambda,sql-injection,psycopg2,OWASP-A03,CWE-89",
     message="Lambda event data flows to psycopg2 cursor.execute(). Use parameterized queries.",
     owasp="A03:2021",
 )

@@ -14,7 +14,7 @@ class AsyncpgConnection(QueryType):
     severity="CRITICAL",
     category="lang",
     cwe="CWE-89",
-    tags="python,asyncpg,sql-injection,database,cwe-89",
+    tags="python,asyncpg,sql-injection,database,CWE-89",
     message="String formatting in asyncpg query. Use parameterized queries with $1 placeholders.",
     owasp="A03:2021",
 )

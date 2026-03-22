@@ -20,7 +20,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-22",
-    tags="python,django,path-traversal,os-path,owasp-a01,cwe-22",
+    tags="python,django,path-traversal,os-path,OWASP-A01,CWE-22",
     message="User input flows to os.path.join() then to file operations. Validate paths.",
     owasp="A01:2021",
 )

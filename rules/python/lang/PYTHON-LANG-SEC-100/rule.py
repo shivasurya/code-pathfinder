@@ -11,7 +11,7 @@ class UUIDModule(QueryType):
     severity="LOW",
     category="lang",
     cwe="CWE-200",
-    tags="python,uuid,mac-address,insufficiently-random,cwe-200",
+    tags="python,uuid,mac-address,insufficiently-random,CWE-200",
     message="uuid.uuid1() leaks the host MAC address and uses predictable timestamps. Use uuid.uuid4() for random UUIDs.",
     owasp="A05:2021",
 )

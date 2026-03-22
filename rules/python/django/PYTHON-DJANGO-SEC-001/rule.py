@@ -27,7 +27,7 @@ _DJANGO_SOURCES = [
     severity="CRITICAL",
     category="django",
     cwe="CWE-89",
-    tags="python,django,sql-injection,cursor,owasp-a03,cwe-89",
+    tags="python,django,sql-injection,cursor,OWASP-A03,CWE-89",
     message="User input flows to cursor.execute() without parameterization. Use %s placeholders.",
     owasp="A03:2021",
 )

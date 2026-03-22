@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-79",
-    tags="python,django,xss,safestring,audit,cwe-79",
+    tags="python,django,xss,safestring,audit,CWE-79",
     message="Class extends SafeString/SafeData. Content bypasses auto-escaping.",
     owasp="A03:2021",
 )

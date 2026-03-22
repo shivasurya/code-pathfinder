@@ -20,7 +20,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-614",
-    tags="python,django,cookies,security,owasp-a05,cwe-614",
+    tags="python,django,cookies,security,OWASP-A05,CWE-614",
     message="set_cookie() without secure/httponly flags. Set secure=True, httponly=True, samesite='Lax'.",
     owasp="A05:2021",
 )

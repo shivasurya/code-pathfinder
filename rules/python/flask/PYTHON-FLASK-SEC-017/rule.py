@@ -8,7 +8,7 @@ from codepathfinder import calls, Or, QueryType
     severity="MEDIUM",
     category="flask",
     cwe="CWE-22",
-    tags="python,flask,path-traversal,static-files,cwe-22",
+    tags="python,flask,path-traversal,static-files,CWE-22",
     message="send_from_directory() with user input. Use werkzeug.utils.secure_filename().",
     owasp="A01:2021",
 )
