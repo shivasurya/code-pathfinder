@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="CRITICAL",
     category="django",
     cwe="CWE-95",
-    tags="python,django,code-injection,eval,owasp-a03,cwe-95",
+    tags="python,django,code-injection,eval,OWASP-A03,CWE-95",
     message="User input flows to eval(). Never use eval() with untrusted data.",
     owasp="A03:2021",
 )

@@ -29,7 +29,7 @@ _DJANGO_SOURCES = [
     severity="CRITICAL",
     category="django",
     cwe="CWE-502",
-    tags="python,django,deserialization,pickle,yaml,owasp-a08,cwe-502",
+    tags="python,django,deserialization,pickle,yaml,OWASP-A08,CWE-502",
     message="Request data flows to unsafe deserialization. Use JSON instead of pickle/yaml.",
     owasp="A08:2021",
 )

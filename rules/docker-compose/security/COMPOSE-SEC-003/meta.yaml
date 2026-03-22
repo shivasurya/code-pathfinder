@@ -32,7 +32,10 @@ description: 'This rule detects services with seccomp (secure computing mode) di
   to use ALL system calls, significantly increasing the attack surface.'
 message: Service disables seccomp profile. Container can use all system calls, increasing attack surface.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the seccomp confinement disabled issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-284: Improper Access Control'
@@ -40,9 +43,13 @@ references:
 - title: Docker Seccomp Security Profiles
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: Linux Seccomp BPF Documentation
-  url: ''
+  url: https://www.kernel.org/doc/html/latest/userspace-api/seccomp_filter.html
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag seccomp confinement disabled?"
+    answer: "Service disables seccomp profile. Container can use all system calls, increasing attack surface."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

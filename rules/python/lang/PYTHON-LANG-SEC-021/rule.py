@@ -12,7 +12,7 @@ class SubprocessModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,subprocess,shell-true,command-injection,owasp-a03,cwe-78",
+    tags="python,subprocess,shell-true,command-injection,OWASP-A03,CWE-78",
     message="subprocess called with shell=True. This is vulnerable to shell injection.",
     owasp="A03:2021",
 )

@@ -19,7 +19,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-502",
-    tags="python,aws,lambda,deserialization,pickle,owasp-a08,cwe-502",
+    tags="python,aws,lambda,deserialization,pickle,OWASP-A08,CWE-502",
     message="Lambda event data flows to pickle deserialization. Use JSON instead.",
     owasp="A08:2021",
 )

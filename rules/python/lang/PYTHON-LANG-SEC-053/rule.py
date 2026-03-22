@@ -11,9 +11,9 @@ class RequestsLib(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-295",
-    tags="python,ssl,cert-validation,mitm,cwe-295",
+    tags="python,ssl,cert-validation,mitm,CWE-295",
     message="Certificate validation disabled (verify=False or CERT_NONE). Enable certificate verification.",
-    owasp="A07:2021",
+    owasp="A02:2021",
 )
 def detect_disabled_cert():
     """Detects requests.get(verify=False) and similar patterns."""

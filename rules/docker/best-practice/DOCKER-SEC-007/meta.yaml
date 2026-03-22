@@ -1,6 +1,6 @@
 id: DOCKER-SEC-007
 name: Sudo Usage in Dockerfile
-short_description: 'Dockerfile uses ''sudo'' in RUN instructions. This is unnecessary during '
+short_description: 'Dockerfile uses sudo in RUN instructions. This is unnecessary during build (already root) and increases security risk if sudo remains in the final image. Use USER instruction for privilege changes instead.'
 severity: MEDIUM
 category: security
 language: docker
@@ -28,12 +28,15 @@ description: 'This rule detects the use of ''sudo'' in RUN instructions within a
   Using sudo in Docker containers is an anti-pattern that indicates confusion about
 
   Docker''s privilege model and can introduce security vulnerabilities.'
-message: 'Dockerfile uses ''sudo'' in RUN instructions. This is unnecessary during '
+message: 'Dockerfile uses sudo in RUN instructions. This is unnecessary during build (already root) and increases security risk if sudo remains in the final image. Use USER instruction for privilege changes instead.'
 secure_example: "FROM ubuntu:latest\n\n# Install packages without sudo (we're already root)\nRUN apt-get\
   \ update && apt-get install -y nginx \\\\\n    && apt-get clean\n\n# Create non-root user\nRUN useradd\
   \ -r -s /bin/false appuser\n\n# Switch to non-root for runtime\nUSER appuser\n\n# Run application as\
   \ non-root\nCMD [\"nginx\", \"-g\", \"daemon off;\"]"
-recommendations: []
+recommendations:
+  - "Remove sudo from RUN instructions since Docker build runs as root by default"
+  - "Use the USER instruction to switch to non-root for the final image"
+  - "Do not install sudo in the final image to eliminate privilege escalation paths"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
@@ -43,9 +46,13 @@ references:
 - title: Docker Security Best Practices
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: CVE-2021-3156 (sudo vulnerability)
-  url: ''
+  url: https://nvd.nist.gov/vuln/detail/CVE-2021-3156
 compliance: []
-faq: []
+faq:
+  - question: "Why is sudo unnecessary in Dockerfile RUN instructions?"
+    answer: "Docker executes RUN instructions as root during build. Using sudo is redundant and indicates confusion about the Docker privilege model."
+  - question: "How do I run commands as a different user during build?"
+    answer: "Use the USER instruction to switch users, then subsequent RUN commands execute as that user. Switch back to root if needed for package installation."
 similar_rules: []
 tests:
   positive: tests/positive/

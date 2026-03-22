@@ -9,7 +9,7 @@ from codepathfinder import calls, Or
     category="flask",
     cwe="CWE-489",
     cve="CVE-2015-5306",
-    tags="python,flask,debug-mode,configuration,information-disclosure,owasp-a05,cwe-489,production,werkzeug,security,misconfiguration",
+    tags="python,flask,debug-mode,configuration,information-disclosure,OWASP-A05,CWE-489,production,werkzeug,security,misconfiguration",
     message="Flask debug mode enabled. Never use debug=True in production. Use a production WSGI server like Gunicorn.",
     owasp="A05:2021",
 )

@@ -38,15 +38,22 @@ secure_example: 'FROM centos:8
   # Good: Cleans cache in same layer
 
   RUN yum install -y nginx && yum clean all'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing yum clean all issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Clean package manager cache"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#apt-get
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing yum clean all?"
+    answer: "RUN instruction uses 'yum install' without 'yum clean all'. This leaves package cache and increases image size."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

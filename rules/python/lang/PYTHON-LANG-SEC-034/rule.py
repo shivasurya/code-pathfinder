@@ -11,7 +11,7 @@ class HashlibModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-327",
-    tags="python,md5,password,weak-hash,cwe-327",
+    tags="python,md5,password,weak-hash,CWE-327",
     message="MD5 used for password hashing. Use bcrypt, scrypt, or argon2 instead.",
     owasp="A02:2021",
 )

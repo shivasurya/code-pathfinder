@@ -35,19 +35,26 @@ message: apk add without --no-cache. Package cache remains in image, increasing 
 secure_example: "FROM alpine:3.19\n\n# Good: No cache retained\nRUN apk add --no-cache \\\n    nginx \\\
   \n    curl \\\n    ca-certificates\n\n# Even better: Pin versions\nRUN apk add --no-cache \\\n    nginx=1.24.0-r15\
   \ \\\n    curl=8.4.0-r0 \\\n    ca-certificates=20230506-r0"
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the apk add without --no-cache issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Alpine Linux Package Management
-  url: ''
+  url: https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper
 - title: 'Docker Official Images: Alpine Best Practices'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: 'Alpine Linux Wiki: Package Management'
-  url: ''
+  url: https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper
 - title: Docker Multi-Stage Builds with Alpine
-  url: ''
+  url: https://docs.docker.com/build/building/multi-stage/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag apk add without --no-cache?"
+    answer: "apk add without --no-cache. Package cache remains in image, increasing size by 2-5 MB."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

@@ -30,11 +30,19 @@ secure_example: "FROM ubuntu:22.04\n\n# Good: Using -y flag for non-interactive 
   \ update && \\\n    apt-get install -y nginx curl && \\\n    rm -rf /var/lib/apt/lists/*\n\n# Alternative:\
   \ Using --yes flag\nRUN apt-get update && \\\n    apt-get install --yes \\\n        nginx \\\n     \
   \   curl \\\n        ca-certificates && \\\n    rm -rf /var/lib/apt/lists/*"
-recommendations: []
+recommendations:
+  - "Use apt-get instead of apt in Dockerfiles for stable CLI behavior"
+  - "Always run apt-get update && apt-get install in the same RUN instruction"
+  - "Add --no-install-recommends to minimize installed packages"
+  - "Clean up with rm -rf /var/lib/apt/lists/* in the same layer"
 detection_scope: ''
 references: []
 compliance: []
-faq: []
+faq:
+  - question: "Why use apt-get instead of apt?"
+    answer: "apt is designed for interactive use and its output format may change between versions. apt-get provides a stable CLI interface suitable for scripting and Dockerfiles."
+  - question: "Why combine update and install in one RUN?"
+    answer: "Docker caches layers. If apt-get update is in a separate RUN, the package index cache may be stale when install runs, causing package-not-found errors."
 similar_rules: []
 tests:
   positive: tests/positive/

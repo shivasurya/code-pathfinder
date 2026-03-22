@@ -12,7 +12,7 @@ class JWTModule(QueryType):
     severity="HIGH",
     category="jwt",
     cwe="CWE-287",
-    tags="python,jwt,unverified,authentication,owasp-a07,cwe-287",
+    tags="python,jwt,unverified,authentication,OWASP-A07,CWE-287",
     message="jwt.decode() with verify_signature=False. Token integrity is not checked.",
     owasp="A07:2021",
 )

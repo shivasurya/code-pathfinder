@@ -19,7 +19,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-95",
-    tags="python,aws,lambda,code-injection,eval,exec,owasp-a03,cwe-95",
+    tags="python,aws,lambda,code-injection,eval,exec,OWASP-A03,CWE-95",
     message="Lambda event data flows to eval()/exec()/compile(). Never eval untrusted data.",
     owasp="A03:2021",
 )

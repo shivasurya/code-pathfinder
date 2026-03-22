@@ -54,19 +54,26 @@ secure_example: 'FROM python:3.11-slim
 
 
   CMD ["python", "app.py"]'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the pip install without --no-cache-dir issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'pip documentation: Caching'
-  url: ''
+  url: https://pip.pypa.io/en/stable/topics/caching/
 - title: 'Docker Best Practices: Python Applications'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: Python Official Docker Images Best Practices
-  url: ''
+  url: https://hub.docker.com/_/python
 - title: 'PEP 517: Build System Independence'
-  url: ''
+  url: https://peps.python.org/pep-0517/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag pip install without --no-cache-dir?"
+    answer: "pip install without --no-cache-dir. Pip cache remains in image, adding 50-200 MB depending on dependencies."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

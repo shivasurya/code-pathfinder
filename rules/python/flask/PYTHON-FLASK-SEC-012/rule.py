@@ -12,7 +12,7 @@ class FlaskModule(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-601",
-    tags="python,flask,open-redirect,owasp-a01,cwe-601",
+    tags="python,flask,open-redirect,OWASP-A01,CWE-601",
     message="User input flows to redirect(). Validate redirect URLs against an allowlist.",
     owasp="A01:2021",
 )

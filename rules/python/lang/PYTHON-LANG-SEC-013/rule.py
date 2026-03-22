@@ -12,7 +12,7 @@ class OSModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-78",
-    tags="python,wildcard,command-injection,cwe-78",
+    tags="python,wildcard,command-injection,CWE-78",
     message="os.system() with wildcard (*) detected. Wildcards may lead to unintended file inclusion.",
     owasp="A03:2021",
 )

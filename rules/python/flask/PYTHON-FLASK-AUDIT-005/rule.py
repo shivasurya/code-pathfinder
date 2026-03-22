@@ -8,7 +8,7 @@ from codepathfinder import calls, Or, QueryType
     severity="LOW",
     category="flask",
     cwe="CWE-601",
-    tags="python,flask,url-for,external,cwe-601",
+    tags="python,flask,url-for,external,CWE-601",
     message="url_for() with _external=True may expose internal URL schemes. Verify usage.",
     owasp="A01:2021",
 )

@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="HIGH",
     category="lang",
     cwe="CWE-95",
-    tags="python,subinterpreters,code-execution,cwe-95",
+    tags="python,subinterpreters,code-execution,CWE-95",
     message="subinterpreters.run_string() detected. Avoid executing untrusted code strings.",
     owasp="A03:2021",
 )

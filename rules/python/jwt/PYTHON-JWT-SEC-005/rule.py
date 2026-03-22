@@ -12,7 +12,7 @@ class JWTModule(QueryType):
     severity="LOW",
     category="jwt",
     cwe="CWE-522",
-    tags="python,jwt,data-exposure,audit,cwe-522",
+    tags="python,jwt,data-exposure,audit,CWE-522",
     message="Data passed to jwt.encode(). JWT payloads are base64-encoded, not encrypted.",
     owasp="A02:2021",
 )

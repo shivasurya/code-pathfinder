@@ -11,7 +11,7 @@ class SSLModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-326",
-    tags="python,ssl,weak-tls,protocol-version,cwe-326",
+    tags="python,ssl,weak-tls,protocol-version,CWE-326",
     message="Weak SSL/TLS version detected (SSLv2/3 or TLSv1/1.1). Use TLS 1.2+ minimum.",
     owasp="A02:2021",
 )

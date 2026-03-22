@@ -34,11 +34,18 @@ message: FROM instruction uses 'latest' tag or no tag. Specify explicit versions
 secure_example: 'FROM ubuntu:22.04
 
   FROM nginx:1.24.0-alpine'
-recommendations: []
+recommendations:
+  - "Pin base images to specific version tags (e.g., python:3.11-slim instead of python:latest)"
+  - "Use digest pinning (@sha256:...) for maximum reproducibility"
+  - "Document the base image version in a comment for team awareness"
 detection_scope: ''
 references: []
 compliance: []
-faq: []
+faq:
+  - question: "Why should I avoid the :latest tag?"
+    answer: "The :latest tag is mutable and can point to different images over time. Your build may break or introduce vulnerabilities when the upstream image changes without your knowledge."
+  - question: "What is digest pinning?"
+    answer: "Digest pinning uses the SHA256 hash of a specific image layer (e.g., python:3.11@sha256:abc123...). Unlike tags, digests are immutable and guarantee you always pull the exact same image."
 similar_rules: []
 tests:
   positive: tests/positive/

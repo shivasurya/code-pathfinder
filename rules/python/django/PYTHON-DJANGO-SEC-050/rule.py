@@ -20,7 +20,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-79",
-    tags="python,django,xss,httpresponse,owasp-a03,cwe-79",
+    tags="python,django,xss,httpresponse,OWASP-A03,CWE-79",
     message="Direct HttpResponse with user input detected. Use templates with auto-escaping.",
     owasp="A03:2021",
 )

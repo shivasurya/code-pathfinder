@@ -11,7 +11,7 @@ class FlaskApp(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-200",
-    tags="python,flask,network,binding,cwe-200",
+    tags="python,flask,network,binding,CWE-200",
     message="Flask app bound to 0.0.0.0 (all interfaces). Bind to 127.0.0.1 in production.",
     owasp="A05:2021",
 )

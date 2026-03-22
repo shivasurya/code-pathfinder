@@ -29,11 +29,18 @@ message: EXPOSE instruction has invalid port number. Valid ports are 1-65535.
 secure_example: 'EXPOSE 8080
 
   EXPOSE 443'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the invalid port number issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references: []
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag invalid port number?"
+    answer: "EXPOSE instruction has invalid port number. Valid ports are 1-65535."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

@@ -12,7 +12,7 @@ class JWTModule(QueryType):
     severity="CRITICAL",
     category="jwt",
     cwe="CWE-327",
-    tags="python,jwt,none-algorithm,weak-crypto,owasp-a02,cwe-327",
+    tags="python,jwt,none-algorithm,weak-crypto,OWASP-A02,CWE-327",
     message="JWT with algorithm='none' disables signature verification. Use HS256 or RS256.",
     owasp="A02:2021",
 )

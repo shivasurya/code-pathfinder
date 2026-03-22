@@ -12,7 +12,7 @@ class Builtins(QueryType):
     severity="CRITICAL",
     category="flask",
     cwe="CWE-95",
-    tags="python,flask,code-injection,exec,rce,owasp-a03,cwe-95",
+    tags="python,flask,code-injection,exec,rce,OWASP-A03,CWE-95",
     message="User input flows to exec(). Never execute user-supplied code.",
     owasp="A03:2021",
 )

@@ -13,7 +13,7 @@ class PyCryptoHashSHA(QueryType):
     severity="MEDIUM",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,sha1,weak-hash,cwe-327",
+    tags="python,pycryptodome,sha1,weak-hash,CWE-327",
     message="SHA-1 is deprecated for security use. Use SHA-256 or SHA-3 instead.",
     owasp="A02:2021",
 )

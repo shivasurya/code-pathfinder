@@ -8,7 +8,7 @@ from codepathfinder import calls, Or, QueryType
     severity="HIGH",
     category="flask",
     cwe="CWE-352",
-    tags="python,flask,csrf,wtf,cwe-352",
+    tags="python,flask,csrf,wtf,CWE-352",
     message="WTF_CSRF_ENABLED set to False. CSRF protection should always be enabled.",
     owasp="A05:2021",
 )

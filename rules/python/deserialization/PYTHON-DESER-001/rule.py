@@ -10,7 +10,7 @@ from codepathfinder.presets import PropagationPresets
     category="deserialization",
     cwe="CWE-502",
     cve="CVE-2021-3177",
-    tags="python,deserialization,pickle,rce,untrusted-data,owasp-a08,cwe-502,remote-code-execution,critical,security,intra-procedural",
+    tags="python,deserialization,pickle,rce,untrusted-data,OWASP-A08,CWE-502,remote-code-execution,critical,security,intra-procedural",
     message="Unsafe pickle deserialization: Untrusted data flows to pickle.loads() which can execute arbitrary code. Use json.loads() instead.",
     owasp="A08:2021",
 )

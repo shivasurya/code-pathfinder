@@ -20,7 +20,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-79",
-    tags="python,django,xss,email,html,owasp-a03,cwe-79",
+    tags="python,django,xss,email,html,OWASP-A03,CWE-79",
     message="User input in HTML email body. Sanitize content before sending.",
     owasp="A03:2021",
 )

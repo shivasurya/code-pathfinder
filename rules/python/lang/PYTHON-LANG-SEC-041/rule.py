@@ -11,7 +11,7 @@ class YamlModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-502",
-    tags="python,yaml,deserialization,rce,owasp-a08,cwe-502",
+    tags="python,yaml,deserialization,rce,OWASP-A08,CWE-502",
     message="yaml.load() or yaml.unsafe_load() detected. Use yaml.safe_load() instead.",
     owasp="A08:2021",
 )

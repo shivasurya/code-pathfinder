@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-79",
-    tags="python,django,xss,mark-safe,audit,cwe-79",
+    tags="python,django,xss,mark-safe,audit,CWE-79",
     message="mark_safe() bypasses Django auto-escaping. Ensure input is properly sanitized.",
     owasp="A03:2021",
 )

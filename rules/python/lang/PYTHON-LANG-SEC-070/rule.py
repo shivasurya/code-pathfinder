@@ -8,7 +8,7 @@ from codepathfinder import calls, QueryType
     severity="MEDIUM",
     category="lang",
     cwe="CWE-200",
-    tags="python,socket,bind,network,cwe-200",
+    tags="python,socket,bind,network,CWE-200",
     message="Socket bound to 0.0.0.0 (all interfaces). Bind to specific interface in production.",
     owasp="A05:2021",
 )

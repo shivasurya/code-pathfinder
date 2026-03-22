@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="CRITICAL",
     category="django",
     cwe="CWE-78",
-    tags="python,django,command-injection,os-system,owasp-a03,cwe-78",
+    tags="python,django,command-injection,os-system,OWASP-A03,CWE-78",
     message="User input flows to os.system(). Use subprocess with list args and shlex.quote().",
     owasp="A03:2021",
 )

@@ -11,7 +11,7 @@ class MinidomModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-611",
-    tags="python,xml,xxe,minidom,cwe-611",
+    tags="python,xml,xxe,minidom,CWE-611",
     message="xml.dom.minidom is vulnerable to XXE. Use defusedxml.minidom instead.",
     owasp="A05:2021",
 )

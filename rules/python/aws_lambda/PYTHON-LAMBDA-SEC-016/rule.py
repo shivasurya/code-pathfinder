@@ -16,7 +16,7 @@ _LAMBDA_SOURCES = [
     severity="HIGH",
     category="aws_lambda",
     cwe="CWE-943",
-    tags="python,aws,lambda,dynamodb,nosql-injection,owasp-a03,cwe-943",
+    tags="python,aws,lambda,dynamodb,nosql-injection,OWASP-A03,CWE-943",
     message="Lambda event data flows to DynamoDB scan/query filter. Validate input.",
     owasp="A03:2021",
 )

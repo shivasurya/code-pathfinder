@@ -21,7 +21,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-78",
-    tags="python,aws,lambda,command-injection,subprocess,owasp-a03,cwe-78",
+    tags="python,aws,lambda,command-injection,subprocess,OWASP-A03,CWE-78",
     message="Lambda event data flows to subprocess call. Use shlex.quote() or list args.",
     owasp="A03:2021",
 )

@@ -762,10 +762,15 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 	}
 
 	// Resolve individual rule IDs to file paths
+	// First try local rules directory, then fall back to CDN download
 	var resolvedRulePaths []string
 	if len(ruleIDSpecs) > 0 {
 		rulesBaseDir := findRulesDirectory()
 		finder := ruleset.NewRuleFinder(rulesBaseDir)
+
+		// Track which languages need CDN download for unresolved rules
+		unresolvedByLanguage := make(map[string][]string) // language -> list of specs
+		cdnDownloadedDirs := make(map[string]string)      // language -> downloaded dir path
 
 		for _, spec := range ruleIDSpecs {
 			ruleSpec, err := ruleset.ParseRuleSpec(spec)
@@ -777,13 +782,66 @@ func prepareRules(localRulesPath string, rulesetSpecs []string, refresh bool, lo
 				return "", "", fmt.Errorf("invalid rule spec %s: %w", spec, err)
 			}
 
+			// Try local first
 			filePath, err := finder.FindRuleFile(ruleSpec)
-			if err != nil {
-				return "", "", fmt.Errorf("failed to find rule %s: %w", spec, err)
+			if err == nil {
+				resolvedRulePaths = append(resolvedRulePaths, filePath)
+				logger.Progress("Resolved rule %s → %s (local)", spec, filepath.Base(filePath))
+				continue
 			}
 
-			resolvedRulePaths = append(resolvedRulePaths, filePath)
-			logger.Progress("Resolved rule %s → %s", spec, filepath.Base(filePath))
+			// Local not found — queue for CDN download
+			unresolvedByLanguage[ruleSpec.Language] = append(unresolvedByLanguage[ruleSpec.Language], spec)
+		}
+
+		// Download bundles from CDN for unresolved rules
+		if len(unresolvedByLanguage) > 0 {
+			config := &ruleset.DownloadConfig{
+				BaseURL:       "https://assets.codepathfinder.dev/rules",
+				CacheDir:      getCacheDir(),
+				CacheTTL:      24 * time.Hour,
+				ManifestTTL:   1 * time.Hour,
+				HTTPTimeout:   30 * time.Second,
+				RetryAttempts: 3,
+			}
+
+			downloader, err := ruleset.NewDownloader(config)
+			if err != nil {
+				return "", "", fmt.Errorf("failed to create downloader: %w", err)
+			}
+
+			manifestLoader := ruleset.NewManifestLoader(config.BaseURL, config.CacheDir)
+
+			for language, specs := range unresolvedByLanguage {
+				// Download all bundles for this language
+				allSpec := fmt.Sprintf("%s/all", language)
+				expanded, err := expandBundleSpecs([]string{allSpec}, manifestLoader, logger)
+				if err != nil {
+					return "", "", fmt.Errorf("failed to expand %s: %w", allSpec, err)
+				}
+
+				// Download each bundle and collect paths
+				for _, bundleSpec := range expanded {
+					path, err := downloader.Download(bundleSpec)
+					if err != nil {
+						logger.Warning("Failed to download %s: %v", bundleSpec, err)
+						continue
+					}
+					cdnDownloadedDirs[language] = path
+				}
+
+				// Now search for each rule in the downloaded bundles
+				cdnFinder := ruleset.NewRuleFinder(getCacheDir())
+				for _, spec := range specs {
+					ruleSpec, _ := ruleset.ParseRuleSpec(spec)
+					filePath, err := cdnFinder.FindRuleFile(ruleSpec)
+					if err != nil {
+						return "", "", fmt.Errorf("failed to find rule %s (checked local and CDN): %w", spec, err)
+					}
+					resolvedRulePaths = append(resolvedRulePaths, filePath)
+					logger.Progress("Resolved rule %s → %s (CDN)", spec, filepath.Base(filePath))
+				}
+			}
 		}
 	}
 

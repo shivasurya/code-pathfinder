@@ -36,7 +36,10 @@ description: 'This rule detects ARG instructions with names that suggest they co
 message: Build argument name suggests it contains a secret. ARG values are visible in image history via
   'docker history'.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Use Docker BuildKit secret mounts instead of ARG for secrets"
+  - "Store secrets in environment variables at runtime, not at build time"
+  - "Add sensitive files to .dockerignore to prevent accidental inclusion"
 detection_scope: ''
 references:
 - title: 'CWE-538: Insertion of Sensitive Information into Externally-Accessible File'
@@ -48,7 +51,13 @@ references:
 - title: 'NIST SP 800-190: Application Container Security Guide'
   url: https://csrc.nist.gov/publications
 compliance: []
-faq: []
+faq:
+  - question: "How do secrets leak from Docker build arguments?"
+    answer: "ARG values are stored in the image layer history. Anyone with access to the image can run docker history to see all build arguments including secrets."
+  - question: "What is the secure alternative to ARG for secrets?"
+    answer: "Use BuildKit secret mounts: RUN --mount=type=secret,id=mysecret cat /run/secrets/mysecret. The secret is available during build but never stored in a layer."
+  - question: "How do I check if my image contains leaked secrets?"
+    answer: "Run docker history --no-trunc <image> to inspect all layers. Tools like trufflehog and gitleaks can also scan container images for exposed credentials."
 similar_rules: []
 tests:
   positive: tests/positive/

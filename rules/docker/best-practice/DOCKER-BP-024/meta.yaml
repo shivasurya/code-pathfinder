@@ -40,15 +40,22 @@ secure_example: 'FROM ubuntu:22.04
   # Or use wget if you prefer
 
   # RUN apt-get update && apt-get install -y wget'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the install only one of wget or curl issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Use set -o pipefail with pipes"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag install only one of wget or curl?"
+    answer: "Installing both wget and curl wastes space. Choose one tool for downloads."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

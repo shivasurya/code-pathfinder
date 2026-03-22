@@ -26,7 +26,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-89",
-    tags="python,django,sql-injection,orm-extra,owasp-a03,cwe-89",
+    tags="python,django,sql-injection,orm-extra,OWASP-A03,CWE-89",
     message="User input flows to .extra() query. Use .annotate() or parameterized queries instead.",
     owasp="A03:2021",
 )

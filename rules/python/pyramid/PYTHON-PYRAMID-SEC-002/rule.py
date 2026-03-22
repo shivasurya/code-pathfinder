@@ -23,7 +23,7 @@ _PYRAMID_SOURCES = [
     severity="HIGH",
     category="pyramid",
     cwe="CWE-79",
-    tags="python,pyramid,xss,response,owasp-a03,cwe-79",
+    tags="python,pyramid,xss,response,OWASP-A03,CWE-79",
     message="User input flows directly to Response(). Use templates with auto-escaping.",
     owasp="A03:2021",
 )

@@ -28,11 +28,18 @@ description: yum install without -y flag. Add -y for non-interactive builds.
 message: yum install without -y flag. Add -y for non-interactive builds.
 secure_example: "FROM centos:7\n\n# Good: Using -y flag for non-interactive installation\nRUN yum install\
   \ -y httpd mod_ssl && \\\n    yum clean all && \\\n    rm -rf /var/cache/yum"
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing -y flag for yum issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references: []
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing -y flag for yum?"
+    answer: "yum install without -y flag. Add -y for non-interactive builds."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

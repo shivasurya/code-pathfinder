@@ -34,21 +34,28 @@ description: 'This rule detects docker-compose services configured with `privile
 message: Service is running in privileged mode. This grants container equivalent of root capabilities
   on the host machine. Can lead to container escapes and privilege escalation.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Never run containers in privileged mode in production"
+  - "Use specific Linux capabilities (cap_add) instead of full privileges"
+  - "Use seccomp profiles to restrict system calls"
 detection_scope: ''
 references:
 - title: 'CWE-250: Execution with Unnecessary Privileges'
   url: https://cwe.mitre.org/data/definitions/250.html
 - title: 'CIS Docker Benchmark: Section 5.4'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 - title: Docker Security Best Practices
   url: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
 - title: Linux Capabilities man page
-  url: ''
+  url: https://man7.org/linux/man-pages/man7/capabilities.7.html
 - title: 'NIST SP 800-190: Container Security Guide'
   url: https://csrc.nist.gov/publications
 compliance: []
-faq: []
+faq:
+  - question: "What does privileged mode do?"
+    answer: "Privileged mode gives the container almost all capabilities of the host, including access to all devices. It effectively removes all container isolation."
+  - question: "What should I use instead of privileged mode?"
+    answer: "Identify the specific capability needed (e.g., SYS_PTRACE for debugging) and add only that with cap_add. This follows the principle of least privilege."
 similar_rules: []
 tests:
   positive: tests/positive/

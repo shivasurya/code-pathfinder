@@ -38,15 +38,22 @@ secure_example: 'FROM ubuntu:22.04
   WORKDIR /app
 
   RUN touch file.txt'
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the nonsensical command issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Set SHELL with pipefail for RUN pipes"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#run
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag nonsensical command?"
+    answer: "RUN command uses 'cd' which doesn't persist. Use WORKDIR instead."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/

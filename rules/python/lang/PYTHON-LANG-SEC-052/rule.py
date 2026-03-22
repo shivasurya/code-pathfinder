@@ -11,7 +11,7 @@ class SSLModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-326",
-    tags="python,ssl,wrap-socket,deprecated,cwe-326",
+    tags="python,ssl,wrap-socket,deprecated,CWE-326",
     message="ssl.wrap_socket() is deprecated since Python 3.7. Use SSLContext.wrap_socket() instead.",
     owasp="A02:2021",
 )

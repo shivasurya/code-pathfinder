@@ -8,7 +8,7 @@ from codepathfinder import calls, QueryType
     severity="MEDIUM",
     category="lang",
     cwe="CWE-78",
-    tags="python,paramiko,ssh,command-execution,cwe-78",
+    tags="python,paramiko,ssh,command-execution,CWE-78",
     message="paramiko exec_command() detected. Ensure command is not user-controlled.",
     owasp="A03:2021",
 )

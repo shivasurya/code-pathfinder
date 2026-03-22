@@ -12,7 +12,7 @@ class FlaskModule(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-79",
-    tags="python,flask,xss,unsanitized-input,owasp-a07,cwe-79",
+    tags="python,flask,xss,unsanitized-input,OWASP-A07,CWE-79",
     message="User input returned directly in response without escaping. Use markupsafe.escape().",
     owasp="A07:2021",
 )

@@ -11,7 +11,7 @@ class ParamikoModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-322",
-    tags="python,paramiko,ssh,host-key,mitm,cwe-322",
+    tags="python,paramiko,ssh,host-key,mitm,CWE-322",
     message="AutoAddPolicy/WarningPolicy trusts unknown host keys. Use RejectPolicy or verify keys.",
     owasp="A02:2021",
 )

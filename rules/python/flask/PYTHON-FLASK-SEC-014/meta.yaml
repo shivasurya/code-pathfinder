@@ -11,9 +11,9 @@ ruleset: python/flask/PYTHON-FLASK-SEC-014
 
 # Vulnerability Details
 cwe:
-  - id: CWE-96
+  - id: CWE-1336
     name: "Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection')"
-    url: https://cwe.mitre.org/data/definitions/96.html
+    url: https://cwe.mitre.org/data/definitions/1336.html
 
 owasp:
   - id: A03:2021
@@ -31,7 +31,7 @@ tags:
   - cross-file
   - inter-procedural
   - taint-analysis
-  - CWE-96
+  - CWE-1336
   - OWASP-A03
 
 # Author
@@ -153,8 +153,8 @@ detection_scope: |
 
 # References
 references:
-  - title: "CWE-96: Static Code Injection / Template Injection"
-    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: "CWE-1336: Static Code Injection / Template Injection"
+    url: https://cwe.mitre.org/data/definitions/1336.html
   - title: OWASP Server-Side Template Injection
     url: https://owasp.org/www-community/attacks/Server_Side_Template_Injection
   - title: Jinja2 SandboxedEnvironment documentation
@@ -171,7 +171,7 @@ compliance:
   - standard: OWASP Top 10
     requirement: "A03:2021 - Injection (template injection is server-side injection)"
   - standard: CWE Top 25
-    requirement: "CWE-96 -- Improper Neutralization of Directives in Code"
+    requirement: "CWE-1336 -- Improper Neutralization of Directives in Code"
   - standard: PCI DSS v4.0
     requirement: "Requirement 6.2.4 -- prevent injection attacks including template injection"
   - standard: NIST SP 800-53

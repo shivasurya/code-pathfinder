@@ -11,7 +11,7 @@ class HttplibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-319",
-    tags="python,http,plaintext,insecure-transport,cwe-319",
+    tags="python,http,plaintext,insecure-transport,CWE-319",
     message="HTTPConnection used instead of HTTPSConnection. Use HTTPS for sensitive communications.",
     owasp="A02:2021",
 )

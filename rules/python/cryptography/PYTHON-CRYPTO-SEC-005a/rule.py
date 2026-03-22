@@ -15,7 +15,7 @@ class PyCryptoCipherDES3(QueryType):
     severity="MEDIUM",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,3des,triple-des,weak-cipher,cwe-327",
+    tags="python,pycryptodome,3des,triple-des,weak-cipher,CWE-327",
     message="Triple DES (3DES) is deprecated. Use AES instead.",
     owasp="A02:2021",
 )

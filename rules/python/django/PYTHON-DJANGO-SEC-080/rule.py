@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="HIGH",
     category="django",
     cwe="CWE-521",
-    tags="python,django,password,empty,owasp-a07,cwe-521",
+    tags="python,django,password,empty,OWASP-A07,CWE-521",
     message="Empty password set via set_password(). Use None instead of empty string.",
     owasp="A07:2021",
 )

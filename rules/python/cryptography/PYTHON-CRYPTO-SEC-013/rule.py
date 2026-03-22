@@ -12,7 +12,7 @@ class PyCryptoHashMD4(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,md4,weak-hash,cwe-327",
+    tags="python,pycryptodome,md4,weak-hash,CWE-327",
     message="MD4 is severely broken. Use SHA-256 or SHA-3 instead.",
     owasp="A02:2021",
 )

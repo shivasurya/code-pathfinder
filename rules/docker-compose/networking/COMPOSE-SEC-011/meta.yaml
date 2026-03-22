@@ -1,6 +1,6 @@
 id: COMPOSE-SEC-011
 name: Missing no-new-privileges Security Option
-short_description: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+short_description: 'Service does not have no-new-privileges security option. Without this, processes inside the container can gain additional privileges via setuid binaries or capability escalation.'
 severity: MEDIUM
 category: security
 language: docker-compose
@@ -26,10 +26,13 @@ description: 'This rule detects docker-compose services that do not set the `no-
   security option. This option prevents processes in the container from gaining additional
 
   privileges through setuid or setgid binaries, which can be used for privilege escalation attacks.'
-message: 'Service does not have ''no-new-privileges:true'' in security_opt. This allows '
+message: 'Service does not have no-new-privileges security option. Without this, processes inside the container can gain additional privileges via setuid binaries or capability escalation.'
 secure_example: "version: '3'\nservices:\n  web:\n    image: nginx\n    user: www-data\n    security_opt:\n\
   \      - no-new-privileges:true  # SECURE\n    # Process cannot gain additional privileges"
-recommendations: []
+recommendations:
+  - "Review your Dockerfile to address the missing no-new-privileges security option issue"
+  - "Follow Docker official best practices for image building"
+  - "Use docker build --check to validate Dockerfile syntax and best practices"
 detection_scope: ''
 references:
 - title: 'CWE-732: Incorrect Permission Assignment for Critical Resource'
@@ -43,7 +46,11 @@ references:
 - title: OWASP A05:2021 - Security Misconfiguration
   url: https://owasp.org/www-project-top-ten/
 compliance: []
-faq: []
+faq:
+  - question: "Why does this rule flag missing no-new-privileges security option?"
+    answer: "Service does not have no-new-privileges security option. Without this, processes inside the container can gain additional privileges via setuid binaries or capability escalation."
+  - question: "How do I fix this?"
+    answer: "Review the secure code example in the playground above and apply the recommended pattern to your Dockerfile or docker-compose.yml."
 similar_rules: []
 tests:
   positive: tests/positive/
