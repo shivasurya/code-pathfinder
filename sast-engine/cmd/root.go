@@ -18,8 +18,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "pathfinder",
-	Short: "AI-Native Static Code Analysis | Graph-First Engine | Privacy-First",
-	Long:  `Code Pathfinder - AI-Native static code analysis with graph-first engine.
+	Short: "Static Code Analysis | Graph-First Engine | Privacy-First",
+	Long:  `Code Pathfinder - Static code analysis with graph-first engine.
 
 Combines structural analysis (call graphs, dataflow, taint tracking) with AI to understand
 real exploit paths. Supports Python, Docker, and docker-compose with language-agnostic queries.

@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "Python SDK for code-pathfinder static analysis for modern security teams"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "AGPL-3.0"}
+license = {text = "Apache-2.0"}
 authors = [{name = "code-pathfinder contributors"}]
 keywords = ["sast", "security", "static-analysis", "codeql-alternative"]
 classifiers = [

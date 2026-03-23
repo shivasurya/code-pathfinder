@@ -9,7 +9,6 @@ name: Security Scan
 
 on:
   pull_request:
-    branches: [main, master]
 
 # Required permissions:
 #   security-events: write  - for uploading SARIF results to GitHub Code Scanning

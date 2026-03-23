@@ -2,7 +2,7 @@
   "name": "@codepathfinder/secureflow-cli",
   "version": "0.0.9",
   "description": "AI-powered security analysis CLI tool with intelligent file discovery and comprehensive vulnerability scanning",
-  "license": "AGPL-3.0",
+  "license": "Apache-2.0",
   "bin": {
     "secureflow": "bin/secureflow"
   },
