@@ -11,7 +11,7 @@ class HashlibModule(QueryType):
     severity="LOW",
     category="lang",
     cwe="CWE-327",
-    tags="python,sha224,weak-hash,cwe-327",
+    tags="python,sha224,weak-hash,CWE-327",
     message="SHA-224 provides only 112-bit security. Consider SHA-256 or SHA-3.",
     owasp="A02:2021",
 )

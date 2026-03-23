@@ -11,7 +11,7 @@ class RequestsLib(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-319",
-    tags="python,requests,http,insecure-transport,cwe-319",
+    tags="python,requests,http,insecure-transport,CWE-319",
     message="HTTP URL used in requests call. Use HTTPS for sensitive data transmission.",
     owasp="A02:2021",
 )

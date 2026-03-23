@@ -21,7 +21,7 @@ class DBCursor(QueryType):
     severity="CRITICAL",
     category="flask",
     cwe="CWE-89",
-    tags="python,flask,sql-injection,database,owasp-a03,cwe-89",
+    tags="python,flask,sql-injection,database,OWASP-A03,CWE-89",
     message="User input flows to SQL execution without parameterization. Use parameterized queries.",
     owasp="A03:2021",
 )

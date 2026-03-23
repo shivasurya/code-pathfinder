@@ -37,19 +37,26 @@ secure_example: "FROM python:3.11-slim\n\nWORKDIR /app\nCOPY requirements.txt .\
   \ -r requirements.txt\n\nCOPY . .\n\n# Health check: Test HTTP endpoint every 30s\nHEALTHCHECK --interval=30s\
   \ --timeout=3s --start-period=5s --retries=3 \\\n  CMD curl --fail http://localhost:8000/health || exit\
   \ 1\n\nCMD [\"python\", \"app.py\"]"
-recommendations: []
+recommendations:
+  - "Add a HEALTHCHECK instruction to enable container health monitoring"
+  - "Use curl, wget, or a custom health check script"
+  - "Set appropriate interval, timeout, and retries for your application"
 detection_scope: ''
 references:
 - title: Docker HEALTHCHECK documentation
-  url: ''
+  url: https://docs.docker.com/reference/dockerfile/#healthcheck
 - title: Kubernetes Liveness and Readiness Probes
-  url: ''
+  url: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 - title: '12-Factor App: Admin Processes'
-  url: ''
+  url: https://12factor.net/admin-processes
 - title: Production-Ready Health Checks (Microsoft)
-  url: ''
+  url: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/monitor-app-health
 compliance: []
-faq: []
+faq:
+  - question: "Why add HEALTHCHECK to a Dockerfile?"
+    answer: "HEALTHCHECK lets Docker and orchestrators like Kubernetes detect when your application is unhealthy and automatically restart or replace the container."
+  - question: "What is a good health check command?"
+    answer: "For web services: HEALTHCHECK CMD curl -f http://localhost:8080/health || exit 1. For non-HTTP services, use a custom script that verifies the application is responsive."
 similar_rules: []
 tests:
   positive: tests/positive/

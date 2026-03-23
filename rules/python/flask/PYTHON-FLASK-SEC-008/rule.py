@@ -12,7 +12,7 @@ class FlaskModule(QueryType):
     severity="HIGH",
     category="flask",
     cwe="CWE-79",
-    tags="python,flask,xss,html,owasp-a07,cwe-79",
+    tags="python,flask,xss,html,OWASP-A07,CWE-79",
     message="User input concatenated into HTML response. Use render_template() or markupsafe.escape().",
     owasp="A07:2021",
 )

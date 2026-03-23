@@ -11,7 +11,7 @@ class UrllibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-319",
-    tags="python,urllib,request-object,insecure-transport,cwe-319",
+    tags="python,urllib,request-object,insecure-transport,CWE-319",
     message="urllib.request.Request() detected. Ensure HTTPS URLs are used.",
     owasp="A02:2021",
 )

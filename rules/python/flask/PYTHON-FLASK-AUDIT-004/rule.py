@@ -11,7 +11,7 @@ class FlaskCORS(QueryType):
     severity="MEDIUM",
     category="flask",
     cwe="CWE-942",
-    tags="python,flask,cors,wildcard,cwe-942",
+    tags="python,flask,cors,wildcard,CWE-942",
     message="CORS configured with wildcard origin '*'. Restrict to specific domains.",
     owasp="A05:2021",
 )

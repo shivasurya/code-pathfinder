@@ -107,7 +107,7 @@ secure_example: |
 
 recommendations:
   - Replace xml.dom.minidom.parse() and minidom.parseString() with defusedxml.minidom.parse() and defusedxml.minidom.parseString().
-  - Install defusedxml: pip install defusedxml. The API is compatible with standard minidom.
+  - "Install defusedxml: pip install defusedxml. The API is compatible with standard minidom."
   - Note that xml.dom.minidom.Document() for XML generation (not parsing) is safe and does not need to be replaced.
   - Validate the XML structure and content after safe parsing to ensure it meets expected schema constraints.
   - For large XML documents, consider SAX-based parsing (defusedxml.sax) which uses less memory than DOM parsing.

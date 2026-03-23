@@ -12,7 +12,7 @@ class AsyncioModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,asyncio,shell,command-injection,cwe-78",
+    tags="python,asyncio,shell,command-injection,CWE-78",
     message="asyncio.create_subprocess_shell() detected. Use create_subprocess_exec() instead.",
     owasp="A03:2021",
 )

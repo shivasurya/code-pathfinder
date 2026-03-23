@@ -11,9 +11,9 @@ class SSLModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-295",
-    tags="python,ssl,unverified-context,certificate,owasp-a07,cwe-295",
+    tags="python,ssl,unverified-context,certificate,OWASP-A02,CWE-295",
     message="ssl._create_unverified_context() disables certificate verification. Use ssl.create_default_context().",
-    owasp="A07:2021",
+    owasp="A02:2021",
 )
 def detect_unverified_ssl():
     """Detects ssl._create_unverified_context() usage."""

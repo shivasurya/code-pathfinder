@@ -12,7 +12,7 @@ class Builtins(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-95",
-    tags="python,exec,code-injection,owasp-a03,cwe-95",
+    tags="python,exec,code-injection,OWASP-A03,CWE-95",
     message="exec() detected. Never execute dynamically constructed code.",
     owasp="A03:2021",
 )

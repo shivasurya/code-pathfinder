@@ -12,7 +12,7 @@ class JWTModule(QueryType):
     severity="MEDIUM",
     category="jwt",
     cwe="CWE-522",
-    tags="python,jwt,credentials,audit,cwe-522",
+    tags="python,jwt,credentials,audit,CWE-522",
     message="jwt.encode() detected. Ensure no passwords or secrets are in the payload.",
     owasp="A02:2021",
 )

@@ -12,7 +12,7 @@ class Builtins(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-95",
-    tags="python,eval,code-injection,owasp-a03,cwe-95",
+    tags="python,eval,code-injection,OWASP-A03,CWE-95",
     message="eval() detected. Avoid eval() on untrusted input. Use ast.literal_eval() for safe parsing.",
     owasp="A03:2021",
 )

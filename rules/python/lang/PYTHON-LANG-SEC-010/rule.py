@@ -12,7 +12,7 @@ class OSModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,os-system,command-injection,owasp-a03,cwe-78",
+    tags="python,os-system,command-injection,OWASP-A03,CWE-78",
     message="os.system() detected. Use subprocess.run() with list arguments instead.",
     owasp="A03:2021",
 )

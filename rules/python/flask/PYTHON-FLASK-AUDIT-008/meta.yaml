@@ -11,9 +11,9 @@ ruleset: python/flask/PYTHON-FLASK-AUDIT-008
 
 # Vulnerability Details
 cwe:
-  - id: CWE-96
+  - id: CWE-1336
     name: Improper Neutralization of Directives in Statically Saved Code (Static Code Injection)
-    url: https://cwe.mitre.org/data/definitions/96.html
+    url: https://cwe.mitre.org/data/definitions/1336.html
 
 owasp:
   - id: A03:2021
@@ -29,7 +29,7 @@ tags:
   - jinja2
   - audit
   - render-template-string
-  - CWE-96
+  - CWE-1336
   - OWASP-A03
 
 # Author
@@ -122,8 +122,8 @@ detection_scope: |
 
 # References
 references:
-  - title: "CWE-96: Improper Neutralization of Directives in Statically Saved Code"
-    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: "CWE-1336: Improper Neutralization of Directives in Statically Saved Code"
+    url: https://cwe.mitre.org/data/definitions/1336.html
   - title: OWASP Server-Side Template Injection
     url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server-Side_Template_Injection
   - title: Flask render_template_string Documentation
@@ -140,7 +140,7 @@ compliance:
   - standard: OWASP Top 10
     requirement: "A03:2021 - Injection: prevent server-side template injection"
   - standard: CWE Top 25
-    requirement: "CWE-96 Improper Neutralization of Directives in Statically Saved Code"
+    requirement: "CWE-1336 Improper Neutralization of Directives in Statically Saved Code"
   - standard: PCI DSS v4.0
     requirement: "Requirement 6.2.4 -- prevent injection attacks including template injection"
   - standard: NIST SP 800-53

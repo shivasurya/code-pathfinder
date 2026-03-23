@@ -12,7 +12,7 @@ class CodeModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-95",
-    tags="python,code-run,interactive-console,cwe-95",
+    tags="python,code-run,interactive-console,CWE-95",
     message="code.InteractiveConsole/interact detected. This enables arbitrary code execution.",
     owasp="A03:2021",
 )

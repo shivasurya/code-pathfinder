@@ -37,19 +37,26 @@ description: 'This rule detects EXPOSE instructions for ports below 1024 (privil
 message: Exposing port below 1024 typically requires root privileges to bind. Consider using non-privileged
   ports (>1024) with port mapping or granting CAP_NET_BIND_SERVICE capability.
 secure_example: ''
-recommendations: []
+recommendations:
+  - "Never run containers in privileged mode in production"
+  - "Use specific Linux capabilities (cap_add) instead of full privileges"
+  - "Use seccomp profiles to restrict system calls"
 detection_scope: ''
 references:
 - title: 'Linux Capabilities: CAP_NET_BIND_SERVICE'
-  url: ''
+  url: https://man7.org/linux/man-pages/man7/capabilities.7.html
 - title: 'CIS Docker Benchmark: Section 4.5'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 - title: OWASP Docker Security Cheat Sheet
   url: https://owasp.org/www-project-top-ten/
 - title: 'RFC 6335: Internet Assigned Numbers Authority (IANA)'
-  url: ''
+  url: https://www.rfc-editor.org/rfc/rfc6335
 compliance: []
-faq: []
+faq:
+  - question: "What does privileged mode do?"
+    answer: "Privileged mode gives the container almost all capabilities of the host, including access to all devices. It effectively removes all container isolation."
+  - question: "What should I use instead of privileged mode?"
+    answer: "Identify the specific capability needed (e.g., SYS_PTRACE for debugging) and add only that with cap_add. This follows the principle of least privilege."
 similar_rules: []
 tests:
   positive: tests/positive/

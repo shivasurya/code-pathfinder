@@ -21,7 +21,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-78",
-    tags="python,aws,lambda,command-injection,asyncio,owasp-a03,cwe-78",
+    tags="python,aws,lambda,command-injection,asyncio,OWASP-A03,CWE-78",
     message="Lambda event data flows to asyncio.create_subprocess_shell().",
     owasp="A03:2021",
 )

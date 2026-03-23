@@ -12,7 +12,7 @@ class CryptoCipherAlgorithms(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,cryptography,arc4,rc4,weak-cipher,cwe-327",
+    tags="python,cryptography,arc4,rc4,weak-cipher,CWE-327",
     message="ARC4/RC4 is a broken stream cipher. Use AES-GCM or ChaCha20Poly1305 instead.",
     owasp="A02:2021",
 )

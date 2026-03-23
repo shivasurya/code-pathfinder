@@ -11,7 +11,7 @@ class ReModule(QueryType):
     severity="LOW",
     category="lang",
     cwe="CWE-1333",
-    tags="python,regex,redos,denial-of-service,cwe-1333",
+    tags="python,regex,redos,denial-of-service,CWE-1333",
     message="re.compile/match/search detected. Audit regex patterns for catastrophic backtracking.",
     owasp="A06:2021",
 )

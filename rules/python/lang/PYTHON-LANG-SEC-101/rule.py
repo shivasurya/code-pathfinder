@@ -11,9 +11,9 @@ class OSModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-732",
-    tags="python,file-permissions,chmod,cwe-732",
+    tags="python,file-permissions,chmod,CWE-732",
     message="Overly permissive file permissions detected. Restrict to minimum required permissions.",
-    owasp="A01:2021",
+    owasp="A05:2021",
 )
 def detect_insecure_permissions():
     """Detects os.chmod/fchmod/lchmod with overly permissive modes."""

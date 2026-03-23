@@ -102,8 +102,10 @@ class RuleProcessor:
             print(f"    ⚠️  Bundle directory not found: {bundle_dir}")
             return None
 
-        # Find all Python files
-        py_files = list(bundle_dir.glob("*.py"))
+        # Find all Python files (top-level and in YAML folder structure subdirectories)
+        py_files = list(bundle_dir.glob("*.py")) + list(bundle_dir.glob("*/rule.py"))
+        # Filter out __init__.py and __pycache__
+        py_files = [f for f in py_files if not f.name.startswith("__")]
         if not py_files:
             print(f"    ⚠️  No Python files in bundle")
             return None
@@ -129,7 +131,12 @@ class RuleProcessor:
 
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for py_file in sorted(py_files):
-                    arcname = py_file.name  # Store only filename, not full path
+                    # For YAML folder structure (RULE-ID/rule.py), use parent dir name as filename
+                    # For legacy (rule_name.py), use the filename directly
+                    if py_file.name == "rule.py":
+                        arcname = f"{py_file.parent.name}.py"  # DOCKER-SEC-001/rule.py -> DOCKER-SEC-001.py
+                    else:
+                        arcname = py_file.name
                     # Read file content
                     with open(py_file, 'rb') as f:
                         file_content = f.read()

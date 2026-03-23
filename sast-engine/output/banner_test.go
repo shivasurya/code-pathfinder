@@ -24,7 +24,7 @@ func TestPrintBanner_FullBanner(t *testing.T) {
 	}
 
 	// Verify tagline is present
-	if !strings.Contains(output, "AI-Native Static Code Analysis") {
+	if !strings.Contains(output, "Static Code Analysis") {
 		t.Errorf("Expected tagline, got: %s", output)
 	}
 
@@ -34,7 +34,7 @@ func TestPrintBanner_FullBanner(t *testing.T) {
 	}
 
 	// Verify license is present
-	if !strings.Contains(output, "License: AGPL-3.0") {
+	if !strings.Contains(output, "License: Apache-2.0") {
 		t.Errorf("Expected license string, got: %s", output)
 	}
 
@@ -61,11 +61,11 @@ func TestPrintBanner_NoBanner(t *testing.T) {
 		t.Errorf("Expected version string, got: %s", output)
 	}
 
-	if !strings.Contains(output, "AI-Native Static Code Analysis") {
+	if !strings.Contains(output, "Static Code Analysis") {
 		t.Errorf("Expected tagline, got: %s", output)
 	}
 
-	if !strings.Contains(output, "AGPL-3.0") {
+	if !strings.Contains(output, "Apache-2.0") {
 		t.Errorf("Expected license info, got: %s", output)
 	}
 
@@ -92,7 +92,7 @@ func TestPrintBanner_VersionOnly(t *testing.T) {
 		t.Errorf("Expected version, got: %s", output)
 	}
 
-	if strings.Contains(output, "AGPL-3.0") {
+	if strings.Contains(output, "Apache-2.0") {
 		t.Errorf("License should not be shown, got: %s", output)
 	}
 }
@@ -113,7 +113,7 @@ func TestPrintBanner_LicenseOnly(t *testing.T) {
 		t.Errorf("Version should not be shown, got: %s", output)
 	}
 
-	if !strings.Contains(output, "AGPL-3.0") {
+	if !strings.Contains(output, "Apache-2.0") {
 		t.Errorf("Expected license, got: %s", output)
 	}
 }
@@ -167,17 +167,17 @@ func TestGetCompactBanner(t *testing.T) {
 		{
 			"normal version",
 			"0.0.25",
-			"Code Pathfinder v0.0.25 | AI-Native Static Code Analysis | https://codepathfinder.dev",
+			"Code Pathfinder v0.0.25 | Static Code Analysis | https://codepathfinder.dev",
 		},
 		{
 			"empty version",
 			"",
-			"Code Pathfinder v | AI-Native Static Code Analysis | https://codepathfinder.dev",
+			"Code Pathfinder v | Static Code Analysis | https://codepathfinder.dev",
 		},
 		{
 			"dev version",
 			"dev",
-			"Code Pathfinder vdev | AI-Native Static Code Analysis | https://codepathfinder.dev",
+			"Code Pathfinder vdev | Static Code Analysis | https://codepathfinder.dev",
 		},
 	}
 

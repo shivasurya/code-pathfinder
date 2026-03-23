@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="HIGH",
     category="django",
     cwe="CWE-918",
-    tags="python,django,ssrf,requests,owasp-a10,cwe-918",
+    tags="python,django,ssrf,requests,OWASP-A10,CWE-918",
     message="User input flows to requests HTTP call. Validate and restrict URLs.",
     owasp="A10:2021",
 )

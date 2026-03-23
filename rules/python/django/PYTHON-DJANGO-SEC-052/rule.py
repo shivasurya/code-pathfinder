@@ -23,7 +23,7 @@ _DJANGO_SOURCES = [
     severity="MEDIUM",
     category="django",
     cwe="CWE-79",
-    tags="python,django,xss,html-safe,audit,cwe-79",
+    tags="python,django,xss,html-safe,audit,CWE-79",
     message="html_safe() marks output as safe HTML. Ensure content is properly sanitized.",
     owasp="A03:2021",
 )

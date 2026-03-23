@@ -12,7 +12,7 @@ class CryptoModes(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,cryptography,ecb,cipher-mode,weak-mode,cwe-327",
+    tags="python,cryptography,ecb,cipher-mode,weak-mode,CWE-327",
     message="ECB mode does not provide semantic security. Use CBC, CTR, or GCM instead.",
     owasp="A02:2021",
 )

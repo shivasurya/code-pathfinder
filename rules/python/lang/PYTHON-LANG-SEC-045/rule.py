@@ -11,7 +11,7 @@ class ShelveModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-502",
-    tags="python,shelve,deserialization,pickle,cwe-502",
+    tags="python,shelve,deserialization,pickle,CWE-502",
     message="shelve.open() uses pickle internally. Not safe for untrusted data.",
     owasp="A08:2021",
 )

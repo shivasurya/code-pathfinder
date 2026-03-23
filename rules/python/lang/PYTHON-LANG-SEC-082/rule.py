@@ -14,7 +14,7 @@ class AiopgCursor(QueryType):
     severity="CRITICAL",
     category="lang",
     cwe="CWE-89",
-    tags="python,aiopg,sql-injection,database,cwe-89",
+    tags="python,aiopg,sql-injection,database,CWE-89",
     message="String formatting in aiopg query. Use parameterized queries.",
     owasp="A03:2021",
 )

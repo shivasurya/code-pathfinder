@@ -12,7 +12,7 @@ class CryptoEC(QueryType):
     severity="LOW",
     category="cryptography",
     cwe="CWE-326",
-    tags="python,cryptography,ec,elliptic-curve,key-size,audit,cwe-326",
+    tags="python,cryptography,ec,elliptic-curve,key-size,audit,CWE-326",
     message="EC key generation detected. Ensure curve >= 224 bits (avoid SECP192R1).",
     owasp="A02:2021",
 )

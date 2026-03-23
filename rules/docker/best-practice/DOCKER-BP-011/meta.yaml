@@ -32,15 +32,22 @@ message: Use COPY instead of ADD for simple file operations. ADD has implicit be
 secure_example: 'COPY app.tar.gz /app/  # ✅ Just copies the file
 
   RUN tar xzf /app/app.tar.gz  # ✅ Explicit extraction'
-recommendations: []
+recommendations:
+  - "Use COPY for copying local files into the image"
+  - "Only use ADD when you specifically need tar auto-extraction or URL downloading"
+  - "For downloading files, prefer RUN with curl or wget for better control"
 detection_scope: ''
 references:
 - title: Docker Best Practices
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: "Dockerfile Best Practice: Use COPY instead of ADD for files"
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#add-or-copy
 compliance: []
-faq: []
+faq:
+  - question: "What is the difference between ADD and COPY?"
+    answer: "COPY simply copies files from the build context. ADD has extra features: it auto-extracts tar archives and can download from URLs. These implicit behaviors can be surprising and introduce security risks."
+  - question: "When should I use ADD?"
+    answer: "Use ADD only when you need automatic tar extraction (e.g., ADD rootfs.tar.xz /). For all other cases, COPY is clearer and safer."
 similar_rules: []
 tests:
   positive: tests/positive/

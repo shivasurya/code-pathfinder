@@ -12,7 +12,7 @@ class PyCryptoCipherBlowfish(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,blowfish,weak-cipher,cwe-327",
+    tags="python,pycryptodome,blowfish,weak-cipher,CWE-327",
     message="Blowfish has a 64-bit block size vulnerable to birthday attacks. Use AES instead.",
     owasp="A02:2021",
 )

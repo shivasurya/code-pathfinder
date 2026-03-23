@@ -12,7 +12,7 @@ class Builtins(QueryType):
     severity="CRITICAL",
     category="flask",
     cwe="CWE-95",
-    tags="python,flask,code-injection,eval,rce,owasp-a03,cwe-95",
+    tags="python,flask,code-injection,eval,rce,OWASP-A03,CWE-95",
     message="User input flows to eval(). Use ast.literal_eval() for safe evaluation.",
     owasp="A03:2021",
 )

@@ -11,7 +11,7 @@ class LoggingConfig(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-95",
-    tags="python,logging,listen,eval,code-execution,cwe-95",
+    tags="python,logging,listen,eval,code-execution,CWE-95",
     message="logging.config.listen() can execute arbitrary code via configuration. Restrict access.",
     owasp="A03:2021",
 )

@@ -57,19 +57,26 @@ secure_example: '# Good: Pin specific version
   FROM maven:3.9.6-eclipse-temurin-17 AS builder
 
   FROM eclipse-temurin:17.0.10_7-jre-alpine'
-recommendations: []
+recommendations:
+  - "Pin base images to specific version tags (e.g., python:3.11-slim instead of python:latest)"
+  - "Use digest pinning (@sha256:...) for maximum reproducibility"
+  - "Document the base image version in a comment for team awareness"
 detection_scope: ''
 references:
 - title: 'Docker Best Practices: Image Tagging'
-  url: ''
+  url: https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 - title: '12-Factor App: Dependencies'
-  url: ''
+  url: https://12factor.net/dependencies
 - title: 'NIST SP 800-190: Container Image Integrity'
   url: https://csrc.nist.gov/publications
 - title: 'CIS Docker Benchmark: Section 4.1'
-  url: ''
+  url: https://www.cisecurity.org/benchmark/docker
 compliance: []
-faq: []
+faq:
+  - question: "Why should I avoid the :latest tag?"
+    answer: "The :latest tag is mutable and can point to different images over time. Your build may break or introduce vulnerabilities when the upstream image changes without your knowledge."
+  - question: "What is digest pinning?"
+    answer: "Digest pinning uses the SHA256 hash of a specific image layer (e.g., python:3.11@sha256:abc123...). Unlike tags, digests are immutable and guarantee you always pull the exact same image."
 similar_rules: []
 tests:
   positive: tests/positive/

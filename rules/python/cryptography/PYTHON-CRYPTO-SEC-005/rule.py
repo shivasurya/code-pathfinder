@@ -12,7 +12,7 @@ class PyCryptoCipherDES(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,des,weak-cipher,cwe-327",
+    tags="python,pycryptodome,des,weak-cipher,CWE-327",
     message="DES has a 56-bit key, easily brute-forced. Use AES instead.",
     owasp="A02:2021",
 )

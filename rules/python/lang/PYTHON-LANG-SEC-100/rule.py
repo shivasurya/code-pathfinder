@@ -10,10 +10,10 @@ class UUIDModule(QueryType):
     name="Insecure UUID Version (uuid1)",
     severity="LOW",
     category="lang",
-    cwe="CWE-330",
-    tags="python,uuid,mac-address,insufficiently-random,cwe-330",
+    cwe="CWE-200",
+    tags="python,uuid,mac-address,insufficiently-random,CWE-200",
     message="uuid.uuid1() leaks the host MAC address and uses predictable timestamps. Use uuid.uuid4() for random UUIDs.",
-    owasp="A02:2021",
+    owasp="A05:2021",
 )
 def detect_uuid1():
     """Detects uuid.uuid1() which leaks MAC address."""

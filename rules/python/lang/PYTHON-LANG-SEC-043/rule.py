@@ -14,7 +14,7 @@ class RuamelYamlModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-502",
-    tags="python,ruamel,yaml,deserialization,rce,cwe-502",
+    tags="python,ruamel,yaml,deserialization,rce,CWE-502",
     message="ruamel.yaml with unsafe typ detected. Use typ='safe' instead.",
     owasp="A08:2021",
 )

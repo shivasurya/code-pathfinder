@@ -1,7 +1,7 @@
 # Rule Identity
 id: PYTHON-CRYPTO-SEC-006
 name: XOR Cipher Usage via PyCryptodome
-short_description: Detects use of the XOR cipher through PyCryptodome, which is not encryption -- it is trivially reversible with no key material and provides zero confidentiality against any attacker.
+short_description: Detects use of the XOR cipher through PyCryptodome, which is not encryption -- it is a weak cipher that provides no real confidentiality. XOR encryption is trivially breakable regardless of key and should never be used for protecting sensitive data.
 
 # Classification
 severity: HIGH

@@ -11,9 +11,9 @@ ruleset: python/django/PYTHON-DJANGO-SEC-022
 
 # Vulnerability Details
 cwe:
-  - id: CWE-96
+  - id: CWE-94
     name: "Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection')"
-    url: https://cwe.mitre.org/data/definitions/96.html
+    url: https://cwe.mitre.org/data/definitions/94.html
 
 owasp:
   - id: A03:2021
@@ -28,7 +28,7 @@ tags:
   - function-dispatch
   - taint-analysis
   - inter-procedural
-  - CWE-96
+  - CWE-94
   - OWASP-A03
 
 # Author
@@ -127,8 +127,8 @@ detection_scope: |
 
 # References
 references:
-  - title: "CWE-96: Static Code Injection"
-    url: https://cwe.mitre.org/data/definitions/96.html
+  - title: "CWE-94: Static Code Injection"
+    url: https://cwe.mitre.org/data/definitions/94.html
   - title: "CWE-95: Eval Injection"
     url: https://cwe.mitre.org/data/definitions/95.html
   - title: OWASP Code Injection
@@ -143,7 +143,7 @@ references:
 # Compliance
 compliance:
   - standard: CWE Top 25
-    requirement: "CWE-96 - Static Code Injection in software weaknesses list"
+    requirement: "CWE-94 - Static Code Injection in software weaknesses list"
   - standard: OWASP Top 10
     requirement: "A03:2021 - Injection"
   - standard: PCI DSS v4.0

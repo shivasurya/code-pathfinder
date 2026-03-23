@@ -12,7 +12,7 @@ class SocketModule(QueryType):
     severity="CRITICAL",
     category="lang",
     cwe="CWE-506",
-    tags="python,reverse-shell,backdoor,cwe-506",
+    tags="python,reverse-shell,backdoor,CWE-506",
     message="Reverse shell pattern detected. This may be a backdoor.",
     owasp="A03:2021",
 )

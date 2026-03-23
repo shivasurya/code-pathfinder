@@ -12,7 +12,7 @@ class PyCryptoCipherXOR(QueryType):
     severity="HIGH",
     category="cryptography",
     cwe="CWE-327",
-    tags="python,pycryptodome,xor,weak-cipher,cwe-327",
+    tags="python,pycryptodome,xor,weak-cipher,CWE-327",
     message="XOR cipher provides no real security. Use AES instead.",
     owasp="A02:2021",
 )

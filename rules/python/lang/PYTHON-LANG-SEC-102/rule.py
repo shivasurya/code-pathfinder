@@ -8,7 +8,7 @@ from codepathfinder import calls, QueryType
     severity="HIGH",
     category="lang",
     cwe="CWE-259",
-    tags="python,hardcoded-password,credentials,cwe-259",
+    tags="python,hardcoded-password,credentials,CWE-259",
     message="Hardcoded password detected in function default argument. Use environment variables or secrets manager.",
     owasp="A07:2021",
 )

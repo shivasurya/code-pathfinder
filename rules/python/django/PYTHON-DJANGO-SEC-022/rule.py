@@ -19,8 +19,8 @@ _DJANGO_SOURCES = [
     name="Django Globals Misuse Code Execution",
     severity="HIGH",
     category="django",
-    cwe="CWE-96",
-    tags="python,django,code-injection,globals,owasp-a03,cwe-96",
+    cwe="CWE-94",
+    tags="python,django,code-injection,globals,OWASP-A03,CWE-94",
     message="User input used to index globals(). This allows arbitrary code execution.",
     owasp="A03:2021",
 )

@@ -21,7 +21,7 @@ _LAMBDA_SOURCES = [
     severity="CRITICAL",
     category="aws_lambda",
     cwe="CWE-89",
-    tags="python,aws,lambda,sql-injection,sqlalchemy,owasp-a03,cwe-89",
+    tags="python,aws,lambda,sql-injection,sqlalchemy,OWASP-A03,CWE-89",
     message="Lambda event data flows to SQLAlchemy session.execute(). Use text() with params.",
     owasp="A03:2021",
 )

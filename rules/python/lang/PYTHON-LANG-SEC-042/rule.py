@@ -14,7 +14,7 @@ class JsonPickleModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-502",
-    tags="python,jsonpickle,deserialization,rce,cwe-502",
+    tags="python,jsonpickle,deserialization,rce,CWE-502",
     message="jsonpickle.decode() detected. jsonpickle can execute arbitrary code. Use json instead.",
     owasp="A08:2021",
 )

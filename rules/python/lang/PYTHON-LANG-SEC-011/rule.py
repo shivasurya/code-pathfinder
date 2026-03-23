@@ -12,7 +12,7 @@ class OSModule(QueryType):
     severity="HIGH",
     category="lang",
     cwe="CWE-78",
-    tags="python,os-exec,command-injection,owasp-a03,cwe-78",
+    tags="python,os-exec,command-injection,OWASP-A03,CWE-78",
     message="os.exec*() detected. These replace the current process with a new one.",
     owasp="A03:2021",
 )

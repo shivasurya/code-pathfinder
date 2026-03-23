@@ -11,8 +11,8 @@ class FlaskModule(QueryType):
     name="Flask Server-Side Template Injection",
     severity="CRITICAL",
     category="flask",
-    cwe="CWE-96",
-    tags="python,flask,ssti,template-injection,rce,owasp-a03,cwe-96",
+    cwe="CWE-1336",
+    tags="python,flask,ssti,template-injection,rce,OWASP-A03,CWE-1336",
     message="User input flows to render_template_string(). Use render_template() with separate template files.",
     owasp="A03:2021",
 )

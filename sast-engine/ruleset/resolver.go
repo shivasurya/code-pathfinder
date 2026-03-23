@@ -6,9 +6,10 @@ import (
 	"strings"
 )
 
-// Rule ID pattern: starts with uppercase letters, followed by dash, uppercase letters/numbers, dash, and numbers.
-// Examples: DOCKER-BP-007, PYTHON-SEC-001, COMPOSE-SEC-008.
-var ruleIDPattern = regexp.MustCompile(`^[A-Z]+(-[A-Z]+)?-\d+$`)
+// Rule ID pattern: starts with uppercase letters, followed by one or more dash-separated
+// uppercase segments, ending with a dash and digits.
+// Examples: DOCKER-BP-007, PYTHON-FLASK-SEC-003, PYTHON-LANG-SEC-001, COMPOSE-SEC-008.
+var ruleIDPattern = regexp.MustCompile(`^[A-Z]+(-[A-Z]+)*-\d+[a-z]?$`)
 
 // ParseSpec parses "docker/security" or "docker/all" into RulesetSpec.
 // The "all" keyword is special and expands to all bundles in the category.

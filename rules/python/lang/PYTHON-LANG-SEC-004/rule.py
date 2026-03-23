@@ -9,7 +9,7 @@ from codepathfinder.presets import PropagationPresets
     severity="MEDIUM",
     category="lang",
     cwe="CWE-96",
-    tags="python,globals,code-injection,cwe-96",
+    tags="python,globals,code-injection,CWE-96",
     message="globals() passed to a function. This may allow arbitrary attribute access.",
     owasp="A03:2021",
 )

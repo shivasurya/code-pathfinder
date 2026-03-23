@@ -11,7 +11,7 @@ class MarshalModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-502",
-    tags="python,marshal,deserialization,cwe-502",
+    tags="python,marshal,deserialization,CWE-502",
     message="marshal.loads/load detected. Marshal is not secure against erroneous or malicious data.",
     owasp="A08:2021",
 )

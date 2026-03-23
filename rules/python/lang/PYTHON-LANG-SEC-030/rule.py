@@ -11,7 +11,7 @@ class HashlibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-327",
-    tags="python,md5,weak-hash,cryptography,owasp-a02,cwe-327",
+    tags="python,md5,weak-hash,cryptography,OWASP-A02,CWE-327",
     message="MD5 is cryptographically broken. Use SHA-256 or SHA-3 for security-sensitive hashing.",
     owasp="A02:2021",
 )

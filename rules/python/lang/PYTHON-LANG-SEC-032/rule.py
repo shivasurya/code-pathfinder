@@ -11,7 +11,7 @@ class HashlibModule(QueryType):
     severity="MEDIUM",
     category="lang",
     cwe="CWE-327",
-    tags="python,weak-hash,hashlib-new,cwe-327",
+    tags="python,weak-hash,hashlib-new,CWE-327",
     message="hashlib.new() with insecure algorithm. Use SHA-256 or SHA-3.",
     owasp="A02:2021",
 )
