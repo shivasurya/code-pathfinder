@@ -857,3 +857,127 @@ func TestStdlibRegistryRemote_GetModule_HTTPError(t *testing.T) {
 	assert.Contains(t, err.Error(), "module download failed with status: 404")
 	assert.Nil(t, module)
 }
+
+func TestStdlibRegistryRemote_FindClassMethodAlias(t *testing.T) {
+	// tarfile.open is a module-level alias for TarFile.open (classmethod)
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"tarfile": {
+				Module:    "tarfile",
+				Functions: map[string]*core.StdlibFunction{},
+				Classes: map[string]*core.StdlibClass{
+					"TarFile": {
+						Type: "class",
+						Methods: map[string]*core.StdlibFunction{
+							"open":       {ReturnType: "tarfile.Self", Confidence: 0.95},
+							"extractall": {ReturnType: "builtins.NoneType", Confidence: 0.95},
+						},
+					},
+					"TarInfo": {
+						Type: "class",
+						Methods: map[string]*core.StdlibFunction{
+							"isdir": {ReturnType: "builtins.bool", Confidence: 0.9},
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := newTestLogger()
+
+	// Found: tarfile.open → TarFile.open
+	method, className := remote.FindClassMethodAlias("tarfile", "open", logger)
+	require.NotNil(t, method, "should find TarFile.open as alias for tarfile.open")
+	assert.Equal(t, "TarFile", className)
+	assert.Equal(t, "tarfile.Self", method.ReturnType)
+	assert.InDelta(t, 0.95, method.Confidence, 0.001)
+
+	// Found: tarfile.extractall → TarFile.extractall
+	method2, className2 := remote.FindClassMethodAlias("tarfile", "extractall", logger)
+	require.NotNil(t, method2)
+	assert.Equal(t, "TarFile", className2)
+	assert.Equal(t, "builtins.NoneType", method2.ReturnType)
+
+	// Found: tarfile.isdir → TarInfo.isdir
+	method3, className3 := remote.FindClassMethodAlias("tarfile", "isdir", logger)
+	require.NotNil(t, method3)
+	assert.Equal(t, "TarInfo", className3)
+
+	// Not found: no class has "nonexistent"
+	method4, className4 := remote.FindClassMethodAlias("tarfile", "nonexistent", logger)
+	assert.Nil(t, method4)
+	assert.Equal(t, "", className4)
+
+	// Not found: module not in cache
+	method5, className5 := remote.FindClassMethodAlias("unknown", "open", logger)
+	assert.Nil(t, method5)
+	assert.Equal(t, "", className5)
+}
+
+func TestStdlibRegistryRemote_FindClassMethodAlias_PrefersModuleNameClass(t *testing.T) {
+	// When multiple classes have the same method name, prefer the class
+	// whose name matches the module (case-insensitive).
+	// Use many non-matching classes to increase chance the preferred one
+	// is not the first iterated (Go map order is random).
+	classes := map[string]*core.StdlibClass{
+		"MyMod": {
+			Type: "class",
+			Methods: map[string]*core.StdlibFunction{
+				"connect": {ReturnType: "mymod.MyMod", Confidence: 0.95},
+			},
+		},
+	}
+	// Add many non-matching classes with the same method to force iteration
+	for _, name := range []string{"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta"} {
+		classes[name] = &core.StdlibClass{
+			Type: "class",
+			Methods: map[string]*core.StdlibFunction{
+				"connect": {ReturnType: "mymod." + name, Confidence: 0.8},
+			},
+		}
+	}
+
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"mymod": {
+				Module:    "mymod",
+				Functions: map[string]*core.StdlibFunction{},
+				Classes:   classes,
+			},
+		},
+	}
+
+	// Run multiple times to exercise different map iteration orders
+	for i := 0; i < 20; i++ {
+		method, className := remote.FindClassMethodAlias("mymod", "connect", newTestLogger())
+		require.NotNil(t, method, "iteration %d: should find connect", i)
+		assert.Equal(t, "MyMod", className, "iteration %d: should always prefer class matching module name", i)
+		assert.Equal(t, "mymod.MyMod", method.ReturnType, "iteration %d", i)
+	}
+}
+
+func TestStdlibRegistryRemote_FindClassMethodAlias_Inherited(t *testing.T) {
+	// FindClassMethodAlias uses GetClassMethod which checks inherited methods too.
+	remote := &StdlibRegistryRemote{
+		ModuleCache: map[string]*core.StdlibModule{
+			"mymod": {
+				Module:    "mymod",
+				Functions: map[string]*core.StdlibFunction{},
+				Classes: map[string]*core.StdlibClass{
+					"Base": {
+						Type:    "class",
+						Methods: map[string]*core.StdlibFunction{},
+						InheritedMethods: map[string]*core.InheritedMember{
+							"read": {ReturnType: "builtins.bytes", Confidence: 0.85, Source: "io.IOBase"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	method, className := remote.FindClassMethodAlias("mymod", "read", newTestLogger())
+	require.NotNil(t, method, "should find inherited method via GetClassMethod")
+	assert.Equal(t, "Base", className)
+	assert.Equal(t, "builtins.bytes", method.ReturnType)
+}

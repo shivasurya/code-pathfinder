@@ -1934,6 +1934,25 @@ func resolveStdlibVariableBindings(typeEngine *resolution.TypeInferenceEngine, l
 						scope.Variables[varName][i].AssignedFrom = funcName
 						continue
 					}
+
+					// Try as module-level alias to a classmethod.
+					// Handles patterns like tarfile.open which is TarFile.open.
+					if method, className := loader.FindClassMethodAlias(moduleName, name, logger); method != nil {
+						returnType := method.ReturnType
+						if returnType != "" && returnType != "unknown" {
+							// Resolve "Self" return types to the owning class
+							if returnType == "Self" || returnType == moduleName+".Self" {
+								returnType = moduleName + "." + className
+							}
+							scope.Variables[varName][i].Type = &core.TypeInfo{
+								TypeFQN:    returnType,
+								Confidence: binding.Type.Confidence * method.Confidence * 0.95,
+								Source:     "stdlib",
+							}
+							scope.Variables[varName][i].AssignedFrom = funcName
+							continue
+						}
+					}
 				}
 
 			}
