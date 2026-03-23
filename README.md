@@ -230,7 +230,6 @@ name: Security Scan
 
 on:
   pull_request:
-    branches: [main, master]
 
 permissions:
   security-events: write
