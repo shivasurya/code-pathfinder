@@ -162,17 +162,19 @@ func ResolveSelfAttributeCall(
 	}
 
 	// Step 3: Resolve the final method on the terminal type
-	return resolveMethodOnType(currentTypeFQN, methodName, lastAttrConfidence, builtins, callGraph)
+	return resolveMethodOnType(currentTypeFQN, methodName, lastAttrConfidence, builtins, callGraph, typeEngine)
 }
 
 // resolveMethodOnType resolves a method call on a given type FQN.
-// Checks builtin registry first, then custom class methods in the call graph.
+// Checks builtin registry first, then custom class methods in the call graph,
+// then stdlib/third-party registries for known external types.
 func resolveMethodOnType(
 	typeFQN string,
 	methodName string,
 	attrConfidence float64,
 	builtins *registry.BuiltinRegistry,
 	callGraph *core.CallGraph,
+	typeEngine *TypeInferenceEngine,
 ) (string, bool, *core.TypeInfo) {
 	// Check if it's a builtin type
 	if strings.HasPrefix(typeFQN, "builtins.") {
@@ -227,6 +229,11 @@ func resolveMethodOnType(
 		}
 	}
 
+	// Check stdlib/third-party registry for external types (e.g., sqlite3.Connection.execute).
+	if fqn, resolved, typeInfo := resolveMethodViaStdlibRegistry(typeFQN, methodName, attrConfidence, typeEngine); resolved {
+		return fqn, true, typeInfo
+	}
+
 	// Method not found — collect stats
 	attributeFailureStats.CustomClassUnsupported++
 	if len(attributeFailureStats.CustomClassSamples) < 20 {
@@ -234,6 +241,85 @@ func resolveMethodOnType(
 			attributeFailureStats.CustomClassSamples,
 			fmt.Sprintf("method %s not found on type %s", methodName, typeFQN))
 	}
+	return "", false, nil
+}
+
+// resolveMethodViaStdlibRegistry checks the stdlib and third-party registries
+// for a method on an external type (e.g., sqlite3.Connection.execute).
+// The typeFQN is split into module + class name, then looked up via GetClassMethod.
+func resolveMethodViaStdlibRegistry(
+	typeFQN string,
+	methodName string,
+	attrConfidence float64,
+	typeEngine *TypeInferenceEngine,
+) (string, bool, *core.TypeInfo) {
+	if typeEngine == nil {
+		return "", false, nil
+	}
+
+	// Split typeFQN into module and class.
+	// e.g., "sqlite3.Connection" → module="sqlite3", class="Connection"
+	// e.g., "http.client.HTTPConnection" → try "http.client" + "HTTPConnection", then "http" + "client"
+	parts := strings.Split(typeFQN, ".")
+	if len(parts) < 2 {
+		return "", false, nil
+	}
+
+	// Try splitting at each dot position, from rightmost to leftmost.
+	// This handles nested modules like "http.client.HTTPConnection".
+	for i := len(parts) - 1; i >= 1; i-- {
+		moduleName := strings.Join(parts[:i], ".")
+		className := parts[i]
+
+		// Only proceed if the remaining parts after className are empty
+		// (i.e., className is the last segment).
+		if i != len(parts)-1 {
+			continue
+		}
+
+		// Check stdlib registry
+		if typeEngine.StdlibRemote != nil {
+			if stdlibLoader, ok := typeEngine.StdlibRemote.(*registry.StdlibRegistryRemote); ok {
+				if stdlibLoader.HasModule(moduleName) {
+					method := stdlibLoader.GetClassMethod(moduleName, className, methodName, nil)
+					if method != nil {
+						methodFQN := typeFQN + "." + methodName
+						returnType := ""
+						if method.ReturnType != "" && method.ReturnType != "unknown" {
+							returnType = method.ReturnType
+						}
+						return methodFQN, true, &core.TypeInfo{
+							TypeFQN:    returnType,
+							Confidence: float32(attrConfidence) * method.Confidence * 0.9,
+							Source:     "self_attribute_stdlib",
+						}
+					}
+				}
+			}
+		}
+
+		// Check third-party registry
+		if typeEngine.ThirdPartyRemote != nil {
+			if tpLoader, ok := typeEngine.ThirdPartyRemote.(*registry.ThirdPartyRegistryRemote); ok {
+				if tpLoader.HasModule(moduleName) {
+					method := tpLoader.GetClassMethod(moduleName, className, methodName, nil)
+					if method != nil {
+						methodFQN := typeFQN + "." + methodName
+						returnType := ""
+						if method.ReturnType != "" && method.ReturnType != "unknown" {
+							returnType = method.ReturnType
+						}
+						return methodFQN, true, &core.TypeInfo{
+							TypeFQN:    returnType,
+							Confidence: float32(attrConfidence) * method.Confidence * 0.9,
+							Source:     "self_attribute_thirdparty",
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return "", false, nil
 }
 

@@ -1059,6 +1059,289 @@ func TestGetModuleFromClassFQN(t *testing.T) {
 	}
 }
 
+// newTestThirdPartyLoader creates a ThirdPartyRegistryRemote with pre-populated cache for testing.
+func newTestThirdPartyLoader(modules map[string]*core.StdlibModule) *registry.ThirdPartyRegistryRemote {
+	manifestModules := make([]*core.ModuleEntry, 0, len(modules))
+	for name := range modules {
+		manifestModules = append(manifestModules, &core.ModuleEntry{Name: name})
+	}
+	loader := registry.NewThirdPartyRegistryRemote("http://test")
+	loader.Manifest = &core.Manifest{Modules: manifestModules}
+	loader.ModuleCache = modules
+	return loader
+}
+
+// newTestStdlibLoader creates a StdlibRegistryRemote with pre-populated cache for testing.
+func newTestStdlibLoader(modules map[string]*core.StdlibModule) *registry.StdlibRegistryRemote {
+	manifestModules := make([]*core.ModuleEntry, 0, len(modules))
+	for name := range modules {
+		manifestModules = append(manifestModules, &core.ModuleEntry{Name: name})
+	}
+	loader := registry.NewStdlibRegistryRemote("http://test", "3.14")
+	loader.Manifest = &core.Manifest{Modules: manifestModules}
+	loader.ModuleCache = modules
+	return loader
+}
+
+// TestResolveMethodViaStdlibRegistry tests stdlib/thirdparty lookup in resolveMethodOnType.
+func TestResolveMethodViaStdlibRegistry(t *testing.T) {
+	tests := []struct {
+		name           string
+		typeFQN        string
+		methodName     string
+		attrConfidence float64
+		setupFunc      func() *TypeInferenceEngine
+		expectResolved bool
+		expectFQN      string
+		expectSource   string
+	}{
+		{
+			name:           "nil typeEngine returns unresolved",
+			typeFQN:        "sqlite3.Connection",
+			methodName:     "execute",
+			attrConfidence: 0.9,
+			setupFunc:      func() *TypeInferenceEngine { return nil },
+			expectResolved: false,
+		},
+		{
+			name:           "single-part typeFQN returns unresolved",
+			typeFQN:        "Connection",
+			methodName:     "execute",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				return NewTypeInferenceEngine(core.NewModuleRegistry())
+			},
+			expectResolved: false,
+		},
+		{
+			name:           "typeEngine with no stdlib registry returns unresolved",
+			typeFQN:        "sqlite3.Connection",
+			methodName:     "execute",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				return te
+			},
+			expectResolved: false,
+		},
+		{
+			name:           "stdlib registry resolves sqlite3.Connection.execute",
+			typeFQN:        "sqlite3.Connection",
+			methodName:     "execute",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"sqlite3": {
+						Module: "sqlite3",
+						Classes: map[string]*core.StdlibClass{
+							"Connection": {
+								Type: "class",
+								Methods: map[string]*core.StdlibFunction{
+									"execute": {
+										ReturnType: "sqlite3.Cursor",
+										Confidence: 0.95,
+									},
+								},
+							},
+						},
+					},
+				})
+				return te
+			},
+			expectResolved: true,
+			expectFQN:      "sqlite3.Connection.execute",
+			expectSource:   "self_attribute_stdlib",
+		},
+		{
+			name:           "stdlib registry with unknown return type",
+			typeFQN:        "logging.Logger",
+			methodName:     "warning",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"logging": {
+						Module: "logging",
+						Classes: map[string]*core.StdlibClass{
+							"Logger": {
+								Type: "class",
+								Methods: map[string]*core.StdlibFunction{
+									"warning": {
+										ReturnType: "unknown",
+										Confidence: 0.9,
+									},
+								},
+							},
+						},
+					},
+				})
+				return te
+			},
+			expectResolved: true,
+			expectFQN:      "logging.Logger.warning",
+			expectSource:   "self_attribute_stdlib",
+		},
+		{
+			name:           "stdlib module exists but method not found",
+			typeFQN:        "sqlite3.Connection",
+			methodName:     "nonexistent",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"sqlite3": {
+						Module: "sqlite3",
+						Classes: map[string]*core.StdlibClass{
+							"Connection": {
+								Type:    "class",
+								Methods: map[string]*core.StdlibFunction{},
+							},
+						},
+					},
+				})
+				return te
+			},
+			expectResolved: false,
+		},
+		{
+			name:           "stdlib module not in manifest",
+			typeFQN:        "unknown_module.SomeClass",
+			methodName:     "method",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				return te
+			},
+			expectResolved: false,
+		},
+		{
+			name:           "thirdparty registry resolves flask.Flask.route",
+			typeFQN:        "flask.Flask",
+			methodName:     "route",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				// No stdlib → fall through to thirdparty
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				// ThirdParty uses same struct type
+				tpLoader := newTestThirdPartyLoader(map[string]*core.StdlibModule{
+					"flask": {
+						Module: "flask",
+						Classes: map[string]*core.StdlibClass{
+							"Flask": {
+								Type: "class",
+								Methods: map[string]*core.StdlibFunction{
+									"route": {
+										ReturnType: "flask.Flask.route",
+										Confidence: 0.9,
+									},
+								},
+							},
+						},
+					},
+				})
+				te.ThirdPartyRemote = tpLoader
+				return te
+			},
+			expectResolved: true,
+			expectFQN:      "flask.Flask.route",
+			expectSource:   "self_attribute_thirdparty",
+		},
+		{
+			name:           "thirdparty module exists but method not found falls through",
+			typeFQN:        "flask.Flask",
+			methodName:     "nonexistent",
+			attrConfidence: 0.9,
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				tpLoader := newTestThirdPartyLoader(map[string]*core.StdlibModule{
+					"flask": {
+						Module: "flask",
+						Classes: map[string]*core.StdlibClass{
+							"Flask": {
+								Type:    "class",
+								Methods: map[string]*core.StdlibFunction{},
+							},
+						},
+					},
+				})
+				te.ThirdPartyRemote = tpLoader
+				return te
+			},
+			expectResolved: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			typeEngine := tt.setupFunc()
+			fqn, resolved, typeInfo := resolveMethodViaStdlibRegistry(
+				tt.typeFQN, tt.methodName, tt.attrConfidence, typeEngine,
+			)
+			assert.Equal(t, tt.expectResolved, resolved)
+			if tt.expectResolved {
+				assert.Equal(t, tt.expectFQN, fqn)
+				assert.NotNil(t, typeInfo)
+				if tt.expectSource != "" {
+					assert.Equal(t, tt.expectSource, typeInfo.Source)
+				}
+			} else {
+				assert.Empty(t, fqn)
+			}
+		})
+	}
+}
+
+// TestDeepChainWithStdlibTerminal tests that when a stdlib type is the terminal type
+// in a deep chain, the stdlib registry is consulted for the method lookup.
+func TestDeepChainWithStdlibTerminal(t *testing.T) {
+	// Reset stats
+	attributeFailureStats = &FailureStats{
+		DeepChainSamples:         make([]string, 0, 20),
+		AttributeNotFoundSamples: make([]string, 0, 20),
+		CustomClassSamples:       make([]string, 0, 20),
+	}
+
+	moduleRegistry := core.NewModuleRegistry()
+	typeEngine := NewTypeInferenceEngine(moduleRegistry)
+	typeEngine.Attributes = registry.NewAttributeRegistry()
+	builtins := registry.NewBuiltinRegistry()
+	callGraph := core.NewCallGraph()
+
+	// App.db → DbWrapper (project class)
+	typeEngine.Attributes.AddAttribute("app.App", &core.ClassAttribute{
+		Name: "db",
+		Type: &core.TypeInfo{TypeFQN: "app.DbWrapper", Confidence: 0.9},
+		Confidence: 0.9,
+	})
+	classAttrs := typeEngine.Attributes.GetClassAttributes("app.App")
+	classAttrs.Methods = append(classAttrs.Methods, "app.App.dangerous")
+
+	// DbWrapper.conn → sqlite3.Connection (stdlib type)
+	typeEngine.Attributes.AddAttribute("app.DbWrapper", &core.ClassAttribute{
+		Name: "conn",
+		Type: &core.TypeInfo{TypeFQN: "sqlite3.Connection", Confidence: 0.9},
+		Confidence: 0.9,
+	})
+
+	// No stdlib registry set — should fail at stdlib lookup, fall to CustomClassUnsupported
+	fqn, resolved, _ := ResolveSelfAttributeCall(
+		"self.db.conn.execute",
+		"app.App.dangerous",
+		typeEngine,
+		builtins,
+		callGraph,
+	)
+
+	// Without stdlib registry, it can't resolve sqlite3.Connection.execute
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+	assert.Equal(t, 1, attributeFailureStats.CustomClassUnsupported)
+}
+
 // TestExtractClassMethodSuffix tests the suffix extraction helper.
 func TestExtractClassMethodSuffix(t *testing.T) {
 	tests := []struct {
