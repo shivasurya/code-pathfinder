@@ -1348,6 +1348,48 @@ func TestResolveSelfAttributeCall_DeepChain(t *testing.T) {
 			},
 		},
 		{
+			name:      "suffix fallback resolves FQN mismatch from relative imports",
+			target:    "self.core.config.get",
+			callerFQN: "myapp.managers.ThreadManager.reconnect",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// ThreadManager.core → myapp.core.Core
+				typeEngine.Attributes.AddAttribute("myapp.managers.ThreadManager", &core.ClassAttribute{
+					Name: "core",
+					Type: &core.TypeInfo{TypeFQN: "myapp.core.Core", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("myapp.managers.ThreadManager")
+				classAttrs.Methods = append(classAttrs.Methods, "myapp.managers.ThreadManager.reconnect")
+
+				// Core.config → MISMATCHED FQN "config.parser.ConfigParser"
+				// (simulates relative import losing a path segment)
+				typeEngine.Attributes.AddAttribute("myapp.core.Core", &core.ClassAttribute{
+					Name: "config",
+					Type: &core.TypeInfo{TypeFQN: "config.parser.ConfigParser", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+
+				// Callgraph stores the CORRECT full FQN
+				callGraph.Functions["myapp.config.parser.ConfigParser.get"] = &graph.Node{
+					ID:   "func-config-get",
+					Name: "get",
+					Type: "method",
+				}
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "myapp.config.parser.ConfigParser.get",
+			expectedType:     "myapp.config.parser.ConfigParser",
+			expectedSource:   "self_attribute_custom_class",
+		},
+		{
 			name:      "3-level chain with class: placeholder resolved inline",
 			target:    "self.core.value.upper",
 			callerFQN: "app.Manager.run",

@@ -196,14 +196,32 @@ func resolveMethodOnType(
 	methodFQN := typeFQN + "." + methodName
 
 	if callGraph != nil {
+		// Exact lookup first
 		if node := callGraph.Functions[methodFQN]; node != nil {
-			if node.Type == "method" || node.Type == "function_definition" ||
-				node.Type == "constructor" || node.Type == "property" ||
-				node.Type == "special_method" {
+			if isCallableNode(node) {
 				return methodFQN, true, &core.TypeInfo{
 					TypeFQN:    typeFQN,
 					Confidence: float32(attrConfidence),
 					Source:     "self_attribute_custom_class",
+				}
+			}
+		}
+
+		// Suffix fallback: handles FQN mismatches from relative imports.
+		// The attribute registry may store "config.parser.ConfigParser" while the
+		// callgraph stores "myapp.config.parser.ConfigParser" (with full module prefix).
+		// We match on "ClassName.method" suffix to bridge this gap.
+		suffix := extractClassMethodSuffix(typeFQN, methodName)
+		if suffix != "" {
+			for fqn, node := range callGraph.Functions {
+				if strings.HasSuffix(fqn, "."+suffix) && isCallableNode(node) {
+					// Use the callgraph's FQN (the authoritative one)
+					resolvedTypeFQN := strings.TrimSuffix(fqn, "."+methodName)
+					return fqn, true, &core.TypeInfo{
+						TypeFQN:    resolvedTypeFQN,
+						Confidence: float32(attrConfidence * 0.85), // slight penalty for fuzzy match
+						Source:     "self_attribute_custom_class",
+					}
 				}
 			}
 		}
@@ -217,6 +235,25 @@ func resolveMethodOnType(
 			fmt.Sprintf("method %s not found on type %s", methodName, typeFQN))
 	}
 	return "", false, nil
+}
+
+// isCallableNode checks if a graph node represents a callable symbol.
+func isCallableNode(node *graph.Node) bool {
+	return node != nil && (node.Type == "method" || node.Type == "function_definition" ||
+		node.Type == "constructor" || node.Type == "property" ||
+		node.Type == "special_method")
+}
+
+// extractClassMethodSuffix extracts "ClassName.method" from a full type FQN.
+// e.g., "config.parser.ConfigParser" + "get" → "ConfigParser.get".
+func extractClassMethodSuffix(typeFQN, methodName string) string {
+	lastDot := strings.LastIndex(typeFQN, ".")
+	if lastDot == -1 {
+		// typeFQN is just a class name (no module prefix)
+		return typeFQN + "." + methodName
+	}
+	className := typeFQN[lastDot+1:]
+	return className + "." + methodName
 }
 
 // resolveClassNameForChain resolves a "class:ClassName" placeholder during chain walking.

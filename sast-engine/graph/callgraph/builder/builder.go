@@ -406,7 +406,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					}
 
 					// Resolve the call target to a fully qualified name
-					targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, job.modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
+						targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, job.modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
 
 					// Update call site with resolution information
 					callSite.TargetFQN = targetFQN
