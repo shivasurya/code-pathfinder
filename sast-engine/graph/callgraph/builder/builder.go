@@ -968,9 +968,9 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		// For self.attr.method where attr isn't in child class, try parent classes
 		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil && codeGraph != nil {
 			attrParts := strings.Split(target, ".")
-			if len(attrParts) == 3 {
+			if len(attrParts) >= 3 {
 				attrName := attrParts[1]
-				methodOnAttr := attrParts[2]
+				methodOnAttr := attrParts[len(attrParts)-1]
 				callerParts := strings.Split(callerFQN, ".")
 				if len(callerParts) >= 3 {
 					callerClassName := callerParts[len(callerParts)-2]

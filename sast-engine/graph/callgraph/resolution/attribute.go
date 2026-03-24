@@ -32,25 +32,26 @@ var attributeFailureStats = &FailureStats{
 	CustomClassSamples:       make([]string, 0, 20),
 }
 
-// ResolveSelfAttributeCall resolves self.attribute.method() patterns
-// This is the core of Phase 3 Task 12 - using extracted attributes to resolve calls.
+// maxChainDepth limits the number of intermediate attributes in a chain walk.
+// Real-world Python rarely exceeds 4 levels (self.app.db.session.execute).
+// This prevents pathological chains from causing excessive work.
+const maxChainDepth = 6
+
+// ResolveSelfAttributeCall resolves self.attribute.method() patterns with
+// support for arbitrary chain depth (e.g., self.obj.attr.method()).
 //
 // Algorithm:
 //  1. Detect pattern: target starts with "self." and has 2+ dots
-//  2. Parse: self.attr.method → attr="attr", method="method"
+//  2. Parse: self.attr₁.attr₂...attrN.method → chain=[attr₁..attrN], method
 //  3. Find containing class from callerFQN
-//  4. Lookup attribute type in AttributeRegistry
-//  5. Resolve method on inferred type
+//  4. Walk the chain: for each attribute, look up its type and advance
+//  5. Resolve the final method on the terminal type
 //
-// Example:
+// Examples:
 //
-//	Input: self.value.upper (caller: test_chaining.StringBuilder.process)
-//	Steps:
-//	  1. Parse → attr="value", method="upper"
-//	  2. Extract class → test_chaining.StringBuilder
-//	  3. Lookup value type → builtins.str
-//	  4. Resolve upper on str → builtins.str.upper
-//	Output: (builtins.str.upper, true, TypeInfo{builtins.str, 1.0, "self_attribute"})
+//	2-level: self.value.upper → chain=["value"], method="upper"
+//	3-level: self.core.config.get → chain=["core","config"], method="get"
+//	4-level: self.app.db.session.execute → chain=["app","db","session"], method="execute"
 //
 // Parameters:
 //   - target: call target string (e.g., "self.value.upper")
@@ -84,24 +85,25 @@ func ResolveSelfAttributeCall(
 		return "", false, nil
 	}
 
-	// Parse the pattern: self.attr.method or self.attr.subattr.method
+	// Parse the pattern: self.attr₁[.attr₂...].method
 	parts := strings.Split(target, ".")
 	if len(parts) < 3 {
 		return "", false, nil
 	}
 
-	// For now, handle simple case: self.attr.method (2 levels)
-	// TODO: Handle deep chains like self.obj.attr.method
-	if len(parts) > 3 {
+	// Extract attribute chain and final method name.
+	// parts[0] = "self", parts[1..n-1] = attribute chain, parts[n] = method
+	attrChain := parts[1 : len(parts)-1] // e.g., ["core", "config"]
+	methodName := parts[len(parts)-1]    // e.g., "get"
+
+	// Enforce depth limit to prevent pathological chains
+	if len(attrChain) > maxChainDepth {
 		attributeFailureStats.DeepChains++
 		if len(attributeFailureStats.DeepChainSamples) < 20 {
 			attributeFailureStats.DeepChainSamples = append(attributeFailureStats.DeepChainSamples, target)
 		}
 		return "", false, nil
 	}
-
-	attrName := parts[1]
-	methodName := parts[2]
 
 	// Step 1: Find the containing class by checking which classes have this method
 	classFQN := findClassContainingMethod(callerFQN, typeEngine.Attributes)
@@ -110,31 +112,78 @@ func ResolveSelfAttributeCall(
 		return "", false, nil
 	}
 
-	// Step 2: Lookup attribute in AttributeRegistry
-	attr := typeEngine.Attributes.GetAttribute(classFQN, attrName)
-	if attr == nil {
-		attributeFailureStats.AttributeNotFound++
-		if len(attributeFailureStats.AttributeNotFoundSamples) < 20 {
-			attributeFailureStats.AttributeNotFoundSamples = append(
-				attributeFailureStats.AttributeNotFoundSamples,
-				fmt.Sprintf("%s (in class %s)", target, classFQN))
+	// Step 2: Walk the attribute chain iteratively.
+	// Start from the containing class and resolve each attribute's type.
+	currentTypeFQN := classFQN
+	var lastAttrConfidence float64
+	visited := make(map[string]bool) // Cycle detection
+
+	for _, attrName := range attrChain {
+		// Cycle detection: if we've seen this type before, stop
+		if visited[currentTypeFQN] {
+			attributeFailureStats.AttributeNotFound++
+			if len(attributeFailureStats.AttributeNotFoundSamples) < 20 {
+				attributeFailureStats.AttributeNotFoundSamples = append(
+					attributeFailureStats.AttributeNotFoundSamples,
+					fmt.Sprintf("%s (circular ref at type %s)", target, currentTypeFQN))
+			}
+			return "", false, nil
 		}
-		return "", false, nil
+		visited[currentTypeFQN] = true
+
+		attr := typeEngine.Attributes.GetAttribute(currentTypeFQN, attrName)
+		if attr == nil {
+			attributeFailureStats.AttributeNotFound++
+			if len(attributeFailureStats.AttributeNotFoundSamples) < 20 {
+				attributeFailureStats.AttributeNotFoundSamples = append(
+					attributeFailureStats.AttributeNotFoundSamples,
+					fmt.Sprintf("%s (attr %q not found in %s)", target, attrName, currentTypeFQN))
+			}
+			return "", false, nil
+		}
+
+		if attr.Type == nil {
+			attributeFailureStats.AttributeNotFound++
+			return "", false, nil
+		}
+
+		lastAttrConfidence = attr.Confidence
+		currentTypeFQN = attr.Type.TypeFQN
+
+		// Resolve placeholder types like "class:Config" inline
+		if strings.HasPrefix(currentTypeFQN, "class:") {
+			className := strings.TrimPrefix(currentTypeFQN, "class:")
+			resolved := resolveClassNameForChain(className, classFQN, typeEngine, callGraph)
+			if resolved != "" {
+				currentTypeFQN = resolved
+			}
+			// If unresolved, continue with the placeholder — it may still match
+		}
 	}
 
-	// Step 3: Resolve method on the attribute's type
-	attributeTypeFQN := attr.Type.TypeFQN
+	// Step 3: Resolve the final method on the terminal type
+	return resolveMethodOnType(currentTypeFQN, methodName, lastAttrConfidence, builtins, callGraph)
+}
 
+// resolveMethodOnType resolves a method call on a given type FQN.
+// Checks builtin registry first, then custom class methods in the call graph.
+func resolveMethodOnType(
+	typeFQN string,
+	methodName string,
+	attrConfidence float64,
+	builtins *registry.BuiltinRegistry,
+	callGraph *core.CallGraph,
+) (string, bool, *core.TypeInfo) {
 	// Check if it's a builtin type
-	if strings.HasPrefix(attributeTypeFQN, "builtins.") {
-		methodFQN := attributeTypeFQN + "." + methodName
+	if strings.HasPrefix(typeFQN, "builtins.") {
+		methodFQN := typeFQN + "." + methodName
 
 		// Verify method exists in builtin registry
-		method := builtins.GetMethod(attributeTypeFQN, methodName)
+		method := builtins.GetMethod(typeFQN, methodName)
 		if method != nil && method.ReturnType != nil {
 			return methodFQN, true, &core.TypeInfo{
 				TypeFQN:    method.ReturnType.TypeFQN,
-				Confidence: float32(attr.Confidence), // Inherit attribute confidence
+				Confidence: float32(attrConfidence),
 				Source:     "self_attribute",
 			}
 		}
@@ -144,34 +193,65 @@ func ResolveSelfAttributeCall(
 	}
 
 	// Handle custom class types (user-defined classes).
-	// The attribute type is already resolved (e.g., "module.Controller")
-	// from variable extraction. Now we need to resolve the method call on that type.
-	methodFQN := attributeTypeFQN + "." + methodName
+	methodFQN := typeFQN + "." + methodName
 
-	// Check if method exists in CallGraph.Functions map.
 	if callGraph != nil {
 		if node := callGraph.Functions[methodFQN]; node != nil {
-			// Verify it's actually a callable (method, function, constructor, etc.).
 			if node.Type == "method" || node.Type == "function_definition" ||
 				node.Type == "constructor" || node.Type == "property" ||
 				node.Type == "special_method" {
 				return methodFQN, true, &core.TypeInfo{
-					TypeFQN:    attributeTypeFQN,
-					Confidence: float32(attr.Confidence),
+					TypeFQN:    typeFQN,
+					Confidence: float32(attrConfidence),
 					Source:     "self_attribute_custom_class",
 				}
 			}
 		}
 	}
 
-	// Method not found in call graph - collect stats and return unresolved.
+	// Method not found — collect stats
 	attributeFailureStats.CustomClassUnsupported++
 	if len(attributeFailureStats.CustomClassSamples) < 20 {
 		attributeFailureStats.CustomClassSamples = append(
 			attributeFailureStats.CustomClassSamples,
-			fmt.Sprintf("%s (type: %s, method not found: %s)", target, attributeTypeFQN, methodFQN))
+			fmt.Sprintf("method %s not found on type %s", methodName, typeFQN))
 	}
 	return "", false, nil
+}
+
+// resolveClassNameForChain resolves a "class:ClassName" placeholder during chain walking.
+// Uses ImportMap, same-module lookup, and module registry (same as ResolveAttributePlaceholders).
+func resolveClassNameForChain(
+	className string,
+	contextClassFQN string,
+	typeEngine *TypeInferenceEngine,
+	callGraph *core.CallGraph,
+) string {
+	if typeEngine == nil {
+		return ""
+	}
+
+	// Try resolving via the existing resolveClassName (uses ImportMap, same-module, short names)
+	modulePath := getModuleFromClassFQN(contextClassFQN)
+	candidateFQN := modulePath + "." + className
+
+	// Check call graph for the class — if any function key starts with candidateFQN+".",
+	// the class exists in the codebase.
+	if callGraph != nil {
+		prefix := candidateFQN + "."
+		for fqn := range callGraph.Functions {
+			if strings.HasPrefix(fqn, prefix) {
+				return candidateFQN
+			}
+		}
+	}
+
+	// Check attribute registry — if the class has registered attributes, it exists
+	if typeEngine.Attributes != nil && typeEngine.Attributes.HasClass(candidateFQN) {
+		return candidateFQN
+	}
+
+	return ""
 }
 
 // PrintAttributeFailureStats prints detailed statistics about attribute chain failures.

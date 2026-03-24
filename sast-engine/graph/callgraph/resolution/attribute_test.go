@@ -96,7 +96,7 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			},
 		},
 		{
-			name:      "deep chain (3+ levels) should fail",
+			name:      "deep chain (3+ levels) with no class setup fails gracefully",
 			target:    "self.obj.attr.method",
 			callerFQN: "test_module.MyClass.process",
 			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
@@ -113,9 +113,10 @@ func TestResolveSelfAttributeCall(t *testing.T) {
 			checkStats: func(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, 1, attributeFailureStats.TotalAttempts)
-				assert.Equal(t, 1, attributeFailureStats.DeepChains)
-				assert.Equal(t, 1, len(attributeFailureStats.DeepChainSamples))
-				assert.Equal(t, "self.obj.attr.method", attributeFailureStats.DeepChainSamples[0])
+				// Deep chains are now attempted (not immediately rejected).
+				// Without class setup, it fails at ClassNotFound.
+				assert.Equal(t, 0, attributeFailureStats.DeepChains)
+				assert.Equal(t, 1, attributeFailureStats.ClassNotFound)
 			},
 		},
 		{
@@ -1058,7 +1059,7 @@ func TestGetModuleFromClassFQN(t *testing.T) {
 	}
 }
 
-// TestFailureStats_SampleLimit tests that samples are limited to 20.
+// TestFailureStats_SampleLimit tests that attribute-not-found samples are limited to 20.
 func TestFailureStats_SampleLimit(t *testing.T) {
 	// Reset stats
 	attributeFailureStats = &FailureStats{
@@ -1073,17 +1074,382 @@ func TestFailureStats_SampleLimit(t *testing.T) {
 	builtins := registry.NewBuiltinRegistry()
 	callGraph := core.NewCallGraph()
 
-	// Try to add 30 deep chain samples
+	// Add a class so we get past ClassNotFound, but the attribute won't exist
+	typeEngine.Attributes.AddClassAttributes(&core.ClassAttributes{
+		ClassFQN:   "test.Class",
+		Attributes: make(map[string]*core.ClassAttribute),
+		Methods:    []string{"test.Class.method"},
+	})
+
+	// Try 30 times — will fail at AttributeNotFound since "a" doesn't exist
 	for range 30 {
 		target := "self.a.b.c"
 		callerFQN := "test.Class.method"
 		ResolveSelfAttributeCall(target, callerFQN, typeEngine, builtins, callGraph)
 	}
 
-	// Should only have 20 samples
-	assert.Equal(t, 20, len(attributeFailureStats.DeepChainSamples))
+	// AttributeNotFoundSamples should be capped at 20
+	assert.Equal(t, 20, len(attributeFailureStats.AttributeNotFoundSamples))
 	assert.Equal(t, 30, attributeFailureStats.TotalAttempts)
-	assert.Equal(t, 30, attributeFailureStats.DeepChains)
+	assert.Equal(t, 30, attributeFailureStats.AttributeNotFound)
+}
+
+// TestResolveSelfAttributeCall_DeepChain tests iterative chain resolution for 3+ levels.
+// This is the core of the deep attribute chain resolution feature.
+func TestResolveSelfAttributeCall_DeepChain(t *testing.T) {
+	tests := []struct {
+		name             string
+		target           string
+		callerFQN        string
+		setupFunc        func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph)
+		expectedResolved bool
+		expectedFQN      string
+		expectedType     string
+		expectedSource   string
+		checkStats       func(*testing.T)
+	}{
+		{
+			name:      "3-level chain with builtin terminal: self.core.value.upper",
+			target:    "self.core.value.upper",
+			callerFQN: "app.Manager.run_command",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager class: self.core → app.Core
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "core",
+					Type: &core.TypeInfo{
+						TypeFQN:    "app.Core",
+						Confidence: 0.9,
+						Source:     "class_instantiation",
+					},
+					Confidence: 0.9,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run_command")
+
+				// Core class: self.value → builtins.str
+				typeEngine.Attributes.AddAttribute("app.Core", &core.ClassAttribute{
+					Name: "value",
+					Type: &core.TypeInfo{
+						TypeFQN:    "builtins.str",
+						Confidence: 0.9,
+						Source:     "annotation",
+					},
+					Confidence: 0.9,
+				})
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "builtins.str.upper",
+			expectedType:     "builtins.str",
+			expectedSource:   "self_attribute",
+			checkStats: func(t *testing.T) {
+				t.Helper()
+				assert.Equal(t, 0, attributeFailureStats.DeepChains, "should not count as depth-limited")
+				assert.Equal(t, 0, attributeFailureStats.AttributeNotFound)
+			},
+		},
+		{
+			name:      "3-level chain with custom class terminal: self.core.config.get",
+			target:    "self.core.config.get",
+			callerFQN: "app.Manager.run_command",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager.core → Core
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "core",
+					Type: &core.TypeInfo{TypeFQN: "app.Core", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run_command")
+
+				// Core.config → ConfigParser (custom class)
+				typeEngine.Attributes.AddAttribute("app.Core", &core.ClassAttribute{
+					Name: "config",
+					Type: &core.TypeInfo{TypeFQN: "app.ConfigParser", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+
+				// ConfigParser.get method in call graph
+				callGraph.Functions["app.ConfigParser.get"] = &graph.Node{
+					ID:   "func-config-get",
+					Name: "get",
+					Type: "method",
+				}
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "app.ConfigParser.get",
+			expectedType:     "app.ConfigParser",
+			expectedSource:   "self_attribute_custom_class",
+		},
+		{
+			name:      "4-level chain: self.app.db.session.execute",
+			target:    "self.app.db.session.execute",
+			callerFQN: "handlers.RequestHandler.handle",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// RequestHandler.app → App
+				typeEngine.Attributes.AddAttribute("handlers.RequestHandler", &core.ClassAttribute{
+					Name: "app",
+					Type: &core.TypeInfo{TypeFQN: "app.App", Confidence: 1.0},
+					Confidence: 1.0,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("handlers.RequestHandler")
+				classAttrs.Methods = append(classAttrs.Methods, "handlers.RequestHandler.handle")
+
+				// App.db → Database
+				typeEngine.Attributes.AddAttribute("app.App", &core.ClassAttribute{
+					Name: "db",
+					Type: &core.TypeInfo{TypeFQN: "db.Database", Confidence: 1.0},
+					Confidence: 1.0,
+				})
+
+				// Database.session → Session
+				typeEngine.Attributes.AddAttribute("db.Database", &core.ClassAttribute{
+					Name: "session",
+					Type: &core.TypeInfo{TypeFQN: "db.Session", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+
+				// Session.execute in call graph
+				callGraph.Functions["db.Session.execute"] = &graph.Node{
+					ID:   "func-session-execute",
+					Name: "execute",
+					Type: "method",
+				}
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "db.Session.execute",
+			expectedType:     "db.Session",
+			expectedSource:   "self_attribute_custom_class",
+		},
+		{
+			name:      "3-level chain fails at middle attribute not found",
+			target:    "self.core.unknown_attr.method",
+			callerFQN: "app.Manager.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager.core → Core (exists)
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "core",
+					Type: &core.TypeInfo{TypeFQN: "app.Core", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run")
+
+				// Core class exists but does NOT have "unknown_attr"
+				typeEngine.Attributes.AddClassAttributes(&core.ClassAttributes{
+					ClassFQN:   "app.Core",
+					Attributes: make(map[string]*core.ClassAttribute),
+					Methods:    []string{"app.Core.start"},
+				})
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: false,
+			expectedFQN:      "",
+			checkStats: func(t *testing.T) {
+				t.Helper()
+				assert.Equal(t, 1, attributeFailureStats.AttributeNotFound)
+			},
+		},
+		{
+			name:      "circular reference detection: A → B → A (cycle hit on 3rd step)",
+			target:    "self.b.a.b.method",
+			callerFQN: "app.A.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// A.b → B
+				typeEngine.Attributes.AddAttribute("app.A", &core.ClassAttribute{
+					Name: "b",
+					Type: &core.TypeInfo{TypeFQN: "app.B", Confidence: 1.0},
+					Confidence: 1.0,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.A")
+				classAttrs.Methods = append(classAttrs.Methods, "app.A.run")
+
+				// B.a → A (circular!)
+				typeEngine.Attributes.AddAttribute("app.B", &core.ClassAttribute{
+					Name: "a",
+					Type: &core.TypeInfo{TypeFQN: "app.A", Confidence: 1.0},
+					Confidence: 1.0,
+				})
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: false,
+			expectedFQN:      "",
+			checkStats: func(t *testing.T) {
+				t.Helper()
+				// Chain: A→B→A(cycle!), 3rd attr "b" on A triggers visited check
+				assert.Equal(t, 1, attributeFailureStats.AttributeNotFound)
+			},
+		},
+		{
+			name:      "depth limit exceeded (chain > maxChainDepth)",
+			target:    "self.a.b.c.d.e.f.g.method",
+			callerFQN: "app.MyClass.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.MyClass")
+				if classAttrs == nil {
+					typeEngine.Attributes.AddClassAttributes(&core.ClassAttributes{
+						ClassFQN:   "app.MyClass",
+						Attributes: make(map[string]*core.ClassAttribute),
+						Methods:    []string{"app.MyClass.run"},
+					})
+				}
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: false,
+			expectedFQN:      "",
+			checkStats: func(t *testing.T) {
+				t.Helper()
+				// 7 intermediate attrs > maxChainDepth=6, so DeepChains counter
+				assert.Equal(t, 1, attributeFailureStats.DeepChains)
+			},
+		},
+		{
+			name:      "3-level chain with class: placeholder resolved inline",
+			target:    "self.core.value.upper",
+			callerFQN: "app.Manager.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager.core → "class:Core" (unresolved placeholder)
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "core",
+					Type: &core.TypeInfo{TypeFQN: "class:Core", Confidence: 0.8},
+					Confidence: 0.8,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run")
+
+				// app.Core class has value attribute (register via AddAttribute so HasClass returns true)
+				typeEngine.Attributes.AddAttribute("app.Core", &core.ClassAttribute{
+					Name: "value",
+					Type: &core.TypeInfo{TypeFQN: "builtins.str", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "builtins.str.upper",
+			expectedType:     "builtins.str",
+			expectedSource:   "self_attribute",
+		},
+		{
+			name:      "2-level chain still works (regression check): self.value.upper",
+			target:    "self.value.upper",
+			callerFQN: "app.Manager.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "value",
+					Type: &core.TypeInfo{TypeFQN: "builtins.str", Confidence: 1.0, Source: "annotation"},
+					Confidence: 1.0,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run")
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "builtins.str.upper",
+			expectedType:     "builtins.str",
+			expectedSource:   "self_attribute",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset stats for each test
+			attributeFailureStats = &FailureStats{
+				DeepChainSamples:         make([]string, 0, 20),
+				AttributeNotFoundSamples: make([]string, 0, 20),
+				CustomClassSamples:       make([]string, 0, 20),
+			}
+
+			typeEngine, builtins, callGraph := tt.setupFunc()
+
+			fqn, resolved, typeInfo := ResolveSelfAttributeCall(
+				tt.target,
+				tt.callerFQN,
+				typeEngine,
+				builtins,
+				callGraph,
+			)
+
+			assert.Equal(t, tt.expectedResolved, resolved,
+				"Resolution status mismatch for %s", tt.target)
+			assert.Equal(t, tt.expectedFQN, fqn,
+				"FQN mismatch for %s", tt.target)
+
+			if tt.expectedResolved {
+				assert.NotNil(t, typeInfo, "TypeInfo should not be nil for resolved calls")
+				if tt.expectedType != "" {
+					assert.Equal(t, tt.expectedType, typeInfo.TypeFQN)
+				}
+				if tt.expectedSource != "" {
+					assert.Equal(t, tt.expectedSource, typeInfo.Source)
+				}
+			} else {
+				assert.Nil(t, typeInfo, "TypeInfo should be nil for unresolved calls")
+			}
+
+			if tt.checkStats != nil {
+				tt.checkStats(t)
+			}
+		})
+	}
 }
 
 // TestResolveSelfAttributeCall_CustomClass tests P0 bug fix: resolving method calls
