@@ -875,6 +875,138 @@ func TestResolveAttributePlaceholders(t *testing.T) {
 				assert.Equal(t, "call:nonexistent_func", attr.Type.TypeFQN)
 			},
 		},
+		{
+			name: "call: placeholder resolved via stdlib registry (sqlite3.connect)",
+			setupFunc: func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph) {
+				attrRegistry := registry.NewAttributeRegistry()
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+				codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
+				typeEngine.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"sqlite3": {
+						Module:    "sqlite3",
+						Functions: map[string]*core.StdlibFunction{"connect": {ReturnType: "sqlite3.Connection", Confidence: 0.95}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+
+				attrRegistry.AddAttribute("myapp.DbWrapper", &core.ClassAttribute{
+					Name:       "conn",
+					Type:       &core.TypeInfo{TypeFQN: "call:sqlite3.connect", Confidence: 0.8, Source: "function_call_attribute"},
+					Confidence: 0.8,
+				})
+				return attrRegistry, typeEngine, moduleRegistry, codeGraph
+			},
+			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
+				attr := reg.GetAttribute("myapp.DbWrapper", "conn")
+				assert.NotNil(t, attr)
+				assert.Equal(t, "sqlite3.Connection", attr.Type.TypeFQN)
+				assert.Contains(t, attr.Type.Source, "stdlib")
+			},
+		},
+		{
+			name: "call: placeholder resolved via stdlib constructor (configparser.ConfigParser)",
+			setupFunc: func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph) {
+				attrRegistry := registry.NewAttributeRegistry()
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+				codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
+				typeEngine.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"configparser": {
+						Module:    "configparser",
+						Functions: map[string]*core.StdlibFunction{},
+						Classes:   map[string]*core.StdlibClass{"ConfigParser": {Type: "class", Methods: map[string]*core.StdlibFunction{}}},
+					},
+				})
+
+				attrRegistry.AddAttribute("myapp.Config", &core.ClassAttribute{
+					Name:       "parser",
+					Type:       &core.TypeInfo{TypeFQN: "call:configparser.ConfigParser", Confidence: 0.8, Source: "function_call_attribute"},
+					Confidence: 0.8,
+				})
+				return attrRegistry, typeEngine, moduleRegistry, codeGraph
+			},
+			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
+				attr := reg.GetAttribute("myapp.Config", "parser")
+				assert.NotNil(t, attr)
+				assert.Equal(t, "configparser.ConfigParser", attr.Type.TypeFQN)
+				assert.Contains(t, attr.Type.Source, "stdlib")
+			},
+		},
+		{
+			name: "call: placeholder resolved via thirdparty registry (redis.Redis)",
+			setupFunc: func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph) {
+				attrRegistry := registry.NewAttributeRegistry()
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+				codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
+				typeEngine.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				typeEngine.ThirdPartyRemote = newTestThirdPartyLoader(map[string]*core.StdlibModule{
+					"redis": {
+						Module:    "redis",
+						Functions: map[string]*core.StdlibFunction{"Redis": {ReturnType: "redis.Redis", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+
+				attrRegistry.AddAttribute("myapp.Cache", &core.ClassAttribute{
+					Name:       "client",
+					Type:       &core.TypeInfo{TypeFQN: "call:redis.Redis", Confidence: 0.8, Source: "function_call_attribute"},
+					Confidence: 0.8,
+				})
+				return attrRegistry, typeEngine, moduleRegistry, codeGraph
+			},
+			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
+				attr := reg.GetAttribute("myapp.Cache", "client")
+				assert.NotNil(t, attr)
+				assert.Equal(t, "redis.Redis", attr.Type.TypeFQN)
+				assert.Contains(t, attr.Type.Source, "thirdparty")
+			},
+		},
+		{
+			name: "call: placeholder prefers project ReturnTypes over stdlib",
+			setupFunc: func() (*registry.AttributeRegistry, *TypeInferenceEngine, *core.ModuleRegistry, *graph.CodeGraph) {
+				attrRegistry := registry.NewAttributeRegistry()
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.ReturnTypes = make(map[string]*core.TypeInfo)
+				codeGraph := &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
+
+				typeEngine.ReturnTypes["test_module.myutils.create_conn"] = &core.TypeInfo{
+					TypeFQN: "test_module.MyConnection", Confidence: 1.0, Source: "return_analysis",
+				}
+				typeEngine.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"myutils": {
+						Module:    "myutils",
+						Functions: map[string]*core.StdlibFunction{"create_conn": {ReturnType: "WRONG_TYPE", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+
+				attrRegistry.AddAttribute("test_module.MyClass", &core.ClassAttribute{
+					Name:       "conn",
+					Type:       &core.TypeInfo{TypeFQN: "call:myutils.create_conn", Confidence: 0.5, Source: "call"},
+					Confidence: 0.5,
+				})
+				return attrRegistry, typeEngine, moduleRegistry, codeGraph
+			},
+			checkFunc: func(t *testing.T, reg *registry.AttributeRegistry) {
+				t.Helper()
+				attr := reg.GetAttribute("test_module.MyClass", "conn")
+				assert.NotNil(t, attr)
+				assert.Equal(t, "test_module.MyConnection", attr.Type.TypeFQN)
+				assert.Equal(t, "function_call_attribute", attr.Type.Source)
+			},
+		},
 	}
 
 	for _, tt := range tests {
