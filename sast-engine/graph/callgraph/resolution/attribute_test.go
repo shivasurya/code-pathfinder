@@ -1584,6 +1584,131 @@ func TestIsCallableNode(t *testing.T) {
 	assert.False(t, isCallableNode(nil))
 }
 
+// TestResolveCallPlaceholderViaRegistry tests the stdlib/thirdparty registry fallback for call: placeholders.
+func TestResolveCallPlaceholderViaRegistry(t *testing.T) {
+	tests := []struct {
+		name           string
+		funcName       string
+		setupFunc      func() *TypeInferenceEngine
+		expectType     string
+		expectResolved bool
+	}{
+		{
+			name:           "nil typeEngine is safe",
+			funcName:       "sqlite3.connect",
+			setupFunc:      func() *TypeInferenceEngine { return nil },
+			expectResolved: false,
+		},
+		{
+			name:           "single-part funcName skipped",
+			funcName:       "connect",
+			setupFunc:      func() *TypeInferenceEngine { return NewTypeInferenceEngine(core.NewModuleRegistry()) },
+			expectResolved: false,
+		},
+		{
+			name:     "unknown return type skipped",
+			funcName: "logging.getLogger",
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"logging": {
+						Module:    "logging",
+						Functions: map[string]*core.StdlibFunction{"getLogger": {ReturnType: "unknown", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+				return te
+			},
+			expectResolved: false,
+		},
+		{
+			name:     "empty return type skipped",
+			funcName: "os.getcwd",
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"os": {
+						Module:    "os",
+						Functions: map[string]*core.StdlibFunction{"getcwd": {ReturnType: "", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+				return te
+			},
+			expectResolved: false,
+		},
+		{
+			name:     "stdlib checked before thirdparty",
+			funcName: "shared.create",
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{
+					"shared": {
+						Module:    "shared",
+						Functions: map[string]*core.StdlibFunction{"create": {ReturnType: "shared.StdlibResult", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+				te.ThirdPartyRemote = newTestThirdPartyLoader(map[string]*core.StdlibModule{
+					"shared": {
+						Module:    "shared",
+						Functions: map[string]*core.StdlibFunction{"create": {ReturnType: "shared.ThirdPartyResult", Confidence: 0.9}},
+						Classes:   map[string]*core.StdlibClass{},
+					},
+				})
+				return te
+			},
+			expectResolved: true,
+			expectType:     "shared.StdlibResult",
+		},
+		{
+			name:     "thirdparty constructor resolves when no function match",
+			funcName: "flask.Flask",
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				te.ThirdPartyRemote = newTestThirdPartyLoader(map[string]*core.StdlibModule{
+					"flask": {
+						Module:    "flask",
+						Functions: map[string]*core.StdlibFunction{},
+						Classes:   map[string]*core.StdlibClass{"Flask": {Type: "class", Methods: map[string]*core.StdlibFunction{}}},
+					},
+				})
+				return te
+			},
+			expectResolved: true,
+			expectType:     "flask.Flask",
+		},
+		{
+			name:     "module not in any registry stays unresolved",
+			funcName: "unknown_lib.create",
+			setupFunc: func() *TypeInferenceEngine {
+				te := NewTypeInferenceEngine(core.NewModuleRegistry())
+				te.StdlibRemote = newTestStdlibLoader(map[string]*core.StdlibModule{})
+				te.ThirdPartyRemote = newTestThirdPartyLoader(map[string]*core.StdlibModule{})
+				return te
+			},
+			expectResolved: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attr := &core.ClassAttribute{
+				Name: "test",
+				Type: &core.TypeInfo{TypeFQN: "call:" + tt.funcName, Confidence: 0.8},
+			}
+			typeEngine := tt.setupFunc()
+			resolveCallPlaceholderViaRegistry(tt.funcName, attr, typeEngine)
+			if tt.expectResolved {
+				assert.Equal(t, tt.expectType, attr.Type.TypeFQN)
+			} else {
+				assert.Equal(t, "call:"+tt.funcName, attr.Type.TypeFQN, "should remain unresolved")
+			}
+		})
+	}
+}
+
 // TestFailureStats_SampleLimit tests that attribute-not-found samples are limited to 20.
 func TestFailureStats_SampleLimit(t *testing.T) {
 	// Reset stats
