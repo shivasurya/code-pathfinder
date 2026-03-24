@@ -406,7 +406,7 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 					}
 
 					// Resolve the call target to a fully qualified name
-					targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, job.modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
+						targetFQN, resolved, typeInfo := resolveCallTarget(callSite.Target, importMap, registry, job.modulePath, codeGraph, typeEngine, callerFQN, callGraph, logger)
 
 					// Update call site with resolution information
 					callSite.TargetFQN = targetFQN
@@ -968,9 +968,9 @@ func resolveCallTarget(target string, importMap *core.ImportMap, registry *core.
 		// For self.attr.method where attr isn't in child class, try parent classes
 		if typeEngine != nil && typeEngine.ThirdPartyRemote != nil && codeGraph != nil {
 			attrParts := strings.Split(target, ".")
-			if len(attrParts) == 3 {
+			if len(attrParts) >= 3 {
 				attrName := attrParts[1]
-				methodOnAttr := attrParts[2]
+				methodOnAttr := attrParts[len(attrParts)-1]
 				callerParts := strings.Split(callerFQN, ".")
 				if len(callerParts) >= 3 {
 					callerClassName := callerParts[len(callerParts)-2]
