@@ -981,3 +981,27 @@ func TestStdlibRegistryRemote_FindClassMethodAlias_Inherited(t *testing.T) {
 	assert.Equal(t, "Base", className)
 	assert.Equal(t, "builtins.bytes", method.ReturnType)
 }
+
+func TestStdlibRegistryRemote_GetCachedModule(t *testing.T) {
+	remote := NewStdlibRegistryRemote("https://example.com", "3.14")
+	remote.Manifest = &core.Manifest{
+		Modules: []*core.ModuleEntry{{Name: "os"}},
+	}
+
+	// Not cached — returns nil without downloading
+	result := remote.GetCachedModule("os")
+	assert.Nil(t, result, "should return nil when module not in cache")
+
+	// Pre-populate cache
+	module := &core.StdlibModule{Module: "os", Functions: map[string]*core.StdlibFunction{}}
+	remote.ModuleCache["os"] = module
+
+	// Now cached — returns the module
+	result = remote.GetCachedModule("os")
+	assert.NotNil(t, result)
+	assert.Equal(t, "os", result.Module)
+
+	// Different module — still nil
+	result = remote.GetCachedModule("sys")
+	assert.Nil(t, result)
+}
