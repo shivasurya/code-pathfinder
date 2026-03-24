@@ -2,13 +2,19 @@ package resolution
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
+
+// silentLogger is a shared logger that discards all output.
+// Used for registry lookups during attribute resolution where no logger is available.
+var silentLogger = output.NewLoggerWithWriter(output.VerbosityDefault, io.Discard)
 
 // FailureStats tracks why attribute chain resolution fails.
 type FailureStats struct {
@@ -581,12 +587,13 @@ func resolveCallPlaceholderViaRegistry(funcName string, attr *core.ClassAttribut
 }
 
 // tryRegistryLookup checks stdlib then thirdparty for a function or constructor.
+// Uses silentLogger for registry lookups that may trigger lazy module downloads.
 func tryRegistryLookup(moduleName, name string, attr *core.ClassAttribute, typeEngine *TypeInferenceEngine) bool {
 	// Check stdlib
 	if typeEngine.StdlibRemote != nil {
 		if loader, ok := typeEngine.StdlibRemote.(*registry.StdlibRegistryRemote); ok && loader.HasModule(moduleName) {
 			// Try as function (e.g., sqlite3.connect → returns sqlite3.Connection)
-			fn := loader.GetFunction(moduleName, name, nil)
+			fn := loader.GetFunction(moduleName, name, silentLogger)
 			if fn != nil && fn.ReturnType != "" && fn.ReturnType != "unknown" {
 				attr.Type.TypeFQN = fn.ReturnType
 				attr.Type.Confidence = fn.Confidence * 0.85
@@ -594,7 +601,7 @@ func tryRegistryLookup(moduleName, name string, attr *core.ClassAttribute, typeE
 				return true
 			}
 			// Try as constructor (e.g., configparser.ConfigParser → type is configparser.ConfigParser)
-			cls := loader.GetClass(moduleName, name, nil)
+			cls := loader.GetClass(moduleName, name, silentLogger)
 			if cls != nil {
 				attr.Type.TypeFQN = moduleName + "." + name
 				attr.Type.Confidence = 0.9
@@ -607,14 +614,14 @@ func tryRegistryLookup(moduleName, name string, attr *core.ClassAttribute, typeE
 	// Check thirdparty
 	if typeEngine.ThirdPartyRemote != nil {
 		if loader, ok := typeEngine.ThirdPartyRemote.(*registry.ThirdPartyRegistryRemote); ok && loader.HasModule(moduleName) {
-			fn := loader.GetFunction(moduleName, name, nil)
+			fn := loader.GetFunction(moduleName, name, silentLogger)
 			if fn != nil && fn.ReturnType != "" && fn.ReturnType != "unknown" {
 				attr.Type.TypeFQN = fn.ReturnType
 				attr.Type.Confidence = fn.Confidence * 0.85
 				attr.Type.Source = "thirdparty_function_call_attribute"
 				return true
 			}
-			cls := loader.GetClass(moduleName, name, nil)
+			cls := loader.GetClass(moduleName, name, silentLogger)
 			if cls != nil {
 				attr.Type.TypeFQN = moduleName + "." + name
 				attr.Type.Confidence = 0.9
