@@ -1059,6 +1059,116 @@ func TestGetModuleFromClassFQN(t *testing.T) {
 	}
 }
 
+// TestExtractClassMethodSuffix tests the suffix extraction helper.
+func TestExtractClassMethodSuffix(t *testing.T) {
+	tests := []struct {
+		typeFQN    string
+		methodName string
+		expected   string
+	}{
+		{"config.parser.ConfigParser", "get", "ConfigParser.get"},
+		{"myapp.User", "save", "User.save"},
+		{"Helper", "run", "Helper.run"},           // No dots — bare class name
+		{"a.b.c.d.MyClass", "method", "MyClass.method"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.typeFQN+"."+tt.methodName, func(t *testing.T) {
+			result := extractClassMethodSuffix(tt.typeFQN, tt.methodName)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestResolveClassNameForChain tests the class placeholder resolution during chain walking.
+func TestResolveClassNameForChain(t *testing.T) {
+	tests := []struct {
+		name            string
+		className       string
+		contextClassFQN string
+		setupFunc       func() (*TypeInferenceEngine, *core.CallGraph)
+		expected        string
+	}{
+		{
+			name:            "nil typeEngine returns empty",
+			className:       "Config",
+			contextClassFQN: "app.Manager",
+			setupFunc: func() (*TypeInferenceEngine, *core.CallGraph) {
+				return nil, nil
+			},
+			expected: "",
+		},
+		{
+			name:            "resolves via callgraph function prefix",
+			className:       "Config",
+			contextClassFQN: "app.Manager",
+			setupFunc: func() (*TypeInferenceEngine, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				callGraph := core.NewCallGraph()
+				// callgraph has a function under app.Config.
+				callGraph.Functions["app.Config.get"] = &graph.Node{
+					ID: "f1", Name: "get", Type: "method",
+				}
+				return typeEngine, callGraph
+			},
+			expected: "app.Config",
+		},
+		{
+			name:            "resolves via attribute registry",
+			className:       "Config",
+			contextClassFQN: "app.Manager",
+			setupFunc: func() (*TypeInferenceEngine, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				// Register the class in attribute registry
+				typeEngine.Attributes.AddClassAttributes(&core.ClassAttributes{
+					ClassFQN:   "app.Config",
+					Attributes: make(map[string]*core.ClassAttribute),
+					Methods:    []string{"app.Config.get"},
+				})
+				callGraph := core.NewCallGraph()
+				return typeEngine, callGraph
+			},
+			expected: "app.Config",
+		},
+		{
+			name:            "not found anywhere returns empty",
+			className:       "Unknown",
+			contextClassFQN: "app.Manager",
+			setupFunc: func() (*TypeInferenceEngine, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				callGraph := core.NewCallGraph()
+				return typeEngine, callGraph
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			typeEngine, callGraph := tt.setupFunc()
+			result := resolveClassNameForChain(tt.className, tt.contextClassFQN, typeEngine, callGraph)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestIsCallableNode tests the callable node check helper.
+func TestIsCallableNode(t *testing.T) {
+	assert.True(t, isCallableNode(&graph.Node{Type: "method"}))
+	assert.True(t, isCallableNode(&graph.Node{Type: "function_definition"}))
+	assert.True(t, isCallableNode(&graph.Node{Type: "constructor"}))
+	assert.True(t, isCallableNode(&graph.Node{Type: "property"}))
+	assert.True(t, isCallableNode(&graph.Node{Type: "special_method"}))
+	assert.False(t, isCallableNode(&graph.Node{Type: "variable"}))
+	assert.False(t, isCallableNode(&graph.Node{Type: "class_definition"}))
+	assert.False(t, isCallableNode(nil))
+}
+
 // TestFailureStats_SampleLimit tests that attribute-not-found samples are limited to 20.
 func TestFailureStats_SampleLimit(t *testing.T) {
 	// Reset stats
@@ -1448,6 +1558,67 @@ func TestResolveSelfAttributeCall_DeepChain(t *testing.T) {
 			expectedFQN:      "builtins.str.upper",
 			expectedType:     "builtins.str",
 			expectedSource:   "self_attribute",
+		},
+		{
+			name:      "chain walk fails when attribute has nil Type",
+			target:    "self.core.config.get",
+			callerFQN: "app.Manager.run",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager.core has a nil Type
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name:       "core",
+					Type:       nil,
+					Confidence: 0.5,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.run")
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: false,
+			expectedFQN:      "",
+			checkStats: func(t *testing.T) {
+				t.Helper()
+				assert.Equal(t, 1, attributeFailureStats.AttributeNotFound)
+			},
+		},
+		{
+			name:      "suffix fallback with no-dot typeFQN (bare class name)",
+			target:    "self.helper.run",
+			callerFQN: "app.Manager.process",
+			setupFunc: func() (*TypeInferenceEngine, *registry.BuiltinRegistry, *core.CallGraph) {
+				moduleRegistry := core.NewModuleRegistry()
+				typeEngine := NewTypeInferenceEngine(moduleRegistry)
+				typeEngine.Attributes = registry.NewAttributeRegistry()
+				builtins := registry.NewBuiltinRegistry()
+				callGraph := core.NewCallGraph()
+
+				// Manager.helper → bare class name "Helper" (no module prefix)
+				typeEngine.Attributes.AddAttribute("app.Manager", &core.ClassAttribute{
+					Name: "helper",
+					Type: &core.TypeInfo{TypeFQN: "Helper", Confidence: 0.9},
+					Confidence: 0.9,
+				})
+				classAttrs := typeEngine.Attributes.GetClassAttributes("app.Manager")
+				classAttrs.Methods = append(classAttrs.Methods, "app.Manager.process")
+
+				// Callgraph has the method with a full module prefix
+				callGraph.Functions["app.Helper.run"] = &graph.Node{
+					ID: "func-helper-run", Name: "run", Type: "method",
+				}
+
+				return typeEngine, builtins, callGraph
+			},
+			expectedResolved: true,
+			expectedFQN:      "app.Helper.run",
+			expectedType:     "app.Helper",
+			expectedSource:   "self_attribute_custom_class",
 		},
 	}
 
