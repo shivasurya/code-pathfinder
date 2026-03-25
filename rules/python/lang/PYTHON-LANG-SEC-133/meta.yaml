@@ -1,0 +1,206 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-133
+name: RSA PKCS1v15 Deprecated Padding Detected
+short_description: PKCS#1 v1.5 padding for RSA is deprecated and vulnerable to Bleichenbacher's adaptive chosen-ciphertext attack. Use OAEP for encryption and PSS for signatures.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-133
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: Use of a Broken or Risky Cryptographic Algorithm
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - python
+  - cryptography
+  - rsa
+  - pkcs1v15
+  - padding
+  - bleichenbacher
+  - deprecated-crypto
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  PKCS#1 v1.5 is a legacy RSA padding scheme that has been known to be vulnerable since
+  Daniel Bleichenbacher's 1998 adaptive chosen-ciphertext attack. The attack exploits
+  padding validation oracles to decrypt RSA ciphertexts without the private key. Despite
+  being over 25 years old, this attack continues to affect real-world systems.
+
+  GHSA-7432-952r-cw78 (authlib) demonstrates how PKCS#1 v1.5 usage in OAuth/OIDC libraries
+  enables Bleichenbacher-style attacks against JWT token validation, allowing attackers to
+  forge signatures and bypass authentication.
+
+  The Python cryptography library provides PKCS1v15() in the padding module. While still
+  available for backward compatibility, it should be replaced with OAEP
+  (Optimal Asymmetric Encryption Padding) for encryption and PSS (Probabilistic Signature
+  Scheme) for digital signatures.
+
+  Modern cryptographic standards (NIST SP 800-131A, RFC 8017) recommend OAEP and PSS as
+  the standard RSA padding schemes. PKCS#1 v1.5 for encryption is explicitly disallowed
+  in many compliance frameworks.
+
+message: "PKCS1v15 padding detected for RSA encryption or signing. PKCS#1 v1.5 is vulnerable to Bleichenbacher's attack. Use OAEP for encryption or PSS for signatures."
+
+security_implications:
+  - title: Bleichenbacher's Adaptive Chosen-Ciphertext Attack
+    description: |
+      The PKCS#1 v1.5 padding scheme leaks information about the plaintext through padding
+      validation errors. An attacker who can submit ciphertexts and observe whether
+      decryption succeeds or fails can recover the plaintext through approximately 2^20
+      oracle queries. This is practical against many network services.
+  - title: ROBOT Attack (Return of Bleichenbacher's Oracle Threat)
+    description: |
+      The ROBOT attack (2018) showed that many modern TLS implementations are still
+      vulnerable to Bleichenbacher's attack despite decades of awareness. Timing differences
+      in error handling, cache behavior, and exception paths create side channels that
+      serve as padding oracles.
+  - title: Signature Forgery
+    description: |
+      PKCS#1 v1.5 signature schemes with low public exponents (e=3) are vulnerable to
+      Bleichenbacher's signature forgery attack, where an attacker can construct a valid
+      signature without the private key by exploiting the padding structure. This has been
+      used to forge RSA signatures in certificate validation and JWT verification.
+  - title: JWT and OAuth Token Forgery
+    description: |
+      Libraries that use PKCS#1 v1.5 for JWT RS256 signature verification may be
+      vulnerable to signature forgery attacks. The authlib vulnerability (GHSA-7432-952r-cw78)
+      demonstrates this in the context of OAuth/OIDC token validation.
+
+secure_example: |
+  from cryptography.hazmat.primitives.asymmetric import padding, rsa
+  from cryptography.hazmat.primitives import hashes
+
+  # INSECURE: PKCS1v15 padding
+  # ciphertext = key.encrypt(data, padding.PKCS1v15())
+
+  # SECURE: OAEP padding for RSA encryption
+  def encrypt_oaep(public_key, plaintext: bytes) -> bytes:
+      return public_key.encrypt(
+          plaintext,
+          padding.OAEP(
+              mgf=padding.MGF1(algorithm=hashes.SHA256()),
+              algorithm=hashes.SHA256(),
+              label=None
+          )
+      )
+
+  # SECURE: PSS padding for RSA signatures
+  def sign_pss(private_key, data: bytes) -> bytes:
+      return private_key.sign(
+          data,
+          padding.PSS(
+              mgf=padding.MGF1(hashes.SHA256()),
+              salt_length=padding.PSS.MAX_LENGTH
+          ),
+          hashes.SHA256()
+      )
+
+  # SECURE: Use Ed25519 for modern signature needs (no padding complexity)
+  from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+  def sign_ed25519(data: bytes) -> tuple:
+      key = Ed25519PrivateKey.generate()
+      return key.sign(data), key.public_key()
+
+recommendations:
+  - Replace PKCS1v15() with OAEP() for all RSA encryption operations.
+  - Replace PKCS1v15() with PSS() for all RSA signature operations.
+  - For new systems, prefer Ed25519 or ECDSA over RSA for digital signatures.
+  - For new systems, prefer X25519 key exchange with symmetric encryption over RSA encryption.
+  - Audit all JWT/OAuth libraries to ensure they do not use PKCS#1 v1.5 internally.
+
+detection_scope: |
+  This rule detects calls to padding.PKCS1v15() and PKCS1v15() from the
+  cryptography.hazmat.primitives.asymmetric.padding module. All usages are flagged
+  because PKCS#1 v1.5 is deprecated for both encryption and signatures. Modern
+  alternatives (OAEP, PSS) should be used in all cases.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 - Cryptographic Failures"
+  - standard: NIST SP 800-131A
+    requirement: "PKCS#1 v1.5 encryption padding is disallowed after 2023"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 - Strong cryptography with industry-accepted algorithms"
+  - standard: FIPS 140-3
+    requirement: "RSA operations must use OAEP or PSS padding schemes"
+
+# References
+references:
+  - title: "GHSA-7432-952r-cw78: authlib Bleichenbacher attack"
+    url: https://github.com/advisories/GHSA-7432-952r-cw78
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "RFC 8017: PKCS #1 RSA Cryptography Specifications"
+    url: https://tools.ietf.org/html/rfc8017
+  - title: "ROBOT Attack: Return of Bleichenbacher's Oracle Threat"
+    url: https://robotattack.org/
+  - title: "Bleichenbacher's original 1998 paper"
+    url: https://link.springer.com/chapter/10.1007/BFb0055716
+
+# FAQ
+faq:
+  - question: Is PKCS1v15 safe for signatures if I use SHA-256?
+    answer: |
+      PKCS#1 v1.5 signatures with SHA-256 are more resistant to forgery than with SHA-1,
+      but PSS is still the recommended scheme. PKCS#1 v1.5 signatures are deterministic
+      (same input always produces same signature), which leaks information. PSS is
+      probabilistic and has a security proof in the random oracle model. For new code,
+      always use PSS.
+
+  - question: My existing system uses PKCS1v15 — can I migrate incrementally?
+    answer: |
+      Yes. For encryption, you can decrypt with PKCS1v15 for existing data while
+      encrypting new data with OAEP. For signatures, you can verify old signatures with
+      PKCS1v15 while producing new signatures with PSS. Plan a migration deadline after
+      which PKCS1v15 verification is disabled.
+
+  - question: Does TLS still use PKCS#1 v1.5?
+    answer: |
+      TLS 1.2 supports PKCS#1 v1.5 for RSA key exchange and signatures but it is
+      not recommended. TLS 1.3 completely removes PKCS#1 v1.5 encryption and only
+      allows PSS for RSA signatures. Upgrading to TLS 1.3 eliminates this risk at the
+      protocol level.
+
+  - question: Why does the cryptography library still provide PKCS1v15?
+    answer: |
+      The cryptography library is a low-level toolkit that provides both modern and
+      legacy algorithms. PKCS1v15 remains available for interoperability with legacy
+      systems that cannot be upgraded. The library documentation recommends OAEP and
+      PSS for new code. The hazmat (hazardous materials) package name is itself a warning.
+
+  - question: Is RSA-OAEP with SHA-1 acceptable?
+    answer: |
+      RSA-OAEP with SHA-1 as the hash function is still considered secure for the OAEP
+      construction (the collision resistance weakness of SHA-1 does not affect OAEP
+      security). However, using SHA-256 is recommended for consistency and future-proofing.
+      The MGF1 mask generation function commonly uses the same hash algorithm as OAEP.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-030
+  - PYTHON-LANG-SEC-031
+  - PYTHON-LANG-SEC-032
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

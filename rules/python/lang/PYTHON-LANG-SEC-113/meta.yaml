@@ -1,0 +1,189 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-113
+name: Host Header Used for Access Control
+short_description: HTTP_HOST header is attacker-controlled and must not be used for authentication, authorization, or security-sensitive routing decisions.
+
+# Classification
+severity: MEDIUM
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-113
+
+# Vulnerability Details
+cwe:
+  - id: CWE-287
+    name: Improper Authentication
+    url: https://cwe.mitre.org/data/definitions/287.html
+  - id: CWE-346
+    name: Origin Validation Error
+    url: https://cwe.mitre.org/data/definitions/346.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - python
+  - host-header
+  - authentication
+  - origin-validation
+  - flask
+  - wsgi
+  - CWE-287
+  - CWE-346
+  - OWASP-A07
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  The HTTP Host header is sent by the client and can be freely set to any value by an
+  attacker. Using the Host header for access control decisions, tenant isolation, URL
+  construction, or authentication checks is a common vulnerability pattern.
+
+  When an application trusts the Host header to determine whether a request should be
+  allowed (e.g., checking if the host is "admin.internal.company.com"), an attacker can
+  simply set the Host header to the expected value and bypass the access control entirely.
+
+  GHSA-q485-cg9q-xq2r (pyload) demonstrates this pattern where the application used
+  request.environ.get("HTTP_HOST") to validate the origin of API requests, allowing
+  attackers to bypass authentication by spoofing the Host header.
+
+  This pattern is especially dangerous in environments with reverse proxies, where the
+  Host header may be forwarded from the client without validation.
+
+message: "HTTP_HOST header used for access control or routing. Host headers are attacker-controlled and must not be trusted for security decisions."
+
+security_implications:
+  - title: Authentication Bypass via Host Header Spoofing
+    description: |
+      When access control checks compare the Host header against expected values
+      (e.g., "admin.internal.company.com"), an attacker can bypass authentication by
+      setting the Host header to the expected value in their HTTP request. This is
+      trivial to exploit with curl, Burp Suite, or any HTTP client.
+  - title: Tenant Isolation Bypass
+    description: |
+      Multi-tenant applications that use the Host header to determine which tenant's
+      data to serve can be attacked by spoofing the Host header to access another
+      tenant's data, leading to unauthorized data access.
+  - title: Password Reset Poisoning
+    description: |
+      Applications that use the Host header to construct password reset URLs can be
+      exploited by attackers who send password reset requests with a spoofed Host header,
+      causing the reset link to point to an attacker-controlled domain. When the victim
+      clicks the link, the reset token is sent to the attacker.
+  - title: Cache Poisoning
+    description: |
+      If the Host header is used in URL construction and the response is cached (by a
+      CDN or reverse proxy), an attacker can poison the cache with responses containing
+      attacker-controlled URLs, affecting all subsequent users.
+
+secure_example: |
+  from flask import request, abort
+  import os
+
+  # INSECURE: Using Host header for access control
+  # host = request.environ.get("HTTP_HOST")
+  # if host == "admin.internal.company.com":
+  #     return True
+
+  # SECURE: Use server-side configuration for access control
+  ALLOWED_ADMIN_IPS = os.environ.get("ADMIN_IPS", "").split(",")
+
+  def check_admin_access():
+      # Use network-level controls (IP allowlisting)
+      client_ip = request.remote_addr
+      if client_ip not in ALLOWED_ADMIN_IPS:
+          abort(403)
+      return True
+
+  # SECURE: Validate Host header against server configuration
+  ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
+
+  def validate_host():
+      host = request.host  # Use request.host with validation
+      if host not in ALLOWED_HOSTS:
+          abort(400)  # 400, not 403 — this is input validation, not authz
+
+  # SECURE: Use Django's ALLOWED_HOSTS or Flask-Talisman
+  # Django validates Host header against settings.ALLOWED_HOSTS automatically
+
+recommendations:
+  - Never use the HTTP_HOST header for authentication or authorization decisions.
+  - Use server-side configuration (environment variables, config files) for security-sensitive values like allowed hosts.
+  - Validate the Host header against a server-configured allowlist (like Django's ALLOWED_HOSTS) for input validation, but not for access control.
+  - Use network-level controls (IP allowlisting, VPN, mutual TLS) for admin access instead of Host header checks.
+  - For URL construction, use server-configured base URLs from environment variables, not the Host header.
+
+detection_scope: |
+  This rule detects calls to request.environ.get() or environ.get() with "HTTP_HOST"
+  as the first argument. This covers Flask/WSGI patterns where the Host header is read
+  from the WSGI environ dictionary. All usages are flagged since the Host header is
+  attacker-controlled and any security-sensitive use requires human review.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A07:2021 - Identification and Authentication Failures"
+  - standard: CWE Top 25
+    requirement: "CWE-287 - Improper Authentication"
+  - standard: NIST SP 800-53
+    requirement: "AC-3: Access Enforcement"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection and access control attacks"
+
+# References
+references:
+  - title: "GHSA-q485-cg9q-xq2r: pyload Host header authentication bypass"
+    url: https://github.com/advisories/GHSA-q485-cg9q-xq2r
+  - title: "CWE-287: Improper Authentication"
+    url: https://cwe.mitre.org/data/definitions/287.html
+  - title: "CWE-346: Origin Validation Error"
+    url: https://cwe.mitre.org/data/definitions/346.html
+  - title: OWASP Host Header Attacks
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection
+  - title: "PortSwigger: HTTP Host header attacks"
+    url: https://portswigger.net/web-security/host-header
+
+# FAQ
+faq:
+  - question: Can the Host header be trusted behind a reverse proxy?
+    answer: |
+      No. Even behind a reverse proxy, the Host header may be forwarded from the client
+      unless the proxy is explicitly configured to override it. Many reverse proxy
+      configurations pass through the original Host header. Use X-Forwarded-Host only
+      if the proxy is configured to set it and you trust the proxy, but even then, prefer
+      server-side configuration over request headers for security decisions.
+
+  - question: Is request.host safer than request.environ.get("HTTP_HOST")?
+    answer: |
+      Flask's request.host property reads from the same source (the Host header) and
+      is equally attacker-controlled. The only difference is that request.host may
+      include port normalization. Neither should be used for access control.
+
+  - question: How does Django's ALLOWED_HOSTS protect against this?
+    answer: |
+      Django's ALLOWED_HOSTS setting validates the Host header against a configured
+      allowlist and returns a 400 Bad Request if the Host header doesn't match. This
+      prevents Host header injection but is input validation, not access control.
+      You should still not use the Host header for authorization decisions.
+
+  - question: What about HTTP_X_FORWARDED_HOST?
+    answer: |
+      X-Forwarded-Host is equally attacker-controlled unless your reverse proxy is
+      configured to strip or override it. The same rules apply — do not use it for
+      security decisions. If you must use it, ensure your proxy is configured to set
+      it authoritatively and that direct access to the application is blocked.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-070
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,191 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-139
+name: Unsafe msgpack Deserialization
+short_description: msgpack.unpackb() and msgpack.unpack() can execute arbitrary code via ext_hook when deserializing untrusted data.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-139
+
+# Vulnerability Details
+cwe:
+  - id: CWE-502
+    name: Deserialization of Untrusted Data
+    url: https://cwe.mitre.org/data/definitions/502.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+
+tags:
+  - python
+  - msgpack
+  - deserialization
+  - untrusted-data
+  - CWE-502
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  MessagePack (msgpack) is a binary serialization format commonly used for inter-process
+  communication, caching, and data exchange. While msgpack is generally safer than pickle
+  because it does not natively support arbitrary code execution, the ext_hook parameter
+  in msgpack.unpackb() and msgpack.unpack() allows custom deserialization logic that can
+  be exploited if an attacker controls the serialized data.
+
+  When ext_hook is provided, msgpack calls this function for each Extension Type encountered
+  in the data stream. If the ext_hook function performs unsafe operations (e.g., calling
+  pickle.loads, eval, or importing modules), an attacker who controls the msgpack payload
+  can trigger arbitrary code execution.
+
+  The ormsgpack library (Rust-based msgpack implementation) has the same ext_hook mechanism
+  and the same risks. Real-world vulnerabilities have been found in projects like LangGraph
+  (GHSA-g48c-2wqr-h844) where msgpack deserialization of checkpoint data from untrusted
+  sources led to code execution.
+
+  This rule flags all msgpack deserialization calls (unpackb, unpack, Unpacker) for review,
+  as the safety depends on both the ext_hook implementation and the trust level of the data
+  source.
+
+message: "msgpack deserialization detected. Verify that the data source is trusted and ext_hook (if used) does not enable code execution."
+
+security_implications:
+  - title: Code Execution via ext_hook
+    description: |
+      The ext_hook parameter receives raw bytes for each Extension Type in the msgpack
+      stream. If the hook function uses pickle.loads(), eval(), exec(), or any other
+      unsafe deserialization to process these bytes, an attacker can craft a msgpack
+      payload with malicious Extension Type data to achieve remote code execution.
+  - title: Checkpoint and State Poisoning
+    description: |
+      Applications that serialize state, checkpoints, or workflow data using msgpack
+      (common in ML pipelines and workflow engines like LangGraph) are vulnerable if
+      an attacker can modify the stored msgpack data. Deserialization of poisoned
+      checkpoints can execute arbitrary code when the checkpoint is restored.
+  - title: Type Confusion Attacks
+    description: |
+      Even without ext_hook, msgpack deserialization of untrusted data can lead to
+      type confusion if the application assumes specific types in the deserialized
+      output without validation. An attacker can substitute unexpected types that
+      cause logic errors or bypass security checks downstream.
+
+secure_example: |
+  import json
+  import msgpack
+
+  # INSECURE: msgpack.unpackb with unsafe ext_hook
+  # obj = msgpack.unpackb(data, ext_hook=lambda code, data: pickle.loads(data))
+
+  # SECURE: Use JSON for untrusted data interchange
+  def deserialize_message(raw_bytes: bytes) -> dict:
+      data = json.loads(raw_bytes.decode("utf-8"))
+      if not isinstance(data, dict):
+          raise ValueError("Expected dict")
+      return data
+
+  # SECURE: msgpack with strict type checking and no ext_hook
+  def safe_unpack(data: bytes) -> dict:
+      result = msgpack.unpackb(data, raw=False, strict_map_key=True)
+      if not isinstance(result, dict):
+          raise ValueError("Unexpected type")
+      return result
+
+  # SECURE: Use pydantic for schema validation after deserialization
+  from pydantic import BaseModel
+
+  class Message(BaseModel):
+      type: str
+      payload: dict
+
+  def parse_message(data: bytes) -> Message:
+      raw = msgpack.unpackb(data, raw=False)
+      return Message.model_validate(raw)
+
+recommendations:
+  - Avoid using ext_hook with msgpack when deserializing data from untrusted sources.
+  - If ext_hook is required, ensure it only handles known Extension Type codes and does not use pickle, eval, or exec.
+  - Validate the structure and types of deserialized msgpack data before use, preferably with a schema validation library like pydantic.
+  - For data interchange with untrusted parties, prefer JSON which has no code execution surface.
+  - Audit all msgpack deserialization points to verify the data source is trusted or the ext_hook is safe.
+
+detection_scope: |
+  This rule detects calls to msgpack.unpackb(), msgpack.unpack(), msgpack.Unpacker(),
+  ormsgpack.unpackb(), and ormsgpack.unpack(). All deserialization calls are flagged
+  because the risk depends on the data source trust level and ext_hook implementation,
+  which requires human review.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-502 - Deserialization of Untrusted Data in the MITRE CWE Top 25"
+  - standard: OWASP Top 10
+    requirement: "A08:2021 - Software and Data Integrity Failures"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including deserialization"
+
+# References
+references:
+  - title: "CWE-502: Deserialization of Untrusted Data"
+    url: https://cwe.mitre.org/data/definitions/502.html
+  - title: "GHSA-g48c-2wqr-h844: Code execution via msgpack deserialization in langgraph-checkpoint"
+    url: https://github.com/advisories/GHSA-g48c-2wqr-h844
+  - title: "msgpack-python documentation"
+    url: https://msgpack-python.readthedocs.io/en/latest/
+  - title: "OWASP Top 10 A08:2021 Software and Data Integrity Failures"
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - title: "ormsgpack documentation"
+    url: https://github.com/aviramha/ormsgpack
+
+# FAQ
+faq:
+  - question: Is msgpack safer than pickle?
+    answer: |
+      Yes, msgpack is significantly safer than pickle by default. Pickle can execute
+      arbitrary code during deserialization via __reduce__, while msgpack only serializes
+      basic types (int, str, bytes, list, dict, etc.) and does not have a built-in code
+      execution mechanism. However, when ext_hook is used, the safety depends entirely
+      on the ext_hook implementation. If ext_hook calls pickle.loads() or eval(), msgpack
+      becomes as dangerous as pickle.
+
+  - question: Should I flag msgpack.unpackb() without ext_hook?
+    answer: |
+      This rule conservatively flags all msgpack deserialization calls. Without ext_hook,
+      msgpack.unpackb() is generally safe from code execution, but deserializing untrusted
+      data can still lead to type confusion or denial of service (e.g., deeply nested
+      structures, extremely large allocations). Manual review is recommended to assess
+      the data source trust level.
+
+  - question: What is the difference between msgpack and ormsgpack?
+    answer: |
+      ormsgpack is a Rust-based msgpack implementation for Python that is faster than the
+      pure-Python/C msgpack library. It has the same API surface (unpackb, packb) and the
+      same ext_hook mechanism, so the same security considerations apply. Both libraries
+      are flagged by this rule.
+
+  - question: How was GHSA-g48c-2wqr-h844 exploited?
+    answer: |
+      The LangGraph checkpoint vulnerability involved deserializing msgpack-encoded
+      checkpoint data where the ext_hook used pickle.loads() to handle Extension Types.
+      An attacker who could write to the checkpoint store could craft a malicious msgpack
+      payload with a pickle-encoded Extension Type that executed arbitrary code when the
+      checkpoint was loaded.
+
+similar_rules:
+  - PYTHON-LANG-SEC-040
+  - PYTHON-LANG-SEC-041
+  - PYTHON-LANG-SEC-042
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,207 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-162
+name: Symlink Following Arbitrary File Access
+short_description: Symlink operations (os.readlink, os.symlink, is_symlink) on user-controlled paths can lead to arbitrary file read or write via symlink following.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-162
+
+# Vulnerability Details
+cwe:
+  - id: CWE-59
+    name: Improper Link Resolution Before File Access
+    url: https://cwe.mitre.org/data/definitions/59.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - symlink
+  - path-traversal
+  - file-access
+  - link-following
+  - CWE-59
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Symlink following vulnerabilities occur when an application performs file operations on a
+  path that is (or contains) a symbolic link controlled by an attacker, causing the
+  application to read, write, or delete files outside the intended directory. This is
+  particularly dangerous in applications that process user-uploaded files, manage
+  repositories, or operate on shared filesystems.
+
+  Common attack scenarios include:
+  - A user uploads a zip/tar archive containing symlinks pointing to /etc/passwd or
+    application secrets, then triggers the application to read those "files"
+  - A user creates a symlink in a writable directory pointing to a sensitive file, then
+    uses the application to read the symlink target
+  - Race conditions (TOCTOU) where a legitimate file is replaced with a symlink between
+    the check and the use
+
+  This is an audit rule. Not every os.readlink() or is_symlink() call is vulnerable —
+  the vulnerability depends on whether the path argument is user-controlled and whether
+  the application follows the symlink to perform sensitive operations. This rule flags
+  symlink-related operations for manual review to assess whether proper validation
+  (os.path.realpath + path prefix check, or O_NOFOLLOW) is in place.
+
+  Real-world example: GHSA-g925-f788-4jh7 (Weblate) where symlink following in a
+  repository management feature allowed reading arbitrary files from the server.
+
+message: "Symlink operation on potentially user-controlled path detected. Verify that symlink resolution is validated before file access."
+
+security_implications:
+  - title: Arbitrary File Read via Symlink Following
+    description: |
+      When an application reads a file path that resolves through a user-controlled
+      symlink, the attacker can point the symlink to any file readable by the
+      application process. This commonly leads to disclosure of /etc/passwd,
+      application configuration files, database credentials, API keys, and
+      private keys.
+  - title: Arbitrary File Write via Symlink Redirection
+    description: |
+      If an application writes to a path that contains a symlink, the write
+      operation follows the symlink and modifies the target file. An attacker
+      can redirect writes to overwrite configuration files, inject code into
+      application modules, or modify cron jobs for persistent access.
+  - title: TOCTOU Race Conditions
+    description: |
+      Even when an application checks is_symlink() before operating on a file,
+      a race condition exists between the check and the use. An attacker can
+      replace a legitimate file with a symlink after the check passes but before
+      the file operation executes, bypassing the symlink check entirely.
+  - title: Container and Sandbox Escape
+    description: |
+      In containerized environments, symlinks pointing to paths outside the
+      container's filesystem namespace (e.g., /proc/1/root/) can potentially
+      be used to access the host filesystem, depending on the container
+      runtime configuration and mount points.
+
+secure_example: |
+  import os
+  from pathlib import Path
+
+  # INSECURE: reading a user-controlled path without symlink check
+  # content = open(user_path).read()
+
+  # SECURE: resolve symlinks and verify the path is within allowed directory
+  def safe_read(user_path: str, allowed_dir: str) -> str:
+      real_path = os.path.realpath(user_path)
+      allowed_real = os.path.realpath(allowed_dir)
+      if not real_path.startswith(allowed_real + os.sep):
+          raise ValueError("Path traversal or symlink escape detected")
+      with open(real_path) as f:
+          return f.read()
+
+  # SECURE: use Path.resolve() with is_relative_to() (Python 3.9+)
+  def safe_read_pathlib(user_path: str, base_dir: str) -> str:
+      resolved = Path(user_path).resolve()
+      if not resolved.is_relative_to(Path(base_dir).resolve()):
+          raise ValueError("Path outside allowed directory")
+      return resolved.read_text()
+
+  # SECURE: open with O_NOFOLLOW to reject symlinks
+  import os
+  fd = os.open(file_path, os.O_RDONLY | os.O_NOFOLLOW)
+  try:
+      data = os.read(fd, os.fstat(fd).st_size)
+  finally:
+      os.close(fd)
+
+  # SECURE: use stat with follow_symlinks=False to check without following
+  info = os.stat(path, follow_symlinks=False)
+  if stat.S_ISLNK(info.st_mode):
+      raise ValueError("Symlinks not allowed")
+
+recommendations:
+  - Always resolve symlinks with os.path.realpath() or Path.resolve() before performing file operations on user-controlled paths.
+  - After resolving, verify the resolved path is within the expected directory using a prefix check (startswith) or Path.is_relative_to().
+  - Use os.open() with O_NOFOLLOW flag when symlinks should be rejected entirely.
+  - For directory traversal, use os.scandir() and check entry.is_symlink() before following entries.
+  - Be aware of TOCTOU race conditions — resolve and open atomically when possible, or use O_NOFOLLOW.
+
+detection_scope: |
+  This rule detects calls to os.readlink(), os.symlink(), Path.is_symlink(), and
+  os.path.islink(). These are audit-level findings — not every symlink operation is
+  dangerous, but symlink operations on user-controlled paths need review to ensure
+  proper validation is in place. Hardcoded paths and paths validated with
+  os.path.realpath() before access are typically safe.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-59 - Improper Link Resolution Before File Access"
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against common coding vulnerabilities"
+
+# References
+references:
+  - title: "CWE-59: Improper Link Resolution Before File Access"
+    url: https://cwe.mitre.org/data/definitions/59.html
+  - title: "GHSA-g925-f788-4jh7: Arbitrary file read in Weblate via symlink following"
+    url: https://github.com/advisories/GHSA-g925-f788-4jh7
+  - title: "OWASP Path Traversal"
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: "Python os.path.realpath() documentation"
+    url: https://docs.python.org/3/library/os.path.html#os.path.realpath
+  - title: "Python pathlib.Path.resolve() documentation"
+    url: https://docs.python.org/3/library/pathlib.html#pathlib.Path.resolve
+
+# FAQ
+faq:
+  - question: Is every os.readlink() call dangerous?
+    answer: |
+      No. os.readlink() on a hardcoded or application-controlled path is safe. The
+      vulnerability occurs when the path argument is derived from user input (request
+      parameters, uploaded filenames, repository paths, etc.) without validation.
+      This rule flags all symlink operations for audit because determining whether a
+      path is user-controlled requires understanding the data flow, which needs human review.
+
+  - question: How does symlink following differ from path traversal?
+    answer: |
+      Path traversal (CWE-22) uses "../" sequences in the filename to escape a directory.
+      Symlink following (CWE-59) uses symbolic links to redirect file access to arbitrary
+      locations. Both can achieve similar outcomes (reading/writing files outside the
+      intended directory), but they require different defenses. Path traversal is blocked
+      by canonicalizing the path and checking the prefix. Symlink following requires
+      resolving symlinks (os.path.realpath) and then checking the prefix, or using
+      O_NOFOLLOW to reject symlinks entirely.
+
+  - question: Does os.path.realpath() prevent symlink attacks?
+    answer: |
+      os.path.realpath() resolves all symlinks in a path and returns the canonical
+      absolute path. Using it before a file operation and then verifying the result
+      is within the allowed directory is the standard defense against symlink following.
+      However, there is a TOCTOU window between calling realpath() and opening the file
+      where the symlink could be changed. For high-security scenarios, use O_NOFOLLOW
+      or open the file first and then verify with fstat.
+
+  - question: Can containers prevent symlink escape?
+    answer: |
+      Container runtimes (Docker, containerd) restrict filesystem access using mount
+      namespaces, so symlinks inside a container generally cannot access host files.
+      However, if the container has host volumes mounted, symlinks can follow those
+      mounts. Additionally, /proc/1/root/ and similar procfs paths can sometimes be
+      used for escape depending on the container security configuration.
+
+similar_rules: []
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

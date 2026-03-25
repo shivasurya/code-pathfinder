@@ -1,0 +1,195 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-110
+name: Unsafe Tarfile Extraction Detected
+short_description: tarfile.extractall() and tarfile.extract() are vulnerable to path traversal attacks (Zip Slip). Malicious tar archives can write files outside the intended directory using entries with ../ in their names.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-110
+
+# Vulnerability Details
+cwe:
+  - id: CWE-22
+    name: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - tarfile
+  - path-traversal
+  - zip-slip
+  - file-extraction
+  - CWE-22
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's tarfile module does not validate member paths during extraction by default. A crafted
+  tar archive can contain entries with names like "../../etc/crontab" or absolute paths like
+  "/etc/passwd", causing extractall() or extract() to write files outside the intended destination
+  directory. This is known as the "Zip Slip" vulnerability (despite the name, it affects tar
+  archives too).
+
+  CVE-2007-4559 is the canonical vulnerability in Python's tarfile module — it has remained
+  unfixed for over 15 years because fixing it would break backward compatibility. Python 3.12
+  introduced the filter parameter (PEP 706) to provide safe extraction modes.
+
+  This vulnerability has been exploited in real-world supply chain attacks. GHSA-fhff-qmm8-h2fp
+  (mlflow) demonstrates how tar path traversal in ML pipeline tools can lead to arbitrary file
+  write on the server, enabling remote code execution.
+
+message: "tarfile.extractall() or tarfile.extract() detected. Tar archives can contain path traversal entries. Use filter='data' or validate members before extraction."
+
+security_implications:
+  - title: Arbitrary File Write via Path Traversal
+    description: |
+      A malicious tar archive can contain members with relative paths containing "../"
+      sequences. When extracted with extractall(), these members are written outside the
+      intended destination directory. An attacker can overwrite any file writable by the
+      application process, including configuration files, crontabs, SSH authorized_keys,
+      or application code.
+  - title: Remote Code Execution via File Overwrite
+    description: |
+      By overwriting executable files, Python modules, or cron jobs, an attacker who can
+      supply a malicious tar archive to an application can achieve remote code execution.
+      In CI/CD and ML pipeline contexts, this is especially dangerous as archives are
+      often processed automatically.
+  - title: Symlink Following in Archives
+    description: |
+      Tar archives can contain symbolic links. A crafted archive can include a symlink
+      pointing outside the destination directory, followed by a regular file entry that
+      writes through the symlink. This two-step attack bypasses simple path validation
+      that only checks regular file paths.
+  - title: Supply Chain Attacks via Package Archives
+    description: |
+      Libraries that download and extract tar archives (ML model registries, package
+      managers, data pipelines) are common targets. The mlflow vulnerability
+      (GHSA-fhff-qmm8-h2fp) allowed arbitrary file write through crafted model artifacts,
+      demonstrating the supply chain risk.
+
+secure_example: |
+  import tarfile
+  import os
+
+  # INSECURE: extractall without validation
+  # tar.extractall(path=dest)
+
+  # SECURE (Python 3.12+): Use filter='data' for safe extraction
+  def safe_extract_filtered(archive_path: str, dest: str) -> None:
+      with tarfile.open(archive_path) as tar:
+          tar.extractall(path=dest, filter="data")
+
+  # SECURE (all versions): Validate each member before extraction
+  def safe_extract_validated(archive_path: str, dest: str) -> None:
+      dest = os.path.realpath(dest)
+      with tarfile.open(archive_path) as tar:
+          for member in tar.getmembers():
+              member_path = os.path.realpath(os.path.join(dest, member.name))
+              if not member_path.startswith(dest + os.sep):
+                  raise ValueError(f"Path traversal detected: {member.name}")
+              if member.issym() or member.islnk():
+                  raise ValueError(f"Symlink in archive: {member.name}")
+          tar.extractall(path=dest, members=tar.getmembers())
+
+  # SECURE: Read file contents without extracting to disk
+  def read_archive_member(archive_path: str, member_name: str) -> bytes:
+      with tarfile.open(archive_path) as tar:
+          f = tar.extractfile(member_name)
+          if f is None:
+              raise ValueError("Not a regular file")
+          return f.read()
+
+recommendations:
+  - Use filter='data' parameter on extractall() (Python 3.12+) to automatically reject path traversal entries, absolute paths, and symlinks.
+  - For Python versions before 3.12, validate each member path with os.path.realpath() and ensure it stays within the destination directory.
+  - Reject tar members that are symbolic links or hard links pointing outside the extraction directory.
+  - Use extractfile() instead of extract() when you only need to read file contents without writing to disk.
+  - Consider using the 'tarfile.data_filter' or a custom filter function to enforce extraction policies.
+
+detection_scope: |
+  This rule detects calls to tarfile.extractall() and tarfile.extract() on tarfile objects.
+  All call sites are flagged because the safety depends on whether the archive source is
+  trusted and whether proper member validation is performed. The filter='data' parameter
+  (Python 3.12+) is the recommended mitigation but cannot be statically verified in all cases.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-22 - Improper Limitation of a Pathname to a Restricted Directory in the MITRE CWE Top 25"
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks including path traversal"
+
+# References
+references:
+  - title: "CVE-2007-4559: Python tarfile directory traversal"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2007-4559
+  - title: "GHSA-fhff-qmm8-h2fp: mlflow tar path traversal"
+    url: https://github.com/advisories/GHSA-fhff-qmm8-h2fp
+  - title: "PEP 706 - Filter for tarfile.extractall"
+    url: https://peps.python.org/pep-0706/
+  - title: "CWE-22: Path Traversal"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: "OWASP Path Traversal"
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+
+# FAQ
+faq:
+  - question: Why wasn't CVE-2007-4559 fixed in Python's tarfile module?
+    answer: |
+      The Python core developers considered fixing this a backward-compatibility break.
+      Many legitimate use cases depend on extracting archives with relative paths or
+      symlinks. Instead, Python 3.12 introduced PEP 706 which adds the filter parameter
+      to extractall(), allowing users to opt into safe extraction behavior. Future Python
+      versions will make the safe filter the default.
+
+  - question: Is extractall(members=validated_list) sufficient?
+    answer: |
+      Passing a validated members list helps, but you must also check for symlink-based
+      attacks where a symlink is followed by a file that writes through it. Both the
+      member paths and the link targets need validation. The filter='data' approach in
+      Python 3.12+ handles these cases automatically.
+
+  - question: How does filter='data' protect against path traversal?
+    answer: |
+      The 'data' filter rejects archive members with absolute paths, paths containing
+      '..' components, symlinks, hard links, device nodes, and other special entries.
+      It only allows regular files and directories with safe, relative paths. This is
+      the recommended approach for Python 3.12+.
+
+  - question: Is tarfile.extractfile() safe?
+    answer: |
+      Yes, extractfile() returns a file-like object for reading the member contents
+      without writing anything to disk. It is safe to use with untrusted archives when
+      you need to read file contents. However, it only works with regular file members,
+      not directories or special file types.
+
+  - question: What about shutil.unpack_archive() with tar files?
+    answer: |
+      shutil.unpack_archive() calls tarfile.extractall() internally and is equally
+      vulnerable to path traversal. The same mitigations apply. In Python 3.12+,
+      shutil.unpack_archive() also accepts the filter parameter.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-060
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
