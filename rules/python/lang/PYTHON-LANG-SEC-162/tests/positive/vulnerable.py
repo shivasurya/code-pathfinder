@@ -1,26 +1,22 @@
 import os
-from pathlib import Path
+import shutil
 
-# SEC-162: os.readlink on user-controlled path
-user_path = request.args.get("path")
-target = os.readlink(user_path)
+# SEC-162: User-controlled path flows to file op without symlink resolution
 
-# SEC-162: os.symlink with user-controlled arguments
-target_file = input("Enter target: ")
-link_name = input("Enter link name: ")
-os.symlink(target_file, link_name)
+# 1. os.path.join → open (classic repo file read)
+def read_repo_file(repo_dir, filename):
+    path = os.path.join(repo_dir, filename)
+    f = open(path, "r")
+    return f.read()
 
-# SEC-162: Path.is_symlink() check on user-controlled path
-repo_path = get_user_repo_path()
-if Path(repo_path).is_symlink():
-    content = open(repo_path).read()
+# 2. os.path.join → os.readlink (Weblate CVE pattern)
+def get_link_target(repo_dir, name):
+    path = os.path.join(repo_dir, name)
+    target = os.readlink(path)
+    return target
 
-# SEC-162: os.path.islink on user-controlled path
-uploaded = request.files["file"].filename
-if os.path.islink(uploaded):
-    real_target = os.readlink(uploaded)
-
-# SEC-162: readlink in a directory traversal loop
-for entry in os.scandir(user_directory):
-    if entry.is_symlink():
-        resolved = os.readlink(entry.path)
+# 3. request.args.get → open (direct web input)
+def download_file(request):
+    filename = request.args.get("file")
+    f = open(filename, "rb")
+    return f.read()
