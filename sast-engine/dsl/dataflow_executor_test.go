@@ -994,3 +994,58 @@ func TestDataflowExecutor_VDG_Global_MultiLevelSink(t *testing.T) {
 // matchesPattern and findMatchingCalls tests removed — these dead methods
 // were deleted from DataflowExecutor. Pattern matching is tested via
 // CallMatcherExecutor tests; resolveMatchers is tested in bridge_test.go.
+
+func TestDataflowExecutor_AttributeMatcherInFlows(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	funcFQN := "test.proxy"
+	cg.Functions[funcFQN] = &graph.Node{
+		Name: "proxy",
+		File: "test.py",
+	}
+
+	cg.Statements[funcFQN] = []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(2),
+			Def:             "url",
+			Uses:            []string{"request"},
+			AttributeAccess: "request.url",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			Def:        "response",
+			Uses:       []string{"url"},
+			CallTarget: "requests.get",
+			CallArgs:   []string{"url"},
+		},
+	}
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{
+			Target:   "requests.get",
+			Location: core.Location{File: "test.py", Line: 3},
+		},
+	}
+
+	sourceJSON, _ := json.Marshal(AttributeMatcherIR{Type: "attribute_matcher", Patterns: []string{"request.url"}})
+	sinkJSON, _ := json.Marshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"requests.get"}})
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{sourceJSON},
+		Sinks:      []json.RawMessage{sinkJSON},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.NotEmpty(t, detections, "Should detect flow: request.url (attribute) -> requests.get (call)")
+	if len(detections) > 0 {
+		assert.Equal(t, funcFQN, detections[0].FunctionFQN)
+		assert.Equal(t, 2, detections[0].SourceLine)
+		assert.Equal(t, 3, detections[0].SinkLine)
+	}
+}

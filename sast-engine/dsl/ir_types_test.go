@@ -73,6 +73,14 @@ func TestDataflowIR_GetType(t *testing.T) {
 	})
 }
 
+func TestAttributeMatcherIR_GetType(t *testing.T) {
+	matcher := &AttributeMatcherIR{
+		Type:     "attribute_matcher",
+		Patterns: []string{"request.url", "request.host"},
+	}
+	assert.Equal(t, IRTypeAttributeMatcher, matcher.GetType())
+}
+
 func TestIRTypeConstants(t *testing.T) {
 	t.Run("IR type constants are defined correctly", func(t *testing.T) {
 		assert.Equal(t, IRType("call_matcher"), IRTypeCallMatcher)

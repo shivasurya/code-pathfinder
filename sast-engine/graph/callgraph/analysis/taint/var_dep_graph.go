@@ -21,11 +21,12 @@ type TaintDetection struct {
 
 // VarDefSite represents a single definition of a variable at a specific line.
 type VarDefSite struct {
-	VarName     string
-	Line        uint32
-	IsTaintSrc  bool
-	IsSanitized bool
-	CallTarget  string
+	VarName         string
+	Line            uint32
+	IsTaintSrc      bool
+	IsSanitized     bool
+	CallTarget      string
+	AttributeAccess string
 }
 
 // VarDepGraph is a directed graph of variable data dependencies within a function.
@@ -63,16 +64,23 @@ func (g *VarDepGraph) Build(
 
 		key := nodeKey(stmt.Def, stmt.LineNumber)
 		node := &VarDefSite{
-			VarName:    stmt.Def,
-			Line:       stmt.LineNumber,
-			CallTarget: stmt.CallTarget,
+			VarName:         stmt.Def,
+			Line:            stmt.LineNumber,
+			CallTarget:      stmt.CallTarget,
+			AttributeAccess: stmt.AttributeAccess,
 		}
 
 		if stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sources) {
 			node.IsTaintSrc = true
 		}
+		if stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sources) {
+			node.IsTaintSrc = true
+		}
 
 		if stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sanitizers) {
+			node.IsSanitized = true
+		}
+		if stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sanitizers) {
 			node.IsSanitized = true
 		}
 
@@ -113,10 +121,9 @@ func (g *VarDepGraph) FindTaintFlows(statements []*core.Statement, sinks []strin
 	// Sinks can appear in any statement type: bare calls (type=call, def=""),
 	// assignments (e.g., obj = pickle.loads(data)), or returns (e.g., return redirect(url)).
 	for _, stmt := range statements {
-		if stmt.CallTarget == "" {
-			continue
-		}
-		if !matchesAnyPattern(stmt.CallTarget, sinks) {
+		callTargetIsSink := stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sinks)
+		attrIsSink := stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sinks)
+		if !callTargetIsSink && !attrIsSink {
 			continue
 		}
 

@@ -144,6 +144,12 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 	} else {
 		// Assignment from expression: x = y + z
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+
+		// If RHS is a pure attribute access (not a call, subscript, or binary op),
+		// capture the full dotted chain for taint source matching.
+		if rightNode.Type() == "attribute" {
+			stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
+		}
 	}
 
 	return stmt
@@ -261,6 +267,29 @@ func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) string {
 		// Complex expression, return full content
 		return string(functionNode.Content(sourceCode)) //nolint:unconvert
 	}
+}
+
+// extractFullAttributeChain recursively builds the full dotted attribute chain
+// from a tree-sitter attribute node.
+func extractFullAttributeChain(node *sitter.Node, sourceCode []byte) string {
+	if node == nil {
+		return ""
+	}
+	switch node.Type() {
+	case "identifier":
+		return string(node.Content(sourceCode))
+	case "attribute":
+		obj := node.ChildByFieldName("object")
+		attr := node.ChildByFieldName("attribute")
+		if obj != nil && attr != nil {
+			prefix := extractFullAttributeChain(obj, sourceCode)
+			if prefix != "" {
+				return prefix + "." + string(attr.Content(sourceCode))
+			}
+			return string(attr.Content(sourceCode))
+		}
+	}
+	return ""
 }
 
 // extractIdentifiersFromArgs extracts all identifiers from call arguments recursively.

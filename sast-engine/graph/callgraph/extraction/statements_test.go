@@ -882,3 +882,98 @@ def foo():
 	assert.Contains(t, stmt.Uses, "x")
 	assert.Contains(t, stmt.Uses, "y")
 }
+
+// extractStatementsFromSource wraps a bare Python statement in a function
+// and extracts statements from it, for concise attribute access tests.
+func extractStatementsFromSource(t *testing.T, source string) []*core.Statement {
+	t.Helper()
+	wrapped := "def _wrapper():\n    " + source + "\n"
+	tree, funcNode, sourceBytes := parsePythonFunction(t, wrapped, "_wrapper")
+	defer tree.Close()
+	stmts, err := ExtractStatements("test.py", sourceBytes, funcNode)
+	require.NoError(t, err)
+	return stmts
+}
+
+//
+// ========== ATTRIBUTE ACCESS TESTS ==========
+//
+
+func TestExtractStatements_AttributeAccess_SimpleChain(t *testing.T) {
+	source := `x = request.url`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "request.url", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "request")
+}
+
+func TestExtractStatements_AttributeAccess_ThreeLevelChain(t *testing.T) {
+	source := `key = self.config.SECRET`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "key", stmt.Def)
+	assert.Equal(t, "self.config.SECRET", stmt.AttributeAccess)
+}
+
+func TestExtractStatements_AttributeAccess_FileFilename(t *testing.T) {
+	source := `name = uploaded.filename`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "name", stmt.Def)
+	assert.Equal(t, "uploaded.filename", stmt.AttributeAccess)
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForCall(t *testing.T) {
+	source := `x = foo()`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "", stmt.AttributeAccess, "Calls should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForMethodCall(t *testing.T) {
+	source := `x = request.url.split("?")`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "", stmt.AttributeAccess, "Method calls should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForLiteral(t *testing.T) {
+	source := `x = 42`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].AttributeAccess, "Literals should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForBinaryOp(t *testing.T) {
+	source := `x = obj.attr + "suffix"`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].AttributeAccess, "Binary ops should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForSubscript(t *testing.T) {
+	source := `x = d["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].AttributeAccess, "Subscripts should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_EmptyForSubscriptOnAttribute(t *testing.T) {
+	source := `x = request.files["avatar"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].AttributeAccess, "Subscript on attribute should not set AttributeAccess")
+}
+
+func TestExtractStatements_AttributeAccess_DeepChain(t *testing.T) {
+	source := `val = a.b.c.d.e.f`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "a.b.c.d.e.f", stmts[0].AttributeAccess)
+}

@@ -101,12 +101,55 @@ class MethodMatcher:
         return f"MethodMatcher({methods})"
 
 
+class AttributeMethodMatcher:
+    """Matcher for attribute access on typed receivers. Returned by QueryType.attr()."""
+
+    def __init__(self, receiver_types, receiver_patterns, match_subclasses, attribute_names):
+        self.receiver_types = receiver_types
+        self.receiver_patterns = receiver_patterns
+        self.match_subclasses = match_subclasses
+        self.attribute_names = attribute_names
+
+    def to_ir(self) -> dict:
+        return {
+            "type": IRType.TYPE_CONSTRAINED_ATTRIBUTE.value,
+            "receiverTypes": self.receiver_types,
+            "receiverPatterns": self.receiver_patterns,
+            "matchSubclasses": self.match_subclasses,
+            "attributeNames": self.attribute_names,
+            "minConfidence": 0.5,
+            "fallbackMode": "none",
+        }
+
+    def __repr__(self) -> str:
+        attrs = ", ".join(f'"{a}"' for a in self.attribute_names)
+        return f"AttributeMethodMatcher({attrs})"
+
+
 class QueryTypeMeta(type):
     """Metaclass for QueryType that provides classmethod-style .method() without instantiation."""
 
     fqns: list[str]
     patterns: list[str]
     match_subclasses: bool
+
+    def attr(cls, *attribute_names: str) -> "AttributeMethodMatcher":
+        """Select attributes to match on this type.
+
+        Args:
+            *attribute_names: One or more attribute names to match.
+
+        Returns:
+            AttributeMethodMatcher configured with this type's FQNs and patterns.
+        """
+        if not attribute_names:
+            raise ValueError("attr() requires at least one attribute name")
+        return AttributeMethodMatcher(
+            receiver_types=cls.fqns,
+            receiver_patterns=cls.patterns,
+            match_subclasses=cls.match_subclasses,
+            attribute_names=list(attribute_names),
+        )
 
     def method(cls, *method_names: str) -> MethodMatcher:
         """Select methods to match on this type.

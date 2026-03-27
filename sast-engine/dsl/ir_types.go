@@ -18,6 +18,7 @@ const (
 	IRTypeLogicNot                 IRType = "logic_not"
 	IRTypeTypeConstrainedCall      IRType = "type_constrained_call"
 	IRTypeTypeConstrainedAttribute IRType = "type_constrained_attribute"
+	IRTypeAttributeMatcher         IRType = "attribute_matcher"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -94,6 +95,19 @@ type VariableMatcherIR struct {
 // GetType returns the IR type.
 func (v *VariableMatcherIR) GetType() IRType {
 	return IRTypeVariableMatcher
+}
+
+// AttributeMatcherIR represents attribute_matcher JSON IR.
+// Matches pure attribute access patterns (not calls) on the RHS of assignments,
+// e.g. {"type": "attribute_matcher", "patterns": ["request.url", "file.filename"]}.
+type AttributeMatcherIR struct {
+	Type     string   `json:"type"`     // "attribute_matcher"
+	Patterns []string `json:"patterns"` // ["request.url", "file.filename"]
+}
+
+// GetType returns the IR type.
+func (a *AttributeMatcherIR) GetType() IRType {
+	return IRTypeAttributeMatcher
 }
 
 // DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.

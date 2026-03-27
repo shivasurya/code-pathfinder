@@ -19,6 +19,8 @@ class IRType(Enum):
     LOGIC_OR = "logic_or"  # Coming in PR #5
     LOGIC_NOT = "logic_not"  # Coming in PR #5
     TYPE_CONSTRAINED_CALL = "type_constrained_call"
+    ATTRIBUTE_MATCHER = "attribute_matcher"
+    TYPE_CONSTRAINED_ATTRIBUTE = "type_constrained_attribute"
 
 
 class MatcherIR(Protocol):
@@ -103,6 +105,22 @@ def validate_ir(ir: Dict[str, Any]) -> bool:
             and isinstance(ir["propagation"], list)
             and "scope" in ir
             and ir["scope"] in ["local", "global"]
+        )
+
+    if ir_type == IRType.ATTRIBUTE_MATCHER:
+        return (
+            "patterns" in ir
+            and isinstance(ir["patterns"], list)
+            and len(ir["patterns"]) > 0
+        )
+
+    if ir_type == IRType.TYPE_CONSTRAINED_ATTRIBUTE:
+        return (
+            "receiverTypes" in ir
+            and isinstance(ir["receiverTypes"], list)
+            and "attributeNames" in ir
+            and isinstance(ir["attributeNames"], list)
+            and len(ir["attributeNames"]) > 0
         )
 
     return True
