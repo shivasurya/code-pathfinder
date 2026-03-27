@@ -194,3 +194,45 @@ class TestValidateIR:
         assert len(ir["sources"]) == 1
         assert len(ir["sinks"]) == 1
         assert len(ir["propagation"]) == 1
+
+    def test_valid_attribute_matcher_ir(self):
+        """Test validation of attribute_matcher IR."""
+        ir = {
+            "type": "attribute_matcher",
+            "patterns": ["request.url"],
+        }
+        assert validate_ir(ir) is True
+
+    def test_invalid_attribute_matcher_empty_patterns(self):
+        """Test attribute_matcher with empty patterns fails validation."""
+        ir = {
+            "type": "attribute_matcher",
+            "patterns": [],
+        }
+        assert validate_ir(ir) is False
+
+    def test_valid_type_constrained_attribute_ir(self):
+        """Test validation of type_constrained_attribute IR."""
+        ir = {
+            "type": "type_constrained_attribute",
+            "receiverTypes": ["flask.wrappers.Request"],
+            "attributeNames": ["url"],
+        }
+        assert validate_ir(ir) is True
+
+    def test_invalid_type_constrained_attribute_missing_attrs(self):
+        """Test type_constrained_attribute with empty attributeNames fails."""
+        ir = {
+            "type": "type_constrained_attribute",
+            "receiverTypes": ["flask.wrappers.Request"],
+            "attributeNames": [],
+        }
+        assert validate_ir(ir) is False
+
+    def test_invalid_type_constrained_attribute_missing_field(self):
+        """Test type_constrained_attribute with missing field fails."""
+        ir = {
+            "type": "type_constrained_attribute",
+            "receiverTypes": ["flask.wrappers.Request"],
+        }
+        assert validate_ir(ir) is False

@@ -277,16 +277,16 @@ func extractFullAttributeChain(node *sitter.Node, sourceCode []byte) string {
 	}
 	switch node.Type() {
 	case "identifier":
-		return string(node.Content(sourceCode))
+		return node.Content(sourceCode)
 	case "attribute":
 		obj := node.ChildByFieldName("object")
 		attr := node.ChildByFieldName("attribute")
 		if obj != nil && attr != nil {
 			prefix := extractFullAttributeChain(obj, sourceCode)
 			if prefix != "" {
-				return prefix + "." + string(attr.Content(sourceCode))
+				return prefix + "." + attr.Content(sourceCode)
 			}
-			return string(attr.Content(sourceCode))
+			return attr.Content(sourceCode)
 		}
 	}
 	return ""

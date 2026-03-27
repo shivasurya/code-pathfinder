@@ -104,7 +104,9 @@ class MethodMatcher:
 class AttributeMethodMatcher:
     """Matcher for attribute access on typed receivers. Returned by QueryType.attr()."""
 
-    def __init__(self, receiver_types, receiver_patterns, match_subclasses, attribute_names):
+    def __init__(
+        self, receiver_types, receiver_patterns, match_subclasses, attribute_names
+    ):
         self.receiver_types = receiver_types
         self.receiver_patterns = receiver_patterns
         self.match_subclasses = match_subclasses
