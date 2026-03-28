@@ -977,3 +977,16 @@ func TestExtractStatements_AttributeAccess_DeepChain(t *testing.T) {
 	require.Len(t, stmts, 1)
 	assert.Equal(t, "a.b.c.d.e.f", stmts[0].AttributeAccess)
 }
+
+func TestExtractFullAttributeChain_NilNode(t *testing.T) {
+	result := extractFullAttributeChain(nil, []byte(""))
+	assert.Equal(t, "", result, "nil node should return empty string")
+}
+
+func TestExtractStatements_AttributeAccess_SingleIdentifier(t *testing.T) {
+	// Single identifier on RHS is type "identifier", not "attribute"
+	source := `x = y`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].AttributeAccess, "Single identifier is not an attribute access")
+}
