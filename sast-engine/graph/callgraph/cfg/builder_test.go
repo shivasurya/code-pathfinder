@@ -516,3 +516,72 @@ func TestBuildCFG_DeepAttributeChain(t *testing.T) {
 func TestExtractFullAttributeChain_NilNode(t *testing.T) {
 	assert.Equal(t, "", extractFullAttributeChain(nil, []byte("")))
 }
+
+func TestExtractCallTarget_NilNode_CFG(t *testing.T) {
+	target, chain := extractCallTarget(nil, []byte(""))
+	assert.Equal(t, "", target)
+	assert.Equal(t, "", chain)
+}
+
+// ========== CALL CHAIN TESTS (GAP-004) ==========
+
+func TestBuildCFG_CallChain_MethodCall(t *testing.T) {
+	source := `def handler(request):
+    query = request.args.get("q")
+    process(query)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "query" {
+				assert.Equal(t, "request.args.get", stmt.CallChain,
+					"CFG builder must extract full call chain")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_CallChain_ThreeLevel(t *testing.T) {
+	source := `def reconnect(self):
+    script = self.pyload.config.get("script")
+    run(script)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.reconnect", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "script" {
+				assert.Equal(t, "self.pyload.config.get", stmt.CallChain)
+			}
+		}
+	}
+}
+
+func TestBuildCFG_CallChain_SimpleCall(t *testing.T) {
+	source := `def foo():
+    x = bar()
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "x" {
+				assert.Equal(t, "bar", stmt.CallChain, "Simple call: chain equals target")
+			}
+		}
+	}
+}
