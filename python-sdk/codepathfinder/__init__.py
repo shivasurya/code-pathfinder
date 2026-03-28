@@ -22,9 +22,9 @@ Examples:
         ... )
 """
 
-__version__ = "1.3.6"
+__version__ = "2.0.1"
 
-from .matchers import calls, variable
+from .matchers import calls, variable, attribute
 from .decorators import rule
 from .dataflow import flows
 from .propagation import propagates
@@ -35,6 +35,7 @@ from .query_type import QueryType
 from .qualifiers import lt, gt, lte, gte, regex, missing
 
 __all__ = [
+    "attribute",
     "calls",
     "variable",
     "rule",

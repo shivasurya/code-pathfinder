@@ -5,6 +5,8 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func makeAssignStmt(line uint32, def string, callTarget string, uses []string) *core.Statement {
@@ -765,4 +767,100 @@ func TestAnalyzeWithCFG_TryExceptTaintFlow(t *testing.T) {
 	if det.SinkLine != 4 {
 		t.Errorf("expected SinkLine=4, got %d", det.SinkLine)
 	}
+}
+
+// --- AttributeAccess VDG Tests ---
+
+func TestVDG_AttributeAccess_MarkedAsSource(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "url",
+			Uses:            []string{"request"},
+			AttributeAccess: "request.url",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			Def:        "",
+			Uses:       []string{"url"},
+			CallTarget: "requests.get",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.url"}, []string{"requests.get"}, nil)
+
+	urlNode := g.Nodes[nodeKey("url", 1)]
+	require.NotNil(t, urlNode, "url node should exist")
+	assert.True(t, urlNode.IsTaintSrc, "url should be taint source via AttributeAccess='request.url'")
+}
+
+func TestVDG_AttributeAccess_FlowToSink(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "filename",
+			Uses:            []string{"uploaded"},
+			AttributeAccess: "uploaded.filename",
+		},
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(2),
+			Def:        "path",
+			Uses:       []string{"filename"},
+			CallTarget: "os.path.join(\"/uploads\", filename)",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"uploaded.filename"}, []string{"os.path.join"}, nil)
+
+	detections := g.FindTaintFlows(stmts, []string{"os.path.join"})
+	assert.NotEmpty(t, detections, "Should detect flow: uploaded.filename -> os.path.join")
+	if len(detections) > 0 {
+		assert.Equal(t, uint32(1), detections[0].SourceLine)
+		assert.Equal(t, uint32(2), detections[0].SinkLine)
+	}
+}
+
+func TestVDG_AttributeAccess_NotMarkedWhenNoMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "debug",
+			Uses:            []string{"Config"},
+			AttributeAccess: "Config.DEBUG",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.url", "request.host"}, nil, nil)
+
+	debugNode := g.Nodes[nodeKey("debug", 1)]
+	require.NotNil(t, debugNode)
+	assert.False(t, debugNode.IsTaintSrc, "Config.DEBUG should NOT be a taint source")
+}
+
+func TestVDG_AttributeAccess_Sanitized(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "url",
+			Uses:            []string{"request"},
+			AttributeAccess: "request.url",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.url"}, nil, []string{"request.url"})
+
+	urlNode := g.Nodes[nodeKey("url", 1)]
+	require.NotNil(t, urlNode)
+	assert.True(t, urlNode.IsTaintSrc, "should be marked as source")
+	assert.True(t, urlNode.IsSanitized, "should also be marked as sanitized")
 }
