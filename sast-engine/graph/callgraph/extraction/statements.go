@@ -138,6 +138,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
 			stmt.Uses = callStmt.Uses
+			stmt.CallChain = callStmt.CallChain
 		}
 
 	case "subscript":
@@ -161,6 +162,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 				callStmt := extractCall(innermostValue, sourceCode)
 				if callStmt != nil {
 					stmt.CallTarget = callStmt.CallTarget
+					stmt.CallChain = callStmt.CallChain
 					stmt.Uses = callStmt.Uses
 					stmt.CallArgs = callStmt.CallArgs
 				}
@@ -249,10 +251,10 @@ func extractCall(callNode *sitter.Node, sourceCode []byte) *core.Statement {
 		Uses: []string{},
 	}
 
-	// Extract call target (function/method name)
+	// Extract call target (function/method name) and full chain
 	functionNode := callNode.ChildByFieldName("function")
 	if functionNode != nil {
-		stmt.CallTarget = extractCallTarget(functionNode, sourceCode)
+		stmt.CallTarget, stmt.CallChain = extractCallTarget(functionNode, sourceCode)
 
 		// For nested calls, add the function name to Uses (conservative approach)
 		targetIds := extractIdentifiers(functionNode, sourceCode)
@@ -273,30 +275,41 @@ func extractCall(callNode *sitter.Node, sourceCode []byte) *core.Statement {
 	return stmt
 }
 
-// extractCallTarget extracts the function/method name from a call expression.
-// Handles: foo, obj.method, obj.method1.method2.
-func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) string {
+// extractCallTarget extracts the function/method name and full dotted chain
+// from a call expression. Returns (target, chain) where target is the bare
+// method name and chain is the full dotted path.
+// Examples:
+//
+//	foo()                → ("foo", "foo")
+//	obj.method()         → ("method", "obj.method")
+//	request.args.get()   → ("get", "request.args.get")
+//	a.b.c.d()            → ("d", "a.b.c.d")
+func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) (string, string) {
 	if functionNode == nil {
-		return ""
+		return "", ""
 	}
 
 	switch functionNode.Type() {
 	case "identifier":
 		// Simple call: foo()
-		return string(functionNode.Content(sourceCode)) //nolint:unconvert
+		name := string(functionNode.Content(sourceCode)) //nolint:unconvert
+		return name, name
 
 	case "attribute":
 		// Method call: obj.method() or obj.method1.method2()
-		// Extract just the method name (rightmost identifier)
 		attrNode := functionNode.ChildByFieldName("attribute")
 		if attrNode != nil {
-			return string(attrNode.Content(sourceCode)) //nolint:unconvert
+			target := string(attrNode.Content(sourceCode)) //nolint:unconvert
+			chain := extractFullAttributeChain(functionNode, sourceCode)
+			return target, chain
 		}
-		return string(functionNode.Content(sourceCode)) //nolint:unconvert
+		content := string(functionNode.Content(sourceCode)) //nolint:unconvert
+		return content, content
 
 	default:
 		// Complex expression, return full content
-		return string(functionNode.Content(sourceCode)) //nolint:unconvert
+		content := string(functionNode.Content(sourceCode)) //nolint:unconvert
+		return content, content
 	}
 }
 
