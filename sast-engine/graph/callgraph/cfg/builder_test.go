@@ -368,3 +368,83 @@ func TestBuildCFG_BlockStatementsPreserveDefUse(t *testing.T) {
 	assert.True(t, foundYDef, "should have y definition")
 	assert.True(t, foundSinkUse, "should have sink using y")
 }
+
+// ========== GAP-012: Subscript handling in CFG block statements ==========
+
+func TestBuildCFG_SubscriptOnAttribute_SetsAttributeAccess(t *testing.T) {
+	source := `def vuln(request):
+    cmd = request.GET["cmd"]
+    subprocess.run(cmd)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.vuln", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	// Find the assignment statement and verify AttributeAccess is set
+	foundAttrAccess := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "cmd" {
+				assert.Equal(t, "request.GET", stmt.AttributeAccess,
+					"CFG builder must set AttributeAccess for subscript on attribute")
+				assert.Contains(t, stmt.Uses, "request")
+				foundAttrAccess = true
+			}
+		}
+	}
+	assert.True(t, foundAttrAccess, "should find cmd assignment with AttributeAccess")
+}
+
+func TestBuildCFG_SubscriptOnCall_UnmasksCallTarget(t *testing.T) {
+	source := `def fetch(url):
+    data = requests.get(url).json()["results"]
+    process(data)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.fetch", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	foundCall := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "data" {
+				assert.Equal(t, "json", stmt.CallTarget,
+					"CFG builder must unmask call target through subscript")
+				assert.Contains(t, stmt.Uses, "url")
+				foundCall = true
+			}
+		}
+	}
+	assert.True(t, foundCall, "should find data assignment with unmasked CallTarget")
+}
+
+func TestBuildCFG_PureAttributeAccess_SetsAttributeAccess(t *testing.T) {
+	source := `def handler(request):
+    url = request.url
+    fetch(url)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	foundAttr := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "url" {
+				assert.Equal(t, "request.url", stmt.AttributeAccess,
+					"CFG builder must set AttributeAccess for pure attribute access")
+				foundAttr = true
+			}
+		}
+	}
+	assert.True(t, foundAttr, "should find url assignment with AttributeAccess")
+}
