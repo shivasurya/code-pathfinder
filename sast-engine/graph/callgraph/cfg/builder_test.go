@@ -448,3 +448,71 @@ func TestBuildCFG_PureAttributeAccess_SetsAttributeAccess(t *testing.T) {
 	}
 	assert.True(t, foundAttr, "should find url assignment with AttributeAccess")
 }
+
+func TestBuildCFG_NestedSubscriptOnAttribute(t *testing.T) {
+	source := `def handler(request):
+    val = request.GET["a"]["b"]
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "request.GET", stmt.AttributeAccess,
+					"Nested subscript should unwrap to innermost attribute chain")
+				assert.Contains(t, stmt.Uses, "request")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_SubscriptOnPlainIdentifier(t *testing.T) {
+	source := `def handler(data):
+    val = data["key"]
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "", stmt.AttributeAccess,
+					"Plain subscript should not set AttributeAccess")
+				assert.Contains(t, stmt.Uses, "data")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_DeepAttributeChain(t *testing.T) {
+	source := `def handler(app):
+    val = app.config.SECRET_KEY
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "app.config.SECRET_KEY", stmt.AttributeAccess)
+			}
+		}
+	}
+}
+
+func TestExtractFullAttributeChain_NilNode(t *testing.T) {
+	assert.Equal(t, "", extractFullAttributeChain(nil, []byte("")))
+}
