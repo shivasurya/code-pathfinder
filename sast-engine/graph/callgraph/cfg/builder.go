@@ -554,6 +554,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
 			stmt.Uses = callStmt.Uses
+			stmt.CallChain = callStmt.CallChain
 		}
 
 	case "subscript":
@@ -571,6 +572,7 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 				callStmt := extractCall(innermostValue, sourceCode)
 				if callStmt != nil {
 					stmt.CallTarget = callStmt.CallTarget
+					stmt.CallChain = callStmt.CallChain
 					stmt.Uses = callStmt.Uses
 				}
 			default:
@@ -655,7 +657,7 @@ func extractCall(callNode *sitter.Node, sourceCode []byte) *core.Statement {
 
 	functionNode := callNode.ChildByFieldName("function")
 	if functionNode != nil {
-		stmt.CallTarget = extractCallTarget(functionNode, sourceCode)
+		stmt.CallTarget, stmt.CallChain = extractCallTarget(functionNode, sourceCode)
 		targetIds := extractIdentifiers(functionNode, sourceCode)
 		stmt.Uses = append(stmt.Uses, targetIds...)
 	}
@@ -688,23 +690,28 @@ func extractReturn(node *sitter.Node, sourceCode []byte) *core.Statement {
 	return stmt
 }
 
-// extractCallTarget extracts the function name from a call expression function node.
-func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) string {
+// extractCallTarget extracts the function name and full dotted chain from a call expression.
+func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) (string, string) {
 	if functionNode == nil {
-		return ""
+		return "", ""
 	}
 
 	switch functionNode.Type() {
 	case "identifier":
-		return functionNode.Content(sourceCode)
+		name := functionNode.Content(sourceCode)
+		return name, name
 	case "attribute":
 		attrNode := functionNode.ChildByFieldName("attribute")
 		if attrNode != nil {
-			return attrNode.Content(sourceCode)
+			target := attrNode.Content(sourceCode)
+			chain := extractFullAttributeChain(functionNode, sourceCode)
+			return target, chain
 		}
-		return functionNode.Content(sourceCode)
+		content := functionNode.Content(sourceCode)
+		return content, content
 	default:
-		return functionNode.Content(sourceCode)
+		content := functionNode.Content(sourceCode)
+		return content, content
 	}
 }
 

@@ -1262,7 +1262,87 @@ func TestExtractCall_NilNode(t *testing.T) {
 }
 
 func TestExtractCallTarget_NilNode_Direct(t *testing.T) {
-	assert.Equal(t, "", extractCallTarget(nil, []byte("")))
+	target, chain := extractCallTarget(nil, []byte(""))
+	assert.Equal(t, "", target)
+	assert.Equal(t, "", chain)
+}
+
+//
+// ========== CALL CHAIN TESTS (GAP-004) ==========
+//
+
+func TestExtractStatements_CallChain_SimpleCall(t *testing.T) {
+	// Assignment: CallTarget = raw RHS, CallChain = extracted chain
+	source := `x = foo()`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "foo", stmts[0].CallChain, "Simple call: chain equals function name")
+}
+
+func TestExtractStatements_CallChain_MethodCall(t *testing.T) {
+	source := `x = obj.method()`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "obj.method", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_TwoLevelChain(t *testing.T) {
+	source := `x = request.args.get("q")`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "request.args.get", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_ThreeLevelChain(t *testing.T) {
+	source := `x = self.pyload.config.get("script")`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "self.pyload.config.get", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_SixLevelChain(t *testing.T) {
+	source := `x = a.b.c.d.e.f()`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "a.b.c.d.e.f", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_BareCall(t *testing.T) {
+	source := `eval(x)`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "eval", stmts[0].CallTarget)
+	assert.Equal(t, "eval", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_BareMethodCall(t *testing.T) {
+	source := `subprocess.run(cmd)`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "run", stmts[0].CallTarget)
+	assert.Equal(t, "subprocess.run", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_SubscriptOnCall(t *testing.T) {
+	source := `x = response.json()["data"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "json", stmts[0].CallTarget)
+	assert.Equal(t, "response.json", stmts[0].CallChain)
+}
+
+func TestExtractStatements_CallChain_NonCallAssignment(t *testing.T) {
+	source := `x = y`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].CallChain, "Non-call assignment has no chain")
+}
+
+func TestExtractStatements_CallChain_AttributeAccess(t *testing.T) {
+	source := `x = request.url`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "", stmts[0].CallChain, "Attribute access is not a call chain")
 }
 
 func TestExtractReturn_NilNode(t *testing.T) {
