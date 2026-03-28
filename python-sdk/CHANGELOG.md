@@ -5,6 +5,18 @@ All notable changes to the codepathfinder Python SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-03-27
+
+### Added
+- `attribute()` matcher for taint sources that are property accesses, not function calls (e.g., `request.url`, `file.filename`, `request.data`)
+- `QueryType.attr()` for type-constrained attribute matching (e.g., `FlaskRequest.attr("url", "host")`)
+- `AttributeMethodMatcher` class returned by `QueryType.attr()`
+- `ATTRIBUTE_MATCHER` and `TYPE_CONSTRAINED_ATTRIBUTE` IR types
+- `attribute()` works inside `flows()` as source, sink, or sanitizer
+
+### Changed
+- `AnyMatcher` union type now includes `AttributeMatcher` and `AttributeMethodMatcher`
+
 ## [2.0.0] - 2026-03-21
 
 ### Added
