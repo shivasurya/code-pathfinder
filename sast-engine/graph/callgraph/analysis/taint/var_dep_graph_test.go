@@ -1010,3 +1010,164 @@ func TestVDG_SubscriptOnCall_UnmaskedCallTarget(t *testing.T) {
 	detections := g.FindTaintFlows(stmts, []string{"eval"})
 	require.Len(t, detections, 1)
 }
+
+// ========== GAP-004: CALL CHAIN TAINT MATCHING ==========
+
+func TestVDG_CallChain_PreciseSourceMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "query",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+			Uses:       []string{"request"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "execute",
+			CallChain:  "cursor.execute",
+			Uses:       []string{"query"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"execute"}, nil)
+
+	queryNode := g.Nodes[nodeKey("query", 1)]
+	require.NotNil(t, queryNode)
+	assert.True(t, queryNode.IsTaintSrc, "request.args.get chain should match source pattern")
+
+	detections := g.FindTaintFlows(stmts, []string{"execute"})
+	require.Len(t, detections, 1)
+	assert.Equal(t, "query", detections[0].SourceVar)
+}
+
+func TestVDG_CallChain_WildcardSuffixMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "script",
+			CallTarget: "get",
+			CallChain:  "self.pyload.config.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "run",
+			CallChain:  "subprocess.run",
+			Uses:       []string{"script"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"config.get"}, []string{"run"}, nil)
+
+	scriptNode := g.Nodes[nodeKey("script", 1)]
+	require.NotNil(t, scriptNode)
+	assert.True(t, scriptNode.IsTaintSrc, "config.get should suffix-match the chain")
+}
+
+func TestVDG_CallChain_NoFalsePositive(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "val",
+			CallTarget: "get",
+			CallChain:  "my_dict.get",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, nil, nil)
+
+	valNode := g.Nodes[nodeKey("val", 1)]
+	require.NotNil(t, valNode)
+	assert.False(t, valNode.IsTaintSrc, "my_dict.get should NOT match request.args.get")
+}
+
+func TestVDG_CallChain_SinkMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "q",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "execute",
+			CallChain:  "cursor.execute",
+			Uses:       []string{"q"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"cursor.execute"}, nil)
+
+	detections := g.FindTaintFlows(stmts, []string{"cursor.execute"})
+	require.Len(t, detections, 1)
+}
+
+func TestVDG_CallChain_SanitizerMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "cmd",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(2),
+			Def:        "safe",
+			CallTarget: "quote",
+			CallChain:  "shlex.quote",
+			Uses:       []string{"cmd"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			CallTarget: "run",
+			CallChain:  "subprocess.run",
+			Uses:       []string{"safe"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"subprocess.run"}, []string{"shlex.quote"})
+
+	detections := g.FindTaintFlows(stmts, []string{"subprocess.run"})
+	assert.Empty(t, detections, "shlex.quote sanitizer should block flow")
+}
+
+func TestVDG_CallChain_BackwardCompat(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "val",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "eval",
+			Uses:       []string{"val"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"get"}, []string{"eval"}, nil)
+
+	valNode := g.Nodes[nodeKey("val", 1)]
+	require.NotNil(t, valNode)
+	assert.True(t, valNode.IsTaintSrc, "Pattern 'get' should still match via CallTarget (backward compat)")
+}
