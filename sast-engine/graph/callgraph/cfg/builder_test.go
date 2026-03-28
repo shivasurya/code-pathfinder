@@ -585,3 +585,76 @@ func TestBuildCFG_CallChain_SimpleCall(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildCFG_AugmentedAssignment(t *testing.T) {
+	source := `def foo():
+    x = 10
+    x += 5
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	totalStmts := 0
+	foundAugmented := false
+	for _, stmts := range blockStmts {
+		totalStmts += len(stmts)
+		for _, stmt := range stmts {
+			if stmt.Def == "x" && len(stmt.Uses) > 0 {
+				for _, u := range stmt.Uses {
+					if u == "x" {
+						foundAugmented = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, foundAugmented, "should find augmented assignment x += 5")
+	assert.GreaterOrEqual(t, totalStmts, 3, "should have at least 3 statements")
+}
+
+func TestBuildCFG_BareCallStatement(t *testing.T) {
+	source := `def foo():
+    print("hello")
+    subprocess.run(cmd)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	foundBareCall := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.CallTarget == "run" && stmt.CallChain == "subprocess.run" {
+				foundBareCall = true
+			}
+		}
+	}
+	assert.True(t, foundBareCall, "should find bare call subprocess.run with chain")
+}
+
+func TestBuildCFG_LambdaCall(t *testing.T) {
+	// Lambda call has a complex expression as function node (not identifier or attribute)
+	source := `def foo():
+    x = (lambda y: y)(10)
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "x" {
+				assert.NotEmpty(t, stmt.CallChain, "Lambda call should have non-empty chain")
+			}
+		}
+	}
+}
