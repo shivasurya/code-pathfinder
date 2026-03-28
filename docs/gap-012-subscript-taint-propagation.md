@@ -298,3 +298,24 @@ Known limitation: the engine only processes top-level statements in function bod
 | `python-sdk/codepathfinder/matchers.py` | +7 -1 | Updated docstring |
 | `python-sdk/tests/test_matchers.py` | +34 | 4 SDK tests |
 | **Total** | **+652 -14** | |
+
+---
+
+## BUG FOUND AND FIXED: DataflowExecutor returned 0 detections for attribute-sourced taint flows
+
+**Found**: 2026-03-28 during rule validation of GAP-012
+**Status**: FIXED in commit `29e892e`
+
+### Root Cause
+
+The CFG builder (`cfg/builder.go`) had its own duplicate `extractAssignment()` function that lacked the subscript/attribute handling added in GAP-012. Since `DataflowExecutor.getStatementsForFunction()` prefers CFG-flattened statements over flat statements, all attribute-sourced taint flows silently failed — the VDG never saw `AttributeAccess` on CFG block statements.
+
+The data flow was:
+1. `extraction/statements.go:extractAssignment()` correctly sets `AttributeAccess` → stored in `CallGraph.Statements` (correct)
+2. `cfg/builder.go:extractAssignment()` does NOT set `AttributeAccess` → stored in `CallGraph.CFGBlockStatements` (broken)
+3. `getStatementsForFunction()` prefers CFG-flattened → always returns broken statements
+4. VDG never sees `AttributeAccess` → 0 detections
+
+### Fix
+
+Ported the subscript/attribute handling and `extractFullAttributeChain` helper from `extraction/statements.go` into `cfg/builder.go`. Added 3 CFG builder tests verifying subscript-on-attribute, subscript-on-call, and pure attribute access.
