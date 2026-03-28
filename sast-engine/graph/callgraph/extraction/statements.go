@@ -141,6 +141,31 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 			// Use call's uses
 			stmt.Uses = callStmt.Uses
 		}
+	} else if rightType == "subscript" {
+		// Assignment from subscript: x = data["key"], x = request.GET["key"], x = obj.method()["key"]
+		// Look inside the subscript's value to determine the correct extraction strategy.
+		valueNode := rightNode.ChildByFieldName("value")
+		if valueNode != nil {
+			switch valueNode.Type() {
+			case "attribute":
+				// x = request.GET["key"] → capture attribute chain as taint source
+				stmt.AttributeAccess = extractFullAttributeChain(valueNode, sourceCode)
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			case "call":
+				// x = obj.method()["key"] → unwrap subscript to expose the masked call
+				callStmt := extractCall(valueNode, sourceCode)
+				if callStmt != nil {
+					stmt.CallTarget = callStmt.CallTarget
+					stmt.Uses = callStmt.Uses
+					stmt.CallArgs = callStmt.CallArgs
+				}
+			default:
+				// x = d["key"] or x = d[0] → just extract identifiers
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			}
+		} else {
+			stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+		}
 	} else {
 		// Assignment from expression: x = y + z
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)

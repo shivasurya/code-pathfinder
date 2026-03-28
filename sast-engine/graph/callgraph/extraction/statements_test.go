@@ -964,11 +964,12 @@ func TestExtractStatements_AttributeAccess_EmptyForSubscript(t *testing.T) {
 	assert.Equal(t, "", stmts[0].AttributeAccess, "Subscripts should not set AttributeAccess")
 }
 
-func TestExtractStatements_AttributeAccess_EmptyForSubscriptOnAttribute(t *testing.T) {
+func TestExtractStatements_SubscriptOnAttribute_SetsAttributeAccess(t *testing.T) {
 	source := `x = request.files["avatar"]`
 	stmts := extractStatementsFromSource(t, source)
 	require.Len(t, stmts, 1)
-	assert.Equal(t, "", stmts[0].AttributeAccess, "Subscript on attribute should not set AttributeAccess")
+	assert.Equal(t, "request.files", stmts[0].AttributeAccess, "Subscript on attribute should set AttributeAccess from value node")
+	assert.Contains(t, stmts[0].Uses, "request")
 }
 
 func TestExtractStatements_AttributeAccess_DeepChain(t *testing.T) {
@@ -989,4 +990,100 @@ func TestExtractStatements_AttributeAccess_SingleIdentifier(t *testing.T) {
 	stmts := extractStatementsFromSource(t, source)
 	require.Len(t, stmts, 1)
 	assert.Equal(t, "", stmts[0].AttributeAccess, "Single identifier is not an attribute access")
+}
+
+//
+// ========== SUBSCRIPT ACCESS TESTS (GAP-012) ==========
+//
+
+func TestExtractStatements_SubscriptOnAttribute_DjangoGET(t *testing.T) {
+	source := `cmd = request.GET["cmd"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "cmd", stmt.Def)
+	assert.Equal(t, "request.GET", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "request")
+}
+
+func TestExtractStatements_SubscriptOnAttribute_DjangoGETDeepChain(t *testing.T) {
+	source := `name = flask.request.form["name"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "name", stmt.Def)
+	assert.Equal(t, "flask.request.form", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "flask")
+}
+
+func TestExtractStatements_SubscriptOnAttribute_OsEnviron(t *testing.T) {
+	source := `val = os.environ["SECRET"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "val", stmt.Def)
+	assert.Equal(t, "os.environ", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "os")
+}
+
+func TestExtractStatements_SubscriptOnPlainIdentifier_NoAttributeAccess(t *testing.T) {
+	// x = d["key"] — value is identifier, not attribute chain
+	source := `x = d["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "d")
+}
+
+func TestExtractStatements_SubscriptOnCallResult_UnmasksCall(t *testing.T) {
+	// x = obj.method()["key"] → subscript masks the call; we unwrap it
+	source := `x = obj.method()["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "method", stmt.CallTarget)
+	assert.Contains(t, stmt.Uses, "obj")
+}
+
+func TestExtractStatements_SubscriptOnChainedCall_UnmasksCall(t *testing.T) {
+	// x = requests.get(url).json()["data"] → subscript masks .json() call
+	source := `x = requests.get(url).json()["data"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "json", stmt.CallTarget)
+	assert.Contains(t, stmt.Uses, "url")
+}
+
+func TestExtractStatements_SubscriptIntegerIndex(t *testing.T) {
+	// x = data[0] — integer subscript, plain identifier value
+	source := `x = data[0]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "data")
+}
+
+func TestExtractStatements_SubscriptVariableIndex(t *testing.T) {
+	// x = data[idx] — variable subscript index appears in Uses
+	source := `x = data[idx]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Contains(t, stmt.Uses, "data")
+	assert.Contains(t, stmt.Uses, "idx")
+}
+
+func TestExtractStatements_SubscriptLHS_StillSkipped(t *testing.T) {
+	// arr[i] = value — subscript on LHS is still skipped (unchanged behavior)
+	source := `arr[i] = value`
+	stmts := extractStatementsFromSource(t, source)
+	assert.Len(t, stmts, 0, "Subscript on LHS should still be skipped")
 }
