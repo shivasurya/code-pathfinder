@@ -143,24 +143,30 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 		}
 	} else if rightType == "subscript" {
 		// Assignment from subscript: x = data["key"], x = request.GET["key"], x = obj.method()["key"]
-		// Look inside the subscript's value to determine the correct extraction strategy.
-		valueNode := rightNode.ChildByFieldName("value")
-		if valueNode != nil {
-			switch valueNode.Type() {
+		// Unwrap nested subscripts (e.g., data["a"]["b"]["c"]) to find the innermost
+		// non-subscript value node, which determines the extraction strategy.
+		innermostValue := rightNode.ChildByFieldName("value")
+		for innermostValue != nil && innermostValue.Type() == "subscript" {
+			innermostValue = innermostValue.ChildByFieldName("value")
+		}
+		if innermostValue != nil {
+			switch innermostValue.Type() {
 			case "attribute":
-				// x = request.GET["key"] → capture attribute chain as taint source
-				stmt.AttributeAccess = extractFullAttributeChain(valueNode, sourceCode)
+				// x = request.GET["key"] or x = request.GET["a"]["b"]
+				// Capture the attribute chain as a taint source identifier.
+				stmt.AttributeAccess = extractFullAttributeChain(innermostValue, sourceCode)
 				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 			case "call":
-				// x = obj.method()["key"] → unwrap subscript to expose the masked call
-				callStmt := extractCall(valueNode, sourceCode)
+				// x = obj.method()["key"] or x = obj.method()["a"]["b"]
+				// Unwrap subscript to expose the masked call target.
+				callStmt := extractCall(innermostValue, sourceCode)
 				if callStmt != nil {
 					stmt.CallTarget = callStmt.CallTarget
 					stmt.Uses = callStmt.Uses
 					stmt.CallArgs = callStmt.CallArgs
 				}
 			default:
-				// x = d["key"] or x = d[0] → just extract identifiers
+				// x = d["key"], x = d[0], x = "hello"[0], x = [1,2,3][0], etc.
 				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 			}
 		} else {

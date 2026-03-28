@@ -1087,3 +1087,160 @@ func TestExtractStatements_SubscriptLHS_StillSkipped(t *testing.T) {
 	stmts := extractStatementsFromSource(t, source)
 	assert.Len(t, stmts, 0, "Subscript on LHS should still be skipped")
 }
+
+//
+// ========== NESTED SUBSCRIPT EDGE CASES ==========
+//
+
+func TestExtractStatements_NestedSubscriptOnIdentifier(t *testing.T) {
+	// x = data["a"]["b"] — nested subscript, innermost value is identifier
+	source := `x = data["a"]["b"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "", stmt.AttributeAccess, "Plain nested subscript has no attribute chain")
+	assert.Contains(t, stmt.Uses, "data")
+}
+
+func TestExtractStatements_NestedSubscriptOnAttribute(t *testing.T) {
+	// x = request.GET["a"]["b"] — nested subscript, innermost value is attribute
+	source := `x = request.GET["a"]["b"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "request.GET", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "request")
+}
+
+func TestExtractStatements_NestedSubscriptOnCall(t *testing.T) {
+	// x = obj.method()["a"]["b"] — nested subscript, innermost value is call
+	source := `x = obj.method()["a"]["b"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "method", stmt.CallTarget)
+	assert.Contains(t, stmt.Uses, "obj")
+}
+
+func TestExtractStatements_TripleNestedSubscript(t *testing.T) {
+	// x = data["a"]["b"]["c"] — triple nested, innermost is identifier
+	source := `x = data["a"]["b"]["c"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "", stmt.AttributeAccess)
+	assert.Contains(t, stmt.Uses, "data")
+}
+
+//
+// ========== OTHER SUBSCRIPT EDGE CASES ==========
+//
+
+func TestExtractStatements_SubscriptOnSelfAttribute(t *testing.T) {
+	// x = self.data["key"] — self.data is an attribute chain
+	source := `x = self.data["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "self.data", stmt.AttributeAccess)
+	// "self" is filtered as keyword, so only "data" should be in Uses
+	assert.NotContains(t, stmt.Uses, "self")
+}
+
+func TestExtractStatements_SubscriptOnSimpleCall(t *testing.T) {
+	// x = func()["key"] — value is call with identifier function (not attribute)
+	source := `x = func()["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "func", stmt.CallTarget)
+}
+
+func TestExtractStatements_SubscriptSliceNotation(t *testing.T) {
+	// x = data[1:3] — slice notation, value is identifier
+	source := `x = data[1:3]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Contains(t, stmt.Uses, "data")
+	assert.Equal(t, "", stmt.AttributeAccess)
+}
+
+func TestExtractStatements_SubscriptNegativeIndex(t *testing.T) {
+	// x = data[-1] — negative index, value is identifier
+	source := `x = data[-1]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Contains(t, stmts[0].Uses, "data")
+}
+
+func TestExtractStatements_SubscriptOnDictLiteral(t *testing.T) {
+	// x = {"a": 1}["a"] — value is dict literal, falls to default
+	source := `x = {"a": 1}["a"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "", stmts[0].AttributeAccess)
+}
+
+func TestExtractStatements_SubscriptOnListLiteral(t *testing.T) {
+	// x = [1,2,3][0] — value is list literal, falls to default
+	source := `x = [1,2,3][0]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "", stmts[0].AttributeAccess)
+}
+
+func TestExtractStatements_SubscriptOnStringLiteral(t *testing.T) {
+	// x = "hello"[0] — value is string, falls to default
+	source := `x = "hello"[0]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "", stmts[0].AttributeAccess)
+}
+
+func TestExtractStatements_SubscriptWithCallAsKey(t *testing.T) {
+	// x = data[func()] — call as subscript key, value is identifier
+	source := `x = data[func()]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Contains(t, stmt.Uses, "data")
+	assert.Contains(t, stmt.Uses, "func", "Call in subscript key should be in Uses")
+}
+
+func TestExtractStatements_SubscriptOnParenthesizedExpr(t *testing.T) {
+	// x = (a if cond else b)["key"] — value is parenthesized_expression
+	source := `x = (a if cond else b)["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Contains(t, stmt.Uses, "a")
+	assert.Contains(t, stmt.Uses, "b")
+}
+
+func TestExtractStatements_SubscriptOnCallWithArgs(t *testing.T) {
+	// x = func(a, b)["key"] — call with args, verify args propagate
+	source := `x = func(a, b)["key"]`
+	stmts := extractStatementsFromSource(t, source)
+	require.Len(t, stmts, 1)
+	stmt := stmts[0]
+	assert.Equal(t, "x", stmt.Def)
+	assert.Equal(t, "func", stmt.CallTarget)
+	assert.Contains(t, stmt.Uses, "a")
+	assert.Contains(t, stmt.Uses, "b")
+	assert.Contains(t, stmt.CallArgs, "a")
+	assert.Contains(t, stmt.CallArgs, "b")
+}
