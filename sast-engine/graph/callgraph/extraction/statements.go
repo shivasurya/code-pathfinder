@@ -132,24 +132,55 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 	stmt.CallTarget = string(rightNode.Content(sourceCode)) //nolint:unconvert
 
 	// Extract all identifiers from RHS
-	rightType := rightNode.Type()
-
-	if rightType == "call" {
+	switch rightNode.Type() {
+	case "call":
 		// Assignment from call: x = foo()
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
-			// Use call's uses
 			stmt.Uses = callStmt.Uses
 		}
-	} else {
-		// Assignment from expression: x = y + z
+
+	case "subscript":
+		// Assignment from subscript: x = data["key"], x = request.GET["key"], x = obj.method()["key"]
+		// Unwrap nested subscripts (e.g., data["a"]["b"]["c"]) to find the innermost
+		// non-subscript value node, which determines the extraction strategy.
+		innermostValue := rightNode.ChildByFieldName("value")
+		for innermostValue != nil && innermostValue.Type() == "subscript" {
+			innermostValue = innermostValue.ChildByFieldName("value")
+		}
+		if innermostValue != nil {
+			switch innermostValue.Type() {
+			case "attribute":
+				// x = request.GET["key"] or x = request.GET["a"]["b"]
+				// Capture the attribute chain as a taint source identifier.
+				stmt.AttributeAccess = extractFullAttributeChain(innermostValue, sourceCode)
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			case "call":
+				// x = obj.method()["key"] or x = obj.method()["a"]["b"]
+				// Unwrap subscript to expose the masked call target.
+				callStmt := extractCall(innermostValue, sourceCode)
+				if callStmt != nil {
+					stmt.CallTarget = callStmt.CallTarget
+					stmt.Uses = callStmt.Uses
+					stmt.CallArgs = callStmt.CallArgs
+				}
+			default:
+				// x = d["key"], x = d[0], x = "hello"[0], x = [1,2,3][0], etc.
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			}
+		} else {
+			stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+		}
+
+	case "attribute":
+		// Assignment from pure attribute access: x = request.url
+		// Capture the full dotted chain for taint source matching.
+		stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 
-		// If RHS is a pure attribute access (not a call, subscript, or binary op),
-		// capture the full dotted chain for taint source matching.
-		if rightNode.Type() == "attribute" {
-			stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
-		}
+	default:
+		// Assignment from expression: x = y + z, x = 10, etc.
+		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 	}
 
 	return stmt

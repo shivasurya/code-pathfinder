@@ -378,3 +378,37 @@ class TestAttributeMatcher:
     def test_mixed_valid_invalid_raises(self):
         with pytest.raises(ValueError, match="non-empty strings"):
             attribute("request.url", "")
+
+    # GAP-012: Subscript-on-attribute patterns (e.g., request.GET["key"])
+    # The engine extracts AttributeAccess from subscript value nodes.
+    # Rule writers use the same attribute() API — no new API surface needed.
+
+    def test_django_get_subscript_pattern(self):
+        """attribute('request.GET') matches x = request.GET['key']."""
+        matcher = attribute("request.GET", "request.POST")
+        ir = matcher.to_ir()
+        assert ir["type"] == "attribute_matcher"
+        assert ir["patterns"] == ["request.GET", "request.POST"]
+
+    def test_flask_form_subscript_pattern(self):
+        """attribute('flask.request.form') matches x = flask.request.form['field']."""
+        matcher = attribute("flask.request.form", "request.form")
+        assert matcher.patterns == ["flask.request.form", "request.form"]
+
+    def test_os_environ_subscript_pattern(self):
+        """attribute('os.environ') matches x = os.environ['VAR']."""
+        ir = attribute("os.environ").to_ir()
+        assert ir["patterns"] == ["os.environ"]
+
+    def test_subscript_patterns_in_flows(self):
+        """Subscript attribute sources work inside flows() dataflow matcher."""
+        from codepathfinder import flows
+
+        result = flows(
+            from_sources=attribute("request.GET", "request.POST"),
+            to_sinks=calls("subprocess.run"),
+            scope="local",
+        )
+        ir = result.to_ir()
+        assert ir["sources"][0]["type"] == "attribute_matcher"
+        assert ir["sources"][0]["patterns"] == ["request.GET", "request.POST"]

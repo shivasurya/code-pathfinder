@@ -202,12 +202,17 @@ class VariableMatcher:
 
 class AttributeMatcher:
     """
-    Matches pure attribute access (not calls) on the RHS of assignments.
+    Matches attribute access on the RHS of assignments, including dict/list
+    subscript access on attribute chains.
 
     Examples:
         attribute("request.url")           # x = request.url
         attribute("file.filename")         # name = file.filename
         attribute("request.url", "request.host")  # Multiple patterns
+        attribute("request.GET")           # x = request.GET["key"]
+        attribute("request.POST")          # x = request.POST["key"]
+        attribute("os.environ")            # x = os.environ["VAR"]
+        attribute("flask.request.form")    # x = flask.request.form["field"]
     """
 
     def __init__(self, *patterns: str):

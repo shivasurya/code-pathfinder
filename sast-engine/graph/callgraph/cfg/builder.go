@@ -549,16 +549,69 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 
 	stmt.CallTarget = rightNode.Content(sourceCode)
 
-	if rightNode.Type() == "call" {
+	switch rightNode.Type() {
+	case "call":
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
 			stmt.Uses = callStmt.Uses
 		}
-	} else {
+
+	case "subscript":
+		// Unwrap nested subscripts to find the innermost non-subscript value.
+		innermostValue := rightNode.ChildByFieldName("value")
+		for innermostValue != nil && innermostValue.Type() == "subscript" {
+			innermostValue = innermostValue.ChildByFieldName("value")
+		}
+		if innermostValue != nil {
+			switch innermostValue.Type() {
+			case "attribute":
+				stmt.AttributeAccess = extractFullAttributeChain(innermostValue, sourceCode)
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			case "call":
+				callStmt := extractCall(innermostValue, sourceCode)
+				if callStmt != nil {
+					stmt.CallTarget = callStmt.CallTarget
+					stmt.Uses = callStmt.Uses
+				}
+			default:
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			}
+		} else {
+			stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+		}
+
+	case "attribute":
+		stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
+		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+
+	default:
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 	}
 
 	return stmt
+}
+
+// extractFullAttributeChain recursively builds the full dotted attribute chain
+// from a tree-sitter attribute node (e.g., request.GET → "request.GET").
+func extractFullAttributeChain(node *sitter.Node, sourceCode []byte) string {
+	if node == nil {
+		return ""
+	}
+	switch node.Type() {
+	case "identifier":
+		return node.Content(sourceCode)
+	case "attribute":
+		obj := node.ChildByFieldName("object")
+		attr := node.ChildByFieldName("attribute")
+		if obj != nil && attr != nil {
+			prefix := extractFullAttributeChain(obj, sourceCode)
+			if prefix != "" {
+				return prefix + "." + attr.Content(sourceCode)
+			}
+			return attr.Content(sourceCode)
+		}
+	}
+	return ""
 }
 
 // extractAugmentedAssignment processes "x += expr" nodes.
