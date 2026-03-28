@@ -1244,3 +1244,27 @@ func TestExtractStatements_SubscriptOnCallWithArgs(t *testing.T) {
 	assert.Contains(t, stmt.CallArgs, "a")
 	assert.Contains(t, stmt.CallArgs, "b")
 }
+
+//
+// ========== DIRECT FUNCTION COVERAGE TESTS ==========
+//
+
+func TestExtractAssignment_NilNode(t *testing.T) {
+	assert.Nil(t, extractAssignment(nil, []byte("")))
+}
+
+func TestExtractAugmentedAssignment_NilNode(t *testing.T) {
+	assert.Nil(t, extractAugmentedAssignment(nil, []byte("")))
+}
+
+func TestExtractCall_NilNode(t *testing.T) {
+	assert.Nil(t, extractCall(nil, []byte("")))
+}
+
+func TestExtractCallTarget_NilNode_Direct(t *testing.T) {
+	assert.Equal(t, "", extractCallTarget(nil, []byte("")))
+}
+
+func TestExtractReturn_NilNode(t *testing.T) {
+	assert.Nil(t, extractReturn(nil, []byte("")))
+}

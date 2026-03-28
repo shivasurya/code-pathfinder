@@ -132,16 +132,15 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 	stmt.CallTarget = string(rightNode.Content(sourceCode)) //nolint:unconvert
 
 	// Extract all identifiers from RHS
-	rightType := rightNode.Type()
-
-	if rightType == "call" {
+	switch rightNode.Type() {
+	case "call":
 		// Assignment from call: x = foo()
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
-			// Use call's uses
 			stmt.Uses = callStmt.Uses
 		}
-	} else if rightType == "subscript" {
+
+	case "subscript":
 		// Assignment from subscript: x = data["key"], x = request.GET["key"], x = obj.method()["key"]
 		// Unwrap nested subscripts (e.g., data["a"]["b"]["c"]) to find the innermost
 		// non-subscript value node, which determines the extraction strategy.
@@ -172,15 +171,16 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 		} else {
 			stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 		}
-	} else {
-		// Assignment from expression: x = y + z
+
+	case "attribute":
+		// Assignment from pure attribute access: x = request.url
+		// Capture the full dotted chain for taint source matching.
+		stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 
-		// If RHS is a pure attribute access (not a call, subscript, or binary op),
-		// capture the full dotted chain for taint source matching.
-		if rightNode.Type() == "attribute" {
-			stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
-		}
+	default:
+		// Assignment from expression: x = y + z, x = 10, etc.
+		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 	}
 
 	return stmt
