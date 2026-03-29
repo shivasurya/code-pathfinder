@@ -1,0 +1,35 @@
+# Dockerfile.mcp - Docker MCP Catalog image for code-pathfinder
+# Downloads pre-built release binary instead of compiling from source.
+# For scan/CI mode, use the main Dockerfile instead.
+
+FROM debian:bookworm-slim
+
+ARG TARGETARCH
+ARG VERSION=2.0.1
+
+WORKDIR /app
+
+# Install Python 3, pip, and curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python DSL library for rule execution
+RUN pip install --no-cache-dir --break-system-packages codepathfinder
+
+# Download pre-built pathfinder binary from GitHub release
+RUN curl -fsSL "https://github.com/shivasurya/code-pathfinder/releases/download/v${VERSION}/pathfinder-linux-${TARGETARCH}.tar.gz" \
+    | tar -xz -C /usr/bin/ \
+    && chmod +x /usr/bin/pathfinder
+
+# Create default project mount point for Docker MCP Gateway
+RUN mkdir -p /project
+
+LABEL maintainer="shiva@shivasurya.me"
+LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
+
+# MCP serve mode: stdio transport, indexing the mounted /project directory
+# Analytics disabled in container mode (no consent mechanism)
+ENTRYPOINT ["/usr/bin/pathfinder", "serve", "--project", "/project", "--disable-metrics"]
