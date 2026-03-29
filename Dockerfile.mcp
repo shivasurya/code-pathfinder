@@ -1,0 +1,45 @@
+# Dockerfile.mcp - Docker MCP Catalog image for code-pathfinder
+# Downloads pre-built release binary instead of compiling from source.
+# For scan/CI mode, use the main Dockerfile instead.
+
+FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG TARGETARCH
+ARG VERSION=2.0.1
+
+WORKDIR /app
+
+# Install Python 3, pip, and curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python DSL library for rule execution
+RUN pip install --no-cache-dir --break-system-packages codepathfinder
+
+# Download pre-built pathfinder binary from GitHub release
+RUN curl -fsSL "https://github.com/shivasurya/code-pathfinder/releases/download/v${VERSION}/pathfinder-linux-${TARGETARCH}.tar.gz" \
+    | tar -xz -C /usr/bin/ \
+    && chmod +x /usr/bin/pathfinder
+
+# Create non-root user with home directory
+RUN groupadd -r pathfinder && useradd -r -g pathfinder -d /home/pathfinder -m -s /sbin/nologin pathfinder
+
+# Create default project mount point for Docker MCP Gateway
+RUN mkdir -p /project && chown pathfinder:pathfinder /project
+
+USER pathfinder
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD ["/usr/bin/pathfinder", "version"]
+
+LABEL maintainer="shiva@shivasurya.me"
+LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
+
+# MCP serve mode: stdio transport, indexing the mounted /project directory
+# Analytics disabled in container mode (no consent mechanism)
+ENTRYPOINT ["/usr/bin/pathfinder", "serve", "--project", "/project", "--disable-metrics"]
