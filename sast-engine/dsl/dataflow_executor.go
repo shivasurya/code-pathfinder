@@ -506,6 +506,48 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 					TrackedParams: ir.TrackedParams,
 				})
 			}
+
+		case "type_constrained_attribute":
+			var ir TypeConstrainedAttributeIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			tcaExecutor := &TypeConstrainedAttributeExecutor{
+				IR:               &ir,
+				CallGraph:        e.CallGraph,
+				Config:           e.Config,
+				ThirdPartyRemote: extractInheritanceChecker(e.CallGraph),
+				Diagnostics:      e.Diagnostics,
+			}
+			for _, det := range tcaExecutor.Execute() {
+				cs := core.CallSite{
+					Target:   det.SinkCall,
+					Location: core.Location{Line: det.SourceLine},
+				}
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    cs,
+					FunctionFQN: det.FunctionFQN,
+					Line:        det.SourceLine,
+				})
+			}
+
+		case "attribute_matcher":
+			var ir AttributeMatcherIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			if err := validateAttributeMatcherIR(&ir, e.Diagnostics); err != nil {
+				e.Diagnostics.Addf("skip", "ir_validation", "skipping attribute_matcher: %v", err)
+				continue
+			}
+			attrExecutor := NewAttributeMatcherExecutor(&ir, e.CallGraph)
+			for _, match := range attrExecutor.Execute() {
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    match.CallSite,
+					FunctionFQN: match.FunctionFQN,
+					Line:        match.Line,
+				})
+			}
 		}
 	}
 

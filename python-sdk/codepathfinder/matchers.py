@@ -200,6 +200,39 @@ class VariableMatcher:
         return f'variable("{self.pattern}")'
 
 
+class AttributeMatcher:
+    """
+    Matches attribute access on the RHS of assignments, including dict/list
+    subscript access on attribute chains.
+
+    Examples:
+        attribute("request.url")           # x = request.url
+        attribute("file.filename")         # name = file.filename
+        attribute("request.url", "request.host")  # Multiple patterns
+        attribute("request.GET")           # x = request.GET["key"]
+        attribute("request.POST")          # x = request.POST["key"]
+        attribute("os.environ")            # x = os.environ["VAR"]
+        attribute("flask.request.form")    # x = flask.request.form["field"]
+    """
+
+    def __init__(self, *patterns: str):
+        if not patterns:
+            raise ValueError("attribute() requires at least one pattern")
+        if any(not p or not isinstance(p, str) for p in patterns):
+            raise ValueError("All patterns must be non-empty strings")
+        self.patterns = list(patterns)
+
+    def to_ir(self) -> dict:
+        return {
+            "type": IRType.ATTRIBUTE_MATCHER.value,
+            "patterns": self.patterns,
+        }
+
+    def __repr__(self) -> str:
+        patterns_str = ", ".join(f'"{p}"' for p in self.patterns)
+        return f"attribute({patterns_str})"
+
+
 # Public API
 def calls(
     *patterns: str,
@@ -263,3 +296,26 @@ def variable(pattern: str) -> VariableMatcher:
         variable("*_id")
     """
     return VariableMatcher(pattern)
+
+
+def attribute(*patterns: str) -> AttributeMatcher:
+    """
+    Create a matcher for attribute access (not function calls).
+
+    Use this when the taint source is a property/attribute, not a method call.
+    Common in web frameworks: request.url, request.data, file.filename.
+
+    Args:
+        *patterns: Attribute access patterns to match.
+
+    Returns:
+        AttributeMatcher instance
+
+    Examples:
+        >>> attribute("request.url")
+        attribute("request.url")
+
+        >>> attribute("request.url", "request.host", "request.data")
+        attribute("request.url", "request.host", "request.data")
+    """
+    return AttributeMatcher(*patterns)

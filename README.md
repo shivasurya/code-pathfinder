@@ -226,7 +226,7 @@ pathfinder scan --ruleset python/all --project . --verbose
 ## GitHub Action
 
 ```yaml
-name: Security Scan
+name: Code Pathfinder Security SAST Scan
 
 on:
   pull_request:
@@ -247,7 +247,7 @@ jobs:
       - name: Run Security Scan
         uses: shivasurya/code-pathfinder@v2.0.0
         with:
-          ruleset: python/django, python/flask, docker/security, docker/best-practice
+          ruleset: python/all, docker/all, docker-compose/all
           verbose: true
           pr-comment: ${{ github.event_name == 'pull_request' }}
           pr-inline: ${{ github.event_name == 'pull_request' }}
@@ -260,7 +260,7 @@ jobs:
           sarif_file: pathfinder-results.sarif
 ```
 
-See the full example: [`.github/workflows/example-security-scan.yml`](.github/workflows/example-security-scan.yml)
+See the full example: [`.github/workflows/code-pathfinder-scan.yml`](.github/workflows/code-pathfinder-scan.yml)
 
 <details>
 <summary><strong>Action Inputs</strong></summary>

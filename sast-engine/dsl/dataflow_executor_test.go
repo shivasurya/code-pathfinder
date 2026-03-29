@@ -994,3 +994,151 @@ func TestDataflowExecutor_VDG_Global_MultiLevelSink(t *testing.T) {
 // matchesPattern and findMatchingCalls tests removed — these dead methods
 // were deleted from DataflowExecutor. Pattern matching is tested via
 // CallMatcherExecutor tests; resolveMatchers is tested in bridge_test.go.
+
+func TestDataflowExecutor_AttributeMatcherInFlows(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	funcFQN := "test.proxy"
+	cg.Functions[funcFQN] = &graph.Node{
+		Name: "proxy",
+		File: "test.py",
+	}
+
+	cg.Statements[funcFQN] = []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(2),
+			Def:             "url",
+			Uses:            []string{"request"},
+			AttributeAccess: "request.url",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			Def:        "response",
+			Uses:       []string{"url"},
+			CallTarget: "requests.get",
+			CallArgs:   []string{"url"},
+		},
+	}
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{
+			Target:   "requests.get",
+			Location: core.Location{File: "test.py", Line: 3},
+		},
+	}
+
+	sourceJSON, _ := json.Marshal(AttributeMatcherIR{Type: "attribute_matcher", Patterns: []string{"request.url"}})
+	sinkJSON, _ := json.Marshal(CallMatcherIR{Type: "call_matcher", Patterns: []string{"requests.get"}})
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{sourceJSON},
+		Sinks:      []json.RawMessage{sinkJSON},
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+
+	assert.NotEmpty(t, detections, "Should detect flow: request.url (attribute) -> requests.get (call)")
+	if len(detections) > 0 {
+		assert.Equal(t, funcFQN, detections[0].FunctionFQN)
+		assert.Equal(t, 2, detections[0].SourceLine)
+		assert.Equal(t, 3, detections[0].SinkLine)
+	}
+}
+
+func TestDataflowExecutor_AttributeMatcherInvalidJSON(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Functions["test.f"] = &graph.Node{Name: "f", File: "t.py"}
+
+	// Type field is valid (so the peek succeeds) but patterns field is wrong type
+	// This makes json.Unmarshal into AttributeMatcherIR fail
+	badJSON := json.RawMessage(`{"type":"attribute_matcher","patterns":"not_an_array"}`)
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{badJSON},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+	assert.Empty(t, detections, "Invalid attribute_matcher JSON should be skipped gracefully")
+}
+
+func TestDataflowExecutor_AttributeMatcherValidationError(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Functions["test.f"] = &graph.Node{Name: "f", File: "t.py"}
+
+	// Empty patterns should fail validation
+	emptyPatternsJSON, _ := json.Marshal(AttributeMatcherIR{Type: "attribute_matcher", Patterns: []string{}})
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{emptyPatternsJSON},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+	assert.Empty(t, detections, "Empty patterns should fail validation and produce no matches")
+}
+
+func TestDataflowExecutor_TypeConstrainedAttributeResolveMatchers(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	funcFQN := "test.handler"
+	cg.Functions[funcFQN] = &graph.Node{Name: "handler", File: "test.py"}
+
+	cg.CallSites[funcFQN] = []core.CallSite{
+		{
+			Target:                   "request.url",
+			Location:                 core.Location{File: "test.py", Line: 2},
+			ResolvedViaTypeInference: true,
+			InferredType:             "flask.wrappers.Request",
+			TypeConfidence:           0.9,
+		},
+	}
+
+	sourceJSON, _ := json.Marshal(map[string]interface{}{
+		"type":          "type_constrained_attribute",
+		"receiverType":  "flask.wrappers.Request",
+		"attributeName": "url",
+		"minConfidence": 0.5,
+		"fallbackMode":  "name",
+	})
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{sourceJSON},
+		Sinks:      emptyRawMessages(),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	matches := executor.resolveMatchers(ir.Sources)
+	assert.NotEmpty(t, matches, "type_constrained_attribute should produce CallSiteMatch entries")
+	assert.Equal(t, "request.url", matches[0].CallSite.Target)
+	assert.Equal(t, funcFQN, matches[0].FunctionFQN)
+}
+
+func TestDataflowExecutor_TypeConstrainedAttributeInvalidJSON(t *testing.T) {
+	cg := core.NewCallGraph()
+	cg.Functions["test.f"] = &graph.Node{Name: "f", File: "t.py"}
+
+	ir := &DataflowIR{
+		Sources:    []json.RawMessage{json.RawMessage(`{"type":"type_constrained_attribute","receiverType":123}`)},
+		Sinks:      toRawMessages(CallMatcherIR{Type: "call_matcher", Patterns: []string{"eval"}}),
+		Sanitizers: emptyRawMessages(),
+		Scope:      "local",
+	}
+
+	executor := NewDataflowExecutor(ir, cg)
+	detections := executor.Execute()
+	assert.Empty(t, detections, "Invalid type_constrained_attribute JSON should be skipped")
+}
