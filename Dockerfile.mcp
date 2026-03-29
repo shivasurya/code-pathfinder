@@ -41,5 +41,5 @@ LABEL maintainer="shiva@shivasurya.me"
 LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
 
 # MCP serve mode: stdio transport, indexing the mounted /project directory
-# Analytics disabled in container mode (no consent mechanism)
-ENTRYPOINT ["/usr/bin/pathfinder", "serve", "--project", "/project", "--disable-metrics"]
+# To disable analytics, add --disable-metrics flag
+ENTRYPOINT ["/usr/bin/pathfinder", "serve", "--project", "/project"]
