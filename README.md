@@ -245,7 +245,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Security Scan
-        uses: shivasurya/code-pathfinder@v2.0.0
+        uses: shivasurya/code-pathfinder@v2.0.2
         with:
           ruleset: python/django, python/flask, docker/security, docker/best-practice
           verbose: true
