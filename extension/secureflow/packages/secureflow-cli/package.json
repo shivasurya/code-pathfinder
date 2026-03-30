@@ -1,6 +1,6 @@
 {
   "name": "@codepathfinder/secureflow-cli",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "AI-powered security analysis CLI tool with intelligent file discovery and comprehensive vulnerability scanning",
   "license": "Apache-2.0",
   "bin": {
