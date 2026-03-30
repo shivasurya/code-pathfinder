@@ -26,6 +26,7 @@ type VarDefSite struct {
 	IsTaintSrc      bool
 	IsSanitized     bool
 	CallTarget      string
+	CallChain       string
 	AttributeAccess string
 }
 
@@ -67,10 +68,14 @@ func (g *VarDepGraph) Build(
 			VarName:         stmt.Def,
 			Line:            stmt.LineNumber,
 			CallTarget:      stmt.CallTarget,
+			CallChain:       stmt.CallChain,
 			AttributeAccess: stmt.AttributeAccess,
 		}
 
 		if stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sources) {
+			node.IsTaintSrc = true
+		}
+		if stmt.CallChain != "" && matchesAnyPattern(stmt.CallChain, sources) {
 			node.IsTaintSrc = true
 		}
 		if stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sources) {
@@ -78,6 +83,9 @@ func (g *VarDepGraph) Build(
 		}
 
 		if stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sanitizers) {
+			node.IsSanitized = true
+		}
+		if stmt.CallChain != "" && matchesAnyPattern(stmt.CallChain, sanitizers) {
 			node.IsSanitized = true
 		}
 		if stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sanitizers) {
@@ -122,8 +130,9 @@ func (g *VarDepGraph) FindTaintFlows(statements []*core.Statement, sinks []strin
 	// assignments (e.g., obj = pickle.loads(data)), or returns (e.g., return redirect(url)).
 	for _, stmt := range statements {
 		callTargetIsSink := stmt.CallTarget != "" && matchesAnyPattern(stmt.CallTarget, sinks)
+		callChainIsSink := stmt.CallChain != "" && matchesAnyPattern(stmt.CallChain, sinks)
 		attrIsSink := stmt.AttributeAccess != "" && matchesAnyPattern(stmt.AttributeAccess, sinks)
-		if !callTargetIsSink && !attrIsSink {
+		if !callTargetIsSink && !callChainIsSink && !attrIsSink {
 			continue
 		}
 

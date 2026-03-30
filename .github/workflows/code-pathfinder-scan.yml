@@ -1,11 +1,11 @@
 # Example workflow showing how to use Code-Pathfinder GitHub Action
-# Copy this to your repository at .github/workflows/security-scan.yml
+# Copy this to your repository at .github/workflows/code-pathfinder-scan.yml
 #
 # NOTE: This workflow uses './' to test the action from the current branch.
 # In your own repository, replace './' with 'shivasurya/code-pathfinder@v2.0.0'
 # or 'shivasurya/code-pathfinder@main' for the latest version.
 
-name: Security Scan
+name: Code Pathfinder Security SAST Scan
 
 on:
   pull_request:
@@ -33,13 +33,11 @@ jobs:
       - name: Run Security Scan
         uses: ./
         with:
-          # Multiple rulesets can be specified as comma-separated list
+          # Use "all" to scan with every ruleset in a category
           ruleset: >-
-            python/deserialization,
-            python/django,
-            python/flask,
-            docker/security,
-            docker/best-practice
+            python/all,
+            docker/all,
+            docker-compose/all
           project: .
           verbose: true
           # Post scan results as PR comments (only on pull_request events)

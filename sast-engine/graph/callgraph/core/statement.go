@@ -64,6 +64,13 @@ type Statement struct {
 	// Empty string for non-call statements
 	CallTarget string
 
+	// CallChain is the full dotted attribute chain for method calls.
+	// Example: for "self.app.config.get(x)", CallChain = "self.app.config.get"
+	// Example: for "request.args.get(x)", CallChain = "request.args.get"
+	// Example: for "foo(x)", CallChain = "foo" (same as CallTarget)
+	// Empty string for non-call statements or when not applicable.
+	CallChain string
+
 	// CallArgs are the argument variables passed to the call (if Type == StatementTypeCall)
 	// Only includes variable names, not literals
 	CallArgs []string

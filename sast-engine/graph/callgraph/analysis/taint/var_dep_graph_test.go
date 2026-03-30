@@ -864,3 +864,310 @@ func TestVDG_AttributeAccess_Sanitized(t *testing.T) {
 	assert.True(t, urlNode.IsTaintSrc, "should be marked as source")
 	assert.True(t, urlNode.IsSanitized, "should also be marked as sanitized")
 }
+
+// ========== GAP-012: SUBSCRIPT-SOURCED ATTRIBUTE ACCESS TAINT TESTS ==========
+
+// TestVDG_SubscriptOnAttribute_DjangoGETSource verifies end-to-end taint flow
+// when the source is a subscript on an attribute chain (e.g., request.GET["cmd"]).
+// The extraction layer sets AttributeAccess="request.GET", and the VDG marks it
+// as a taint source when the pattern matches.
+func TestVDG_SubscriptOnAttribute_DjangoGETSource(t *testing.T) {
+	// Simulates: cmd = request.GET["cmd"]; subprocess.run(cmd)
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "cmd",
+			Uses:            []string{"request"},
+			CallTarget:      `request.GET["cmd"]`,
+			AttributeAccess: "request.GET", // Set by subscript extraction
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "subprocess.run",
+			Uses:       []string{"cmd"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.GET"}, []string{"subprocess.run"}, nil)
+
+	// Verify cmd@1 is marked as taint source via AttributeAccess matching
+	cmdNode := g.Nodes[nodeKey("cmd", 1)]
+	require.NotNil(t, cmdNode)
+	assert.True(t, cmdNode.IsTaintSrc, "request.GET['cmd'] should be taint source")
+	assert.Equal(t, "request.GET", cmdNode.AttributeAccess)
+
+	// Verify taint flows to sink
+	detections := g.FindTaintFlows(stmts, []string{"subprocess.run"})
+	require.Len(t, detections, 1)
+	assert.Equal(t, uint32(1), detections[0].SourceLine)
+	assert.Equal(t, "cmd", detections[0].SourceVar)
+	assert.Equal(t, uint32(2), detections[0].SinkLine)
+	assert.Equal(t, "subprocess.run", detections[0].SinkCall)
+}
+
+// TestVDG_SubscriptOnAttribute_TransitiveTaint verifies taint propagation
+// through intermediate variables after a subscript source.
+func TestVDG_SubscriptOnAttribute_TransitiveTaint(t *testing.T) {
+	// Simulates: name = request.POST["name"]; upper = name.upper(); eval(upper)
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "name",
+			Uses:            []string{"request"},
+			AttributeAccess: "request.POST",
+		},
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(2),
+			Def:        "upper",
+			CallTarget: "upper",
+			Uses:       []string{"name"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			CallTarget: "eval",
+			Uses:       []string{"upper"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.POST"}, []string{"eval"}, nil)
+
+	detections := g.FindTaintFlows(stmts, []string{"eval"})
+	require.Len(t, detections, 1)
+	assert.Equal(t, "name", detections[0].SourceVar)
+	assert.Equal(t, "eval", detections[0].SinkCall)
+	assert.Equal(t, []string{"name", "upper"}, detections[0].PropagationPath)
+}
+
+// TestVDG_SubscriptOnAttribute_Sanitized verifies that sanitizers block
+// taint from subscript sources.
+func TestVDG_SubscriptOnAttribute_Sanitized(t *testing.T) {
+	// Simulates: raw = os.environ["CMD"]; safe = shlex.quote(raw); subprocess.run(safe)
+	stmts := []*core.Statement{
+		{
+			Type:            core.StatementTypeAssignment,
+			LineNumber:      uint32(1),
+			Def:             "raw",
+			Uses:            []string{"os"},
+			AttributeAccess: "os.environ",
+		},
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(2),
+			Def:        "safe",
+			CallTarget: "shlex.quote",
+			Uses:       []string{"raw"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			CallTarget: "subprocess.run",
+			Uses:       []string{"safe"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"os.environ"}, []string{"subprocess.run"}, []string{"shlex.quote"})
+
+	detections := g.FindTaintFlows(stmts, []string{"subprocess.run"})
+	assert.Empty(t, detections, "Sanitizer shlex.quote should block taint flow")
+}
+
+// TestVDG_SubscriptOnCall_UnmaskedCallTarget verifies that when a subscript
+// masks a call (e.g., obj.method()["key"]), the extracted CallTarget is used
+// for source matching.
+func TestVDG_SubscriptOnCall_UnmaskedCallTarget(t *testing.T) {
+	// Simulates: data = response.json()["results"] → CallTarget="json"
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "data",
+			CallTarget: "json",
+			Uses:       []string{"response"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "eval",
+			Uses:       []string{"data"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"json"}, []string{"eval"}, nil)
+
+	dataNode := g.Nodes[nodeKey("data", 1)]
+	require.NotNil(t, dataNode)
+	assert.True(t, dataNode.IsTaintSrc, "json() call target should be recognized as source")
+
+	detections := g.FindTaintFlows(stmts, []string{"eval"})
+	require.Len(t, detections, 1)
+}
+
+// ========== GAP-004: CALL CHAIN TAINT MATCHING ==========
+
+func TestVDG_CallChain_PreciseSourceMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "query",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+			Uses:       []string{"request"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "execute",
+			CallChain:  "cursor.execute",
+			Uses:       []string{"query"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"execute"}, nil)
+
+	queryNode := g.Nodes[nodeKey("query", 1)]
+	require.NotNil(t, queryNode)
+	assert.True(t, queryNode.IsTaintSrc, "request.args.get chain should match source pattern")
+
+	detections := g.FindTaintFlows(stmts, []string{"execute"})
+	require.Len(t, detections, 1)
+	assert.Equal(t, "query", detections[0].SourceVar)
+}
+
+func TestVDG_CallChain_WildcardSuffixMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "script",
+			CallTarget: "get",
+			CallChain:  "self.pyload.config.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "run",
+			CallChain:  "subprocess.run",
+			Uses:       []string{"script"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"config.get"}, []string{"run"}, nil)
+
+	scriptNode := g.Nodes[nodeKey("script", 1)]
+	require.NotNil(t, scriptNode)
+	assert.True(t, scriptNode.IsTaintSrc, "config.get should suffix-match the chain")
+}
+
+func TestVDG_CallChain_NoFalsePositive(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "val",
+			CallTarget: "get",
+			CallChain:  "my_dict.get",
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, nil, nil)
+
+	valNode := g.Nodes[nodeKey("val", 1)]
+	require.NotNil(t, valNode)
+	assert.False(t, valNode.IsTaintSrc, "my_dict.get should NOT match request.args.get")
+}
+
+func TestVDG_CallChain_SinkMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "q",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "execute",
+			CallChain:  "cursor.execute",
+			Uses:       []string{"q"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"cursor.execute"}, nil)
+
+	detections := g.FindTaintFlows(stmts, []string{"cursor.execute"})
+	require.Len(t, detections, 1)
+}
+
+func TestVDG_CallChain_SanitizerMatch(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "cmd",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(2),
+			Def:        "safe",
+			CallTarget: "quote",
+			CallChain:  "shlex.quote",
+			Uses:       []string{"cmd"},
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(3),
+			CallTarget: "run",
+			CallChain:  "subprocess.run",
+			Uses:       []string{"safe"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"request.args.get"}, []string{"subprocess.run"}, []string{"shlex.quote"})
+
+	detections := g.FindTaintFlows(stmts, []string{"subprocess.run"})
+	assert.Empty(t, detections, "shlex.quote sanitizer should block flow")
+}
+
+func TestVDG_CallChain_BackwardCompat(t *testing.T) {
+	stmts := []*core.Statement{
+		{
+			Type:       core.StatementTypeAssignment,
+			LineNumber: uint32(1),
+			Def:        "val",
+			CallTarget: "get",
+			CallChain:  "request.args.get",
+		},
+		{
+			Type:       core.StatementTypeCall,
+			LineNumber: uint32(2),
+			CallTarget: "eval",
+			Uses:       []string{"val"},
+		},
+	}
+
+	g := NewVarDepGraph()
+	g.Build(stmts, []string{"get"}, []string{"eval"}, nil)
+
+	valNode := g.Nodes[nodeKey("val", 1)]
+	require.NotNil(t, valNode)
+	assert.True(t, valNode.IsTaintSrc, "Pattern 'get' should still match via CallTarget (backward compat)")
+}
