@@ -8,6 +8,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	golang "github.com/smacker/go-tree-sitter/golang"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,4 +290,38 @@ func TestSplitGoTypeFQN(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ========== resolveGoTypeFQN tests ==========
+
+func TestResolveGoTypeFQN(t *testing.T) {
+	importMap := core.NewGoImportMap("test.go")
+	importMap.AddImport("http", "net/http")
+	importMap.AddImport("sql", "database/sql")
+	importMap.AddImport("fmt", "fmt")
+
+	tests := []struct {
+		name      string
+		shortType string
+		want      string
+	}{
+		{"Qualified stdlib type", "http.Request", "net/http.Request"},
+		{"Qualified sql type", "sql.DB", "database/sql.DB"},
+		{"Simple stdlib type", "fmt.Stringer", "fmt.Stringer"},
+		{"Unqualified type", "MyStruct", "MyStruct"},
+		{"Unknown alias", "redis.Client", "redis.Client"},
+		{"Empty string", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := resolveGoTypeFQN(tt.shortType, importMap)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+func TestResolveGoTypeFQN_NilImportMap(t *testing.T) {
+	result := resolveGoTypeFQN("http.Request", nil)
+	assert.Equal(t, "http.Request", result)
 }
