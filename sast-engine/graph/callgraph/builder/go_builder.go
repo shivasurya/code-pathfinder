@@ -165,6 +165,29 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			// Add edge from caller to callee
 			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
 
+			// Populate type inference metadata if resolution used variable type binding
+			var inferredType string
+			var typeConfidence float32
+			var typeSource string
+			var wasTypeResolved bool
+
+			if typeEngine != nil && callSite.ObjectName != "" {
+				scope := typeEngine.GetScope(callSite.CallerFQN)
+				if scope != nil {
+					binding := scope.GetVariable(callSite.ObjectName)
+					if binding != nil && binding.Type != nil {
+						typeFQN := binding.Type.TypeFQN
+						if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
+							typeFQN = after
+						}
+						inferredType = typeFQN
+						typeConfidence = binding.Type.Confidence
+						typeSource = "go_variable_binding"
+						wasTypeResolved = true
+					}
+				}
+			}
+
 			// Add detailed call site information
 			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
 				Target: callSite.FunctionName,
@@ -172,9 +195,13 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					File: callSite.CallerFile,
 					Line: int(callSite.CallLine),
 				},
-				Resolved:  true,
-				TargetFQN: targetFQN,
-				IsStdlib:  isStdlib,
+				Resolved:                 true,
+				TargetFQN:                targetFQN,
+				IsStdlib:                 isStdlib,
+				ResolvedViaTypeInference: wasTypeResolved,
+				InferredType:             inferredType,
+				TypeConfidence:           typeConfidence,
+				TypeSource:               typeSource,
 			})
 		} else {
 			// Record unresolved call for diagnostics
@@ -388,16 +415,16 @@ func resolveGoCallTarget(
 			return targetFQN, true, isStdlib
 		}
 
-		// Pattern 1b: Variable-based method resolution (PR-17)
+		// Pattern 1b: Variable-based method resolution (PR-17 + Approach C)
 		// If import resolution failed, try resolving as variable.method()
-		// Example: user.Save() where user is a variable of type *User
+		// Example: db.Query(sql) where db is *sql.DB
 		if typeEngine != nil && callGraph != nil && callSite.CallerFQN != "" {
 			scope := typeEngine.GetScope(callSite.CallerFQN)
 			if scope != nil {
 				binding := scope.GetVariable(callSite.ObjectName)
 				if binding != nil && binding.Type != nil {
 					// Build method FQN: "pkg.Type.Method"
-					// Handle pointer types: *User -> User (methods are defined on the type, not the pointer in FQN)
+					// Handle pointer types: *User -> User
 					typeFQN := binding.Type.TypeFQN
 					if after, ok0 := strings.CutPrefix(typeFQN, "*"); ok0 {
 						typeFQN = after
@@ -405,11 +432,28 @@ func resolveGoCallTarget(
 
 					methodFQN := typeFQN + "." + callSite.FunctionName
 
-					// Verify method exists in callGraph before returning
-					// This prevents false positives from unindexed methods
+					// Check 1: Method exists in user code
 					if callGraph.Functions[methodFQN] != nil {
 						return methodFQN, true, false
 					}
+
+					// Check 2 (Approach C): Validate method via StdlibLoader
+					if registry != nil && registry.StdlibLoader != nil {
+						importPath, typeName, ok := splitGoTypeFQN(typeFQN)
+						if ok && registry.StdlibLoader.ValidateStdlibImport(importPath) {
+							stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
+							if err == nil && stdlibType != nil {
+								if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
+									return methodFQN, true, true // resolved via stdlib
+								}
+							}
+						}
+					}
+
+					// Check 3: Third-party / unvalidated — accept with best-effort FQN
+					// The type is known but we can't validate the method exists.
+					// TypeConstrainedCallExecutor uses InferredType for matching.
+					return methodFQN, true, false
 				}
 			}
 		}

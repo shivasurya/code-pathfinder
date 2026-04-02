@@ -691,7 +691,7 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			shouldResolve: true,
 		},
 		{
-			name: "fail when method doesn't exist",
+			name: "resolve with best-effort FQN when method not in Functions map",
 			callSite: &CallSiteInternal{
 				FunctionName: "NonExistent",
 				ObjectName:   "user",
@@ -701,7 +701,8 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			variableName:  "user",
 			variableType:  "models.User",
 			methodExists:  false,
-			shouldResolve: false,
+			expectedFQN:   "models.User.NonExistent", // Approach C: best-effort FQN
+			shouldResolve: true,                       // Approach C: type known → resolved
 		},
 		{
 			name: "fail when variable not in scope",

@@ -3,6 +3,7 @@ package builder
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 )
@@ -90,4 +91,27 @@ func findGoNodeByByteRange(root *sitter.Node, startByte, endByte uint32) *sitter
 	}
 
 	return nil
+}
+
+// splitGoTypeFQN splits a Go type FQN into import path and type name.
+// Uses the LAST dot as separator since import paths can contain dots.
+//
+// Examples:
+//
+//	"database/sql.DB"             → ("database/sql", "DB", true)
+//	"net/http.Request"            → ("net/http", "Request", true)
+//	"github.com/lib/pq.Connector" → ("github.com/lib/pq", "Connector", true)
+//	"fmt.Stringer"                → ("fmt", "Stringer", true)
+//	"error"                       → ("", "", false)
+func splitGoTypeFQN(typeFQN string) (importPath, typeName string, ok bool) {
+	if typeFQN == "" {
+		return "", "", false
+	}
+
+	lastDot := strings.LastIndex(typeFQN, ".")
+	if lastDot < 0 || lastDot == len(typeFQN)-1 {
+		return "", "", false
+	}
+
+	return typeFQN[:lastDot], typeFQN[lastDot+1:], true
 }
