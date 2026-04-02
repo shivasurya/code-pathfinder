@@ -6,6 +6,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	golang "github.com/smacker/go-tree-sitter/golang"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -327,6 +328,198 @@ func foo(x int) int {
 func TestBuildGoCFG_NilNode(t *testing.T) {
 	_, _, err := BuildGoCFGFromAST("test", nil, nil)
 	assert.Error(t, err)
+}
+
+func TestBuildGoCFG_VarDeclInBlock(t *testing.T) {
+	source := `package main
+
+func foo() {
+	if true {
+		var x = getValue()
+		_ = x
+	}
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundVarDecl := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.Def == "x" && s.CallTarget == "getValue" {
+				foundVarDecl = true
+			}
+		}
+	}
+	assert.True(t, foundVarDecl, "var declaration should be extracted inside if block")
+}
+
+func TestBuildGoCFG_MethodCallInBlock(t *testing.T) {
+	source := `package main
+
+func foo() {
+	if true {
+		x := db.Query(sql)
+		y := r.URL.Path
+		_ = x
+		_ = y
+	}
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundCall := false
+	foundAttr := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.CallTarget == "Query" && s.CallChain == "db.Query" {
+				foundCall = true
+			}
+			if s.AttributeAccess == "r.URL.Path" {
+				foundAttr = true
+			}
+		}
+	}
+	assert.True(t, foundCall, "method call db.Query should be extracted")
+	assert.True(t, foundAttr, "attribute access r.URL.Path should be extracted")
+}
+
+func TestBuildGoCFG_GoDefer(t *testing.T) {
+	source := `package main
+
+func foo() {
+	go handler(x)
+	defer cleanup()
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundGo := false
+	foundDefer := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.CallTarget == "handler" {
+				foundGo = true
+			}
+			if s.CallTarget == "cleanup" {
+				foundDefer = true
+			}
+		}
+	}
+	assert.True(t, foundGo, "go statement should be extracted")
+	assert.True(t, foundDefer, "defer statement should be extracted")
+}
+
+func TestBuildGoCFG_SendInSelect(t *testing.T) {
+	source := `package main
+
+func foo() {
+	for i := range items {
+		ch <- i
+	}
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundSend := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.Type == core.StatementTypeExpression {
+				foundSend = true
+			}
+		}
+	}
+	assert.True(t, foundSend, "send statement should be extracted")
+}
+
+func TestBuildGoCFG_AssignmentInLoop(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := 0
+	for i := 0; i < 10; i++ {
+		x += i
+	}
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundAugmented := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.Def == "x" {
+				for _, u := range s.Uses {
+					if u == "x" {
+						foundAugmented = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, foundAugmented, "augmented assignment x += i should have x in Uses")
+}
+
+func TestBuildGoCFG_ReturnWithCall(t *testing.T) {
+	source := `package main
+
+func foo() string {
+	return getValue()
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundReturn := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.Type == core.StatementTypeReturn && s.CallTarget == "getValue" {
+				foundReturn = true
+			}
+		}
+	}
+	assert.True(t, foundReturn, "return with call should extract call target")
+}
+
+func TestBuildGoCFG_VarDeclWithAttr(t *testing.T) {
+	source := `package main
+
+func foo() {
+	if true {
+		var path = r.URL.Path
+		_ = path
+	}
+}
+`
+	funcNode, sourceBytes := parseGoFunction(t, source)
+	cfg, blockStmts, err := BuildGoCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	foundVarAttr := false
+	for _, stmts := range blockStmts {
+		for _, s := range stmts {
+			if s.Def == "path" && s.AttributeAccess == "r.URL.Path" {
+				foundVarAttr = true
+			}
+		}
+	}
+	assert.True(t, foundVarAttr, "var decl with attribute access should be extracted")
 }
 
 func TestBuildGoCFG_EmptyBody(t *testing.T) {
