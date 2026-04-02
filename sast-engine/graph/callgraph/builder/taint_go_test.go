@@ -299,3 +299,165 @@ func main() {}
 	// Verify summary exists for synthetic scope
 	assert.Contains(t, callGraph.Summaries, initFQN, "Should have taint summary for init scope")
 }
+
+func TestGenerateGoTaintSummaries_NilSourceLocation(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	// Go function without SourceLocation — should be skipped gracefully
+	callGraph.Functions["testapp.broken"] = &graph.Node{
+		ID:             "go1",
+		Type:           "function_declaration",
+		Name:           "broken",
+		Language:       "go",
+		File:           "/nonexistent/file.go",
+		SourceLocation: nil, // nil SourceLocation
+	}
+
+	codeGraph := &graph.CodeGraph{
+		Nodes: make(map[string]*graph.Node),
+		Edges: make([]*graph.Edge, 0),
+	}
+
+	// Should not panic — function is skipped due to nil SourceLocation
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+	assert.Empty(t, callGraph.Statements)
+}
+
+func TestGenerateGoTaintSummaries_NonexistentFile(t *testing.T) {
+	callGraph := core.NewCallGraph()
+
+	callGraph.Functions["testapp.gone"] = &graph.Node{
+		ID:       "go1",
+		Type:     "function_declaration",
+		Name:     "gone",
+		Language: "go",
+		File:     "/definitely/not/a/real/file.go",
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 0,
+			EndByte:   100,
+		},
+	}
+
+	codeGraph := &graph.CodeGraph{
+		Nodes: make(map[string]*graph.Node),
+		Edges: make([]*graph.Edge, 0),
+	}
+
+	// Should not panic — skips with warning
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+	assert.Empty(t, callGraph.Statements)
+}
+
+func TestGenerateGoTaintSummaries_WrongByteRange(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	mainFile := filepath.Join(tmpDir, "main.go")
+	err = os.WriteFile(mainFile, []byte(`package main
+
+func foo() {}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	callGraph := core.NewCallGraph()
+
+	// Function with wrong byte range — won't match any AST node
+	callGraph.Functions["testapp.phantom"] = &graph.Node{
+		ID:       "go1",
+		Type:     "function_declaration",
+		Name:     "phantom",
+		Language: "go",
+		File:     mainFile,
+		SourceLocation: &graph.SourceLocation{
+			StartByte: 9999,
+			EndByte:   9999,
+		},
+	}
+
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+	assert.Empty(t, callGraph.Statements, "Wrong byte range should skip function")
+}
+
+func TestGenerateGoTaintSummaries_FileCacheReuse(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	// Two functions in the same file — should only parse once
+	mainFile := filepath.Join(tmpDir, "main.go")
+	err = os.WriteFile(mainFile, []byte(`package main
+
+func first() {
+	x := 1
+	_ = x
+}
+
+func second() {
+	y := 2
+	_ = y
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	callGraph := core.NewCallGraph()
+
+	for _, node := range codeGraph.Nodes {
+		if node.Language == "go" && node.Type == "function_declaration" {
+			callGraph.Functions["testapp."+node.Name] = node
+		}
+	}
+
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+
+	// Both functions should have statements
+	foundFirst := false
+	foundSecond := false
+	for fqn := range callGraph.Statements {
+		if fqn == "testapp.first" {
+			foundFirst = true
+		}
+		if fqn == "testapp.second" {
+			foundSecond = true
+		}
+	}
+	assert.True(t, foundFirst, "Should extract statements from first()")
+	assert.True(t, foundSecond, "Should extract statements from second()")
+}
+
+func TestExtractGoPackageLevelVars_NoVars(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	// File with no package-level vars
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+func main() {
+	x := 1
+	_ = x
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	callGraph := core.NewCallGraph()
+
+	for _, node := range codeGraph.Nodes {
+		if node.Language == "go" && node.Type == "function_declaration" {
+			callGraph.Functions["testapp."+node.Name] = node
+		}
+	}
+
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+
+	// Should not create synthetic init scope when no package vars exist
+	for fqn := range callGraph.Statements {
+		assert.NotContains(t, fqn, "init$vars", "Should not create init$vars scope when no package vars")
+	}
+}
