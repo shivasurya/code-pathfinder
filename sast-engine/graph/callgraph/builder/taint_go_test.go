@@ -429,6 +429,68 @@ func second() {
 	assert.True(t, foundSecond, "Should extract statements from second()")
 }
 
+func TestGenerateGoTaintSummaries_PackageLevelVars_MultiFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	// Two files in same package with vars
+	err = os.WriteFile(filepath.Join(tmpDir, "config_a.go"), []byte(`package main
+
+import "os"
+
+var HostA = os.Getenv("HOST_A")
+`), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "config_b.go"), []byte(`package main
+
+import "os"
+
+var HostB = os.Getenv("HOST_B")
+`), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+func main() {}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	callGraph := core.NewCallGraph()
+
+	for _, node := range codeGraph.Nodes {
+		if node.Language == "go" && node.Type == "function_declaration" {
+			callGraph.Functions["testapp."+node.Name] = node
+		}
+	}
+
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+
+	// Both HostA and HostB should be in init$vars scope
+	var initFQN string
+	for fqn := range callGraph.Statements {
+		for _, stmt := range callGraph.Statements[fqn] {
+			if stmt.Def == "HostA" || stmt.Def == "HostB" {
+				initFQN = fqn
+				break
+			}
+		}
+	}
+	require.NotEmpty(t, initFQN, "Should have synthetic scope")
+
+	defs := map[string]bool{}
+	for _, stmt := range callGraph.Statements[initFQN] {
+		if stmt.Def != "" {
+			defs[stmt.Def] = true
+		}
+	}
+	assert.True(t, defs["HostA"], "Should have HostA from config_a.go")
+	assert.True(t, defs["HostB"], "Should have HostB from config_b.go")
+}
+
 func TestExtractGoPackageLevelVars_NoVars(t *testing.T) {
 	tmpDir := t.TempDir()
 
