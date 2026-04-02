@@ -17,7 +17,7 @@ func TestEnrichGoStatements_AttributeAccess(t *testing.T) {
 		Name:                 "handler",
 		Language:             "go",
 		MethodArgumentsValue: []string{"w", "r"},
-		MethodArgumentsType:  []string{"http.ResponseWriter", "*http.Request"},
+		MethodArgumentsType:  []string{"w: http.ResponseWriter", "r: *http.Request"},
 		File:                 "handler.go",
 	}
 
@@ -45,7 +45,7 @@ func TestEnrichGoStatements_CallChain(t *testing.T) {
 		Name:                 "handler",
 		Language:             "go",
 		MethodArgumentsValue: []string{"w", "r"},
-		MethodArgumentsType:  []string{"http.ResponseWriter", "*http.Request"},
+		MethodArgumentsType:  []string{"w: http.ResponseWriter", "r: *http.Request"},
 		File:                 "handler.go",
 	}
 
@@ -109,7 +109,7 @@ func TestEnrichGoStatements_DifferentVariableNames(t *testing.T) {
 				Name:                 "handler",
 				Language:             "go",
 				MethodArgumentsValue: []string{"w", varName},
-				MethodArgumentsType:  []string{"http.ResponseWriter", "*http.Request"},
+				MethodArgumentsType:  []string{"w: http.ResponseWriter", varName + ": *http.Request"},
 				File:                 "handler.go",
 			}
 
@@ -199,13 +199,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		for _, stmt := range stmts {
 			if stmt.AttributeAccess != "" {
 				t.Logf("%s: AttributeAccess = %q", funcFQN, stmt.AttributeAccess)
-				assert.NotContains(t, stmt.AttributeAccess, "r.URL",
-					"AttributeAccess should be type-qualified, not variable-prefixed")
+				// Positive assertion — must be type-qualified
+				assert.Equal(t, "net/http.Request.URL.Path", stmt.AttributeAccess,
+					"AttributeAccess should be resolved to type FQN")
 			}
 			if stmt.CallChain != "" && stmt.CallTarget == "FormValue" {
 				t.Logf("%s: CallChain = %q", funcFQN, stmt.CallChain)
-				assert.NotContains(t, stmt.CallChain, "r.FormValue",
-					"CallChain should be type-qualified, not variable-prefixed")
+				assert.Equal(t, "net/http.Request.FormValue", stmt.CallChain,
+					"CallChain should be resolved to type FQN")
 			}
 		}
 	}

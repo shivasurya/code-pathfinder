@@ -45,9 +45,6 @@ func GenerateGoTaintSummaries(
 	registry *core.GoModuleRegistry,
 	importMaps map[string]*core.GoImportMap,
 ) {
-	_ = typeEngine // Reserved for PR-05 type enrichment
-	_ = importMaps // Reserved for PR-05 type enrichment
-
 	// Cache parsed trees per file to avoid re-parsing the same file
 	// for multiple functions in the same source file.
 	fileCache := make(map[string]*parsedFile)
@@ -210,6 +207,11 @@ func buildParamTypeMap(funcNode *graph.Node, importMaps map[string]*core.GoImpor
 			break
 		}
 		typeStr := funcNode.MethodArgumentsType[i]
+		// Go parser stores types as "name: type" (e.g., "r: *http.Request").
+		// Strip the "name: " prefix to get the bare type.
+		if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+			typeStr = typeStr[colonIdx+2:]
+		}
 		typeStr = strings.TrimPrefix(typeStr, "*")
 		typeStr = strings.TrimPrefix(typeStr, "[]")
 		resolved := resolveGoTypeFQN(typeStr, importMap)
