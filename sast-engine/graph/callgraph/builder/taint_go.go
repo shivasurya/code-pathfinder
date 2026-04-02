@@ -11,6 +11,7 @@ import (
 	golang "github.com/smacker/go-tree-sitter/golang"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/analysis/taint"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/cfg"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
@@ -116,7 +117,12 @@ func GenerateGoTaintSummaries(
 		// Store statements for demand-driven dataflow analysis (Tier 2 feed).
 		callGraph.Statements[funcFQN] = statements
 
-		// NOTE: CFG building is added in PR-03. For now, skip CFG (Tier 1 unavailable).
+		// Build CFG for CFG-aware dataflow analysis (Tier 1 feed).
+		cfGraph, blockStmts, cfgErr := cfg.BuildGoCFGFromAST(funcFQN, functionASTNode, pf.sourceCode)
+		if cfgErr == nil && cfGraph != nil {
+			callGraph.CFGs[funcFQN] = cfGraph
+			callGraph.CFGBlockStatements[funcFQN] = blockStmts
+		}
 
 		// NOTE: Type enrichment is added in PR-05. For now, statements have raw
 		// variable-prefixed AttributeAccess/CallChain (e.g., "r.URL.Path" not
