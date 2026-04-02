@@ -604,3 +604,360 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	assert.Contains(t, sinkDefs, "rows")
 	assert.Contains(t, sinkDefs, "err")
 }
+
+// ========== COVERAGE: ParseGoFile ==========
+
+func TestParseGoFile(t *testing.T) {
+	tree, err := ParseGoFile([]byte(`package main; func foo() {}`))
+	require.NoError(t, err)
+	require.NotNil(t, tree)
+	defer tree.Close()
+	assert.Equal(t, "source_file", tree.RootNode().Type())
+}
+
+func TestParseGoFile_Empty(t *testing.T) {
+	tree, err := ParseGoFile([]byte(``))
+	// tree-sitter parses empty files as empty source_file
+	require.NoError(t, err)
+	require.NotNil(t, tree)
+	defer tree.Close()
+}
+
+// ========== COVERAGE: extractGoCallTarget edge cases ==========
+
+func TestExtractGoStatements_DirectFunctionCall(t *testing.T) {
+	source := `package main
+
+func foo() {
+	doSomething(x)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "doSomething", stmts[0].CallTarget)
+	assert.Equal(t, "doSomething", stmts[0].CallChain)
+}
+
+// ========== COVERAGE: var declaration without value ==========
+
+func TestExtractGoStatements_VarDeclNoValue(t *testing.T) {
+	source := `package main
+
+func foo() {
+	var x int
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Empty(t, stmts[0].Uses)
+}
+
+func TestExtractGoStatements_VarDeclWithAttribute(t *testing.T) {
+	source := `package main
+
+func foo() {
+	var x = r.URL.Path
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "r.URL.Path", stmts[0].AttributeAccess)
+	assert.Contains(t, stmts[0].Uses, "r")
+}
+
+func TestExtractGoStatements_VarDeclWithIdentifier(t *testing.T) {
+	source := `package main
+
+func foo() {
+	var x = y
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Contains(t, stmts[0].Uses, "y")
+}
+
+// ========== COVERAGE: assignment with index/selector LHS ==========
+
+func TestExtractGoStatements_MapIndexAssignment(t *testing.T) {
+	source := `package main
+
+func foo() {
+	m["key"] = value
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	// Map index assignment has no local Def — it mutates existing map
+	assert.Equal(t, 0, len(stmts))
+}
+
+func TestExtractGoStatements_AssignmentFromCall(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x = getValue()
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "getValue", stmts[0].CallTarget)
+}
+
+func TestExtractGoStatements_AssignmentFromAttribute(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x = r.URL.Path
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "r.URL.Path", stmts[0].AttributeAccess)
+}
+
+// ========== COVERAGE: return with multiple values ==========
+
+func TestExtractGoStatements_ReturnEmpty(t *testing.T) {
+	source := `package main
+
+func foo() {
+	return
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, core.StatementTypeReturn, stmts[0].Type)
+	assert.Empty(t, stmts[0].Uses)
+}
+
+// ========== COVERAGE: extractGoIdentifiers nil ==========
+
+func TestExtractGoIdentifiers_Nil(t *testing.T) {
+	ids := extractGoIdentifiers(nil, []byte{})
+	assert.Empty(t, ids)
+}
+
+// ========== COVERAGE: extractGoIdentifiersFromArgs nil ==========
+
+func TestExtractGoIdentifiersFromArgs_Nil(t *testing.T) {
+	ids := extractGoIdentifiersFromArgs(nil, []byte{})
+	assert.Empty(t, ids)
+}
+
+// ========== COVERAGE: short var with plain unary (not channel receive) ==========
+
+func TestExtractGoStatements_ShortVarDecl_UnaryNonReceive(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := -y
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Contains(t, stmts[0].Uses, "y")
+}
+
+// ========== COVERAGE: multi-statement function ==========
+
+func TestExtractGoStatements_MixedStatements(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := 1
+	fmt.Println(x)
+	y := db.Query(x)
+	return y
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(stmts))
+
+	assert.Equal(t, core.StatementTypeAssignment, stmts[0].Type)
+	assert.Equal(t, core.StatementTypeCall, stmts[1].Type)
+	assert.Equal(t, core.StatementTypeAssignment, stmts[2].Type)
+	assert.Equal(t, core.StatementTypeReturn, stmts[3].Type)
+}
+
+// ========== COVERAGE: go statement with method call ==========
+
+func TestExtractGoStatements_GoMethodCall(t *testing.T) {
+	source := `package main
+
+func foo() {
+	go srv.Serve(listener)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "Serve", stmts[0].CallTarget)
+	assert.Equal(t, "srv.Serve", stmts[0].CallChain)
+	assert.Contains(t, stmts[0].Uses, "listener")
+}
+
+// ========== COVERAGE: extractGoCallTarget nil ==========
+
+func TestExtractGoCallTarget_Nil(t *testing.T) {
+	target, chain, attr := extractGoCallTarget(nil, []byte{})
+	assert.Equal(t, "", target)
+	assert.Equal(t, "", chain)
+	assert.Equal(t, "", attr)
+}
+
+// ========== COVERAGE: extractGoSelectorChain nil ==========
+
+func TestExtractGoSelectorChain_Nil(t *testing.T) {
+	result := extractGoSelectorChain(nil, []byte{})
+	assert.Equal(t, "", result)
+}
+
+// ========== COVERAGE: chained method calls ==========
+
+func TestExtractGoStatements_ChainedMethodCall(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := r.URL.Query().Get("key")
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "Get", stmts[0].CallTarget)
+	// Chain includes intermediate call
+	assert.Contains(t, stmts[0].CallChain, "Get")
+}
+
+// ========== COVERAGE: extractGoSend nil ==========
+
+func TestExtractGoSend_Nil(t *testing.T) {
+	result := extractGoSend(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoReturn nil ==========
+
+func TestExtractGoReturn_Nil(t *testing.T) {
+	result := extractGoReturn(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoGoDefer nil ==========
+
+func TestExtractGoGoDefer_Nil(t *testing.T) {
+	result := extractGoGoDefer(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoCall nil ==========
+
+func TestExtractGoCall_Nil(t *testing.T) {
+	result := extractGoCall(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoShortVarDecl nil ==========
+
+func TestExtractGoShortVarDecl_Nil(t *testing.T) {
+	result := extractGoShortVarDecl(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoVarDecl nil ==========
+
+func TestExtractGoVarDecl_Nil(t *testing.T) {
+	result := extractGoVarDecl(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: extractGoAssignment nil ==========
+
+func TestExtractGoAssignment_Nil(t *testing.T) {
+	result := extractGoAssignment(nil, []byte{})
+	assert.Nil(t, result)
+}
+
+// ========== COVERAGE: deep selector chain (3+ levels) ==========
+
+func TestExtractGoStatements_DeepSelectorCall(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := a.b.c.Do(y)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	assert.Equal(t, "Do", stmts[0].CallTarget)
+	assert.Equal(t, "a.b.c.Do", stmts[0].CallChain)
+	assert.Contains(t, stmts[0].Uses, "y")
+}
