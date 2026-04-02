@@ -190,3 +190,98 @@ func TestApproachC_NoTypeEngine(t *testing.T) {
 	assert.Equal(t, "", targetFQN)
 	assert.False(t, resolved)
 }
+
+// TestApproachC_Pass4TypeInferenceFields tests that Pass 4 populates type inference
+// fields on CallSite when a variable-method call is resolved via Pattern 1b.
+func TestApproachC_Pass4TypeInferenceFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	// A method call on a user-defined type — triggers Pattern 1b
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+type Service struct{}
+
+func (s *Service) Process(input string) string {
+	return input
+}
+
+func handler() {
+	svc := NewService()
+	result := svc.Process("data")
+	_ = result
+}
+
+func NewService() *Service {
+	return &Service{}
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	goRegistry, err := resolution.BuildGoModuleRegistry(tmpDir)
+	require.NoError(t, err)
+
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	require.NoError(t, err)
+
+	// Find the call site for svc.Process — should have type inference fields
+	for callerFQN, callSites := range callGraph.CallSites {
+		for _, cs := range callSites {
+			if cs.Target == "Process" && cs.Resolved {
+				t.Logf("Found Process call in %s: FQN=%s, InferredType=%s, TypeSource=%s",
+					callerFQN, cs.TargetFQN, cs.InferredType, cs.TypeSource)
+				if cs.ResolvedViaTypeInference {
+					assert.NotEmpty(t, cs.InferredType, "InferredType should be set")
+					assert.NotEmpty(t, cs.TypeSource, "TypeSource should be set")
+					assert.Greater(t, cs.TypeConfidence, float32(0), "TypeConfidence should be > 0")
+				}
+			}
+		}
+	}
+}
+
+// TestApproachC_StdlibResolution_Integration tests end-to-end stdlib resolution
+// with a real project that has variable-method calls on stdlib types.
+func TestApproachC_StdlibResolution_Integration(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+import "fmt"
+
+func handler() {
+	msg := fmt.Sprintf("hello %s", "world")
+	fmt.Println(msg)
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	goRegistry, err := resolution.BuildGoModuleRegistry(tmpDir)
+	require.NoError(t, err)
+
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	require.NoError(t, err)
+
+	// Verify fmt.Sprintf resolved
+	foundSprintf := false
+	for _, callSites := range callGraph.CallSites {
+		for _, cs := range callSites {
+			if cs.Target == "Sprintf" && cs.Resolved {
+				foundSprintf = true
+				assert.Equal(t, "fmt.Sprintf", cs.TargetFQN)
+			}
+		}
+	}
+	assert.True(t, foundSprintf, "fmt.Sprintf should be resolved")
+}
