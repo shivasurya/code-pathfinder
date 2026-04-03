@@ -523,3 +523,46 @@ func main() {
 		assert.NotContains(t, fqn, "init$vars", "Should not create init$vars scope when no package vars")
 	}
 }
+
+func TestGenerateGoTaintSummaries_WithCFG(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	// Code with control flow — CFG captures taint through if branches
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+func handler(input string) {
+	if len(input) > 0 {
+		query := input
+		execute(query)
+	}
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	callGraph := core.NewCallGraph()
+
+	for _, node := range codeGraph.Nodes {
+		if node.Type == "function_declaration" && node.Name == "handler" && node.Language == "go" {
+			callGraph.Functions["testapp.handler"] = node
+			break
+		}
+	}
+	require.NotEmpty(t, callGraph.Functions)
+
+	GenerateGoTaintSummaries(callGraph, codeGraph, nil, nil, nil)
+
+	// CFGs should be populated
+	_, hasCFG := callGraph.CFGs["testapp.handler"]
+	assert.True(t, hasCFG, "CFG should be populated for handler function")
+
+	_, hasBlockStmts := callGraph.CFGBlockStatements["testapp.handler"]
+	assert.True(t, hasBlockStmts, "CFGBlockStatements should be populated")
+
+	// Statements key should exist (even if empty — all code is inside if block)
+	_, hasStmts := callGraph.Statements["testapp.handler"]
+	assert.True(t, hasStmts, "Statements key should exist")
+}
