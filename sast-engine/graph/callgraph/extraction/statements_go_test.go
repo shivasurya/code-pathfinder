@@ -991,3 +991,130 @@ var y = 42
 	assert.Equal(t, "getValue", stmts[0].CallTarget)
 	assert.Equal(t, "y", stmts[1].Def)
 }
+
+// ========== CLOSURE FLATTENING ==========
+
+func TestExtractGoStatements_GoClosureFlattened(t *testing.T) {
+	source := `package main
+
+func foo() {
+	x := source()
+	go func() {
+		sink(x)
+	}()
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+
+	// x := source() + sink(x) from flattened closure body
+	foundSource := false
+	foundSink := false
+	for _, s := range stmts {
+		if s.Def == "x" && s.CallTarget == "source" {
+			foundSource = true
+		}
+		if s.CallTarget == "sink" {
+			foundSink = true
+			assert.Contains(t, s.Uses, "x", "Closure should capture 'x' from outer scope")
+		}
+	}
+	assert.True(t, foundSource, "Should extract x := source()")
+	assert.True(t, foundSink, "Should flatten closure body: sink(x) from go func(){...}()")
+}
+
+func TestExtractGoStatements_DeferClosureFlattened(t *testing.T) {
+	source := `package main
+
+func foo() {
+	val := getData()
+	defer func() {
+		cleanup(val)
+	}()
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+
+	foundCleanup := false
+	for _, s := range stmts {
+		if s.CallTarget == "cleanup" {
+			foundCleanup = true
+			assert.Contains(t, s.Uses, "val")
+		}
+	}
+	assert.True(t, foundCleanup, "Should flatten defer func(){cleanup(val)}()")
+}
+
+func TestExtractGoStatements_NonClosureGoStatement(t *testing.T) {
+	source := `package main
+
+func foo() {
+	go handler(data)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	// Regular go statement — NOT a closure, should extract as call
+	assert.Equal(t, core.StatementTypeCall, stmts[0].Type)
+	assert.Equal(t, "handler", stmts[0].CallTarget)
+}
+
+// ========== TYPE ASSERTION ==========
+
+func TestExtractGoStatements_TypeAssertion(t *testing.T) {
+	source := `package main
+
+func foo() {
+	val := x.(string)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(stmts))
+
+	stmt := stmts[0]
+	assert.Equal(t, core.StatementTypeAssignment, stmt.Type)
+	assert.Equal(t, "val", stmt.Def)
+	assert.Contains(t, stmt.Uses, "x", "Type assertion should propagate taint from x to val")
+}
+
+func TestExtractGoStatements_TypeAssertionInChain(t *testing.T) {
+	source := `package main
+
+func foo() {
+	input := getInput()
+	typed := input.(string)
+	sink(typed)
+}
+`
+	tree, funcNode, sourceBytes := parseGoFunction(t, source, "foo")
+	defer tree.Close()
+
+	stmts, err := ExtractGoStatements("test.go", sourceBytes, funcNode)
+	require.NoError(t, err)
+
+	// input := getInput() → typed := input.(string) → sink(typed)
+	// Taint should flow: input → typed → sink
+	defs := map[string][]string{}
+	for _, s := range stmts {
+		if s.Def != "" {
+			defs[s.Def] = s.Uses
+		}
+	}
+	assert.Contains(t, defs["typed"], "input", "Type assertion should carry taint from input to typed")
+}

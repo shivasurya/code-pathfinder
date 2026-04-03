@@ -14,11 +14,12 @@ Usage:
 
 from .query_type import QueryType
 
-
 # --- net/http ---
+
 
 class GoHTTPRequest(QueryType):
     """*http.Request — HTTP handler request parameter."""
+
     fqns = ["net/http.Request"]
     patterns = ["*.Request"]
     match_subclasses = False
@@ -26,6 +27,7 @@ class GoHTTPRequest(QueryType):
 
 class GoHTTPClient(QueryType):
     """*http.Client and package-level http.Get/Post."""
+
     fqns = ["net/http.Client", "net/http"]
     patterns = ["http.Client"]
     match_subclasses = False
@@ -33,6 +35,7 @@ class GoHTTPClient(QueryType):
 
 class GoHTTPResponseWriter(QueryType):
     """http.ResponseWriter — HTTP response sink."""
+
     fqns = ["net/http.ResponseWriter"]
     patterns = ["*.ResponseWriter"]
     match_subclasses = False
@@ -40,8 +43,10 @@ class GoHTTPResponseWriter(QueryType):
 
 # --- database/sql ---
 
+
 class GoSQLDB(QueryType):
     """*sql.DB, *sql.Tx, *sql.Stmt — database handles."""
+
     fqns = ["database/sql.DB", "database/sql.Tx", "database/sql.Stmt"]
     patterns = ["*.DB", "*.Tx"]
     match_subclasses = False
@@ -49,8 +54,10 @@ class GoSQLDB(QueryType):
 
 # --- os ---
 
+
 class GoOS(QueryType):
     """os package — file operations, env vars."""
+
     fqns = ["os", "os.File"]
     patterns = ["os.*"]
     match_subclasses = False
@@ -58,8 +65,10 @@ class GoOS(QueryType):
 
 # --- os/exec ---
 
+
 class GoOSExec(QueryType):
     """os/exec — command execution."""
+
     fqns = ["os/exec", "os/exec.Cmd"]
     patterns = ["exec.*"]
     match_subclasses = False
@@ -67,8 +76,10 @@ class GoOSExec(QueryType):
 
 # --- fmt ---
 
+
 class GoFmt(QueryType):
     """fmt — string formatting (taint propagation source)."""
+
     fqns = ["fmt"]
     patterns = ["fmt.*"]
     match_subclasses = False
@@ -76,8 +87,10 @@ class GoFmt(QueryType):
 
 # --- io ---
 
+
 class GoIO(QueryType):
     """io package — ReadAll, Copy, etc."""
+
     fqns = ["io"]
     patterns = ["io.*"]
     match_subclasses = False
@@ -85,8 +98,10 @@ class GoIO(QueryType):
 
 # --- path/filepath ---
 
+
 class GoFilepath(QueryType):
     """path/filepath — path sanitization."""
+
     fqns = ["path/filepath"]
     patterns = ["filepath.*"]
     match_subclasses = False
@@ -94,8 +109,10 @@ class GoFilepath(QueryType):
 
 # --- strconv ---
 
+
 class GoStrconv(QueryType):
     """strconv — type conversion sanitizers."""
+
     fqns = ["strconv"]
     patterns = ["strconv.*"]
     match_subclasses = False
@@ -103,8 +120,10 @@ class GoStrconv(QueryType):
 
 # --- encoding/json ---
 
+
 class GoJSON(QueryType):
     """encoding/json — JSON encode/decode."""
+
     fqns = ["encoding/json", "encoding/json.Decoder"]
     patterns = ["json.*"]
     match_subclasses = False
@@ -112,8 +131,10 @@ class GoJSON(QueryType):
 
 # --- html/template ---
 
+
 class GoTemplate(QueryType):
     """html/template — template execution (auto-escapes by default)."""
+
     fqns = ["html/template.Template", "text/template.Template"]
     patterns = ["*.Template"]
     match_subclasses = False
@@ -121,8 +142,10 @@ class GoTemplate(QueryType):
 
 # --- context ---
 
+
 class GoContext(QueryType):
     """context.Context — request-scoped values."""
+
     fqns = ["context.Context"]
     patterns = ["*.Context"]
     match_subclasses = False
@@ -130,8 +153,10 @@ class GoContext(QueryType):
 
 # --- crypto ---
 
+
 class GoCrypto(QueryType):
     """crypto packages — hashing and encryption sanitizers."""
+
     fqns = ["crypto/sha256", "crypto/sha512", "crypto/hmac", "crypto/aes"]
     patterns = ["sha256.*", "sha512.*", "hmac.*"]
     match_subclasses = False
