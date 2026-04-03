@@ -357,8 +357,8 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 		e.Diagnostics.Addf("error", "executor", "TypeConstrainedAttributeExecutor: CallGraph is nil")
 		return nil
 	}
-	if e.CallGraph.CallSites == nil {
-		e.Diagnostics.Addf("warning", "executor", "TypeConstrainedAttributeExecutor: CallSites map is nil, treating as empty")
+	if e.CallGraph.CallSites == nil && e.CallGraph.Statements == nil {
+		e.Diagnostics.Addf("warning", "executor", "TypeConstrainedAttributeExecutor: CallSites and Statements maps are nil, treating as empty")
 		return nil
 	}
 
@@ -368,19 +368,54 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 		minConfidence = e.Config.getDefaultMinConfidence()
 	}
 
-	for functionFQN, callSites := range e.CallGraph.CallSites {
-		for _, cs := range callSites {
-			if e.matchesAttributeAccess(&cs, minConfidence) {
-				detections = append(detections, DataflowDetection{
-					FunctionFQN:  functionFQN,
-					SourceLine:   cs.Location.Line,
-					SourceColumn: cs.Location.Column,
-					SinkLine:     cs.Location.Line,
-					SinkColumn:   cs.Location.Column,
-					SinkCall:     cs.Target,
-					Confidence:   float64(cs.TypeConfidence),
-					Scope:        "local",
-				})
+	// Scan CallSites for attribute access (Python pattern).
+	if e.CallGraph.CallSites != nil {
+		for functionFQN, callSites := range e.CallGraph.CallSites {
+			for _, cs := range callSites {
+				if e.matchesAttributeAccess(&cs, minConfidence) {
+					detections = append(detections, DataflowDetection{
+						FunctionFQN:  functionFQN,
+						SourceLine:   cs.Location.Line,
+						SourceColumn: cs.Location.Column,
+						SinkLine:     cs.Location.Line,
+						SinkColumn:   cs.Location.Column,
+						SinkCall:     cs.Target,
+						Confidence:   float64(cs.TypeConfidence),
+						Scope:        "local",
+					})
+				}
+			}
+		}
+	}
+
+	// Scan Statements for attribute access (Go struct fields).
+	// After PR-05 type enrichment, stmt.AttributeAccess is type-qualified:
+	//   "net/http.Request.URL.Path" (not "r.URL.Path")
+	if e.CallGraph.Statements != nil {
+		receiverTypes := e.IR.getReceiverTypes()
+		attrNames := e.IR.getAttributeNames()
+
+		for funcFQN, stmts := range e.CallGraph.Statements {
+			for _, stmt := range stmts {
+				if stmt.AttributeAccess == "" {
+					continue
+				}
+				for _, rt := range receiverTypes {
+					for _, attrName := range attrNames {
+						expected := rt + "." + attrName
+						if stmt.AttributeAccess == expected ||
+							strings.HasPrefix(stmt.AttributeAccess, expected+".") {
+							detections = append(detections, DataflowDetection{
+								FunctionFQN: funcFQN,
+								SourceLine:  int(stmt.LineNumber),
+								SinkLine:    int(stmt.LineNumber),
+								SinkCall:    stmt.AttributeAccess,
+								Confidence:  0.85,
+								Scope:       "local",
+							})
+						}
+					}
+				}
 			}
 		}
 	}
@@ -390,18 +425,24 @@ func (e *TypeConstrainedAttributeExecutor) Execute() []DataflowDetection {
 
 // matchesAttributeAccess checks if a call site represents a typed attribute access.
 func (e *TypeConstrainedAttributeExecutor) matchesAttributeAccess(cs *core.CallSite, minConfidence float64) bool {
-	// Check if target contains the attribute name
-	attrName := e.IR.AttributeName
-	if attrName == "" {
+	attrNames := e.IR.getAttributeNames()
+	if len(attrNames) == 0 {
 		return false
 	}
 
 	// Target should end with ".attributeName" (e.g., "request.GET", "self.request.GET")
-	if !strings.HasSuffix(cs.Target, "."+attrName) {
+	matchedAttr := false
+	for _, attrName := range attrNames {
+		if strings.HasSuffix(cs.Target, "."+attrName) {
+			matchedAttr = true
+			break
+		}
+	}
+	if !matchedAttr {
 		return false
 	}
 
-	receiverTypes := []string{e.IR.ReceiverType}
+	receiverTypes := e.IR.getReceiverTypes()
 
 	// Step 2: Type inference match
 	if cs.ResolvedViaTypeInference && cs.TypeConfidence >= float32(minConfidence) {

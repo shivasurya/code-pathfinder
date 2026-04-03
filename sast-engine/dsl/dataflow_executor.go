@@ -920,6 +920,14 @@ func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []Cal
 	functions := []string{}
 	for funcFQN := range sourceMap {
 		if sinkMap[funcFQN] {
+			// Language filter: skip if rule is language-scoped and function doesn't match.
+			if e.IR.Language != "" && e.CallGraph != nil {
+				if funcNode, ok := e.CallGraph.Functions[funcFQN]; ok {
+					if funcNode.Language != e.IR.Language {
+						continue
+					}
+				}
+			}
 			functions = append(functions, funcFQN)
 		}
 	}
