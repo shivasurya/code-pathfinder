@@ -398,6 +398,12 @@ func extractGoShortVarDecl(node *sitter.Node, sourceCode []byte) []*core.Stateme
 	return stmts
 }
 
+// ExtractGoVarDeclFromNode extracts statements from a top-level var_declaration node.
+// Exported for use by GenerateGoTaintSummaries for package-level variable extraction.
+func ExtractGoVarDeclFromNode(node *sitter.Node, sourceCode []byte) []*core.Statement {
+	return extractGoVarDecl(node, sourceCode)
+}
+
 // extractGoVarDecl handles `var x = expr` declarations.
 // node type: "var_declaration" containing "var_spec" children.
 func extractGoVarDecl(node *sitter.Node, sourceCode []byte) []*core.Statement {

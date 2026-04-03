@@ -210,6 +210,11 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		}
 	}
 
+	// Pass 5: Generate taint summaries for all Go functions.
+	// Populates callGraph.Statements and callGraph.Summaries (Tier 2 feed for DataflowExecutor).
+	// CFG population (Tier 1) is added in PR-03. Type enrichment in PR-05.
+	GenerateGoTaintSummaries(callGraph, codeGraph, typeEngine, registry, importMaps)
+
 	return callGraph, nil
 }
 

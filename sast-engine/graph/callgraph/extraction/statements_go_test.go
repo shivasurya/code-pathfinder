@@ -961,3 +961,33 @@ func foo() {
 	assert.Equal(t, "a.b.c.Do", stmts[0].CallChain)
 	assert.Contains(t, stmts[0].Uses, "y")
 }
+
+// ========== COVERAGE: ExtractGoVarDeclFromNode ==========
+
+func TestExtractGoVarDeclFromNode(t *testing.T) {
+	source := `package main
+
+var x = getValue()
+var y = 42
+`
+	sourceBytes := []byte(source)
+	tree, err := ParseGoFile(sourceBytes)
+	require.NoError(t, err)
+	defer tree.Close()
+
+	root := tree.RootNode()
+
+	// Find var_declaration nodes at top level
+	var stmts []*core.Statement
+	for i := 0; i < int(root.ChildCount()); i++ {
+		child := root.Child(i)
+		if child != nil && child.Type() == "var_declaration" {
+			stmts = append(stmts, ExtractGoVarDeclFromNode(child, sourceBytes)...)
+		}
+	}
+
+	require.Equal(t, 2, len(stmts))
+	assert.Equal(t, "x", stmts[0].Def)
+	assert.Equal(t, "getValue", stmts[0].CallTarget)
+	assert.Equal(t, "y", stmts[1].Def)
+}
