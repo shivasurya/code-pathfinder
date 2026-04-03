@@ -210,6 +210,9 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				}
 			}
 
+			// Convert CallSiteInternal.Arguments to core.Argument structs.
+			args := buildCallSiteArguments(callSite.Arguments)
+
 			// Add detailed call site information
 			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
 				Target: callSite.FunctionName,
@@ -217,6 +220,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					File: callSite.CallerFile,
 					Line: int(callSite.CallLine),
 				},
+				Arguments:                args,
 				Resolved:                 true,
 				TargetFQN:                targetFQN,
 				IsStdlib:                 isStdlib,
@@ -226,6 +230,8 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				TypeSource:               typeSource,
 			})
 		} else {
+			args := buildCallSiteArguments(callSite.Arguments)
+
 			// Record unresolved call for diagnostics
 			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
 				Target: callSite.FunctionName,
@@ -233,6 +239,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					File: callSite.CallerFile,
 					Line: int(callSite.CallLine),
 				},
+				Arguments:     args,
 				Resolved:      false,
 				FailureReason: "unresolved_go_call",
 			})
@@ -380,6 +387,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 			CallLine:     node.LineNumber,
 			FunctionName: functionName,
 			ObjectName:   objectName,
+			Arguments:    node.MethodArgumentsValue, // argument expressions from AST
 		}
 
 		callSites = append(callSites, callSite)
@@ -498,7 +506,14 @@ func resolveGoCallTarget(
 					}
 				}
 
-				// Check 3: Third-party / unvalidated — accept with best-effort FQN
+				// Check 3: Promoted method via struct embedding
+				if promotedFQN, resolved, isStdlib := resolvePromotedMethod(
+					typeFQN, callSite.FunctionName, registry,
+				); resolved {
+					return promotedFQN, true, isStdlib
+				}
+
+				// Check 4: Third-party / unvalidated — accept with best-effort FQN
 				return methodFQN, true, false
 			}
 		}
@@ -678,4 +693,95 @@ func isSameGoPackage(file1, file2 string) bool {
 	dir1 := filepath.Dir(file1)
 	dir2 := filepath.Dir(file2)
 	return dir1 == dir2
+}
+
+// buildCallSiteArguments converts CallSiteInternal.Arguments ([]string) to
+// core.Argument structs with Value, IsVariable, and Position.
+func buildCallSiteArguments(argNames []string) []core.Argument {
+	if len(argNames) == 0 {
+		return nil
+	}
+	args := make([]core.Argument, len(argNames))
+	for i, name := range argNames {
+		args[i] = core.Argument{
+			Value:      name,
+			IsVariable: !isGoLiteral(name),
+			Position:   i,
+		}
+	}
+	return args
+}
+
+// isGoLiteral checks if an argument value looks like a literal (not a variable).
+func isGoLiteral(value string) bool {
+	if value == "" {
+		return true
+	}
+	// Quoted strings
+	if (value[0] == '"' && value[len(value)-1] == '"') ||
+		(value[0] == '\'' && value[len(value)-1] == '\'') ||
+		(value[0] == '`' && value[len(value)-1] == '`') {
+		return true
+	}
+	// Numbers
+	if value[0] >= '0' && value[0] <= '9' {
+		return true
+	}
+	// Go keyword literals
+	if value == "true" || value == "false" || value == "nil" {
+		return true
+	}
+	return false
+}
+
+// resolvePromotedMethod checks if a method exists on an embedded type.
+// Go struct embedding promotes all methods of the embedded type.
+//
+// Example: type MyHandler struct { *sql.DB }
+//
+//	MyHandler doesn't have Query(), but *sql.DB does (promoted).
+//	h.Query(sql) → resolves to "database/sql.DB.Query"
+func resolvePromotedMethod(
+	typeFQN string,
+	methodName string,
+	registry *core.GoModuleRegistry,
+) (string, bool, bool) {
+	if registry == nil || registry.StdlibLoader == nil {
+		return "", false, false
+	}
+
+	importPath, typeName, ok := splitGoTypeFQN(typeFQN)
+	if !ok {
+		return "", false, false
+	}
+
+	stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
+	if err != nil || stdlibType == nil {
+		return "", false, false
+	}
+
+	// Check embedded fields for promoted methods.
+	for _, field := range stdlibType.Fields {
+		if field.Name != "" {
+			continue // skip named fields, only check embedded (anonymous) fields
+		}
+		embeddedTypeFQN := field.Type
+		embeddedTypeFQN = strings.TrimPrefix(embeddedTypeFQN, "*")
+
+		embImport, embType, ok := splitGoTypeFQN(embeddedTypeFQN)
+		if !ok {
+			continue
+		}
+
+		embStdlibType, err := registry.StdlibLoader.GetType(embImport, embType)
+		if err != nil || embStdlibType == nil {
+			continue
+		}
+
+		if _, hasMethod := embStdlibType.Methods[methodName]; hasMethod {
+			return embeddedTypeFQN + "." + methodName, true, true
+		}
+	}
+
+	return "", false, false
 }
