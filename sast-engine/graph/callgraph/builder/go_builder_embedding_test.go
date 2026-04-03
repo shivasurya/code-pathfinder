@@ -33,3 +33,64 @@ func TestResolvePromotedMethod_InvalidFQN(t *testing.T) {
 	assert.False(t, resolved)
 	assert.Empty(t, fqn)
 }
+
+func TestResolvePromotedMethodFromFields_NamedFieldSkipped(t *testing.T) {
+	// Named fields (non-embedded) should be skipped
+	fields := []*core.GoStructField{
+		{Name: "Host", Type: "string", Exported: true},
+		{Name: "Port", Type: "int", Exported: true},
+	}
+	fqn, resolved, _ := resolvePromotedMethodFromFields(fields, "Query", nil)
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+}
+
+func TestResolvePromotedMethodFromFields_EmbeddedNoStdlib(t *testing.T) {
+	// Embedded field but no StdlibLoader — can't resolve
+	fields := []*core.GoStructField{
+		{Name: "", Type: "database/sql.DB", Exported: true},
+	}
+	fqn, resolved, _ := resolvePromotedMethodFromFields(fields, "Query", nil)
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+}
+
+func TestResolvePromotedMethodFromFields_EmbeddedInvalidFQN(t *testing.T) {
+	// Embedded field with no dot in type — splitGoTypeFQN fails
+	fields := []*core.GoStructField{
+		{Name: "", Type: "error", Exported: true},
+	}
+	fqn, resolved, _ := resolvePromotedMethodFromFields(fields, "Error", nil)
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+}
+
+func TestResolvePromotedMethodFromFields_EmptyFields(t *testing.T) {
+	fqn, resolved, _ := resolvePromotedMethodFromFields(nil, "Query", nil)
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+}
+
+func TestResolvePromotedMethodFromFields_PointerStripping(t *testing.T) {
+	// Embedded *sql.DB — pointer prefix should be stripped
+	fields := []*core.GoStructField{
+		{Name: "", Type: "*database/sql.DB", Exported: true},
+	}
+	// Without StdlibLoader, can't validate — but pointer stripping should work
+	fqn, resolved, _ := resolvePromotedMethodFromFields(fields, "Query", nil)
+	assert.False(t, resolved) // no loader
+	assert.Empty(t, fqn)
+}
+
+func TestResolvePromotedMethodFromFields_MixedFields(t *testing.T) {
+	// Mix of named and embedded fields — only embedded checked
+	fields := []*core.GoStructField{
+		{Name: "Logger", Type: "log.Logger", Exported: true},   // named — skip
+		{Name: "", Type: "database/sql.DB", Exported: true},     // embedded — check
+		{Name: "Config", Type: "myapp.Config", Exported: true},  // named — skip
+	}
+	// Without StdlibLoader, still won't resolve, but exercises the loop
+	fqn, resolved, _ := resolvePromotedMethodFromFields(fields, "Query", nil)
+	assert.False(t, resolved)
+	assert.Empty(t, fqn)
+}

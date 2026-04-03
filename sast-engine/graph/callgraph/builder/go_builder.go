@@ -760,26 +760,34 @@ func resolvePromotedMethod(
 		return "", false, false
 	}
 
-	// Check embedded fields for promoted methods.
-	for _, field := range stdlibType.Fields {
+	return resolvePromotedMethodFromFields(stdlibType.Fields, methodName, registry)
+}
+
+// resolvePromotedMethodFromFields walks embedded struct fields to find promoted methods.
+// Separated for testability without StdlibLoader.
+func resolvePromotedMethodFromFields(
+	fields []*core.GoStructField,
+	methodName string,
+	registry *core.GoModuleRegistry,
+) (string, bool, bool) {
+	for _, field := range fields {
 		if field.Name != "" {
 			continue // skip named fields, only check embedded (anonymous) fields
 		}
-		embeddedTypeFQN := field.Type
-		embeddedTypeFQN = strings.TrimPrefix(embeddedTypeFQN, "*")
+		embeddedTypeFQN := strings.TrimPrefix(field.Type, "*")
 
 		embImport, embType, ok := splitGoTypeFQN(embeddedTypeFQN)
 		if !ok {
 			continue
 		}
 
-		embStdlibType, err := registry.StdlibLoader.GetType(embImport, embType)
-		if err != nil || embStdlibType == nil {
-			continue
-		}
-
-		if _, hasMethod := embStdlibType.Methods[methodName]; hasMethod {
-			return embeddedTypeFQN + "." + methodName, true, true
+		if registry != nil && registry.StdlibLoader != nil {
+			embStdlibType, err := registry.StdlibLoader.GetType(embImport, embType)
+			if err == nil && embStdlibType != nil {
+				if _, hasMethod := embStdlibType.Methods[methodName]; hasMethod {
+					return embeddedTypeFQN + "." + methodName, true, true
+				}
+			}
 		}
 	}
 
