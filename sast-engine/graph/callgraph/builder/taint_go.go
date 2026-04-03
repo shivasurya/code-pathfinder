@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	golang "github.com/smacker/go-tree-sitter/golang"
@@ -44,9 +45,6 @@ func GenerateGoTaintSummaries(
 	registry *core.GoModuleRegistry,
 	importMaps map[string]*core.GoImportMap,
 ) {
-	_ = typeEngine // Reserved for PR-05 type enrichment
-	_ = importMaps // Reserved for PR-05 type enrichment
-
 	// Cache parsed trees per file to avoid re-parsing the same file
 	// for multiple functions in the same source file.
 	fileCache := make(map[string]*parsedFile)
@@ -124,9 +122,9 @@ func GenerateGoTaintSummaries(
 			callGraph.CFGBlockStatements[funcFQN] = blockStmts
 		}
 
-		// NOTE: Type enrichment is added in PR-05. For now, statements have raw
-		// variable-prefixed AttributeAccess/CallChain (e.g., "r.URL.Path" not
-		// "net/http.Request.URL.Path").
+		// Type enrichment: resolve variable names to type FQNs in
+		// AttributeAccess and CallChain. "r.URL.Path" → "net/http.Request.URL.Path"
+		enrichGoStatements(funcFQN, funcNode, statements, typeEngine, registry, importMaps)
 
 		// Step 2: Build def-use chains.
 		defUseChain := core.BuildDefUseChains(statements)
@@ -154,6 +152,101 @@ func GenerateGoTaintSummaries(
 
 	// Phase 2: Extract package-level variable declarations into synthetic init scopes.
 	extractGoPackageLevelVars(callGraph, fileCache, registry, codeGraph)
+}
+
+// enrichGoStatements resolves variable names in AttributeAccess and CallChain
+// to their type FQNs, enabling type-constrained matching without variable names.
+//
+// "r.URL.Path" → "net/http.Request.URL.Path"  (when r: *http.Request)
+// "db.Query"   → "database/sql.DB.Query"      (when db: *sql.DB).
+func enrichGoStatements(
+	funcFQN string,
+	funcNode *graph.Node,
+	statements []*core.Statement,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMaps map[string]*core.GoImportMap,
+) {
+	_ = registry // Reserved for future stdlib type validation in enrichment
+	paramTypes := buildParamTypeMap(funcNode, importMaps)
+
+	var scope *resolution.GoFunctionScope
+	if typeEngine != nil {
+		scope = typeEngine.GetScope(funcFQN)
+	}
+
+	for _, stmt := range statements {
+		if stmt.AttributeAccess != "" {
+			if resolved := resolveAccessChain(stmt.AttributeAccess, paramTypes, scope); resolved != "" {
+				stmt.AttributeAccess = resolved
+			}
+		}
+
+		if stmt.CallChain != "" && strings.Contains(stmt.CallChain, ".") {
+			if resolved := resolveAccessChain(stmt.CallChain, paramTypes, scope); resolved != "" {
+				stmt.CallChain = resolved
+			}
+		}
+	}
+}
+
+// buildParamTypeMap builds varName → typeFQN from function parameter declarations.
+func buildParamTypeMap(funcNode *graph.Node, importMaps map[string]*core.GoImportMap) map[string]string {
+	paramTypes := make(map[string]string)
+	if funcNode == nil {
+		return paramTypes
+	}
+
+	var importMap *core.GoImportMap
+	if importMaps != nil {
+		importMap = importMaps[funcNode.File]
+	}
+
+	for i, paramName := range funcNode.MethodArgumentsValue {
+		if i >= len(funcNode.MethodArgumentsType) {
+			break
+		}
+		typeStr := funcNode.MethodArgumentsType[i]
+		// Go parser stores types as "name: type" (e.g., "r: *http.Request").
+		// Strip the "name: " prefix to get the bare type.
+		if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+			typeStr = typeStr[colonIdx+2:]
+		}
+		typeStr = strings.TrimPrefix(typeStr, "*")
+		typeStr = strings.TrimPrefix(typeStr, "[]")
+		resolved := resolveGoTypeFQN(typeStr, importMap)
+		if resolved != "" {
+			paramTypes[paramName] = resolved
+		}
+	}
+
+	return paramTypes
+}
+
+// resolveAccessChain resolves "varName.field.path" to "typeFQN.field.path".
+// Returns "" if the variable's type is unknown.
+func resolveAccessChain(chain string, paramTypes map[string]string, scope *resolution.GoFunctionScope) string {
+	dotIdx := strings.Index(chain, ".")
+	if dotIdx < 0 {
+		return ""
+	}
+
+	varName := chain[:dotIdx]
+	rest := chain[dotIdx+1:]
+
+	if typeFQN, ok := paramTypes[varName]; ok {
+		return typeFQN + "." + rest
+	}
+
+	if scope != nil {
+		binding := scope.GetVariable(varName)
+		if binding != nil && binding.Type != nil {
+			typeFQN := strings.TrimPrefix(binding.Type.TypeFQN, "*")
+			return typeFQN + "." + rest
+		}
+	}
+
+	return ""
 }
 
 // extractGoPackageLevelVars scans Go source files for top-level var_declaration nodes

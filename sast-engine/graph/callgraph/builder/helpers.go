@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
 
 // ReadFileBytes reads a file and returns its contents as a byte slice.
@@ -114,4 +115,34 @@ func splitGoTypeFQN(typeFQN string) (importPath, typeName string, ok bool) {
 	}
 
 	return typeFQN[:lastDot], typeFQN[lastDot+1:], true
+}
+
+// resolveGoTypeFQN resolves a short Go type name to a fully qualified import path
+// using the file's import map.
+//
+// Examples (with importMap: "http" → "net/http", "sql" → "database/sql"):
+//
+//	"http.Request"  → "net/http.Request"
+//	"sql.DB"        → "database/sql.DB"
+//	"MyStruct"      → "MyStruct"  (unqualified — returned as-is)
+//	"redis.Client"  → "redis.Client"  (unknown alias — returned as-is)
+func resolveGoTypeFQN(shortType string, importMap *core.GoImportMap) string {
+	if shortType == "" || importMap == nil {
+		return shortType
+	}
+
+	dotIdx := strings.Index(shortType, ".")
+	if dotIdx < 0 {
+		return shortType
+	}
+
+	alias := shortType[:dotIdx]
+	rest := shortType[dotIdx+1:]
+
+	importPath, ok := importMap.Resolve(alias)
+	if !ok {
+		return shortType
+	}
+
+	return importPath + "." + rest
 }
