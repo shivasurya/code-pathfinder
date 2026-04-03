@@ -262,15 +262,13 @@ func ExtractGoStatements(filePath string, sourceCode []byte, functionNode *sitte
 			}
 			continue
 
-		case "go_statement":
-			if stmt := extractGoGoDefer(stmtNode, sourceCode); stmt != nil {
-				stmt.LineNumber = uint32(stmtNode.StartPoint().Row + 1) //nolint:unconvert
-				statements = append(statements, stmt)
-			}
-			continue
-
-		case "defer_statement":
-			if stmt := extractGoGoDefer(stmtNode, sourceCode); stmt != nil {
+		case "go_statement", "defer_statement":
+			// Check if this is `go func() { ... }()` or `defer func() { ... }()`
+			// If so, flatten the closure body into the enclosing function's statements.
+			if closureStmts := extractGoClosureFlattened(stmtNode, sourceCode); len(closureStmts) > 0 {
+				statements = append(statements, closureStmts...)
+			} else if stmt := extractGoGoDefer(stmtNode, sourceCode); stmt != nil {
+				// Not a closure — regular go/defer call (e.g., go handler(x))
 				stmt.LineNumber = uint32(stmtNode.StartPoint().Row + 1) //nolint:unconvert
 				statements = append(statements, stmt)
 			}
@@ -348,7 +346,6 @@ func extractGoShortVarDecl(node *sitter.Node, sourceCode []byte) []*core.Stateme
 	case "unary_expression":
 		// Handle receive: x := <-ch
 		if actualRight.ChildCount() > 0 && actualRight.Child(0).Content(sourceCode) == "<-" {
-			// Channel receive — extract the operand identifier
 			for ci := 0; ci < int(actualRight.NamedChildCount()); ci++ {
 				child := actualRight.NamedChild(ci)
 				if child != nil {
@@ -359,6 +356,10 @@ func extractGoShortVarDecl(node *sitter.Node, sourceCode []byte) []*core.Stateme
 		} else {
 			uses = extractGoIdentifiers(actualRight, sourceCode)
 		}
+	case "type_assertion_expression":
+		// val := x.(string) — taint flows through type assertion
+		// The identifier before the dot is the source variable.
+		uses = extractGoIdentifiers(actualRight, sourceCode)
 	default:
 		uses = extractGoIdentifiers(actualRight, sourceCode)
 	}
@@ -580,6 +581,50 @@ func extractGoCall(callNode *sitter.Node, sourceCode []byte) *core.Statement {
 	}
 
 	return stmt
+}
+
+// extractGoClosureFlattened handles go/defer statements that invoke a func_literal.
+// Flattens the closure body's statements into the enclosing function's statement list.
+//
+// Pattern: go func() { sink(x) }()  OR  defer func() { cleanup(val) }()
+//
+// The func_literal's body statements are extracted as if they were in the enclosing function.
+// This works because captured variables are already defined in the outer scope's VDG.
+// Non-closure go/defer (e.g., go handler(x)) returns nil — caller falls back to extractGoGoDefer.
+func extractGoClosureFlattened(node *sitter.Node, sourceCode []byte) []*core.Statement {
+	if node == nil {
+		return nil
+	}
+
+	// Find the call_expression child of go_statement/defer_statement.
+	var callExpr *sitter.Node
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		if child != nil && child.Type() == "call_expression" {
+			callExpr = child
+			break
+		}
+	}
+	if callExpr == nil {
+		return nil
+	}
+
+	// Check if the call_expression's function is a func_literal.
+	funcNode := callExpr.ChildByFieldName("function")
+	if funcNode == nil || funcNode.Type() != "func_literal" {
+		return nil // not a closure — fall back to extractGoGoDefer
+	}
+
+	// Extract the closure body's block node.
+	bodyNode := funcNode.ChildByFieldName("body")
+	if bodyNode == nil {
+		return nil
+	}
+
+	// Recursively extract statements from the closure body,
+	// as if they were top-level statements in the enclosing function.
+	closureStmts, _ := ExtractGoStatements("", sourceCode, funcNode)
+	return closureStmts
 }
 
 // extractGoReturn handles return statements.
