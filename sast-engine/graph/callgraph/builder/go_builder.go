@@ -165,25 +165,47 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			// Add edge from caller to callee
 			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
 
-			// Populate type inference metadata if resolution used variable type binding
+			// Populate type inference metadata from parameter types or variable bindings.
 			var inferredType string
 			var typeConfidence float32
 			var typeSource string
 			var wasTypeResolved bool
 
-			if typeEngine != nil && callSite.ObjectName != "" {
-				scope := typeEngine.GetScope(callSite.CallerFQN)
-				if scope != nil {
-					binding := scope.GetVariable(callSite.ObjectName)
-					if binding != nil && binding.Type != nil {
-						typeFQN := binding.Type.TypeFQN
-						if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
-							typeFQN = after
+			if callSite.ObjectName != "" {
+				// Source 1: Function parameter types
+				if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+					for pi, paramName := range callerNode.MethodArgumentsValue {
+						if paramName == callSite.ObjectName && pi < len(callerNode.MethodArgumentsType) {
+							typeStr := callerNode.MethodArgumentsType[pi]
+							if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+								typeStr = typeStr[colonIdx+2:]
+							}
+							typeStr = strings.TrimPrefix(typeStr, "*")
+							im := importMaps[callSite.CallerFile]
+							inferredType = resolveGoTypeFQN(typeStr, im)
+							typeConfidence = 0.95
+							typeSource = "go_function_parameter"
+							wasTypeResolved = true
+							break
 						}
-						inferredType = typeFQN
-						typeConfidence = binding.Type.Confidence
-						typeSource = "go_variable_binding"
-						wasTypeResolved = true
+					}
+				}
+
+				// Source 2: Local variable type bindings from GoTypeInferenceEngine
+				if !wasTypeResolved && typeEngine != nil {
+					scope := typeEngine.GetScope(callSite.CallerFQN)
+					if scope != nil {
+						binding := scope.GetVariable(callSite.ObjectName)
+						if binding != nil && binding.Type != nil {
+							typeFQN := binding.Type.TypeFQN
+							if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
+								typeFQN = after
+							}
+							inferredType = typeFQN
+							typeConfidence = binding.Type.Confidence
+							typeSource = "go_variable_binding"
+							wasTypeResolved = true
+						}
 					}
 				}
 			}
@@ -417,44 +439,67 @@ func resolveGoCallTarget(
 
 		// Pattern 1b: Variable-based method resolution (PR-17 + Approach C)
 		// If import resolution failed, try resolving as variable.method()
-		// Example: db.Query(sql) where db is *sql.DB
-		if typeEngine != nil && callGraph != nil && callSite.CallerFQN != "" {
-			scope := typeEngine.GetScope(callSite.CallerFQN)
-			if scope != nil {
-				binding := scope.GetVariable(callSite.ObjectName)
-				if binding != nil && binding.Type != nil {
-					// Build method FQN: "pkg.Type.Method"
-					// Handle pointer types: *User -> User
-					typeFQN := binding.Type.TypeFQN
-					if after, ok0 := strings.CutPrefix(typeFQN, "*"); ok0 {
-						typeFQN = after
+		// Example: db.Query(sql) where db is *sql.DB, r.FormValue() where r is *http.Request
+		if callGraph != nil && callSite.CallerFQN != "" {
+			// Source 1: Function parameter types (MethodArgumentsValue/Type).
+			// GoTypeInferenceEngine does NOT track function parameters — only := and = assignments.
+			// So we check the caller function's parameter list first.
+			var typeFQN string
+			if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+				for i, paramName := range callerNode.MethodArgumentsValue {
+					if paramName == callSite.ObjectName && i < len(callerNode.MethodArgumentsType) {
+						typeStr := callerNode.MethodArgumentsType[i]
+						// Go parser stores types as "name: type" (e.g., "r: *http.Request").
+						if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+							typeStr = typeStr[colonIdx+2:]
+						}
+						typeStr = strings.TrimPrefix(typeStr, "*")
+						// Resolve short type via import map: "http.Request" → "net/http.Request"
+						typeFQN = resolveGoTypeFQN(typeStr, importMap)
+						break
 					}
+				}
+			}
 
-					methodFQN := typeFQN + "." + callSite.FunctionName
-
-					// Check 1: Method exists in user code
-					if callGraph.Functions[methodFQN] != nil {
-						return methodFQN, true, false
+			// Source 2: Local variable types from GoTypeInferenceEngine (from := and = assignments).
+			if typeFQN == "" && typeEngine != nil {
+				scope := typeEngine.GetScope(callSite.CallerFQN)
+				if scope != nil {
+					binding := scope.GetVariable(callSite.ObjectName)
+					if binding != nil && binding.Type != nil {
+						typeFQN = binding.Type.TypeFQN
+						typeFQN = strings.TrimPrefix(typeFQN, "*")
+					} else {
+						fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: scope found but no binding for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.ObjectName)
 					}
+				} else {
+					fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: no scope for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
+				}
+			}
 
-					// Check 2 (Approach C): Validate method via StdlibLoader
-					if registry != nil && registry.StdlibLoader != nil {
-						importPath, typeName, ok := splitGoTypeFQN(typeFQN)
-						if ok && registry.StdlibLoader.ValidateStdlibImport(importPath) {
-							stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
-							if err == nil && stdlibType != nil {
-								if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
-									return methodFQN, true, true // resolved via stdlib
-								}
+			if typeFQN != "" {
+				methodFQN := typeFQN + "." + callSite.FunctionName
+
+				// Check 1: Method exists in user code
+				if callGraph.Functions[methodFQN] != nil {
+					return methodFQN, true, false
+				}
+
+				// Check 2 (Approach C): Validate method via StdlibLoader
+				if registry != nil && registry.StdlibLoader != nil {
+					importPath, typeName, ok := splitGoTypeFQN(typeFQN)
+					if ok && registry.StdlibLoader.ValidateStdlibImport(importPath) {
+						stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
+						if err == nil && stdlibType != nil {
+							if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
+								return methodFQN, true, true // resolved via stdlib
 							}
 						}
 					}
-
-					// Check 3: Third-party / unvalidated — accept with best-effort FQN
-					// The type is known but we can't validate the method exists.
-					// TypeConstrainedCallExecutor uses InferredType for matching.
-					return methodFQN, true, false
 				}
+
+				// Check 3: Third-party / unvalidated — accept with best-effort FQN
+				return methodFQN, true, false
 			}
 		}
 

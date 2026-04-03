@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -74,6 +75,51 @@ func (e *TypeConstrainedCallExecutor) Execute() []DataflowDetection {
 					MatchedCallSite: cs,
 					MatchMethod:     matchMethod,
 				})
+			}
+		}
+	}
+
+	// Also scan Statements for type-enriched CallChain matches.
+	// After PR-05 type enrichment, stmt.CallChain contains type-qualified FQNs
+	// (e.g., "net/http.Request.FormValue") even when the CallSite has no InferredType
+	// (because function parameters are not tracked by GoTypeInferenceEngine).
+	if e.CallGraph.Statements != nil {
+		receiverTypes := e.IR.GetEffectiveReceiverTypes()
+		methodNames := e.IR.GetEffectiveMethodNames()
+
+		// Track already-detected (funcFQN, line) to avoid duplicates with CallSite matches.
+		seen := make(map[string]bool)
+		for _, d := range detections {
+			key := fmt.Sprintf("%s:%d", d.FunctionFQN, d.SourceLine)
+			seen[key] = true
+		}
+
+		for funcFQN, stmts := range e.CallGraph.Statements {
+			for _, stmt := range stmts {
+				if stmt.CallChain == "" {
+					continue
+				}
+				for _, rt := range receiverTypes {
+					for _, method := range methodNames {
+						expected := rt + "." + method
+						if stmt.CallChain == expected {
+							key := fmt.Sprintf("%s:%d", funcFQN, stmt.LineNumber)
+							if seen[key] {
+								continue
+							}
+							seen[key] = true
+							detections = append(detections, DataflowDetection{
+								FunctionFQN: funcFQN,
+								SourceLine:  int(stmt.LineNumber),
+								SinkLine:    int(stmt.LineNumber),
+								SinkCall:    stmt.CallTarget,
+								Confidence:  0.85,
+								Scope:       "local",
+								MatchMethod: "statement_callchain",
+							})
+						}
+					}
+				}
 			}
 		}
 	}

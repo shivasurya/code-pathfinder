@@ -285,3 +285,46 @@ func handler() {
 	}
 	assert.True(t, foundSprintf, "fmt.Sprintf should be resolved")
 }
+
+// TestApproachC_ParameterBasedResolution verifies that method calls on
+// function parameters (r.FormValue, db.Query) resolve via parameter type lookup.
+func TestApproachC_ParameterBasedResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module testapp\n\ngo 1.21\n"), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+import "net/http"
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	query := r.FormValue("q")
+	_ = query
+}
+`), 0644)
+	require.NoError(t, err)
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	goRegistry, err := resolution.BuildGoModuleRegistry(tmpDir)
+	require.NoError(t, err)
+	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	require.NoError(t, err)
+
+	// r.FormValue should resolve via parameter type (r: *http.Request)
+	foundFormValue := false
+	for _, sites := range callGraph.CallSites {
+		for _, cs := range sites {
+			if cs.Target == "FormValue" {
+				foundFormValue = true
+				assert.True(t, cs.Resolved, "FormValue should be resolved via parameter type")
+				assert.Equal(t, "net/http.Request.FormValue", cs.TargetFQN)
+				assert.Equal(t, "net/http.Request", cs.InferredType)
+				assert.Equal(t, "go_function_parameter", cs.TypeSource)
+			}
+		}
+	}
+	assert.True(t, foundFormValue, "Should find FormValue call site")
+}
