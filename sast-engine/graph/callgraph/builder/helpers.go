@@ -56,3 +56,38 @@ func FindFunctionAtLine(root *sitter.Node, lineNumber uint32) *sitter.Node {
 
 	return nil
 }
+
+// findGoNodeByByteRange finds a Go function or method node matching the given byte range.
+// Analogous to FindFunctionAtLine (which searches Python by line number).
+//
+// Go nodes use SourceLocation{StartByte, EndByte} set by setGoSourceLocation
+// in graph/parser_golang.go. This function matches on those byte offsets.
+//
+// Note: Go uses "function_declaration" (not Python's "function_definition")
+// and "method_declaration" for methods with receivers.
+//
+// Parameters:
+//   - root: the root tree-sitter node to search from
+//   - startByte: expected StartByte of the function node
+//   - endByte: expected EndByte of the function node
+//
+// Returns:
+//   - tree-sitter node for the function/method, or nil if not found
+func findGoNodeByByteRange(root *sitter.Node, startByte, endByte uint32) *sitter.Node {
+	if root == nil {
+		return nil
+	}
+
+	if (root.Type() == "function_declaration" || root.Type() == "method_declaration") &&
+		root.StartByte() == startByte && root.EndByte() == endByte {
+		return root
+	}
+
+	for i := 0; i < int(root.ChildCount()); i++ {
+		if result := findGoNodeByByteRange(root.Child(i), startByte, endByte); result != nil {
+			return result
+		}
+	}
+
+	return nil
+}
