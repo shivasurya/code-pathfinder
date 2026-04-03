@@ -258,3 +258,35 @@ func findGoNodeEndByte(root *sitter.Node, nodeType, name string, src []byte) uin
 	}
 	return 0
 }
+
+// ========== splitGoTypeFQN tests ==========
+
+func TestSplitGoTypeFQN(t *testing.T) {
+	tests := []struct {
+		name       string
+		typeFQN    string
+		wantImport string
+		wantType   string
+		wantOK     bool
+	}{
+		{"Standard stdlib type", "database/sql.DB", "database/sql", "DB", true},
+		{"Net/http type", "net/http.Request", "net/http", "Request", true},
+		{"Simple package", "fmt.Stringer", "fmt", "Stringer", true},
+		{"os package", "os.File", "os", "File", true},
+		{"Third-party deep path", "github.com/lib/pq.Connector", "github.com/lib/pq", "Connector", true},
+		{"No dot — bare type", "error", "", "", false},
+		{"Empty string", "", "", "", false},
+		{"Trailing dot", "pkg.", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			importPath, typeName, ok := splitGoTypeFQN(tt.typeFQN)
+			assert.Equal(t, tt.wantOK, ok)
+			if ok {
+				assert.Equal(t, tt.wantImport, importPath)
+				assert.Equal(t, tt.wantType, typeName)
+			}
+		})
+	}
+}
