@@ -255,6 +255,10 @@ Examples:
 			} else {
 				// Initialize Go stdlib loader and type inference engine
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
+
+				// Initialize Go third-party type loader (vendor/ + GOMODCACHE)
+				builder.InitGoThirdPartyLoader(goRegistry, projectPath, logger)
+
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
 				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)

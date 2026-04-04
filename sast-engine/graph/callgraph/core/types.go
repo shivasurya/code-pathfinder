@@ -381,6 +381,10 @@ type GoModuleRegistry struct {
 	// It is initialized lazily from the CDN registry during call graph construction.
 	// Nil when stdlib registry loading is disabled or unavailable.
 	StdlibLoader GoStdlibLoader
+
+	// ThirdPartyLoader provides type metadata for Go third-party libraries.
+	// Parses from vendor/ or GOMODCACHE. Nil when unavailable.
+	ThirdPartyLoader GoThirdPartyLoader
 }
 
 // NewGoModuleRegistry creates an initialized GoModuleRegistry.
@@ -527,6 +531,23 @@ type GoStdlibLoader interface {
 	GetType(importPath, typeName string) (*GoStdlibType, error)
 
 	// PackageCount returns the total number of stdlib packages available in the registry.
+	PackageCount() int
+}
+
+// GoThirdPartyLoader provides access to Go third-party library type metadata.
+// Mirrors GoStdlibLoader and reuses the same GoStdlibType/GoStdlibFunction structs.
+// Implemented by registry.GoThirdPartyLocalLoader.
+type GoThirdPartyLoader interface {
+	// ValidateImport reports whether the given import path is a known third-party package.
+	ValidateImport(importPath string) bool
+
+	// GetFunction returns the metadata for a named function in the given third-party package.
+	GetFunction(importPath, funcName string) (*GoStdlibFunction, error)
+
+	// GetType returns the metadata for a named type in the given third-party package.
+	GetType(importPath, typeName string) (*GoStdlibType, error)
+
+	// PackageCount returns the total number of third-party packages available.
 	PackageCount() int
 }
 

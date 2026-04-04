@@ -534,6 +534,10 @@ func inferTypeFromFunctionCall(
 		if ti := inferTypeFromStdlibFunction(importPath, fnName, registry); ti != nil {
 			return ti
 		}
+		// Fallback: attempt third-party lookup for non-stdlib cross-package calls.
+		if ti := inferTypeFromThirdPartyFunction(importPath, fnName, registry); ti != nil {
+			return ti
+		}
 	}
 
 	// Function not found or has no return type
@@ -615,6 +619,36 @@ func normalizeStdlibReturnType(rawType, importPath string) string {
 	}
 	// Unqualified type name — belongs to the function's own package.
 	return importPath + "." + t
+}
+
+// inferTypeFromThirdPartyFunction looks up the primary return type of a Go
+// third-party function using the ThirdPartyLoader attached to the registry.
+func inferTypeFromThirdPartyFunction(importPath, funcName string, registry *core.GoModuleRegistry) *core.TypeInfo {
+	if registry.ThirdPartyLoader == nil {
+		return nil
+	}
+	if !registry.ThirdPartyLoader.ValidateImport(importPath) {
+		return nil
+	}
+	fn, err := registry.ThirdPartyLoader.GetFunction(importPath, funcName)
+	if err != nil || fn == nil || len(fn.Returns) == 0 {
+		return nil
+	}
+	for _, ret := range fn.Returns {
+		if ret.Type == "" || ret.Type == "error" {
+			continue
+		}
+		typeFQN := normalizeStdlibReturnType(ret.Type, importPath)
+		if typeFQN == "" {
+			continue
+		}
+		return &core.TypeInfo{
+			TypeFQN:    typeFQN,
+			Confidence: 0.85,
+			Source:     "thirdparty_local",
+		}
+	}
+	return nil
 }
 
 // extractGoFunctionName extracts the function name from a function node.

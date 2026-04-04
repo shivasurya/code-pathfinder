@@ -119,3 +119,24 @@ func initGoStdlibLoaderWithBase(reg *core.GoModuleRegistry, projectPath string, 
 	logger.Progress("Loaded Go %s stdlib manifest (%d packages)", version, remote.PackageCount())
 	reg.StdlibLoader = remote
 }
+
+// InitGoThirdPartyLoader initializes the third-party type loader for Go dependencies.
+// Parses go.mod require directives and lazily loads type metadata from vendor/ or GOMODCACHE.
+func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, logger *output.Logger) {
+	if reg == nil {
+		return
+	}
+
+	loader := registry.NewGoThirdPartyLocalLoader(projectPath, logger)
+	if loader.PackageCount() == 0 {
+		if logger != nil {
+			logger.Debug("No Go third-party dependencies found in go.mod")
+		}
+		return
+	}
+
+	reg.ThirdPartyLoader = loader
+	if logger != nil {
+		logger.Progress("Go third-party loader ready (%d dependencies from go.mod)", loader.PackageCount())
+	}
+}
