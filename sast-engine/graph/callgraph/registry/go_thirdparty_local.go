@@ -232,6 +232,7 @@ func parseGoModRequires(projectRoot string) map[string]string {
 
 // extractGoPackageWithTreeSitter parses .go files in a directory using tree-sitter
 // and extracts exported types, methods, and functions into a GoStdlibPackage.
+// After extraction, flattens embedded interface methods into parent interfaces.
 func extractGoPackageWithTreeSitter(importPath, srcDir string) (*core.GoStdlibPackage, error) {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -265,7 +266,150 @@ func extractGoPackageWithTreeSitter(importPath, srcDir string) (*core.GoStdlibPa
 		tree.Close()
 	}
 
+	// Post-processing: flatten embedded interface/struct methods into parent types.
+	// e.g., if Client embeds EnqueueClient, copy EnqueueClient's methods into Client.
+	flattenEmbeddedMethods(pkg)
+
+	// Resolve cross-package embeds (e.g., io.Closer) using well-known stdlib interfaces.
+	resolveWellKnownEmbeds(pkg)
+
 	return pkg, nil
+}
+
+// resolveWellKnownEmbeds resolves cross-package embedded interfaces using a hardcoded
+// table of well-known stdlib interfaces (io.Closer, io.Reader, etc.).
+func resolveWellKnownEmbeds(pkg *core.GoStdlibPackage) {
+	for _, typ := range pkg.Types {
+		for _, embeddedName := range typ.Embeds {
+			if !strings.Contains(embeddedName, ".") {
+				continue // same-package — already handled
+			}
+			dotIdx := strings.LastIndex(embeddedName, ".")
+			pkgAlias := embeddedName[:dotIdx]
+			typeName := embeddedName[dotIdx+1:]
+
+			if methods := getWellKnownInterfaceMethods(pkgAlias, typeName); methods != nil {
+				for methodName, method := range methods {
+					if _, exists := typ.Methods[methodName]; !exists {
+						typ.Methods[methodName] = method
+					}
+				}
+			}
+		}
+	}
+}
+
+// flattenEmbeddedMethods resolves embedded type references and copies their methods
+// into the parent type. Handles same-package embeds (e.g., EnqueueClient) by looking
+// up in pkg.Types. Cross-package embeds (e.g., io.Closer) are deferred to the loader.
+func flattenEmbeddedMethods(pkg *core.GoStdlibPackage) {
+	for _, typ := range pkg.Types {
+		if len(typ.Embeds) == 0 {
+			continue
+		}
+
+		for _, embeddedName := range typ.Embeds {
+			// Same-package embed: look up directly in pkg.Types
+			// e.g., "EnqueueClient" in posthog package
+			bareEmbed := strings.TrimPrefix(embeddedName, "*")
+			if embeddedType, ok := pkg.Types[bareEmbed]; ok {
+				for methodName, method := range embeddedType.Methods {
+					if _, exists := typ.Methods[methodName]; !exists {
+						typ.Methods[methodName] = method
+					}
+				}
+				// Recursively flatten (for multi-level embedding)
+				if len(embeddedType.Embeds) > 0 {
+					for _, deepEmbed := range embeddedType.Embeds {
+						deepBare := strings.TrimPrefix(deepEmbed, "*")
+						if deepType, ok2 := pkg.Types[deepBare]; ok2 {
+							for methodName, method := range deepType.Methods {
+								if _, exists := typ.Methods[methodName]; !exists {
+									typ.Methods[methodName] = method
+								}
+							}
+						}
+					}
+				}
+			}
+			// Cross-package embeds (e.g., "io.Closer") handled in resolveEmbeddedFromExternal
+		}
+	}
+}
+
+// resolveEmbeddedFromExternal resolves cross-package embedded interfaces using
+// stdlib and third-party loaders. Called by getOrLoadPackage after initial extraction.
+func (l *GoThirdPartyLocalLoader) resolveEmbeddedFromExternal(pkg *core.GoStdlibPackage, registry interface{}) {
+	// Registry is core.GoModuleRegistry but we accept any to avoid import cycles.
+	// This is best-effort — if we can't resolve an embed, we skip it.
+	type registryWithLoaders interface {
+		getStdlibLoader() core.GoStdlibLoader
+	}
+
+	for _, typ := range pkg.Types {
+		for _, embeddedName := range typ.Embeds {
+			// Only handle cross-package embeds (contain a dot)
+			if !strings.Contains(embeddedName, ".") {
+				continue // same-package — already handled by flattenEmbeddedMethods
+			}
+
+			// Split "io.Closer" → ("io", "Closer")
+			dotIdx := strings.LastIndex(embeddedName, ".")
+			pkgAlias := embeddedName[:dotIdx]
+			typeName := embeddedName[dotIdx+1:]
+
+			// Try stdlib — common case: io.Closer, io.Reader, fmt.Stringer
+			// We check the well-known stdlib interfaces directly
+			if methods := getWellKnownInterfaceMethods(pkgAlias, typeName); methods != nil {
+				for methodName, method := range methods {
+					if _, exists := typ.Methods[methodName]; !exists {
+						typ.Methods[methodName] = method
+					}
+				}
+			}
+		}
+	}
+}
+
+// getWellKnownInterfaceMethods returns methods for commonly embedded stdlib interfaces.
+// This is a hardcoded fallback for when we don't have access to the StdlibLoader
+// (avoiding import cycle). Covers the most security-relevant embedded interfaces.
+func getWellKnownInterfaceMethods(pkg, typeName string) map[string]*core.GoStdlibFunction {
+	key := pkg + "." + typeName
+
+	wellKnown := map[string]map[string]*core.GoStdlibFunction{
+		"io.Closer": {
+			"Close": {Name: "Close", Returns: []*core.GoReturnValue{{Type: "error"}}, Confidence: 1.0},
+		},
+		"io.Reader": {
+			"Read": {Name: "Read", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}},
+				Returns: []*core.GoReturnValue{{Name: "n", Type: "int"}, {Name: "err", Type: "error"}}, Confidence: 1.0},
+		},
+		"io.Writer": {
+			"Write": {Name: "Write", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}},
+				Returns: []*core.GoReturnValue{{Name: "n", Type: "int"}, {Name: "err", Type: "error"}}, Confidence: 1.0},
+		},
+		"io.ReadCloser": {
+			"Read":  {Name: "Read", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}}, Returns: []*core.GoReturnValue{{Type: "int"}, {Type: "error"}}, Confidence: 1.0},
+			"Close": {Name: "Close", Returns: []*core.GoReturnValue{{Type: "error"}}, Confidence: 1.0},
+		},
+		"io.WriteCloser": {
+			"Write": {Name: "Write", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}}, Returns: []*core.GoReturnValue{{Type: "int"}, {Type: "error"}}, Confidence: 1.0},
+			"Close": {Name: "Close", Returns: []*core.GoReturnValue{{Type: "error"}}, Confidence: 1.0},
+		},
+		"io.ReadWriter": {
+			"Read":  {Name: "Read", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}}, Returns: []*core.GoReturnValue{{Type: "int"}, {Type: "error"}}, Confidence: 1.0},
+			"Write": {Name: "Write", Params: []*core.GoFunctionParam{{Name: "p", Type: "[]byte"}}, Returns: []*core.GoReturnValue{{Type: "int"}, {Type: "error"}}, Confidence: 1.0},
+		},
+		"fmt.Stringer": {
+			"String": {Name: "String", Returns: []*core.GoReturnValue{{Type: "string"}}, Confidence: 1.0},
+		},
+		"error": {
+			"Error": {Name: "Error", Returns: []*core.GoReturnValue{{Type: "string"}}, Confidence: 1.0},
+		},
+	}
+
+	return wellKnown[key]
 }
 
 // extractFromTree walks a Go AST and extracts exported declarations.
@@ -471,39 +615,69 @@ func extractStructFields(node *sitter.Node, src []byte) []*core.GoStructField {
 	return fields
 }
 
-// extractInterfaceMethods extracts method signatures from an interface_type node.
+// extractInterfaceMethods extracts method signatures and embedded interface names
+// from an interface_type node. Embedded interfaces (e.g., io.Closer, EnqueueClient)
+// are recorded in typ.Embeds for post-extraction flattening.
 func extractInterfaceMethods(node *sitter.Node, src []byte, typ *core.GoStdlibType) {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		// Look for method_spec nodes inside the interface body
-		if child.Type() == "method_spec" || child.Type() == "method_elem" {
-			nameNode := child.ChildByFieldName("name")
-			if nameNode == nil {
-				continue
-			}
-			name := nameNode.Content(src)
-			if !isExported(name) {
-				continue
+
+		switch child.Type() {
+		case "method_spec", "method_elem":
+			// Direct method declaration: IsFeatureEnabled(payload string) (interface{}, error)
+			extractInterfaceMethodElem(child, src, typ)
+
+		case "type_elem":
+			// Embedded type reference, wrapped in type_elem node.
+			// Contains either type_identifier (same-package) or qualified_type (cross-package).
+			for j := 0; j < int(child.ChildCount()); j++ {
+				inner := child.Child(j)
+				switch inner.Type() {
+				case "type_identifier":
+					typ.Embeds = append(typ.Embeds, inner.Content(src))
+				case "qualified_type":
+					typ.Embeds = append(typ.Embeds, inner.Content(src))
+				}
 			}
 
-			fn := &core.GoStdlibFunction{
-				Name:       name,
-				Confidence: 1.0,
-			}
+		case "type_identifier":
+			// Embedded same-package interface (direct child, some grammars)
+			typ.Embeds = append(typ.Embeds, child.Content(src))
 
-			paramsNode := child.ChildByFieldName("parameters")
-			if paramsNode != nil {
-				fn.Params = extractParams(paramsNode, src)
-			}
-
-			resultNode := child.ChildByFieldName("result")
-			if resultNode != nil {
-				fn.Returns = extractReturns(resultNode, src)
-			}
-
-			typ.Methods[name] = fn
+		case "qualified_type":
+			// Embedded cross-package interface (direct child, some grammars)
+			typ.Embeds = append(typ.Embeds, child.Content(src))
 		}
 	}
+}
+
+// extractInterfaceMethodElem extracts a single method from a method_elem or method_spec node.
+func extractInterfaceMethodElem(child *sitter.Node, src []byte, typ *core.GoStdlibType) {
+	nameNode := child.ChildByFieldName("name")
+	if nameNode == nil {
+		return
+	}
+	name := nameNode.Content(src)
+	if !isExported(name) {
+		return
+	}
+
+	fn := &core.GoStdlibFunction{
+		Name:       name,
+		Confidence: 1.0,
+	}
+
+	paramsNode := child.ChildByFieldName("parameters")
+	if paramsNode != nil {
+		fn.Params = extractParams(paramsNode, src)
+	}
+
+	resultNode := child.ChildByFieldName("result")
+	if resultNode != nil {
+		fn.Returns = extractReturns(resultNode, src)
+	}
+
+	typ.Methods[name] = fn
 }
 
 // extractParams extracts function parameters from a parameter_list node.

@@ -310,6 +310,97 @@ func Default() *Engine { return nil }
 	assert.Equal(t, "*Engine", defaultFn.Returns[0].Type)
 }
 
+// TestInterfaceEmbedding_SamePackage tests that embedded interface methods are flattened.
+// This is the posthog.Client pattern: Client embeds EnqueueClient and io.Closer.
+func TestInterfaceEmbedding_SamePackage(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Simulate posthog package with interface embedding
+	src := `package posthog
+
+type Client interface {
+	io.Closer
+	EnqueueClient
+
+	IsFeatureEnabled(payload FeatureFlagPayload) (interface{}, error)
+	GetFeatureFlag(payload FeatureFlagPayload) (interface{}, error)
+}
+
+type EnqueueClient interface {
+	Enqueue(msg Message) error
+}
+
+type Message interface{}
+type FeatureFlagPayload struct{}
+type Capture struct {
+	DistinctId string
+	Event      string
+}
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "posthog.go"), []byte(src), 0644)
+	require.NoError(t, err)
+
+	pkg, err := extractGoPackageWithTreeSitter("github.com/posthog/posthog-go", tmpDir)
+	require.NoError(t, err)
+	require.NotNil(t, pkg)
+
+	// Client interface should exist
+	clientType, ok := pkg.Types["Client"]
+	require.True(t, ok, "Client type should exist")
+	assert.Equal(t, "interface", clientType.Kind)
+
+	// Direct methods
+	assert.Contains(t, clientType.Methods, "IsFeatureEnabled", "Direct method should be extracted")
+	assert.Contains(t, clientType.Methods, "GetFeatureFlag", "Direct method should be extracted")
+
+	// Flattened from EnqueueClient (same-package embed)
+	assert.Contains(t, clientType.Methods, "Enqueue",
+		"Enqueue should be flattened from embedded EnqueueClient interface")
+
+	// Flattened from io.Closer (cross-package embed, well-known)
+	assert.Contains(t, clientType.Methods, "Close",
+		"Close should be flattened from embedded io.Closer interface")
+
+	// Verify Embeds field captured the embedding info
+	assert.Contains(t, clientType.Embeds, "EnqueueClient")
+	assert.Contains(t, clientType.Embeds, "io.Closer")
+}
+
+// TestInterfaceEmbedding_MultiLevel tests multi-level embedding:
+// A embeds B, B embeds C → A should have C's methods.
+func TestInterfaceEmbedding_MultiLevel(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package pkg
+
+type Level1 interface {
+	Level2
+	L1Method() string
+}
+
+type Level2 interface {
+	Level3
+	L2Method() int
+}
+
+type Level3 interface {
+	L3Method() error
+}
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "levels.go"), []byte(src), 0644)
+	require.NoError(t, err)
+
+	pkg, err := extractGoPackageWithTreeSitter("example.com/pkg", tmpDir)
+	require.NoError(t, err)
+
+	l1 := pkg.Types["Level1"]
+	require.NotNil(t, l1)
+
+	assert.Contains(t, l1.Methods, "L1Method", "Own method")
+	assert.Contains(t, l1.Methods, "L2Method", "Flattened from Level2")
+	assert.Contains(t, l1.Methods, "L3Method", "Flattened from Level3 (multi-level)")
+}
+
 // TestHasGoFiles tests the hasGoFiles helper.
 func TestHasGoFiles(t *testing.T) {
 	tmpDir := t.TempDir()
