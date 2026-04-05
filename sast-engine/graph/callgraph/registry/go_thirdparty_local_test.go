@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -724,4 +726,134 @@ func TestInitDiskCache_NoGoMod(t *testing.T) {
 	emptyDir := t.TempDir()
 	loader := NewGoThirdPartyLocalLoader(emptyDir, false, nil)
 	assert.Equal(t, 0, loader.PackageCount())
+}
+
+// TestModuleKeyFor_NoMatch verifies moduleKeyFor returns the importPath itself
+// when no module prefix matches — the fallback branch.
+func TestModuleKeyFor_NoMatch(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+
+	// "unknown.io/pkg" is not in go.mod → should return the importPath unchanged.
+	key := loader.moduleKeyFor("unknown.io/pkg")
+	assert.Equal(t, "unknown.io/pkg", key)
+}
+
+// TestLoadFromDiskCache_MissingFile verifies that loadFromDiskCache returns nil
+// when cache-index.json references a file that no longer exists on disk.
+func TestLoadFromDiskCache_MissingFile(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+
+	// Populate index with an entry pointing at a non-existent file.
+	loader.diskIndex = &cacheIndex{
+		Version: cacheIndexVersion,
+		Entries: map[string]*cacheIndexEntry{
+			"gorm.io/gorm": {Version: "v1.25.7", File: "nonexistent_file.json"},
+		},
+	}
+	result := loader.loadFromDiskCache("gorm.io/gorm")
+	assert.Nil(t, result)
+}
+
+// TestLoadFromDiskCache_WithLogger verifies the debug-log branch executes when
+// a logger is attached and the cache hits successfully.
+func TestLoadFromDiskCache_WithLogger(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	logger := output.NewLogger(output.VerbosityDefault)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+
+	// Cold run to populate the disk cache.
+	_, err := loader.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+
+	// Warm run: build a new loader sharing the same cacheDir to hit the debug log branch.
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	result := loader2.loadFromDiskCache("gorm.io/gorm")
+	assert.NotNil(t, result)
+}
+
+// TestSaveCacheIndex_EmptyCacheDir verifies saveCacheIndex is a no-op when cacheDir is empty.
+func TestSaveCacheIndex_EmptyCacheDir(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader.cacheDir = "" // simulate unavailable cache dir
+
+	// Should not panic.
+	loader.saveCacheIndex()
+}
+
+// TestWriteToDiskCache_WriteFailure verifies that writeToDiskCache logs and
+// continues gracefully when the output file cannot be written.
+func TestWriteToDiskCache_WriteFailure(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	logger := output.NewLogger(output.VerbosityDefault)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+
+	// Point cacheDir at a regular file so os.WriteFile fails with ENOTDIR/EISDIR.
+	fakeFile := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(fakeFile, []byte("x"), 0644))
+	loader.cacheDir = fakeFile
+
+	// Should not panic; WriteFile will fail but error is swallowed.
+	loader.writeToDiskCache("gorm.io/gorm", &core.GoStdlibPackage{ImportPath: "gorm.io/gorm"})
+}
+
+// TestInitDiskCache_MkdirAllFailure verifies initDiskCache handles the case
+// where the cache directory cannot be created.
+func TestInitDiskCache_MkdirAllFailure(t *testing.T) {
+	// Put a regular file at the path we'll try to mkdir — this forces MkdirAll to fail.
+	parent := t.TempDir()
+	blockingFile := filepath.Join(parent, "blocked")
+	require.NoError(t, os.WriteFile(blockingFile, []byte("x"), 0644))
+
+	projectDir := makeVendoredProject(t)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	// Override cacheDir to a path underneath a file (impossible to mkdir).
+	loader.cacheDir = filepath.Join(blockingFile, "subdir")
+	loader.diskIndex = nil
+
+	// initDiskCache must not panic; diskIndex stays nil on failure.
+	loader.initDiskCache(false)
+	assert.Nil(t, loader.diskIndex)
+}
+
+// TestInitDiskCache_RefreshWithLogger verifies the refreshCache=true path
+// with a logger attached (covers the RemoveAll + logger.Debug branch).
+func TestInitDiskCache_RefreshWithLogger(t *testing.T) {
+	projectDir := makeVendoredProject(t)
+	logger := output.NewLogger(output.VerbosityDefault)
+
+	// First pass: populate cache.
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	_, err := loader1.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+
+	// Second pass with refreshCache=true should flush and still work.
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, logger)
+	typ, err := loader2.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	assert.NotNil(t, typ)
+}
+
+// TestExtractMethodDecl_UnexportedMethod verifies that unexported methods are skipped.
+func TestExtractMethodDecl_UnexportedMethod(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := `package mypkg
+
+type Svc struct{}
+
+func (s *Svc) ExportedMethod() string { return "" }
+func (s *Svc) unexportedMethod() string { return "" }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "svc.go"), []byte(src), 0644))
+
+	pkg, err := extractGoPackageWithTreeSitter("example.com/mypkg", tmpDir)
+	require.NoError(t, err)
+	require.NotNil(t, pkg)
+
+	svc := pkg.Types["Svc"]
+	require.NotNil(t, svc)
+	assert.Contains(t, svc.Methods, "ExportedMethod")
+	assert.NotContains(t, svc.Methods, "unexportedMethod")
 }
