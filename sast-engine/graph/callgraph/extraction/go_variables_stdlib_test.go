@@ -329,3 +329,94 @@ func Greet(name string) {
 	require.NotEmpty(t, bindings)
 	assert.Equal(t, "builtin.string", bindings[0].Type.TypeFQN)
 }
+
+// -----------------------------------------------------------------------------
+// inferTypeFromThirdPartyFunction
+// -----------------------------------------------------------------------------
+
+// mockThirdPartyLoader implements core.GoThirdPartyLoader for testing.
+type mockThirdPartyLoader struct {
+	knownPkgs map[string]bool
+	functions map[string]*core.GoStdlibFunction // key: "importPath.funcName"
+}
+
+func (m *mockThirdPartyLoader) ValidateImport(importPath string) bool {
+	return m.knownPkgs[importPath]
+}
+
+func (m *mockThirdPartyLoader) GetFunction(importPath, funcName string) (*core.GoStdlibFunction, error) {
+	key := importPath + "." + funcName
+	fn, ok := m.functions[key]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return fn, nil
+}
+
+func (m *mockThirdPartyLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockThirdPartyLoader) PackageCount() int { return len(m.knownPkgs) }
+
+func TestInferTypeFromThirdPartyFunction_NilLoader(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	// ThirdPartyLoader is nil → returns nil without panic.
+	result := inferTypeFromThirdPartyFunction("gorm.io/gorm", "Open", reg)
+	assert.Nil(t, result)
+}
+
+func TestInferTypeFromThirdPartyFunction_UnknownPackage(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ThirdPartyLoader = &mockThirdPartyLoader{knownPkgs: map[string]bool{}}
+	result := inferTypeFromThirdPartyFunction("gorm.io/gorm", "Open", reg)
+	assert.Nil(t, result)
+}
+
+func TestInferTypeFromThirdPartyFunction_FuncNotFound(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+	reg.ThirdPartyLoader = &mockThirdPartyLoader{
+		knownPkgs: map[string]bool{"gorm.io/gorm": true},
+		functions: map[string]*core.GoStdlibFunction{},
+	}
+	result := inferTypeFromThirdPartyFunction("gorm.io/gorm", "Open", reg)
+	assert.Nil(t, result)
+}
+
+func TestInferTypeFromThirdPartyFunction_ErrorOnly(t *testing.T) {
+	// Function exists but its only return type is "error" → returns nil.
+	reg := core.NewGoModuleRegistry()
+	reg.ThirdPartyLoader = &mockThirdPartyLoader{
+		knownPkgs: map[string]bool{"gorm.io/gorm": true},
+		functions: map[string]*core.GoStdlibFunction{
+			"gorm.io/gorm.Close": {
+				Name:    "Close",
+				Returns: []*core.GoReturnValue{{Type: "error"}},
+			},
+		},
+	}
+	result := inferTypeFromThirdPartyFunction("gorm.io/gorm", "Close", reg)
+	assert.Nil(t, result)
+}
+
+func TestInferTypeFromThirdPartyFunction_Success(t *testing.T) {
+	// Open(dialector) (*DB, error) → first non-error return is *DB.
+	reg := core.NewGoModuleRegistry()
+	reg.ThirdPartyLoader = &mockThirdPartyLoader{
+		knownPkgs: map[string]bool{"gorm.io/gorm": true},
+		functions: map[string]*core.GoStdlibFunction{
+			"gorm.io/gorm.Open": {
+				Name: "Open",
+				Returns: []*core.GoReturnValue{
+					{Type: "*DB"},
+					{Type: "error"},
+				},
+			},
+		},
+	}
+	result := inferTypeFromThirdPartyFunction("gorm.io/gorm", "Open", reg)
+	require.NotNil(t, result)
+	assert.Equal(t, "gorm.io/gorm.DB", result.TypeFQN)
+	assert.InDelta(t, 0.85, result.Confidence, 0.001)
+	assert.Equal(t, "thirdparty_local", result.Source)
+}

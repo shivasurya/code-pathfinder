@@ -290,3 +290,58 @@ func TestInitGoStdlibLoader_PublicAPI_CallsInner(t *testing.T) {
 
 	require.NotNil(t, reg.StdlibLoader)
 }
+
+// -----------------------------------------------------------------------------
+// InitGoThirdPartyLoader
+// -----------------------------------------------------------------------------
+
+func TestInitGoThirdPartyLoader_NilReg(t *testing.T) {
+	// Must not panic when reg is nil.
+	InitGoThirdPartyLoader(nil, t.TempDir(), false, nil)
+}
+
+func TestInitGoThirdPartyLoader_NoDependencies(t *testing.T) {
+	// go.mod with no require directives → PackageCount == 0 → ThirdPartyLoader stays nil.
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod", "module github.com/example/app\n\ngo 1.21\n")
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	assert.Nil(t, reg.ThirdPartyLoader)
+}
+
+func TestInitGoThirdPartyLoader_WithDependencies(t *testing.T) {
+	// go.mod with one require + vendored source → ThirdPartyLoader is set.
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	assert.NotNil(t, reg.ThirdPartyLoader)
+}
+
+func TestInitGoThirdPartyLoader_RefreshCache(t *testing.T) {
+	// refreshCache=true should not panic and should still set the loader.
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	reg := core.NewGoModuleRegistry()
+	InitGoThirdPartyLoader(reg, tmpDir, true, nil)
+	assert.NotNil(t, reg.ThirdPartyLoader)
+}

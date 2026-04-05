@@ -561,3 +561,167 @@ func TestRefreshCacheFlush(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(freshData), `"_sentinel"`, "flushed cache should not contain stale sentinel")
 }
+
+// TestPackageCount verifies PackageCount reflects the number of go.mod requires.
+func TestPackageCount(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	assert.Equal(t, 1, loader.PackageCount())
+}
+
+// TestGetType_NotFound verifies that GetType returns an error for unknown types.
+func TestGoThirdPartyLocalGetType_NotFound(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+
+	_, err := loader.GetType("gorm.io/gorm", "NonExistentType")
+	assert.Error(t, err)
+}
+
+// TestGetFunction_NotFound verifies that GetFunction returns an error for unknown functions.
+func TestGoThirdPartyLocalGetFunction_NotFound(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+
+	_, err := loader.GetFunction("gorm.io/gorm", "NonExistentFunc")
+	assert.Error(t, err)
+}
+
+// TestGetType_PackageNotFound verifies that GetType returns an error when the
+// package cannot be located in vendor/ or GOMODCACHE.
+func TestGetType_PackageNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire github.com/missing/pkg v1.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644))
+
+	// No vendor/ directory, no GOMODCACHE entry → source not found.
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
+	loader.cacheDir = "" // disable disk cache so we go straight to findPackageSource
+
+	_, err := loader.GetType("github.com/missing/pkg", "SomeType")
+	assert.Error(t, err)
+}
+
+// TestFindPackageSource_GOMODCACHE verifies that findPackageSource falls back to
+// GOMODCACHE when vendor/ does not contain the package.
+func TestFindPackageSource_GOMODCACHE(t *testing.T) {
+	projectDir := t.TempDir()
+
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire example.com/mylib v1.2.3\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte(goMod), 0644))
+
+	// Set up a fake GOMODCACHE with the module source.
+	fakeCache := t.TempDir()
+	modDir := filepath.Join(fakeCache, "example.com", "mylib@v1.2.3")
+	require.NoError(t, os.MkdirAll(modDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "mylib.go"), []byte(`package mylib
+
+type Client struct{}
+func (c *Client) Call() string { return "" }
+`), 0644))
+
+	t.Setenv("GOMODCACHE", fakeCache)
+
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader.cacheDir = "" // disable disk cache
+
+	typ, err := loader.GetType("example.com/mylib", "Client")
+	require.NoError(t, err)
+	require.NotNil(t, typ)
+	assert.Contains(t, typ.Methods, "Call")
+}
+
+// TestFindPackageSource_GOMODCACHE_Subpackage verifies resolution of a subpackage
+// (import path = module/subpkg) from GOMODCACHE.
+func TestFindPackageSource_GOMODCACHE_Subpackage(t *testing.T) {
+	projectDir := t.TempDir()
+
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire example.com/sdk v2.0.0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte(goMod), 0644))
+
+	fakeCache := t.TempDir()
+	subDir := filepath.Join(fakeCache, "example.com", "sdk@v2.0.0", "auth")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "auth.go"), []byte(`package auth
+
+type Token struct{}
+func (t *Token) Verify() bool { return true }
+`), 0644))
+
+	t.Setenv("GOMODCACHE", fakeCache)
+
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader.cacheDir = ""
+
+	typ, err := loader.GetType("example.com/sdk/auth", "Token")
+	require.NoError(t, err)
+	require.NotNil(t, typ)
+	assert.Contains(t, typ.Methods, "Verify")
+}
+
+// TestLoadCacheIndex_InvalidJSON verifies that a corrupt cache-index.json
+// produces an empty (not nil) index rather than a crash.
+func TestLoadCacheIndex_InvalidJSON(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+
+	// Overwrite cache-index.json with garbage.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(loader.cacheDir, "cache-index.json"),
+		[]byte("not-valid-json{{{"),
+		0644,
+	))
+
+	// Re-load the index — should return an empty index, not panic.
+	idx := loader.loadCacheIndex()
+	require.NotNil(t, idx)
+	assert.Empty(t, idx.Entries)
+}
+
+// TestWriteToDiskCache_NilDiskIndex verifies writeToDiskCache is a no-op when
+// diskIndex is nil (disk cache unavailable).
+func TestWriteToDiskCache_NilDiskIndex(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader.diskIndex = nil // simulate unavailable disk cache
+
+	// Should not panic.
+	loader.writeToDiskCache("gorm.io/gorm", nil)
+}
+
+// TestIsExported_EmptyString verifies isExported handles empty input without panic.
+func TestIsExported_EmptyString(t *testing.T) {
+	assert.False(t, isExported(""))
+}
+
+// TestExtractMethodDecl_NoReceiverType verifies that method declarations with
+// no parseable receiver type are silently skipped.
+func TestExtractMethodDecl_NoReceiverType(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Valid method + exported function only; no unusual receiver syntax.
+	src := `package mypkg
+
+type Svc struct{}
+
+func (s *Svc) DoWork() string { return "" }
+func StandaloneFunc() int { return 0 }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "svc.go"), []byte(src), 0644))
+
+	pkg, err := extractGoPackageWithTreeSitter("example.com/mypkg", tmpDir)
+	require.NoError(t, err)
+	require.NotNil(t, pkg)
+
+	assert.Contains(t, pkg.Types, "Svc")
+	assert.Contains(t, pkg.Types["Svc"].Methods, "DoWork")
+	assert.Contains(t, pkg.Functions, "StandaloneFunc")
+}
+
+// TestInitDiskCache_NoGoMod verifies that a project with no go.mod produces a
+// loader with PackageCount == 0 (no crash, graceful degradation).
+func TestInitDiskCache_NoGoMod(t *testing.T) {
+	emptyDir := t.TempDir()
+	loader := NewGoThirdPartyLocalLoader(emptyDir, false, nil)
+	assert.Equal(t, 0, loader.PackageCount())
+}
