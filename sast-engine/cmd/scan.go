@@ -256,8 +256,9 @@ Examples:
 				// Initialize Go stdlib loader and type inference engine
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 
-				// Initialize Go third-party type loader (vendor/ + GOMODCACHE)
-				builder.InitGoThirdPartyLoader(goRegistry, projectPath, logger)
+				// Initialize Go third-party type loader (vendor/ + GOMODCACHE).
+				// Pass refreshRules so --refresh-rules also flushes the go-thirdparty disk cache.
+				builder.InitGoThirdPartyLoader(goRegistry, projectPath, refreshRules, logger)
 
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 

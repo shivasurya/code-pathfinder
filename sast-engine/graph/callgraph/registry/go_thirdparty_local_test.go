@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -209,7 +210,7 @@ func Open(dialector interface{}) (*DB, error) {
 	require.NoError(t, err)
 
 	// Create loader and test
-	loader := NewGoThirdPartyLocalLoader(tmpDir, nil)
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
 
 	// Validate import
 	assert.True(t, loader.ValidateImport("gorm.io/gorm"))
@@ -279,7 +280,7 @@ func Default() *Engine { return nil }
 	err = os.WriteFile(filepath.Join(vendorDir, "context.go"), []byte(ginSrc), 0644)
 	require.NoError(t, err)
 
-	loader := NewGoThirdPartyLocalLoader(tmpDir, nil)
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
 
 	// Verify type and methods
 	ctxType, err := loader.GetType("github.com/gin-gonic/gin", "Context")
@@ -422,4 +423,141 @@ func TestHasGoFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDir, "foo.go"), []byte("package foo"), 0644)
 	require.NoError(t, err)
 	assert.True(t, hasGoFiles(tmpDir))
+}
+
+// makeVendoredProject creates a minimal project with a vendored gorm stub
+// and returns the project root directory. Shared by disk-cache tests.
+func makeVendoredProject(t *testing.T, version string) string {
+	t.Helper()
+	projectDir := t.TempDir()
+
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire gorm.io/gorm " + version + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte(goMod), 0644))
+
+	vendorDir := filepath.Join(projectDir, "vendor", "gorm.io", "gorm")
+	require.NoError(t, os.MkdirAll(vendorDir, 0755))
+
+	gormSrc := `package gorm
+type DB struct{ Error error }
+func (db *DB) Where(query interface{}, args ...interface{}) *DB { return db }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "gorm.go"), []byte(gormSrc), 0644))
+	return projectDir
+}
+
+// TestDiskCacheWriteAndRead verifies that a cold extraction is persisted to disk
+// and a second loader instance reads from the disk cache instead of re-parsing.
+func TestDiskCacheWriteAndRead(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+
+	// Cold run: loader extracts from vendor/ and writes to disk cache.
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	dbType, err := loader1.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	require.NotNil(t, dbType)
+	assert.Contains(t, dbType.Methods, "Where")
+
+	// Cache-index.json must exist after the cold run.
+	indexPath := filepath.Join(loader1.cacheDir, "cache-index.json")
+	_, statErr := os.Stat(indexPath)
+	assert.NoError(t, statErr, "cache-index.json should be written after cold extraction")
+
+	// Package JSON file must exist.
+	entry := loader1.diskIndex.Entries["gorm.io/gorm"]
+	require.NotNil(t, entry, "cache-index.json should contain gorm.io/gorm entry")
+	pkgFile := filepath.Join(loader1.cacheDir, entry.File)
+	_, statErr = os.Stat(pkgFile)
+	assert.NoError(t, statErr, "package JSON file should exist on disk")
+
+	// Warm run: new loader with same projectDir reads from disk cache.
+	// Remove vendor/ to prove it's not re-parsing from source.
+	require.NoError(t, os.RemoveAll(filepath.Join(projectDir, "vendor")))
+
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	dbType2, err := loader2.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	require.NotNil(t, dbType2, "disk cache hit should return the type even without vendor/")
+	assert.Contains(t, dbType2.Methods, "Where", "disk-cached type should retain methods")
+}
+
+// TestCacheVersionMismatch verifies that a go.mod version bump causes re-extraction
+// and invalidates the stale disk cache entry.
+func TestCacheVersionMismatch(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+
+	// Cold run at v1.25.7.
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	_, err := loader1.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+
+	// Simulate a go.mod upgrade to v1.25.8: update go.mod and add new method to vendor source.
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire gorm.io/gorm v1.25.8\n"
+	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte(goMod), 0644))
+
+	vendorDir := filepath.Join(projectDir, "vendor", "gorm.io", "gorm")
+	require.NoError(t, os.MkdirAll(vendorDir, 0755))
+	newSrc := `package gorm
+type DB struct{ Error error }
+func (db *DB) Where(query interface{}, args ...interface{}) *DB { return db }
+func (db *DB) Save(value interface{}) *DB { return db }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "gorm.go"), []byte(newSrc), 0644))
+
+	// New loader: same cache dir, but go.mod says v1.25.8 — cache entry is v1.25.7 → miss.
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	dbType, err := loader2.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	require.NotNil(t, dbType)
+
+	// New method from v1.25.8 source must be present (re-extraction happened).
+	assert.Contains(t, dbType.Methods, "Save", "re-extraction should pick up new method after version bump")
+
+	// Cache-index entry should now reflect v1.25.8.
+	entry := loader2.diskIndex.Entries["gorm.io/gorm"]
+	require.NotNil(t, entry)
+	assert.Equal(t, "v1.25.8", entry.Version, "cache-index.json should be updated to new version")
+}
+
+// TestRefreshCacheFlush verifies that refreshCache=true wipes existing cache files
+// and forces a fresh extraction on the next load.
+func TestRefreshCacheFlush(t *testing.T) {
+	projectDir := makeVendoredProject(t, "v1.25.7")
+
+	// Cold run to populate cache.
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	_, err := loader1.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	cacheDir := loader1.cacheDir
+
+	// Verify cache files exist.
+	indexPath := filepath.Join(cacheDir, "cache-index.json")
+	_, statErr := os.Stat(indexPath)
+	require.NoError(t, statErr, "cache-index.json should exist after cold run")
+
+	// Inject a sentinel into the cached package JSON to detect whether it gets reused.
+	entry := loader1.diskIndex.Entries["gorm.io/gorm"]
+	require.NotNil(t, entry)
+	pkgPath := filepath.Join(cacheDir, entry.File)
+	data, err := os.ReadFile(pkgPath)
+	require.NoError(t, err)
+	var pkgMap map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &pkgMap))
+	pkgMap["_sentinel"] = "stale"
+	patched, err := json.Marshal(pkgMap)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(pkgPath, patched, 0644))
+
+	// Refresh run: cache dir is wiped, extraction happens from vendor/ again.
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, nil)
+	dbType, err := loader2.GetType("gorm.io/gorm", "DB")
+	require.NoError(t, err)
+	require.NotNil(t, dbType)
+	assert.Contains(t, dbType.Methods, "Where", "fresh extraction should succeed after cache flush")
+
+	// The new cache entry should NOT contain the sentinel we injected.
+	entry2 := loader2.diskIndex.Entries["gorm.io/gorm"]
+	require.NotNil(t, entry2)
+	freshData, err := os.ReadFile(filepath.Join(cacheDir, entry2.File))
+	require.NoError(t, err)
+	assert.NotContains(t, string(freshData), `"_sentinel"`, "flushed cache should not contain stale sentinel")
 }

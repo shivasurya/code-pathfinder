@@ -122,12 +122,15 @@ func initGoStdlibLoaderWithBase(reg *core.GoModuleRegistry, projectPath string, 
 
 // InitGoThirdPartyLoader initializes the third-party type loader for Go dependencies.
 // Parses go.mod require directives and lazily loads type metadata from vendor/ or GOMODCACHE.
-func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, logger *output.Logger) {
+//
+// When refreshCache is true (triggered by --refresh-rules on the CLI), the on-disk
+// go-thirdparty extraction cache for this project is flushed and rebuilt.
+func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, refreshCache bool, logger *output.Logger) {
 	if reg == nil {
 		return
 	}
 
-	loader := registry.NewGoThirdPartyLocalLoader(projectPath, logger)
+	loader := registry.NewGoThirdPartyLocalLoader(projectPath, refreshCache, logger)
 	if loader.PackageCount() == 0 {
 		if logger != nil {
 			logger.Debug("No Go third-party dependencies found in go.mod")

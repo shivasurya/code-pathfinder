@@ -79,7 +79,7 @@ func handler(db *gorm.DB) {
 	require.NoError(t, err)
 
 	// Initialize third-party loader (this is what scan.go would do)
-	InitGoThirdPartyLoader(goRegistry, tmpDir, nil)
+	InitGoThirdPartyLoader(goRegistry, tmpDir, false, nil)
 	require.NotNil(t, goRegistry.ThirdPartyLoader, "ThirdPartyLoader should be initialized")
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
@@ -159,7 +159,7 @@ func handler(c *gin.Context) {
 	goRegistry, err := resolution.BuildGoModuleRegistry(tmpDir)
 	require.NoError(t, err)
 
-	InitGoThirdPartyLoader(goRegistry, tmpDir, nil)
+	InitGoThirdPartyLoader(goRegistry, tmpDir, false, nil)
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
 	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)

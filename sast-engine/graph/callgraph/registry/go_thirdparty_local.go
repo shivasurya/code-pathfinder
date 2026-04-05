@@ -2,11 +2,15 @@ package registry
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -16,31 +20,116 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
 
+// cacheIndexVersion is the schema version written into cache-index.json.
+// Increment when the cache format changes to force re-extraction on upgrade.
+const cacheIndexVersion = "1.0.0"
+
+// cacheIndexEntry is one record in cache-index.json.
+type cacheIndexEntry struct {
+	Version  string    `json:"version"`
+	File     string    `json:"file"`
+	CachedAt time.Time `json:"cached_at"`
+}
+
+// cacheIndex is the in-memory representation of cache-index.json.
+type cacheIndex struct {
+	Version string                      `json:"version"`
+	Entries map[string]*cacheIndexEntry `json:"entries"`
+}
+
 // GoThirdPartyLocalLoader extracts type metadata from third-party Go packages
 // found in vendor/ or GOMODCACHE. Uses tree-sitter for lightweight parsing.
 // Implements core.GoThirdPartyLoader.
 type GoThirdPartyLocalLoader struct {
 	projectRoot    string
-	moduleVersions map[string]string                 // import path → version (from go.mod require)
-	packageCache   map[string]*core.GoStdlibPackage  // import path → extracted package
+	moduleVersions map[string]string                // import path → version (from go.mod require)
+	packageCache   map[string]*core.GoStdlibPackage // import path → extracted package (in-memory)
 	cacheMutex     sync.RWMutex
+	cacheDir       string      // disk cache directory: {userCacheDir}/code-pathfinder/go-thirdparty/{projectHash}/
+	diskIndex      *cacheIndex // loaded from cache-index.json; nil when disk cache is unavailable
 	logger         *output.Logger
 }
 
 // NewGoThirdPartyLocalLoader creates a loader that finds and parses third-party
 // Go packages from vendor/ or GOMODCACHE.
-func NewGoThirdPartyLocalLoader(projectRoot string, logger *output.Logger) *GoThirdPartyLocalLoader {
+//
+// When refreshCache is true (set by --refresh-rules on the CLI), the existing
+// go-thirdparty disk cache for this project is deleted and rebuilt from source.
+func NewGoThirdPartyLocalLoader(projectRoot string, refreshCache bool, logger *output.Logger) *GoThirdPartyLocalLoader {
 	loader := &GoThirdPartyLocalLoader{
-		projectRoot:    projectRoot,
-		moduleVersions: make(map[string]string),
-		packageCache:   make(map[string]*core.GoStdlibPackage),
-		logger:         logger,
+		projectRoot:  projectRoot,
+		packageCache: make(map[string]*core.GoStdlibPackage),
+		logger:       logger,
 	}
 	loader.moduleVersions = parseGoModRequires(projectRoot)
 	if logger != nil {
 		logger.Debug("Go third-party local loader: found %d dependencies in go.mod", len(loader.moduleVersions))
 	}
+	loader.cacheDir = goThirdPartyCacheDir(projectRoot)
+	loader.initDiskCache(refreshCache)
 	return loader
+}
+
+// goThirdPartyCacheDir returns the project-specific disk cache directory.
+// Path: {os.UserCacheDir}/code-pathfinder/go-thirdparty/{sha256(projectRoot)[:12]}/
+func goThirdPartyCacheDir(projectRoot string) string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	h := sha256.Sum256([]byte(projectRoot))
+	projectHash := hex.EncodeToString(h[:])[:12]
+	return filepath.Join(base, "code-pathfinder", "go-thirdparty", projectHash)
+}
+
+// initDiskCache prepares the on-disk cache directory and loads cache-index.json.
+// If refreshCache is true, the directory is wiped before loading (always a miss).
+func (l *GoThirdPartyLocalLoader) initDiskCache(refreshCache bool) {
+	if refreshCache {
+		if err := os.RemoveAll(l.cacheDir); err != nil && l.logger != nil {
+			l.logger.Debug("go-thirdparty: failed to flush cache dir %s: %v", l.cacheDir, err)
+		}
+	}
+	if err := os.MkdirAll(l.cacheDir, 0o755); err != nil {
+		if l.logger != nil {
+			l.logger.Debug("go-thirdparty: could not create cache dir %s: %v", l.cacheDir, err)
+		}
+		return
+	}
+	l.diskIndex = l.loadCacheIndex()
+}
+
+// loadCacheIndex reads cache-index.json from disk. Returns an empty index on any error.
+func (l *GoThirdPartyLocalLoader) loadCacheIndex() *cacheIndex {
+	indexPath := filepath.Join(l.cacheDir, "cache-index.json")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return &cacheIndex{Version: cacheIndexVersion, Entries: make(map[string]*cacheIndexEntry)}
+	}
+	var idx cacheIndex
+	if err := json.Unmarshal(data, &idx); err != nil || idx.Entries == nil {
+		return &cacheIndex{Version: cacheIndexVersion, Entries: make(map[string]*cacheIndexEntry)}
+	}
+	return &idx
+}
+
+// saveCacheIndex writes the current diskIndex to cache-index.json.
+// Called while the write lock is held.
+func (l *GoThirdPartyLocalLoader) saveCacheIndex() {
+	if l.diskIndex == nil || l.cacheDir == "" {
+		return
+	}
+	data, err := json.MarshalIndent(l.diskIndex, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(l.cacheDir, "cache-index.json"), data, 0o644)
+}
+
+// encodeCachePath converts an import path to a safe filename component.
+// e.g. "gorm.io/gorm" → "gorm.io_gorm"
+func encodeCachePath(importPath string) string {
+	return strings.ReplaceAll(importPath, "/", "_")
 }
 
 // ValidateImport reports whether the import path is a known third-party dependency.
@@ -87,9 +176,10 @@ func (l *GoThirdPartyLocalLoader) PackageCount() int {
 	return len(l.moduleVersions)
 }
 
-// getOrLoadPackage retrieves a package from cache or parses it from source.
+// getOrLoadPackage retrieves a package from the in-memory cache, the disk cache,
+// or by parsing from vendor/GOMODCACHE (in that priority order).
 func (l *GoThirdPartyLocalLoader) getOrLoadPackage(importPath string) (*core.GoStdlibPackage, error) {
-	// Fast path: check cache
+	// Fast path: in-memory cache (includes negative results stored as nil).
 	l.cacheMutex.RLock()
 	if pkg, ok := l.packageCache[importPath]; ok {
 		l.cacheMutex.RUnlock()
@@ -97,18 +187,25 @@ func (l *GoThirdPartyLocalLoader) getOrLoadPackage(importPath string) (*core.GoS
 	}
 	l.cacheMutex.RUnlock()
 
-	// Slow path: find and parse
+	// Slow path: disk cache then source parse.
 	l.cacheMutex.Lock()
 	defer l.cacheMutex.Unlock()
 
-	// Double-check
+	// Double-check under write lock.
 	if pkg, ok := l.packageCache[importPath]; ok {
 		return pkg, nil
 	}
 
+	// Disk cache hit: version must match go.mod require version.
+	if pkg := l.loadFromDiskCache(importPath); pkg != nil {
+		l.packageCache[importPath] = pkg
+		return pkg, nil
+	}
+
+	// Parse from vendor/ or GOMODCACHE.
 	srcDir := l.findPackageSource(importPath)
 	if srcDir == "" {
-		l.packageCache[importPath] = nil // cache negative result
+		l.packageCache[importPath] = nil
 		return nil, nil
 	}
 
@@ -126,7 +223,75 @@ func (l *GoThirdPartyLocalLoader) getOrLoadPackage(importPath string) (*core.GoS
 		l.logger.Debug("Extracted third-party package %s: %d types, %d functions",
 			importPath, len(pkg.Types), len(pkg.Functions))
 	}
+
+	// Persist to disk cache for subsequent runs.
+	l.writeToDiskCache(importPath, pkg)
 	return pkg, nil
+}
+
+// loadFromDiskCache attempts to read a GoStdlibPackage from the disk cache.
+// Returns nil on any cache miss, version mismatch, or read error.
+func (l *GoThirdPartyLocalLoader) loadFromDiskCache(importPath string) *core.GoStdlibPackage {
+	if l.diskIndex == nil || l.cacheDir == "" {
+		return nil
+	}
+	entry, ok := l.diskIndex.Entries[importPath]
+	if !ok {
+		return nil
+	}
+	// Version mismatch → stale cache, re-extract.
+	if wantVer := l.moduleVersions[l.moduleKeyFor(importPath)]; wantVer != "" && entry.Version != wantVer {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(l.cacheDir, entry.File))
+	if err != nil {
+		return nil
+	}
+	var pkg core.GoStdlibPackage
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return nil
+	}
+	if l.logger != nil {
+		l.logger.Debug("go-thirdparty: disk cache hit for %s (%s)", importPath, entry.Version)
+	}
+	return &pkg
+}
+
+// writeToDiskCache serialises pkg to a JSON file and updates cache-index.json.
+// Errors are logged at debug level and silently ignored (cache is best-effort).
+func (l *GoThirdPartyLocalLoader) writeToDiskCache(importPath string, pkg *core.GoStdlibPackage) {
+	if l.diskIndex == nil || l.cacheDir == "" {
+		return
+	}
+	version := l.moduleVersions[l.moduleKeyFor(importPath)]
+	fileName := encodeCachePath(importPath) + "@" + version + ".json"
+
+	data, err := json.MarshalIndent(pkg, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(filepath.Join(l.cacheDir, fileName), data, 0o644); err != nil {
+		if l.logger != nil {
+			l.logger.Debug("go-thirdparty: failed to write disk cache for %s: %v", importPath, err)
+		}
+		return
+	}
+	l.diskIndex.Entries[importPath] = &cacheIndexEntry{
+		Version:  version,
+		File:     fileName,
+		CachedAt: time.Now().UTC(),
+	}
+	l.saveCacheIndex()
+}
+
+// moduleKeyFor returns the go.mod module path that owns the given import path.
+func (l *GoThirdPartyLocalLoader) moduleKeyFor(importPath string) string {
+	for modPath := range l.moduleVersions {
+		if importPath == modPath || strings.HasPrefix(importPath, modPath+"/") {
+			return modPath
+		}
+	}
+	return importPath
 }
 
 // findPackageSource locates the source directory for an import path.
