@@ -68,6 +68,7 @@ func ExtractGoVariableAssignments(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) error {
 	// Parse with tree-sitter
 	parser := sitter.NewParser()
@@ -106,6 +107,7 @@ func ExtractGoVariableAssignments(
 		typeEngine,
 		registry,
 		importMap,
+		callGraph,
 	)
 
 	return nil
@@ -122,6 +124,7 @@ func traverseForVariableAssignments(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) {
 	if node == nil {
 		return
@@ -163,6 +166,7 @@ func traverseForVariableAssignments(
 				typeEngine,
 				registry,
 				importMap,
+				callGraph,
 			)
 		}
 
@@ -177,6 +181,7 @@ func traverseForVariableAssignments(
 				typeEngine,
 				registry,
 				importMap,
+				callGraph,
 			)
 		}
 	}
@@ -193,6 +198,7 @@ func traverseForVariableAssignments(
 			typeEngine,
 			registry,
 			importMap,
+			callGraph,
 		)
 	}
 }
@@ -226,6 +232,7 @@ func processShortVarDeclaration(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) {
 	// Use existing helper to extract variable info
 	varInfos := golangpkg.ParseShortVarDeclaration(node, sourceCode)
@@ -256,6 +263,7 @@ func processShortVarDeclaration(
 			typeEngine,
 			registry,
 			importMap,
+			callGraph,
 		)
 
 		if typeInfo == nil {
@@ -296,6 +304,7 @@ func processAssignmentStatement(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) {
 	// Use existing helper to extract variable info
 	varInfos := golangpkg.ParseAssignment(node, sourceCode)
@@ -320,6 +329,7 @@ func processAssignmentStatement(
 			typeEngine,
 			registry,
 			importMap,
+			callGraph,
 		)
 
 		if typeInfo == nil {
@@ -367,6 +377,7 @@ func inferTypeFromRHS(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) *core.TypeInfo {
 	if rhsNode == nil {
 		return nil
@@ -432,14 +443,12 @@ func inferTypeFromRHS(
 
 	// Function call - look up return type
 	case "call_expression":
-		return inferTypeFromFunctionCall(
-			rhsNode,
-			sourceCode,
-			filePath,
-			typeEngine,
-			registry,
-			importMap,
-		)
+		if result := inferTypeFromFunctionCall(rhsNode, sourceCode, filePath, typeEngine, registry, importMap); result != nil {
+			return result
+		}
+		// Param-aware fallback: if RHS is obj.Method() and obj is a function parameter,
+		// resolve the method's return type via StdlibLoader / ThirdPartyLoader.
+		return inferTypeFromParamMethodCall(rhsNode, sourceCode, functionFQN, callGraph, registry, importMap)
 
 	// Variable reference - copy type from scope
 	case "identifier":
@@ -465,6 +474,7 @@ func inferTypeFromRHS(
 			typeEngine,
 			registry,
 			importMap,
+			callGraph,
 		)
 
 	// Expression list - for multi-assignment, get first element
@@ -479,6 +489,7 @@ func inferTypeFromRHS(
 				typeEngine,
 				registry,
 				importMap,
+				callGraph,
 			)
 		}
 		return nil
@@ -651,6 +662,142 @@ func inferTypeFromThirdPartyFunction(importPath, funcName string, registry *core
 	return nil
 }
 
+// inferTypeFromParamMethodCall resolves the return type of a method call where the
+// receiver is a function parameter (e.g. r.FormValue("id") when r is *http.Request).
+//
+// This is the param-aware fallback in inferTypeFromRHS: it fires only when the
+// standard inferTypeFromFunctionCall path returned nil (i.e., the receiver is not
+// a package alias and not tracked as a :=-variable in the scope).
+//
+// Resolution order follows the Check 2 / Check 2.5 precedence:
+//  1. StdlibLoader — for stdlib types (e.g. net/http.Request)
+//  2. ThirdPartyLoader — for vendored/GOMODCACHE types (e.g. gin.Context)
+func inferTypeFromParamMethodCall(
+	callNode *sitter.Node,
+	sourceCode []byte,
+	functionFQN string,
+	callGraph *core.CallGraph,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+) *core.TypeInfo {
+	if callGraph == nil || callNode == nil {
+		return nil
+	}
+
+	// Must be a selector_expression receiver: obj.Method(...)
+	funcNode := callNode.ChildByFieldName("function")
+	if funcNode == nil || funcNode.Type() != "selector_expression" {
+		return nil
+	}
+
+	operandNode := funcNode.ChildByFieldName("operand")
+	fieldNode := funcNode.ChildByFieldName("field")
+	if operandNode == nil || fieldNode == nil {
+		return nil
+	}
+
+	objectName := operandNode.Content(sourceCode)
+	methodName := fieldNode.Content(sourceCode)
+
+	// If the operand is a known package alias, it was already handled by inferTypeFromFunctionCall.
+	if importMap != nil {
+		if _, ok := importMap.Imports[objectName]; ok {
+			return nil
+		}
+	}
+
+	// Look up the enclosing function's parameter list.
+	callerNode, ok := callGraph.Functions[functionFQN]
+	if !ok || callerNode == nil {
+		return nil
+	}
+
+	for i, paramName := range callerNode.MethodArgumentsValue {
+		if paramName != objectName || i >= len(callerNode.MethodArgumentsType) {
+			continue
+		}
+
+		typeStr := callerNode.MethodArgumentsType[i]
+		// Strip "name: " prefix that the parser sometimes prepends.
+		if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+			typeStr = typeStr[colonIdx+2:]
+		}
+		// Strip pointer qualifier — we look up the base type.
+		typeStr = strings.TrimPrefix(typeStr, "*")
+
+		// Resolve short qualifier (e.g. "http.Request" → "net/http.Request").
+		paramTypeFQN := extractionResolveGoTypeFQN(typeStr, importMap)
+
+		importPath, typeName, split := extractionSplitGoTypeFQN(paramTypeFQN)
+		if !split {
+			continue
+		}
+
+		// Check StdlibLoader first, then ThirdPartyLoader.
+		var method *core.GoStdlibFunction
+		if registry.StdlibLoader != nil {
+			if t, err := registry.StdlibLoader.GetType(importPath, typeName); err == nil && t != nil {
+				method = t.Methods[methodName]
+			}
+		}
+		if method == nil && registry.ThirdPartyLoader != nil {
+			if t, err := registry.ThirdPartyLoader.GetType(importPath, typeName); err == nil && t != nil {
+				method = t.Methods[methodName]
+			}
+		}
+		if method == nil || len(method.Returns) == 0 {
+			continue
+		}
+
+		for _, ret := range method.Returns {
+			if ret.Type == "" || ret.Type == "error" {
+				continue
+			}
+			return &core.TypeInfo{
+				TypeFQN:    normalizeStdlibReturnType(ret.Type, importPath),
+				Confidence: 0.85,
+				Source:     "method_return_type",
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractionSplitGoTypeFQN splits a fully-qualified Go type name into its package
+// import path and type name.  Duplicated from builder/helpers.go to avoid an
+// import cycle (extraction → builder → extraction).
+func extractionSplitGoTypeFQN(typeFQN string) (importPath, typeName string, ok bool) {
+	if typeFQN == "" {
+		return "", "", false
+	}
+	lastDot := strings.LastIndex(typeFQN, ".")
+	if lastDot < 0 || lastDot == len(typeFQN)-1 {
+		return "", "", false
+	}
+	return typeFQN[:lastDot], typeFQN[lastDot+1:], true
+}
+
+// extractionResolveGoTypeFQN resolves a short Go type name to a fully-qualified
+// import path using the file's import map.  Duplicated from builder/helpers.go to
+// avoid an import cycle.
+func extractionResolveGoTypeFQN(shortType string, importMap *core.GoImportMap) string {
+	if shortType == "" || importMap == nil {
+		return shortType
+	}
+	dotIdx := strings.Index(shortType, ".")
+	if dotIdx < 0 {
+		return shortType
+	}
+	alias := shortType[:dotIdx]
+	rest := shortType[dotIdx+1:]
+	importPath, ok := importMap.Resolve(alias)
+	if !ok {
+		return shortType
+	}
+	return importPath + "." + rest
+}
+
 // extractGoFunctionName extracts the function name from a function node.
 // Handles:
 //   - Simple calls: foo()
@@ -761,6 +908,7 @@ func inferTypeFromUnaryExpression(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	registry *core.GoModuleRegistry,
 	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
 ) *core.TypeInfo {
 	// Check operator
 	operatorNode := unaryNode.ChildByFieldName("operator")
@@ -789,6 +937,7 @@ func inferTypeFromUnaryExpression(
 			typeEngine,
 			registry,
 			importMap,
+			callGraph,
 		)
 
 	default:

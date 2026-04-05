@@ -81,7 +81,8 @@ func Test() {
 				typeEngine,
 				registry,
 				importMap,
-			)
+				nil,
+)
 
 			// Verify
 			assert.NoError(t, err)
@@ -150,7 +151,8 @@ func Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify
 	assert.NoError(t, err)
@@ -199,7 +201,8 @@ func Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify
 	assert.NoError(t, err)
@@ -273,7 +276,8 @@ func Test() {
 				typeEngine,
 				registry,
 				importMap,
-			)
+				nil,
+)
 
 			// Verify
 			assert.NoError(t, err)
@@ -334,7 +338,8 @@ func Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify
 	assert.NoError(t, err)
@@ -389,7 +394,8 @@ func Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify
 	assert.NoError(t, err)
@@ -442,7 +448,8 @@ func (u *User) Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify
 	assert.NoError(t, err)
@@ -481,7 +488,8 @@ func TestExtractGoVariables_EmptyFile(t *testing.T) {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify - should not error
 	assert.NoError(t, err)
@@ -515,7 +523,8 @@ func Test() {
 		typeEngine,
 		registry,
 		importMap,
-	)
+		nil,
+)
 
 	// Verify - should return nil without error
 	assert.NoError(t, err)
@@ -579,6 +588,7 @@ func TestExtractGoVariables_Integration(t *testing.T) {
 		typeEngine,
 		registry,
 		importMap,
+				nil,
 	)
 
 	// Verify
@@ -662,6 +672,7 @@ func Demo() {
 		typeEngine,
 		registry,
 		&core.GoImportMap{},
+		nil,
 	)
 	
 	// Should return nil (skipped) since path not in registry, not an error
@@ -686,6 +697,7 @@ func Demo() {
 		typeEngine,
 		registry,
 		&core.GoImportMap{},
+		nil,
 	)
 	
 	assert.NoError(t, err)
