@@ -330,3 +330,208 @@ func handler(r *http.Request) {
 		assert.False(t, hasBinding, "no binding for x (not a parameter named r)")
 	}
 }
+
+// TestParamAwareRHSInference_PackageAlias ensures package-qualified calls like
+// http.NewRequest() are NOT intercepted by param-aware inference (they're already
+// handled by inferTypeFromFunctionCall).
+func TestParamAwareRHSInference_PackageAlias(t *testing.T) {
+	code := `package main
+
+import "net/http"
+
+func makeReq() {
+	req, _ := http.NewRequest("GET", "/", nil)
+	_ = req
+}
+`
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/app"
+	reg.DirToImport = map[string]string{"/test": "main"}
+
+	loader := &mockStdlibLoaderWithTypes{
+		stdlibPkgs: map[string]bool{"net/http": true},
+		functions: map[string]*core.GoStdlibFunction{
+			"net/http.NewRequest": {
+				Name:    "NewRequest",
+				Returns: []*core.GoReturnValue{{Type: "*Request"}, {Type: "error"}},
+			},
+		},
+		types: map[string]*core.GoStdlibType{},
+	}
+	reg.StdlibLoader = loader
+
+	importMap := &core.GoImportMap{Imports: map[string]string{"http": "net/http"}}
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+
+	callGraph := &core.CallGraph{
+		Functions: map[string]*graph.Node{
+			"main.makeReq": {
+				ID:   "makeReq",
+				Name: "makeReq",
+				Type: "function_declaration",
+				File: "/test/main.go",
+			},
+		},
+	}
+
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, callGraph)
+	assert.NoError(t, err)
+
+	// req should be resolved via inferTypeFromFunctionCall (stdlib path), not param-aware
+	scope := typeEngine.GetScope("main.makeReq")
+	assert.NotNil(t, scope)
+	bindings, ok := scope.Variables["req"]
+	assert.True(t, ok, "req should have a binding from stdlib lookup")
+	if assert.Len(t, bindings, 1) {
+		assert.Equal(t, "net/http.Request", bindings[0].Type.TypeFQN)
+	}
+}
+
+// TestParamAwareRHSInference_MethodNotFound ensures no binding is created when the
+// type is known but does not have the called method.
+func TestParamAwareRHSInference_MethodNotFound(t *testing.T) {
+	code := `package main
+
+import "net/http"
+
+func handler(r *http.Request) {
+	v := r.UnknownMethod()
+	_ = v
+}
+`
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/app"
+	reg.DirToImport = map[string]string{"/test": "main"}
+
+	loader := &mockStdlibLoaderWithTypes{
+		stdlibPkgs: map[string]bool{"net/http": true},
+		functions:  map[string]*core.GoStdlibFunction{},
+		types: map[string]*core.GoStdlibType{
+			"net/http.Request": {
+				Name:    "Request",
+				Methods: map[string]*core.GoStdlibFunction{},
+			},
+		},
+	}
+	reg.StdlibLoader = loader
+
+	importMap := &core.GoImportMap{Imports: map[string]string{"http": "net/http"}}
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+
+	callGraph := &core.CallGraph{
+		Functions: map[string]*graph.Node{
+			"main.handler": {
+				ID:                   "handler",
+				Name:                 "handler",
+				Type:                 "function_declaration",
+				File:                 "/test/main.go",
+				MethodArgumentsValue: []string{"r"},
+				MethodArgumentsType:  []string{"r: *http.Request"},
+			},
+		},
+	}
+
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, callGraph)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("main.handler")
+	if scope != nil {
+		_, hasBinding := scope.Variables["v"]
+		assert.False(t, hasBinding, "no binding when method is not in type's method set")
+	}
+}
+
+// TestParamAwareRHSInference_ErrorOnlyReturns ensures no binding is created when
+// the method only returns error (no non-error return value to infer from).
+func TestParamAwareRHSInference_ErrorOnlyReturns(t *testing.T) {
+	code := `package main
+
+import "net/http"
+
+func handler(r *http.Request) {
+	err := r.ParseForm()
+	_ = err
+}
+`
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/app"
+	reg.DirToImport = map[string]string{"/test": "main"}
+
+	loader := &mockStdlibLoaderWithTypes{
+		stdlibPkgs: map[string]bool{"net/http": true},
+		functions:  map[string]*core.GoStdlibFunction{},
+		types: map[string]*core.GoStdlibType{
+			"net/http.Request": {
+				Name: "Request",
+				Methods: map[string]*core.GoStdlibFunction{
+					"ParseForm": {
+						Name:    "ParseForm",
+						Returns: []*core.GoReturnValue{{Type: "error"}},
+					},
+				},
+			},
+		},
+	}
+	reg.StdlibLoader = loader
+
+	importMap := &core.GoImportMap{Imports: map[string]string{"http": "net/http"}}
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+
+	callGraph := &core.CallGraph{
+		Functions: map[string]*graph.Node{
+			"main.handler": {
+				ID:                   "handler",
+				Name:                 "handler",
+				Type:                 "function_declaration",
+				File:                 "/test/main.go",
+				MethodArgumentsValue: []string{"r"},
+				MethodArgumentsType:  []string{"r: *http.Request"},
+			},
+		},
+	}
+
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, callGraph)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("main.handler")
+	if scope != nil {
+		_, hasBinding := scope.Variables["err"]
+		assert.False(t, hasBinding, "no binding when method only returns error")
+	}
+}
+
+// TestParamAwareRHSInference_UnqualifiedParamType verifies graceful handling when
+// the parameter type is unqualified (no package prefix, e.g. "MyStruct").
+func TestParamAwareRHSInference_UnqualifiedParamType(t *testing.T) {
+	code := `package main
+
+func process(s MyStruct) {
+	v := s.Compute()
+	_ = v
+}
+`
+	reg := core.NewGoModuleRegistry()
+	reg.ModulePath = "github.com/example/app"
+	reg.DirToImport = map[string]string{"/test": "main"}
+
+	importMap := &core.GoImportMap{Imports: map[string]string{}}
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+
+	callGraph := &core.CallGraph{
+		Functions: map[string]*graph.Node{
+			"main.process": {
+				ID:                   "process",
+				Name:                 "process",
+				Type:                 "function_declaration",
+				File:                 "/test/main.go",
+				MethodArgumentsValue: []string{"s"},
+				MethodArgumentsType:  []string{"s: MyStruct"},
+			},
+		},
+	}
+
+	// Must not panic; type has no dot, so extractionSplitGoTypeFQN returns false.
+	assert.NotPanics(t, func() {
+		_ = ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, callGraph)
+	})
+}
