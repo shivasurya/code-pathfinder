@@ -427,11 +427,11 @@ func TestHasGoFiles(t *testing.T) {
 
 // makeVendoredProject creates a minimal project with a vendored gorm stub
 // and returns the project root directory. Shared by disk-cache tests.
-func makeVendoredProject(t *testing.T, version string) string {
+func makeVendoredProject(t *testing.T) string {
 	t.Helper()
 	projectDir := t.TempDir()
 
-	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire gorm.io/gorm " + version + "\n"
+	goMod := "module github.com/example/myapp\n\ngo 1.21\n\nrequire gorm.io/gorm v1.25.7\n"
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte(goMod), 0644))
 
 	vendorDir := filepath.Join(projectDir, "vendor", "gorm.io", "gorm")
@@ -448,7 +448,7 @@ func (db *DB) Where(query interface{}, args ...interface{}) *DB { return db }
 // TestDiskCacheWriteAndRead verifies that a cold extraction is persisted to disk
 // and a second loader instance reads from the disk cache instead of re-parsing.
 func TestDiskCacheWriteAndRead(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 
 	// Cold run: loader extracts from vendor/ and writes to disk cache.
 	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
@@ -483,7 +483,7 @@ func TestDiskCacheWriteAndRead(t *testing.T) {
 // TestCacheVersionMismatch verifies that a go.mod version bump causes re-extraction
 // and invalidates the stale disk cache entry.
 func TestCacheVersionMismatch(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 
 	// Cold run at v1.25.7.
 	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
@@ -521,7 +521,7 @@ func (db *DB) Save(value interface{}) *DB { return db }
 // TestRefreshCacheFlush verifies that refreshCache=true wipes existing cache files
 // and forces a fresh extraction on the next load.
 func TestRefreshCacheFlush(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 
 	// Cold run to populate cache.
 	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
@@ -564,14 +564,14 @@ func TestRefreshCacheFlush(t *testing.T) {
 
 // TestPackageCount verifies PackageCount reflects the number of go.mod requires.
 func TestPackageCount(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
 	assert.Equal(t, 1, loader.PackageCount())
 }
 
 // TestGetType_NotFound verifies that GetType returns an error for unknown types.
 func TestGoThirdPartyLocalGetType_NotFound(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
 
 	_, err := loader.GetType("gorm.io/gorm", "NonExistentType")
@@ -580,7 +580,7 @@ func TestGoThirdPartyLocalGetType_NotFound(t *testing.T) {
 
 // TestGetFunction_NotFound verifies that GetFunction returns an error for unknown functions.
 func TestGoThirdPartyLocalGetFunction_NotFound(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
 
 	_, err := loader.GetFunction("gorm.io/gorm", "NonExistentFunc")
@@ -662,7 +662,7 @@ func (t *Token) Verify() bool { return true }
 // TestLoadCacheIndex_InvalidJSON verifies that a corrupt cache-index.json
 // produces an empty (not nil) index rather than a crash.
 func TestLoadCacheIndex_InvalidJSON(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
 
 	// Overwrite cache-index.json with garbage.
@@ -681,7 +681,7 @@ func TestLoadCacheIndex_InvalidJSON(t *testing.T) {
 // TestWriteToDiskCache_NilDiskIndex verifies writeToDiskCache is a no-op when
 // diskIndex is nil (disk cache unavailable).
 func TestWriteToDiskCache_NilDiskIndex(t *testing.T) {
-	projectDir := makeVendoredProject(t, "v1.25.7")
+	projectDir := makeVendoredProject(t)
 	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
 	loader.diskIndex = nil // simulate unavailable disk cache
 
