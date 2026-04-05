@@ -212,7 +212,7 @@ func Open(dialector interface{}) (*DB, error) {
 	require.NoError(t, err)
 
 	// Create loader and test
-	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil, nil)
 
 	// Validate import
 	assert.True(t, loader.ValidateImport("gorm.io/gorm"))
@@ -282,7 +282,7 @@ func Default() *Engine { return nil }
 	err = os.WriteFile(filepath.Join(vendorDir, "context.go"), []byte(ginSrc), 0644)
 	require.NoError(t, err)
 
-	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil, nil)
 
 	// Verify type and methods
 	ctxType, err := loader.GetType("github.com/gin-gonic/gin", "Context")
@@ -453,7 +453,7 @@ func TestDiskCacheWriteAndRead(t *testing.T) {
 	projectDir := makeVendoredProject(t)
 
 	// Cold run: loader extracts from vendor/ and writes to disk cache.
-	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	dbType, err := loader1.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	require.NotNil(t, dbType)
@@ -475,7 +475,7 @@ func TestDiskCacheWriteAndRead(t *testing.T) {
 	// Remove vendor/ to prove it's not re-parsing from source.
 	require.NoError(t, os.RemoveAll(filepath.Join(projectDir, "vendor")))
 
-	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	dbType2, err := loader2.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	require.NotNil(t, dbType2, "disk cache hit should return the type even without vendor/")
@@ -488,7 +488,7 @@ func TestCacheVersionMismatch(t *testing.T) {
 	projectDir := makeVendoredProject(t)
 
 	// Cold run at v1.25.7.
-	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	_, err := loader1.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 
@@ -506,7 +506,7 @@ func (db *DB) Save(value interface{}) *DB { return db }
 	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "gorm.go"), []byte(newSrc), 0644))
 
 	// New loader: same cache dir, but go.mod says v1.25.8 — cache entry is v1.25.7 → miss.
-	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	dbType, err := loader2.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	require.NotNil(t, dbType)
@@ -526,7 +526,7 @@ func TestRefreshCacheFlush(t *testing.T) {
 	projectDir := makeVendoredProject(t)
 
 	// Cold run to populate cache.
-	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	_, err := loader1.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	cacheDir := loader1.cacheDir
@@ -550,7 +550,7 @@ func TestRefreshCacheFlush(t *testing.T) {
 	require.NoError(t, os.WriteFile(pkgPath, patched, 0644))
 
 	// Refresh run: cache dir is wiped, extraction happens from vendor/ again.
-	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, nil)
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, nil, nil)
 	dbType, err := loader2.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	require.NotNil(t, dbType)
@@ -567,14 +567,14 @@ func TestRefreshCacheFlush(t *testing.T) {
 // TestPackageCount verifies PackageCount reflects the number of go.mod requires.
 func TestPackageCount(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	assert.Equal(t, 1, loader.PackageCount())
 }
 
 // TestGetType_NotFound verifies that GetType returns an error for unknown types.
 func TestGoThirdPartyLocalGetType_NotFound(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 
 	_, err := loader.GetType("gorm.io/gorm", "NonExistentType")
 	assert.Error(t, err)
@@ -583,7 +583,7 @@ func TestGoThirdPartyLocalGetType_NotFound(t *testing.T) {
 // TestGetFunction_NotFound verifies that GetFunction returns an error for unknown functions.
 func TestGoThirdPartyLocalGetFunction_NotFound(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 
 	_, err := loader.GetFunction("gorm.io/gorm", "NonExistentFunc")
 	assert.Error(t, err)
@@ -597,7 +597,7 @@ func TestGetType_PackageNotFound(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644))
 
 	// No vendor/ directory, no GOMODCACHE entry → source not found.
-	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(tmpDir, false, nil, nil)
 	loader.cacheDir = "" // disable disk cache so we go straight to findPackageSource
 
 	_, err := loader.GetType("github.com/missing/pkg", "SomeType")
@@ -624,7 +624,7 @@ func (c *Client) Call() string { return "" }
 
 	t.Setenv("GOMODCACHE", fakeCache)
 
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	loader.cacheDir = "" // disable disk cache
 
 	typ, err := loader.GetType("example.com/mylib", "Client")
@@ -652,7 +652,7 @@ func (t *Token) Verify() bool { return true }
 
 	t.Setenv("GOMODCACHE", fakeCache)
 
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	loader.cacheDir = ""
 
 	typ, err := loader.GetType("example.com/sdk/auth", "Token")
@@ -665,7 +665,7 @@ func (t *Token) Verify() bool { return true }
 // produces an empty (not nil) index rather than a crash.
 func TestLoadCacheIndex_InvalidJSON(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 
 	// Overwrite cache-index.json with garbage.
 	require.NoError(t, os.WriteFile(
@@ -684,7 +684,7 @@ func TestLoadCacheIndex_InvalidJSON(t *testing.T) {
 // diskIndex is nil (disk cache unavailable).
 func TestWriteToDiskCache_NilDiskIndex(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	loader.diskIndex = nil // simulate unavailable disk cache
 
 	// Should not panic.
@@ -724,7 +724,7 @@ func StandaloneFunc() int { return 0 }
 // loader with PackageCount == 0 (no crash, graceful degradation).
 func TestInitDiskCache_NoGoMod(t *testing.T) {
 	emptyDir := t.TempDir()
-	loader := NewGoThirdPartyLocalLoader(emptyDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(emptyDir, false, nil, nil)
 	assert.Equal(t, 0, loader.PackageCount())
 }
 
@@ -732,7 +732,7 @@ func TestInitDiskCache_NoGoMod(t *testing.T) {
 // when no module prefix matches — the fallback branch.
 func TestModuleKeyFor_NoMatch(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 
 	// "unknown.io/pkg" is not in go.mod → should return the importPath unchanged.
 	key := loader.moduleKeyFor("unknown.io/pkg")
@@ -743,7 +743,7 @@ func TestModuleKeyFor_NoMatch(t *testing.T) {
 // when cache-index.json references a file that no longer exists on disk.
 func TestLoadFromDiskCache_MissingFile(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 
 	// Populate index with an entry pointing at a non-existent file.
 	loader.diskIndex = &cacheIndex{
@@ -761,14 +761,14 @@ func TestLoadFromDiskCache_MissingFile(t *testing.T) {
 func TestLoadFromDiskCache_WithLogger(t *testing.T) {
 	projectDir := makeVendoredProject(t)
 	logger := output.NewLogger(output.VerbosityDefault)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger, nil)
 
 	// Cold run to populate the disk cache.
 	_, err := loader.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 
 	// Warm run: build a new loader sharing the same cacheDir to hit the debug log branch.
-	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, false, logger, nil)
 	result := loader2.loadFromDiskCache("gorm.io/gorm")
 	assert.NotNil(t, result)
 }
@@ -776,7 +776,7 @@ func TestLoadFromDiskCache_WithLogger(t *testing.T) {
 // TestSaveCacheIndex_EmptyCacheDir verifies saveCacheIndex is a no-op when cacheDir is empty.
 func TestSaveCacheIndex_EmptyCacheDir(t *testing.T) {
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	loader.cacheDir = "" // simulate unavailable cache dir
 
 	// Should not panic.
@@ -788,7 +788,7 @@ func TestSaveCacheIndex_EmptyCacheDir(t *testing.T) {
 func TestWriteToDiskCache_WriteFailure(t *testing.T) {
 	projectDir := makeVendoredProject(t)
 	logger := output.NewLogger(output.VerbosityDefault)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, logger, nil)
 
 	// Point cacheDir at a regular file so os.WriteFile fails with ENOTDIR/EISDIR.
 	fakeFile := filepath.Join(t.TempDir(), "not-a-dir")
@@ -808,7 +808,7 @@ func TestInitDiskCache_MkdirAllFailure(t *testing.T) {
 	require.NoError(t, os.WriteFile(blockingFile, []byte("x"), 0644))
 
 	projectDir := makeVendoredProject(t)
-	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil)
+	loader := NewGoThirdPartyLocalLoader(projectDir, false, nil, nil)
 	// Override cacheDir to a path underneath a file (impossible to mkdir).
 	loader.cacheDir = filepath.Join(blockingFile, "subdir")
 	loader.diskIndex = nil
@@ -825,12 +825,12 @@ func TestInitDiskCache_RefreshWithLogger(t *testing.T) {
 	logger := output.NewLogger(output.VerbosityDefault)
 
 	// First pass: populate cache.
-	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, logger)
+	loader1 := NewGoThirdPartyLocalLoader(projectDir, false, logger, nil)
 	_, err := loader1.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 
 	// Second pass with refreshCache=true should flush and still work.
-	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, logger)
+	loader2 := NewGoThirdPartyLocalLoader(projectDir, true, logger, nil)
 	typ, err := loader2.GetType("gorm.io/gorm", "DB")
 	require.NoError(t, err)
 	assert.NotNil(t, typ)

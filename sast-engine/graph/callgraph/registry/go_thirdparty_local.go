@@ -53,6 +53,7 @@ type GoThirdPartyLocalLoader struct {
 	cacheDir       string      // disk cache directory: {userCacheDir}/code-pathfinder/go-thirdparty/{projectHash}/
 	diskIndex      *cacheIndex // loaded from cache-index.json; nil when disk cache is unavailable
 	logger         *output.Logger
+	registry       *core.GoModuleRegistry // for StdlibLoader access in cross-package embed resolution
 }
 
 // NewGoThirdPartyLocalLoader creates a loader that finds and parses third-party
@@ -60,11 +61,12 @@ type GoThirdPartyLocalLoader struct {
 //
 // When refreshCache is true (set by --refresh-rules on the CLI), the existing
 // go-thirdparty disk cache for this project is deleted and rebuilt from source.
-func NewGoThirdPartyLocalLoader(projectRoot string, refreshCache bool, logger *output.Logger) *GoThirdPartyLocalLoader {
+func NewGoThirdPartyLocalLoader(projectRoot string, refreshCache bool, logger *output.Logger, registry *core.GoModuleRegistry) *GoThirdPartyLocalLoader {
 	loader := &GoThirdPartyLocalLoader{
 		projectRoot:  projectRoot,
 		packageCache: make(map[string]*core.GoStdlibPackage),
 		logger:       logger,
+		registry:     registry,
 	}
 	loader.moduleVersions = parseGoModRequires(projectRoot)
 	if logger != nil {
@@ -222,6 +224,10 @@ func (l *GoThirdPartyLocalLoader) getOrLoadPackage(importPath string) (*core.GoS
 		l.packageCache[importPath] = nil
 		return nil, err
 	}
+
+	// Resolve cross-package embeds (e.g., io.Closer, context.Context) via StdlibLoader
+	// when available, falling back to the hardcoded well-known table.
+	l.resolveEmbeddings(pkg)
 
 	l.packageCache[importPath] = pkg
 	if l.logger != nil {
@@ -440,10 +446,51 @@ func extractGoPackageWithTreeSitter(importPath, srcDir string) (*core.GoStdlibPa
 	// e.g., if Client embeds EnqueueClient, copy EnqueueClient's methods into Client.
 	flattenEmbeddedMethods(pkg)
 
-	// Resolve cross-package embeds (e.g., io.Closer) using well-known stdlib interfaces.
+	// Resolve cross-package embeds using the well-known stdlib interface table.
+	// When called via getOrLoadPackage, resolveEmbeddings will additionally try
+	// StdlibLoader for interfaces not in this table.
 	resolveWellKnownEmbeds(pkg)
 
 	return pkg, nil
+}
+
+// resolveEmbeddings resolves cross-package embedded interfaces for all types in pkg.
+// Resolution order:
+//  1. StdlibLoader.GetType — covers ALL stdlib interfaces (requires registry to be set)
+//  2. getWellKnownInterfaceMethods — hardcoded fallback for when StdlibLoader is unavailable
+func (l *GoThirdPartyLocalLoader) resolveEmbeddings(pkg *core.GoStdlibPackage) {
+	for _, typ := range pkg.Types {
+		for _, embeddedName := range typ.Embeds {
+			if !strings.Contains(embeddedName, ".") {
+				continue // same-package — already handled by flattenEmbeddedMethods
+			}
+			dotIdx := strings.LastIndex(embeddedName, ".")
+			pkgAlias := embeddedName[:dotIdx]
+			typeName := embeddedName[dotIdx+1:]
+
+			// Try StdlibLoader first: covers all stdlib interfaces (e.g. context.Context,
+			// sort.Interface) that are not in the hardcoded well-known table.
+			if l.registry != nil && l.registry.StdlibLoader != nil {
+				if stdType, err := l.registry.StdlibLoader.GetType(pkgAlias, typeName); err == nil && stdType != nil {
+					for methodName, method := range stdType.Methods {
+						if _, exists := typ.Methods[methodName]; !exists {
+							typ.Methods[methodName] = method
+						}
+					}
+					continue
+				}
+			}
+
+			// Fallback: well-known table (when StdlibLoader is unavailable).
+			if methods := getWellKnownInterfaceMethods(pkgAlias, typeName); methods != nil {
+				for methodName, method := range methods {
+					if _, exists := typ.Methods[methodName]; !exists {
+						typ.Methods[methodName] = method
+					}
+				}
+			}
+		}
+	}
 }
 
 // resolveWellKnownEmbeds resolves cross-package embedded interfaces using a hardcoded

@@ -41,7 +41,7 @@ func TestApproachC_ThirdPartyPartialResolution(t *testing.T) {
 	}
 
 	targetFQN, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, goRegistry, nil, typeEngine, callGraph,
+		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
 	)
 
 	assert.Equal(t, "github.com/redis/go-redis/v9.Client.Get", targetFQN)
@@ -82,7 +82,7 @@ func TestApproachC_UserCodeMethodResolution(t *testing.T) {
 	}
 
 	targetFQN, resolved, isStdlib := resolveGoCallTarget(
-		callSite, importMap, goRegistry, nil, typeEngine, callGraph,
+		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
 	)
 
 	assert.Equal(t, "testapp.Service.Handle", targetFQN)
@@ -118,7 +118,7 @@ func TestApproachC_PointerTypeStripping(t *testing.T) {
 	}
 
 	targetFQN, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, goRegistry, nil, typeEngine, callGraph,
+		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
 	)
 
 	// Pointer * should be stripped: *database/sql.DB → database/sql.DB
@@ -184,7 +184,7 @@ func TestApproachC_NoTypeEngine(t *testing.T) {
 
 	// No typeEngine → Pattern 1b skipped → unresolved
 	targetFQN, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, goRegistry, nil, nil, callGraph,
+		callSite, importMap, goRegistry, nil, nil, callGraph, nil,
 	)
 
 	assert.Equal(t, "", targetFQN)
