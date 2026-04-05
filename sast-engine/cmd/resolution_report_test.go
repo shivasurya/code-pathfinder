@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -817,4 +818,51 @@ func TestAggregateResolutionStatistics_GoModuleNameEmpty(t *testing.T) {
 	// extractGoModuleName returns "" (no slash) → GoStdlibByModule stays empty.
 	assert.Equal(t, 1, stats.GoStdlibResolved)
 	assert.Equal(t, 0, len(stats.GoStdlibByModule))
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests for the resolutionReportCmd Run function
+// (covers Go pipeline construction + printGoResolutionStatistics call)
+// ---------------------------------------------------------------------------
+
+func TestResolutionReportCmd_WithoutGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Python-only project — no go.mod, Go pipeline must be skipped.
+	err := os.WriteFile(filepath.Join(tmpDir, "main.py"), []byte("def handler():\n    pass\n"), 0644)
+	assert.NoError(t, err)
+
+	err = resolutionReportCmd.Flags().Set("project", tmpDir)
+	assert.NoError(t, err)
+
+	// Should not panic.
+	assert.NotPanics(t, func() {
+		resolutionReportCmd.Run(resolutionReportCmd, []string{})
+	})
+}
+
+func TestResolutionReportCmd_WithGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Minimal Go project — go.mod + one Go file.
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module example.com/test\n\ngo 1.22\n"), 0644)
+	assert.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hello")
+}
+`), 0644)
+	assert.NoError(t, err)
+
+	err = resolutionReportCmd.Flags().Set("project", tmpDir)
+	assert.NoError(t, err)
+
+	// Go pipeline runs; must not panic regardless of what it resolves.
+	assert.NotPanics(t, func() {
+		resolutionReportCmd.Run(resolutionReportCmd, []string{})
+	})
 }
