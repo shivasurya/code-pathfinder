@@ -345,3 +345,123 @@ func TestInitGoThirdPartyLoader_RefreshCache(t *testing.T) {
 	InitGoThirdPartyLoader(reg, tmpDir, true, nil)
 	assert.NotNil(t, reg.ThirdPartyLoader)
 }
+
+func TestInitGoThirdPartyLoader_CDNAvailable_CreatesCombined(t *testing.T) {
+	// When the CDN is reachable and returns a valid manifest, InitGoThirdPartyLoader
+	// must create a GoThirdPartyCombinedLoader (CDN + local).
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	// Serve a minimal manifest from a local HTTP server.
+	manifest := `{"schema_version":"1.0.0","registry_version":"v1","packages":[{"import_path":"gorm.io/gorm","checksum":"","file_size":0,"function_count":0,"type_count":1,"constant_count":0}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(manifest))
+	}))
+	defer server.Close()
+
+	// Override CDN URL so the loader points at our test server.
+	origURL := thirdPartyRegistryBaseURL
+	thirdPartyRegistryBaseURL = server.URL
+	defer func() { thirdPartyRegistryBaseURL = origURL }()
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	// Loader must be set: CDN (1 pkg) + local (1 pkg) = 2 total.
+	require.NotNil(t, reg.ThirdPartyLoader)
+	assert.GreaterOrEqual(t, reg.ThirdPartyLoader.PackageCount(), 2)
+}
+
+func TestInitGoThirdPartyLoader_CDNUnavailable_UsesLocalOnly(t *testing.T) {
+	// When the CDN is unreachable, InitGoThirdPartyLoader must degrade gracefully
+	// and use the local loader only (no fatal error).
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	// Point CDN at a closed server (manifest load will fail).
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	server.Close() // close immediately so connection is refused
+
+	origURL := thirdPartyRegistryBaseURL
+	thirdPartyRegistryBaseURL = server.URL
+	defer func() { thirdPartyRegistryBaseURL = origURL }()
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	// Loader must still be set via local-only path.
+	require.NotNil(t, reg.ThirdPartyLoader)
+	assert.Equal(t, 1, reg.ThirdPartyLoader.PackageCount())
+}
+
+func TestInitGoThirdPartyLoader_CDNEmptyManifest_LocalOnly(t *testing.T) {
+	// When the CDN returns a valid but empty manifest (0 packages), the combined
+	// loader still resolves local dependencies.
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	emptyManifest := `{"schema_version":"1.0.0","registry_version":"v1","packages":[]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(emptyManifest))
+	}))
+	defer server.Close()
+
+	origURL := thirdPartyRegistryBaseURL
+	thirdPartyRegistryBaseURL = server.URL
+	defer func() { thirdPartyRegistryBaseURL = origURL }()
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	// Combined loader: 0 CDN + 1 local = 1.
+	require.NotNil(t, reg.ThirdPartyLoader)
+	assert.GreaterOrEqual(t, reg.ThirdPartyLoader.PackageCount(), 1)
+}
+
+func TestInitGoThirdPartyLoader_CPFCDNURLEnvOverride(t *testing.T) {
+	// CPF_CDN_URL environment variable overrides the default CDN base URL.
+	tmpDir := t.TempDir()
+	writeTempFile(t, tmpDir, "go.mod",
+		"module github.com/example/app\n\ngo 1.21\n\nrequire example.com/lib v1.0.0\n")
+	vendorDir := filepath.Join(tmpDir, "vendor", "example.com", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"),
+		[]byte("package lib\ntype Client struct{}\n"), 0o644))
+
+	manifest := `{"schema_version":"1.0.0","registry_version":"v1","packages":[]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(manifest))
+	}))
+	defer server.Close()
+
+	t.Setenv("CPF_CDN_URL", server.URL)
+
+	reg := core.NewGoModuleRegistry()
+	logger := newGoVersionTestLogger()
+	InitGoThirdPartyLoader(reg, tmpDir, false, logger)
+
+	require.NotNil(t, reg.ThirdPartyLoader)
+}
