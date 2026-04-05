@@ -143,7 +143,7 @@ type unexportedType struct {
 
 	// Verify DB fields
 	assert.NotEmpty(t, dbType.Fields)
-	fieldNames := make([]string, 0)
+	fieldNames := make([]string, 0, len(dbType.Fields))
 	for _, f := range dbType.Fields {
 		fieldNames = append(fieldNames, f.Name)
 	}

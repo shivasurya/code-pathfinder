@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,11 +25,15 @@ import (
 // Increment when the cache format changes to force re-extraction on upgrade.
 const cacheIndexVersion = "1.0.0"
 
+// errPackageSourceNotFound is returned by getOrLoadPackage when no source
+// directory can be located for the requested import path.
+var errPackageSourceNotFound = errors.New("go-thirdparty: package source not found in vendor/ or GOMODCACHE")
+
 // cacheIndexEntry is one record in cache-index.json.
 type cacheIndexEntry struct {
 	Version  string    `json:"version"`
 	File     string    `json:"file"`
-	CachedAt time.Time `json:"cached_at"`
+	CachedAt time.Time `json:"cachedAt"`
 }
 
 // cacheIndex is the in-memory representation of cache-index.json.
@@ -71,7 +76,7 @@ func NewGoThirdPartyLocalLoader(projectRoot string, refreshCache bool, logger *o
 }
 
 // goThirdPartyCacheDir returns the project-specific disk cache directory.
-// Path: {os.UserCacheDir}/code-pathfinder/go-thirdparty/{sha256(projectRoot)[:12]}/
+// Path: {os.UserCacheDir}/code-pathfinder/go-thirdparty/{sha256(projectRoot)[:12]}.
 func goThirdPartyCacheDir(projectRoot string) string {
 	base, err := os.UserCacheDir()
 	if err != nil {
@@ -127,7 +132,7 @@ func (l *GoThirdPartyLocalLoader) saveCacheIndex() {
 }
 
 // encodeCachePath converts an import path to a safe filename component.
-// e.g. "gorm.io/gorm" → "gorm.io_gorm"
+// e.g. "gorm.io/gorm" → "gorm.io_gorm".
 func encodeCachePath(importPath string) string {
 	return strings.ReplaceAll(importPath, "/", "_")
 }
@@ -206,7 +211,7 @@ func (l *GoThirdPartyLocalLoader) getOrLoadPackage(importPath string) (*core.GoS
 	srcDir := l.findPackageSource(importPath)
 	if srcDir == "" {
 		l.packageCache[importPath] = nil
-		return nil, nil
+		return nil, errPackageSourceNotFound
 	}
 
 	pkg, err := extractGoPackageWithTreeSitter(importPath, srcDir)
@@ -497,41 +502,7 @@ func flattenEmbeddedMethods(pkg *core.GoStdlibPackage) {
 					}
 				}
 			}
-			// Cross-package embeds (e.g., "io.Closer") handled in resolveEmbeddedFromExternal
-		}
-	}
-}
-
-// resolveEmbeddedFromExternal resolves cross-package embedded interfaces using
-// stdlib and third-party loaders. Called by getOrLoadPackage after initial extraction.
-func (l *GoThirdPartyLocalLoader) resolveEmbeddedFromExternal(pkg *core.GoStdlibPackage, registry interface{}) {
-	// Registry is core.GoModuleRegistry but we accept any to avoid import cycles.
-	// This is best-effort — if we can't resolve an embed, we skip it.
-	type registryWithLoaders interface {
-		getStdlibLoader() core.GoStdlibLoader
-	}
-
-	for _, typ := range pkg.Types {
-		for _, embeddedName := range typ.Embeds {
-			// Only handle cross-package embeds (contain a dot)
-			if !strings.Contains(embeddedName, ".") {
-				continue // same-package — already handled by flattenEmbeddedMethods
-			}
-
-			// Split "io.Closer" → ("io", "Closer")
-			dotIdx := strings.LastIndex(embeddedName, ".")
-			pkgAlias := embeddedName[:dotIdx]
-			typeName := embeddedName[dotIdx+1:]
-
-			// Try stdlib — common case: io.Closer, io.Reader, fmt.Stringer
-			// We check the well-known stdlib interfaces directly
-			if methods := getWellKnownInterfaceMethods(pkgAlias, typeName); methods != nil {
-				for methodName, method := range methods {
-					if _, exists := typ.Methods[methodName]; !exists {
-						typ.Methods[methodName] = method
-					}
-				}
-			}
+			// Cross-package embeds (e.g., "io.Closer") are resolved by resolveWellKnownEmbeds.
 		}
 	}
 }
@@ -912,7 +883,7 @@ func extractReturns(node *sitter.Node, src []byte) []*core.GoReturnValue {
 }
 
 // extractReceiverTypeName extracts the type name from a receiver parameter list.
-// e.g., "(db *DB)" → "*DB", "(s Server)" → "Server"
+// e.g., "(db *DB)" → "*DB", "(s Server)" → "Server".
 func extractReceiverTypeName(node *sitter.Node, src []byte) string {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
