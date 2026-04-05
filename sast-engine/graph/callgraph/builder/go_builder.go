@@ -155,7 +155,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph)
+		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, codeGraph)
 
 		if resolved {
 			resolvedCount++
@@ -438,6 +438,7 @@ func resolveGoCallTarget(
 	functionContext map[string][]*graph.Node,
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
+	codeGraph *graph.CodeGraph,
 ) (string, bool, bool) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
@@ -488,6 +489,27 @@ func resolveGoCallTarget(
 					}
 				} else {
 					fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: no scope for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
+				}
+			}
+
+			// Source 3: Package-level variable types from CodeGraph nodes.
+			// Covers `var globalDB *sql.DB` at package scope — not tracked by
+			// GoTypeInferenceEngine (which only processes := / = assignments in
+			// function bodies). Only fires when Source 1 and Source 2 both fail.
+			if typeFQN == "" && codeGraph != nil {
+				for _, node := range codeGraph.Nodes {
+					if node.Type != "module_variable" || node.DataType == "" {
+						continue
+					}
+					if node.Name != callSite.ObjectName {
+						continue
+					}
+					if !isSameGoPackage(callSite.CallerFile, node.File) {
+						continue
+					}
+					typeStr := strings.TrimPrefix(node.DataType, "*")
+					typeFQN = resolveGoTypeFQN(typeStr, importMap)
+					break
 				}
 			}
 
