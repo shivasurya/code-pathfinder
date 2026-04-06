@@ -120,7 +120,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 
 		// Export call sites JSON for validation against ground truth
 		if dumpJSON != "" {
-			if err := dumpCallSitesJSON(cg, projectInput, dumpJSON); err != nil {
+			if err := dumpCallSitesJSON(cg, dumpJSON); err != nil {
 				fmt.Printf("Error writing call sites JSON: %v\n", err)
 			} else {
 				fmt.Printf("\nExported call sites to %s\n", dumpJSON)
@@ -559,17 +559,17 @@ type callSiteRecord struct {
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	Col        int    `json:"col"`
-	CallerFQN  string `json:"caller_fqn"`
+	CallerFQN  string `json:"callerFqn"`
 	Target     string `json:"target"`
-	OurFQN     string `json:"our_fqn"`
+	OurFQN     string `json:"ourFqn"`
 	Resolved   bool   `json:"resolved"`
-	TypeSource string `json:"type_source,omitempty"` // e.g., "go_variable_binding", "thirdparty_local"
-	IsStdlib   bool   `json:"is_stdlib,omitempty"`
+	TypeSource string `json:"typeSource,omitempty"` // e.g., "go_variable_binding", "thirdparty_local"
+	IsStdlib   bool   `json:"isStdlib,omitempty"`
 }
 
 // dumpCallSitesJSON writes all Go call sites (resolved + unresolved) to a JSONL file
 // so they can be compared against a ground-truth extractor (e.g., go/packages).
-func dumpCallSitesJSON(cg *core.CallGraph, projectRoot, outputPath string) error {
+func dumpCallSitesJSON(cg *core.CallGraph, outputPath string) error {
 	f, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create JSON file: %w", err)
