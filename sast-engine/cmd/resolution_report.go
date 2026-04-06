@@ -58,7 +58,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 				builder.InitGoStdlibLoader(goRegistry, projectInput, logger)
 				builder.InitGoThirdPartyLoader(goRegistry, projectInput, false, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-				goCG, goErr := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+				goCG, goErr := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
 				if goErr == nil && goCG != nil {
 					builder.MergeCallGraphs(cg, goCG)
 				}

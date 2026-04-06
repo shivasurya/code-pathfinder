@@ -12,6 +12,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
 
 // CallSiteInternal represents a function call location during graph construction.
@@ -41,7 +42,7 @@ type CallSiteInternal struct {
 // Returns:
 //   - CallGraph: complete call graph with resolved edges and type information
 //   - error: if any critical step fails
-func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) (*core.CallGraph, error) {
+func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine, logger *output.Logger) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
 	// Store type engine in call graph for MCP tool access
@@ -165,7 +166,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, pkgVarIndex)
+		targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, pkgVarIndex, logger)
 
 		if resolved {
 			resolvedCount++
@@ -466,6 +467,7 @@ func resolveGoCallTarget(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
 	pkgVarIndex map[string]*graph.Node,
+	logger *output.Logger,
 ) (string, bool, bool, string) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
@@ -515,11 +517,11 @@ func resolveGoCallTarget(
 					if binding != nil && binding.Type != nil {
 						typeFQN = binding.Type.TypeFQN
 						typeFQN = strings.TrimPrefix(typeFQN, "*")
-					} else {
-						fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: scope found but no binding for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.ObjectName)
+					} else if logger != nil && logger.IsDebug() {
+						logger.Debug("[debug-1b] %s.%s: scope found but no binding for %q", callSite.CallerFQN, callSite.FunctionName, callSite.ObjectName)
 					}
-				} else {
-					fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: no scope for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
+				} else if logger != nil && logger.IsDebug() {
+					logger.Debug("[debug-1b] %s.%s: no scope for %q", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
 				}
 			}
 

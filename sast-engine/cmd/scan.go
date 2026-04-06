@@ -262,7 +262,7 @@ Examples:
 
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
 				} else {

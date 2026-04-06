@@ -215,7 +215,7 @@ func transform(data string) string {
 	require.NoError(t, err)
 
 	// BuildGoCallGraph should call GenerateGoTaintSummaries internally
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, nil, nil)
 	require.NoError(t, err)
 
 	// After BuildGoCallGraph, Statements should be populated for Go functions
