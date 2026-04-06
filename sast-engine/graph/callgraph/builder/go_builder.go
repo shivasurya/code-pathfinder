@@ -150,6 +150,10 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	// Key: filepath.Dir(file) + "::" + varName → node
 	pkgVarIndex := buildPkgVarIndex(codeGraph)
 
+	// Pre-index struct field types for Source 4 lookup (chained field access: a.Field.Method()).
+	// Key: "pkgPath.TypeName.FieldName" → resolved field type FQN
+	callGraph.GoStructFieldIndex = buildStructFieldIndex(codeGraph, registry, importMaps)
+
 	totalCallSites := len(callSites)
 	resolvedCount := 0
 	stdlibCount := 0
@@ -532,6 +536,58 @@ func resolveGoCallTarget(
 				}
 			}
 
+			// Source 4: Struct field access (a.Field.Method()).
+			// Fires only when ObjectName is "root.Field" and Sources 1-3 all failed.
+			// Looks up the root variable's type via Sources 1-3, then resolves the
+			// field's type from the pre-built struct field index.
+			if typeFQN == "" && callGraph != nil && len(callGraph.GoStructFieldIndex) > 0 {
+				dotIdx := strings.Index(callSite.ObjectName, ".")
+				if dotIdx > 0 {
+					rootName := callSite.ObjectName[:dotIdx]
+					fieldName := callSite.ObjectName[dotIdx+1:]
+					// Only handle simple one-level access; skip chained dots or method calls.
+					if !strings.Contains(fieldName, ".") && !strings.Contains(fieldName, "(") {
+						var rootTypeFQN string
+
+						// S4-Source1: function parameters
+						if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+							for i, paramName := range callerNode.MethodArgumentsValue {
+								if paramName == rootName && i < len(callerNode.MethodArgumentsType) {
+									typeStr := callerNode.MethodArgumentsType[i]
+									if ci := strings.Index(typeStr, ": "); ci >= 0 {
+										typeStr = typeStr[ci+2:]
+									}
+									rootTypeFQN = resolveGoTypeFQN(strings.TrimPrefix(typeStr, "*"), importMap)
+									break
+								}
+							}
+						}
+						// S4-Source2: scope variable binding
+						if rootTypeFQN == "" && typeEngine != nil {
+							scope := typeEngine.GetScope(callSite.CallerFQN)
+							if scope != nil {
+								if b := scope.GetVariable(rootName); b != nil && b.Type != nil {
+									rootTypeFQN = strings.TrimPrefix(b.Type.TypeFQN, "*")
+								}
+							}
+						}
+						// S4-Source3: package-level variable
+						if rootTypeFQN == "" && pkgVarIndex != nil {
+							key := filepath.Dir(callSite.CallerFile) + "::" + rootName
+							if varNode, ok := pkgVarIndex[key]; ok {
+								rootTypeFQN = resolveGoTypeFQN(strings.TrimPrefix(varNode.DataType, "*"), importMap)
+							}
+						}
+
+						if rootTypeFQN != "" {
+							if ft, ok := callGraph.GoStructFieldIndex[rootTypeFQN+"."+fieldName]; ok {
+								typeFQN = ft
+							}
+						}
+					}
+				}
+			}
+
 			if typeFQN != "" {
 				methodFQN := typeFQN + "." + callSite.FunctionName
 
@@ -695,6 +751,51 @@ func buildPkgVarIndex(codeGraph *graph.CodeGraph) map[string]*graph.Node {
 		}
 		key := filepath.Dir(node.File) + "::" + node.Name
 		index[key] = node
+	}
+	return index
+}
+
+// buildStructFieldIndex builds a flat index of struct field → field type FQN for all
+// struct_definition nodes in user code.
+// Key:   "pkgPath.TypeName.FieldName"   (e.g. "myapp.models.Attention.KNorm")
+// Value: resolved field type FQN         (e.g. "myapp.nn.Linear")
+//
+// Used by resolveGoCallTarget Source 4 to resolve chained field access: a.Field.Method().
+func buildStructFieldIndex(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, importMaps map[string]*core.GoImportMap) map[string]string {
+	index := make(map[string]string)
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "struct_definition" || node.Language != "go" || node.File == "" {
+			continue
+		}
+		dirPath := filepath.Dir(node.File)
+		pkgPath, ok := registry.DirToImport[dirPath]
+		if !ok {
+			continue
+		}
+		typeFQN := pkgPath + "." + node.Name
+		importMap := importMaps[node.File]
+
+		for _, field := range node.Interface {
+			// Field format stored by parser: "FieldName: TypeStr"
+			colonIdx := strings.Index(field, ": ")
+			if colonIdx < 0 {
+				continue // embedded type, skip
+			}
+			fieldName := field[:colonIdx]
+			typeStr := strings.TrimPrefix(field[colonIdx+2:], "*")
+			if typeStr == "" {
+				continue
+			}
+			// Resolve to FQN via importMap
+			fieldTypeFQN := resolveGoTypeFQN(typeStr, importMap)
+			// Unqualified — same package
+			if fieldTypeFQN == typeStr && !strings.Contains(fieldTypeFQN, ".") {
+				fieldTypeFQN = pkgPath + "." + typeStr
+			}
+			if fieldTypeFQN != "" {
+				index[typeFQN+"."+fieldName] = fieldTypeFQN
+			}
+		}
 	}
 	return index
 }
