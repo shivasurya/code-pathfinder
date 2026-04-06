@@ -55,7 +55,7 @@ func TestBuildGoCallGraph(t *testing.T) {
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
 
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// Verify functions were indexed
@@ -391,7 +391,7 @@ func TestResolveGoCallTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pass nil for typeEngine and callGraph (backward compatibility)
-			targetFQN, resolved, _, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil)
+			targetFQN, resolved, _, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil, nil)
 
 			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
 
@@ -619,7 +619,7 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
 
 	// Build call graph with type tracking
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 
@@ -834,6 +834,7 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 				typeEngine,
 				callGraph,
 				nil,
+				nil,
 			)
 
 			// Assert
@@ -975,7 +976,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	typeEngine.AddScope(scope)
 
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 

@@ -42,6 +42,7 @@ func TestApproachC_ThirdPartyPartialResolution(t *testing.T) {
 
 	targetFQN, resolved, _, _ := resolveGoCallTarget(
 		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
+		nil,
 	)
 
 	assert.Equal(t, "github.com/redis/go-redis/v9.Client.Get", targetFQN)
@@ -83,6 +84,7 @@ func TestApproachC_UserCodeMethodResolution(t *testing.T) {
 
 	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(
 		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
+		nil,
 	)
 
 	assert.Equal(t, "testapp.Service.Handle", targetFQN)
@@ -119,6 +121,7 @@ func TestApproachC_PointerTypeStripping(t *testing.T) {
 
 	targetFQN, resolved, _, _ := resolveGoCallTarget(
 		callSite, importMap, goRegistry, nil, typeEngine, callGraph, nil,
+		nil,
 	)
 
 	// Pointer * should be stripped: *database/sql.DB → database/sql.DB
@@ -151,7 +154,7 @@ func handler() {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// Find fmt.Sprintf call site — resolved via Pattern 1a (import)
@@ -185,6 +188,7 @@ func TestApproachC_NoTypeEngine(t *testing.T) {
 	// No typeEngine → Pattern 1b skipped → unresolved
 	targetFQN, resolved, _, _ := resolveGoCallTarget(
 		callSite, importMap, goRegistry, nil, nil, callGraph, nil,
+		nil,
 	)
 
 	assert.Equal(t, "", targetFQN)
@@ -226,7 +230,7 @@ func NewService() *Service {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// Find the call site for svc.Process — should have type inference fields
@@ -270,7 +274,7 @@ func handler() {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// Verify fmt.Sprintf resolved
@@ -310,7 +314,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	require.NoError(t, err)
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// r.FormValue should resolve via parameter type (r: *http.Request)
