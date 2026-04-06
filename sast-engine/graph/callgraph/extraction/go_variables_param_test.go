@@ -38,6 +38,10 @@ func (m *mockStdlibLoaderWithTypes) GetType(importPath, typeName string) (*core.
 	return t, nil
 }
 
+func (m *mockStdlibLoaderWithTypes) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errMockNotImplemented
+}
+
 func (m *mockStdlibLoaderWithTypes) PackageCount() int {
 	return len(m.stdlibPkgs)
 }

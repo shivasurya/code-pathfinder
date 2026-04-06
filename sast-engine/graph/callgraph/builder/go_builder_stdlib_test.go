@@ -38,6 +38,10 @@ func (m *mockStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
 	return nil, errMockNotImplemented
 }
 
+func (m *mockStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errMockNotImplemented
+}
+
 func (m *mockStdlibLoader) PackageCount() int { return len(m.stdlib) }
 
 // goStdlibPackages is a small set of known stdlib import paths used in tests.

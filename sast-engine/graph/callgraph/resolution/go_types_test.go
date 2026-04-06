@@ -36,6 +36,10 @@ func (m *mockGoTypesStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, erro
 	return nil, errNotFound
 }
 
+func (m *mockGoTypesStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errNotFound
+}
+
 func (m *mockGoTypesStdlibLoader) PackageCount() int {
 	return len(m.packages)
 }

@@ -536,6 +536,10 @@ type GoStdlibLoader interface {
 	// Returns a non-nil error if the package or type is not found in the registry.
 	GetType(importPath, typeName string) (*GoStdlibType, error)
 
+	// GetPackage returns all type and function metadata for a stdlib package.
+	// Used to scan for interface types that expose promoted methods.
+	GetPackage(importPath string) (*GoStdlibPackage, error)
+
 	// PackageCount returns the total number of stdlib packages available in the registry.
 	PackageCount() int
 }

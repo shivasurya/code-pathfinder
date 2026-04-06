@@ -618,6 +618,7 @@ func inferTypeFromRHS(
 			sourceCode,
 			filePath,
 			registry,
+			importMap,
 		)
 
 	// Unary expression - handle address-of operator
@@ -1037,6 +1038,7 @@ func inferTypeFromCompositeLiteral(
 	sourceCode []byte,
 	filePath string,
 	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
 ) *core.TypeInfo {
 	// Get type node from composite literal
 	typeNode := literalNode.ChildByFieldName("type")
@@ -1044,7 +1046,21 @@ func inferTypeFromCompositeLiteral(
 		return nil
 	}
 
-	typeName := typeNode.Content(sourceCode)
+	typeName := strings.TrimPrefix(typeNode.Content(sourceCode), "*")
+
+	// For qualified types like "blob.Chunk", resolve the package alias to the
+	// full import path via the import map before falling back to ParseGoTypeString.
+	// This fixes "blob.Chunk" → "github.com/ollama/ollama/.../blob.Chunk".
+	if strings.Contains(typeName, ".") && importMap != nil {
+		resolved := extractionResolveGoTypeFQN(typeName, importMap)
+		if strings.Contains(resolved, "/") {
+			return &core.TypeInfo{
+				TypeFQN:    resolved,
+				Confidence: 0.9,
+				Source:     "composite_literal",
+			}
+		}
+	}
 
 	// Parse the type name using existing parser from PR-14
 	typeInfo, err := ParseGoTypeString(typeName, registry, filePath)

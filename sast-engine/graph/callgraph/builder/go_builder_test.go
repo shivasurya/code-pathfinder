@@ -691,7 +691,7 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			shouldResolve: true,
 		},
 		{
-			name: "resolve with best-effort FQN when method not in Functions map",
+			name: "skip best-effort when typeFQN has no slash (incomplete package path)",
 			callSite: &CallSiteInternal{
 				FunctionName: "NonExistent",
 				ObjectName:   "user",
@@ -699,10 +699,10 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 				CallerFile:   "/project/main.go",
 			},
 			variableName:  "user",
-			variableType:  "models.User",
+			variableType:  "models.User", // no "/" → Check 4 rejects to avoid false positive
 			methodExists:  false,
-			expectedFQN:   "models.User.NonExistent", // Approach C: best-effort FQN
-			shouldResolve: true,                       // Approach C: type known → resolved
+			expectedFQN:   "",
+			shouldResolve: false, // incomplete FQN rejected by Check 4 gate
 		},
 		{
 			name: "fail when variable not in scope",

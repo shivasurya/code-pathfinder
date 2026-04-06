@@ -608,8 +608,9 @@ func resolveGoCallTarget(
 			// Source 4: Struct field access (a.Field.Method()).
 			// Fires only when ObjectName is "root.Field" and Sources 1-3 all failed.
 			// Looks up the root variable's type via Sources 1-3, then resolves the
-			// field's type from the pre-built struct field index.
-			if typeFQN == "" && callGraph != nil && len(callGraph.GoStructFieldIndex) > 0 {
+			// field's type from the pre-built struct field index (S4-Source4a) or
+			// from the CDN for stdlib types (S4-Source4b).
+			if typeFQN == "" && callGraph != nil {
 				dotIdx := strings.Index(callSite.ObjectName, ".")
 				if dotIdx > 0 {
 					rootName := callSite.ObjectName[:dotIdx]
@@ -652,6 +653,33 @@ func resolveGoCallTarget(
 							if ft, ok := callGraph.GoStructFieldIndex[rootTypeFQN+"."+fieldName]; ok {
 								typeFQN = ft
 							}
+							// S4-Source4b: Stdlib struct field lookup (lazy, via CDN).
+							// Covers stdlib types like net/http.Request.Header → net/http.Header.
+							// Only runs when user-code struct index missed the field and the
+							// root type comes from a known stdlib package.
+							if typeFQN == "" && registry != nil && registry.StdlibLoader != nil {
+								if pkgPath, typeName, ok := splitGoTypeFQN(rootTypeFQN); ok &&
+									registry.StdlibLoader.ValidateStdlibImport(pkgPath) {
+									if stdlibType, err := registry.StdlibLoader.GetType(pkgPath, typeName); err == nil && stdlibType != nil {
+										for _, f := range stdlibType.Fields {
+											if f.Name == fieldName {
+												typeFQN = resolveFieldType(f.Type, pkgPath)
+												// resolveFieldType may return a short-qualified
+												// type like "url.URL" when the CDN stores the
+												// field using the owner package's import alias.
+												// Expand using the calling file's importMap first
+												// (e.g., "url" → "net/url" if the file imports it).
+												if typeFQN != "" && strings.Contains(typeFQN, ".") && !strings.Contains(typeFQN, "/") {
+													if expanded := resolveGoTypeFQN(typeFQN, importMap); strings.Contains(expanded, "/") {
+														typeFQN = expanded
+													}
+												}
+												break
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -674,6 +702,16 @@ func resolveGoCallTarget(
 							if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
 								return methodFQN, true, true, "" // resolved via stdlib
 							}
+						}
+						// Check 2b: Method not found directly on the type — scan the same
+						// package for an interface that declares it. This covers promoted
+						// methods whose CDN entry does not list them on the concrete type
+						// (e.g., testing.T.Fatalf is promoted from testing.common but
+						// testing.TB.Fatalf is present; T implements TB).
+						if ifaceFQN, found := findMethodInPackageInterfaces(
+							registry.StdlibLoader, importPath, callSite.FunctionName,
+						); found {
+							return ifaceFQN, true, true, "" // resolved via stdlib interface
 						}
 					}
 				}
@@ -703,8 +741,16 @@ func resolveGoCallTarget(
 					return promotedFQN, true, isStdlib, ""
 				}
 
-				// Check 4: Unvalidated — accept with best-effort FQN
-				return methodFQN, true, false, ""
+				// Check 4: Unvalidated best-effort — only for verifiably complete FQNs.
+				// typeFQN must contain "/" (a real multi-segment module path), or be
+				// the built-in "error" interface, or a CGO type ("C.something").
+				// Incomplete FQNs like "Chunk" or "blob.Chunk" are rejected here to
+				// prevent false positives from low-confidence type bindings.
+				if strings.Contains(typeFQN, "/") ||
+					typeFQN == "error" ||
+					strings.HasPrefix(typeFQN, "C.") {
+					return methodFQN, true, false, ""
+				}
 			}
 		}
 

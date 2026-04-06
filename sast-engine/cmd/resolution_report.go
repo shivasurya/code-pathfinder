@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		projectInput := cmd.Flag("project").Value.String()
 		csvOutput := cmd.Flag("csv").Value.String()
+		dumpJSON := cmd.Flag("dump-callsites-json").Value.String()
 
 		if projectInput == "" {
 			fmt.Println("Error: --project flag is required")
@@ -113,6 +115,15 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 				fmt.Printf("Error writing CSV: %v\n", err)
 			} else {
 				fmt.Printf("\nExported %d unresolved calls to %s\n", len(stats.UnresolvedDetails), csvOutput)
+			}
+		}
+
+		// Export call sites JSON for validation against ground truth
+		if dumpJSON != "" {
+			if err := dumpCallSitesJSON(cg, projectInput, dumpJSON); err != nil {
+				fmt.Printf("Error writing call sites JSON: %v\n", err)
+			} else {
+				fmt.Printf("\nExported call sites to %s\n", dumpJSON)
 			}
 		}
 	},
@@ -543,6 +554,60 @@ func printTopUnresolvedPatterns(stats *resolutionStatistics, topN int) {
 	}
 }
 
+// callSiteRecord is the JSON record written by dumpCallSitesJSON.
+type callSiteRecord struct {
+	File       string `json:"file"`
+	Line       int    `json:"line"`
+	Col        int    `json:"col"`
+	CallerFQN  string `json:"caller_fqn"`
+	Target     string `json:"target"`
+	OurFQN     string `json:"our_fqn"`
+	Resolved   bool   `json:"resolved"`
+	TypeSource string `json:"type_source,omitempty"` // e.g., "go_variable_binding", "thirdparty_local"
+	IsStdlib   bool   `json:"is_stdlib,omitempty"`
+}
+
+// dumpCallSitesJSON writes all Go call sites (resolved + unresolved) to a JSONL file
+// so they can be compared against a ground-truth extractor (e.g., go/packages).
+func dumpCallSitesJSON(cg *core.CallGraph, projectRoot, outputPath string) error {
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create JSON file: %w", err)
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	written := 0
+
+	for callerFQN, sites := range cg.CallSites {
+		funcNode := cg.Functions[callerFQN]
+		// Only emit Go call sites
+		isGoFunc := funcNode != nil && funcNode.Language == "go"
+		if !isGoFunc {
+			continue
+		}
+		for _, site := range sites {
+			rec := callSiteRecord{
+				File:       site.Location.File,
+				Line:       site.Location.Line,
+				Col:        site.Location.Column,
+				CallerFQN:  callerFQN,
+				Target:     site.Target,
+				OurFQN:     site.TargetFQN,
+				Resolved:   site.Resolved,
+				TypeSource: site.TypeSource,
+				IsStdlib:   site.IsStdlib,
+			}
+			if err := enc.Encode(rec); err != nil {
+				return fmt.Errorf("failed to encode record: %w", err)
+			}
+			written++
+		}
+	}
+	fmt.Fprintf(os.Stderr, "  wrote %d Go call site records\n", written)
+	return nil
+}
+
 // exportUnresolvedCSV writes all unresolved call sites to a CSV file.
 func exportUnresolvedCSV(stats *resolutionStatistics, outputPath string) error {
 	f, err := os.Create(outputPath)
@@ -844,4 +909,5 @@ func init() {
 	resolutionReportCmd.Flags().StringP("project", "p", "", "Project root directory")
 	resolutionReportCmd.MarkFlagRequired("project")
 	resolutionReportCmd.Flags().String("csv", "", "Export unresolved calls to CSV file (e.g., --csv unresolved.csv)")
+	resolutionReportCmd.Flags().String("dump-callsites-json", "", "Export all Go call sites as JSONL for accuracy validation (e.g., --dump-callsites-json callsites.jsonl)")
 }

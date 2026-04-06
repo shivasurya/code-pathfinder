@@ -35,6 +35,10 @@ func (m *mockStdlibLoaderForEmbed) GetType(importPath, typeName string) (*core.G
 	return t, nil
 }
 
+func (m *mockStdlibLoaderForEmbed) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, nil //nolint:nilnil
+}
+
 func (m *mockStdlibLoaderForEmbed) PackageCount() int { return len(m.types) }
 
 // buildLoaderWithRegistry creates a GoThirdPartyLocalLoader whose registry
