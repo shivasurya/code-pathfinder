@@ -391,7 +391,7 @@ func TestResolveGoCallTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pass nil for typeEngine and callGraph (backward compatibility)
-			targetFQN, resolved, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil, nil)
+			targetFQN, resolved, _, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil)
 
 			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
 
@@ -826,14 +826,13 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			functionContext := make(map[string][]*graph.Node)
 
 			// Execute
-			targetFQN, resolved, _ := resolveGoCallTarget(
+			targetFQN, resolved, _, _ := resolveGoCallTarget(
 				tt.callSite,
 				importMap,
 				registry,
 				functionContext,
 				typeEngine,
 				callGraph,
-				nil,
 				nil,
 			)
 

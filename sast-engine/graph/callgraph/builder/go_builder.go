@@ -161,7 +161,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, codeGraph, pkgVarIndex)
+		targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, pkgVarIndex)
 
 		if resolved {
 			resolvedCount++
@@ -214,6 +214,14 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 						}
 					}
 				}
+			}
+
+			// Propagate resolve source from the resolver (e.g. third-party).
+			// This overrides the type-inference source so stats correctly attribute
+			// calls resolved via GoThirdPartyLoader rather than counting them as
+			// user-code resolutions.
+			if resolveSource != "" {
+				typeSource = resolveSource
 			}
 
 			// Convert CallSiteInternal.Arguments to core.Argument structs.
@@ -445,6 +453,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 //   - targetFQN: the resolved fully qualified name
 //   - resolved: true if resolution succeeded
 //   - isStdlib: true when the target is a Go standard library function
+//   - resolveSource: "thirdparty_local" when resolved via GoThirdPartyLoader; "" otherwise
 func resolveGoCallTarget(
 	callSite *CallSiteInternal,
 	importMap *core.GoImportMap,
@@ -452,9 +461,8 @@ func resolveGoCallTarget(
 	functionContext map[string][]*graph.Node,
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
-	codeGraph *graph.CodeGraph,
 	pkgVarIndex map[string]*graph.Node,
-) (string, bool, bool) {
+) (string, bool, bool, string) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
 		// Try import resolution first (existing pattern)
@@ -464,7 +472,11 @@ func resolveGoCallTarget(
 			targetFQN := importPath + "." + callSite.FunctionName
 			isStdlib := registry.StdlibLoader != nil &&
 				registry.StdlibLoader.ValidateStdlibImport(importPath)
-			return targetFQN, true, isStdlib
+			if !isStdlib && registry != nil && registry.ThirdPartyLoader != nil &&
+				registry.ThirdPartyLoader.ValidateImport(importPath) {
+				return targetFQN, true, false, "thirdparty_local"
+			}
+			return targetFQN, true, isStdlib, ""
 		}
 
 		// Pattern 1b: Variable-based method resolution (PR-17 + Approach C)
@@ -525,7 +537,7 @@ func resolveGoCallTarget(
 
 				// Check 1: Method exists in user code
 				if callGraph.Functions[methodFQN] != nil {
-					return methodFQN, true, false
+					return methodFQN, true, false, ""
 				}
 
 				// Check 2 (Approach C): Validate method via StdlibLoader
@@ -535,7 +547,7 @@ func resolveGoCallTarget(
 						stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
 						if err == nil && stdlibType != nil {
 							if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
-								return methodFQN, true, true // resolved via stdlib
+								return methodFQN, true, true, "" // resolved via stdlib
 							}
 						}
 					}
@@ -552,7 +564,7 @@ func resolveGoCallTarget(
 							tpType, err := registry.ThirdPartyLoader.GetType(importPath, typeName)
 							if err == nil && tpType != nil {
 								if _, hasMethod := tpType.Methods[callSite.FunctionName]; hasMethod {
-									return methodFQN, true, false // resolved via third-party
+									return methodFQN, true, false, "thirdparty_local" // resolved via third-party
 								}
 							}
 						}
@@ -563,16 +575,16 @@ func resolveGoCallTarget(
 				if promotedFQN, resolved, isStdlib := resolvePromotedMethod(
 					typeFQN, callSite.FunctionName, registry,
 				); resolved {
-					return promotedFQN, true, isStdlib
+					return promotedFQN, true, isStdlib, ""
 				}
 
 				// Check 4: Unvalidated — accept with best-effort FQN
-				return methodFQN, true, false
+				return methodFQN, true, false, ""
 			}
 		}
 
 		// Import not found and variable not found - unresolved
-		return "", false, false
+		return "", false, false, ""
 	}
 
 	// Pattern 2: Same-package call (simple function name)
@@ -582,17 +594,17 @@ func resolveGoCallTarget(
 		if isSameGoPackage(callSite.CallerFile, candidate.File) {
 			// Build FQN for this candidate
 			candidateFQN := buildGoFQN(candidate, nil, registry)
-			return candidateFQN, true, false
+			return candidateFQN, true, false, ""
 		}
 	}
 
 	// Pattern 3: Builtin function
 	if isBuiltin(callSite.FunctionName) {
-		return "builtin." + callSite.FunctionName, true, false
+		return "builtin." + callSite.FunctionName, true, false, ""
 	}
 
 	// Pattern 4: Unresolved
-	return "", false, false
+	return "", false, false, ""
 }
 
 // buildGoFQN constructs a fully qualified name for a Go function, method, or closure.
@@ -734,8 +746,11 @@ func findParentGoFunction(closureNode *graph.Node, parentMap map[string]*graph.N
 	}
 }
 
-// goBuiltins is the set of Go builtin function names, allocated once at package init.
+// goBuiltins is the set of Go builtin function names and predeclared type names
+// that syntactically look like function calls (e.g. int(x), float64(x)).
+// Allocated once at package init.
 var goBuiltins = map[string]bool{
+	// Builtin functions
 	"append":  true,
 	"cap":     true,
 	"close":   true,
@@ -751,6 +766,29 @@ var goBuiltins = map[string]bool{
 	"println": true,
 	"real":    true,
 	"recover": true,
+	// Predeclared numeric/string types used as type-conversion expressions.
+	// In Go, T(x) is syntactically identical to a call expression, so the
+	// call-site extractor captures these as plain function calls.
+	"int":        true,
+	"int8":       true,
+	"int16":      true,
+	"int32":      true,
+	"int64":      true,
+	"uint":       true,
+	"uint8":      true,
+	"uint16":     true,
+	"uint32":     true,
+	"uint64":     true,
+	"uintptr":    true,
+	"float32":    true,
+	"float64":    true,
+	"complex64":  true,
+	"complex128": true,
+	"string":     true,
+	"byte":       true,
+	"rune":       true,
+	"bool":       true,
+	"error":      true,
 }
 
 // isBuiltin returns true if the function name is a Go builtin.
