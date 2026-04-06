@@ -144,6 +144,12 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 
 	// Pass 4: Resolve call targets and add edges
 	fmt.Fprintf(os.Stderr, "  Pass 4: Resolving call targets...\n")
+
+	// Pre-index package-level variables for Source 3 lookup in resolveGoCallTarget.
+	// Without this, Source 3 scans all 225k+ nodes for every unresolved method call.
+	// Key: filepath.Dir(file) + "::" + varName → node
+	pkgVarIndex := buildPkgVarIndex(codeGraph)
+
 	totalCallSites := len(callSites)
 	resolvedCount := 0
 	stdlibCount := 0
@@ -155,7 +161,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 			importMap = core.NewGoImportMap(callSite.CallerFile)
 		}
 
-		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, codeGraph)
+		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, codeGraph, pkgVarIndex)
 
 		if resolved {
 			resolvedCount++
@@ -287,6 +293,10 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) map[string][]*graph.Node {
 	functionContext := make(map[string][]*graph.Node)
 
+	// Build parent map once for closure FQN construction (func_literal nodes need their parent).
+	// Without this, buildGoFQN → findParentGoFunction would rebuild the map for every closure.
+	parentMap := buildParentMap(codeGraph)
+
 	totalNodes := len(codeGraph.Nodes)
 	processed := 0
 	indexed := 0
@@ -307,7 +317,7 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 		}
 
 		// Build FQN using module registry
-		fqn := buildGoFQN(node, codeGraph, registry)
+		fqn := buildGoFQN(node, parentMap, registry)
 
 		// Add to CallGraph.Functions
 		callGraph.Functions[fqn] = node
@@ -349,6 +359,10 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		nodeIDToFQN[funcNode.ID] = fqn
 	}
 
+	// Build parent map once here so findContainingGoFunction doesn't rebuild it
+	// for every call node (was O(call_nodes × total_nodes) before this fix).
+	parentMap := buildParentMap(codeGraph)
+
 	totalNodes := len(codeGraph.Nodes)
 	processed := 0
 	callNodesFound := 0
@@ -380,7 +394,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		}
 
 		// Find containing function to get caller FQN
-		containingFunc := findContainingGoFunction(node, codeGraph)
+		containingFunc := findContainingGoFunction(node, parentMap)
 		var callerFQN string
 		if containingFunc != nil {
 			// Fast O(1) lookup using reverse map
@@ -439,6 +453,7 @@ func resolveGoCallTarget(
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
 	codeGraph *graph.CodeGraph,
+	pkgVarIndex map[string]*graph.Node,
 ) (string, bool, bool) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
@@ -496,20 +511,12 @@ func resolveGoCallTarget(
 			// Covers `var globalDB *sql.DB` at package scope — not tracked by
 			// GoTypeInferenceEngine (which only processes := / = assignments in
 			// function bodies). Only fires when Source 1 and Source 2 both fail.
-			if typeFQN == "" && codeGraph != nil {
-				for _, node := range codeGraph.Nodes {
-					if node.Type != "module_variable" || node.DataType == "" {
-						continue
-					}
-					if node.Name != callSite.ObjectName {
-						continue
-					}
-					if !isSameGoPackage(callSite.CallerFile, node.File) {
-						continue
-					}
-					typeStr := strings.TrimPrefix(node.DataType, "*")
+			// Uses pre-built pkgVarIndex (O(1)) instead of a full node scan (O(N)).
+			if typeFQN == "" && pkgVarIndex != nil {
+				key := filepath.Dir(callSite.CallerFile) + "::" + callSite.ObjectName
+				if varNode, ok := pkgVarIndex[key]; ok {
+					typeStr := strings.TrimPrefix(varNode.DataType, "*")
 					typeFQN = resolveGoTypeFQN(typeStr, importMap)
-					break
 				}
 			}
 
@@ -602,7 +609,7 @@ func resolveGoCallTarget(
 //
 // Returns:
 //   - fully qualified name string
-func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry) string {
+func buildGoFQN(node *graph.Node, parentMap map[string]*graph.Node, registry *core.GoModuleRegistry) string {
 	// Get directory path for this file
 	dirPath := filepath.Dir(node.File)
 
@@ -636,10 +643,10 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 
 	case "func_literal":
 		// Closure: parentFQN.$anon_N
-		// Find parent function
-		parent := findParentGoFunction(node, codeGraph)
+		// Find parent function using the pre-built parentMap
+		parent := findParentGoFunction(node, parentMap)
 		if parent != nil {
-			parentFQN := buildGoFQN(parent, codeGraph, registry)
+			parentFQN := buildGoFQN(parent, parentMap, registry)
 			return parentFQN + "." + node.Name // Name is already "$anon_N" from PR-06
 		}
 		// Orphaned closure - shouldn't happen but handle gracefully
@@ -650,20 +657,44 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 	}
 }
 
-// findContainingGoFunction finds the function/method/closure that contains a given call node.
-// Walks parent edges in the CodeGraph to find the first function-like ancestor.
-//
-// Returns:
-//   - Node pointer to the containing function, or nil if no containing function found
-func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) *graph.Node {
-	// Build parent map from CodeGraph edges
-	parentMap := make(map[string]*graph.Node)
+// buildParentMap constructs a reverse-edge map (child ID → parent node) from the CodeGraph.
+// Build this once and pass it to findContainingGoFunction / findParentGoFunction to avoid
+// rebuilding it O(N) times inside loops over call nodes.
+func buildParentMap(codeGraph *graph.CodeGraph) map[string]*graph.Node {
+	parentMap := make(map[string]*graph.Node, len(codeGraph.Nodes))
 	for _, node := range codeGraph.Nodes {
 		for _, edge := range node.OutgoingEdges {
 			parentMap[edge.To.ID] = node
 		}
 	}
+	return parentMap
+}
 
+// buildPkgVarIndex builds a lookup table for package-level variables.
+// Key: filepath.Dir(file) + "::" + varName
+// Value: the module_variable node (only nodes with a non-empty DataType are included).
+//
+// This replaces the O(N) linear scan in resolveGoCallTarget Source 3 with an O(1) lookup.
+func buildPkgVarIndex(codeGraph *graph.CodeGraph) map[string]*graph.Node {
+	index := make(map[string]*graph.Node)
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "module_variable" || node.DataType == "" {
+			continue
+		}
+		key := filepath.Dir(node.File) + "::" + node.Name
+		index[key] = node
+	}
+	return index
+}
+
+// findContainingGoFunction finds the function/method/closure that contains a given call node.
+// Walks parent edges using the pre-built parentMap to find the first function-like ancestor.
+//
+// parentMap must be built once via buildParentMap before iterating call nodes.
+//
+// Returns:
+//   - Node pointer to the containing function, or nil if no containing function found
+func findContainingGoFunction(callNode *graph.Node, parentMap map[string]*graph.Node) *graph.Node {
 	// Walk up the parent chain
 	current := callNode
 	for {
@@ -685,15 +716,8 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 
 // findParentGoFunction finds the immediate parent function for a closure.
 // Used by buildGoFQN for closure FQN generation.
-func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *graph.Node {
-	// Build parent map
-	parentMap := make(map[string]*graph.Node)
-	for _, node := range codeGraph.Nodes {
-		for _, edge := range node.OutgoingEdges {
-			parentMap[edge.To.ID] = node
-		}
-	}
-
+// parentMap must be pre-built via buildParentMap.
+func findParentGoFunction(closureNode *graph.Node, parentMap map[string]*graph.Node) *graph.Node {
 	// Walk up to find parent function
 	current := closureNode
 	for {
@@ -710,27 +734,28 @@ func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *
 	}
 }
 
+// goBuiltins is the set of Go builtin function names, allocated once at package init.
+var goBuiltins = map[string]bool{
+	"append":  true,
+	"cap":     true,
+	"close":   true,
+	"complex": true,
+	"copy":    true,
+	"delete":  true,
+	"imag":    true,
+	"len":     true,
+	"make":    true,
+	"new":     true,
+	"panic":   true,
+	"print":   true,
+	"println": true,
+	"real":    true,
+	"recover": true,
+}
+
 // isBuiltin returns true if the function name is a Go builtin.
-// Go has 15 builtin functions that are always available.
 func isBuiltin(name string) bool {
-	builtins := map[string]bool{
-		"append":  true,
-		"cap":     true,
-		"close":   true,
-		"complex": true,
-		"copy":    true,
-		"delete":  true,
-		"imag":    true,
-		"len":     true,
-		"make":    true,
-		"new":     true,
-		"panic":   true,
-		"print":   true,
-		"println": true,
-		"real":    true,
-		"recover": true,
-	}
-	return builtins[name]
+	return goBuiltins[name]
 }
 
 // isSameGoPackage returns true if two file paths belong to the same Go package.

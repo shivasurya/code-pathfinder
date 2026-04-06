@@ -43,7 +43,7 @@ func TestSource3_PackageLevelVariable(t *testing.T) {
 	callGraph := &core.CallGraph{Functions: make(map[string]*graph.Node)}
 
 	targetFQN, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, reg, nil, nil, callGraph, cg,
+		callSite, importMap, reg, nil, nil, callGraph, cg, buildPkgVarIndex(cg),
 	)
 
 	assert.True(t, resolved)
@@ -70,7 +70,7 @@ func TestSource3_PointerType(t *testing.T) {
 	callGraph := &core.CallGraph{Functions: make(map[string]*graph.Node)}
 
 	targetFQN, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, reg, nil, nil, callGraph, cg,
+		callSite, importMap, reg, nil, nil, callGraph, cg, buildPkgVarIndex(cg),
 	)
 
 	assert.True(t, resolved)
@@ -103,7 +103,7 @@ func TestSource3_SamePackageFilter(t *testing.T) {
 	callGraph := &core.CallGraph{Functions: make(map[string]*graph.Node)}
 
 	_, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, reg, nil, nil, callGraph, cg,
+		callSite, importMap, reg, nil, nil, callGraph, cg, buildPkgVarIndex(cg),
 	)
 
 	// Must NOT resolve: variable is in a different package directory.
@@ -127,7 +127,7 @@ func TestSource3_NoTypeAnnotation(t *testing.T) {
 	callGraph := &core.CallGraph{Functions: make(map[string]*graph.Node)}
 
 	_, resolved, _ := resolveGoCallTarget(
-		callSite, importMap, reg, nil, nil, callGraph, cg,
+		callSite, importMap, reg, nil, nil, callGraph, cg, buildPkgVarIndex(cg),
 	)
 
 	// Must NOT resolve: no type info available.
@@ -148,6 +148,6 @@ func TestSource3_NilCodeGraph(t *testing.T) {
 	callGraph := &core.CallGraph{Functions: make(map[string]*graph.Node)}
 
 	assert.NotPanics(t, func() {
-		resolveGoCallTarget(callSite, importMap, reg, nil, nil, callGraph, nil)
+		resolveGoCallTarget(callSite, importMap, reg, nil, nil, callGraph, nil, nil)
 	})
 }
