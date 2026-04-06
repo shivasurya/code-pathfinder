@@ -340,7 +340,7 @@ func processVarSpec(
 				typeFQN = pkgPath + "." + typeFQN
 			}
 		}
-		if typeFQN != "" && typeFQN != typeStr {
+		if typeFQN != "" {
 			typeInfo = &core.TypeInfo{
 				TypeFQN:    typeFQN,
 				Confidence: 0.9,
