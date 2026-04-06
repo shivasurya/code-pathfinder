@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,4 +178,81 @@ func handler(c *gin.Context) {
 
 	assert.True(t, resolvedTargets["github.com/gin-gonic/gin.Context.Query"],
 		"c.Query() should resolve to github.com/gin-gonic/gin.Context.Query")
+}
+
+// TestThirdPartyResolution_TypeSourceLabeling verifies that call sites resolved
+// via the ThirdPartyLoader carry TypeSource == "thirdparty_local", enabling
+// the resolution-report stats to attribute them correctly.
+func TestThirdPartyResolution_TypeSourceLabeling(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goMod := `module testapp
+
+go 1.21
+
+require gorm.io/gorm v1.25.7
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644))
+
+	// Vendor gorm with a type and method.
+	vendorDir := filepath.Join(tmpDir, "vendor", "gorm.io", "gorm")
+	require.NoError(t, os.MkdirAll(vendorDir, 0755))
+	gormSrc := `package gorm
+type DB struct{}
+func (db *DB) Find(dest interface{}) *DB { return db }
+func Open(dialector interface{}) (*DB, error) { return nil, nil }
+`
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "gorm.go"), []byte(gormSrc), 0644))
+
+	// User code: Pattern 1a (gorm.Open) + Pattern 1b Check 2.5 (db.Find).
+	mainSrc := `package main
+
+import "gorm.io/gorm"
+
+func handler(db *gorm.DB) {
+	db.Find(nil)
+}
+
+func setup() {
+	gorm.Open(nil)
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(mainSrc), 0644))
+
+	codeGraph := graph.Initialize(tmpDir, nil)
+	require.NotNil(t, codeGraph)
+
+	goRegistry, err := resolution.BuildGoModuleRegistry(tmpDir)
+	require.NoError(t, err)
+	InitGoThirdPartyLoader(goRegistry, tmpDir, false, nil)
+	require.NotNil(t, goRegistry.ThirdPartyLoader)
+
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, resolution.NewGoTypeInferenceEngine(goRegistry))
+	require.NoError(t, err)
+
+	// Check 2.5 path: db.Find — method call on third-party receiver.
+	handlerSites := callGraph.CallSites["testapp.handler"]
+	var findSite *core.CallSite
+	for i := range handlerSites {
+		if handlerSites[i].TargetFQN == "gorm.io/gorm.DB.Find" {
+			findSite = &handlerSites[i]
+			break
+		}
+	}
+	require.NotNil(t, findSite, "db.Find() should be resolved")
+	assert.Equal(t, "thirdparty_local", findSite.TypeSource,
+		"Check 2.5 resolution must carry TypeSource=thirdparty_local")
+
+	// Pattern 1a path: gorm.Open — import-qualified function call.
+	setupSites := callGraph.CallSites["testapp.setup"]
+	var openSite *core.CallSite
+	for i := range setupSites {
+		if setupSites[i].TargetFQN == "gorm.io/gorm.Open" {
+			openSite = &setupSites[i]
+			break
+		}
+	}
+	require.NotNil(t, openSite, "gorm.Open() should be resolved")
+	assert.Equal(t, "thirdparty_local", openSite.TypeSource,
+		"Pattern 1a third-party resolution must carry TypeSource=thirdparty_local")
 }
