@@ -156,120 +156,187 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	callGraph.GoStructFieldIndex = buildStructFieldIndex(codeGraph, registry, importMaps)
 
 	totalCallSites := len(callSites)
+
+	// pass4Result holds the fully computed output for one call site, produced by
+	// a worker goroutine and later applied to the CallGraph sequentially.
+	// Keeping resolution and write separate means workers touch zero shared state.
+	type pass4Result struct {
+		callerFQN string
+		targetFQN string // empty when unresolved
+		resolved  bool
+		callSite  core.CallSite
+	}
+
+	// Stage 1: Resolve call sites in parallel.
+	//
+	// Safety proof — every shared structure accessed inside this stage is either:
+	//   • Immutable by Pass 4 (importMaps, callGraph.Functions,
+	//     callGraph.GoStructFieldIndex, functionContext, pkgVarIndex,
+	//     registry.DirToImport): written only during earlier passes, never here.
+	//   • Protected by sync.RWMutex (typeEngine.GetScope/GetVariable,
+	//     StdlibLoader.ValidateStdlibImport/GetType,
+	//     ThirdPartyLoader.ValidateImport/GetType): concurrent reads are safe.
+	//   • Worker-local (importMap fallback allocation, callSite value copy,
+	//     local variables, result slice): not shared at all.
+	//
+	// The ONLY writes in Pass 4 (AddEdge, AddCallSite) happen in Stage 2.
+	numWorkers := getOptimalWorkerCount()
+	shardResults := make([][]pass4Result, numWorkers)
+	chunkSize := (totalCallSites + numWorkers - 1) / numWorkers
+
+	var resolveWg sync.WaitGroup
+	var processedCount atomic.Int64
+
+	for w := 0; w < numWorkers; w++ {
+		start := w * chunkSize
+		end := min(start+chunkSize, totalCallSites)
+		if start >= totalCallSites {
+			break
+		}
+		shardIdx := w // capture for closure
+
+		resolveWg.Add(1)
+		go func() {
+			defer resolveWg.Done()
+			local := make([]pass4Result, 0, end-start)
+
+			for _, callSite := range callSites[start:end] {
+				importMap := importMaps[callSite.CallerFile]
+				if importMap == nil {
+					// No import map - can still resolve builtins and same-package calls
+					importMap = core.NewGoImportMap(callSite.CallerFile)
+				}
+
+				targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(
+					callSite, importMap, registry, functionContext, typeEngine,
+					callGraph, pkgVarIndex, logger)
+
+				var cs core.CallSite
+				if resolved {
+					// Populate type inference metadata from parameter types or variable bindings.
+					// NOTE: this block is intentionally preserved verbatim from the original
+					// sequential loop — do not refactor or deduplicate with resolveGoCallTarget.
+					var inferredType string
+					var typeConfidence float32
+					var typeSource string
+					var wasTypeResolved bool
+
+					if callSite.ObjectName != "" {
+						// Source 1: Function parameter types
+						if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+							for pi, paramName := range callerNode.MethodArgumentsValue {
+								if paramName == callSite.ObjectName && pi < len(callerNode.MethodArgumentsType) {
+									typeStr := callerNode.MethodArgumentsType[pi]
+									if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+										typeStr = typeStr[colonIdx+2:]
+									}
+									typeStr = strings.TrimPrefix(typeStr, "*")
+									im := importMaps[callSite.CallerFile]
+									inferredType = resolveGoTypeFQN(typeStr, im)
+									typeConfidence = 0.95
+									typeSource = "go_function_parameter"
+									wasTypeResolved = true
+									break
+								}
+							}
+						}
+
+						// Source 2: Local variable type bindings from GoTypeInferenceEngine
+						if !wasTypeResolved && typeEngine != nil {
+							scope := typeEngine.GetScope(callSite.CallerFQN)
+							if scope != nil {
+								binding := scope.GetVariable(callSite.ObjectName)
+								if binding != nil && binding.Type != nil {
+									typeFQN := binding.Type.TypeFQN
+									if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
+										typeFQN = after
+									}
+									inferredType = typeFQN
+									typeConfidence = binding.Type.Confidence
+									typeSource = "go_variable_binding"
+									wasTypeResolved = true
+								}
+							}
+						}
+					}
+
+					// Propagate resolve source from the resolver (e.g. third-party).
+					// This overrides the type-inference source so stats correctly attribute
+					// calls resolved via GoThirdPartyLoader rather than counting them as
+					// user-code resolutions.
+					if resolveSource != "" {
+						typeSource = resolveSource
+					}
+
+					// Convert CallSiteInternal.Arguments to core.Argument structs.
+					args := buildCallSiteArguments(callSite.Arguments)
+
+					cs = core.CallSite{
+						Target: callSite.FunctionName,
+						Location: core.Location{
+							File: callSite.CallerFile,
+							Line: int(callSite.CallLine),
+						},
+						Arguments:                args,
+						Resolved:                 true,
+						TargetFQN:                targetFQN,
+						IsStdlib:                 isStdlib,
+						ResolvedViaTypeInference: wasTypeResolved,
+						InferredType:             inferredType,
+						TypeConfidence:           typeConfidence,
+						TypeSource:               typeSource,
+					}
+				} else {
+					args := buildCallSiteArguments(callSite.Arguments)
+
+					// Record unresolved call for diagnostics
+					cs = core.CallSite{
+						Target: callSite.FunctionName,
+						Location: core.Location{
+							File: callSite.CallerFile,
+							Line: int(callSite.CallLine),
+						},
+						Arguments:     args,
+						Resolved:      false,
+						FailureReason: "unresolved_go_call",
+					}
+				}
+
+				local = append(local, pass4Result{
+					callerFQN: callSite.CallerFQN,
+					targetFQN: targetFQN,
+					resolved:  resolved,
+					callSite:  cs,
+				})
+
+				// Progress tracking (atomic — safe from multiple goroutines).
+				// Uses the same \r overwrite pattern as Pass 2b.
+				count := processedCount.Add(1)
+				if count%500 == 0 || count == int64(totalCallSites) {
+					percentage := float64(count) / float64(totalCallSites) * 100
+					fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%)",
+						count, totalCallSites, percentage)
+				}
+			}
+			shardResults[shardIdx] = local
+		}()
+	}
+	resolveWg.Wait()
+
+	// Stage 2: Apply results sequentially — single goroutine, zero locking needed.
+	// AddEdge and AddCallSite have no mutex; keeping writes here ensures safety.
 	resolvedCount := 0
 	stdlibCount := 0
-
-	for i, callSite := range callSites {
-		importMap := importMaps[callSite.CallerFile]
-		if importMap == nil {
-			// No import map - can still resolve builtins and same-package calls
-			importMap = core.NewGoImportMap(callSite.CallerFile)
-		}
-
-		targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, pkgVarIndex, logger)
-
-		if resolved {
-			resolvedCount++
-			if isStdlib {
-				stdlibCount++
-			}
-			// Add edge from caller to callee
-			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
-
-			// Populate type inference metadata from parameter types or variable bindings.
-			var inferredType string
-			var typeConfidence float32
-			var typeSource string
-			var wasTypeResolved bool
-
-			if callSite.ObjectName != "" {
-				// Source 1: Function parameter types
-				if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
-					for pi, paramName := range callerNode.MethodArgumentsValue {
-						if paramName == callSite.ObjectName && pi < len(callerNode.MethodArgumentsType) {
-							typeStr := callerNode.MethodArgumentsType[pi]
-							if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
-								typeStr = typeStr[colonIdx+2:]
-							}
-							typeStr = strings.TrimPrefix(typeStr, "*")
-							im := importMaps[callSite.CallerFile]
-							inferredType = resolveGoTypeFQN(typeStr, im)
-							typeConfidence = 0.95
-							typeSource = "go_function_parameter"
-							wasTypeResolved = true
-							break
-						}
-					}
+	for _, shard := range shardResults {
+		for _, r := range shard {
+			if r.resolved {
+				resolvedCount++
+				if r.callSite.IsStdlib {
+					stdlibCount++
 				}
-
-				// Source 2: Local variable type bindings from GoTypeInferenceEngine
-				if !wasTypeResolved && typeEngine != nil {
-					scope := typeEngine.GetScope(callSite.CallerFQN)
-					if scope != nil {
-						binding := scope.GetVariable(callSite.ObjectName)
-						if binding != nil && binding.Type != nil {
-							typeFQN := binding.Type.TypeFQN
-							if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
-								typeFQN = after
-							}
-							inferredType = typeFQN
-							typeConfidence = binding.Type.Confidence
-							typeSource = "go_variable_binding"
-							wasTypeResolved = true
-						}
-					}
-				}
+				callGraph.AddEdge(r.callerFQN, r.targetFQN)
 			}
-
-			// Propagate resolve source from the resolver (e.g. third-party).
-			// This overrides the type-inference source so stats correctly attribute
-			// calls resolved via GoThirdPartyLoader rather than counting them as
-			// user-code resolutions.
-			if resolveSource != "" {
-				typeSource = resolveSource
-			}
-
-			// Convert CallSiteInternal.Arguments to core.Argument structs.
-			args := buildCallSiteArguments(callSite.Arguments)
-
-			// Add detailed call site information
-			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
-				Target: callSite.FunctionName,
-				Location: core.Location{
-					File: callSite.CallerFile,
-					Line: int(callSite.CallLine),
-				},
-				Arguments:                args,
-				Resolved:                 true,
-				TargetFQN:                targetFQN,
-				IsStdlib:                 isStdlib,
-				ResolvedViaTypeInference: wasTypeResolved,
-				InferredType:             inferredType,
-				TypeConfidence:           typeConfidence,
-				TypeSource:               typeSource,
-			})
-		} else {
-			args := buildCallSiteArguments(callSite.Arguments)
-
-			// Record unresolved call for diagnostics
-			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
-				Target: callSite.FunctionName,
-				Location: core.Location{
-					File: callSite.CallerFile,
-					Line: int(callSite.CallLine),
-				},
-				Arguments:     args,
-				Resolved:      false,
-				FailureReason: "unresolved_go_call",
-			})
-		}
-
-		// Progress tracking
-		if (i+1)%500 == 0 || i+1 == totalCallSites {
-			percentage := float64(i+1) / float64(totalCallSites) * 100
-			resolutionRate := float64(resolvedCount) / float64(i+1) * 100
-			fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%) - %.1f%% resolved",
-				i+1, totalCallSites, percentage, resolutionRate)
+			callGraph.AddCallSite(r.callerFQN, r.callSite)
 		}
 	}
 
