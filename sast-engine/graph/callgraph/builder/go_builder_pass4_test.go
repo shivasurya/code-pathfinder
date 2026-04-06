@@ -44,6 +44,10 @@ func (m *testStdlibLoader) GetType(importPath, typeName string) (*core.GoStdlibT
 	return nil, errors.New("type not found")
 }
 
+func (m *testStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *testStdlibLoader) PackageCount() int { return len(m.packages) }
 
 type testThirdPartyLoader struct {
@@ -393,6 +397,160 @@ func TestResolveGoCallTarget_StdlibLoaderMethodFound(t *testing.T) {
 	assert.True(t, resolved)
 	assert.Equal(t, "myapp.Store.Save", targetFQN)
 	assert.True(t, isStdlib, "resolved via StdlibLoader → isStdlib=true")
+}
+
+// TestResolveGoCallTarget_StdlibCheck2b_PromotedViaInterface covers Check 2b:
+// when the method is not on the concrete type but IS on an interface in the same
+// package (e.g., testing.T.Fatalf promoted from testing.common, but testing.TB
+// declares Fatalf). The interface FQN should be returned.
+func TestResolveGoCallTarget_StdlibCheck2b_PromotedViaInterface(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+
+	// Stdlib package "testing" is valid.
+	// "T" has no Fatalf method (only promoted ones, not in CDN data).
+	// "TB" is an interface that has Fatalf.
+	reg.StdlibLoader = &testStdlibLoaderWithPackages{
+		testStdlibLoader: testStdlibLoader{
+			packages: map[string]bool{"testing": true},
+			types: map[string]*core.GoStdlibType{
+				"testing.T": {
+					Name:    "T",
+					Kind:    "struct",
+					Methods: map[string]*core.GoStdlibFunction{"Run": {Name: "Run"}}, // no Fatalf
+				},
+			},
+		},
+		pkgData: map[string]*core.GoStdlibPackage{
+			"testing": {
+				ImportPath: "testing",
+				Types: map[string]*core.GoStdlibType{
+					"T": {
+						Name:    "T",
+						Kind:    "struct",
+						Methods: map[string]*core.GoStdlibFunction{"Run": {Name: "Run"}},
+					},
+					"TB": {
+						Name: "TB",
+						Kind: "interface",
+						Methods: map[string]*core.GoStdlibFunction{
+							"Fatalf": {Name: "Fatalf"},
+							"Errorf": {Name: "Errorf"},
+							"Fatal":  {Name: "Fatal"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+	scope := resolution.NewGoFunctionScope("github.com/example/pkg.TestFoo")
+	scope.AddVariable(&resolution.GoVariableBinding{
+		VarName:      "t",
+		Type:         &core.TypeInfo{TypeFQN: "testing.T", Confidence: 0.95},
+		AssignedFrom: "param",
+	})
+	typeEngine.AddScope(scope)
+
+	callGraph := core.NewCallGraph()
+	importMap := core.NewGoImportMap("foo_test.go")
+
+	callSite := &CallSiteInternal{
+		CallerFQN:    "github.com/example/pkg.TestFoo",
+		CallerFile:   "foo_test.go",
+		FunctionName: "Fatalf",
+		ObjectName:   "t",
+	}
+
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(
+		callSite, importMap, reg, nil, typeEngine, callGraph, nil, nil,
+	)
+
+	// Check 2b: T has no Fatalf, but TB (interface) does → resolve to testing.TB.Fatalf.
+	assert.True(t, resolved, "should resolve via Check 2b (package interface scan)")
+	assert.Equal(t, "testing.TB.Fatalf", targetFQN)
+	assert.True(t, isStdlib, "resolved via stdlib interface")
+}
+
+// testStdlibLoaderWithPackages extends testStdlibLoader with GetPackage support.
+type testStdlibLoaderWithPackages struct {
+	testStdlibLoader
+	pkgData map[string]*core.GoStdlibPackage
+}
+
+func (m *testStdlibLoaderWithPackages) GetPackage(importPath string) (*core.GoStdlibPackage, error) {
+	if pkg, ok := m.pkgData[importPath]; ok {
+		return pkg, nil
+	}
+	return nil, errors.New("package not found")
+}
+
+// TestResolveGoCallTarget_S4Source4b_CrossPackageField covers the importMap expansion
+// step in S4-Source4b: when a CDN field type uses a short alias like "url.URL"
+// (from net/http's perspective), the calling file's importMap expands it to
+// "net/url.URL" so that Check 2 can validate the method via the StdlibLoader.
+func TestResolveGoCallTarget_S4Source4b_CrossPackageField(t *testing.T) {
+	reg := core.NewGoModuleRegistry()
+
+	// net/http is stdlib; net/url is stdlib.
+	// net/http.Request has a field URL of type "*url.URL" (CDN short form).
+	// net/url.URL has a String() method.
+	reg.StdlibLoader = &testStdlibLoaderWithPackages{
+		testStdlibLoader: testStdlibLoader{
+			packages: map[string]bool{"net/http": true, "net/url": true},
+			types: map[string]*core.GoStdlibType{
+				"net/http.Request": {
+					Name: "Request",
+					Kind: "struct",
+					Fields: []*core.GoStructField{
+						{Name: "URL", Type: "*url.URL", Exported: true},
+					},
+					Methods: map[string]*core.GoStdlibFunction{},
+				},
+				"net/url.URL": {
+					Name:   "URL",
+					Kind:   "struct",
+					Fields: []*core.GoStructField{},
+					Methods: map[string]*core.GoStdlibFunction{
+						"String": {Name: "String"},
+					},
+				},
+			},
+		},
+		pkgData: map[string]*core.GoStdlibPackage{},
+	}
+
+	typeEngine := resolution.NewGoTypeInferenceEngine(reg)
+	scope := resolution.NewGoFunctionScope("github.com/example/pkg.HandleReq")
+	scope.AddVariable(&resolution.GoVariableBinding{
+		VarName:      "req",
+		Type:         &core.TypeInfo{TypeFQN: "net/http.Request", Confidence: 0.95},
+		AssignedFrom: "param",
+	})
+	typeEngine.AddScope(scope)
+
+	callGraph := core.NewCallGraph()
+
+	// The calling file imports net/url as "url" — importMap can expand "url" → "net/url".
+	importMap := core.NewGoImportMap("handler.go")
+	importMap.AddImport("url", "net/url")
+
+	callSite := &CallSiteInternal{
+		CallerFQN:    "github.com/example/pkg.HandleReq",
+		CallerFile:   "handler.go",
+		FunctionName: "String",
+		ObjectName:   "req.URL",
+	}
+
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(
+		callSite, importMap, reg, nil, typeEngine, callGraph, nil, nil,
+	)
+
+	// S4-Source4b: req→net/http.Request, field URL→"url.URL" (CDN), expanded to
+	// "net/url.URL" via importMap, then Check 2 finds String() on net/url.URL.
+	assert.True(t, resolved, "should resolve via S4-Source4b + importMap alias expansion")
+	assert.Equal(t, "net/url.URL.String", targetFQN)
+	assert.True(t, isStdlib, "resolved via stdlib type")
 }
 
 // TestResolveGoCallTarget_ThirdPartyLoaderFound covers lines 669-676:

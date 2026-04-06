@@ -146,3 +146,76 @@ func resolveGoTypeFQN(shortType string, importMap *core.GoImportMap) string {
 
 	return importPath + "." + rest
 }
+
+// resolveFieldType converts a raw struct field type string (as stored in the
+// CDN registry) to a TypeFQN suitable for method resolution.
+//
+// The CDN stores field types relative to the package they belong to, so a
+// field typed "Header" in "net/http" means "net/http.Header". A field typed
+// "io.ReadCloser" is already package-qualified and returned as-is. Pointer
+// prefixes are stripped since method lookup works on the base type.
+//
+// Examples (pkgPath = "net/http"):
+//
+//	"Header"        → "net/http.Header"
+//	"*url.URL"      → "net/url.URL"  (the caller must resolve "url" → "net/url")
+//	"io.ReadCloser" → "io.ReadCloser"
+//	"string"        → "" (builtin — not useful for method resolution)
+func resolveFieldType(rawType, pkgPath string) string {
+	t := strings.TrimPrefix(rawType, "*")
+	t = strings.TrimPrefix(t, "[]") // drop slice prefix; focus on element type
+	if t == "" {
+		return ""
+	}
+	// Skip builtins and function types — not useful for method resolution.
+	if strings.HasPrefix(t, "func") || strings.HasPrefix(t, "chan") || strings.HasPrefix(t, "map") {
+		return ""
+	}
+	// Already package-qualified (e.g., "io.ReadCloser", "url.URL")
+	if strings.Contains(t, ".") {
+		return t // caller may further resolve "url" → "net/url" if needed
+	}
+	// Check if it's a Go builtin type — skip those.
+	builtins := map[string]bool{
+		"bool": true, "byte": true, "error": true, "int": true,
+		"int8": true, "int16": true, "int32": true, "int64": true,
+		"uint": true, "uint8": true, "uint16": true, "uint32": true,
+		"uint64": true, "string": true, "rune": true, "float32": true,
+		"float64": true, "any": true,
+	}
+	if builtins[t] {
+		return ""
+	}
+	// Unqualified name — belongs to the same package (e.g., "Header" in "net/http").
+	return pkgPath + "." + t
+}
+
+// findMethodInPackageInterfaces scans all types in the given stdlib package for
+// any interface type that declares the named method. Returns the FQN of the
+// method on the first matching interface (e.g., "testing.TB.Fatalf").
+//
+// This handles promoted methods that do not appear directly on a concrete type
+// in the CDN data (e.g., testing.T.Fatalf is promoted from testing.common but
+// the CDN only lists testing.T's direct methods). Since T implements TB and TB
+// declares Fatalf, this function finds testing.TB.Fatalf and returns it.
+//
+// Returns ("", false) when no interface in the package has the method.
+func findMethodInPackageInterfaces(
+	loader core.GoStdlibLoader,
+	importPath, methodName string,
+) (methodFQN string, found bool) {
+	pkg, err := loader.GetPackage(importPath)
+	if err != nil || pkg == nil {
+		return "", false
+	}
+
+	for typeName, typ := range pkg.Types {
+		if typ.Kind != "interface" {
+			continue
+		}
+		if _, hasMethod := typ.Methods[methodName]; hasMethod {
+			return importPath + "." + typeName + "." + methodName, true
+		}
+	}
+	return "", false
+}
