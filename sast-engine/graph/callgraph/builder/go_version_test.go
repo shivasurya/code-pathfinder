@@ -301,7 +301,10 @@ func TestInitGoThirdPartyLoader_NilReg(t *testing.T) {
 }
 
 func TestInitGoThirdPartyLoader_NoDependencies(t *testing.T) {
-	// go.mod with no require directives → PackageCount == 0 → ThirdPartyLoader stays nil.
+	// go.mod with no require directives and no CDN → ThirdPartyLoader stays nil.
+	// Use an unreachable CDN URL so the test is not coupled to live CDN availability.
+	t.Setenv("CPF_CDN_URL", "https://nonexistent.invalid.test")
+
 	tmpDir := t.TempDir()
 	writeTempFile(t, tmpDir, "go.mod", "module github.com/example/app\n\ngo 1.21\n")
 
