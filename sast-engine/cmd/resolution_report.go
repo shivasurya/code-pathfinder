@@ -11,7 +11,9 @@ import (
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
 )
@@ -41,10 +43,26 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 		codeGraph := graph.Initialize(projectInput, nil)
 
 		fmt.Println("Building call graph...")
-		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, output.NewLogger(output.VerbosityDefault))
+		logger := output.NewLogger(output.VerbosityDefault)
+		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, logger)
 		if err != nil {
 			fmt.Printf("Error building call graph: %v\n", err)
 			return
+		}
+
+		// Build Go call graph if go.mod exists (same pipeline as scan.go).
+		goModPath := filepath.Join(projectInput, "go.mod")
+		if _, statErr := os.Stat(goModPath); statErr == nil {
+			goRegistry, goErr := resolution.BuildGoModuleRegistry(projectInput)
+			if goErr == nil && goRegistry != nil {
+				builder.InitGoStdlibLoader(goRegistry, projectInput, logger)
+				builder.InitGoThirdPartyLoader(goRegistry, projectInput, false, logger)
+				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
+				goCG, goErr := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+				if goErr == nil && goCG != nil {
+					builder.MergeCallGraphs(cg, goCG)
+				}
+			}
 		}
 
 		fmt.Printf("\nResolution Report for %s\n", projectInput)
@@ -66,6 +84,12 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 		// Print stdlib registry statistics
 		if stats.StdlibResolved > 0 {
 			printStdlibStatistics(stats)
+			fmt.Println()
+		}
+
+		// Print Go resolution statistics
+		if stats.GoTotalCalls > 0 {
+			printGoResolutionStatistics(stats)
 			fmt.Println()
 		}
 
@@ -133,6 +157,16 @@ type resolutionStatistics struct {
 	StdlibViaAnnotation int            // Resolved via type annotations
 	StdlibViaInference  int            // Resolved via type inference
 	StdlibViaBuiltin    int            // Resolved via builtin registry
+
+	// Go resolution statistics
+	GoTotalCalls         int
+	GoResolvedCalls      int
+	GoUnresolvedCalls    int
+	GoUserCodeResolved   int            // Resolved via user-code call graph (Check 1)
+	GoStdlibResolved     int            // Resolved via StdlibLoader (Check 2)
+	GoThirdPartyResolved int            // Resolved via ThirdPartyLoader (Check 2.5)
+	GoStdlibByModule     map[string]int // e.g., "net/http" -> 12
+	GoThirdPartyByModule map[string]int // e.g., "gorm.io/gorm" -> 5
 }
 
 // aggregateResolutionStatistics analyzes the call graph and collects statistics.
@@ -147,12 +181,48 @@ func aggregateResolutionStatistics(cg *core.CallGraph, projectRoot string) *reso
 		ConfidenceDistribution: make(map[string]int),
 		StdlibByModule:         make(map[string]int),
 		StdlibByType:           make(map[string]int),
+		GoStdlibByModule:       make(map[string]int),
+		GoThirdPartyByModule:   make(map[string]int),
 	}
 
 	// Iterate through all call sites
 	for functionFQN, callSites := range cg.CallSites {
 		for _, site := range callSites {
 			stats.TotalCalls++
+
+			// Classify Go call sites: check caller function language or FQN heuristic.
+			// Go FQNs always contain "/" (e.g., "net/http.Request.FormValue").
+			// Caller function node language is the authoritative signal when available.
+			funcNode := cg.Functions[functionFQN]
+			isGoCall := (funcNode != nil && funcNode.Language == "go") ||
+				strings.Contains(site.TargetFQN, "/")
+
+			if isGoCall {
+				stats.GoTotalCalls++
+				if site.Resolved {
+					stats.GoResolvedCalls++
+					// Use site.IsStdlib (set by go_builder.go) as the authoritative stdlib signal.
+					// It correctly handles single-segment stdlib packages (fmt, os, sync, io).
+					switch {
+					case site.IsStdlib:
+						stats.GoStdlibResolved++
+						goModule := extractGoModuleName(site.TargetFQN)
+						if goModule != "" {
+							stats.GoStdlibByModule[goModule]++
+						}
+					case site.TypeSource == "thirdparty_local" || site.TypeSource == "thirdparty_cdn":
+						stats.GoThirdPartyResolved++
+						goModule := extractGoModuleName(site.TargetFQN)
+						if goModule != "" {
+							stats.GoThirdPartyByModule[goModule]++
+						}
+					default:
+						stats.GoUserCodeResolved++
+					}
+				} else {
+					stats.GoUnresolvedCalls++
+				}
+			}
 
 			if site.Resolved {
 				stats.ResolvedCalls++
@@ -515,6 +585,92 @@ func percentage(part, total int) float64 {
 		return 0.0
 	}
 	return float64(part) * 100.0 / float64(total)
+}
+
+// extractGoModuleName extracts the Go module/package path from a fully-qualified name.
+// Examples:
+//
+//	"gorm.io/gorm.DB.Where"             -> "gorm.io/gorm"
+//	"net/http.Request.FormValue"         -> "net/http"
+//	"github.com/gin-gonic/gin.Context.Query" -> "github.com/gin-gonic/gin"
+//	"fmt.Println"                        -> "" (no slash, not a module path)
+func extractGoModuleName(fqn string) string {
+	lastSlash := strings.LastIndex(fqn, "/")
+	if lastSlash == -1 {
+		// No slash — single-segment stdlib package (fmt, os, sync).
+		// Cannot reliably extract a module path, so return empty.
+		return ""
+	}
+	// After the last slash find the first "." which separates package from type name.
+	rest := fqn[lastSlash+1:]
+	dotIdx := strings.Index(rest, ".")
+	if dotIdx == -1 {
+		return fqn
+	}
+	return fqn[:lastSlash+1+dotIdx]
+}
+
+// printTopModules prints the top N entries from a module→count map,
+// sorted by count descending.
+func printTopModules(modules map[string]int, topN int) {
+	type moduleCount struct {
+		module string
+		count  int
+	}
+	entries := make([]moduleCount, 0, len(modules))
+	for mod, count := range modules {
+		entries = append(entries, moduleCount{mod, count})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].count != entries[j].count {
+			return entries[i].count > entries[j].count
+		}
+		return entries[i].module < entries[j].module
+	})
+	for i, mc := range entries {
+		if i >= topN {
+			break
+		}
+		fmt.Printf("    %2d. %-40s %d calls\n", i+1, mc.module, mc.count)
+	}
+}
+
+// printGoResolutionStatistics prints the Go call graph resolution statistics.
+func printGoResolutionStatistics(stats *resolutionStatistics) {
+	fmt.Println("Go Resolution Statistics:")
+	fmt.Printf("  Total Go calls:       %d\n", stats.GoTotalCalls)
+	fmt.Printf("  Resolved:             %d (%.1f%%)\n",
+		stats.GoResolvedCalls,
+		percentage(stats.GoResolvedCalls, stats.GoTotalCalls))
+	fmt.Printf("  Unresolved:           %d (%.1f%%)\n",
+		stats.GoUnresolvedCalls,
+		percentage(stats.GoUnresolvedCalls, stats.GoTotalCalls))
+	fmt.Println()
+
+	if stats.GoResolvedCalls > 0 {
+		fmt.Println("  Resolution Breakdown:")
+		fmt.Printf("    User code:          %d (%.1f%%)\n",
+			stats.GoUserCodeResolved,
+			percentage(stats.GoUserCodeResolved, stats.GoResolvedCalls))
+		fmt.Printf("    Stdlib (CDN):       %d (%.1f%%)\n",
+			stats.GoStdlibResolved,
+			percentage(stats.GoStdlibResolved, stats.GoResolvedCalls))
+		fmt.Printf("    Third-party:        %d (%.1f%%)\n",
+			stats.GoThirdPartyResolved,
+			percentage(stats.GoThirdPartyResolved, stats.GoResolvedCalls))
+		fmt.Println()
+	}
+
+	if len(stats.GoStdlibByModule) > 0 {
+		fmt.Println("  Top Go Stdlib Modules:")
+		printTopModules(stats.GoStdlibByModule, 10)
+		fmt.Println()
+	}
+
+	if len(stats.GoThirdPartyByModule) > 0 {
+		fmt.Println("  Top Go Third-Party Modules:")
+		printTopModules(stats.GoThirdPartyByModule, 10)
+	}
 }
 
 // isStdlibResolution checks if a FQN resolves to Python stdlib.

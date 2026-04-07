@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
 )
@@ -615,4 +617,252 @@ func TestAggregateResolutionStatistics_FailureReasonBreakdown(t *testing.T) {
 	assert.Equal(t, 1, stats.FailuresByReason["super_call"])
 	assert.Equal(t, 1, stats.FailuresByReason["variable_method"])
 	assert.Equal(t, 1, stats.FailuresByReason["attribute_chain"])
+}
+
+func TestExtractGoModuleName(t *testing.T) {
+	tests := []struct {
+		name     string
+		fqn      string
+		expected string
+	}{
+		{"gorm multi-segment", "gorm.io/gorm.DB.Where", "gorm.io/gorm"},
+		{"net/http two-segment", "net/http.Request.FormValue", "net/http"},
+		{"gin three-segment", "github.com/gin-gonic/gin.Context.Query", "github.com/gin-gonic/gin"},
+		{"pgxpool four-segment", "github.com/jackc/pgx/v5/pgxpool.Pool.Query", "github.com/jackc/pgx/v5/pgxpool"},
+		{"no slash single-segment stdlib", "fmt.Println", ""},
+		{"no slash no dot", "fmt", ""},
+		{"empty string", "", ""},
+		{"no dot after last slash", "github.com/foo/bar", "github.com/foo/bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractGoModuleName(tt.fqn)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPrintTopModules(t *testing.T) {
+	// Should not panic with a normal map.
+	modules := map[string]int{
+		"net/http":              8,
+		"fmt":                   5,
+		"gorm.io/gorm":          4,
+		"github.com/gin-gonic/gin": 3,
+	}
+	printTopModules(modules, 10)
+
+	// Should not panic with empty map.
+	printTopModules(map[string]int{}, 10)
+
+	// Should respect topN limit.
+	printTopModules(modules, 2)
+}
+
+func TestPrintGoResolutionStatistics_Empty(t *testing.T) {
+	stats := &resolutionStatistics{
+		GoTotalCalls:         0,
+		GoResolvedCalls:      0,
+		GoUnresolvedCalls:    0,
+		GoStdlibByModule:     make(map[string]int),
+		GoThirdPartyByModule: make(map[string]int),
+	}
+	// Should not panic.
+	printGoResolutionStatistics(stats)
+}
+
+func TestPrintGoResolutionStatistics_StdlibOnly(t *testing.T) {
+	stats := &resolutionStatistics{
+		GoTotalCalls:       20,
+		GoResolvedCalls:    18,
+		GoUnresolvedCalls:  2,
+		GoUserCodeResolved: 0,
+		GoStdlibResolved:   18,
+		GoStdlibByModule: map[string]int{
+			"net/http": 10,
+			"fmt":      8,
+		},
+		GoThirdPartyByModule: make(map[string]int),
+	}
+	// Should not panic.
+	printGoResolutionStatistics(stats)
+}
+
+func TestPrintGoResolutionStatistics_ThirdPartyOnly(t *testing.T) {
+	stats := &resolutionStatistics{
+		GoTotalCalls:         10,
+		GoResolvedCalls:      10,
+		GoUnresolvedCalls:    0,
+		GoThirdPartyResolved: 10,
+		GoStdlibByModule:     make(map[string]int),
+		GoThirdPartyByModule: map[string]int{
+			"gorm.io/gorm":               4,
+			"github.com/gin-gonic/gin":   3,
+			"github.com/redis/go-redis/v9": 3,
+		},
+	}
+	// Should not panic.
+	printGoResolutionStatistics(stats)
+}
+
+func TestPrintGoResolutionStatistics_Mixed(t *testing.T) {
+	stats := &resolutionStatistics{
+		GoTotalCalls:         45,
+		GoResolvedCalls:      42,
+		GoUnresolvedCalls:    3,
+		GoUserCodeResolved:   12,
+		GoStdlibResolved:     20,
+		GoThirdPartyResolved: 10,
+		GoStdlibByModule: map[string]int{
+			"net/http":    8,
+			"fmt":         5,
+			"crypto/tls":  3,
+			"os":          4,
+		},
+		GoThirdPartyByModule: map[string]int{
+			"gorm.io/gorm":             4,
+			"github.com/gin-gonic/gin": 3,
+		},
+	}
+	// Should not panic.
+	printGoResolutionStatistics(stats)
+}
+
+func TestAggregateResolutionStatistics_GoCallSites(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Go stdlib call (IsStdlib=true, FQN has slash)
+	cg.AddCallSite("main.handler", core.CallSite{
+		Target:    "FormValue",
+		Resolved:  true,
+		TargetFQN: "net/http.Request.FormValue",
+		IsStdlib:  true,
+	})
+
+	// Go third-party call (TypeSource=thirdparty_local)
+	cg.AddCallSite("main.handler", core.CallSite{
+		Target:     "Raw",
+		Resolved:   true,
+		TargetFQN:  "gorm.io/gorm.DB.Raw",
+		TypeSource: "thirdparty_local",
+	})
+
+	// Go user code call (resolved, not stdlib, not third-party)
+	cg.AddCallSite("main.handler", core.CallSite{
+		Target:    "Process",
+		Resolved:  true,
+		TargetFQN: "testapp/svc.Service.Process",
+	})
+
+	// Go unresolved call
+	cg.AddCallSite("main.handler", core.CallSite{
+		Target:    "Unknown",
+		Resolved:  false,
+		TargetFQN: "github.com/some/pkg.Type.Unknown",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 4, stats.GoTotalCalls)
+	assert.Equal(t, 3, stats.GoResolvedCalls)
+	assert.Equal(t, 1, stats.GoUnresolvedCalls)
+	assert.Equal(t, 1, stats.GoStdlibResolved)
+	assert.Equal(t, 1, stats.GoThirdPartyResolved)
+	assert.Equal(t, 1, stats.GoUserCodeResolved)
+	assert.Equal(t, 1, stats.GoStdlibByModule["net/http"])
+	assert.Equal(t, 1, stats.GoThirdPartyByModule["gorm.io/gorm"])
+}
+
+func TestAggregateResolutionStatistics_GoThirdPartyCDN(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Go CDN third-party call
+	cg.AddCallSite("main.handler", core.CallSite{
+		Target:     "Get",
+		Resolved:   true,
+		TargetFQN:  "github.com/redis/go-redis/v9.Client.Get",
+		TypeSource: "thirdparty_cdn",
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	assert.Equal(t, 1, stats.GoTotalCalls)
+	assert.Equal(t, 1, stats.GoThirdPartyResolved)
+	assert.Equal(t, 1, stats.GoThirdPartyByModule["github.com/redis/go-redis/v9"])
+}
+
+func TestAggregateResolutionStatistics_GoModuleNameEmpty(t *testing.T) {
+	cg := core.NewCallGraph()
+
+	// Register the caller function with Language="go" so the Go-detection path
+	// triggers even for single-segment stdlib FQNs (fmt, os) that have no slash.
+	cg.Functions["main.main"] = &graph.Node{
+		ID:       "main_main",
+		Type:     "function",
+		Name:     "main",
+		Language: "go",
+	}
+
+	// Go stdlib single-segment — no slash, extractGoModuleName returns ""
+	cg.AddCallSite("main.main", core.CallSite{
+		Target:    "Println",
+		Resolved:  true,
+		TargetFQN: "fmt.Println",
+		IsStdlib:  true,
+	})
+
+	stats := aggregateResolutionStatistics(cg, "/project")
+
+	// fmt.Println has IsStdlib=true, caller has Language="go" → classified as Go stdlib.
+	// extractGoModuleName returns "" (no slash) → GoStdlibByModule stays empty.
+	assert.Equal(t, 1, stats.GoStdlibResolved)
+	assert.Equal(t, 0, len(stats.GoStdlibByModule))
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests for the resolutionReportCmd Run function
+// (covers Go pipeline construction + printGoResolutionStatistics call)
+// ---------------------------------------------------------------------------
+
+func TestResolutionReportCmd_WithoutGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Python-only project — no go.mod, Go pipeline must be skipped.
+	err := os.WriteFile(filepath.Join(tmpDir, "main.py"), []byte("def handler():\n    pass\n"), 0644)
+	assert.NoError(t, err)
+
+	err = resolutionReportCmd.Flags().Set("project", tmpDir)
+	assert.NoError(t, err)
+
+	// Should not panic.
+	assert.NotPanics(t, func() {
+		resolutionReportCmd.Run(resolutionReportCmd, []string{})
+	})
+}
+
+func TestResolutionReportCmd_WithGoMod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Minimal Go project — go.mod + one Go file.
+	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module example.com/test\n\ngo 1.22\n"), 0644)
+	assert.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(`package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hello")
+}
+`), 0644)
+	assert.NoError(t, err)
+
+	err = resolutionReportCmd.Flags().Set("project", tmpDir)
+	assert.NoError(t, err)
+
+	// Go pipeline runs; must not panic regardless of what it resolves.
+	assert.NotPanics(t, func() {
+		resolutionReportCmd.Run(resolutionReportCmd, []string{})
+	})
 }
