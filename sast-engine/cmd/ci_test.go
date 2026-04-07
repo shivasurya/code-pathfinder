@@ -370,3 +370,42 @@ func TestCICmdPrepareRulesLocalOnly(t *testing.T) {
 	_, err = os.Stat(outputFile)
 	require.NoError(t, err)
 }
+
+// TestCICmdEnableDBCacheFlag verifies that the --enable-db-cache flag is
+// registered on the ci command with the correct default value.
+func TestCICmdEnableDBCacheFlag(t *testing.T) {
+	flag := ciCmd.Flags().Lookup("enable-db-cache")
+	require.NotNil(t, flag, "enable-db-cache flag should be registered on ci command")
+	assert.Equal(t, "false", flag.DefValue)
+}
+
+// TestCICmdEnableDBCacheWithGoProject verifies the --enable-db-cache code path
+// is exercised when running the ci command against a Go project.
+func TestCICmdEnableDBCacheWithGoProject(t *testing.T) {
+	projectDir, rulesFile := setupCIIntegrationTest(t)
+
+	// Add a go.mod so the ci command enters the Go analysis branch.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projectDir, "go.mod"),
+		[]byte("module example.com/test\n\ngo 1.21\n"),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projectDir, "main.go"),
+		[]byte("package main\n\nfunc main() {}\n"),
+		0o644,
+	))
+
+	outputFile := filepath.Join(t.TempDir(), "results.sarif")
+
+	resetCIFlags()
+	ciCmd.Flags().Set("rules", rulesFile)
+	ciCmd.Flags().Set("project", projectDir)
+	ciCmd.Flags().Set("output-file", outputFile)
+	require.NoError(t, ciCmd.Flags().Set("enable-db-cache", "true"))
+	defer ciCmd.Flags().Set("enable-db-cache", "false")
+
+	// Should complete without error — the cache is created and closed.
+	err := ciCmd.RunE(ciCmd, []string{})
+	require.NoError(t, err)
+}
