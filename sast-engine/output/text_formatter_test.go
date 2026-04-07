@@ -582,3 +582,50 @@ func TestTextFormatterEmptySummary(t *testing.T) {
 		t.Error("missing summary line")
 	}
 }
+
+// TestTextFormatterTaintGlobalWithSourceSnippet exercises the inter-procedural
+// taint path in writeDetailedFinding: DetectionTypeTaintGlobal with a non-empty
+// SourceSnippet (lines 133-141 of text_formatter.go).
+func TestTextFormatterTaintGlobalWithSourceSnippet(t *testing.T) {
+	var buf bytes.Buffer
+	tf := NewTextFormatterWithWriter(&buf, nil, nil)
+
+	detections := []*dsl.EnrichedDetection{
+		{
+			Detection: dsl.DataflowDetection{
+				SourceLine: 5,
+				SinkLine:   20,
+				TaintedVar: "req",
+				SinkCall:   "exec.Command",
+				Confidence: 0.95,
+			},
+			DetectionType: dsl.DetectionTypeTaintGlobal,
+			Rule:          dsl.RuleMetadata{ID: "cmd-inj-global", Severity: "critical"},
+			// Source location and snippet (simulates enriched inter-procedural finding)
+			SourceLocation: dsl.LocationInfo{RelPath: "handler.go", Line: 5},
+			SourceSnippet: dsl.CodeSnippet{
+				Lines: []dsl.SnippetLine{{Number: 5, Content: `	cmd := r.FormValue("cmd")`}},
+			},
+			// Sink location and snippet
+			Location: dsl.LocationInfo{RelPath: "runner.go", Line: 20},
+			Snippet: dsl.CodeSnippet{
+				Lines: []dsl.SnippetLine{{Number: 20, Content: `	exec.Command(cmd).Run()`}},
+			},
+		},
+	}
+
+	summary := BuildSummary(detections, 1)
+	tf.Format(detections, summary)
+
+	out := buf.String()
+	// Source header and sink header must both appear
+	if !strings.Contains(out, "Source:") {
+		t.Error("missing Source: header in taint-global finding")
+	}
+	if !strings.Contains(out, "Sink:") {
+		t.Error("missing Sink: header in taint-global finding")
+	}
+	if !strings.Contains(out, "handler.go") {
+		t.Error("missing source file in taint-global finding")
+	}
+}

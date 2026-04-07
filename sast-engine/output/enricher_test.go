@@ -9,6 +9,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewEnricher(t *testing.T) {
@@ -651,4 +652,54 @@ func TestExtractLocationWithoutCallGraph(t *testing.T) {
 	if loc.Line != 10 {
 		t.Errorf("line: got %d, want 10", loc.Line)
 	}
+}
+
+// TestEnrichDetection_InterproceduralSourceLocation verifies that when
+// SourceFunctionFQN differs from FunctionFQN (inter-procedural taint),
+// enricher.go lines 62-65 are exercised: SourceLocation is set and a source
+// code snippet is attempted.
+func TestEnrichDetection_InterproceduralSourceLocation(t *testing.T) {
+	// Write a real source file so extractSnippet can read it.
+	tmpDir := t.TempDir()
+	srcFile := tmpDir + "/handler.go"
+	require.NoError(t, os.WriteFile(srcFile, []byte("package main\n\nfunc Source() { _ = 1 }\n"), 0o644))
+	sinkFile := tmpDir + "/runner.go"
+	require.NoError(t, os.WriteFile(sinkFile, []byte("package main\n\nfunc Sink() { exec() }\n"), 0o644))
+
+	cg := core.NewCallGraph()
+	cg.Functions["mypkg.Source"] = &graph.Node{
+		Name:     "Source",
+		Language: "go",
+		SourceLocation: &graph.SourceLocation{
+			File: srcFile,
+		},
+	}
+	cg.Functions["mypkg.Sink"] = &graph.Node{
+		Name:     "Sink",
+		Language: "go",
+		SourceLocation: &graph.SourceLocation{
+			File: sinkFile,
+		},
+	}
+
+	opts := &OutputOptions{ProjectRoot: tmpDir}
+	e := NewEnricher(cg, opts)
+
+	rule := dsl.RuleIR{}
+	rule.Rule.ID = "taint-global-test"
+	rule.Rule.Severity = "high"
+
+	det := dsl.DataflowDetection{
+		FunctionFQN:       "mypkg.Sink",
+		SourceFunctionFQN: "mypkg.Source", // Different from FunctionFQN → inter-procedural
+		SinkLine:          3,
+		SourceLine:        3,
+		Scope:             "global",
+	}
+
+	enriched, err := e.EnrichDetection(det, rule)
+	require.NoError(t, err)
+
+	// SourceLocation must be populated (line 62 covered)
+	assert.NotEmpty(t, enriched.SourceLocation.FilePath, "SourceLocation.FilePath should be populated")
 }
