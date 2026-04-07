@@ -1,0 +1,117 @@
+name: Upload Go Third-Party Registries to R2
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      force_upload:
+        description: 'Force upload even if not a release'
+        required: false
+        default: 'false'
+  # Temporary: also run on PR-09 pushes to validate the pipeline end-to-end.
+  # Remove this trigger once the PR is merged.
+  push:
+    branches:
+      - shiva/pr-09-incremental-cache
+
+permissions:
+  contents: read
+
+jobs:
+  upload-go-thirdparty-registries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: Verify Go installation
+        run: |
+          echo "Go compiler: $(go version)"
+          echo "GOPATH: $(go env GOPATH)"
+          echo "GOMODCACHE: $(go env GOMODCACHE)"
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Generate and upload Go third-party registries
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          cd sast-engine/tools
+          chmod +x upload_go_thirdparty_to_r2.sh
+          ./upload_go_thirdparty_to_r2.sh
+
+      - name: Verify uploads in R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          echo "Verifying uploaded files in R2..."
+          aws s3 ls "s3://code-pathfinder-assets/registries/go-thirdparty/v1/manifest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            || echo "Warning: manifest.json not found"
+
+          echo ""
+          echo "Listing uploaded files..."
+          aws s3 ls "s3://code-pathfinder-assets/registries/go-thirdparty/v1/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --summarize --human-readable
+
+      - name: Test public CDN accessibility
+        run: |
+          echo "Testing public CDN URL..."
+          URL="https://assets.codepathfinder.dev/registries/go-thirdparty/v1/manifest.json"
+          echo "Testing: $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          if [ "$STATUS" = "200" ]; then
+            echo "  Go third-party manifest is publicly accessible"
+            echo ""
+            echo "Manifest contents:"
+            curl -s "$URL" | python3 -c "
+import json, sys
+m = json.load(sys.stdin)
+pkgs = m.get('packages', [])
+print('  Schema version:  ', m.get('schema_version', 'unknown'))
+print('  Registry version:', m.get('registry_version', 'unknown'))
+print('  Generated at:    ', m.get('generated_at', 'unknown'))
+print('  Packages:        ', len(pkgs))
+if pkgs:
+    print('  First 5 packages:')
+    for p in pkgs[:5]:
+        print(f'    - {p[\"import_path\"]} ({p.get(\"type_count\",0)} types, {p.get(\"function_count\",0)} functions)')
+"
+          else
+            echo "  Go third-party manifest returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "========================================="
+          echo "Go Third-Party Registry Upload Complete"
+          echo "========================================="
+          echo ""
+          echo "Registry available at:"
+          echo "  https://assets.codepathfinder.dev/registries/go-thirdparty/v1/manifest.json"
+          echo ""
+          echo "The code-pathfinder engine will use this CDN registry for Go third-party"
+          echo "type inference. Popular packages (gin, gorm, sqlx, etc.) will resolve"
+          echo "via CDN first; project-specific deps fall back to local vendor/ parsing."
