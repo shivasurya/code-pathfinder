@@ -215,7 +215,7 @@ func TestBuildGoCallGraph_StdlibTagging(t *testing.T) {
 	}
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(reg)
-	callGraph, err := BuildGoCallGraph(codeGraph, reg, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, reg, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, callGraph)
 

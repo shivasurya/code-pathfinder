@@ -154,7 +154,7 @@ func handler() {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// Find fmt.Sprintf call site — resolved via Pattern 1a (import)
@@ -230,7 +230,7 @@ func NewService() *Service {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// Find the call site for svc.Process — should have type inference fields
@@ -274,7 +274,7 @@ func handler() {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// Verify fmt.Sprintf resolved
@@ -314,7 +314,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	require.NoError(t, err)
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// r.FormValue should resolve via parameter type (r: *http.Request)

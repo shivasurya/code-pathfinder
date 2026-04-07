@@ -105,7 +105,7 @@ func handler() {
 	require.NoError(t, err)
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// The unresolved call site must be recorded with FailureReason = "unresolved_go_call".
@@ -173,7 +173,7 @@ func handler() {
 	})
 	goTypeEngine.AddScope(scope)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// Find the globalDB.Query call.

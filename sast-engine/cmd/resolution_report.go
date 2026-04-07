@@ -35,6 +35,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 		projectInput := cmd.Flag("project").Value.String()
 		csvOutput := cmd.Flag("csv").Value.String()
 		dumpJSON := cmd.Flag("dump-callsites-json").Value.String()
+		enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
 
 		if projectInput == "" {
 			fmt.Println("Error: --project flag is required")
@@ -60,9 +61,29 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 				builder.InitGoStdlibLoader(goRegistry, projectInput, logger)
 				builder.InitGoThirdPartyLoader(goRegistry, projectInput, false, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-				goCG, goErr := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
+
+				// Open SQLite analysis cache only when --enable-db-cache is set.
+				// Disabled by default to preserve current behaviour.
+				var analysisCache *builder.AnalysisCache
+				if enableDBCache {
+					var cacheErr error
+					analysisCache, cacheErr = builder.OpenAnalysisCache(projectInput)
+					if cacheErr != nil {
+						fmt.Fprintf(os.Stderr, "  [cache] warn: could not open cache: %v — running full analysis\n", cacheErr)
+						analysisCache = nil
+					}
+					if analysisCache != nil {
+						defer analysisCache.Close()
+					}
+				}
+
+				goCG, goErr := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if goErr == nil && goCG != nil {
 					builder.MergeCallGraphs(cg, goCG)
+				}
+
+				if enableDBCache && analysisCache != nil {
+					fmt.Println("Cache: incremental analysis cache updated")
 				}
 			}
 		}
@@ -910,4 +931,5 @@ func init() {
 	resolutionReportCmd.MarkFlagRequired("project")
 	resolutionReportCmd.Flags().String("csv", "", "Export unresolved calls to CSV file (e.g., --csv unresolved.csv)")
 	resolutionReportCmd.Flags().String("dump-callsites-json", "", "Export all Go call sites as JSONL for accuracy validation (e.g., --dump-callsites-json callsites.jsonl)")
+	resolutionReportCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental). Caches Pass 2b scopes and Pass 3 call sites per file keyed by content hash; only changed files are re-analysed on subsequent runs.")
 }
