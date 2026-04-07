@@ -156,6 +156,66 @@ func dirHasGoFiles(dir string) (bool, error) {
 	return false, nil
 }
 
+// ExtractSinglePackage extracts type metadata from a single Go package directory.
+// Unlike Run (which processes the entire Go stdlib tree), this operates on a single
+// directory path supplied by the caller (e.g., a `go mod download` cache path).
+//
+// Parameters:
+//   - packageDir: absolute path to the package source directory
+//   - importPath: the Go import path (e.g., "gorm.io/gorm")
+//
+// Files named *_test.go are excluded. Individual files that fail to parse (e.g.,
+// due to cgo directives or build-constrained syntax) are skipped silently so the
+// method returns the best-effort API surface of the remaining files.
+// Returns an error if packageDir cannot be read or contains no .go source files.
+func (e *Extractor) ExtractSinglePackage(packageDir, importPath string) (*Package, error) {
+	entries, err := os.ReadDir(packageDir)
+	if err != nil {
+		return nil, fmt.Errorf("reading directory %s: %w", packageDir, err)
+	}
+
+	var goFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			goFiles = append(goFiles, filepath.Join(packageDir, name))
+		}
+	}
+
+	if len(goFiles) == 0 {
+		return nil, fmt.Errorf("no .go files found in %s", packageDir)
+	}
+
+	pkg := &Package{
+		ImportPath:  importPath,
+		GoVersion:   e.config.GoVersion,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Functions:   make(map[string]*Function),
+		Types:       make(map[string]*Type),
+		Constants:   make(map[string]*Constant),
+		Variables:   make(map[string]*Variable),
+	}
+
+	fset := token.NewFileSet()
+	for _, filePath := range goFiles {
+		astFile, parseErr := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+		if parseErr != nil {
+			// Skip files that fail to parse (cgo, unsupported syntax, etc.).
+			continue
+		}
+		// Skip test-only package declarations (e.g. "package mypkg_test").
+		if strings.HasSuffix(astFile.Name.Name, "_test") {
+			continue
+		}
+		e.extractFromFile(pkg, astFile, fset)
+	}
+
+	return pkg, nil
+}
+
 // extractPackage parses all non-test .go files in the given import path and
 // returns the extracted Package metadata.
 func (e *Extractor) extractPackage(importPath string) (*Package, error) {
