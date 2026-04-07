@@ -29,7 +29,7 @@ func handler() {
 	goRegistry, _ := resolution.BuildGoModuleRegistry(tmpDir)
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	foundPrintln := false
@@ -64,7 +64,7 @@ func handler() {
 	codeGraph := graph.Initialize(tmpDir, nil)
 	goRegistry, _ := resolution.BuildGoModuleRegistry(tmpDir)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, nil, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, nil, nil, nil)
 	require.NoError(t, err)
 
 	for _, sites := range callGraph.CallSites {

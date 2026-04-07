@@ -85,7 +85,7 @@ func handler(db *gorm.DB) {
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, callGraph)
 
@@ -163,7 +163,7 @@ func handler(c *gin.Context) {
 	InitGoThirdPartyLoader(goRegistry, tmpDir, false, nil)
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	handlerFQN := "testapp.handler"
@@ -227,7 +227,7 @@ func setup() {
 	InitGoThirdPartyLoader(goRegistry, tmpDir, false, nil)
 	require.NotNil(t, goRegistry.ThirdPartyLoader)
 
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, resolution.NewGoTypeInferenceEngine(goRegistry), nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, resolution.NewGoTypeInferenceEngine(goRegistry), nil, nil)
 	require.NoError(t, err)
 
 	// Check 2.5 path: db.Find — method call on third-party receiver.

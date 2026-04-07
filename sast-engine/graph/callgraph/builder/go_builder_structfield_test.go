@@ -143,7 +143,7 @@ func (a *Attention) Forward(x string) string {
 	require.NoError(t, err)
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// Verify that Attention.Forward's call to a.KNorm.Forward is resolved.
@@ -188,7 +188,7 @@ func (s *Store) GetUser(id int) {
 	require.NoError(t, err)
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil)
+	callGraph, err := BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, nil, nil)
 	require.NoError(t, err)
 
 	// The index must have the db field mapped.
