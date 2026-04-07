@@ -70,25 +70,8 @@ echo ""
 echo "  Generated $FILE_COUNT files ($TOTAL_SIZE total)"
 
 # Show manifest stats
-go run - <<'GOEOF' "$OUTPUT_DIR/manifest.json"
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "os"
-)
-
-func main() {
-    data, _ := os.ReadFile(os.Args[1])
-    var m struct {
-        Packages []struct{} `json:"packages"`
-    }
-    json.Unmarshal(data, &m)
-    fmt.Printf("  Packages: %d\n", len(m.Packages))
-}
-GOEOF
-
+PKG_COUNT=$(python3 -c "import json; m=json.load(open('$OUTPUT_DIR/manifest.json')); print(len(m.get('packages',[])))")
+echo "  Packages: $PKG_COUNT"
 echo ""
 
 # ---------------------------------------------------------------------------

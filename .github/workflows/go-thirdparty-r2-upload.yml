@@ -85,19 +85,7 @@ jobs:
             echo "  Go third-party manifest is publicly accessible"
             echo ""
             echo "Manifest contents:"
-            curl -s "$URL" | python3 -c "
-import json, sys
-m = json.load(sys.stdin)
-pkgs = m.get('packages', [])
-print('  Schema version:  ', m.get('schema_version', 'unknown'))
-print('  Registry version:', m.get('registry_version', 'unknown'))
-print('  Generated at:    ', m.get('generated_at', 'unknown'))
-print('  Packages:        ', len(pkgs))
-if pkgs:
-    print('  First 5 packages:')
-    for p in pkgs[:5]:
-        print(f'    - {p[\"import_path\"]} ({p.get(\"type_count\",0)} types, {p.get(\"function_count\",0)} functions)')
-"
+            curl -s "$URL" | python3 -c "import json,sys; m=json.load(sys.stdin); pkgs=m.get('packages',[]); print('  Schema version:  ', m.get('schema_version','unknown')); print('  Registry version:', m.get('registry_version','unknown')); print('  Generated at:    ', m.get('generated_at','unknown')); print('  Packages:        ', len(pkgs)); [print(f'    - {p[\"import_path\"]} ({p.get(\"type_count\",0)} types, {p.get(\"function_count\",0)} functions)') for p in pkgs[:5]]"
           else
             echo "  Go third-party manifest returned HTTP $STATUS"
             exit 1
