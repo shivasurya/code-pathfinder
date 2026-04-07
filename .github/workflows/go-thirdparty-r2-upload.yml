@@ -9,11 +9,6 @@ on:
         description: 'Force upload even if not a release'
         required: false
         default: 'false'
-  # Temporary: also run on PR-09 pushes to validate the pipeline end-to-end.
-  # Remove this trigger once the PR is merged.
-  push:
-    branches:
-      - shiva/pr-09-incremental-cache
 
 permissions:
   contents: read
