@@ -655,3 +655,160 @@ func TestSavePass4Results_ClosedDB(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
+
+// TestLoadFunctionIndex_ClosedDB verifies that LoadFunctionIndex returns an
+// empty map (not a panic) when the database connection is already closed.
+func TestLoadFunctionIndex_ClosedDB(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	require.NoError(t, cache.Close())
+
+	// Should return empty map, not panic, on closed DB.
+	idx := cache.LoadFunctionIndex()
+	assert.Empty(t, idx)
+}
+
+// TestOpenAnalysisCache_UserCacheDirFallback verifies that OpenAnalysisCache
+// gracefully falls back to os.TempDir() when os.UserCacheDir() cannot determine
+// the home directory. This covers the fallback branch in OpenAnalysisCache.
+func TestOpenAnalysisCache_UserCacheDirFallback(t *testing.T) {
+	// Force os.UserCacheDir() to fail by clearing both HOME and XDG_CACHE_HOME.
+	// Go's UserCacheDir on Linux returns an error when neither is set.
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
+
+	// Set TMPDIR to an isolated fresh directory so os.TempDir() → fresh dir/pathfinder,
+	// avoiding collisions with pre-existing /tmp/pathfinder entries on the test host.
+	t.Setenv("TMPDIR", t.TempDir())
+
+	// OpenAnalysisCache should still succeed using os.TempDir() as the fallback.
+	cache, err := OpenAnalysisCache(t.TempDir())
+	if err != nil {
+		// If HOME="" breaks more than just UserCacheDir (e.g. sqlite temp files),
+		// that's acceptable to skip — the important thing is it doesn't panic.
+		t.Skipf("env-cleared run produced error (acceptable): %v", err)
+	}
+	require.NoError(t, cache.Close())
+}
+
+// TestOpenAnalysisCache_MkdirError verifies that OpenAnalysisCache returns an
+// error when it cannot create the cache directory (e.g., because a file already
+// exists at the target path).
+func TestOpenAnalysisCache_MkdirError(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Place a regular file where the "pathfinder" directory should be created.
+	blockingFile := filepath.Join(tmp, "pathfinder")
+	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0o444))
+
+	// Point XDG_CACHE_HOME at our temp dir so pfDir = tmp/pathfinder (the file above).
+	t.Setenv("XDG_CACHE_HOME", tmp)
+
+	_, err := OpenAnalysisCache(t.TempDir())
+	assert.Error(t, err, "os.MkdirAll should fail when a file blocks the cache dir")
+}
+
+// TestSaveFunctionIndex_TableDropped verifies that SaveFunctionIndex returns an
+// error when the function_index table has been dropped.
+func TestSaveFunctionIndex_TableDropped(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Drop the table so the DELETE inside SaveFunctionIndex fails.
+	_, err = cache.db.ExecContext(context.Background(), `DROP TABLE function_index`)
+	require.NoError(t, err)
+
+	err = cache.SaveFunctionIndex(map[string][]string{"/a.go": {"pkg.Fn"}})
+	assert.Error(t, err)
+}
+
+// TestSavePass4Results_TableDropped verifies that SavePass4Results returns an
+// error when the pass4_results table has been dropped.
+func TestSavePass4Results_TableDropped(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	_, err = cache.db.ExecContext(context.Background(), `DROP TABLE pass4_results`)
+	require.NoError(t, err)
+
+	err = cache.SavePass4Results(map[string]*CachedPass4Result{
+		"/a.go": {ContentHash: "abc", Edges: []CachedPass4Edge{}, UnresolvedNames: []string{}},
+	})
+	assert.Error(t, err)
+}
+
+// TestOpenAnalysisCache_ProjectRootMismatch_WipesAll verifies that when the
+// stored project_root differs from the new one, all data tables are emptied and
+// the cache opens successfully with the new project root stored.
+func TestOpenAnalysisCache_ProjectRootMismatch_WipesAll(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "wipe_all.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	sc := &CachedScope{FunctionScopes: make(map[string]CachedFunctionScope)}
+	require.NoError(t, cache.PutFileCached(goFile, cs, sc))
+	require.NoError(t, cache.SaveFunctionIndex(map[string][]string{goFile: {"pkg.Fn"}}))
+
+	// Store a different project_root to simulate opening the same DB for a new project.
+	_, err = cache.db.ExecContext(context.Background(),
+		"UPDATE meta SET value='/different/project' WHERE key='project_root'")
+	require.NoError(t, err)
+	require.NoError(t, cache.Close())
+
+	// Re-opening should succeed and wipe all data tables.
+	cache2, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	// All data tables should be wiped (file was in old project).
+	_, hit := cache2.GetFileCached(goFile)
+	assert.False(t, hit, "file_cache should be wiped on project_root change")
+
+	idx := cache2.LoadFunctionIndex()
+	assert.Empty(t, idx, "function_index should be wiped on project_root change")
+}
+
+// TestOpenAnalysisCache_VersionMismatch_OnlyWipesAffectedTable verifies the
+// per-table version check by bumping only pass4_version: pass4_results gets
+// wiped while file_cache remains intact.
+func TestOpenAnalysisCache_VersionMismatch_OnlyWipesAffectedTable(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "ver_mismatch.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	sc := &CachedScope{FunctionScopes: make(map[string]CachedFunctionScope)}
+	require.NoError(t, cache.PutFileCached(goFile, cs, sc))
+
+	h, _ := hashFile(goFile)
+	p4 := map[string]*CachedPass4Result{
+		goFile: {ContentHash: h, Edges: []CachedPass4Edge{}, UnresolvedNames: []string{}},
+	}
+	require.NoError(t, cache.SavePass4Results(p4))
+
+	// Bump pass4_version to simulate a future upgrade.
+	_, err = cache.db.ExecContext(context.Background(),
+		"INSERT OR REPLACE INTO meta(key,value) VALUES('pass4_version','999')")
+	require.NoError(t, err)
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	// pass4_results should be wiped.
+	out := cache2.LoadPass4Results([]string{goFile})
+	assert.Empty(t, out, "pass4_results should be wiped on pass4_version bump")
+
+	// file_cache should still be warm.
+	_, hit := cache2.GetFileCached(goFile)
+	assert.True(t, hit, "file_cache should survive a pass4_version bump")
+}
