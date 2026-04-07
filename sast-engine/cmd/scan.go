@@ -262,10 +262,25 @@ Examples:
 
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
+				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
+				var analysisCache *builder.AnalysisCache
+				if enableDBCache {
+					var cacheErr error
+					analysisCache, cacheErr = builder.OpenAnalysisCache(projectPath)
+					if cacheErr != nil {
+						logger.Warning("Could not open analysis cache: %v — running full analysis", cacheErr)
+					} else {
+						defer analysisCache.Close()
+					}
+				}
+
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
 				} else {
+					if analysisCache != nil {
+						logger.Progress("Cache: incremental analysis cache updated")
+					}
 					builder.MergeCallGraphs(cg, goCG)
 					logger.Statistic("Go call graph merged: %d functions, %d call sites",
 						len(goCG.Functions), countTotalCallSites(goCG))
@@ -1052,5 +1067,6 @@ func init() {
 	scanCmd.Flags().Bool("diff-aware", false, "Enable diff-aware scanning (only report findings in changed files)")
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
+	scanCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
 	scanCmd.MarkFlagRequired("project")
 }
