@@ -12,6 +12,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/extraction"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
+	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
 
 // CallSiteInternal represents a function call location during graph construction.
@@ -41,7 +42,7 @@ type CallSiteInternal struct {
 // Returns:
 //   - CallGraph: complete call graph with resolved edges and type information
 //   - error: if any critical step fails
-func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) (*core.CallGraph, error) {
+func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine, logger *output.Logger) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
 	// Store type engine in call graph for MCP tool access
@@ -144,113 +145,198 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 
 	// Pass 4: Resolve call targets and add edges
 	fmt.Fprintf(os.Stderr, "  Pass 4: Resolving call targets...\n")
+
+	// Pre-index package-level variables for Source 3 lookup in resolveGoCallTarget.
+	// Without this, Source 3 scans all 225k+ nodes for every unresolved method call.
+	// Key: filepath.Dir(file) + "::" + varName → node
+	pkgVarIndex := buildPkgVarIndex(codeGraph)
+
+	// Pre-index struct field types for Source 4 lookup (chained field access: a.Field.Method()).
+	// Key: "pkgPath.TypeName.FieldName" → resolved field type FQN
+	callGraph.GoStructFieldIndex = buildStructFieldIndex(codeGraph, registry, importMaps)
+
 	totalCallSites := len(callSites)
+
+	// pass4Result holds the fully computed output for one call site, produced by
+	// a worker goroutine and later applied to the CallGraph sequentially.
+	// Keeping resolution and write separate means workers touch zero shared state.
+	type pass4Result struct {
+		callerFQN string
+		targetFQN string // empty when unresolved
+		resolved  bool
+		callSite  core.CallSite
+	}
+
+	// Stage 1: Resolve call sites in parallel.
+	//
+	// Safety proof — every shared structure accessed inside this stage is either:
+	//   • Immutable by Pass 4 (importMaps, callGraph.Functions,
+	//     callGraph.GoStructFieldIndex, functionContext, pkgVarIndex,
+	//     registry.DirToImport): written only during earlier passes, never here.
+	//   • Protected by sync.RWMutex (typeEngine.GetScope/GetVariable,
+	//     StdlibLoader.ValidateStdlibImport/GetType,
+	//     ThirdPartyLoader.ValidateImport/GetType): concurrent reads are safe.
+	//   • Worker-local (importMap fallback allocation, callSite value copy,
+	//     local variables, result slice): not shared at all.
+	//
+	// The ONLY writes in Pass 4 (AddEdge, AddCallSite) happen in Stage 2.
+	numWorkers := getOptimalWorkerCount()
+	shardResults := make([][]pass4Result, numWorkers)
+	chunkSize := (totalCallSites + numWorkers - 1) / numWorkers
+
+	var resolveWg sync.WaitGroup
+	var processedCount atomic.Int64
+
+	for w := 0; w < numWorkers; w++ {
+		start := w * chunkSize
+		end := min(start+chunkSize, totalCallSites)
+		if start >= totalCallSites {
+			break
+		}
+		shardIdx := w // capture for closure
+
+		resolveWg.Add(1)
+		go func() {
+			defer resolveWg.Done()
+			local := make([]pass4Result, 0, end-start)
+
+			for _, callSite := range callSites[start:end] {
+				importMap := importMaps[callSite.CallerFile]
+				if importMap == nil {
+					// No import map - can still resolve builtins and same-package calls
+					importMap = core.NewGoImportMap(callSite.CallerFile)
+				}
+
+				targetFQN, resolved, isStdlib, resolveSource := resolveGoCallTarget(
+					callSite, importMap, registry, functionContext, typeEngine,
+					callGraph, pkgVarIndex, logger)
+
+				var cs core.CallSite
+				if resolved {
+					// Populate type inference metadata from parameter types or variable bindings.
+					// NOTE: this block is intentionally preserved verbatim from the original
+					// sequential loop — do not refactor or deduplicate with resolveGoCallTarget.
+					var inferredType string
+					var typeConfidence float32
+					var typeSource string
+					var wasTypeResolved bool
+
+					if callSite.ObjectName != "" {
+						// Source 1: Function parameter types
+						if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+							for pi, paramName := range callerNode.MethodArgumentsValue {
+								if paramName == callSite.ObjectName && pi < len(callerNode.MethodArgumentsType) {
+									typeStr := callerNode.MethodArgumentsType[pi]
+									if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
+										typeStr = typeStr[colonIdx+2:]
+									}
+									typeStr = strings.TrimPrefix(typeStr, "*")
+									im := importMaps[callSite.CallerFile]
+									inferredType = resolveGoTypeFQN(typeStr, im)
+									typeConfidence = 0.95
+									typeSource = "go_function_parameter"
+									wasTypeResolved = true
+									break
+								}
+							}
+						}
+
+						// Source 2: Local variable type bindings from GoTypeInferenceEngine
+						if !wasTypeResolved && typeEngine != nil {
+							scope := typeEngine.GetScope(callSite.CallerFQN)
+							if scope != nil {
+								binding := scope.GetVariable(callSite.ObjectName)
+								if binding != nil && binding.Type != nil {
+									typeFQN := binding.Type.TypeFQN
+									if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
+										typeFQN = after
+									}
+									inferredType = typeFQN
+									typeConfidence = binding.Type.Confidence
+									typeSource = "go_variable_binding"
+									wasTypeResolved = true
+								}
+							}
+						}
+					}
+
+					// Propagate resolve source from the resolver (e.g. third-party).
+					// This overrides the type-inference source so stats correctly attribute
+					// calls resolved via GoThirdPartyLoader rather than counting them as
+					// user-code resolutions.
+					if resolveSource != "" {
+						typeSource = resolveSource
+					}
+
+					// Convert CallSiteInternal.Arguments to core.Argument structs.
+					args := buildCallSiteArguments(callSite.Arguments)
+
+					cs = core.CallSite{
+						Target: callSite.FunctionName,
+						Location: core.Location{
+							File: callSite.CallerFile,
+							Line: int(callSite.CallLine),
+						},
+						Arguments:                args,
+						Resolved:                 true,
+						TargetFQN:                targetFQN,
+						IsStdlib:                 isStdlib,
+						ResolvedViaTypeInference: wasTypeResolved,
+						InferredType:             inferredType,
+						TypeConfidence:           typeConfidence,
+						TypeSource:               typeSource,
+					}
+				} else {
+					args := buildCallSiteArguments(callSite.Arguments)
+
+					// Record unresolved call for diagnostics
+					cs = core.CallSite{
+						Target: callSite.FunctionName,
+						Location: core.Location{
+							File: callSite.CallerFile,
+							Line: int(callSite.CallLine),
+						},
+						Arguments:     args,
+						Resolved:      false,
+						FailureReason: "unresolved_go_call",
+					}
+				}
+
+				local = append(local, pass4Result{
+					callerFQN: callSite.CallerFQN,
+					targetFQN: targetFQN,
+					resolved:  resolved,
+					callSite:  cs,
+				})
+
+				// Progress tracking (atomic — safe from multiple goroutines).
+				// Uses the same \r overwrite pattern as Pass 2b.
+				count := processedCount.Add(1)
+				if count%500 == 0 || count == int64(totalCallSites) {
+					percentage := float64(count) / float64(totalCallSites) * 100
+					fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%)",
+						count, totalCallSites, percentage)
+				}
+			}
+			shardResults[shardIdx] = local
+		}()
+	}
+	resolveWg.Wait()
+
+	// Stage 2: Apply results sequentially — single goroutine, zero locking needed.
+	// AddEdge and AddCallSite have no mutex; keeping writes here ensures safety.
 	resolvedCount := 0
 	stdlibCount := 0
-
-	for i, callSite := range callSites {
-		importMap := importMaps[callSite.CallerFile]
-		if importMap == nil {
-			// No import map - can still resolve builtins and same-package calls
-			importMap = core.NewGoImportMap(callSite.CallerFile)
-		}
-
-		targetFQN, resolved, isStdlib := resolveGoCallTarget(callSite, importMap, registry, functionContext, typeEngine, callGraph, codeGraph)
-
-		if resolved {
-			resolvedCount++
-			if isStdlib {
-				stdlibCount++
-			}
-			// Add edge from caller to callee
-			callGraph.AddEdge(callSite.CallerFQN, targetFQN)
-
-			// Populate type inference metadata from parameter types or variable bindings.
-			var inferredType string
-			var typeConfidence float32
-			var typeSource string
-			var wasTypeResolved bool
-
-			if callSite.ObjectName != "" {
-				// Source 1: Function parameter types
-				if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
-					for pi, paramName := range callerNode.MethodArgumentsValue {
-						if paramName == callSite.ObjectName && pi < len(callerNode.MethodArgumentsType) {
-							typeStr := callerNode.MethodArgumentsType[pi]
-							if colonIdx := strings.Index(typeStr, ": "); colonIdx >= 0 {
-								typeStr = typeStr[colonIdx+2:]
-							}
-							typeStr = strings.TrimPrefix(typeStr, "*")
-							im := importMaps[callSite.CallerFile]
-							inferredType = resolveGoTypeFQN(typeStr, im)
-							typeConfidence = 0.95
-							typeSource = "go_function_parameter"
-							wasTypeResolved = true
-							break
-						}
-					}
+	for _, shard := range shardResults {
+		for _, r := range shard {
+			if r.resolved {
+				resolvedCount++
+				if r.callSite.IsStdlib {
+					stdlibCount++
 				}
-
-				// Source 2: Local variable type bindings from GoTypeInferenceEngine
-				if !wasTypeResolved && typeEngine != nil {
-					scope := typeEngine.GetScope(callSite.CallerFQN)
-					if scope != nil {
-						binding := scope.GetVariable(callSite.ObjectName)
-						if binding != nil && binding.Type != nil {
-							typeFQN := binding.Type.TypeFQN
-							if after, ok := strings.CutPrefix(typeFQN, "*"); ok {
-								typeFQN = after
-							}
-							inferredType = typeFQN
-							typeConfidence = binding.Type.Confidence
-							typeSource = "go_variable_binding"
-							wasTypeResolved = true
-						}
-					}
-				}
+				callGraph.AddEdge(r.callerFQN, r.targetFQN)
 			}
-
-			// Convert CallSiteInternal.Arguments to core.Argument structs.
-			args := buildCallSiteArguments(callSite.Arguments)
-
-			// Add detailed call site information
-			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
-				Target: callSite.FunctionName,
-				Location: core.Location{
-					File: callSite.CallerFile,
-					Line: int(callSite.CallLine),
-				},
-				Arguments:                args,
-				Resolved:                 true,
-				TargetFQN:                targetFQN,
-				IsStdlib:                 isStdlib,
-				ResolvedViaTypeInference: wasTypeResolved,
-				InferredType:             inferredType,
-				TypeConfidence:           typeConfidence,
-				TypeSource:               typeSource,
-			})
-		} else {
-			args := buildCallSiteArguments(callSite.Arguments)
-
-			// Record unresolved call for diagnostics
-			callGraph.AddCallSite(callSite.CallerFQN, core.CallSite{
-				Target: callSite.FunctionName,
-				Location: core.Location{
-					File: callSite.CallerFile,
-					Line: int(callSite.CallLine),
-				},
-				Arguments:     args,
-				Resolved:      false,
-				FailureReason: "unresolved_go_call",
-			})
-		}
-
-		// Progress tracking
-		if (i+1)%500 == 0 || i+1 == totalCallSites {
-			percentage := float64(i+1) / float64(totalCallSites) * 100
-			resolutionRate := float64(resolvedCount) / float64(i+1) * 100
-			fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%) - %.1f%% resolved",
-				i+1, totalCallSites, percentage, resolutionRate)
+			callGraph.AddCallSite(r.callerFQN, r.callSite)
 		}
 	}
 
@@ -287,6 +373,10 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) map[string][]*graph.Node {
 	functionContext := make(map[string][]*graph.Node)
 
+	// Build parent map once for closure FQN construction (func_literal nodes need their parent).
+	// Without this, buildGoFQN → findParentGoFunction would rebuild the map for every closure.
+	parentMap := buildParentMap(codeGraph)
+
 	totalNodes := len(codeGraph.Nodes)
 	processed := 0
 	indexed := 0
@@ -307,7 +397,7 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 		}
 
 		// Build FQN using module registry
-		fqn := buildGoFQN(node, codeGraph, registry)
+		fqn := buildGoFQN(node, parentMap, registry)
 
 		// Add to CallGraph.Functions
 		callGraph.Functions[fqn] = node
@@ -349,6 +439,10 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		nodeIDToFQN[funcNode.ID] = fqn
 	}
 
+	// Build parent map once here so findContainingGoFunction doesn't rebuild it
+	// for every call node (was O(call_nodes × total_nodes) before this fix).
+	parentMap := buildParentMap(codeGraph)
+
 	totalNodes := len(codeGraph.Nodes)
 	processed := 0
 	callNodesFound := 0
@@ -380,7 +474,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 		}
 
 		// Find containing function to get caller FQN
-		containingFunc := findContainingGoFunction(node, codeGraph)
+		containingFunc := findContainingGoFunction(node, parentMap)
 		var callerFQN string
 		if containingFunc != nil {
 			// Fast O(1) lookup using reverse map
@@ -431,6 +525,7 @@ func extractGoCallSitesFromCodeGraph(codeGraph *graph.CodeGraph, callGraph *core
 //   - targetFQN: the resolved fully qualified name
 //   - resolved: true if resolution succeeded
 //   - isStdlib: true when the target is a Go standard library function
+//   - resolveSource: "thirdparty_local" when resolved via GoThirdPartyLoader; "" otherwise
 func resolveGoCallTarget(
 	callSite *CallSiteInternal,
 	importMap *core.GoImportMap,
@@ -438,8 +533,9 @@ func resolveGoCallTarget(
 	functionContext map[string][]*graph.Node,
 	typeEngine *resolution.GoTypeInferenceEngine,
 	callGraph *core.CallGraph,
-	codeGraph *graph.CodeGraph,
-) (string, bool, bool) {
+	pkgVarIndex map[string]*graph.Node,
+	logger *output.Logger,
+) (string, bool, bool, string) {
 	// Pattern 1a: Qualified call (pkg.Func or obj.Method)
 	if callSite.ObjectName != "" {
 		// Try import resolution first (existing pattern)
@@ -449,7 +545,11 @@ func resolveGoCallTarget(
 			targetFQN := importPath + "." + callSite.FunctionName
 			isStdlib := registry.StdlibLoader != nil &&
 				registry.StdlibLoader.ValidateStdlibImport(importPath)
-			return targetFQN, true, isStdlib
+			if !isStdlib && registry != nil && registry.ThirdPartyLoader != nil &&
+				registry.ThirdPartyLoader.ValidateImport(importPath) {
+				return targetFQN, true, false, "thirdparty_local"
+			}
+			return targetFQN, true, isStdlib, ""
 		}
 
 		// Pattern 1b: Variable-based method resolution (PR-17 + Approach C)
@@ -484,11 +584,11 @@ func resolveGoCallTarget(
 					if binding != nil && binding.Type != nil {
 						typeFQN = binding.Type.TypeFQN
 						typeFQN = strings.TrimPrefix(typeFQN, "*")
-					} else {
-						fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: scope found but no binding for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.ObjectName)
+					} else if logger != nil && logger.IsDebug() {
+						logger.Debug("[debug-1b] %s.%s: scope found but no binding for %q", callSite.CallerFQN, callSite.FunctionName, callSite.ObjectName)
 					}
-				} else {
-					fmt.Fprintf(os.Stderr, "    [debug-1b] %s.%s: no scope for %q\n", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
+				} else if logger != nil && logger.IsDebug() {
+					logger.Debug("[debug-1b] %s.%s: no scope for %q", callSite.CallerFQN, callSite.FunctionName, callSite.CallerFQN)
 				}
 			}
 
@@ -496,20 +596,92 @@ func resolveGoCallTarget(
 			// Covers `var globalDB *sql.DB` at package scope — not tracked by
 			// GoTypeInferenceEngine (which only processes := / = assignments in
 			// function bodies). Only fires when Source 1 and Source 2 both fail.
-			if typeFQN == "" && codeGraph != nil {
-				for _, node := range codeGraph.Nodes {
-					if node.Type != "module_variable" || node.DataType == "" {
-						continue
-					}
-					if node.Name != callSite.ObjectName {
-						continue
-					}
-					if !isSameGoPackage(callSite.CallerFile, node.File) {
-						continue
-					}
-					typeStr := strings.TrimPrefix(node.DataType, "*")
+			// Uses pre-built pkgVarIndex (O(1)) instead of a full node scan (O(N)).
+			if typeFQN == "" && pkgVarIndex != nil {
+				key := filepath.Dir(callSite.CallerFile) + "::" + callSite.ObjectName
+				if varNode, ok := pkgVarIndex[key]; ok {
+					typeStr := strings.TrimPrefix(varNode.DataType, "*")
 					typeFQN = resolveGoTypeFQN(typeStr, importMap)
-					break
+				}
+			}
+
+			// Source 4: Struct field access (a.Field.Method()).
+			// Fires only when ObjectName is "root.Field" and Sources 1-3 all failed.
+			// Looks up the root variable's type via Sources 1-3, then resolves the
+			// field's type from the pre-built struct field index (S4-Source4a) or
+			// from the CDN for stdlib types (S4-Source4b).
+			if typeFQN == "" && callGraph != nil {
+				dotIdx := strings.Index(callSite.ObjectName, ".")
+				if dotIdx > 0 {
+					rootName := callSite.ObjectName[:dotIdx]
+					fieldName := callSite.ObjectName[dotIdx+1:]
+					// Only handle simple one-level access; skip chained dots or method calls.
+					if !strings.Contains(fieldName, ".") && !strings.Contains(fieldName, "(") {
+						var rootTypeFQN string
+
+						// S4-Source1: function parameters
+						if callerNode, exists := callGraph.Functions[callSite.CallerFQN]; exists {
+							for i, paramName := range callerNode.MethodArgumentsValue {
+								if paramName == rootName && i < len(callerNode.MethodArgumentsType) {
+									typeStr := callerNode.MethodArgumentsType[i]
+									if ci := strings.Index(typeStr, ": "); ci >= 0 {
+										typeStr = typeStr[ci+2:]
+									}
+									rootTypeFQN = resolveGoTypeFQN(strings.TrimPrefix(typeStr, "*"), importMap)
+									break
+								}
+							}
+						}
+						// S4-Source2: scope variable binding
+						if rootTypeFQN == "" && typeEngine != nil {
+							scope := typeEngine.GetScope(callSite.CallerFQN)
+							if scope != nil {
+								if b := scope.GetVariable(rootName); b != nil && b.Type != nil {
+									rootTypeFQN = strings.TrimPrefix(b.Type.TypeFQN, "*")
+								}
+							}
+						}
+						// S4-Source3: package-level variable
+						if rootTypeFQN == "" && pkgVarIndex != nil {
+							key := filepath.Dir(callSite.CallerFile) + "::" + rootName
+							if varNode, ok := pkgVarIndex[key]; ok {
+								rootTypeFQN = resolveGoTypeFQN(strings.TrimPrefix(varNode.DataType, "*"), importMap)
+							}
+						}
+
+						if rootTypeFQN != "" {
+							if ft, ok := callGraph.GoStructFieldIndex[rootTypeFQN+"."+fieldName]; ok {
+								typeFQN = ft
+							}
+							// S4-Source4b: Stdlib struct field lookup (lazy, via CDN).
+							// Covers stdlib types like net/http.Request.Header → net/http.Header.
+							// Only runs when user-code struct index missed the field and the
+							// root type comes from a known stdlib package.
+							if typeFQN == "" && registry != nil && registry.StdlibLoader != nil {
+								if pkgPath, typeName, ok := splitGoTypeFQN(rootTypeFQN); ok &&
+									registry.StdlibLoader.ValidateStdlibImport(pkgPath) {
+									if stdlibType, err := registry.StdlibLoader.GetType(pkgPath, typeName); err == nil && stdlibType != nil {
+										for _, f := range stdlibType.Fields {
+											if f.Name == fieldName {
+												typeFQN = resolveFieldType(f.Type, pkgPath)
+												// resolveFieldType may return a short-qualified
+												// type like "url.URL" when the CDN stores the
+												// field using the owner package's import alias.
+												// Expand using the calling file's importMap first
+												// (e.g., "url" → "net/url" if the file imports it).
+												if typeFQN != "" && strings.Contains(typeFQN, ".") && !strings.Contains(typeFQN, "/") {
+													if expanded := resolveGoTypeFQN(typeFQN, importMap); strings.Contains(expanded, "/") {
+														typeFQN = expanded
+													}
+												}
+												break
+											}
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 
@@ -518,7 +690,7 @@ func resolveGoCallTarget(
 
 				// Check 1: Method exists in user code
 				if callGraph.Functions[methodFQN] != nil {
-					return methodFQN, true, false
+					return methodFQN, true, false, ""
 				}
 
 				// Check 2 (Approach C): Validate method via StdlibLoader
@@ -528,8 +700,18 @@ func resolveGoCallTarget(
 						stdlibType, err := registry.StdlibLoader.GetType(importPath, typeName)
 						if err == nil && stdlibType != nil {
 							if _, hasMethod := stdlibType.Methods[callSite.FunctionName]; hasMethod {
-								return methodFQN, true, true // resolved via stdlib
+								return methodFQN, true, true, "" // resolved via stdlib
 							}
+						}
+						// Check 2b: Method not found directly on the type — scan the same
+						// package for an interface that declares it. This covers promoted
+						// methods whose CDN entry does not list them on the concrete type
+						// (e.g., testing.T.Fatalf is promoted from testing.common but
+						// testing.TB.Fatalf is present; T implements TB).
+						if ifaceFQN, found := findMethodInPackageInterfaces(
+							registry.StdlibLoader, importPath, callSite.FunctionName,
+						); found {
+							return ifaceFQN, true, true, "" // resolved via stdlib interface
 						}
 					}
 				}
@@ -545,7 +727,7 @@ func resolveGoCallTarget(
 							tpType, err := registry.ThirdPartyLoader.GetType(importPath, typeName)
 							if err == nil && tpType != nil {
 								if _, hasMethod := tpType.Methods[callSite.FunctionName]; hasMethod {
-									return methodFQN, true, false // resolved via third-party
+									return methodFQN, true, false, "thirdparty_local" // resolved via third-party
 								}
 							}
 						}
@@ -556,16 +738,24 @@ func resolveGoCallTarget(
 				if promotedFQN, resolved, isStdlib := resolvePromotedMethod(
 					typeFQN, callSite.FunctionName, registry,
 				); resolved {
-					return promotedFQN, true, isStdlib
+					return promotedFQN, true, isStdlib, ""
 				}
 
-				// Check 4: Unvalidated — accept with best-effort FQN
-				return methodFQN, true, false
+				// Check 4: Unvalidated best-effort — only for verifiably complete FQNs.
+				// typeFQN must contain "/" (a real multi-segment module path), or be
+				// the built-in "error" interface, or a CGO type ("C.something").
+				// Incomplete FQNs like "Chunk" or "blob.Chunk" are rejected here to
+				// prevent false positives from low-confidence type bindings.
+				if strings.Contains(typeFQN, "/") ||
+					typeFQN == "error" ||
+					strings.HasPrefix(typeFQN, "C.") {
+					return methodFQN, true, false, ""
+				}
 			}
 		}
 
 		// Import not found and variable not found - unresolved
-		return "", false, false
+		return "", false, false, ""
 	}
 
 	// Pattern 2: Same-package call (simple function name)
@@ -575,17 +765,17 @@ func resolveGoCallTarget(
 		if isSameGoPackage(callSite.CallerFile, candidate.File) {
 			// Build FQN for this candidate
 			candidateFQN := buildGoFQN(candidate, nil, registry)
-			return candidateFQN, true, false
+			return candidateFQN, true, false, ""
 		}
 	}
 
 	// Pattern 3: Builtin function
 	if isBuiltin(callSite.FunctionName) {
-		return "builtin." + callSite.FunctionName, true, false
+		return "builtin." + callSite.FunctionName, true, false, ""
 	}
 
 	// Pattern 4: Unresolved
-	return "", false, false
+	return "", false, false, ""
 }
 
 // buildGoFQN constructs a fully qualified name for a Go function, method, or closure.
@@ -602,7 +792,7 @@ func resolveGoCallTarget(
 //
 // Returns:
 //   - fully qualified name string
-func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry) string {
+func buildGoFQN(node *graph.Node, parentMap map[string]*graph.Node, registry *core.GoModuleRegistry) string {
 	// Get directory path for this file
 	dirPath := filepath.Dir(node.File)
 
@@ -636,10 +826,10 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 
 	case "func_literal":
 		// Closure: parentFQN.$anon_N
-		// Find parent function
-		parent := findParentGoFunction(node, codeGraph)
+		// Find parent function using the pre-built parentMap
+		parent := findParentGoFunction(node, parentMap)
 		if parent != nil {
-			parentFQN := buildGoFQN(parent, codeGraph, registry)
+			parentFQN := buildGoFQN(parent, parentMap, registry)
 			return parentFQN + "." + node.Name // Name is already "$anon_N" from PR-06
 		}
 		// Orphaned closure - shouldn't happen but handle gracefully
@@ -650,20 +840,89 @@ func buildGoFQN(node *graph.Node, codeGraph *graph.CodeGraph, registry *core.GoM
 	}
 }
 
-// findContainingGoFunction finds the function/method/closure that contains a given call node.
-// Walks parent edges in the CodeGraph to find the first function-like ancestor.
-//
-// Returns:
-//   - Node pointer to the containing function, or nil if no containing function found
-func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) *graph.Node {
-	// Build parent map from CodeGraph edges
-	parentMap := make(map[string]*graph.Node)
+// buildParentMap constructs a reverse-edge map (child ID → parent node) from the CodeGraph.
+// Build this once and pass it to findContainingGoFunction / findParentGoFunction to avoid
+// rebuilding it O(N) times inside loops over call nodes.
+func buildParentMap(codeGraph *graph.CodeGraph) map[string]*graph.Node {
+	parentMap := make(map[string]*graph.Node, len(codeGraph.Nodes))
 	for _, node := range codeGraph.Nodes {
 		for _, edge := range node.OutgoingEdges {
 			parentMap[edge.To.ID] = node
 		}
 	}
+	return parentMap
+}
 
+// buildPkgVarIndex builds a lookup table for package-level variables.
+// Key: filepath.Dir(file) + "::" + varName
+// Value: the module_variable node (only nodes with a non-empty DataType are included).
+//
+// This replaces the O(N) linear scan in resolveGoCallTarget Source 3 with an O(1) lookup.
+func buildPkgVarIndex(codeGraph *graph.CodeGraph) map[string]*graph.Node {
+	index := make(map[string]*graph.Node)
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "module_variable" || node.DataType == "" {
+			continue
+		}
+		key := filepath.Dir(node.File) + "::" + node.Name
+		index[key] = node
+	}
+	return index
+}
+
+// buildStructFieldIndex builds a flat index of struct field → field type FQN for all
+// struct_definition nodes in user code.
+// Key:   "pkgPath.TypeName.FieldName"   (e.g. "myapp.models.Attention.KNorm")
+// Value: resolved field type FQN         (e.g. "myapp.nn.Linear")
+//
+// Used by resolveGoCallTarget Source 4 to resolve chained field access: a.Field.Method().
+func buildStructFieldIndex(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, importMaps map[string]*core.GoImportMap) map[string]string {
+	index := make(map[string]string)
+	for _, node := range codeGraph.Nodes {
+		if node.Type != "struct_definition" || node.Language != "go" || node.File == "" {
+			continue
+		}
+		dirPath := filepath.Dir(node.File)
+		pkgPath, ok := registry.DirToImport[dirPath]
+		if !ok {
+			continue
+		}
+		typeFQN := pkgPath + "." + node.Name
+		importMap := importMaps[node.File]
+
+		for _, field := range node.Interface {
+			// Field format stored by parser: "FieldName: TypeStr"
+			colonIdx := strings.Index(field, ": ")
+			if colonIdx < 0 {
+				continue // embedded type, skip
+			}
+			fieldName := field[:colonIdx]
+			typeStr := strings.TrimPrefix(field[colonIdx+2:], "*")
+			if typeStr == "" {
+				continue
+			}
+			// Resolve to FQN via importMap
+			fieldTypeFQN := resolveGoTypeFQN(typeStr, importMap)
+			// Unqualified — same package
+			if fieldTypeFQN == typeStr && !strings.Contains(fieldTypeFQN, ".") {
+				fieldTypeFQN = pkgPath + "." + typeStr
+			}
+			if fieldTypeFQN != "" {
+				index[typeFQN+"."+fieldName] = fieldTypeFQN
+			}
+		}
+	}
+	return index
+}
+
+// findContainingGoFunction finds the function/method/closure that contains a given call node.
+// Walks parent edges using the pre-built parentMap to find the first function-like ancestor.
+//
+// parentMap must be built once via buildParentMap before iterating call nodes.
+//
+// Returns:
+//   - Node pointer to the containing function, or nil if no containing function found
+func findContainingGoFunction(callNode *graph.Node, parentMap map[string]*graph.Node) *graph.Node {
 	// Walk up the parent chain
 	current := callNode
 	for {
@@ -685,15 +944,8 @@ func findContainingGoFunction(callNode *graph.Node, codeGraph *graph.CodeGraph) 
 
 // findParentGoFunction finds the immediate parent function for a closure.
 // Used by buildGoFQN for closure FQN generation.
-func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *graph.Node {
-	// Build parent map
-	parentMap := make(map[string]*graph.Node)
-	for _, node := range codeGraph.Nodes {
-		for _, edge := range node.OutgoingEdges {
-			parentMap[edge.To.ID] = node
-		}
-	}
-
+// parentMap must be pre-built via buildParentMap.
+func findParentGoFunction(closureNode *graph.Node, parentMap map[string]*graph.Node) *graph.Node {
 	// Walk up to find parent function
 	current := closureNode
 	for {
@@ -710,27 +962,54 @@ func findParentGoFunction(closureNode *graph.Node, codeGraph *graph.CodeGraph) *
 	}
 }
 
+// goBuiltins is the set of Go builtin function names and predeclared type names
+// that syntactically look like function calls (e.g. int(x), float64(x)).
+// Allocated once at package init.
+var goBuiltins = map[string]bool{
+	// Builtin functions
+	"append":  true,
+	"cap":     true,
+	"close":   true,
+	"complex": true,
+	"copy":    true,
+	"delete":  true,
+	"imag":    true,
+	"len":     true,
+	"make":    true,
+	"new":     true,
+	"panic":   true,
+	"print":   true,
+	"println": true,
+	"real":    true,
+	"recover": true,
+	// Predeclared numeric/string types used as type-conversion expressions.
+	// In Go, T(x) is syntactically identical to a call expression, so the
+	// call-site extractor captures these as plain function calls.
+	"int":        true,
+	"int8":       true,
+	"int16":      true,
+	"int32":      true,
+	"int64":      true,
+	"uint":       true,
+	"uint8":      true,
+	"uint16":     true,
+	"uint32":     true,
+	"uint64":     true,
+	"uintptr":    true,
+	"float32":    true,
+	"float64":    true,
+	"complex64":  true,
+	"complex128": true,
+	"string":     true,
+	"byte":       true,
+	"rune":       true,
+	"bool":       true,
+	"error":      true,
+}
+
 // isBuiltin returns true if the function name is a Go builtin.
-// Go has 15 builtin functions that are always available.
 func isBuiltin(name string) bool {
-	builtins := map[string]bool{
-		"append":  true,
-		"cap":     true,
-		"close":   true,
-		"complex": true,
-		"copy":    true,
-		"delete":  true,
-		"imag":    true,
-		"len":     true,
-		"make":    true,
-		"new":     true,
-		"panic":   true,
-		"print":   true,
-		"println": true,
-		"real":    true,
-		"recover": true,
-	}
-	return builtins[name]
+	return goBuiltins[name]
 }
 
 // isSameGoPackage returns true if two file paths belong to the same Go package.

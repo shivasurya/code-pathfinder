@@ -150,6 +150,11 @@ type CallGraph struct {
 	// *registry.StdlibRegistryRemote (stored as any to avoid import cycle)
 	// Implements dsl.InheritanceChecker interface.
 	StdlibRemote any
+
+	// GoStructFieldIndex maps "pkgPath.TypeName.FieldName" → resolved field type FQN.
+	// Populated during call graph construction (Pass 4 setup) from struct_definition nodes.
+	// Used by resolveGoCallTarget Source 4 to resolve chained field access like a.Field.Method().
+	GoStructFieldIndex map[string]string
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.
@@ -165,6 +170,7 @@ func NewCallGraph() *CallGraph {
 		Statements:         make(map[string][]*Statement),
 		CFGs:               make(map[string]any),
 		CFGBlockStatements: make(map[string]any),
+		GoStructFieldIndex: make(map[string]string),
 	}
 }
 
@@ -529,6 +535,10 @@ type GoStdlibLoader interface {
 	// GetType returns the metadata for a named type in the given stdlib package.
 	// Returns a non-nil error if the package or type is not found in the registry.
 	GetType(importPath, typeName string) (*GoStdlibType, error)
+
+	// GetPackage returns all type and function metadata for a stdlib package.
+	// Used to scan for interface types that expose promoted methods.
+	GetPackage(importPath string) (*GoStdlibPackage, error)
 
 	// PackageCount returns the total number of stdlib packages available in the registry.
 	PackageCount() int

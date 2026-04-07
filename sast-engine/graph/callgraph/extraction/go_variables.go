@@ -152,7 +152,41 @@ func traverseForVariableAssignments(
 			receiverType := extractReceiverType(receiverNode, sourceCode)
 			if receiverType != "" {
 				currentFunctionFQN = packagePath + "." + receiverType + "." + methodName
+
+				// Add receiver variable as a typed binding so that calls like s.foo()
+				// inside the method body can be resolved via type inference.
+				receiverName := extractReceiverName(receiverNode, sourceCode)
+				if receiverName != "" {
+					scope := typeEngine.GetScope(currentFunctionFQN)
+					if scope == nil {
+						scope = resolution.NewGoFunctionScope(currentFunctionFQN)
+						typeEngine.AddScope(scope)
+					}
+					scope.AddVariable(&resolution.GoVariableBinding{
+						VarName: receiverName,
+						Type: &core.TypeInfo{
+							TypeFQN:    packagePath + "." + receiverType,
+							Confidence: 0.95,
+							Source:     "receiver_declaration",
+						},
+					})
+				}
 			}
+		}
+
+	case "var_declaration":
+		// Handle explicit variable declaration: var sb strings.Builder
+		if currentFunctionFQN != "" {
+			processVarDeclaration(
+				node,
+				sourceCode,
+				filePath,
+				currentFunctionFQN,
+				typeEngine,
+				registry,
+				importMap,
+				callGraph,
+			)
 		}
 
 	case "short_var_declaration":
@@ -220,6 +254,128 @@ func extractReceiverType(receiverNode *sitter.Node, sourceCode []byte) string {
 		}
 	}
 	return ""
+}
+
+// extractReceiverName extracts the variable name from a receiver node.
+// For `func (s *Store) Method()` it returns "s".
+// Returns "" when the receiver is unnamed (e.g. `func (*Store) Method()`).
+func extractReceiverName(receiverNode *sitter.Node, sourceCode []byte) string {
+	for i := 0; i < int(receiverNode.NamedChildCount()); i++ {
+		param := receiverNode.NamedChild(i)
+		if param.Type() == "parameter_declaration" {
+			nameNode := param.ChildByFieldName("name")
+			if nameNode != nil {
+				return nameNode.Content(sourceCode)
+			}
+		}
+	}
+	return ""
+}
+
+// processVarDeclaration processes a var_declaration node.
+// Handles: var sb strings.Builder, var x, y int, var ( a T; b U ).
+func processVarDeclaration(
+	node *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
+) {
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		switch child.Type() {
+		case "var_spec":
+			processVarSpec(child, sourceCode, filePath, functionFQN, typeEngine, registry, importMap, callGraph)
+		case "var_spec_list":
+			for j := 0; j < int(child.NamedChildCount()); j++ {
+				spec := child.NamedChild(j)
+				if spec.Type() == "var_spec" {
+					processVarSpec(spec, sourceCode, filePath, functionFQN, typeEngine, registry, importMap, callGraph)
+				}
+			}
+		}
+	}
+}
+
+// processVarSpec processes a single var_spec node inside a var_declaration.
+func processVarSpec(
+	spec *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	functionFQN string,
+	typeEngine *resolution.GoTypeInferenceEngine,
+	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
+	callGraph *core.CallGraph,
+) {
+	// Collect variable names (may be multiple: var x, y int)
+	var names []string
+	for i := 0; i < int(spec.NamedChildCount()); i++ {
+		child := spec.NamedChild(i)
+		if child.Type() == "identifier" {
+			name := child.Content(sourceCode)
+			if name != "_" {
+				names = append(names, name)
+			}
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+
+	var typeInfo *core.TypeInfo
+
+	// Priority 1: Explicit type annotation (var sb strings.Builder)
+	typeNode := spec.ChildByFieldName("type")
+	if typeNode != nil {
+		typeStr := strings.TrimPrefix(typeNode.Content(sourceCode), "*")
+		typeFQN := extractionResolveGoTypeFQN(typeStr, importMap)
+		// Unqualified type — belongs to same package
+		if typeFQN == typeStr && !strings.Contains(typeFQN, ".") {
+			dirPath := filepath.Dir(filePath)
+			if pkgPath, ok := registry.DirToImport[dirPath]; ok {
+				typeFQN = pkgPath + "." + typeFQN
+			}
+		}
+		if typeFQN != "" {
+			typeInfo = &core.TypeInfo{
+				TypeFQN:    typeFQN,
+				Confidence: 0.9,
+				Source:     "var_declaration",
+			}
+		}
+	}
+
+	// Priority 2: Infer from RHS value expression (var x = someFunc())
+	if typeInfo == nil {
+		valueNode := spec.ChildByFieldName("value")
+		if valueNode != nil {
+			typeInfo = inferTypeFromRHS(valueNode, sourceCode, filePath, functionFQN, typeEngine, registry, importMap, callGraph)
+		}
+	}
+
+	if typeInfo == nil {
+		return
+	}
+
+	scope := typeEngine.GetScope(functionFQN)
+	if scope == nil {
+		scope = resolution.NewGoFunctionScope(functionFQN)
+		typeEngine.AddScope(scope)
+	}
+	for _, name := range names {
+		scope.AddVariable(&resolution.GoVariableBinding{
+			VarName: name,
+			Type:    typeInfo,
+			Location: resolution.Location{
+				File: filePath,
+				Line: spec.StartPoint().Row + 1,
+			},
+		})
+	}
 }
 
 // processShortVarDeclaration processes a short_var_declaration node.
@@ -462,6 +618,7 @@ func inferTypeFromRHS(
 			sourceCode,
 			filePath,
 			registry,
+			importMap,
 		)
 
 	// Unary expression - handle address-of operator
@@ -881,6 +1038,7 @@ func inferTypeFromCompositeLiteral(
 	sourceCode []byte,
 	filePath string,
 	registry *core.GoModuleRegistry,
+	importMap *core.GoImportMap,
 ) *core.TypeInfo {
 	// Get type node from composite literal
 	typeNode := literalNode.ChildByFieldName("type")
@@ -888,7 +1046,21 @@ func inferTypeFromCompositeLiteral(
 		return nil
 	}
 
-	typeName := typeNode.Content(sourceCode)
+	typeName := strings.TrimPrefix(typeNode.Content(sourceCode), "*")
+
+	// For qualified types like "blob.Chunk", resolve the package alias to the
+	// full import path via the import map before falling back to ParseGoTypeString.
+	// This fixes "blob.Chunk" → "github.com/ollama/ollama/.../blob.Chunk".
+	if strings.Contains(typeName, ".") && importMap != nil {
+		resolved := extractionResolveGoTypeFQN(typeName, importMap)
+		if strings.Contains(resolved, "/") {
+			return &core.TypeInfo{
+				TypeFQN:    resolved,
+				Confidence: 0.9,
+				Source:     "composite_literal",
+			}
+		}
+	}
 
 	// Parse the type name using existing parser from PR-14
 	typeInfo, err := ParseGoTypeString(typeName, registry, filePath)

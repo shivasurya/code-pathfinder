@@ -38,6 +38,10 @@ func (m *mockStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
 	return nil, errMockNotImplemented
 }
 
+func (m *mockStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errMockNotImplemented
+}
+
 func (m *mockStdlibLoader) PackageCount() int { return len(m.stdlib) }
 
 // goStdlibPackages is a small set of known stdlib import paths used in tests.
@@ -75,7 +79,7 @@ func TestResolveGoCallTarget_StdlibImport(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "Println", ObjectName: "fmt"}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	require.True(t, resolved)
 	assert.Equal(t, "fmt.Println", targetFQN)
@@ -89,7 +93,7 @@ func TestResolveGoCallTarget_NilStdlibLoader(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "Println", ObjectName: "fmt"}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	require.True(t, resolved)
 	assert.Equal(t, "fmt.Println", targetFQN)
@@ -105,7 +109,7 @@ func TestResolveGoCallTarget_ThirdPartyImport(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "Default", ObjectName: "gin"}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	require.True(t, resolved)
 	assert.Equal(t, "github.com/gin-gonic/gin.Default", targetFQN)
@@ -119,7 +123,7 @@ func TestResolveGoCallTarget_StdlibMultiSegmentPath(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "ListenAndServe", ObjectName: "http"}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	require.True(t, resolved)
 	assert.Equal(t, "net/http.ListenAndServe", targetFQN)
@@ -137,7 +141,7 @@ func TestResolveGoCallTarget_Builtin(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "append", ObjectName: ""}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	require.True(t, resolved)
 	assert.Equal(t, "builtin.append", targetFQN)
@@ -151,7 +155,7 @@ func TestResolveGoCallTarget_Unresolved(t *testing.T) {
 
 	cs := &CallSiteInternal{FunctionName: "Foo", ObjectName: "unknown"}
 
-	targetFQN, resolved, isStdlib := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil)
+	targetFQN, resolved, isStdlib, _ := resolveGoCallTarget(cs, importMap, reg, nil, nil, nil, nil, nil)
 
 	assert.False(t, resolved)
 	assert.Empty(t, targetFQN)
@@ -211,7 +215,7 @@ func TestBuildGoCallGraph_StdlibTagging(t *testing.T) {
 	}
 
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(reg)
-	callGraph, err := BuildGoCallGraph(codeGraph, reg, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, reg, goTypeEngine, nil)
 	require.NoError(t, err)
 	require.NotNil(t, callGraph)
 

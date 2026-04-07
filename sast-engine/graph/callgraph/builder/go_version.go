@@ -17,6 +17,10 @@ const defaultGoVersion = "1.21"
 // Overridden in tests to point at a local httptest.Server.
 var stdlibRegistryBaseURL = "https://assets.codepathfinder.dev/registries"
 
+// thirdPartyRegistryBaseURL is the CDN root for Go third-party registries.
+// Overridden by the CPF_CDN_URL environment variable at runtime, or by tests.
+var thirdPartyRegistryBaseURL = "https://assets.codepathfinder.dev/registries"
+
 // goVersionRegex matches the "go X.Y" directive in go.mod and go.work files.
 // The minor version suffix (e.g. ".4" in "1.21.4") is intentionally not captured;
 // normalizeGoVersion handles stripping the patch component from raw go.mod values.
@@ -123,6 +127,11 @@ func initGoStdlibLoaderWithBase(reg *core.GoModuleRegistry, projectPath string, 
 // InitGoThirdPartyLoader initializes the third-party type loader for Go dependencies.
 // Parses go.mod require directives and lazily loads type metadata from vendor/ or GOMODCACHE.
 //
+// When a CDN base URL is available (from the CPF_CDN_URL environment variable or the
+// package-level thirdPartyRegistryBaseURL default), a GoThirdPartyCombinedLoader is
+// created so that popular packages resolve via the CDN (fast) while project-specific
+// or private dependencies fall back to local parsing.
+//
 // When refreshCache is true (triggered by --refresh-rules on the CLI), the on-disk
 // go-thirdparty extraction cache for this project is flushed and rebuilt.
 func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, refreshCache bool, logger *output.Logger) {
@@ -130,16 +139,53 @@ func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, refr
 		return
 	}
 
-	loader := registry.NewGoThirdPartyLocalLoader(projectPath, refreshCache, logger, reg)
-	if loader.PackageCount() == 0 {
-		if logger != nil {
-			logger.Debug("No Go third-party dependencies found in go.mod")
+	localLoader := registry.NewGoThirdPartyLocalLoader(projectPath, refreshCache, logger, reg)
+
+	// Attempt CDN loader initialization. The CDN base URL can be overridden via the
+	// CPF_CDN_URL environment variable; the package-level default is used otherwise.
+	cdnBaseURL := os.Getenv("CPF_CDN_URL")
+	if cdnBaseURL == "" {
+		cdnBaseURL = thirdPartyRegistryBaseURL
+	}
+
+	// CDN initialization requires a non-nil logger (the remote loader uses it for
+	// progress and diagnostic messages). Skip CDN when logger is absent.
+	var cdnLoader core.GoThirdPartyLoader
+	if cdnBaseURL != "" && logger != nil {
+		remote := registry.NewGoThirdPartyRegistryRemote(cdnBaseURL, logger)
+		if err := remote.LoadManifest(); err != nil {
+			logger.Debug("Go third-party CDN unavailable: %v (using local only)", err)
+		} else {
+			cdnLoader = remote
+			logger.Debug("Go third-party CDN loaded: %d packages", remote.PackageCount())
 		}
-		return
+	}
+
+	var loader core.GoThirdPartyLoader
+	if cdnLoader != nil {
+		combined := registry.NewGoThirdPartyCombinedLoader(cdnLoader, localLoader)
+		if combined.PackageCount() == 0 {
+			if logger != nil {
+				logger.Debug("No Go third-party dependencies found (CDN + local)")
+			}
+			return
+		}
+		loader = combined
+		if logger != nil {
+			logger.Progress("Go third-party loader ready (%d packages, CDN+local)", combined.PackageCount())
+		}
+	} else {
+		if localLoader.PackageCount() == 0 {
+			if logger != nil {
+				logger.Debug("No Go third-party dependencies found in go.mod")
+			}
+			return
+		}
+		loader = localLoader
+		if logger != nil {
+			logger.Progress("Go third-party loader ready (%d dependencies from go.mod)", localLoader.PackageCount())
+		}
 	}
 
 	reg.ThirdPartyLoader = loader
-	if logger != nil {
-		logger.Progress("Go third-party loader ready (%d dependencies from go.mod)", loader.PackageCount())
-	}
 }

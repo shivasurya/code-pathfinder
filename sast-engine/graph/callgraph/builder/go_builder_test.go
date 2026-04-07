@@ -55,7 +55,7 @@ func TestBuildGoCallGraph(t *testing.T) {
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
 
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine, nil)
 	require.NoError(t, err)
 
 	// Verify functions were indexed
@@ -391,7 +391,7 @@ func TestResolveGoCallTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pass nil for typeEngine and callGraph (backward compatibility)
-			targetFQN, resolved, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil)
+			targetFQN, resolved, _, _ := resolveGoCallTarget(tt.callSite, tt.importMap, tt.registry, tt.funcContext, nil, nil, nil, nil)
 
 			assert.Equal(t, tt.shouldResolve, resolved, "Resolution status mismatch")
 
@@ -485,7 +485,7 @@ func TestBuildGoFQN(t *testing.T) {
 				tt.codeGraph = &graph.CodeGraph{Nodes: make(map[string]*graph.Node)}
 			}
 
-			fqn := buildGoFQN(tt.node, tt.codeGraph, tt.registry)
+			fqn := buildGoFQN(tt.node, buildParentMap(tt.codeGraph), tt.registry)
 			assert.Equal(t, tt.expectedFQN, fqn, "FQN mismatch")
 		})
 	}
@@ -619,7 +619,7 @@ func TestBuildGoCallGraph_WithTypeTracking(t *testing.T) {
 	goTypeEngine := resolution.NewGoTypeInferenceEngine(registry)
 
 	// Build call graph with type tracking
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, goTypeEngine, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 
@@ -691,7 +691,7 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			shouldResolve: true,
 		},
 		{
-			name: "resolve with best-effort FQN when method not in Functions map",
+			name: "skip best-effort when typeFQN has no slash (incomplete package path)",
 			callSite: &CallSiteInternal{
 				FunctionName: "NonExistent",
 				ObjectName:   "user",
@@ -699,10 +699,10 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 				CallerFile:   "/project/main.go",
 			},
 			variableName:  "user",
-			variableType:  "models.User",
+			variableType:  "models.User", // no "/" → Check 4 rejects to avoid false positive
 			methodExists:  false,
-			expectedFQN:   "models.User.NonExistent", // Approach C: best-effort FQN
-			shouldResolve: true,                       // Approach C: type known → resolved
+			expectedFQN:   "",
+			shouldResolve: false, // incomplete FQN rejected by Check 4 gate
 		},
 		{
 			name: "fail when variable not in scope",
@@ -826,13 +826,14 @@ func TestResolveGoCallTarget_VariableMethod(t *testing.T) {
 			functionContext := make(map[string][]*graph.Node)
 
 			// Execute
-			targetFQN, resolved, _ := resolveGoCallTarget(
+			targetFQN, resolved, _, _ := resolveGoCallTarget(
 				tt.callSite,
 				importMap,
 				registry,
 				functionContext,
 				typeEngine,
 				callGraph,
+				nil,
 				nil,
 			)
 
@@ -975,7 +976,7 @@ func TestBuildGoCallGraph_MethodResolution(t *testing.T) {
 	typeEngine.AddScope(scope)
 
 	// Build call graph
-	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine)
+	callGraph, err := BuildGoCallGraph(codeGraph, registry, typeEngine, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, callGraph)
 

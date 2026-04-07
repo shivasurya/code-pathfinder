@@ -178,8 +178,11 @@ func ParseGoTypeString(
 		}
 	}
 
-	// Step 7: Fallback - use type string as-is with lower confidence
-	// This handles cases where registry lookup failed
+	// Step 7: Fallback — registry lookup failed, use type string as-is.
+	// Confidence is intentionally low (0.5) to signal an incomplete resolution.
+	// Check 4 in resolveGoCallTarget gates on "/" in the FQN, so incomplete
+	// FQNs like "Chunk" or "Tensor" stored here will NOT produce false-positive
+	// call resolutions; they may still be useful for partial diagnostics.
 	return &core.TypeInfo{
 		TypeFQN:    typeStr,
 		Confidence: 0.5,
