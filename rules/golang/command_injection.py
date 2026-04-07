@@ -93,15 +93,26 @@ REFERENCES:
 - OWASP A03:2021 Injection: https://owasp.org/Top10/A03_2021-Injection/
 """
 
-from codepathfinder import rule, calls
+from codepathfinder.go_rule import GoGinContext, GoHTTPRequest, GoOSExec
+from codepathfinder import flows
+from codepathfinder.presets import PropagationPresets
+from rules.go_decorators import go_rule
 
-@rule(
-    id="GO-SEC-002",
-    severity="CRITICAL",
-    cwe="CWE-78",
-    owasp="A03:2021"
-)
+
+@go_rule(id="GO-SEC-002", severity="CRITICAL", cwe="CWE-78", owasp="A03:2021")
 def go_command_injection():
-    """Detects OS command execution that may be vulnerable to injection.
-    Flags calls to exec.Command and exec.CommandContext."""
-    return calls("*Command", "*CommandContext")
+    """HTTP/Gin request input reaches os/exec — command injection.
+    L1: GoGinContext + GoHTTPRequest sources, GoOSExec sink — both sides QueryType."""
+    return flows(
+        from_sources=[
+            GoGinContext.method("Param", "Query", "PostForm", "GetRawData",
+                                "ShouldBindJSON", "BindJSON", "GetHeader"),
+            GoHTTPRequest.method("FormValue", "PostFormValue"),
+            GoHTTPRequest.attr("Body", "URL.Path", "URL.RawQuery"),
+        ],
+        to_sinks=[
+            GoOSExec.method("Command", "CommandContext"),
+        ],
+        propagates_through=PropagationPresets.standard(),
+        scope="global",
+    )

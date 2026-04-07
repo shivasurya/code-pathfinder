@@ -300,10 +300,12 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	}
 
 	// Dedup: multiple matchers can produce identical findings for the same flow
+	// Dedup by sink location only: multiple sources can reach the same sink,
+	// but we report each sink once (with the first source that reaches it).
 	seen := make(map[string]bool)
 	deduped := make([]DataflowDetection, 0, len(detections))
 	for _, det := range detections {
-		key := fmt.Sprintf("%s:%d:%d:%s", det.FunctionFQN, det.SourceLine, det.SinkLine, det.SinkCall)
+		key := fmt.Sprintf("%s:%d:%s", det.FunctionFQN, det.SinkLine, det.SinkCall)
 		if !seen[key] {
 			seen[key] = true
 			deduped = append(deduped, det)
@@ -342,7 +344,17 @@ func (e *DataflowExecutor) summaryConfirmsFlow(
 				break
 			}
 		}
-		if !hasParamToReturn {
+		// Also accept when a param transitively reaches a sink (e.g., HTTP handler
+		// that calls a source, assigns to local var, then passes to callee with ParamToSink).
+		// ConvertHandler: r → r.FormValue() → filename → service.Convert → exec.Command
+		hasParamToSink := false
+		for _, flows := range sourceSummary.ParamToSink {
+			if flows {
+				hasParamToSink = true
+				break
+			}
+		}
+		if !hasParamToReturn && !hasParamToSink {
 			return false
 		}
 	}
