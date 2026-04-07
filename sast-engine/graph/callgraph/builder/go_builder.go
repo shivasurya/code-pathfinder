@@ -38,11 +38,12 @@ type CallSiteInternal struct {
 //   - codeGraph: the existing code graph with parsed AST nodes from PR-06
 //   - registry: Go module registry from PR-07 with import path mappings
 //   - typeEngine: Go type inference engine for Phase 2 type tracking (PR-14/PR-15)
+//   - cache: optional SQLite analysis cache for Pass 2b and Pass 3 results (nil = disabled)
 //
 // Returns:
 //   - CallGraph: complete call graph with resolved edges and type information
 //   - error: if any critical step fails
-func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine, logger *output.Logger) (*core.CallGraph, error) {
+func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine, logger *output.Logger, cache *AnalysisCache) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
 	// Store type engine in call graph for MCP tool access
@@ -75,6 +76,65 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	functionContext := indexGoFunctions(codeGraph, callGraph, registry, typeEngine)
 	fmt.Fprintf(os.Stderr, "    Indexed %d functions\n", len(callGraph.Functions))
 
+	// Collect all Go source files — needed for both Pass 2b and Pass 3 cache logic.
+	goFiles := make(map[string]bool)
+	for _, node := range codeGraph.Nodes {
+		if node.File != "" && strings.HasSuffix(node.File, ".go") {
+			goFiles[node.File] = true
+		}
+	}
+
+	// Build current function index (file → []FQN) from Pass 1 output.
+	// Used for delta detection before Pass 4.
+	currentFuncIndex := make(map[string][]string, len(callGraph.Functions))
+	for fqn, node := range callGraph.Functions {
+		if node.File != "" {
+			currentFuncIndex[node.File] = append(currentFuncIndex[node.File], fqn)
+		}
+	}
+
+	// Compute function index delta: compare cached snapshot vs current.
+	// addedFQNs / removedFQNs drive Pass 4 dirty-file classification.
+	var addedFQNs, removedFQNs map[string]bool
+	if cache != nil {
+		cachedFuncIndex := cache.LoadFunctionIndex()
+		addedFQNs, removedFQNs = ComputeFunctionIndexDelta(cachedFuncIndex, currentFuncIndex)
+		fmt.Fprintf(os.Stderr, "  Function index delta: +%d added, -%d removed FQNs\n",
+			len(addedFQNs), len(removedFQNs))
+	}
+
+	// cacheStats tracks warm vs cold files for the final summary line.
+	var cacheStats CacheStats
+
+	// cachedFileResults holds pass 2b + pass 3 data recovered from the cache,
+	// keyed by file path. Populated during the cache-check phase and consumed
+	// when rebuilding call sites after Pass 3.
+	cachedFileResults := make(map[string]*CachedFilePResult)
+
+	// dirtyFiles is the set of Go files that need full re-analysis (cache miss).
+	dirtyFiles := make(map[string]bool)
+
+	// Pre-flight cache check: classify every Go file as cached or dirty.
+	// This must happen before Pass 2b so we can skip extraction on warm files.
+	if cache != nil {
+		for filePath := range goFiles {
+			if result, hit := cache.GetFileCached(filePath); hit {
+				cachedFileResults[filePath] = result
+				cacheStats.HitFiles++
+			} else {
+				dirtyFiles[filePath] = true
+				cacheStats.MissFiles++
+			}
+		}
+		fmt.Fprintf(os.Stderr, "  Cache: %d files hot-loaded, %d files to re-analyze\n",
+			cacheStats.HitFiles, cacheStats.MissFiles)
+	} else {
+		// Cache disabled — all files are dirty.
+		for filePath := range goFiles {
+			dirtyFiles[filePath] = true
+		}
+	}
+
 	// Pass 2a: Extract return types from all indexed Go functions
 	// Only run if typeEngine is provided (not nil)
 	// ExtractGoReturnTypes operates on already-indexed functions in callGraph
@@ -82,84 +142,244 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		fmt.Fprintf(os.Stderr, "  Pass 2a: Extracting return types...\n")
 		_ = extraction.ExtractGoReturnTypes(callGraph, registry, typeEngine)
 
-		// Pass 2b: Extract variable assignments from all Go source files (parallel)
-		// Collect all Go source files
-		goFiles := make(map[string]bool)
-		for _, node := range codeGraph.Nodes {
-			if node.File != "" && strings.HasSuffix(node.File, ".go") {
-				goFiles[node.File] = true
+		// Pass 2b: Restore cached scopes and extract variable assignments for dirty files.
+
+		// Step 1: Restore variable scopes from cache for warm files.
+		for filePath, result := range cachedFileResults {
+			if result.Scope == nil {
+				continue
 			}
+			for _, fs := range result.Scope.FunctionScopes {
+				scope := resolution.NewGoFunctionScope(fs.FunctionFQN)
+				for varName, cb := range fs.Variables {
+					binding := &resolution.GoVariableBinding{
+						VarName: varName,
+						Type: &core.TypeInfo{
+							TypeFQN:    cb.TypeFQN,
+							Confidence: cb.Confidence,
+							Source:     cb.Source,
+						},
+						AssignedFrom: cb.AssignedFrom,
+					}
+					scope.AddVariable(binding)
+				}
+				typeEngine.AddScope(scope)
+			}
+			_ = filePath // used as map key only
 		}
 
 		totalFiles := len(goFiles)
-		fmt.Fprintf(os.Stderr, "  Pass 2b: Extracting variable assignments (%d files)...\n", totalFiles)
+		dirtyCount := len(dirtyFiles)
+		fmt.Fprintf(os.Stderr, "  Pass 2b: Extracting variable assignments (%d dirty files / %d total)...\n",
+			dirtyCount, totalFiles)
 
-		// Determine optimal worker count (same pattern as Python builder)
+		// Step 2: Extract variable assignments only for dirty files.
 		numWorkers := getOptimalWorkerCount()
-
-		// Create job queue for parallel processing
 		varJobs := make(chan string, 100)
 		var varProcessed atomic.Int64
 		var wg sync.WaitGroup
 
-		// Start workers for variable assignment extraction
 		for range numWorkers {
 			wg.Go(func() {
 				for filePath := range varJobs {
 					sourceCode, err := ReadFileBytes(filePath)
 					if err != nil {
-						continue // Skip files we can't read
+						continue
 					}
-
-					// Extract variable assignments for this file
-					// ExtractGoVariableAssignments is thread-safe (uses mutex internally)
 					_ = extraction.ExtractGoVariableAssignments(filePath, sourceCode, typeEngine, registry, importMaps[filePath], callGraph)
 
-					// Progress tracking
 					count := varProcessed.Add(1)
-					if count%50 == 0 || count == int64(totalFiles) {
-						percentage := float64(count) / float64(totalFiles) * 100
-						fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (%.1f%%)", count, totalFiles, percentage)
+					if count%50 == 0 || count == int64(dirtyCount) {
+						percentage := float64(count) / float64(dirtyCount) * 100
+						fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (%.1f%%)", count, dirtyCount, percentage)
 					}
 				}
 			})
 		}
 
-		// Queue all Go files for variable assignment extraction
-		for filePath := range goFiles {
+		for filePath := range dirtyFiles {
 			varJobs <- filePath
 		}
 		close(varJobs)
 		wg.Wait()
 
-		// Final progress line
-		if totalFiles > 0 {
-			fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (100.0%%)\n", totalFiles, totalFiles)
+		if dirtyCount > 0 {
+			fmt.Fprintf(os.Stderr, "\r    Variable assignments: %d/%d (100.0%%)\n", dirtyCount, dirtyCount)
 		}
 	}
 
-	// Pass 3: Extract call sites from call_expression nodes
+	// Pass 3: Extract call sites.
+	// For dirty files: use the code graph (same as before).
+	// For cached files: use call sites from the cache.
 	fmt.Fprintf(os.Stderr, "  Pass 3: Extracting call sites...\n")
-	callSites := extractGoCallSitesFromCodeGraph(codeGraph, callGraph)
+
+	// Extract call sites from the code graph for ALL files (the existing fast path).
+	// We then replace call sites for cached files with the stored data.
+	allCodeGraphCallSites := extractGoCallSitesFromCodeGraph(codeGraph, callGraph)
+
+	// Separate call sites by file: keep dirty-file sites; discard cached-file sites.
+	var callSites []*CallSiteInternal
+	if cache != nil && len(cachedFileResults) > 0 {
+		// Retain only call sites whose file is dirty (or unknown).
+		for _, cs := range allCodeGraphCallSites {
+			if dirtyFiles[cs.CallerFile] || (!dirtyFiles[cs.CallerFile] && cachedFileResults[cs.CallerFile] == nil) {
+				callSites = append(callSites, cs)
+			}
+		}
+		// Inject cached call sites for warm files.
+		for filePath, result := range cachedFileResults {
+			_ = filePath
+			for i := range result.CallSites {
+				ccs := &result.CallSites[i]
+				callSites = append(callSites, &CallSiteInternal{
+					CallerFQN:    ccs.CallerFQN,
+					CallerFile:   ccs.CallerFile,
+					CallLine:     ccs.CallLine,
+					FunctionName: ccs.FunctionName,
+					ObjectName:   ccs.ObjectName,
+					Arguments:    ccs.Arguments,
+				})
+			}
+		}
+	} else {
+		callSites = allCodeGraphCallSites
+	}
+
 	fmt.Fprintf(os.Stderr, "    Found %d call sites\n", len(callSites))
+
+	// After Pass 3: persist dirty-file results back to cache.
+	// Group dirty call sites by file so we can flush one DB row per file.
+	if cache != nil && len(dirtyFiles) > 0 {
+		// Build per-file call site map.
+		dirtyCallSitesByFile := make(map[string][]CachedCallSite, len(dirtyFiles))
+		for _, cs := range allCodeGraphCallSites {
+			if !dirtyFiles[cs.CallerFile] {
+				continue
+			}
+			dirtyCallSitesByFile[cs.CallerFile] = append(dirtyCallSitesByFile[cs.CallerFile], CachedCallSite{
+				CallerFQN:    cs.CallerFQN,
+				CallerFile:   cs.CallerFile,
+				CallLine:     cs.CallLine,
+				FunctionName: cs.FunctionName,
+				ObjectName:   cs.ObjectName,
+				Arguments:    cs.Arguments,
+			})
+		}
+
+		// Flush each dirty file's data to the cache.
+		for filePath := range dirtyFiles {
+			// Build the scope snapshot for this file.
+			// We collect all scopes whose FQN belongs to this file by checking the
+			// function node's file path via callGraph.Functions.
+			scope := &CachedScope{
+				FunctionScopes: make(map[string]CachedFunctionScope),
+			}
+			if typeEngine != nil {
+				for fqn, funcNode := range callGraph.Functions {
+					if funcNode.File != filePath {
+						continue
+					}
+					fs := typeEngine.GetScope(fqn)
+					if fs == nil {
+						continue
+					}
+					cfs := CachedFunctionScope{
+						FunctionFQN: fqn,
+						Variables:   make(map[string]CachedBinding),
+					}
+					for varName := range fs.Variables {
+						binding := fs.GetVariable(varName)
+						if binding == nil || binding.Type == nil {
+							continue
+						}
+						cfs.Variables[varName] = CachedBinding{
+							TypeFQN:      binding.Type.TypeFQN,
+							Confidence:   binding.Type.Confidence,
+							Source:       binding.Type.Source,
+							AssignedFrom: binding.AssignedFrom,
+						}
+					}
+					scope.FunctionScopes[fqn] = cfs
+				}
+			}
+
+			cs := dirtyCallSitesByFile[filePath] // may be nil/empty — that's fine
+			if cs == nil {
+				cs = []CachedCallSite{}
+			}
+			if err := cache.PutFileCached(filePath, cs, scope); err != nil {
+				// Non-fatal: log and continue
+				fmt.Fprintf(os.Stderr, "  [cache] warn: failed to store %s: %v\n", filePath, err)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "  Cache: wrote %d dirty files\n", len(dirtyFiles))
+	}
 
 	// Pass 4: Resolve call targets and add edges
 	fmt.Fprintf(os.Stderr, "  Pass 4: Resolving call targets...\n")
 
 	// Pre-index package-level variables for Source 3 lookup in resolveGoCallTarget.
-	// Without this, Source 3 scans all 225k+ nodes for every unresolved method call.
-	// Key: filepath.Dir(file) + "::" + varName → node
 	pkgVarIndex := buildPkgVarIndex(codeGraph)
 
 	// Pre-index struct field types for Source 4 lookup (chained field access: a.Field.Method()).
-	// Key: "pkgPath.TypeName.FieldName" → resolved field type FQN
 	callGraph.GoStructFieldIndex = buildStructFieldIndex(codeGraph, registry, importMaps)
 
+	// --- Pass 4 delta cache ---
+	//
+	// Classify each Go file as dirty or warm for Pass 4:
+	//   Dirty  → re-resolve its call sites (new file, content changed, callee renamed, new callee).
+	//   Warm   → replay cached resolved edges directly, skipping resolution entirely.
+	//
+	// File content hashes are needed for both the cache key and delta checks.
+	fileHashes := make(map[string]string, len(goFiles))
+	if cache != nil {
+		for fp := range goFiles {
+			if h, err := hashFile(fp); err == nil {
+				fileHashes[fp] = h
+			}
+		}
+	}
+
+	var cachedPass4 map[string]*CachedPass4Result
+	if cache != nil {
+		allFiles := make([]string, 0, len(goFiles))
+		for fp := range goFiles {
+			allFiles = append(allFiles, fp)
+		}
+		cachedPass4 = cache.LoadPass4Results(allFiles)
+	}
+
+	pass4DirtyFiles := make(map[string]bool)
+	pass4WarmFiles := make(map[string]*CachedPass4Result)
+
+	for fp := range goFiles {
+		var cached *CachedPass4Result
+		if cachedPass4 != nil {
+			cached = cachedPass4[fp]
+		}
+		if NeedsPass4Rerun(cached, fileHashes[fp], addedFQNs, removedFQNs) {
+			pass4DirtyFiles[fp] = true
+		} else {
+			pass4WarmFiles[fp] = cached
+		}
+	}
+
+	if cache != nil {
+		fmt.Fprintf(os.Stderr, "  Pass 4 cache: %d warm files (skip re-resolve), %d dirty files\n",
+			len(pass4WarmFiles), len(pass4DirtyFiles))
+	}
+
+	// Only dirty-file call sites need to go through resolution.
+	var dirtySites []*CallSiteInternal
+	for _, cs := range callSites {
+		if cache == nil || pass4DirtyFiles[cs.CallerFile] {
+			dirtySites = append(dirtySites, cs)
+		}
+	}
+	totalDirtySites := len(dirtySites)
 	totalCallSites := len(callSites)
 
-	// pass4Result holds the fully computed output for one call site, produced by
-	// a worker goroutine and later applied to the CallGraph sequentially.
-	// Keeping resolution and write separate means workers touch zero shared state.
+	// pass4Result holds the fully computed output for one call site.
 	type pass4Result struct {
 		callerFQN string
 		targetFQN string // empty when unresolved
@@ -167,43 +387,33 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 		callSite  core.CallSite
 	}
 
-	// Stage 1: Resolve call sites in parallel.
-	//
-	// Safety proof — every shared structure accessed inside this stage is either:
-	//   • Immutable by Pass 4 (importMaps, callGraph.Functions,
-	//     callGraph.GoStructFieldIndex, functionContext, pkgVarIndex,
-	//     registry.DirToImport): written only during earlier passes, never here.
-	//   • Protected by sync.RWMutex (typeEngine.GetScope/GetVariable,
-	//     StdlibLoader.ValidateStdlibImport/GetType,
-	//     ThirdPartyLoader.ValidateImport/GetType): concurrent reads are safe.
-	//   • Worker-local (importMap fallback allocation, callSite value copy,
-	//     local variables, result slice): not shared at all.
-	//
-	// The ONLY writes in Pass 4 (AddEdge, AddCallSite) happen in Stage 2.
+	// Stage 1: Resolve dirty call sites in parallel.
 	numWorkers := getOptimalWorkerCount()
 	shardResults := make([][]pass4Result, numWorkers)
-	chunkSize := (totalCallSites + numWorkers - 1) / numWorkers
+	chunkSize := (totalDirtySites + numWorkers - 1) / numWorkers
+	if chunkSize == 0 {
+		chunkSize = 1
+	}
 
 	var resolveWg sync.WaitGroup
 	var processedCount atomic.Int64
 
 	for w := 0; w < numWorkers; w++ {
 		start := w * chunkSize
-		end := min(start+chunkSize, totalCallSites)
-		if start >= totalCallSites {
+		end := min(start+chunkSize, totalDirtySites)
+		if start >= totalDirtySites {
 			break
 		}
-		shardIdx := w // capture for closure
+		shardIdx := w
 
 		resolveWg.Add(1)
 		go func() {
 			defer resolveWg.Done()
 			local := make([]pass4Result, 0, end-start)
 
-			for _, callSite := range callSites[start:end] {
+			for _, callSite := range dirtySites[start:end] {
 				importMap := importMaps[callSite.CallerFile]
 				if importMap == nil {
-					// No import map - can still resolve builtins and same-package calls
 					importMap = core.NewGoImportMap(callSite.CallerFile)
 				}
 
@@ -213,9 +423,6 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 
 				var cs core.CallSite
 				if resolved {
-					// Populate type inference metadata from parameter types or variable bindings.
-					// NOTE: this block is intentionally preserved verbatim from the original
-					// sequential loop — do not refactor or deduplicate with resolveGoCallTarget.
 					var inferredType string
 					var typeConfidence float32
 					var typeSource string
@@ -241,7 +448,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 							}
 						}
 
-						// Source 2: Local variable type bindings from GoTypeInferenceEngine
+						// Source 2: Local variable type bindings
 						if !wasTypeResolved && typeEngine != nil {
 							scope := typeEngine.GetScope(callSite.CallerFQN)
 							if scope != nil {
@@ -260,23 +467,14 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 						}
 					}
 
-					// Propagate resolve source from the resolver (e.g. third-party).
-					// This overrides the type-inference source so stats correctly attribute
-					// calls resolved via GoThirdPartyLoader rather than counting them as
-					// user-code resolutions.
 					if resolveSource != "" {
 						typeSource = resolveSource
 					}
 
-					// Convert CallSiteInternal.Arguments to core.Argument structs.
 					args := buildCallSiteArguments(callSite.Arguments)
-
 					cs = core.CallSite{
-						Target: callSite.FunctionName,
-						Location: core.Location{
-							File: callSite.CallerFile,
-							Line: int(callSite.CallLine),
-						},
+						Target:                   callSite.FunctionName,
+						Location:                 core.Location{File: callSite.CallerFile, Line: int(callSite.CallLine)},
 						Arguments:                args,
 						Resolved:                 true,
 						TargetFQN:                targetFQN,
@@ -288,14 +486,9 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					}
 				} else {
 					args := buildCallSiteArguments(callSite.Arguments)
-
-					// Record unresolved call for diagnostics
 					cs = core.CallSite{
-						Target: callSite.FunctionName,
-						Location: core.Location{
-							File: callSite.CallerFile,
-							Line: int(callSite.CallLine),
-						},
+						Target:        callSite.FunctionName,
+						Location:      core.Location{File: callSite.CallerFile, Line: int(callSite.CallLine)},
 						Arguments:     args,
 						Resolved:      false,
 						FailureReason: "unresolved_go_call",
@@ -309,13 +502,11 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 					callSite:  cs,
 				})
 
-				// Progress tracking (atomic — safe from multiple goroutines).
-				// Uses the same \r overwrite pattern as Pass 2b.
 				count := processedCount.Add(1)
-				if count%500 == 0 || count == int64(totalCallSites) {
-					percentage := float64(count) / float64(totalCallSites) * 100
+				if count%500 == 0 || count == int64(totalDirtySites) {
+					percentage := float64(count) / float64(totalDirtySites) * 100
 					fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (%.1f%%)",
-						count, totalCallSites, percentage)
+						count, totalDirtySites, percentage)
 				}
 			}
 			shardResults[shardIdx] = local
@@ -323,10 +514,17 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 	}
 	resolveWg.Wait()
 
-	// Stage 2: Apply results sequentially — single goroutine, zero locking needed.
-	// AddEdge and AddCallSite have no mutex; keeping writes here ensures safety.
+	// Stage 2a: Apply newly-resolved dirty results and collect cache data.
 	resolvedCount := 0
 	stdlibCount := 0
+
+	pass4ToCache := make(map[string]*CachedPass4Result, len(pass4DirtyFiles))
+	if cache != nil {
+		for fp := range pass4DirtyFiles {
+			pass4ToCache[fp] = &CachedPass4Result{ContentHash: fileHashes[fp]}
+		}
+	}
+
 	for _, shard := range shardResults {
 		for _, r := range shard {
 			if r.resolved {
@@ -337,18 +535,92 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 				callGraph.AddEdge(r.callerFQN, r.targetFQN)
 			}
 			callGraph.AddCallSite(r.callerFQN, r.callSite)
+
+			if cache != nil {
+				if entry, ok := pass4ToCache[r.callSite.Location.File]; ok {
+					cachedArgs := make([]CachedArgument, len(r.callSite.Arguments))
+					for i, a := range r.callSite.Arguments {
+						cachedArgs[i] = CachedArgument{Value: a.Value, IsVariable: a.IsVariable, Position: a.Position}
+					}
+					entry.Edges = append(entry.Edges, CachedPass4Edge{
+						CallerFQN:                r.callerFQN,
+						TargetFQN:                r.targetFQN,
+						Resolved:                 r.resolved,
+						Target:                   r.callSite.Target,
+						File:                     r.callSite.Location.File,
+						Line:                     r.callSite.Location.Line,
+						Arguments:                cachedArgs,
+						IsStdlib:                 r.callSite.IsStdlib,
+						ResolvedViaTypeInference: r.callSite.ResolvedViaTypeInference,
+						InferredType:             r.callSite.InferredType,
+						TypeConfidence:           r.callSite.TypeConfidence,
+						TypeSource:               r.callSite.TypeSource,
+						FailureReason:            r.callSite.FailureReason,
+					})
+					if !r.resolved {
+						entry.UnresolvedNames = append(entry.UnresolvedNames, r.callSite.Target)
+					}
+				}
+			}
 		}
+	}
+
+	// Stage 2b: Replay warm (cached) files — inject stored edges without re-resolution.
+	warmResolved := 0
+	warmStdlib := 0
+	for _, cached := range pass4WarmFiles {
+		for _, edge := range cached.Edges {
+			args := make([]core.Argument, len(edge.Arguments))
+			for i, a := range edge.Arguments {
+				args[i] = core.Argument{Value: a.Value, IsVariable: a.IsVariable, Position: a.Position}
+			}
+			cs := core.CallSite{
+				Target:                   edge.Target,
+				Location:                 core.Location{File: edge.File, Line: edge.Line},
+				Arguments:                args,
+				Resolved:                 edge.Resolved,
+				TargetFQN:                edge.TargetFQN,
+				IsStdlib:                 edge.IsStdlib,
+				ResolvedViaTypeInference: edge.ResolvedViaTypeInference,
+				InferredType:             edge.InferredType,
+				TypeConfidence:           edge.TypeConfidence,
+				TypeSource:               edge.TypeSource,
+				FailureReason:            edge.FailureReason,
+			}
+			if edge.Resolved {
+				warmResolved++
+				if edge.IsStdlib {
+					warmStdlib++
+				}
+				callGraph.AddEdge(edge.CallerFQN, edge.TargetFQN)
+			}
+			callGraph.AddCallSite(edge.CallerFQN, cs)
+		}
+	}
+
+	totalResolved := resolvedCount + warmResolved
+	totalStdlib := stdlibCount + warmStdlib
+
+	// Flush dirty Pass 4 results and updated function index to cache.
+	if cache != nil && len(pass4ToCache) > 0 {
+		if err := cache.SavePass4Results(pass4ToCache); err != nil {
+			fmt.Fprintf(os.Stderr, "  [cache] warn: failed to save Pass 4 results: %v\n", err)
+		}
+		if err := cache.SaveFunctionIndex(currentFuncIndex); err != nil {
+			fmt.Fprintf(os.Stderr, "  [cache] warn: failed to save function index: %v\n", err)
+		}
+		fmt.Fprintf(os.Stderr, "  Pass 4 cache: wrote %d dirty files\n", len(pass4ToCache))
 	}
 
 	// Final summary
 	if totalCallSites > 0 {
-		finalResolutionRate := float64(resolvedCount) / float64(totalCallSites) * 100
-		fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (100.0%%) - %.1f%% resolved\n",
-			totalCallSites, totalCallSites, finalResolutionRate)
-		if stdlibCount > 0 && resolvedCount > 0 {
-			stdlibRate := float64(stdlibCount) / float64(resolvedCount) * 100
+		finalResolutionRate := float64(totalResolved) / float64(totalCallSites) * 100
+		fmt.Fprintf(os.Stderr, "\r    Call targets: %d/%d (100.0%%) - %.1f%% resolved (%d from cache)\n",
+			totalCallSites, totalCallSites, finalResolutionRate, warmResolved)
+		if totalStdlib > 0 && totalResolved > 0 {
+			stdlibRate := float64(totalStdlib) / float64(totalResolved) * 100
 			fmt.Fprintf(os.Stderr, "    Stdlib calls: %d (%.1f%% of resolved)\n",
-				stdlibCount, stdlibRate)
+				totalStdlib, stdlibRate)
 		}
 	}
 

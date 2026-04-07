@@ -866,3 +866,49 @@ func main() {
 		resolutionReportCmd.Run(resolutionReportCmd, []string{})
 	})
 }
+
+// TestDumpCallSitesJSON verifies that dumpCallSitesJSON writes Go call site
+// records to a JSONL file and skips non-Go callers.
+func TestDumpCallSitesJSON(t *testing.T) {
+	goFunc := &graph.Node{ID: "fn", Language: "go", Name: "Fn"}
+	pyFunc := &graph.Node{ID: "pyfn", Language: "python", Name: "PyFn"}
+
+	cg := &core.CallGraph{
+		Functions: map[string]*graph.Node{
+			"example.com/pkg.Fn": goFunc,
+			"pymod.PyFn":         pyFunc,
+		},
+		CallSites: map[string][]core.CallSite{
+			"example.com/pkg.Fn": {
+				{Target: "fmt.Println", TargetFQN: "fmt.Println", Resolved: true, IsStdlib: true,
+					Location: core.Location{File: "main.go", Line: 5}},
+			},
+			"pymod.PyFn": {
+				{Target: "os.exit", Resolved: false, Location: core.Location{File: "script.py", Line: 2}},
+			},
+		},
+	}
+
+	out := filepath.Join(t.TempDir(), "callsites.jsonl")
+	err := dumpCallSitesJSON(cg, out)
+	assert.NoError(t, err)
+
+	data, err := os.ReadFile(out)
+	assert.NoError(t, err)
+	content := string(data)
+	// Only the Go call site should be written
+	assert.Contains(t, content, "fmt.Println")
+	assert.NotContains(t, content, "os.exit")
+}
+
+// TestDumpCallSitesJSON_WriteError verifies that an unwritable output path
+// returns an error from dumpCallSitesJSON.
+func TestDumpCallSitesJSON_WriteError(t *testing.T) {
+	cg := &core.CallGraph{
+		Functions: map[string]*graph.Node{},
+		CallSites: map[string][]core.CallSite{},
+	}
+	err := dumpCallSitesJSON(cg, "/nonexistent/dir/out.jsonl")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create JSON file")
+}

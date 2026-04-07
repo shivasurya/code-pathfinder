@@ -281,10 +281,25 @@ Examples:
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
+				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
+				var analysisCache *builder.AnalysisCache
+				if enableDBCache {
+					var cacheErr error
+					analysisCache, cacheErr = builder.OpenAnalysisCache(projectPath)
+					if cacheErr != nil {
+						logger.Warning("Could not open analysis cache: %v — running full analysis", cacheErr)
+					} else {
+						defer analysisCache.Close()
+					}
+				}
+
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
 				} else {
+					if analysisCache != nil {
+						logger.Progress("Cache: incremental analysis cache updated")
+					}
 					builder.MergeCallGraphs(cg, goCG)
 					logger.Statistic("Go call graph merged: %d functions, %d call sites",
 						len(goCG.Functions), countTotalCallSites(goCG))
@@ -507,5 +522,6 @@ func init() {
 	ciCmd.Flags().Int("github-pr", 0, "Pull request number for posting comments")
 	ciCmd.Flags().Bool("pr-comment", false, "Post summary comment on the pull request")
 	ciCmd.Flags().Bool("pr-inline", false, "Post inline review comments for critical/high findings")
+	ciCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
 	ciCmd.MarkFlagRequired("project")
 }

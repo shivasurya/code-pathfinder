@@ -113,7 +113,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 				server.SetGoContext(goRegistry.GoVersion, goRegistry)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
-				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger)
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, nil)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
 				} else {
