@@ -506,6 +506,24 @@ func resolveGoCallTarget(
 					}
 				}
 
+				// Check 2.5: Validate method via ThirdPartyLoader (vendor/GOMODCACHE)
+				if registry != nil && registry.ThirdPartyLoader != nil {
+					importPath, typeName, ok := splitGoTypeFQN(typeFQN)
+					if ok {
+						// Skip if already checked as stdlib
+						isStdlib := registry.StdlibLoader != nil &&
+							registry.StdlibLoader.ValidateStdlibImport(importPath)
+						if !isStdlib && registry.ThirdPartyLoader.ValidateImport(importPath) {
+							tpType, err := registry.ThirdPartyLoader.GetType(importPath, typeName)
+							if err == nil && tpType != nil {
+								if _, hasMethod := tpType.Methods[callSite.FunctionName]; hasMethod {
+									return methodFQN, true, false // resolved via third-party
+								}
+							}
+						}
+					}
+				}
+
 				// Check 3: Promoted method via struct embedding
 				if promotedFQN, resolved, isStdlib := resolvePromotedMethod(
 					typeFQN, callSite.FunctionName, registry,
@@ -513,7 +531,7 @@ func resolveGoCallTarget(
 					return promotedFQN, true, isStdlib
 				}
 
-				// Check 4: Third-party / unvalidated — accept with best-effort FQN
+				// Check 4: Unvalidated — accept with best-effort FQN
 				return methodFQN, true, false
 			}
 		}

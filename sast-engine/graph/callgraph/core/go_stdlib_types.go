@@ -251,6 +251,12 @@ type GoStdlibType struct {
 	IsGeneric  bool                         `json:"is_generic"`
 	TypeParams []*GoTypeParam               `json:"type_params"`
 	Docstring  string                       `json:"docstring"`
+
+	// Embeds lists type names embedded by this interface or struct.
+	// For interfaces: embedded interface names (e.g., "io.Closer", "EnqueueClient").
+	// For structs: embedded struct names (e.g., "*sql.DB").
+	// Used by the third-party loader to flatten embedded methods post-extraction.
+	Embeds []string `json:"embeds,omitempty"`
 }
 
 // GoStructField represents a single exported field in a struct type declaration.
