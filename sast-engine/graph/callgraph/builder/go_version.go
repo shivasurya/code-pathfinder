@@ -130,7 +130,7 @@ func InitGoThirdPartyLoader(reg *core.GoModuleRegistry, projectPath string, refr
 		return
 	}
 
-	loader := registry.NewGoThirdPartyLocalLoader(projectPath, refreshCache, logger)
+	loader := registry.NewGoThirdPartyLocalLoader(projectPath, refreshCache, logger, reg)
 	if loader.PackageCount() == 0 {
 		if logger != nil {
 			logger.Debug("No Go third-party dependencies found in go.mod")
