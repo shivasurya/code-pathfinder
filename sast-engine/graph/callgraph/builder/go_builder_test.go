@@ -161,7 +161,7 @@ func TestIndexGoFunctions(t *testing.T) {
 				},
 			}
 
-			functionContext := indexGoFunctions(codeGraph, callGraph, registry)
+			functionContext := indexGoFunctions(codeGraph, callGraph, registry, nil)
 
 			// Check expected FQNs
 			for _, expectedFQN := range tt.expectedFQNs {

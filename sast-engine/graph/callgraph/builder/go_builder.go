@@ -71,7 +71,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 
 	// Pass 1: Index all function definitions
 	fmt.Fprintf(os.Stderr, "  Pass 1: Indexing functions...\n")
-	functionContext := indexGoFunctions(codeGraph, callGraph, registry)
+	functionContext := indexGoFunctions(codeGraph, callGraph, registry, typeEngine)
 	fmt.Fprintf(os.Stderr, "    Indexed %d functions\n", len(callGraph.Functions))
 
 	// Pass 2a: Extract return types from all indexed Go functions
@@ -112,7 +112,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 
 					// Extract variable assignments for this file
 					// ExtractGoVariableAssignments is thread-safe (uses mutex internally)
-					_ = extraction.ExtractGoVariableAssignments(filePath, sourceCode, typeEngine, registry, importMaps[filePath])
+					_ = extraction.ExtractGoVariableAssignments(filePath, sourceCode, typeEngine, registry, importMaps[filePath], callGraph)
 
 					// Progress tracking
 					count := varProcessed.Add(1)
@@ -284,7 +284,7 @@ func BuildGoCallGraph(codeGraph *graph.CodeGraph, registry *core.GoModuleRegistr
 //
 // Returns:
 //   - functionContext: map from simple name to list of nodes for resolution
-func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.GoModuleRegistry) map[string][]*graph.Node {
+func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, registry *core.GoModuleRegistry, typeEngine *resolution.GoTypeInferenceEngine) map[string][]*graph.Node {
 	functionContext := make(map[string][]*graph.Node)
 
 	totalNodes := len(codeGraph.Nodes)
@@ -311,6 +311,12 @@ func indexGoFunctions(codeGraph *graph.CodeGraph, callGraph *core.CallGraph, reg
 
 		// Add to CallGraph.Functions
 		callGraph.Functions[fqn] = node
+
+		// Eagerly create scope so Pattern 1b Source 2 always finds one.
+		// Guard with GetScope == nil so Pass 2b bindings are not overwritten.
+		if typeEngine != nil && typeEngine.GetScope(fqn) == nil {
+			typeEngine.AddScope(resolution.NewGoFunctionScope(fqn))
+		}
 
 		// Add to function context for name-based lookup
 		functionContext[node.Name] = append(functionContext[node.Name], node)

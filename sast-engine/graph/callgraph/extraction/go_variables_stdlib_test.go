@@ -242,7 +242,7 @@ func Handler() {
 		Imports: map[string]string{"http": "net/http"},
 	}
 
-	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap)
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, nil)
 	require.NoError(t, err)
 
 	scope := typeEngine.GetScope("test.Handler")
@@ -278,7 +278,7 @@ func ReadFile() {
 		Imports: map[string]string{"os": "os"},
 	}
 
-	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap)
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, nil)
 	require.NoError(t, err)
 
 	scope := typeEngine.GetScope("test.ReadFile")
@@ -319,7 +319,7 @@ func Greet(name string) {
 		Imports: map[string]string{"fmt": "fmt"},
 	}
 
-	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap)
+	err := ExtractGoVariableAssignments("/test/main.go", []byte(code), typeEngine, reg, importMap, nil)
 	require.NoError(t, err)
 
 	scope := typeEngine.GetScope("test.Greet")
