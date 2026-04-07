@@ -1213,3 +1213,116 @@ func TestBuildGoCallGraph_Cache_FileModifiedBetweenRuns(t *testing.T) {
 	assert.Contains(t, result.Functions, "example.com/svc.A")
 	assert.Contains(t, result.Functions, "example.com/svc.B")
 }
+
+// TestBuildGoCallGraph_Cache_WithArgsStdlibAndUnresolved exercises the
+// argument-serialisation loops (cold: lines 542-544, warm: 574-576), the
+// unresolved-name tracking (lines 560-562), and the warm stdlib edge counter
+// (lines 592-594) in BuildGoCallGraph.
+func TestBuildGoCallGraph_Cache_WithArgsStdlibAndUnresolved(t *testing.T) {
+	dir := t.TempDir()
+	goFile := filepath.Join(dir, "svc.go")
+
+	// Real Go source so the import-map extractor can parse the "fmt" import.
+	src := `package svc
+
+import "fmt"
+
+func Caller(x string) {
+	fmt.Println(x)
+	Target(x)
+	NoSuchFunc(x)
+}
+
+func Target(x string) {}
+`
+	require.NoError(t, os.WriteFile(goFile, []byte(src), 0o644))
+
+	// --- code-graph nodes ---
+	callerNode := &graph.Node{
+		ID: "caller", Type: "function_declaration", Name: "Caller",
+		File: goFile, LineNumber: 5,
+		MethodArgumentsValue: []string{"x"},
+		MethodArgumentsType:  []string{"x: string"},
+	}
+	targetNode := &graph.Node{
+		ID: "target", Type: "function_declaration", Name: "Target",
+		File: goFile, LineNumber: 11,
+	}
+
+	// fmt.Println(x) — qualified stdlib call with an argument
+	callFmt := &graph.Node{
+		ID: "call_fmt", Type: "call", Name: "Println",
+		File: goFile, LineNumber: 6,
+		Interface:            []string{"fmt"},
+		MethodArgumentsValue: []string{"x"},
+	}
+	// Target(x) — local resolved call with an argument
+	callTarget := &graph.Node{
+		ID: "call_target", Type: "call", Name: "Target",
+		File: goFile, LineNumber: 7,
+		MethodArgumentsValue: []string{"x"},
+	}
+	// NoSuchFunc(x) — unresolved call with an argument
+	callUnknown := &graph.Node{
+		ID: "call_unknown", Type: "call", Name: "NoSuchFunc",
+		File: goFile, LineNumber: 8,
+		MethodArgumentsValue: []string{"x"},
+	}
+
+	// Wire callerNode → its three call children via OutgoingEdges so that
+	// findContainingGoFunction can walk up to the function declaration.
+	callerNode.OutgoingEdges = []*graph.Edge{
+		{From: callerNode, To: callFmt},
+		{From: callerNode, To: callTarget},
+		{From: callerNode, To: callUnknown},
+	}
+
+	codeGraph := &graph.CodeGraph{
+		Nodes: map[string]*graph.Node{
+			"caller":       callerNode,
+			"target":       targetNode,
+			"call_fmt":     callFmt,
+			"call_target":  callTarget,
+			"call_unknown": callUnknown,
+		},
+	}
+
+	// Registry with a mock stdlib loader that recognises "fmt".
+	reg := &core.GoModuleRegistry{
+		DirToImport:    map[string]string{dir: "example.com/svc"},
+		StdlibPackages: map[string]bool{"fmt": true},
+		StdlibLoader:   &mockStdlibLoader{stdlib: map[string]bool{"fmt": true}},
+	}
+	te := resolution.NewGoTypeInferenceEngine(reg)
+
+	cacheDir := t.TempDir()
+	cache, err := OpenAnalysisCache(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// --- Cold run ---
+	coldCG, err := BuildGoCallGraph(codeGraph, reg, te, nil, cache)
+	require.NoError(t, err)
+	require.NotNil(t, coldCG)
+
+	// Verify the cache was populated with call sites.
+	pass4 := cache.LoadPass4Results([]string{goFile})
+	assert.NotEmpty(t, pass4, "pass4 results should be cached after cold run")
+
+	// --- Warm run (same file, same hash — replays from cache) ---
+	te2 := resolution.NewGoTypeInferenceEngine(reg)
+	warmCG, err := BuildGoCallGraph(codeGraph, reg, te2, nil, cache)
+	require.NoError(t, err)
+	require.NotNil(t, warmCG)
+
+	// The warm run must reproduce at least as many call sites as the cold run.
+	coldSites := 0
+	for _, sites := range coldCG.CallSites {
+		coldSites += len(sites)
+	}
+	warmSites := 0
+	for _, sites := range warmCG.CallSites {
+		warmSites += len(sites)
+	}
+	assert.Equal(t, coldSites, warmSites, "warm run should reproduce all cold-run call sites")
+}
