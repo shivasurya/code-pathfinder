@@ -9,8 +9,14 @@ type EnrichedDetection struct {
 	// Resolved location information
 	Location LocationInfo
 
-	// Code snippet with context
+	// Code snippet with context (sink location)
 	Snippet CodeSnippet
+
+	// Source snippet for inter-procedural taint flows (empty for local/pattern)
+	SourceSnippet CodeSnippet
+
+	// Source location for inter-procedural taint flows
+	SourceLocation LocationInfo
 
 	// Rule metadata (from RuleIR)
 	Rule RuleMetadata
