@@ -1,0 +1,210 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-136
+name: Dynamic Module Import from User Input
+short_description: Dynamic module imports via importlib.import_module(), load_object(), or __import__() with user-controlled input can lead to arbitrary code execution through module initialization side effects.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-136
+
+# Vulnerability Details
+cwe:
+  - id: CWE-470
+    name: Use of Externally-Controlled Input to Select Classes or Code
+    url: https://cwe.mitre.org/data/definitions/470.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - import
+  - dynamic-import
+  - code-injection
+  - arbitrary-code-execution
+  - CWE-470
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Python's import system executes module-level code when a module is imported. If an
+  attacker can control the module path passed to importlib.import_module(), __import__(),
+  or framework-specific loaders like Scrapy's load_object(), they can cause arbitrary
+  Python modules to be loaded and their initialization code executed.
+
+  This is particularly dangerous because:
+  1. Python modules execute arbitrary code at import time (__init__.py, module body)
+  2. An attacker can import stdlib modules with dangerous side effects
+  3. In applications with writable PYTHONPATH entries, an attacker can place malicious
+     modules that will be imported
+
+  GHSA-cwxj-rr6w-m6w7 (Scrapy) demonstrates this vulnerability: the Referrer-Policy
+  header value was passed to load_object() to dynamically load a policy class. An attacker
+  could set the Referrer-Policy header to an arbitrary Python dotted path, causing arbitrary
+  module loading and code execution.
+
+  Framework configuration patterns that load backends, middleware, or plugins by dotted
+  path are common sources of this vulnerability when the path comes from user input,
+  HTTP headers, or external configuration.
+
+message: "Dynamic module import detected (importlib.import_module, load_object, __import__). Importing modules based on user input can lead to arbitrary code execution."
+
+security_implications:
+  - title: Arbitrary Code Execution via Module Import
+    description: |
+      Python executes module-level code when a module is imported. An attacker who can
+      control the module path can cause any importable module to be loaded, executing
+      its initialization code. This can include modules that spawn processes, open network
+      connections, or modify the filesystem.
+  - title: Module Injection via Writable Paths
+    description: |
+      If any directory in sys.path is writable by the attacker (e.g., /tmp, upload
+      directories, shared filesystems), the attacker can place a malicious Python module
+      at that path. When importlib.import_module() is called with the attacker-controlled
+      name, the malicious module is loaded and executed.
+  - title: Supply Chain Attack via Configuration
+    description: |
+      Applications that load plugins, backends, or middleware by dotted path from
+      configuration files, environment variables, or HTTP headers are vulnerable if
+      those sources can be influenced by an attacker. The Scrapy Referrer-Policy
+      vulnerability demonstrates how HTTP headers can be exploited.
+  - title: Denial of Service via Import Side Effects
+    description: |
+      Even without code execution, an attacker can cause denial of service by importing
+      modules that consume excessive memory, open many file descriptors, or trigger
+      expensive initialization. Importing recursive or circular module structures can
+      also cause stack overflows.
+
+secure_example: |
+  import importlib
+
+  # INSECURE: Importing user-controlled module path
+  # mod = importlib.import_module(user_input)
+
+  # SECURE: Use an allowlist of permitted module paths
+  ALLOWED_BACKENDS = {
+      "redis": "myapp.cache.redis_backend",
+      "memcached": "myapp.cache.memcached_backend",
+      "local": "myapp.cache.local_backend",
+  }
+
+  def load_backend(backend_name: str):
+      if backend_name not in ALLOWED_BACKENDS:
+          raise ValueError(f"Unknown backend: {backend_name}")
+      module_path = ALLOWED_BACKENDS[backend_name]
+      return importlib.import_module(module_path)
+
+  # SECURE: Use a factory pattern with registered handlers
+  class HandlerRegistry:
+      _handlers = {}
+
+      @classmethod
+      def register(cls, name, handler_class):
+          cls._handlers[name] = handler_class
+
+      @classmethod
+      def get(cls, name):
+          if name not in cls._handlers:
+              raise ValueError(f"Unknown handler: {name}")
+          return cls._handlers[name]
+
+  # SECURE: For plugin systems, use entry_points (validated by pip)
+  from importlib.metadata import entry_points
+
+  def load_plugins():
+      eps = entry_points(group="myapp.plugins")
+      return {ep.name: ep.load() for ep in eps}
+
+recommendations:
+  - Never pass user input, HTTP headers, or untrusted configuration values directly to importlib.import_module() or __import__().
+  - Use an allowlist mapping user-facing names to hardcoded module paths for plugin/backend selection.
+  - For plugin systems, use setuptools entry_points which are registered at install time and cannot be injected at runtime.
+  - Validate that module paths match an expected pattern (e.g., must start with "myapp.") before importing.
+  - Audit all uses of load_object(), import_module(), and __import__() in framework configuration code.
+
+detection_scope: |
+  This rule detects calls to importlib.import_module(), __import__(), load_object(),
+  and similar dynamic import functions. All call sites are flagged because the safety
+  depends on whether the module path argument is attacker-controlled. Hardcoded module
+  paths are safe but require human review to confirm.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-470 - Use of Externally-Controlled Input to Select Classes or Code"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks"
+
+# References
+references:
+  - title: "GHSA-cwxj-rr6w-m6w7: Scrapy Referrer-Policy code execution"
+    url: https://github.com/advisories/GHSA-cwxj-rr6w-m6w7
+  - title: "CWE-470: Use of Externally-Controlled Input to Select Classes or Code"
+    url: https://cwe.mitre.org/data/definitions/470.html
+  - title: "Python importlib documentation"
+    url: https://docs.python.org/3/library/importlib.html
+  - title: "OWASP A03:2021 Injection"
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Python entry_points for safe plugin loading"
+    url: https://packaging.python.org/en/latest/specifications/entry-points/
+
+# FAQ
+faq:
+  - question: Is importlib.import_module() with a hardcoded string safe?
+    answer: |
+      Yes. importlib.import_module("json") or importlib.import_module("myapp.utils")
+      with hardcoded string literals are safe because the attacker cannot control the
+      module path. This rule flags all call sites for review, but hardcoded paths can
+      be safely ignored.
+
+  - question: How does this differ from PYTHON-LANG-SEC-005 (Non-literal import)?
+    answer: |
+      PYTHON-LANG-SEC-005 detects the same functions but focuses on the non-literal
+      argument pattern. PYTHON-LANG-SEC-136 is specifically about the code execution
+      risk from user-controlled module paths and includes framework-specific loaders
+      like load_object(). The rules complement each other.
+
+  - question: Is load_object() specific to Scrapy?
+    answer: |
+      load_object() is a Scrapy utility function (scrapy.utils.misc.load_object) that
+      imports a module and returns an object by dotted path. Similar patterns exist in
+      Django (import_string), Celery (symbol_by_name), and other frameworks. This rule
+      catches the generic pattern; framework-specific rules may provide more context.
+
+  - question: Can I use a regex to validate module paths?
+    answer: |
+      Regex validation (e.g., requiring paths to start with "myapp.") provides some
+      defense but is fragile. An attacker might find importable modules within your
+      namespace that have dangerous side effects. An explicit allowlist is safer than
+      pattern matching.
+
+  - question: What about dynamic imports in Django settings?
+    answer: |
+      Django's settings like MIDDLEWARE, AUTHENTICATION_BACKENDS, etc. are loaded via
+      import_string() from the settings file. These are safe because settings are
+      server-side configuration, not user input. The risk arises when the import path
+      comes from request data, HTTP headers, or user-facing configuration interfaces.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-005
+  - PYTHON-LANG-SEC-001
+  - PYTHON-LANG-SEC-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

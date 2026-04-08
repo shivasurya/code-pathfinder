@@ -1,0 +1,199 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-144
+name: Insecure CORS Wildcard with Credentials
+short_description: CORS middleware configured with wildcard origins (allow_origins=["*"]) may expose APIs to cross-origin attacks when combined with credentials.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-144
+
+# Vulnerability Details
+cwe:
+  - id: CWE-942
+    name: Permissive Cross-domain Policy with Untrusted Domains
+    url: https://cwe.mitre.org/data/definitions/942.html
+
+owasp:
+  - id: A05:2021
+    name: Security Misconfiguration
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+tags:
+  - python
+  - cors
+  - misconfiguration
+  - wildcard
+  - cross-origin
+  - CWE-942
+  - OWASP-A05
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Cross-Origin Resource Sharing (CORS) is a browser security mechanism that controls which
+  origins can access an API. Misconfiguring CORS middleware with allow_origins=["*"] (wildcard)
+  allows any website to make cross-origin requests to your API. When combined with
+  allow_credentials=True, this creates a critical vulnerability where any malicious website
+  can make authenticated requests on behalf of a logged-in user.
+
+  This is a configuration audit rule. The CORS middleware call itself is not inherently
+  vulnerable — the vulnerability depends on the specific arguments passed (allow_origins,
+  allow_credentials, allow_methods, allow_headers). This rule flags CORS middleware
+  instantiation and configuration calls for manual review to verify that:
+
+  1. allow_origins is not set to ["*"] or a permissive regex
+  2. allow_credentials=True is not combined with wildcard origins
+  3. allow_methods and allow_headers are appropriately restricted
+
+  Real-world vulnerabilities like GHSA-9jfm-9rc6-2hfq (Glances) demonstrate that permissive
+  CORS configurations in Python web applications enable cross-site data theft and CSRF attacks.
+
+  Common affected frameworks include FastAPI (CORSMiddleware from starlette), Flask (flask-cors),
+  Django (django-cors-headers), and any ASGI/WSGI middleware that configures CORS headers.
+
+message: "CORS middleware configuration detected. Review allow_origins and allow_credentials settings to ensure origins are restricted."
+
+security_implications:
+  - title: Cross-Origin Data Theft
+    description: |
+      When allow_origins=["*"] is set, any website can make AJAX requests to your API
+      and read the responses. If the API returns sensitive data (user profiles, financial
+      data, internal metrics), a malicious website can silently exfiltrate this data
+      when a user visits the attacker's page while logged into your application.
+  - title: Cross-Site Request Forgery via CORS
+    description: |
+      When allow_credentials=True is combined with permissive origins, the browser
+      will include cookies, authorization headers, and TLS client certificates in
+      cross-origin requests. This effectively bypasses CSRF protections because the
+      attacker's JavaScript can make authenticated state-changing requests.
+  - title: API Abuse from Untrusted Origins
+    description: |
+      Wildcard CORS allows any origin to call your API endpoints. Even without
+      credentials, this can enable abuse of public-facing APIs, rate limit bypass
+      from distributed origins, and exploitation of any unauthenticated endpoints.
+  - title: Internal Service Exposure
+    description: |
+      Internal APIs or admin endpoints that rely on network-level access control
+      (e.g., only accessible from internal network) can be accessed from the
+      browser of an internal user who visits a malicious external website, if
+      CORS is configured with wildcard origins.
+
+secure_example: |
+  from fastapi import FastAPI
+  from fastapi.middleware.cors import CORSMiddleware
+
+  app = FastAPI()
+
+  # INSECURE: wildcard origins with credentials
+  # app.add_middleware(
+  #     CORSMiddleware,
+  #     allow_origins=["*"],
+  #     allow_credentials=True,
+  # )
+
+  # SECURE: explicit allowed origins
+  ALLOWED_ORIGINS = [
+      "https://app.example.com",
+      "https://admin.example.com",
+  ]
+
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=ALLOWED_ORIGINS,
+      allow_credentials=True,
+      allow_methods=["GET", "POST"],
+      allow_headers=["Authorization", "Content-Type"],
+  )
+
+  # SECURE: Flask-CORS with specific origins
+  from flask import Flask
+  from flask_cors import CORS
+
+  flask_app = Flask(__name__)
+  CORS(flask_app, origins=["https://app.example.com"])
+
+recommendations:
+  - Never use allow_origins=["*"] in production, especially with allow_credentials=True.
+  - Explicitly list allowed origins using full URLs including the scheme (https://example.com).
+  - If a regex is needed for subdomains, use allow_origin_regex with a strict pattern that anchors the domain.
+  - Restrict allow_methods to only the HTTP methods your API actually uses.
+  - Restrict allow_headers to only the headers your API requires.
+  - Use environment variables to configure allowed origins so development and production have different settings.
+
+detection_scope: |
+  This rule detects calls to CORSMiddleware(), app.add_middleware(), and CORS()
+  constructors. All CORS middleware configuration calls are flagged for manual review
+  because the vulnerability depends on the specific arguments passed, which may be
+  variables or configuration values that static analysis cannot resolve. This is a
+  configuration audit rule that requires human verification of the CORS settings.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A05:2021 - Security Misconfiguration"
+  - standard: CWE/SANS Top 25
+    requirement: "CWE-942 - Permissive Cross-domain Policy with Untrusted Domains"
+  - standard: NIST SP 800-53
+    requirement: "AC-4: Information Flow Enforcement"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect web-facing applications against attacks"
+
+# References
+references:
+  - title: "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+    url: https://cwe.mitre.org/data/definitions/942.html
+  - title: "GHSA-9jfm-9rc6-2hfq: Permissive CORS in Glances"
+    url: https://github.com/advisories/GHSA-9jfm-9rc6-2hfq
+  - title: "MDN Web Docs: Cross-Origin Resource Sharing (CORS)"
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+  - title: "OWASP CORS Misconfiguration"
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing
+  - title: "FastAPI CORS Documentation"
+    url: https://fastapi.tiangolo.com/tutorial/cors/
+
+# FAQ
+faq:
+  - question: Is allow_origins=["*"] always dangerous?
+    answer: |
+      Not always. For truly public APIs that serve only public data and do not use
+      cookies or authentication, allow_origins=["*"] is acceptable and is how public
+      CDNs and open APIs operate. However, it is dangerous when combined with
+      allow_credentials=True or when the API has any authenticated endpoints. Most
+      application APIs should use explicit origin lists.
+
+  - question: Why does this rule flag all CORS middleware calls instead of just wildcard ones?
+    answer: |
+      The allowed origins are often passed as variables, loaded from configuration files,
+      or set via environment variables. Static analysis cannot reliably determine the
+      runtime value of these arguments, so the rule flags all CORS configuration calls
+      for manual review. A human reviewer can quickly verify whether the configuration
+      is restrictive enough.
+
+  - question: Does the browser prevent allow_credentials with wildcard origins?
+    answer: |
+      Modern browsers will reject responses that have both Access-Control-Allow-Origin: *
+      and Access-Control-Allow-Credentials: true. However, some CORS middleware
+      implementations work around this by reflecting the request's Origin header back as
+      the Access-Control-Allow-Origin value when credentials are enabled, effectively
+      allowing any origin while appearing to be specific. This reflection pattern is
+      equally dangerous.
+
+  - question: How do I handle CORS for multiple subdomains?
+    answer: |
+      Use allow_origin_regex with a properly anchored regex pattern like
+      r"^https://.*\.example\.com$" to allow all subdomains of example.com. Avoid
+      overly permissive regex patterns like ".*example.*" that could match
+      attacker-controlled domains like "evil-example.com" or "example.evil.com".
+
+similar_rules: []
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

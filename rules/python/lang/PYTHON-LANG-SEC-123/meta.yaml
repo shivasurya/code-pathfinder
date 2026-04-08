@@ -1,0 +1,189 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-123
+name: Jinja2 Server-Side Template Injection
+short_description: Jinja2 from_string(), Template(), and render_template_string() construct templates from strings, enabling SSTI when the template source contains user input.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-123
+
+# Vulnerability Details
+cwe:
+  - id: CWE-1336
+    name: Improper Neutralization of Special Elements Used in a Template Engine
+    url: https://cwe.mitre.org/data/definitions/1336.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - jinja2
+  - ssti
+  - template-injection
+  - remote-code-execution
+  - flask
+  - CWE-1336
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Server-Side Template Injection (SSTI) occurs when user input is embedded into a template
+  string that is then compiled and rendered by the Jinja2 template engine. Unlike cross-site
+  scripting (XSS) which executes in the browser, SSTI executes on the server and can lead
+  to remote code execution (RCE).
+
+  Jinja2's from_string() method, the Template() constructor, and Flask's render_template_string()
+  all compile a string into a template. If the string contains user input, an attacker can
+  inject Jinja2 template expressions like {{ config.items() }} or {{ ''.__class__.__mro__[1].__subclasses__() }}
+  to read configuration, access Python internals, and ultimately execute arbitrary code.
+
+  CVE-2025-27516 and GHSA-pxrr-hq57-q35p (dynaconf) demonstrate how template injection in
+  configuration processing can lead to remote code execution. SandboxedEnvironment provides
+  some protection but has been bypassed in multiple CVEs.
+
+  The safe pattern is to use file-based templates with render_template() or get_template(),
+  passing user data as template context variables rather than embedding it in the template string.
+
+message: "Jinja2 template constructed from dynamic input detected. from_string(), Template(), and render_template_string() can lead to server-side template injection (SSTI)."
+
+security_implications:
+  - title: Remote Code Execution via Template Expressions
+    description: |
+      Jinja2 template expressions have access to Python objects. An attacker can traverse
+      the Python object hierarchy from any string to access builtins and execute arbitrary
+      code: {{ ''.__class__.__mro__[1].__subclasses__() }}. This is a well-documented
+      technique with readily available payloads.
+  - title: Configuration and Secret Disclosure
+    description: |
+      In Flask applications, template expressions can access the app config:
+      {{ config.items() }} or {{ config['SECRET_KEY'] }}. This can expose database
+      credentials, API keys, and session signing secrets.
+  - title: Sandbox Escape
+    description: |
+      Jinja2's SandboxedEnvironment restricts access to dangerous attributes and methods,
+      but sandbox escapes have been discovered repeatedly (CVE-2024-22195, CVE-2025-27516).
+      The sandbox should not be relied upon as the sole protection against SSTI when
+      template sources are attacker-controlled.
+  - title: Indirect Template Injection
+    description: |
+      Templates loaded from databases, configuration files, or external services may
+      contain attacker-controlled content even if the immediate caller does not take
+      direct user input. Any non-hardcoded template string should be treated as potentially
+      tainted.
+
+secure_example: |
+  from flask import render_template
+  from jinja2 import Environment, FileSystemLoader
+
+  # INSECURE: User input in template string
+  # return render_template_string(f"Hello {user_input}")
+
+  # SECURE: Use file-based templates with data as context
+  def render_profile(user):
+      return render_template("profile.html", user=user)
+
+  # SECURE: Load templates from filesystem
+  def render_report(data):
+      env = Environment(loader=FileSystemLoader("templates"))
+      tmpl = env.get_template("report.html")
+      return tmpl.render(data=data)
+
+  # SECURE: If dynamic template selection is needed, use select_template
+  def render_themed(theme, data):
+      env = Environment(loader=FileSystemLoader("templates"))
+      tmpl = env.select_template([f"{theme}.html", "default.html"])
+      return tmpl.render(data=data)
+
+recommendations:
+  - Use render_template() with file-based templates instead of render_template_string() with string templates.
+  - Pass user data as template context variables (render_template("page.html", name=user_input)) rather than embedding it in template strings.
+  - Use Environment with FileSystemLoader and get_template() to load templates from the filesystem.
+  - If dynamic template content is absolutely required, use SandboxedEnvironment and keep Jinja2 updated, but understand that sandbox escapes are periodically discovered.
+  - Never construct template strings by concatenating or formatting user input into them.
+
+detection_scope: |
+  This rule detects calls to Environment.from_string(), jinja2.Template(), Template(),
+  and Flask's render_template_string(). These methods compile a string into a Jinja2
+  template and are the primary vectors for SSTI. File-based template loading via
+  get_template() and render_template() are not flagged.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-94 - Improper Control of Generation of Code ('Code Injection')"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against injection attacks"
+
+# References
+references:
+  - title: "GHSA-pxrr-hq57-q35p: dynaconf Jinja2 SSTI"
+    url: https://github.com/advisories/GHSA-pxrr-hq57-q35p
+  - title: "CVE-2025-27516: Jinja2 sandbox escape"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2025-27516
+  - title: "CWE-1336: Template Engine Injection"
+    url: https://cwe.mitre.org/data/definitions/1336.html
+  - title: "PortSwigger: Server-Side Template Injection"
+    url: https://portswigger.net/web-security/server-side-template-injection
+  - title: "HackTricks: Jinja2 SSTI"
+    url: https://book.hacktricks.xyz/pentesting-web/ssti-server-side-template-injection/jinja2-ssti
+
+# FAQ
+faq:
+  - question: Is SandboxedEnvironment safe against SSTI?
+    answer: |
+      SandboxedEnvironment provides defense-in-depth by restricting access to dangerous
+      attributes and methods, but it has been bypassed multiple times (CVE-2024-22195,
+      CVE-2025-27516). It should be used as an additional layer of protection but not as
+      the sole defense. The primary defense should be avoiding user input in template strings.
+
+  - question: What is the difference between render_template and render_template_string?
+    answer: |
+      render_template() loads a template from a file on the filesystem — the template
+      source is controlled by the developer. render_template_string() compiles a string
+      directly into a template. If the string contains user input, render_template_string()
+      enables SSTI. Always prefer render_template().
+
+  - question: Can autoescaping prevent SSTI?
+    answer: |
+      No. Autoescaping (enabled by default in Jinja2 for HTML templates) prevents XSS by
+      escaping HTML special characters in template output. It does not prevent SSTI because
+      the injection happens at the template compilation stage, before any rendering or
+      escaping occurs. {{ and }} are template syntax, not HTML.
+
+  - question: Is this related to XSS?
+    answer: |
+      SSTI and XSS are different vulnerabilities. XSS executes in the victim's browser
+      and requires the attacker's payload to be reflected in the HTML output. SSTI executes
+      on the server and gives the attacker access to the server-side Python environment.
+      SSTI is generally more severe because it leads to RCE, while XSS is limited to
+      client-side actions.
+
+  - question: How do I detect SSTI in my application?
+    answer: |
+      Test by injecting {{ 7*7 }} into user inputs. If the output contains 49, the input
+      is being processed as a Jinja2 template expression and SSTI is confirmed. For
+      blind SSTI, use time-based payloads. Static analysis (this rule) catches the
+      code patterns that enable SSTI.
+
+# Similar Rules
+similar_rules:
+  - PYTHON-LANG-SEC-093
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

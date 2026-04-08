@@ -1,0 +1,191 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-157
+name: ZipFile Extract Path Traversal (Zip Slip)
+short_description: ZipFile.extract() and ZipFile.extractall() can write files outside the target directory when zip entries contain path traversal sequences.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-157
+
+# Vulnerability Details
+cwe:
+  - id: CWE-22
+    name: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - python
+  - zipfile
+  - path-traversal
+  - zip-slip
+  - file-write
+  - CWE-22
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Zip Slip is a path traversal vulnerability that occurs when a zip archive contains entries
+  with filenames like "../../../etc/cron.d/malicious" that, when extracted, write files outside
+  the intended target directory. Python's zipfile.ZipFile.extract() and extractall() methods
+  do not validate member filenames for path traversal sequences by default.
+
+  An attacker who can upload or supply a zip archive to an application that extracts it can:
+  - Overwrite arbitrary files on the filesystem (e.g., configuration files, cron jobs)
+  - Write executable files to web-accessible directories for remote code execution
+  - Replace application binaries or libraries with malicious versions
+  - Overwrite SSH authorized_keys files for persistent access
+
+  This vulnerability class (CVE-2018-1002200) has affected numerous libraries and applications
+  across languages. In Python specifically, GHSA-8rrh-rw8j-w5fx demonstrated this in the
+  wheel package's unpack functionality.
+
+  Note: Python 3.12+ added a filter parameter to extractall() and the data_filter for
+  safer extraction, but older versions and code that does not use these features remain
+  vulnerable.
+
+message: "ZipFile.extract() or extractall() detected. Validate member filenames for path traversal before extraction."
+
+security_implications:
+  - title: Arbitrary File Overwrite
+    description: |
+      A malicious zip entry named "../../../etc/cron.d/backdoor" will be written to
+      /etc/cron.d/backdoor when extracted with a target directory of /tmp/uploads/.
+      This allows an attacker to overwrite any file writable by the application's
+      process user, including configuration files, cron jobs, and application code.
+  - title: Remote Code Execution via File Write
+    description: |
+      By writing a malicious file to a web-accessible directory (e.g., a PHP webshell,
+      a Python script in a CGI directory, or a template file), an attacker can achieve
+      remote code execution. Writing to application module directories can also inject
+      code that runs on the next import.
+  - title: Supply Chain Attacks via Package Archives
+    description: |
+      Build tools, package installers, and CI/CD pipelines that extract zip/wheel
+      archives are vulnerable to Zip Slip. A malicious package archive can overwrite
+      build scripts, inject code into dependencies, or modify deployment artifacts.
+  - title: Denial of Service via Symlink Entries
+    description: |
+      Some zip implementations support symbolic link entries. Combined with path
+      traversal, an attacker can create symlinks that point to sensitive files,
+      which are then overwritten on subsequent extractions.
+
+secure_example: |
+  import zipfile
+  import os
+
+  # INSECURE: extractall without validation
+  # with zipfile.ZipFile("upload.zip") as zf:
+  #     zf.extractall("/tmp/output")
+
+  # SECURE: validate each member before extraction
+  def safe_extract(zip_path: str, dest_dir: str) -> None:
+      dest_dir = os.path.realpath(dest_dir)
+      with zipfile.ZipFile(zip_path) as zf:
+          for member in zf.infolist():
+              member_path = os.path.realpath(
+                  os.path.join(dest_dir, member.filename)
+              )
+              if not member_path.startswith(dest_dir + os.sep):
+                  raise ValueError(
+                      f"Path traversal detected: {member.filename}"
+                  )
+              zf.extract(member, dest_dir)
+
+  # SECURE (Python 3.12+): use data_filter
+  # with zipfile.ZipFile("upload.zip") as zf:
+  #     zf.extractall("/tmp/output", filter="data")
+
+  # SECURE: read file contents without extracting to disk
+  with zipfile.ZipFile("archive.zip") as zf:
+      data = zf.read("config.json")
+
+recommendations:
+  - Always validate zip entry filenames before extraction by resolving the full path and checking it starts with the target directory.
+  - Use os.path.realpath() on both the target directory and the resolved member path to handle symlinks and relative paths.
+  - On Python 3.12+, use extractall(path, filter="data") which rejects path traversal entries.
+  - Consider using zf.read() or zf.open() to read file contents into memory instead of extracting to disk.
+  - Reject zip entries with absolute paths or entries containing ".." path components.
+  - Set restrictive file permissions on the extraction directory.
+
+detection_scope: |
+  This rule detects calls to zipfile.ZipFile.extract() and zipfile.ZipFile.extractall()
+  using the ZipFileModule.method() pattern. It specifically targets the zipfile module
+  methods rather than using broad wildcard matching like calls("*.extract") to avoid
+  false positives from unrelated extract methods (str.extract, re.extract, etc.).
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-22 - Improper Limitation of a Pathname to a Restricted Directory"
+  - standard: OWASP Top 10
+    requirement: "A01:2021 - Broken Access Control"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 - Protect against common coding vulnerabilities"
+
+# References
+references:
+  - title: "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: "OWASP Path Traversal"
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: "GHSA-8rrh-rw8j-w5fx: Path traversal in wheel unpack"
+    url: https://github.com/advisories/GHSA-8rrh-rw8j-w5fx
+  - title: "CVE-2018-1002200: Zip Slip arbitrary file overwrite"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2018-1002200
+  - title: "Python zipfile documentation"
+    url: https://docs.python.org/3/library/zipfile.html
+  - title: "Python 3.12 zipfile.extractall filter parameter"
+    url: https://docs.python.org/3.12/library/zipfile.html#zipfile.ZipFile.extractall
+
+# FAQ
+faq:
+  - question: Does Python's zipfile module protect against Zip Slip by default?
+    answer: |
+      No. Python's zipfile.extract() and extractall() do not validate member filenames
+      for path traversal by default in versions before 3.12. Starting with Python 3.12,
+      a filter parameter was added to extractall() that can reject dangerous entries when
+      set to "data". However, this filter is not enabled by default for backward
+      compatibility, so code must explicitly opt in.
+
+  - question: What is the difference between this rule and PYTHON-LANG-SEC-110 (tarfile)?
+    answer: |
+      PYTHON-LANG-SEC-110 covers tarfile extraction which has similar path traversal
+      risks. Tar archives can additionally contain symlink entries and device files,
+      making them slightly more dangerous. Both rules detect the same class of
+      vulnerability (CWE-22) but in different archive format handlers.
+
+  - question: Is extractall() with a members parameter safe?
+    answer: |
+      Using extractall(path, members=validated_list) can be safe if the members list
+      has been filtered to exclude entries with path traversal sequences. However, the
+      filtering must be done correctly — checking that the resolved path starts with the
+      target directory using os.path.realpath(). Simply checking for ".." in the filename
+      is insufficient as there are bypass techniques.
+
+  - question: Can Zip Slip affect Python wheel installation?
+    answer: |
+      Yes. Python wheel files (.whl) are zip archives. The wheel package had a Zip Slip
+      vulnerability (GHSA-8rrh-rw8j-w5fx) where malicious wheel files could write files
+      outside the installation directory during pip install. This was fixed in the wheel
+      package, but custom wheel extraction code may still be vulnerable.
+
+similar_rules: []
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

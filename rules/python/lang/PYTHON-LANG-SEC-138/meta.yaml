@@ -1,0 +1,186 @@
+# Rule Identity
+id: PYTHON-LANG-SEC-138
+name: Cypher/Graph Query Injection
+short_description: Neo4j Cypher queries built with string concatenation or formatting allow injection of arbitrary graph query logic.
+
+# Classification
+severity: HIGH
+category: lang
+language: python
+ruleset: python/lang/PYTHON-LANG-SEC-138
+
+# Vulnerability Details
+cwe:
+  - id: CWE-943
+    name: Improper Neutralization of Special Elements in Data Query Logic
+    url: https://cwe.mitre.org/data/definitions/943.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - python
+  - neo4j
+  - cypher
+  - injection
+  - graph-database
+  - CWE-943
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Cypher is the query language for Neo4j and other graph databases. Like SQL injection,
+  Cypher injection occurs when user-controlled input is concatenated directly into a query
+  string rather than passed as a parameter. However, Cypher injection is a distinct
+  vulnerability class (CWE-943) because graph query languages have different syntax,
+  capabilities, and exploitation techniques compared to SQL.
+
+  An attacker who can inject into a Cypher query can:
+  - Read arbitrary nodes and relationships from the graph database
+  - Modify or delete graph data (MERGE, DELETE, DETACH DELETE)
+  - Bypass access control logic encoded in query WHERE clauses
+  - Exfiltrate data through LOAD CSV or APOC procedures
+  - In some configurations, execute server-side procedures (CALL dbms.*)
+
+  Unlike SQL, Cypher uses $param syntax for parameterized queries. The Neo4j Python driver
+  supports parameterized queries natively via keyword arguments to session.run() and
+  driver.execute_query(). Libraries like py2neo and neomodel also support parameterization.
+
+  This rule flags calls to session.run(), driver.execute_query(), graph.evaluate(), and
+  similar graph query execution methods for manual review to ensure parameterized queries
+  are used.
+
+message: "Cypher query execution detected. Ensure parameterized queries with $param syntax are used instead of string concatenation."
+
+security_implications:
+  - title: Graph Data Exfiltration
+    description: |
+      An attacker can inject UNION clauses or modify RETURN statements to extract
+      nodes and relationships they should not have access to. Graph databases often
+      store interconnected sensitive data (user relationships, access graphs, knowledge
+      graphs) that can be traversed with injected MATCH patterns.
+  - title: Data Modification via Injected Mutations
+    description: |
+      Cypher supports CREATE, MERGE, SET, DELETE, and DETACH DELETE operations. An
+      attacker who can inject into a read query can append mutation operations to
+      modify or destroy graph data, including deleting entire node labels.
+  - title: Procedure Execution
+    description: |
+      Neo4j supports server-side procedures via CALL syntax. If the database user
+      has elevated privileges, an attacker can call procedures like dbms.listConfig(),
+      apoc.load.json(), or custom procedures that may expose system internals or
+      enable further exploitation.
+  - title: Access Control Bypass
+    description: |
+      Applications that encode access control in Cypher WHERE clauses (e.g.,
+      WHERE u.tenant = 'tenant1') are vulnerable to injection that modifies or
+      removes the WHERE clause, granting access to data across tenants.
+
+secure_example: |
+  from neo4j import GraphDatabase
+
+  driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+
+  # INSECURE: string concatenation in Cypher query
+  # session.run(f"MATCH (u:User) WHERE u.name = '{name}' RETURN u")
+
+  # SECURE: parameterized query with $param syntax
+  with driver.session() as session:
+      result = session.run(
+          "MATCH (u:User) WHERE u.name = $name RETURN u",
+          name=user_input
+      )
+
+  # SECURE: execute_query with parameters dict
+  records, summary, keys = driver.execute_query(
+      "MATCH (n) WHERE n.id = $id RETURN n",
+      parameters_={"id": user_id}
+  )
+
+  # SECURE: transaction function with parameters
+  def find_user(tx, name):
+      return tx.run(
+          "MATCH (u:User {name: $name}) RETURN u",
+          name=name
+      ).single()
+
+recommendations:
+  - Always use parameterized Cypher queries with $param syntax instead of string concatenation or formatting.
+  - Pass parameters as keyword arguments to session.run() or as a parameters dict to driver.execute_query().
+  - Never interpolate user input into Cypher query strings using f-strings, format(), or % formatting.
+  - Apply the principle of least privilege to Neo4j database users to limit the impact of injection.
+  - Use Neo4j's role-based access control to restrict which procedures and graph operations are available.
+
+detection_scope: |
+  This rule detects calls to session.run(), driver.execute_query(), graph.evaluate(),
+  cypher.execute(), and generic .query() methods. Because these methods are used
+  legitimately with parameterized queries, all findings require manual review to
+  determine if string concatenation or formatting is used to build the query string.
+  This is an audit-level rule.
+
+# Compliance
+compliance:
+  - standard: CWE Top 25
+    requirement: "CWE-943 - Improper Neutralization of Special Elements in Data Query Logic"
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection"
+  - standard: NIST SP 800-53
+    requirement: "SI-10: Information Input Validation"
+
+# References
+references:
+  - title: "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+    url: https://cwe.mitre.org/data/definitions/943.html
+  - title: "GHSA-gg5m-55jj-8m5g: Cypher injection in graphiti-core"
+    url: https://github.com/advisories/GHSA-gg5m-55jj-8m5g
+  - title: "Neo4j Cypher Injection Prevention"
+    url: https://neo4j.com/developer/kb/protecting-against-cypher-injection/
+  - title: "OWASP Top 10 A03:2021 Injection"
+    url: https://owasp.org/Top10/A03_2021-Injection/
+  - title: "Neo4j Python Driver Documentation"
+    url: https://neo4j.com/docs/python-manual/current/
+
+# FAQ
+faq:
+  - question: How does Cypher injection differ from SQL injection?
+    answer: |
+      While both are query injection vulnerabilities, Cypher injection targets graph databases
+      and uses different syntax. Cypher uses MATCH/RETURN instead of SELECT, graph traversal
+      patterns like (a)-[:KNOWS]->(b), and $param syntax for parameters instead of ? or %s.
+      The exploitation techniques differ: Cypher injection can traverse graph relationships,
+      modify labels, and call graph-specific procedures. CWE-943 is the dedicated CWE for
+      data query logic injection, separate from CWE-89 (SQL injection).
+
+  - question: Is session.run() with a static query string safe?
+    answer: |
+      Yes. If the Cypher query string is a static literal with no user input interpolated,
+      it is safe. This rule flags all session.run() calls for audit because static analysis
+      cannot always determine whether the query argument contains interpolated user input.
+
+  - question: Does this rule detect py2neo and neomodel injection?
+    answer: |
+      This rule detects graph.evaluate() calls (py2neo) and generic .query() and .run()
+      methods. For neomodel, which uses an ORM pattern, direct Cypher injection is less
+      common but can occur through raw_cypher() or db.cypher_query() calls.
+
+  - question: Are Neo4j APOC procedures exploitable through injection?
+    answer: |
+      Yes. If an attacker can inject into a Cypher query, they may be able to call APOC
+      procedures like apoc.load.json(), apoc.load.csv(), or apoc.cypher.run() to read
+      files, make network requests, or execute nested queries. Restricting APOC procedures
+      via Neo4j configuration is recommended as defense in depth.
+
+similar_rules:
+  - PYTHON-LANG-SEC-084
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
