@@ -1,19 +1,22 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
+	"github.com/shivasurya/code-pathfinder/sast-engine/updatecheck"
 	"github.com/spf13/cobra"
 )
 
 var (
-	verboseFlag bool
-	Version     = "2.0.2"
-	GitCommit   = "HEAD"
+	verboseFlag            bool
+	Version                = "2.0.2"
+	GitCommit              = "HEAD"
+	updateCheckManifestURL string // empty = use updatecheck default; overridable in tests
 )
 
 var rootCmd = &cobra.Command{
@@ -46,6 +49,31 @@ Learn more: https://codepathfinder.dev`,
 				fmt.Fprintln(os.Stderr)
 			}
 		}
+
+		// Update check: best-effort 800 ms fetch against the CDN manifest.
+		// shouldSkipUpdateCheck is the fetch gate; shouldShowNotice is the render gate.
+		// They are kept separate so PR-04 can fire analytics even when the banner is
+		// suppressed by --no-banner or a non-TTY environment.
+		if !shouldSkipUpdateCheck(cmd) {
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			logger := output.NewLogger(output.VerbosityDefault)
+			notice := updatecheck.Check(ctx, Version, "cli", updatecheck.Options{
+				ManifestURL: updateCheckManifestURL,
+				Logger:      logger,
+			})
+			noBanner, _ := cmd.Flags().GetBool("no-banner")
+			if notice != nil && shouldShowNotice(logger.IsTTY(), noBanner) {
+				if notice.Upgrade != nil {
+					output.PrintUpdateNotice(os.Stderr, notice.Upgrade)
+				}
+				if notice.Announcement != nil {
+					output.PrintAnnouncement(os.Stderr, notice.Announcement)
+				}
+			}
+		}
 	},
 }
 
@@ -57,4 +85,39 @@ func init() {
 	rootCmd.PersistentFlags().Bool("disable-metrics", false, "Disable metrics collection")
 	rootCmd.PersistentFlags().Bool("verbose", false, "Verbose output")
 	rootCmd.PersistentFlags().Bool("no-banner", false, "Disable startup banner")
+	rootCmd.PersistentFlags().Bool("no-update-check", false,
+		"Disable check for newer pathfinder versions")
+}
+
+// shouldSkipUpdateCheck returns true when the update-check fetch should be
+// skipped entirely. This is the *fetch* gate — it prevents any outbound HTTP
+// request. It is deliberately broad so CI systems and explicit opt-outs never
+// pay the 800 ms latency cost.
+func shouldSkipUpdateCheck(cmd *cobra.Command) bool {
+	if v, _ := cmd.Flags().GetBool("no-update-check"); v {
+		return true
+	}
+	if os.Getenv("PATHFINDER_NO_UPDATE_CHECK") != "" {
+		return true
+	}
+	for _, k := range []string{
+		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE",
+		"CIRCLECI", "TRAVIS", "JENKINS_URL", "TF_BUILD",
+	} {
+		if os.Getenv(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldShowNotice returns true when the update-check result should be rendered
+// to the user. This is the *render* gate — it is separate from the fetch gate
+// so that PR-04 analytics can record stale versions even when the banner is
+// suppressed by --no-banner or a non-TTY output stream.
+//
+// isTTY and noBanner are passed as plain booleans so the function is
+// independently testable without needing a real terminal.
+func shouldShowNotice(isTTY, noBanner bool) bool {
+	return isTTY && !noBanner
 }
