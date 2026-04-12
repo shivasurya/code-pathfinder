@@ -8,6 +8,7 @@ severity: CRITICAL
 category: security
 language: go
 ruleset: golang/GO-SQLI-002
+status: disabled
 
 # Vulnerability Details
 cwe:
