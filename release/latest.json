@@ -1,32 +1,17 @@
 {
   "schema": 1,
   "latest": {
-    "version": "2.0.3",
-    "released_at": "2026-04-12T00:00:00Z",
-    "release_url": "https://github.com/shivasurya/code-pathfinder/releases/tag/v2.0.3"
+    "version": "2.0.2",
+    "released_at": "2026-04-03T00:00:00Z",
+    "release_url": "https://github.com/shivasurya/code-pathfinder/releases/tag/v2.0.2"
   },
   "channels": {
-    "stable": "2.0.3"
+    "stable": "2.0.2"
   },
   "message": {
     "level": "info",
-    "text": "Code Pathfinder 2.0.3 — upgrade for the latest improvements."
+    "text": "Code Pathfinder static analysis engine."
   },
-  "announcements": [
-    {
-      "id": "test-targeted-ann",
-      "level": "warn",
-      "title": "Version-Targeted Announcement Test",
-      "text": "This notice only shows on builds older than 2.0.0.",
-      "version_range": "<2.0.0"
-    },
-    {
-      "id": "test-generic-ann",
-      "level": "info",
-      "title": "Generic Announcement Test",
-      "text": "This notice shows on all versions regardless of upgrade state.",
-      "url": "https://codepathfinder.dev"
-    }
-  ],
+  "announcements": [],
   "min_supported": "1.9.0"
 }
