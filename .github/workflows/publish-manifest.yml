@@ -35,6 +35,13 @@ jobs:
             ))
           ' release/latest.json
 
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
       - name: Upload to Cloudflare R2
         env:
           R2_ACCOUNT_ID:        ${{ secrets.R2_ACCOUNT_ID }}
@@ -46,7 +53,7 @@ jobs:
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
           aws s3 cp release/latest.json \
-            s3://codepathfinder-assets/pathfinder/latest.json \
+            s3://code-pathfinder-assets/pathfinder/latest.json \
             --endpoint-url "$R2_ENDPOINT" \
             --cache-control "public, max-age=300" \
             --content-type "application/json"
