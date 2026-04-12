@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
@@ -51,10 +52,18 @@ Learn more: https://codepathfinder.dev`,
 		}
 
 		// Update check: best-effort 800 ms fetch against the CDN manifest.
-		// shouldSkipUpdateCheck is the fetch gate; shouldShowNotice is the render gate.
-		// They are kept separate so PR-04 can fire analytics even when the banner is
+		// updateCheckSkipReason is the fetch gate; shouldShowNotice is the render gate.
+		// They are kept separate so analytics can fire even when the banner is
 		// suppressed by --no-banner or a non-TTY environment.
-		if !shouldSkipUpdateCheck(cmd) {
+		if reason, skipped := updateCheckSkipReason(cmd); skipped {
+			// Sampled dismissed event (1 in 10) so we can measure opt-out noise.
+			if !analytics.IsDisabled() && rand.Intn(10) == 0 { //nolint:gosec // sampling, not crypto
+				analytics.ReportEventWithProperties("update_notice_dismissed", map[string]any{
+					"current": Version,
+					"reason":  reason,
+				})
+			}
+		} else {
 			ctx := cmd.Context()
 			if ctx == nil {
 				ctx = context.Background()
@@ -89,18 +98,24 @@ func init() {
 		"Disable check for newer pathfinder versions")
 }
 
-// shouldSkipUpdateCheck returns true when the update-check fetch should be
-// skipped entirely. This is the *fetch* gate — it prevents any outbound HTTP
-// request. CI environments intentionally receive the update check so teams
-// stay informed about newer versions.
-func shouldSkipUpdateCheck(cmd *cobra.Command) bool {
+// updateCheckSkipReason returns the skip reason and true when the
+// update-check fetch should be skipped, or ("", false) when the check
+// should proceed. The reason string is used for analytics.
+func updateCheckSkipReason(cmd *cobra.Command) (reason string, skip bool) {
 	if v, _ := cmd.Flags().GetBool("no-update-check"); v {
-		return true
+		return "flag", true
 	}
 	if os.Getenv("PATHFINDER_NO_UPDATE_CHECK") != "" {
-		return true
+		return "env", true
 	}
-	return false
+	return "", false
+}
+
+// shouldSkipUpdateCheck is a convenience wrapper for callers that only need
+// the boolean (e.g. tests).
+func shouldSkipUpdateCheck(cmd *cobra.Command) bool {
+	_, skip := updateCheckSkipReason(cmd)
+	return skip
 }
 
 // shouldShowNotice returns true when the update-check result should be rendered

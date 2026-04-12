@@ -42,6 +42,10 @@ type Server struct {
 	// updatecheck.Check call (5 s timeout). It is immutable for the lifetime
 	// of the process — no goroutine, no locking, no Close() needed.
 	updateInfo *updatecheck.Result
+
+	// reachReporter deduplicates analytics reach events within a 24-hour
+	// window. Initialized in both constructors alongside updateInfo.
+	reachReporter *updatecheck.ReachReporter
 }
 
 // SetVersion sets the server version reported in MCP initialize responses.
@@ -100,6 +104,7 @@ func NewServer(
 		degradation:      NewGracefulDegradation(tracker),
 		analytics:        mcpAnalytics,
 		disableAnalytics: disableAnalytics,
+		reachReporter:    updatecheck.NewReachReporter(),
 	}
 	s.fetchUpdateInfo()
 	return s
@@ -120,6 +125,7 @@ func NewServerWithBackgroundIndexing(projectPath, pythonVersion string, disableA
 		degradation:      NewGracefulDegradation(tracker),
 		analytics:        NewAnalytics("stdio", disableAnalytics),
 		disableAnalytics: disableAnalytics,
+		reachReporter:    updatecheck.NewReachReporter(),
 	}
 	s.fetchUpdateInfo()
 	return s
@@ -335,6 +341,8 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) *JSONRPCResponse {
 			}
 		}
 	}
+	// Fire reach analytics after description injection (once per 24-hour window).
+	s.reportReachIfNeeded()
 	return SuccessResponse(req.ID, ToolsListResult{
 		Tools: tools,
 	})
