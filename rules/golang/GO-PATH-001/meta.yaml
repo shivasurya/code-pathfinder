@@ -1,0 +1,237 @@
+# Rule Identity
+id: GO-PATH-001
+name: Path Traversal via HTTP Input
+short_description: User-controlled HTTP input reaches file system operations without path validation — filepath.Clean() alone is insufficient; filepath.Join("/uploads", "/etc/passwd") returns "/etc/passwd" in Go.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-PATH-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-22
+    name: "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+    url: https://cwe.mitre.org/data/definitions/22.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - go
+  - security
+  - path-traversal
+  - directory-traversal
+  - zip-slip
+  - file-system
+  - CWE-22
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Path traversal occurs when user-controlled input is used in file system operations
+  without properly restricting the resulting path to an intended directory. Attackers
+  inject sequences like `../../etc/passwd`, `../../../etc/shadow`, or `%2e%2e%2f` to
+  read or write files outside the intended base directory.
+
+  **Go-specific pitfall — filepath.Join with absolute paths**:
+  `filepath.Join("/var/uploads", "/etc/passwd")` returns `/etc/passwd` in Go.
+  This is documented behavior: if an element is an absolute path, all preceding elements
+  are discarded. A user supplying `/etc/passwd` as a filename completely bypasses the
+  base directory constraint.
+
+  **filepath.Clean() is necessary but NOT sufficient**:
+  `filepath.Clean("../../../etc/passwd")` returns `../../etc/passwd` — it resolves
+  redundant separators and dots but does not anchor to any base directory. Clean must
+  be followed by a `strings.HasPrefix(clean, baseDir)` check with a trailing separator.
+
+  **The correct pattern**:
+  ```go
+  clean := filepath.Join(baseDir, filename)
+  clean = filepath.Clean(clean)
+  if !strings.HasPrefix(clean, baseDir+string(filepath.Separator)) {
+      // path traversal attempt
+  }
+  ```
+  Note the trailing separator — without it, `baseDir = "/uploads"` and
+  `clean = "/uploads-secret/file.txt"` would pass the prefix check.
+
+  **Zip Slip vulnerability**: Archive extraction (zip, tar) is a common path traversal
+  vector. A malicious archive contains entries with paths like `../../etc/cron.d/backdoor`.
+  When extracted without path validation, files are written outside the extraction directory.
+  Go's archive/zip and archive/tar packages provide the raw filename from the archive
+  without sanitization — developers must validate each entry's path before extraction.
+
+  **Null byte injection**: In some contexts, filenames containing null bytes
+  (`filename\x00.jpg`) may be truncated at the null byte by underlying C library functions.
+  Go's os package handles null bytes safely (returns an error), but third-party or CGO
+  code may not.
+
+message: |
+  User input flows into file system operations. Use filepath.Join + filepath.Clean +
+  strings.HasPrefix(clean, baseDir+sep) to ensure the path stays within the intended
+  directory. Note: filepath.Join("/base", "/etc/passwd") returns "/etc/passwd" in Go.
+
+security_implications:
+  - title: Sensitive File Read
+    description: |
+      Attackers read `/etc/passwd`, `/etc/shadow` (Unix), `C:\Windows\System32\config\SAM`
+      (Windows), application configuration files containing database credentials, TLS
+      private keys, or cloud credential files (~/.aws/credentials).
+  - title: Application Source Code Disclosure
+    description: |
+      Reading `../../app/main.go`, `../../.env`, or `../../config.yaml` exposes
+      application secrets, database passwords, API keys, and business logic.
+  - title: Malicious File Write (Remote Code Execution)
+    description: |
+      Write access enables persistence: write to `/etc/cron.d/`, `~/.ssh/authorized_keys`,
+      or executable paths. In web contexts, writing a server-side script to a web-accessible
+      directory enables RCE.
+  - title: Zip Slip — Archive Extraction RCE
+    description: |
+      A malicious archive entry `../../.ssh/authorized_keys` writes the attacker's SSH
+      public key to the server's authorized_keys file during archive extraction.
+      Demonstrated against multiple Go-based archive tools.
+
+vulnerable_example: |
+  // VULNERABLE: filepath.Join with user input — absolute path injection
+  func serveFile(w http.ResponseWriter, r *http.Request) {
+      filename := r.FormValue("file")
+      // Attacker sends: file=/etc/passwd
+      // filepath.Join("/var/uploads", "/etc/passwd") == "/etc/passwd"
+      path := filepath.Join("/var/uploads", filename)
+      http.ServeFile(w, r, path)
+  }
+
+  // VULNERABLE: filepath.Clean without base check
+  func downloadFile(w http.ResponseWriter, r *http.Request) {
+      name := r.FormValue("name")
+      // Attacker sends: name=../../etc/shadow
+      clean := filepath.Clean("/var/uploads/" + name)
+      // clean = "/etc/shadow" — no base directory check!
+      data, _ := os.ReadFile(clean)
+      w.Write(data)
+  }
+
+  // VULNERABLE: zip extraction without path validation (Zip Slip)
+  func extractZip(archive *zip.ReadCloser, destDir string) {
+      for _, f := range archive.File {
+          // f.Name could be: ../../.ssh/authorized_keys
+          destPath := filepath.Join(destDir, f.Name) // absolute path injection!
+          os.MkdirAll(filepath.Dir(destPath), 0755)
+          out, _ := os.Create(destPath) // writes outside destDir
+          rc, _ := f.Open()
+          io.Copy(out, rc)
+      }
+  }
+
+secure_example: |
+  // SECURE: filepath.Join + Clean + HasPrefix check (with trailing separator)
+  func serveFile(w http.ResponseWriter, r *http.Request) {
+      filename := r.FormValue("file")
+      baseDir := "/var/uploads"
+
+      // Join, then Clean to resolve any remaining .. or .
+      clean := filepath.Clean(filepath.Join(baseDir, filename))
+
+      // CRITICAL: check with trailing separator to prevent "/uploads-evil" bypass
+      if !strings.HasPrefix(clean, baseDir+string(filepath.Separator)) {
+          http.Error(w, "invalid path", http.StatusBadRequest)
+          return
+      }
+      http.ServeFile(w, r, clean)
+  }
+
+  // SECURE: zip extraction with path traversal prevention
+  func extractZip(archive *zip.ReadCloser, destDir string) error {
+      destDir = filepath.Clean(destDir) + string(filepath.Separator)
+      for _, f := range archive.File {
+          // Validate destination path before extraction
+          destPath := filepath.Clean(filepath.Join(destDir, f.Name))
+          if !strings.HasPrefix(destPath, destDir) {
+              return fmt.Errorf("zip slip detected: %s", f.Name)
+          }
+          if f.FileInfo().IsDir() {
+              os.MkdirAll(destPath, f.Mode())
+              continue
+          }
+          os.MkdirAll(filepath.Dir(destPath), 0755)
+          out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
+          if err != nil {
+              return err
+          }
+          rc, _ := f.Open()
+          io.Copy(out, rc)
+          out.Close()
+          rc.Close()
+      }
+      return nil
+  }
+
+recommendations:
+  - Always use filepath.Clean() after filepath.Join() to resolve remaining .. components.
+  - After Clean, verify the path has the expected base directory prefix WITH a trailing separator.
+  - Never trust user-supplied filenames from archives — validate each entry path during extraction.
+  - Use os.OpenFile with appropriate flags; consider os.O_EXCL to prevent overwrite attacks.
+  - Reject filenames containing null bytes, path separators, or explicit .. components.
+  - Serve static files through http.FileServer with a restricted http.Dir, not by path construction.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources (net/http.Request, gin.Context, echo.Context,
+  fiber.Ctx) to os package file operations (os.Open, os.ReadFile, os.Create, os.WriteFile,
+  os.OpenFile) and filepath operations (filepath.Join, filepath.Abs) with global
+  inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2022-24348
+    description: |
+      Path traversal in Argo CD (CNCF GitOps tool, written in Go). Helm chart template
+      paths were not validated, allowing directory traversal to read files outside the
+      intended repository scope. An attacker could read sensitive files (credentials,
+      keys) from the Argo CD server by crafting a malicious Helm chart. Fixed in v2.1.9
+      and v2.2.4.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-24348
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 — Broken Access Control"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-22 — Path Traversal (ranked #8)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against path traversal attacks"
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 — Information Input Validation"
+
+# References
+references:
+  - title: "CWE-22: Path Traversal — MITRE"
+    url: https://cwe.mitre.org/data/definitions/22.html
+  - title: "OWASP Path Traversal attack"
+    url: https://owasp.org/www-community/attacks/Path_Traversal
+  - title: "OWASP Testing Guide: Path Traversal (v4.2)"
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/01-Testing_Directory_Traversal_File_Include
+  - title: "Zip Slip — path traversal in archive extraction"
+    url: https://github.com/snyk/zip-slip-vulnerability
+  - title: "Go filepath package documentation"
+    url: https://pkg.go.dev/path/filepath
+  - title: "Go filepath.Join behavior with absolute paths"
+    url: https://pkg.go.dev/path/filepath#Join
+
+# Similar Rules
+similar_rules:
+  - GO-SEC-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

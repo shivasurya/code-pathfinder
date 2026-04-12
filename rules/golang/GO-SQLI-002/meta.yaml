@@ -1,0 +1,220 @@
+# Rule Identity
+id: GO-SQLI-002
+name: SQL Injection via pgx PostgreSQL Driver
+short_description: User-controlled input reaches pgx query methods without parameterization, enabling SQL injection on PostgreSQL via the high-performance native pgx driver.
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-SQLI-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - sql-injection
+  - pgx
+  - postgresql
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  pgx is a high-performance native PostgreSQL driver for Go, widely used as a
+  database/sql replacement when maximum PostgreSQL performance is needed. Like database/sql,
+  pgx's Exec, Query, and QueryRow methods are vulnerable to SQL injection when user-controlled
+  input is concatenated into the query string rather than passed as positional parameters.
+
+  pgx uses PostgreSQL's native wire protocol and supports parameterized queries directly.
+  pgx positional parameter syntax is identical to PostgreSQL's: $1, $2, $3, etc.
+  Example: `conn.Exec(ctx, "SELECT * FROM users WHERE id = $1", userID)`.
+
+  **Real-world pgx SQL injection CVEs**:
+  - **CVE-2024-27289** (jackc/pgx < v4.18.2): SQL injection via large integer values that
+    bypass type conversion, allowing injection of unsigned integer-like values that
+    PostgreSQL interprets differently than expected.
+  - **CVE-2024-27304** (jackc/pgx < v4.18.2 and < v5.5.4): SQL injection via integer
+    types during query parameter binding — specific integer type coercion edge cases.
+
+  **pgx-specific attack surface**: Beyond standard string concatenation, pgx's use of
+  the PostgreSQL wire protocol means that type coercion bugs (where Go types are coerced
+  to PostgreSQL types with unexpected behavior) can create injection paths that don't exist
+  in database/sql with string-based drivers.
+
+  **Pool vs Conn**: Both `*pgx.Conn` (single connection) and `*pgxpool.Pool` (connection
+  pool) share the same API surface — both Exec/Query/QueryRow methods are vulnerable
+  when used without parameterization.
+
+message: |
+  User-controlled input flows into a pgx PostgreSQL query without parameterization.
+  Use conn.Exec(ctx, "SELECT $1", id) or pool.Query(ctx, "SELECT $1", id) instead.
+
+security_implications:
+  - title: Full PostgreSQL Database Access
+    description: |
+      SQL injection against a PostgreSQL database via pgx can expose all tables,
+      dump user credentials, bypass authentication, and (if SUPERUSER) execute
+      server-side commands via COPY TO/FROM, pg_read_file, or dblink extensions.
+  - title: PostgreSQL-Specific Functions
+    description: |
+      PostgreSQL exposes powerful built-in functions accessible via injection:
+      pg_read_file() reads server-side files, COPY TO PROGRAM executes OS commands
+      (on PostgreSQL < 9.3 or misconfigured servers), and dblink can probe other
+      databases. These amplify SQL injection far beyond data disclosure.
+  - title: Stacked Query Injection
+    description: |
+      PostgreSQL supports multiple statements in a single query string. SQL injection
+      can execute DROP, INSERT, UPDATE, or CREATE statements alongside the original
+      query, enabling data manipulation and destruction.
+
+vulnerable_example: |
+  // VULNERABLE: pgx with string concatenation
+  import (
+      "context"
+      "github.com/jackc/pgx/v5"
+  )
+
+  func getUser(conn *pgx.Conn, r *http.Request) {
+      id := r.FormValue("id")
+      // Attacker sends: id=1 UNION SELECT usename,passwd,null FROM pg_shadow--
+      rows, _ := conn.Query(context.Background(),
+          "SELECT name FROM users WHERE id = " + id)
+      defer rows.Close()
+  }
+
+  // VULNERABLE: pgxpool with fmt.Sprintf
+  func searchProducts(pool *pgxpool.Pool, r *http.Request) {
+      name := r.FormValue("name")
+      query := fmt.Sprintf("SELECT * FROM products WHERE name = '%s'", name)
+      // Attacker sends: ' OR '1'='1
+      rows, _ := pool.Query(context.Background(), query)
+      defer rows.Close()
+  }
+
+secure_example: |
+  // SECURE: pgx parameterized query (positional $1, $2 placeholders)
+  func getUser(conn *pgx.Conn, r *http.Request) {
+      id := r.FormValue("id")
+      rows, err := conn.Query(context.Background(),
+          "SELECT name FROM users WHERE id = $1", id)
+      if err != nil {
+          // handle error
+      }
+      defer rows.Close()
+  }
+
+  // SECURE: pgxpool parameterized query
+  func searchProducts(pool *pgxpool.Pool, r *http.Request) {
+      name := r.FormValue("name")
+      rows, err := pool.Query(context.Background(),
+          "SELECT * FROM products WHERE name LIKE $1", "%"+name+"%")
+      if err != nil {
+          // handle error
+      }
+      defer rows.Close()
+  }
+
+  // SECURE: Exec for non-SELECT queries
+  func updateUser(conn *pgx.Conn, r *http.Request) {
+      email := r.FormValue("email")
+      userID := r.FormValue("id")
+      _, err := conn.Exec(context.Background(),
+          "UPDATE users SET email = $1 WHERE id = $2", email, userID)
+      if err != nil {
+          // handle error
+      }
+  }
+
+  // SECURE: Batch parameterized queries
+  func batchInsert(conn *pgx.Conn, items []Item) {
+      batch := &pgx.Batch{}
+      for _, item := range items {
+          batch.Queue("INSERT INTO items(name, price) VALUES($1, $2)", item.Name, item.Price)
+      }
+      results := conn.SendBatch(context.Background(), batch)
+      defer results.Close()
+  }
+
+recommendations:
+  - Use pgx positional parameters $1, $2, ... for ALL user-supplied values.
+  - For batch operations, use pgx.Batch with parameterized Queue() calls.
+  - Validate numeric IDs with strconv.Atoi before use (also acts as a taint sanitizer).
+  - Keep pgx updated — CVE-2024-27289 and CVE-2024-27304 demonstrate driver-level
+    injection bugs that require version updates to fix.
+  - Avoid mixing pgx and fmt.Sprintf for query construction.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources to pgx Conn/Pool query methods.
+
+known_limitations: |
+  pgx type inference (GoPgxConn FQN) is not yet fully resolved by the engine for
+  *pgx.Conn parameters — this rule may miss findings until the engine supports pgx
+  type resolution. Engine gap tracked as EC-7. Use calls()-based matching as fallback.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2024-27289
+    description: |
+      SQL injection in jackc/pgx v4 (versions < 4.18.2). Large unsigned integer values
+      bypass expected type conversion, enabling SQL injection via integer parameter binding.
+      Affects applications using pgx v4 with certain integer type parameters.
+    url: https://github.com/jackc/pgx/security/advisories/GHSA-mrww-27vc-gghv
+  - id: CVE-2024-27304
+    description: |
+      SQL injection in jackc/pgx v4 (< 4.18.2) and v5 (< 5.5.4). Integer type coercion
+      edge cases during query parameter binding enable SQL injection. Fixed by validating
+      integer ranges before parameter substitution.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-27304
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-89 — SQL Injection (ranked #6)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "pgx — PostgreSQL driver and toolkit for Go (GitHub)"
+    url: https://github.com/jackc/pgx
+  - title: "pgx documentation — parameterized queries"
+    url: https://pkg.go.dev/github.com/jackc/pgx/v5
+  - title: "CVE-2024-27289 — pgx v4 SQL injection (GitHub Advisory)"
+    url: https://github.com/jackc/pgx/security/advisories/GHSA-mrww-27vc-gghv
+  - title: "CVE-2024-27304 — pgx v4/v5 SQL injection (GitHub Advisory)"
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-27304
+  - title: "OWASP SQL Injection Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: "Go database SQL injection avoidance — official Go documentation"
+    url: https://go.dev/doc/database/sql-injection
+
+# Similar Rules
+similar_rules:
+  - GO-SEC-001
+  - GO-SQLI-003
+  - GO-GORM-SQLI-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

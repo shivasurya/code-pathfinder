@@ -1,0 +1,206 @@
+# Rule Identity
+id: GO-CRYPTO-002
+name: Use of SHA1 Weak Hash Algorithm
+short_description: Detects use of SHA1 (crypto/sha1) which has a proven collision (SHAttered, 2017) and is deprecated by NIST for all applications through 2030.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-CRYPTO-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-328
+    name: "Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - crypto
+  - sha1
+  - weak-hash
+  - shattered
+  - collision-attack
+  - CWE-328
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  SHA-1 was broken in practice by the SHAttered attack (February 2017), produced by
+  Marc Stevens (CWI Amsterdam) and Google Research. The attack found two distinct PDF
+  files with identical SHA-1 digests using 9.2 × 10^18 SHA-1 computations — equivalent
+  to 6,500 CPU-years and 100 GPU-years, at a cost of roughly $110,000 on cloud hardware.
+
+  NIST announced in December 2022 that SHA-1 is being deprecated for ALL applications
+  (not just digital signatures). The deadline is December 31, 2030, after which any FIPS
+  140-validated module listing SHA-1 as an approved algorithm moves to the historical list.
+
+  All major browser vendors (Chrome, Firefox, Edge, Safari) stopped trusting SHA-1
+  TLS certificates by January–March 2017. The CA/Browser Forum banned issuance of
+  SHA-1-signed TLS certificates effective January 1, 2016.
+
+  Git still uses SHA-1 for object naming (commit/tree/blob hashes), and migration to
+  SHA-256 is in progress since Git 2.29 (2020). The SHAttered team noted that crafting
+  a colliding Git object is harder than generic collision due to format constraints,
+  but the technical feasibility is established.
+
+  **SHA-1 in HMAC (edge case)**: HMAC-SHA1 is not directly affected by SHA-1 collision
+  attacks because HMAC's security proof relies on PRF properties, not collision resistance.
+  HMAC-SHA1 remains used in OAuth 1.0a. However, HMAC-SHA256 is universally supported
+  and preferred for all new implementations.
+
+message: |
+  SHA-1 has a proven collision (SHAttered, 2017) and is deprecated by NIST through 2030.
+  Replace crypto/sha1 with crypto/sha256 or crypto/sha512.
+
+security_implications:
+  - title: Forged TLS Certificates
+    description: |
+      A SHA-1 collision enables certificate forgery. In the 2008 rogue CA attack (Sotirov et al.),
+      researchers used MD5 collisions to create a rogue CA certificate. The same attack class
+      applies to SHA-1. Browser vendors removed SHA-1 trust precisely to prevent this.
+  - title: Code Signing Bypass
+    description: |
+      If a build system or software distribution pipeline verifies code signatures using SHA-1,
+      an attacker who can produce a colliding binary passes the integrity check. The SHAttered
+      PDFs demonstrate the collision is real and producible with nation-state resources.
+  - title: Git Repository Poisoning
+    description: |
+      In Git's SHA-1-based object model, a commit/tree/blob hash acts as both the object ID
+      and its integrity proof. A SHA-1 collision attack against Git objects could theoretically
+      insert malicious content while preserving the expected hash, though the attack is more
+      complex than generic file collisions due to Git object format requirements.
+
+vulnerable_example: |
+  // VULNERABLE: SHA-1 for file integrity — collision proven feasible
+  import "crypto/sha1"
+
+  func hashFile(data []byte) string {
+      h := sha1.Sum(data)
+      return fmt.Sprintf("%x", h)
+  }
+
+  // VULNERABLE: SHA-1 for token generation
+  func generateToken(secret, data string) string {
+      h := sha1.New()
+      h.Write([]byte(secret + data))
+      return fmt.Sprintf("%x", h.Sum(nil))
+  }
+
+secure_example: |
+  // SECURE: SHA-256 for file integrity
+  import "crypto/sha256"
+
+  func hashFile(data []byte) string {
+      h := sha256.Sum256(data)
+      return fmt.Sprintf("%x", h)
+  }
+
+  // SECURE: SHA-256 streaming for large files
+  func hashFileLarge(r io.Reader) (string, error) {
+      h := sha256.New()
+      if _, err := io.Copy(h, r); err != nil {
+          return "", err
+      }
+      return fmt.Sprintf("%x", h.Sum(nil)), nil
+  }
+
+  // SECURE: HMAC-SHA256 for message authentication
+  import "crypto/hmac"
+
+  func computeHMAC(key, data []byte) []byte {
+      mac := hmac.New(sha256.New, key)
+      mac.Write(data)
+      return mac.Sum(nil)
+  }
+
+  // Migration note: SHA-256 output is 32 bytes (64 hex chars)
+  // vs SHA-1's 20 bytes (40 hex chars).
+  // Widen any database columns or cache keys storing these values.
+
+recommendations:
+  - Replace sha1.New() and sha1.Sum() with sha256.New() and sha256.Sum256().
+  - For SHA-512 where larger output is needed: use crypto/sha512.
+  - Audit stored SHA-1 hashes and plan migration to SHA-256 for all security-relevant uses.
+  - For HMAC, prefer HMAC-SHA256 over HMAC-SHA1 in all new code.
+  - Note output size change (20 bytes → 32 bytes) — update any fixed-width columns.
+  - For password hashing, use bcrypt or argon2id — not any variant of SHA.
+
+detection_scope: |
+  Detects all calls to crypto/sha1 package methods (New(), Sum()). Flags any use
+  regardless of context — sha256 is a drop-in replacement with no meaningful
+  performance penalty for application code.
+
+# Real-World Attacks
+cves:
+  - id: SHAttered-2017
+    description: |
+      First SHA-1 collision for full SHA-1 (CWI Amsterdam + Google Research, Feb 2017).
+      Two PDF files with identical SHA-1 digest produced using 2^63 SHA-1 computations.
+      Triggered NIST's December 2022 full deprecation announcement.
+    url: https://eprint.iacr.org/2017/190
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A Rev 2 (2019)
+    requirement: |
+      SHA-1 is disallowed for digital signature generation. Legacy verification only.
+      Deprecated through December 31, 2030 for all remaining uses (NIST Dec 2022 announcement).
+      URL: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - standard: CA/Browser Forum Baseline Requirements
+    requirement: "SHA-1 TLS certificates banned effective January 1, 2016."
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 — Strong cryptography required for data in transit"
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures"
+
+# References
+references:
+  - title: "SHAttered — First SHA-1 Collision (IACR ePrint 2017/190)"
+    url: https://eprint.iacr.org/2017/190
+  - title: "SHAttered paper PDF — Stevens et al. (CWI/Google, CRYPTO 2017)"
+    url: https://eprint.iacr.org/2017/190.pdf
+  - title: "NIST: Transitioning Away from SHA-1 for All Applications (December 2022)"
+    url: https://csrc.nist.gov/news/2022/nist-transitioning-away-from-sha-1-for-all-apps
+  - title: "NIST retires SHA-1 cryptographic algorithm (news release, 2022)"
+    url: https://www.nist.gov/news-events/news/2022/12/nist-retires-sha-1-cryptographic-algorithm
+  - title: "NIST SP 800-131A Revision 2 — Transitioning Cryptographic Algorithms"
+    url: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - title: "CWI announcement: First SHA-1 collision"
+    url: https://www.cwi.nl/en/news/cwi-and-google-announce-first-collision-for-industry-security-standard-sha-1/
+  - title: "Chrome SHA-1 deprecation timeline (Chromium security)"
+    url: https://www.chromium.org/Home/chromium-security/education/tls/sha-1/
+  - title: "Git hash-function-transition documentation"
+    url: https://git-scm.com/docs/hash-function-transition
+  - title: "Go crypto/sha256 package documentation"
+    url: https://pkg.go.dev/crypto/sha256
+  - title: "Go crypto/sha1 package documentation"
+    url: https://pkg.go.dev/crypto/sha1
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - title: "OWASP Cryptographic Storage Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-CRYPTO-001
+  - GO-CRYPTO-003
+  - GO-CRYPTO-004
+  - GO-CRYPTO-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,412 @@
+# Rule Identity
+id: GO-SEC-004
+name: Hardcoded Credentials in Source Code
+short_description: Detects credential-named variables (password, secret, api_key, token) being assigned or passed as arguments — hardcoded secrets are exposed in git history, compiled binaries, container images, and CI/CD logs.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-SEC-004
+
+# Vulnerability Details
+cwe:
+  - id: CWE-798
+    name: "Use of Hard-coded Credentials"
+    url: https://cwe.mitre.org/data/definitions/798.html
+  - id: CWE-259
+    name: "Use of Hard-coded Password"
+    url: https://cwe.mitre.org/data/definitions/259.html
+  - id: CWE-321
+    name: "Use of Hard-coded Cryptographic Key"
+    url: https://cwe.mitre.org/data/definitions/321.html
+
+owasp:
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - hardcoded-credentials
+  - secrets
+  - api-key
+  - token
+  - password
+  - CWE-798
+  - CWE-259
+  - CWE-321
+  - OWASP-A07
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Hardcoded credentials are secrets — passwords, API keys, tokens, signing keys, and
+  connection strings — embedded directly as string literals in source code. This is one
+  of the most frequently occurring and impactful security vulnerabilities in software
+  development, consistently appearing in real breaches with catastrophic consequences.
+
+  **Why hardcoded secrets are permanently dangerous**:
+
+  Source code is copied, forked, backed up, and diffed far more broadly than developers
+  realize. A secret committed to any version control system persists in the commit history
+  indefinitely — even `git rm` and `git commit` do not remove it. An attacker with read
+  access to any historical snapshot (via GitHub, GitLab, Bitbucket, backup, or zip export)
+  recovers the credential. Forcing a secret into git history is effectively publishing it.
+
+  **Surface area of secret exposure beyond git**:
+  - **Compiled Go binaries**: Go embeds string literals directly in the binary's `.rodata`
+    section. The Unix `strings` command extracts all printable strings of 4+ characters.
+    Tools like Ghidra with the "ghostrings" plugin specifically hunt for string constants
+    that look like credentials. A hardcoded JWT secret or database password survives
+    unchanged in every compiled artifact shipped to customers or placed in container images.
+  - **Container image layers**: Docker layers are union filesystem snapshots. Each layer
+    is a tar archive. `docker history --no-trunc` and `docker inspect` expose build-time
+    ARG values. If a binary containing hardcoded credentials is in the image, `docker save`
+    followed by `tar xf` and `strings` extracts them.
+  - **CI/CD pipeline artifacts**: Build systems cache compiled binaries and run logs. A
+    test output that prints a hardcoded constant, or a build artifact in a public artifact
+    store, exposes the credential to anyone with artifact access.
+  - **Log files and crash dumps**: Go programs that log their configuration at startup
+    (common in 12-factor app patterns) may log environment variables or struct fields —
+    including credential-named fields initialized from string literals.
+
+  **Real-world incidents involving hardcoded credentials**:
+
+  *Toyota T-Connect breach (2022–2023)*: Toyota disclosed that a contractor had
+  accidentally published source code to a public GitHub repository containing credentials
+  for a data server. The exposed data server contained information of approximately
+  296,019 Toyota T-Connect customers — names, phone numbers, and vehicle identification
+  numbers. The credentials remained valid and exposed for approximately 4 years and 9 months
+  before discovery. Toyota stated no financial data was accessed but could not rule out
+  third-party access during the exposure window.
+
+  *Internet Archive breach (October 2024)*: Threat actors obtained a GitLab personal
+  access token that was exposed in a public repository. Using this token, they accessed
+  the Internet Archive's GitLab instance and exfiltrated configuration files. The breach
+  exposed 31 million user records (email addresses, usernames, bcrypt-hashed passwords,
+  and other internal data). The token, once hardcoded in the repository, became the
+  entry point for the entire breach.
+
+  *Slack GitHub repository credential exposure (2022)*: Slack disclosed that hashed
+  employee credentials and GitHub repository cloning tokens were exposed when an attacker
+  gained access to a subset of Slack's GitHub repositories. The exposure included tokens
+  that could be used to access Slack's internal systems. While Slack rotated all affected
+  credentials immediately, the incident demonstrated how a single exposed token creates
+  a lateral movement path from external repository access to internal infrastructure.
+
+  **Scale of the problem — GitGuardian research (2024)**:
+  GitGuardian's "State of Secrets Sprawl" report analyzed over 1 billion commits:
+  - 23.8 million new plaintext secrets were detected in public GitHub repositories in 2023
+  - 70% of secrets exposed in 2021 remain valid and active 2 years later — secret rotation
+    after discovery is the exception, not the rule
+  - The most common secret types: API keys (35%), generic credentials (28%), private keys (17%)
+  - Developer-to-secret ratio: approximately 1 hardcoded secret per 1,000 commits in
+    enterprise repositories
+
+  **Extraction techniques attackers use**:
+  1. `strings /path/to/binary | grep -iE "(password|secret|key|token)" | grep -v "^[[:space:]]*$"`
+  2. TruffleHog v3: `trufflehog git file:///path/to/repo --only-verified` — scans git history
+     with entropy analysis and regex patterns against known-secret formats
+  3. Gitleaks: `gitleaks detect --source /path/to/repo` — rule-based scanning with 150+
+     built-in patterns for AWS keys, GitHub tokens, Stripe keys, etc.
+  4. Docker layer inspection: `docker save image:tag | tar xf - | find . -name "*.tar" -exec tar xf {} \; | strings | grep -i secret`
+  5. Ghidra ghostrings plugin: static analysis of Go binaries to identify Go string constants
+     and cross-reference them against credential patterns
+
+  **CWE taxonomy for this vulnerability class**:
+  - **CWE-798** (parent): General hardcoded credentials — covers any credential type
+  - **CWE-259** (child): Specifically hardcoded passwords in authentication code
+  - **CWE-321** (child): Hardcoded cryptographic keys — JWT signing secrets, AES keys,
+    HMAC secrets. These are both a credential and a cryptographic failure simultaneously.
+
+  **Go-specific remediation hierarchy** (in order of increasing security):
+  1. `os.Getenv("SECRET_NAME")` — environment variables; acceptable for development,
+     simple deployments. Note: env vars are visible in `/proc/<pid>/environ`, `docker inspect`,
+     and CI/CD log output if logged.
+  2. `github.com/spf13/viper` with config files excluded from git — supports env var binding,
+     remote config (etcd, Consul), and layered config. Better than bare os.Getenv for complex apps.
+  3. `github.com/hashicorp/vault/sdk` — HashiCorp Vault dynamic secrets. Vault generates
+     short-lived credentials on demand and revokes them automatically. Compromised credentials
+     expire without requiring rotation. Vault audit logs all secret accesses.
+  4. AWS Secrets Manager (`github.com/aws/aws-sdk-go-v2/service/secretsmanager`) / GCP Secret
+     Manager / Azure Key Vault — cloud-native secrets management with IAM-based access control,
+     automatic rotation for supported services (RDS, Redshift), and CloudTrail audit logging.
+
+  **CISA Secure by Design guidance**:
+  CISA's "Secure by Design" principles explicitly list elimination of default and hardcoded
+  credentials as a foundational requirement. The guidance states that software manufacturers
+  should make it technically impossible to deploy software with default credentials by
+  requiring credential configuration as part of the installation process.
+
+message: |
+  Variable name suggests credential storage. Hardcoded secrets appear in git history,
+  compiled binaries, container images, and CI/CD artifacts. Use os.Getenv() for simple cases
+  or a secrets manager (HashiCorp Vault, AWS Secrets Manager) for production. Never commit
+  secrets — rotate any credential that has ever touched version control.
+
+security_implications:
+  - title: Permanent Exposure via Git History
+    description: |
+      Any secret committed to version control persists indefinitely in git history. Even
+      `git rm` + `git push` leaves the secret in every historical clone, CI/CD artifact,
+      and backup. Tools like TruffleHog and Gitleaks scan all commits, not just the current
+      HEAD. The only remediation is credential rotation — the history cannot be practically
+      sanitized once other parties have cloned the repository.
+  - title: Binary Reverse Engineering
+    description: |
+      Go embeds string literals verbatim in compiled binaries. A database password or API
+      key in a Go string constant appears in the binary's .rodata section readable by the
+      `strings` command without any disassembly. Compiled binaries distributed to customers,
+      deployed in container images, or included in GitHub releases expose credentials to
+      anyone who downloads them.
+  - title: Supply Chain Compromise
+    description: |
+      An attacker who compromises a developer's workstation, a CI/CD pipeline, or a source
+      code repository recovers all hardcoded credentials with a single search. This provides
+      immediate access to every environment — development, staging, and production — where
+      those credentials are used. Hardcoded credentials make a single point of compromise
+      (developer laptop) equivalent to full infrastructure compromise.
+  - title: Credential Reuse Across Environments
+    description: |
+      Hardcoded credentials typically use the same value across all environments. When a
+      staging environment credential is exposed, it often also works in production because
+      developers hardcoded the same value in both. Per-environment rotation is only possible
+      with externalized configuration.
+
+vulnerable_example: |
+  // VULNERABLE: hardcoded database password
+  func connectDB() (*sql.DB, error) {
+      password := "MyDatabasePassword123!"
+      return sql.Open("postgres",
+          fmt.Sprintf("postgres://app:%s@localhost/prod", password))
+  }
+
+  // VULNERABLE: hardcoded JWT signing secret
+  func createToken(userID string) (string, error) {
+      jwtSecret := "super-secret-jwt-key-dont-share"
+      token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+          "sub": userID,
+          "exp": time.Now().Add(24 * time.Hour).Unix(),
+      })
+      return token.SignedString([]byte(jwtSecret))
+  }
+
+  // VULNERABLE: hardcoded API key in HTTP client
+  func fetchUserData(userID string) (*UserData, error) {
+      apiKey := "sk-prod-a1b2c3d4e5f6g7h8i9j0"
+      client := &http.Client{}
+      req, _ := http.NewRequest("GET", "https://api.example.com/users/"+userID, nil)
+      req.Header.Set("Authorization", "Bearer "+apiKey)
+      // ...
+  }
+
+  // VULNERABLE: hardcoded credentials in connection string constant
+  const redisURL = "redis://:hardcoded-redis-password@redis.internal:6379/0"
+
+  // VULNERABLE: credentials embedded in struct literal
+  type Config struct {
+      DBPassword string
+      APISecret  string
+  }
+
+  var AppConfig = Config{
+      DBPassword: "prod_db_pass_2024",
+      APISecret:  "my-api-secret-key",
+  }
+
+secure_example: |
+  // SECURE: environment variables (simple, suitable for containers/12-factor apps)
+  func connectDB() (*sql.DB, error) {
+      password := os.Getenv("DB_PASSWORD")
+      if password == "" {
+          return nil, fmt.Errorf("DB_PASSWORD environment variable not set")
+      }
+      return sql.Open("postgres",
+          fmt.Sprintf("postgres://app:%s@localhost/prod",
+              url.QueryEscape(password)))
+  }
+
+  // SECURE: Viper for structured config with env var binding
+  import "github.com/spf13/viper"
+
+  func initConfig() {
+      viper.SetEnvPrefix("MYAPP")
+      viper.AutomaticEnv() // MYAPP_DB_PASSWORD → DB_PASSWORD
+      viper.BindEnv("db_password")
+      viper.BindEnv("jwt_secret")
+  }
+
+  // SECURE: HashiCorp Vault dynamic secrets
+  import (
+      "github.com/hashicorp/vault/api"
+  )
+
+  func getDBCredentials(vaultAddr, role string) (username, password string, err error) {
+      config := vault.DefaultConfig()
+      config.Address = vaultAddr
+      client, err := vault.NewClient(config)
+      if err != nil {
+          return "", "", err
+      }
+      // Vault generates a short-lived credential that auto-expires
+      secret, err := client.Logical().Read("database/creds/" + role)
+      if err != nil {
+          return "", "", err
+      }
+      return secret.Data["username"].(string), secret.Data["password"].(string), nil
+  }
+
+  // SECURE: AWS Secrets Manager
+  import (
+      "github.com/aws/aws-sdk-go-v2/config"
+      "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+  )
+
+  func getSecret(secretName string) (string, error) {
+      cfg, err := config.LoadDefaultConfig(context.TODO())
+      if err != nil {
+          return "", err
+      }
+      svc := secretsmanager.NewFromConfig(cfg)
+      result, err := svc.GetSecretValue(context.TODO(),
+          &secretsmanager.GetSecretValueInput{SecretId: &secretName})
+      if err != nil {
+          return "", err
+      }
+      return *result.SecretString, nil
+  }
+
+  // SECURE: JWT secret from environment with minimum length validation
+  func getJWTSecret() ([]byte, error) {
+      secret := os.Getenv("JWT_SECRET")
+      if len(secret) < 32 {
+          return nil, fmt.Errorf("JWT_SECRET must be at least 32 characters; got %d", len(secret))
+      }
+      return []byte(secret), nil
+  }
+
+recommendations:
+  - Use os.Getenv() as a minimum for all credential values — never hardcode string literals.
+  - Validate that required secrets are present at startup; fail fast with a clear error message.
+  - Use HashiCorp Vault or AWS/GCP/Azure Secrets Manager for production workloads.
+  - Add .env and config files containing secrets to .gitignore before initial commit.
+  - Run TruffleHog or Gitleaks as a pre-commit hook and in CI to catch secrets before push.
+  - If a credential is ever committed, rotate it immediately — assume it is compromised.
+  - Use per-environment secrets — staging and production must never share credentials.
+  - Store JWT signing keys with minimum 256-bit entropy (32 random bytes from crypto/rand).
+  - Audit binary artifacts for embedded credentials using `strings binary | grep -iE 'password|secret|key|token'`.
+  - Follow the principle of least privilege — each service should have its own credentials with minimal scope.
+
+detection_scope: |
+  Variable name pattern matching for password/secret/api_key/apikey/token/credential/passwd
+  patterns. Produces findings on any variable with these name patterns used in function calls.
+  Requires manual review to confirm whether the assigned value is a hardcoded literal vs
+  a runtime value — the rule flags the variable name as a strong signal warranting review.
+
+# Real-World Incidents
+incidents:
+  - id: Toyota-T-Connect-2022
+    description: |
+      Toyota disclosed in October 2022 that source code containing credentials for a
+      data server had been accidentally published to a public GitHub repository by a
+      contractor. The exposure lasted approximately 4 years and 9 months (January 2017
+      to September 2022). Data of approximately 296,019 Toyota T-Connect customers —
+      including names, phone numbers, and vehicle identification numbers — was potentially
+      accessible. Toyota could not determine whether third parties accessed the data during
+      the exposure window.
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+  - id: Internet-Archive-2024
+    description: |
+      In October 2024, threat actors obtained a GitLab personal access token that was
+      exposed in a public repository. Using this token, attackers accessed the Internet
+      Archive's GitLab instance and exfiltrated configuration files and a database containing
+      31 million user records (email addresses, bcrypt password hashes, and other data).
+      The exposed token was the sole entry point for the entire breach.
+    url: https://www.bleepingcomputer.com/news/security/internet-archive-hacked-data-breach-impacts-31-million-users/
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A07:2021 — Identification and Authentication Failures; A02:2021 — Cryptographic Failures (hardcoded crypto keys)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 8.6.2 — Hardcoded credentials (passwords/passphrases) for non-console
+      administrative access and application accounts are prohibited.
+      Requirement 8.3 — Authenticate individual non-consumer user accounts and credentials.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: |
+      IA-5 — Authenticator Management: prohibits embedded/hardcoded authenticators in
+      software and requires unique authenticators per environment.
+      SA-15 — Development Process, Standards, and Tools: secure coding practices must
+      prohibit hardcoded credentials.
+  - standard: NIST SP 800-57 Part 1
+    requirement: |
+      Key Management: cryptographic keys must have defined lifecycle with generation,
+      distribution, storage, and revocation procedures. Hardcoded keys violate all lifecycle
+      requirements.
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-798 — Use of Hard-coded Credentials (ranked in CWE/SANS Top 25)"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(d) — Person or entity authentication; hardcoded credentials undermine authentication integrity"
+  - standard: CISA Secure by Design
+    requirement: |
+      Hardcoded default and embedded credentials are explicitly called out as an
+      insecure-by-design pattern that software manufacturers must eliminate. Deployment
+      must require credential configuration rather than accepting embedded defaults.
+      URL: https://www.cisa.gov/resources-tools/resources/secure-by-design
+
+# References
+references:
+  - title: "CWE-798: Use of Hard-coded Credentials — MITRE"
+    url: https://cwe.mitre.org/data/definitions/798.html
+  - title: "CWE-259: Use of Hard-coded Password — MITRE"
+    url: https://cwe.mitre.org/data/definitions/259.html
+  - title: "CWE-321: Use of Hard-coded Cryptographic Key — MITRE"
+    url: https://cwe.mitre.org/data/definitions/321.html
+  - title: "OWASP Secrets Management Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+  - title: "CISA Secure by Design — hardcoded credential guidance"
+    url: https://www.cisa.gov/resources-tools/resources/secure-by-design
+  - title: "OWASP Secrets Management Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+  - title: "HashiCorp Vault Go SDK documentation"
+    url: https://pkg.go.dev/github.com/hashicorp/vault/api
+  - title: "AWS Secrets Manager Go SDK (aws-sdk-go-v2)"
+    url: https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/secretsmanager
+  - title: "GCP Secret Manager Go client library"
+    url: https://pkg.go.dev/cloud.google.com/go/secretmanager/apiv1
+  - title: "Spf13/Viper — Go configuration library with env var support"
+    url: https://pkg.go.dev/github.com/spf13/viper
+  - title: "TruffleHog v3 — secrets scanning with git history support"
+    url: https://github.com/trufflesecurity/trufflehog
+  - title: "Gitleaks — secrets detection for git repos"
+    url: https://github.com/gitleaks/gitleaks
+  - title: "NIST SP 800-57 Part 1 — Recommendation for Key Management"
+    url: https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final
+  - title: "NIST SP 800-53 Rev 5 — IA-5 Authenticator Management"
+    url: https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final
+  - title: "Go os package — Getenv documentation"
+    url: https://pkg.go.dev/os#Getenv
+  - title: "12-Factor App — Config (store config in environment)"
+    url: https://12factor.net/config
+
+# Similar Rules
+similar_rules:
+  - GO-SEC-001
+  - GO-JWT-001
+  - GO-JWT-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

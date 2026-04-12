@@ -1,0 +1,227 @@
+# Rule Identity
+id: GO-NET-001
+name: HTTP Server Without TLS
+short_description: Detects http.ListenAndServe() starting an unencrypted HTTP server — all traffic including credentials and session tokens travels in plaintext, interceptable by any network observer.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-NET-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-319
+    name: "Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - tls
+  - http
+  - cleartext
+  - man-in-the-middle
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  `http.ListenAndServe()` starts an HTTP server without TLS encryption. All transmitted
+  data — login credentials, session cookies, API keys, personal information, financial
+  data, and application payloads — travels in plaintext over the network and can be read
+  or modified by any network observer on the path between client and server.
+
+  **Threat model**:
+  - **Same network (Wi-Fi, corporate LAN)**: Any device on the same network can passively
+    capture all HTTP traffic using standard tools (Wireshark, tcpdump). Coffee shop Wi-Fi,
+    shared office networks, and corporate LANs are all attacked this way.
+  - **Network infrastructure**: ISPs, VPN providers, and enterprise proxies can inspect
+    and modify HTTP traffic in transit.
+  - **MITM attacks**: ARP poisoning, rogue Wi-Fi access points, and BGP hijacking can
+    redirect HTTP traffic through attacker-controlled infrastructure.
+
+  **Cookie theft**: Session cookies transmitted over HTTP can be stolen and used to
+  hijack authenticated sessions without knowing the user's password. The `Secure`
+  cookie flag instructs browsers to only send cookies over HTTPS — but the flag is
+  meaningless if the server itself doesn't use HTTPS.
+
+  **HTTP Strict Transport Security (HSTS)**: Requires TLS to be configured first.
+  HSTS tells browsers to always use HTTPS for a domain for a specified duration.
+  `http.ListenAndServe()` cannot benefit from HSTS.
+
+  **When HTTP (non-TLS) is acceptable**:
+  - Internal health check endpoints binding to `localhost` or `127.0.0.1` only.
+  - When TLS is terminated at a load balancer or reverse proxy (nginx, Caddy, AWS ALB)
+    and the connection from LB to server is on a trusted private network or localhost.
+  - Development servers that never handle real user data.
+
+  **Modern alternatives for TLS in Go**:
+  - `http.ListenAndServeTLS(addr, certFile, keyFile, handler)` — standard TLS
+  - `golang.org/x/crypto/acme/autocert` — automatic Let's Encrypt certificate management
+  - Caddy web server with reverse proxy — automatic HTTPS with zero configuration
+  - **crypto/tls** with `tls.NewListener` for fine-grained TLS control
+
+message: |
+  http.ListenAndServe() starts an unencrypted HTTP server — all traffic including
+  credentials and session cookies travels in cleartext. Use http.ListenAndServeTLS()
+  or terminate TLS at a reverse proxy.
+
+security_implications:
+  - title: Session Hijacking
+    description: |
+      Session cookies transmitted over HTTP are visible to any network observer.
+      An attacker who intercepts the `Set-Cookie: session_id=abc123` header can replay
+      that cookie to impersonate the user for the lifetime of the session.
+  - title: Credential Interception
+    description: |
+      Login forms that POST over HTTP send username and password in plaintext. The
+      HTTP POST body is fully readable in tcpdump/Wireshark captures without any
+      decryption.
+  - title: Traffic Modification (Active MITM)
+    description: |
+      An active MITM attacker can inject JavaScript into HTTP responses to install
+      persistent XSS payloads, steal future requests, or redirect users to phishing sites.
+  - title: Downgrade Attacks
+    description: |
+      Without HSTS, browsers may follow links to the HTTP version of a site even if
+      HTTPS exists. Attackers on the network can respond to HTTP requests before the
+      HTTPS redirect reaches the user (SSL stripping attack).
+
+vulnerable_example: |
+  // VULNERABLE: cleartext HTTP server
+  func main() {
+      mux := http.NewServeMux()
+      mux.HandleFunc("/login", loginHandler)
+      mux.HandleFunc("/api/", apiHandler)
+      // All traffic is unencrypted — credentials, tokens, everything
+      log.Fatal(http.ListenAndServe(":8080", mux))
+  }
+
+  // VULNERABLE: HTTP server binding to all interfaces
+  func main() {
+      srv := &http.Server{
+          Addr:    "0.0.0.0:80",
+          Handler: myHandler,
+      }
+      srv.ListenAndServe() // no TLS
+  }
+
+secure_example: |
+  // SECURE: HTTPS with explicit TLS certificate files
+  func main() {
+      mux := http.NewServeMux()
+      mux.HandleFunc("/", handler)
+      log.Fatal(http.ListenAndServeTLS(":443", "cert.pem", "key.pem", mux))
+  }
+
+  // SECURE: TLS with custom configuration (TLS 1.2+ required, strong cipher suites)
+  func main() {
+      tlsConfig := &tls.Config{
+          MinVersion: tls.VersionTLS12,
+          CurvePreferences: []tls.CurveID{
+              tls.CurveP256,
+              tls.X25519,
+          },
+      }
+      srv := &http.Server{
+          Addr:      ":443",
+          Handler:   myHandler,
+          TLSConfig: tlsConfig,
+      }
+      log.Fatal(srv.ListenAndServeTLS("cert.pem", "key.pem"))
+  }
+
+  // SECURE: automatic TLS with Let's Encrypt (golang.org/x/crypto/acme/autocert)
+  import "golang.org/x/crypto/acme/autocert"
+
+  func main() {
+      m := &autocert.Manager{
+          Prompt:     autocert.AcceptTOS,
+          HostPolicy: autocert.HostWhitelist("example.com", "www.example.com"),
+          Cache:      autocert.DirCache("/var/cache/autocert"),
+      }
+      srv := &http.Server{
+          Addr:      ":443",
+          Handler:   myHandler,
+          TLSConfig: m.TLSConfig(),
+      }
+      // Redirect HTTP to HTTPS
+      go http.ListenAndServe(":80", m.HTTPHandler(nil))
+      log.Fatal(srv.ListenAndServeTLS("", ""))
+  }
+
+  // ACCEPTABLE: HTTP for localhost health checks only
+  func main() {
+      // External: HTTPS on :443
+      go log.Fatal(http.ListenAndServeTLS(":443", "cert.pem", "key.pem", appHandler))
+      // Internal: HTTP on localhost only for health check
+      healthMux := http.NewServeMux()
+      healthMux.HandleFunc("/health", healthHandler)
+      log.Fatal(http.ListenAndServe("127.0.0.1:8081", healthMux)) // localhost only
+  }
+
+recommendations:
+  - Use http.ListenAndServeTLS() with a valid certificate for all externally accessible servers.
+  - For automatic certificate management, use golang.org/x/crypto/acme/autocert (Let's Encrypt).
+  - Set TLSConfig.MinVersion to tls.VersionTLS12 or tls.VersionTLS13.
+  - Add HTTP Strict Transport Security (HSTS) header with a long max-age.
+  - Set secure cookie flags: `Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode`.
+  - http.ListenAndServe is acceptable only on loopback (127.0.0.1) for internal health checks.
+
+detection_scope: |
+  Detects all calls to net/http.ListenAndServe() regardless of address or handler.
+  Flags any use — whether the address is 0.0.0.0, specific IP, or empty string.
+  Localhost binding (127.0.0.1) is a known acceptable use case that produces a
+  low-priority finding.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures (cleartext transmission sub-category)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 4.2.1 — Strong cryptography required for transmission of cardholder data.
+      Requirement 4.2.1.1 — All data transmission uses trusted keys/certificates.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SC-8 — Transmission Confidentiality and Integrity"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(e)(1) — Transmission security; encryption of ePHI in transit"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-319 — Cleartext Transmission of Sensitive Information"
+
+# References
+references:
+  - title: "CWE-319: Cleartext Transmission of Sensitive Information — MITRE"
+    url: https://cwe.mitre.org/data/definitions/319.html
+  - title: "Go net/http ListenAndServeTLS documentation"
+    url: https://pkg.go.dev/net/http#ListenAndServeTLS
+  - title: "Go golang.org/x/crypto/acme/autocert (Let's Encrypt)"
+    url: https://pkg.go.dev/golang.org/x/crypto/acme/autocert
+  - title: "OWASP Transport Layer Security Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  - title: "OWASP TLS Cipher String Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/TLS_Cipher_String_Cheat_Sheet.html
+  - title: "HSTS — HTTP Strict Transport Security (MDN)"
+    url: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
+  - title: "Let's Encrypt — Free TLS Certificates"
+    url: https://letsencrypt.org/docs/
+
+# Similar Rules
+similar_rules:
+  - GO-NET-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

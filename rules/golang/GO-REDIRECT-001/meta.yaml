@@ -1,0 +1,214 @@
+# Rule Identity
+id: GO-REDIRECT-001
+name: Open Redirect via User-Controlled URL
+short_description: User-controlled input flows into HTTP redirect functions without URL validation — open redirect enables phishing, OAuth token theft, and malware distribution via trusted-domain URLs.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-REDIRECT-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-601
+    name: "URL Redirection to Untrusted Site ('Open Redirect')"
+    url: https://cwe.mitre.org/data/definitions/601.html
+
+owasp:
+  - id: A01:2021
+    name: Broken Access Control
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+
+tags:
+  - go
+  - security
+  - open-redirect
+  - phishing
+  - oauth
+  - CWE-601
+  - OWASP-A01
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Open redirect occurs when user-controlled input is used as the destination URL in an
+  HTTP redirect (http.Redirect, gin.Context.Redirect, etc.) without validation. Attackers
+  craft URLs pointing to the trusted domain that silently redirect users to attacker sites:
+  `https://trusted-app.com/login?next=https://evil.com`.
+
+  **Why this matters beyond simple phishing**:
+  - **OAuth 2.0 token theft**: When OAuth providers validate redirect_uri using prefix
+    matching or insufficient validation, an open redirect on the OAuth client can be
+    chained: `?redirect_uri=https://trusted.com/redirect?next=https://attacker.com`.
+    The OAuth code/token flows through the trusted domain then to the attacker.
+  - **SSO bypass**: SAML and OAuth flows often use a `next` or `returnTo` parameter.
+    An open redirect in the post-login flow redirects authenticated users immediately
+    after login to attacker-controlled sites with their session active.
+
+  **URL parsing edge cases that bypass naive checks** (Go-specific):
+  - Protocol-relative: `//evil.com` — `url.Parse("//evil.com").Host` = "evil.com" but
+    many naive checks only look for `http://` or `https://`.
+  - `javascript:alert(1)` — Go's `url.Parse` parses scheme as "javascript". Browsers
+    execute javascript: URLs when used in redirect headers.
+  - Missing scheme with valid TLD: `evil.com` — browsers interpret as relative path
+    to `http://evil.com` in some redirect contexts.
+  - Double-slash in path: `/\\evil.com` — some browsers normalize `\` to `/`.
+  - Unicode normalization: `ℯvil.com` ≠ `evil.com` — visually similar but different hosts.
+
+  **Go's http.Redirect**: Setting the Location header without validation makes your
+  server an open redirector. Go does not validate Location header values.
+
+message: |
+  User input flows into HTTP redirect without URL validation. Allow only relative paths
+  (must start with '/' and not '//') or validate against an explicit allowlist of
+  permitted redirect destinations. javascript: scheme redirects must be blocked.
+
+security_implications:
+  - title: OAuth Authorization Code Theft
+    description: |
+      If the OAuth client app has an open redirect, attackers chain it with OAuth:
+      the authorization server sends the code to `redirect_uri=https://client.com/redirect?to=evil`,
+      the client immediately redirects to `evil.com?code=AUTH_CODE` passing the code
+      in the Referer header or URL. The attacker exchanges the code for a token.
+  - title: Post-Login Phishing with Active Session
+    description: |
+      User logs in normally, but the `next` parameter sends them to a phishing page
+      while their session is active. The attacker's page (identical to the legitimate
+      one) asks for additional information ("confirm your 2FA code") with the user
+      believing they are still on the trusted site.
+  - title: Malware Distribution
+    description: |
+      Links distributed as `https://trusted.com/go?url=https://malware.example/payload`
+      appear safe in security tools that check the initial domain. Users and security
+      scanners may trust the trusted.com domain without following the redirect.
+  - title: SSRF Chain
+    description: |
+      An open redirect combined with an SSRF vulnerability in a third-party service:
+      the third-party fetches `https://trusted.com/redirect?url=http://169.254.169.254`
+      and follows the redirect to the metadata endpoint.
+
+vulnerable_example: |
+  // VULNERABLE: direct user input to http.Redirect
+  func loginHandler(w http.ResponseWriter, r *http.Request) {
+      next := r.FormValue("next")
+      // Attacker sends: next=https://evil.com or next=//evil.com
+      http.Redirect(w, r, next, http.StatusFound)
+  }
+
+  // VULNERABLE: gin Redirect with user input
+  func oauthCallback(c *gin.Context) {
+      returnTo := c.Query("return_to")
+      // No validation — attacker can redirect to any URL
+      c.Redirect(http.StatusFound, returnTo)
+  }
+
+  // VULNERABLE: naive host check — bypassable
+  func naiveCheck(w http.ResponseWriter, r *http.Request) {
+      next := r.FormValue("next")
+      parsed, _ := url.Parse(next)
+      // BYPASS: //evil.com has empty scheme but Host = evil.com
+      // BYPASS: javascript:steal() has scheme = javascript
+      if parsed.Scheme == "https" && parsed.Host == "trusted.com" {
+          http.Redirect(w, r, next, http.StatusFound)
+      }
+  }
+
+secure_example: |
+  // SECURE: only allow relative paths (most common safe pattern)
+  func loginHandler(w http.ResponseWriter, r *http.Request) {
+      next := r.FormValue("next")
+      // Only allow paths starting with / (but not //)
+      if next == "" || next[0] != '/' || (len(next) > 1 && next[1] == '/') {
+          next = "/dashboard"
+      }
+      // Additional validation: no newlines, no control characters
+      if strings.ContainsAny(next, "\r\n") {
+          next = "/dashboard"
+      }
+      http.Redirect(w, r, next, http.StatusFound)
+  }
+
+  // SECURE: explicit allowlist for cross-domain redirects
+  func oauthCallback(c *gin.Context) {
+      returnTo := c.Query("return_to")
+      allowedURLs := map[string]bool{
+          "/dashboard":              true,
+          "/profile":                true,
+          "https://app.example.com": true,
+          "https://admin.example.com": true,
+      }
+      if !allowedURLs[returnTo] {
+          returnTo = "/dashboard"
+      }
+      c.Redirect(http.StatusFound, returnTo)
+  }
+
+  // SECURE: URL parsing with strict validation
+  func validateRedirect(rawURL string) string {
+      if rawURL == "" {
+          return "/dashboard"
+      }
+      // Allow relative paths only
+      parsed, err := url.Parse(rawURL)
+      if err != nil {
+          return "/dashboard"
+      }
+      // Reject any URL with a scheme or host — only allow path-only relative URLs
+      if parsed.Scheme != "" || parsed.Host != "" {
+          return "/dashboard"
+      }
+      // Ensure it starts with /
+      if !strings.HasPrefix(parsed.Path, "/") {
+          return "/dashboard"
+      }
+      return rawURL
+  }
+
+recommendations:
+  - For post-login redirects: only allow relative paths starting with "/" but not "//".
+  - For cross-origin redirects: use an explicit allowlist of permitted full URLs.
+  - After url.Parse, verify Scheme is empty OR explicitly "https" to a known host.
+  - Never allow javascript:, data:, or protocol-relative (//host) redirect targets.
+  - Check for newlines (\r\n) in redirect targets to prevent HTTP header injection.
+  - For OAuth flows: validate redirect_uri strictly; prefix matching is insufficient.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources to http.Redirect, gin.Context.Redirect,
+  echo.Context.Redirect, and fiber.Ctx.Redirect calls with global inter-procedural scope.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A01:2021 — Broken Access Control (open redirect is a broken access control violation)"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-601 — URL Redirection to Untrusted Site"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against unvalidated redirects"
+
+# References
+references:
+  - title: "CWE-601: URL Redirection to Untrusted Site — MITRE"
+    url: https://cwe.mitre.org/data/definitions/601.html
+  - title: "OWASP Unvalidated Redirects and Forwards Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+  - title: "Go net/http Redirect documentation"
+    url: https://pkg.go.dev/net/http#Redirect
+  - title: "OAuth 2.0 redirect_uri validation — RFC 6749"
+    url: https://www.rfc-editor.org/rfc/rfc6749#section-10.6
+  - title: "RFC 3986 — URI syntax (relative references)"
+    url: https://www.rfc-editor.org/rfc/rfc3986
+
+# Similar Rules
+similar_rules:
+  - GO-SSRF-001
+  - GO-SSRF-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

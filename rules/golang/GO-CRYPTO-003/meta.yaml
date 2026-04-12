@@ -1,0 +1,222 @@
+# Rule Identity
+id: GO-CRYPTO-003
+name: Use of DES or 3DES Weak Cipher
+short_description: Detects use of DES/3DES (crypto/des) — DES uses a 56-bit key exhausted in 22 hours (1999); 3DES is vulnerable to the SWEET32 birthday attack and disallowed by NIST after December 31, 2023.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-CRYPTO-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - crypto
+  - des
+  - 3des
+  - triple-des
+  - sweet32
+  - birthday-attack
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  **DES (Data Encryption Standard)**: Standardized in 1977 with a 56-bit key (2^56 ≈ 72
+  quadrillion combinations). The EFF's "Deep Crack" machine broke a DES-encrypted message
+  in 22 hours and 15 minutes in January 1999, spending approximately $250,000 on hardware.
+  Modern cloud infrastructure makes DES key exhaustion trivial. DES must never be used.
+
+  **3DES (Triple DES / TDEA)**: 3DES applies DES three times with independent keys, providing
+  112-bit effective security. However, 3DES retains DES's 64-bit block size — and that is
+  its fatal weakness.
+
+  The **SWEET32 attack** (Bhargavan and Leurent, ACM CCS 2016; CVE-2016-2183) exploits the
+  birthday bound of 64-bit block ciphers. In CBC mode, after approximately 2^32 blocks
+  (32 GB of data encrypted under the same key), a block collision is expected with ~50%
+  probability. From a block collision, the attacker can XOR two ciphertext blocks to
+  recover the XOR of the corresponding plaintexts. In a proof-of-concept, researchers
+  recovered a 16-byte HTTP BasicAuth session cookie in under 38 hours by sending ~785 GB
+  of HTTPS requests in the background of a long-lived TLS session.
+
+  **NIST retirement**: NIST SP 800-131A Rev 2 (2019) deprecated 3DES for applying
+  cryptographic protection through December 31, 2023, and **disallowed it after that date**.
+  As of 2024, 3DES is prohibited for encryption under all NIST guidance. Legacy decryption
+  (reading old data) remains allowed to preserve interoperability.
+
+  **Replacement**: AES-GCM is the correct modern replacement. AES operates on 128-bit blocks
+  (birthday bound: 2^64 blocks = 256 exabytes — unreachable in practice), and GCM is an
+  AEAD construction providing authenticated encryption and integrity in a single pass.
+
+message: |
+  DES is broken (56-bit key, exhausted in 22 hours); 3DES is vulnerable to SWEET32 and
+  disallowed by NIST after 2023. Replace crypto/des with AES-GCM:
+  crypto/aes + crypto/cipher.NewGCM.
+
+security_implications:
+  - title: SWEET32 Session Decryption (CVE-2016-2183)
+    description: |
+      A 3DES-CBC TLS session carrying 32+ GB of data is vulnerable to birthday attack
+      block collision. The SWEET32 proof-of-concept recovered session cookie credentials
+      (HTTP BasicAuth username and password) in under 38 hours of sustained traffic.
+      This affected approximately 1–2% of TLS connections in 2016.
+  - title: DES Brute Force
+    description: |
+      DES with its 56-bit key can be exhausted in hours using modern hardware. Any
+      encrypted data or keys protected only by DES must be considered compromised.
+  - title: Long-Lived Session Vulnerability
+    description: |
+      VPN tunnels, database connection pools, and long-running API sessions are
+      particularly vulnerable to SWEET32 because the same session key encrypts
+      traffic over extended time periods, making 32 GB accumulation realistic.
+
+vulnerable_example: |
+  // VULNERABLE: DES encryption (56-bit key, trivially brute-forced)
+  import "crypto/des"
+
+  func encryptDES(key, plaintext []byte) ([]byte, error) {
+      block, err := des.NewCipher(key) // 8-byte key = 56 effective bits
+      if err != nil {
+          return nil, err
+      }
+      ciphertext := make([]byte, len(plaintext))
+      cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, plaintext)
+      return ciphertext, nil
+  }
+
+  // VULNERABLE: 3DES (64-bit block → SWEET32 birthday attack after 32 GB)
+  func encrypt3DES(key, plaintext []byte) ([]byte, error) {
+      block, err := des.NewTripleDESCipher(key) // 24-byte key
+      if err != nil {
+          return nil, err
+      }
+      // 64-bit block cipher in CBC mode — SWEET32 vulnerability
+      ciphertext := make([]byte, len(plaintext))
+      cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, plaintext)
+      return ciphertext, nil
+  }
+
+secure_example: |
+  // SECURE: AES-GCM (128-bit block, authenticated encryption, no SWEET32 risk)
+  import (
+      "crypto/aes"
+      "crypto/cipher"
+      "crypto/rand"
+      "io"
+  )
+
+  func encryptAESGCM(key, plaintext []byte) ([]byte, error) {
+      // key: 16 bytes (AES-128), 24 (AES-192), or 32 bytes (AES-256)
+      block, err := aes.NewCipher(key)
+      if err != nil {
+          return nil, err
+      }
+      aesgcm, err := cipher.NewGCM(block)
+      if err != nil {
+          return nil, err
+      }
+      // Generate a unique nonce per encryption (never reuse a nonce with the same key)
+      nonce := make([]byte, aesgcm.NonceSize()) // 12 bytes for standard GCM
+      if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+          return nil, err
+      }
+      // Seal appends the 16-byte GCM authentication tag
+      return aesgcm.Seal(nonce, nonce, plaintext, nil), nil
+  }
+
+  func decryptAESGCM(key, ciphertextWithNonce []byte) ([]byte, error) {
+      block, _ := aes.NewCipher(key)
+      aesgcm, _ := cipher.NewGCM(block)
+      nonceSize := aesgcm.NonceSize()
+      nonce, ct := ciphertextWithNonce[:nonceSize], ciphertextWithNonce[nonceSize:]
+      return aesgcm.Open(nil, nonce, ct, nil)
+  }
+
+recommendations:
+  - Replace des.NewCipher and des.NewTripleDESCipher with aes.NewCipher + cipher.NewGCM.
+  - Use 32-byte (256-bit) keys for AES-256-GCM for strongest security.
+  - Never reuse a GCM nonce with the same key — use crypto/rand for fresh 12-byte nonces.
+  - AES-GCM provides both confidentiality and integrity — no separate MAC step needed.
+  - For TLS configuration, Go's crypto/tls defaults are safe — do not add 3DES cipher suites.
+
+detection_scope: |
+  Detects all calls to crypto/des package methods (NewCipher, NewTripleDESCipher).
+  Both DES and 3DES are flagged — DES because its key is trivially exhausted,
+  3DES because it is disallowed by NIST as of January 1, 2024.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2016-2183
+    description: |
+      SWEET32 birthday attack on 3DES in TLS. 64-bit block cipher vulnerable to CBC block
+      collision after 32 GB of traffic. Proof-of-concept recovered session credentials in
+      under 38 hours. Affected TLS 1.0/1.1/1.2 cipher suites using 3DES-CBC.
+    url: https://sweet32.info/
+  - id: CVE-2016-6329
+    description: |
+      SWEET32 in OpenVPN — same birthday attack on 64-bit block ciphers in VPN tunnels.
+      Fixed by migrating to AES cipher suites.
+    url: https://sweet32.info/
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A Rev 2 (2019)
+    requirement: |
+      Two-key TDEA (2DES): disallowed for encryption.
+      Three-key TDEA (3DES) for encryption: deprecated through Dec 31, 2023; disallowed after.
+      URL: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 — Strong cryptography required. 3DES not considered strong."
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures"
+
+# References
+references:
+  - title: "SWEET32 — Birthday attacks on 64-bit block ciphers (sweet32.info)"
+    url: https://sweet32.info/
+  - title: "SWEET32 paper: On the Practical (In-)Security of 64-bit Block Ciphers (ACM CCS 2016)"
+    url: https://sweet32.info/SWEET32_CCS16.pdf
+  - title: "EFF Deep Crack — DES 56-bit key exhaustion (1999)"
+    url: https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/
+  - title: "NIST SP 800-131A Revision 2 — Transitioning Cryptographic Algorithms"
+    url: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - title: "SWEET32 explained — NCC Group Cryptography Services"
+    url: https://cryptoservices.github.io/cryptographic/attacks/2016/09/03/Sweet32.html
+  - title: "Go crypto/aes package documentation"
+    url: https://pkg.go.dev/crypto/aes
+  - title: "Go crypto/cipher package documentation (AES-GCM)"
+    url: https://pkg.go.dev/crypto/cipher
+  - title: "Go crypto/des package documentation"
+    url: https://pkg.go.dev/crypto/des
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - title: "OWASP Cryptographic Storage Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-CRYPTO-001
+  - GO-CRYPTO-002
+  - GO-CRYPTO-004
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

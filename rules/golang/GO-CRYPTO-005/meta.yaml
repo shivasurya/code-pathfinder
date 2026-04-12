@@ -1,0 +1,245 @@
+# Rule Identity
+id: GO-CRYPTO-005
+name: MD5 Used for Password Hashing
+short_description: MD5 hash output flows into password-related functions — MD5 runs at 164 billion hashes/second on a single GPU, making any MD5-hashed password database crackable in seconds to minutes.
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-CRYPTO-005
+
+# Vulnerability Details
+cwe:
+  - id: CWE-916
+    name: "Use of Password Hash With Insufficient Computational Effort"
+    url: https://cwe.mitre.org/data/definitions/916.html
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+  - id: CWE-328
+    name: "Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - go
+  - security
+  - crypto
+  - md5
+  - password-hashing
+  - CWE-916
+  - CWE-327
+  - OWASP-A02
+  - OWASP-A07
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Using MD5 to hash passwords is a critical vulnerability. Password hashing requires
+  an intentionally slow, memory-hard function — MD5 is the opposite: it is designed
+  for speed and runs at **164.1 billion hashes per second** on a single NVIDIA RTX 4090
+  GPU (hashcat v6.2.6 benchmark).
+
+  **Cracking speed in context**:
+  - 8-char lowercase alphanumeric (36^8 ≈ 2.8 trillion): exhausted in ~17 seconds.
+  - 8-char mixed-case + digits (62^8 ≈ 218 trillion): exhausted in ~22 minutes.
+  - bcrypt cost-10 on the same RTX 4090: ~184,000 hashes/second — ~892,000x slower.
+  - argon2id: ~1,000–10,000 hashes/second — ~16,000,000x slower than MD5.
+
+  **Why salted SHA-256 is also insufficient**: Adding a salt stops rainbow table attacks
+  but does not slow the attacker on GPUs. Salted SHA-256 is still computed at billions
+  of hashes per second. bcrypt's work factor and argon2id's memory hardness are
+  specifically designed to keep per-hash computation time at 100ms–1s even on dedicated
+  hardware, making bulk cracking economically infeasible.
+
+  **Real breach consequences**: The "rockyou.txt" password list (32 million entries from
+  the 2009 RockYou breach, which stored passwords in plaintext) became the most widely
+  used cracking wordlist in all password cracking tools — demonstrating how breached data
+  permanently enables future attacks against other services where users reuse credentials.
+
+  **Detection**: This rule detects MD5 hash output flowing into password-named functions
+  (storePassword, checkPassword, savePassword, hashPassword, etc.), indicating password
+  storage using MD5.
+
+message: |
+  MD5 runs at 164 billion hashes/second on a GPU — any MD5-hashed password is crackable
+  in seconds to minutes. Replace with golang.org/x/crypto/bcrypt (cost >= 12) or
+  argon2.IDKey (time=1, memory=46MiB, threads=1).
+
+security_implications:
+  - title: Instant Password Cracking After Database Breach
+    description: |
+      An attacker who exfiltrates a database of MD5-hashed passwords can crack the vast
+      majority in hours using a single consumer GPU. Studies of breached password datasets
+      consistently show 90–99% crack rates for MD5 hashes within 24–72 hours when
+      dictionary + rule-based attacks are applied.
+  - title: Credential Stuffing at Scale
+    description: |
+      Cracked passwords from one service are used to attack other services where users
+      reuse credentials. A single breached MD5 database provides the attacker with a tested
+      password list for attacks against email, banking, and other accounts.
+  - title: Rainbow Table Vulnerability
+    description: |
+      Unsalted MD5 password hashes are directly reversible using pre-computed rainbow tables
+      freely available online. Common passwords are recovered in milliseconds without
+      any cracking computation.
+
+vulnerable_example: |
+  // VULNERABLE: MD5 for password storage — crackable in seconds per hash on GPU
+  import (
+      "crypto/md5"
+      "fmt"
+  )
+
+  func storePassword(username, password string) error {
+      sum := md5.Sum([]byte(password))           // 164 GH/s cracking speed
+      hash := fmt.Sprintf("%x", sum)
+      return db.Exec("INSERT INTO users(username, password_hash) VALUES($1, $2)",
+          username, hash)
+  }
+
+  func checkPassword(storedHash, input string) bool {
+      sum := md5.Sum([]byte(input))
+      return fmt.Sprintf("%x", sum) == storedHash
+  }
+
+  // ALSO VULNERABLE: salted MD5 is still crackable at GPU speed
+  func hashWithSalt(password string) string {
+      sum := md5.Sum([]byte("static_salt" + password)) // salt doesn't prevent GPU cracking
+      return fmt.Sprintf("%x", sum)
+  }
+
+secure_example: |
+  // SECURE: bcrypt — intentionally slow, adaptive work factor
+  import "golang.org/x/crypto/bcrypt"
+
+  func storePassword(username, password string) error {
+      // Cost 12 recommended for 2024+; increase as server permits
+      hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+      if err != nil {
+          return err
+      }
+      return db.Exec("INSERT INTO users(username, password_hash) VALUES($1, $2)",
+          username, string(hash))
+  }
+
+  func checkPassword(storedHash, input string) bool {
+      err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(input))
+      return err == nil
+  }
+
+  // SECURE: argon2id — PHC winner, memory-hard, recommended for new systems
+  import (
+      "crypto/rand"
+      "golang.org/x/crypto/argon2"
+  )
+
+  func storePasswordArgon2(password string) ([]byte, []byte, error) {
+      salt := make([]byte, 16)
+      if _, err := rand.Read(salt); err != nil {
+          return nil, nil, err
+      }
+      // OWASP recommended parameters: time=1, memory=46MiB, threads=1, keyLen=32
+      hash := argon2.IDKey([]byte(password), salt, 1, 46*1024, 1, 32)
+      return hash, salt, nil
+  }
+
+  // MIGRATION: upgrade cost factor at next successful login
+  func loginAndUpgrade(db *sql.DB, username, password string) error {
+      var storedHash string
+      db.QueryRow("SELECT password_hash FROM users WHERE username=$1", username).Scan(&storedHash)
+      if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
+          return err
+      }
+      cost, _ := bcrypt.Cost([]byte(storedHash))
+      if cost < 12 {
+          newHash, _ := bcrypt.GenerateFromPassword([]byte(password), 12)
+          db.Exec("UPDATE users SET password_hash=$1 WHERE username=$2", string(newHash), username)
+      }
+      return nil
+  }
+
+recommendations:
+  - Replace all MD5 password hashing with bcrypt (golang.org/x/crypto/bcrypt, cost >= 12).
+  - For new systems, prefer argon2id (golang.org/x/crypto/argon2) — PHC winner, memory-hard.
+  - For migration: at next successful login, re-hash the password with bcrypt/argon2id.
+  - Never use any fast hash (MD5, SHA-1, SHA-256) directly for password storage — even salted.
+  - bcrypt has a 72-byte input limit — enforce this or pre-hash input before passing to bcrypt.
+  - Use constant-time comparison (bcrypt.CompareHashAndPassword) to prevent timing attacks.
+
+detection_scope: |
+  Detects MD5 hash output (md5.Sum() return value) flowing into functions with
+  password-related names (storePassword, savePassword, checkPassword, hashPassword, etc.).
+  This indicates password storage using MD5.
+
+# Real-World Incidents
+cves:
+  - id: RockYou-2009
+    description: |
+      RockYou stored 32 million passwords in plaintext (not hashed). Exposed via SQL
+      injection. The leaked password list became "rockyou.txt" — the standard wordlist
+      used in all password cracking tools. Demonstrates how breached data permanently
+      enables future attacks across all services where users reused credentials.
+    url: https://en.wikipedia.org/wiki/RockYou
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-63B (Digital Identity Guidelines)
+    requirement: |
+      Section 5.1.1.2 — Memorized Secret Verifiers: SHALL use a suitable one-way key
+      derivation function (PBKDF2, bcrypt, scrypt, or Balloon). SHALL use a salt of at
+      least 32 bits. MD5 does not meet these requirements.
+      URL: https://pages.nist.gov/800-63-3/sp800-63b.html
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures; A07:2021 — Identification and Authentication Failures"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 8.3.1 — Passwords must use strong cryptography."
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-916 — Use of Password Hash With Insufficient Computational Effort"
+
+# References
+references:
+  - title: "OWASP Password Storage Cheat Sheet (bcrypt/argon2id recommendations)"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+  - title: "Go golang.org/x/crypto/bcrypt package"
+    url: https://pkg.go.dev/golang.org/x/crypto/bcrypt
+  - title: "Go golang.org/x/crypto/argon2 package"
+    url: https://pkg.go.dev/golang.org/x/crypto/argon2
+  - title: "RFC 9106 — Argon2 Memory-Hard Password Hashing Function"
+    url: https://www.rfc-editor.org/rfc/rfc9106
+  - title: "bcrypt original paper: A Future-Adaptable Password Scheme (Provos & Mazières, USENIX 1999)"
+    url: https://www.usenix.org/event/usenix99/provos/provos.pdf
+  - title: "Password Hashing Competition — Argon2 winner (PHC)"
+    url: https://www.password-hashing.net/
+  - title: "NIST SP 800-63B — Digital Identity Guidelines, Authentication"
+    url: https://pages.nist.gov/800-63-3/sp800-63b.html
+  - title: "Hashcat RTX 4090 benchmark: MD5=164.1 GH/s, bcrypt=184 kH/s"
+    url: https://gist.github.com/Chick3nman/32e662a5bb63bc4f51b847bb422222fd
+  - title: "RockYou breach — Wikipedia"
+    url: https://en.wikipedia.org/wiki/RockYou
+  - title: "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+    url: https://cwe.mitre.org/data/definitions/916.html
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+# Similar Rules
+similar_rules:
+  - GO-CRYPTO-001
+  - GO-CRYPTO-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

