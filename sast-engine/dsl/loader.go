@@ -128,7 +128,10 @@ func (l *RuleLoader) loadRulesFromDirectory(dirPath string, logger Logger) ([]Ru
 		// Load rules from this file
 		rules, err := l.loadRulesFromFile(path, logger)
 		if err != nil {
-			// Silently skip files that fail to load (may be container rules)
+			// Log the error for debugging, then skip (may be container rules)
+			if logger != nil {
+				logger.Debug("skipping rule file %s: %v", path, err)
+			}
 			//nolint:nilerr // Intentionally skip files that aren't code analysis rules
 			return nil
 		}
