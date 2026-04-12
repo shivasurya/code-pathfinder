@@ -430,6 +430,18 @@ Examples:
 			},
 		},
 		{
+			Name: "status",
+			Description: `Returns the current server state: indexing phase, progress, and readiness.
+
+Use when: Checking whether the index is ready before making queries, or diagnosing slow startup.
+
+Returns: state (uninitialized/indexing/ready/failed), progress details, stats (when ready), and optional update-check fields (latest_version, update_message, announcement) when a newer version or operator announcement is available.`,
+			InputSchema: InputSchema{
+				Type:       "object",
+				Properties: map[string]Property{},
+			},
+		},
+		{
 			Name: "get_docker_dependencies",
 			Description: `Retrieves dependency information for Docker entities (compose services or Dockerfile stages).
 
@@ -521,9 +533,23 @@ func (s *Server) executeTool(name string, args map[string]any) (string, bool) {
 		return s.toolGetDockerfileDetails(args)
 	case "get_docker_dependencies":
 		return s.toolGetDockerDependencies(args)
+	case "status":
+		return s.toolStatus()
 	default:
 		return fmt.Sprintf(`{"error": "Unknown tool: %s"}`, name), true
 	}
+}
+
+// toolStatus returns the current server status as a JSON string, enriched with
+// any available update-check fields.
+func (s *Server) toolStatus() (string, bool) {
+	result := s.degradation.GetStatusJSON()
+	s.injectUpdateInfo(result)
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf(`{"error": "marshal failed: %s"}`, err.Error()), true
+	}
+	return string(data), false
 }
 
 // ============================================================================
