@@ -47,11 +47,11 @@ description: |
   databases that support stacked queries.
 
   **Real-world impact in Go ecosystem**:
-  - **CVE-2024-35181** (Meshery, CVSS 8.8): SQL injection via parameter manipulation
+  - "**CVE-2024-35181** (Meshery, CVSS 8.8): SQL injection via parameter manipulation"
     in the meshery/meshery API, allowing authenticated attackers to read arbitrary data
     from the database.
-  - **CVE-2024-35182** (Meshery, CVSS 8.8): Companion vulnerability in the same codebase.
-  - **CVE-2024-37896** (gin-vue-admin, CVSS 9.8): SQL injection via unsanitized query
+  - "**CVE-2024-35182** (Meshery, CVSS 8.8): Companion vulnerability in the same codebase."
+  - "**CVE-2024-37896** (gin-vue-admin, CVSS 9.8): SQL injection via unsanitized query"
     parameters in GORM-based queries in the gin-vue-admin administrative framework.
 
   **OWASP testing**: SQL injection is consistently the most frequently tested vulnerability
@@ -163,12 +163,12 @@ secure_example: |
   }
 
 recommendations:
-  - Always use parameterized queries: db.Query("... WHERE id = $1", id) not string concat.
+  - "Always use parameterized queries: db.Query(\"... WHERE id = $1\", id) not string concat."
   - For MySQL/SQLite, use ? placeholder; for PostgreSQL, use $1/$2; for SQL Server, use @p1.
   - Use strconv.Atoi or strconv.ParseInt to validate numeric IDs before use (also sanitizes).
   - For dynamic ORDER BY columns, validate against an explicit string allowlist.
   - Use an ORM like GORM with named parameters for complex queries — see GO-GORM-SQLI rules.
-  - Apply least-privilege database accounts: read-only accounts cannot DROP TABLE.
+  - "Apply least-privilege database accounts: read-only accounts cannot DROP TABLE."
   - Enable query logging in staging environments to detect unparameterized queries.
 
 detection_scope: |

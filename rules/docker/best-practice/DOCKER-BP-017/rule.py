@@ -1,4 +1,4 @@
-from rules.container_decorators import dockerfile_rule
+from codepathfinder.container_decorators import dockerfile_rule
 from rules.container_matchers import instruction, missing
 from rules.container_combinators import all_of, any_of
 

@@ -132,7 +132,7 @@ secure_example: |
 
 recommendations:
   - Replace sha1.New() and sha1.Sum() with sha256.New() and sha256.Sum256().
-  - For SHA-512 where larger output is needed: use crypto/sha512.
+  - "For SHA-512 where larger output is needed: use crypto/sha512."
   - Audit stored SHA-1 hashes and plan migration to SHA-256 for all security-relevant uses.
   - For HMAC, prefer HMAC-SHA256 over HMAC-SHA1 in all new code.
   - Note output size change (20 bytes → 32 bytes) — update any fixed-width columns.

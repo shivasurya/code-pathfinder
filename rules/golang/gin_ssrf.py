@@ -55,7 +55,7 @@ from codepathfinder.go_rule import (
 )
 from codepathfinder import flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 @go_rule(id="GO-SSRF-001", severity="HIGH", cwe="CWE-918", owasp="A10:2021")

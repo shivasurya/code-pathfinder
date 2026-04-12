@@ -91,7 +91,7 @@ security_implications:
     description: |
       template.CSS(userInput) can inject legacy IE expression() payloads or close
       the style block and open a script block: </style><script>alert(1)</script>.
-  - title: javascript: URL via template.URL
+  - title: "javascript: URL via template.URL"
     description: |
       template.URL only validates the scheme is not obviously dangerous but does not
       block javascript: pseudo-protocol in all contexts. Attacker supplies

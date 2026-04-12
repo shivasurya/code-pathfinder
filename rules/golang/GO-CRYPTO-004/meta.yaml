@@ -146,7 +146,7 @@ recommendations:
   - For environments without hardware AES, consider ChaCha20-Poly1305
     (golang.org/x/crypto/chacha20poly1305) — used in TLS 1.3 and WireGuard.
   - Never use RC4 in any new protocol, application, or configuration.
-  - For TLS: Go's crypto/tls defaults are safe — do not override to add RC4 cipher suites.
+  - "For TLS: Go's crypto/tls defaults are safe — do not override to add RC4 cipher suites."
   - Remove any RC4 cipher suites from existing TLS server configurations.
 
 detection_scope: |

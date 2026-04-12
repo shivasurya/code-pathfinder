@@ -55,7 +55,7 @@ from codepathfinder.go_rule import (
 )
 from codepathfinder import flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 class GoHTTPServer(QueryType):

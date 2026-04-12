@@ -1,5 +1,5 @@
 """
-Core matchers for the pathfinder Python DSL.
+Core matchers for the pathfinder Python SDK.
 
 These matchers generate JSON IR for the Go executor.
 """

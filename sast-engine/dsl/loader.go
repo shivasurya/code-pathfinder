@@ -20,7 +20,7 @@ type Logger interface {
 	IsVerbose() bool
 }
 
-// RuleLoader loads Python DSL rules and executes them.
+// RuleLoader loads Python SDK rules and executes them.
 type RuleLoader struct {
 	RulesPath   string               // Path to .py rules file or directory
 	Config      *QueryTypeConfig     // Execution config (nil → defaults)
@@ -32,7 +32,7 @@ func NewRuleLoader(rulesPath string) *RuleLoader {
 	return &RuleLoader{RulesPath: rulesPath}
 }
 
-// LoadRules loads and executes Python DSL rules.
+// LoadRules loads and executes Python SDK rules.
 //
 // Algorithm:
 //  1. Check if path is file or directory
@@ -159,6 +159,7 @@ func hasCodeAnalysisRuleDecorators(filePath string) bool {
 	// is tracked as a separate tech spec. For now, this works for standard
 	// rule files where @rule appears at the top level.
 	return strings.Contains(fileContent, "@rule(") ||
+		strings.Contains(fileContent, "@go_rule(") ||
 		strings.Contains(fileContent, "from codepathfinder import") ||
 		strings.Contains(fileContent, "import codepathfinder")
 }
@@ -209,7 +210,7 @@ func (l *RuleLoader) hasAnyContainerRulesInPath() bool {
 	return hasRules
 }
 
-// LoadContainerRules loads container rules (Dockerfile/Compose) from Python DSL files.
+// LoadContainerRules loads container rules (Dockerfile/Compose) from Python SDK files.
 // Returns JSON IR in format: {"dockerfile": [...], "compose": [...]}.
 func (l *RuleLoader) LoadContainerRules(logger Logger) ([]byte, error) {
 	// Check if path is file or directory (check existence first)

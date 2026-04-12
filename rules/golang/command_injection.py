@@ -96,7 +96,7 @@ REFERENCES:
 from codepathfinder.go_rule import GoGinContext, GoHTTPRequest, GoOSExec
 from codepathfinder import flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 @go_rule(id="GO-SEC-002", severity="CRITICAL", cwe="CWE-78", owasp="A03:2021")

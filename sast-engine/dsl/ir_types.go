@@ -66,7 +66,7 @@ type CallMatcherIR struct {
 
 	// PositionalArgs maps positional argument index (as string) to expected value(s).
 	// Example: {"0": ArgumentConstraint{Value: "0.0.0.0"}}
-	// Position is stored as string key to match JSON format from Python DSL.
+	// Position is stored as string key to match JSON format from Python SDK.
 	// This field is optional and will be omitted from JSON if empty.
 	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
 
@@ -110,7 +110,7 @@ func (a *AttributeMatcherIR) GetType() IRType {
 	return IRTypeAttributeMatcher
 }
 
-// DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
+// DataflowIR represents dataflow (taint analysis) JSON IR from Python SDK.
 // Sources/Sinks/Sanitizers accept any matcher type (CallMatcherIR or TypeConstrainedCallIR).
 type DataflowIR struct {
 	Type        string            `json:"type"`                  // "dataflow"
@@ -163,7 +163,7 @@ type DataflowDetection struct {
 // TypeConstrainedCallIR represents type_constrained_call JSON IR.
 // Matches call sites where the receiver variable has a specific inferred type.
 //
-//nolint:tagliatelle // JSON tags match Python DSL format.
+//nolint:tagliatelle // JSON tags match Python SDK format.
 type TypeConstrainedCallIR struct {
 	Type             string  `json:"type"`                       // "type_constrained_call"
 	ReceiverType     string  `json:"receiverType,omitempty"`     // backward compat: single FQN
@@ -212,7 +212,7 @@ func (t *TypeConstrainedCallIR) GetType() IRType {
 // TypeConstrainedAttributeIR represents type_constrained_attribute JSON IR.
 // Matches attribute access on variables with a specific inferred type.
 //
-//nolint:tagliatelle // JSON tags match Python DSL format.
+//nolint:tagliatelle // JSON tags match Python SDK format.
 type TypeConstrainedAttributeIR struct {
 	Type           string   `json:"type"`                       // "type_constrained_attribute"
 	ReceiverType   string   `json:"receiverType"`               // singular — backward compat

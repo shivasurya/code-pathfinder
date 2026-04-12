@@ -31,7 +31,7 @@ golangci-lint run
 ./build/go/pathfinder serve --project <path>
 ./build/go/pathfinder serve --http --address :8080 --project <path>
 
-# Scan mode (using Python DSL rules)
+# Scan mode (using Python SDK rules)
 ./build/go/pathfinder scan --project <path> --ruleset <path_to_rules>
 
 # CI mode (loads rules from remote/local, outputs SARIF/JSON/CSV)
@@ -65,7 +65,7 @@ Type Inference Engine (bidirectional, return types, variable assignments)
     ↓
 Call Graph Builder (5-pass algorithm)
     ↓
-MCP Server / Python DSL Rules
+MCP Server / Python SDK Rules
     ↓
 Output Formats (JSON, SARIF, CSV, Text)
 ```
@@ -234,9 +234,9 @@ This project **requires CGO** due to `go-tree-sitter` C bindings. Build fails wi
 - Variable assignments (no type information)
 - Simplified compared to Java (no invocation linking yet)
 
-## Python DSL Rules (v1.0.0+)
+## Python SDK Rules (v1.0.0+)
 
-Code Pathfinder uses **Python DSL** for writing security rules. Rules are Python functions that query the call graph using the MCP interface.
+Code Pathfinder uses **Python SDK** for writing security rules. Rules are Python functions that query the call graph using the MCP interface.
 
 ### Example Rule
 ```python
@@ -431,4 +431,4 @@ Releases must include binaries for linux-amd64, darwin-amd64, darwin-arm64, and 
 1. Use `--verbose` flag to see indexing statistics
 2. Large projects benefit from more CPU cores (PATHFINDER_MAX_WORKERS env var)
 3. MCP queries are fast (index pre-built)
-4. Python DSL rules run sequentially - keep rules focused
+4. Python SDK rules run sequentially - keep rules focused

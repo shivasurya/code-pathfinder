@@ -139,7 +139,7 @@ secure_example: |
   }
 
 recommendations:
-  - Use ? positional placeholders in GORM Raw() and Exec(): db.Raw("WHERE id = ?", id).
+  - "Use ? positional placeholders in GORM Raw() and Exec(): db.Raw(\"WHERE id = ?\", id)."
   - Use @name named parameters for complex queries with multiple reused values.
   - Prefer GORM's struct-based query builder (Where, Find, First, Create) over Raw/Exec.
   - Validate dynamic column/table names against an explicit allowlist before use.

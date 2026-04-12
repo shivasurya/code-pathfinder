@@ -46,10 +46,10 @@ description: |
   Example: `conn.Exec(ctx, "SELECT * FROM users WHERE id = $1", userID)`.
 
   **Real-world pgx SQL injection CVEs**:
-  - **CVE-2024-27289** (jackc/pgx < v4.18.2): SQL injection via large integer values that
+  - "**CVE-2024-27289** (jackc/pgx < v4.18.2): SQL injection via large integer values that"
     bypass type conversion, allowing injection of unsigned integer-like values that
     PostgreSQL interprets differently than expected.
-  - **CVE-2024-27304** (jackc/pgx < v4.18.2 and < v5.5.4): SQL injection via integer
+  - "**CVE-2024-27304** (jackc/pgx < v4.18.2 and < v5.5.4): SQL injection via integer"
     types during query parameter binding — specific integer type coercion edge cases.
 
   **pgx-specific attack surface**: Beyond standard string concatenation, pgx's use of

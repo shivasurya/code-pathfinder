@@ -307,7 +307,7 @@ Examples:
 			}
 		}
 
-		// Load Python DSL rules
+		// Load Python SDK rules
 		logger.StartProgress("Loading rules", -1)
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
@@ -504,7 +504,7 @@ var osExit = os.Exit
 
 func init() {
 	rootCmd.AddCommand(ciCmd)
-	ciCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
+	ciCmd.Flags().StringP("rules", "r", "", "Path to Python SDK rules file or directory")
 	ciCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
 	ciCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	ciCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")

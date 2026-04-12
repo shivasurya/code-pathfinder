@@ -48,9 +48,9 @@ description: |
   metacharacters become active and enable full command injection.
 
   **Other dangerous patterns**:
-  - Passing user input as the binary name: `exec.Command(userInput, args...)` — attacker
+  - "Passing user input as the binary name: `exec.Command(userInput, args...)` — attacker"
     controls which binary is executed.
-  - Argument injection: `exec.Command("ffmpeg", "-i", userInput)` — while not shell
+  - "Argument injection: `exec.Command(\"ffmpeg\", \"-i\", userInput)` — while not shell"
     injection, ffmpeg and many tools have argument injection vulnerabilities (e.g.,
     `-vf` flag injection).
 

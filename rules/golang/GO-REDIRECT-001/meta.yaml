@@ -42,23 +42,23 @@ description: |
   `https://trusted-app.com/login?next=https://evil.com`.
 
   **Why this matters beyond simple phishing**:
-  - **OAuth 2.0 token theft**: When OAuth providers validate redirect_uri using prefix
+  - "**OAuth 2.0 token theft**: When OAuth providers validate redirect_uri using prefix"
     matching or insufficient validation, an open redirect on the OAuth client can be
     chained: `?redirect_uri=https://trusted.com/redirect?next=https://attacker.com`.
     The OAuth code/token flows through the trusted domain then to the attacker.
-  - **SSO bypass**: SAML and OAuth flows often use a `next` or `returnTo` parameter.
+  - "**SSO bypass**: SAML and OAuth flows often use a `next` or `returnTo` parameter."
     An open redirect in the post-login flow redirects authenticated users immediately
     after login to attacker-controlled sites with their session active.
 
   **URL parsing edge cases that bypass naive checks** (Go-specific):
-  - Protocol-relative: `//evil.com` — `url.Parse("//evil.com").Host` = "evil.com" but
+  - "Protocol-relative: `//evil.com` — `url.Parse(\"//evil.com\").Host` = \"evil.com\" but"
     many naive checks only look for `http://` or `https://`.
   - `javascript:alert(1)` — Go's `url.Parse` parses scheme as "javascript". Browsers
     execute javascript: URLs when used in redirect headers.
-  - Missing scheme with valid TLD: `evil.com` — browsers interpret as relative path
+  - "Missing scheme with valid TLD: `evil.com` — browsers interpret as relative path"
     to `http://evil.com` in some redirect contexts.
-  - Double-slash in path: `/\\evil.com` — some browsers normalize `\` to `/`.
-  - Unicode normalization: `ℯvil.com` ≠ `evil.com` — visually similar but different hosts.
+  - "Double-slash in path: `/\\\\evil.com` — some browsers normalize `\\` to `/`."
+  - "Unicode normalization: `ℯvil.com` ≠ `evil.com` — visually similar but different hosts."
 
   **Go's http.Redirect**: Setting the Location header without validation makes your
   server an open redirector. Go does not validate Location header values.
@@ -170,12 +170,12 @@ secure_example: |
   }
 
 recommendations:
-  - For post-login redirects: only allow relative paths starting with "/" but not "//".
-  - For cross-origin redirects: use an explicit allowlist of permitted full URLs.
+  - "For post-login redirects: only allow relative paths starting with \"/\" but not \"//\"."
+  - "For cross-origin redirects: use an explicit allowlist of permitted full URLs."
   - After url.Parse, verify Scheme is empty OR explicitly "https" to a known host.
   - Never allow javascript:, data:, or protocol-relative (//host) redirect targets.
   - Check for newlines (\r\n) in redirect targets to prevent HTTP header injection.
-  - For OAuth flows: validate redirect_uri strictly; prefix matching is insufficient.
+  - "For OAuth flows: validate redirect_uri strictly; prefix matching is insufficient."
 
 detection_scope: |
   Tracks taint from HTTP framework sources to http.Redirect, gin.Context.Redirect,

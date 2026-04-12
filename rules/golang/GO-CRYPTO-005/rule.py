@@ -3,7 +3,7 @@
 from codepathfinder.go_rule import QueryType
 from codepathfinder import calls, flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 class GoCryptoMD5(QueryType):

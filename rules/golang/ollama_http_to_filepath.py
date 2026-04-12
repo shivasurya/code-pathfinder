@@ -16,7 +16,7 @@ L1: GoGinContext + GoHTTPRequest sources, GoFilepath + GoOS sinks — both sides
 from codepathfinder.go_rule import GoGinContext, GoHTTPRequest, GoOS, GoFilepath
 from codepathfinder import flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 @go_rule(id="OLLAMA-SEC-002", severity="HIGH", cwe="CWE-22", owasp="A01:2021")

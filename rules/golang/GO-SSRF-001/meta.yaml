@@ -46,26 +46,26 @@ description: |
   R.SetURL(), etc.) without validation, SSRF vulnerabilities arise.
 
   **Cloud metadata endpoint attacks** (most critical impact):
-  - **AWS IMDSv1** (169.254.169.254): `GET /latest/meta-data/iam/security-credentials/<role>`
+  - "**AWS IMDSv1** (169.254.169.254): `GET /latest/meta-data/iam/security-credentials/<role>`"
     returns temporary AWS credentials (AccessKeyId, SecretAccessKey, Token) in JSON.
     These credentials have the IAM permissions of the EC2 instance role — potentially
     S3 read/write, RDS access, Lambda invocation, etc. IMDSv1 requires no session token
     and is accessible from any process on the instance, including SSRF payloads.
-  - **AWS IMDSv2**: Requires a PUT request first to obtain a session token, then GET
+  - "**AWS IMDSv2**: Requires a PUT request first to obtain a session token, then GET"
     requests must include `X-aws-ec2-metadata-token`. Mitigates SSRF but is not universal
     — many older deployments still use IMDSv1.
-  - **GCP metadata**: `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token`
+  - "**GCP metadata**: `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token`"
     returns an OAuth2 access token with the instance's service account permissions.
     Requires `Metadata-Flavor: Google` header — but many SSRF tools set this automatically.
-  - **Azure IMDS**: `http://169.254.169.254/metadata/instance?api-version=2021-02-01`
+  - "**Azure IMDS**: `http://169.254.169.254/metadata/instance?api-version=2021-02-01`"
     (requires `Metadata: true` header). Returns instance metadata and managed identity tokens.
 
   **URL bypass techniques**: Naive host-string matching is bypassed by:
-  - Decimal IP: `http://2130706433` = 127.0.0.1
-  - IPv6: `http://[::1]`, `http://[0:0:0:0:0:ffff:7f00:1]`
-  - IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]`
-  - URL encoding: `http://169.254.169.254%2F` or `http://169.254.169%2e254`
-  - DNS rebinding: hostname resolves to external IP first (passes check), then attacker's
+  - "Decimal IP: `http://2130706433` = 127.0.0.1"
+  - "IPv6: `http://[::1]`, `http://[0:0:0:0:0:ffff:7f00:1]`"
+  - "IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]`"
+  - "URL encoding: `http://169.254.169.254%2F` or `http://169.254.169%2e254`"
+  - "DNS rebinding: hostname resolves to external IP first (passes check), then attacker's"
     DNS returns 169.254.169.254 before the actual HTTP request — bypasses IP allowlisting
     based on DNS resolution at validation time.
 
@@ -194,7 +194,7 @@ recommendations:
   - Validate outbound URLs against an explicit allowlist of permitted hosts.
   - After DNS resolution, verify the resolved IP is not in private ranges (10/8, 172.16/12,
     192.168/16, 127/8, 169.254/16) to prevent DNS rebinding bypass.
-  - Block cloud metadata endpoints: 169.254.169.254 and metadata.google.internal.
+  - "Block cloud metadata endpoints: 169.254.169.254 and metadata.google.internal."
   - Enforce HTTPS-only for outbound requests in security-sensitive contexts.
   - Disable HTTP redirects in the HTTP client or re-validate URLs after each redirect.
   - Enable AWS IMDSv2 (instance metadata service v2) to require session tokens.

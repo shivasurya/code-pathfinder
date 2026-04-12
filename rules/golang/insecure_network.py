@@ -52,7 +52,7 @@ REFERENCES:
 
 from codepathfinder.go_rule import GoHTTPClient, QueryType
 from codepathfinder import calls
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 class GoHTTPServer(QueryType):

@@ -2,7 +2,7 @@
 
 from codepathfinder.go_rule import QueryType
 from codepathfinder import flows
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 class GoGRPC(QueryType):

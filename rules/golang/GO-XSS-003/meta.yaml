@@ -211,8 +211,8 @@ secure_example: |
 recommendations:
   - Replace io.WriteString(w, userInput) with html/template rendering for all HTML responses.
   - If io.WriteString must be used, pre-escape all user values with html.EscapeString().
-  - Set Content-Type: text/html; charset=utf-8 explicitly — never rely on auto-detection.
-  - Add X-Content-Type-Options: nosniff to all responses to disable MIME sniffing.
+  - "Set Content-Type: text/html; charset=utf-8 explicitly — never rely on auto-detection."
+  - "Add X-Content-Type-Options: nosniff to all responses to disable MIME sniffing."
   - Apply Content-Security-Policy header as a defense-in-depth layer.
   - Escape values in error pages and 4xx/5xx responses — they are equally exploitable.
   - For JSON API handlers, use encoding/json rather than string formatting into io.WriteString.

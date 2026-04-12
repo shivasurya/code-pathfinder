@@ -64,19 +64,19 @@ description: |
   recovers the credential. Forcing a secret into git history is effectively publishing it.
 
   **Surface area of secret exposure beyond git**:
-  - **Compiled Go binaries**: Go embeds string literals directly in the binary's `.rodata`
+  - "**Compiled Go binaries**: Go embeds string literals directly in the binary's `.rodata`"
     section. The Unix `strings` command extracts all printable strings of 4+ characters.
     Tools like Ghidra with the "ghostrings" plugin specifically hunt for string constants
     that look like credentials. A hardcoded JWT secret or database password survives
     unchanged in every compiled artifact shipped to customers or placed in container images.
-  - **Container image layers**: Docker layers are union filesystem snapshots. Each layer
+  - "**Container image layers**: Docker layers are union filesystem snapshots. Each layer"
     is a tar archive. `docker history --no-trunc` and `docker inspect` expose build-time
     ARG values. If a binary containing hardcoded credentials is in the image, `docker save`
     followed by `tar xf` and `strings` extracts them.
-  - **CI/CD pipeline artifacts**: Build systems cache compiled binaries and run logs. A
+  - "**CI/CD pipeline artifacts**: Build systems cache compiled binaries and run logs. A"
     test output that prints a hardcoded constant, or a build artifact in a public artifact
     store, exposes the credential to anyone with artifact access.
-  - **Log files and crash dumps**: Go programs that log their configuration at startup
+  - "**Log files and crash dumps**: Go programs that log their configuration at startup"
     (common in 12-factor app patterns) may log environment variables or struct fields —
     including credential-named fields initialized from string literals.
 
@@ -109,8 +109,8 @@ description: |
   - 23.8 million new plaintext secrets were detected in public GitHub repositories in 2023
   - 70% of secrets exposed in 2021 remain valid and active 2 years later — secret rotation
     after discovery is the exception, not the rule
-  - The most common secret types: API keys (35%), generic credentials (28%), private keys (17%)
-  - Developer-to-secret ratio: approximately 1 hardcoded secret per 1,000 commits in
+  - "The most common secret types: API keys (35%), generic credentials (28%), private keys (17%)"
+  - "Developer-to-secret ratio: approximately 1 hardcoded secret per 1,000 commits in"
     enterprise repositories
 
   **Extraction techniques attackers use**:
@@ -124,9 +124,9 @@ description: |
      and cross-reference them against credential patterns
 
   **CWE taxonomy for this vulnerability class**:
-  - **CWE-798** (parent): General hardcoded credentials — covers any credential type
-  - **CWE-259** (child): Specifically hardcoded passwords in authentication code
-  - **CWE-321** (child): Hardcoded cryptographic keys — JWT signing secrets, AES keys,
+  - "**CWE-798** (parent): General hardcoded credentials — covers any credential type"
+  - "**CWE-259** (child): Specifically hardcoded passwords in authentication code"
+  - "**CWE-321** (child): Hardcoded cryptographic keys — JWT signing secrets, AES keys,"
     HMAC secrets. These are both a credential and a cryptographic failure simultaneously.
 
   **Go-specific remediation hierarchy** (in order of increasing security):
