@@ -42,4 +42,8 @@ RUN chmod +x /usr/bin/entrypoint.sh
 LABEL maintainer="shiva@shivasurya.me"
 LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
 
+# Disable in-product update notices for Docker users — they upgrade by
+# pulling a new image tag, so an in-container nudge would be noise.
+ENV PATHFINDER_NO_UPDATE_CHECK=1
+
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]

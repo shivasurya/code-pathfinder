@@ -40,6 +40,10 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 LABEL maintainer="shiva@shivasurya.me"
 LABEL io.modelcontextprotocol.server.name="dev.codepathfinder/pathfinder"
 
+# Disable in-product update notices for Docker users — they upgrade by
+# pulling a new image tag, so an in-container nudge would be noise.
+ENV PATHFINDER_NO_UPDATE_CHECK=1
+
 # MCP serve mode: stdio transport, indexing the mounted /project directory
 # To disable analytics, add --disable-metrics flag
 ENTRYPOINT ["/usr/bin/pathfinder", "serve", "--project", "/project"]
