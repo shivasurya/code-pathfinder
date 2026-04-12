@@ -181,6 +181,20 @@ func runPreRun(t *testing.T, flags map[string]string) {
 	rootCmd.PersistentPreRun(cmd, []string{})
 }
 
+// clearCIEnvVars unsets all environment variables that shouldSkipUpdateCheck
+// treats as CI signals. Required in tests that must observe the non-skip path,
+// because the CI runner itself exports these vars.
+func clearCIEnvVars(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE",
+		"CIRCLECI", "TRAVIS", "JENKINS_URL", "TF_BUILD",
+		"PATHFINDER_NO_UPDATE_CHECK",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
 // --- shouldSkipUpdateCheck unit tests ---------------------------------------
 
 func TestShouldSkipUpdateCheck_Flag(t *testing.T) {
@@ -190,7 +204,7 @@ func TestShouldSkipUpdateCheck_Flag(t *testing.T) {
 }
 
 func TestShouldSkipUpdateCheck_FlagFalse(t *testing.T) {
-	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
+	clearCIEnvVars(t)
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("no-update-check", false, "")
 	assert.False(t, shouldSkipUpdateCheck(cmd))
@@ -221,7 +235,7 @@ func TestShouldSkipUpdateCheck_CIEnvVars(t *testing.T) {
 func TestShouldSkipUpdateCheck_NoFlagReturnsDefault(t *testing.T) {
 	// If the flag is not registered on cmd, GetBool returns false+err;
 	// the error is ignored and the check falls through to the env/CI tests.
-	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
+	clearCIEnvVars(t)
 	cmd := &cobra.Command{}
 	assert.False(t, shouldSkipUpdateCheck(cmd))
 }
@@ -293,7 +307,7 @@ func TestPersistentPreRun_CIDetected_Skips(t *testing.T) {
 // non-TTY environment the manifest fetch still occurs (so future analytics can
 // fire) but no banner is rendered.
 func TestPersistentPreRun_NonTTY_FetchesButDoesNotRender(t *testing.T) {
-	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
+	clearCIEnvVars(t)
 
 	srv, hits := startFakeCDN(t)
 	defer srv.Close()
@@ -311,7 +325,7 @@ func TestPersistentPreRun_NonTTY_FetchesButDoesNotRender(t *testing.T) {
 // TestPersistentPreRun_NoBanner_FetchesButDoesNotRender verifies that
 // --no-banner suppresses the update notice while still fetching.
 func TestPersistentPreRun_NoBanner_FetchesButDoesNotRender(t *testing.T) {
-	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
+	clearCIEnvVars(t)
 
 	srv, hits := startFakeCDN(t)
 	defer srv.Close()
