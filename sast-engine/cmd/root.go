@@ -91,22 +91,14 @@ func init() {
 
 // shouldSkipUpdateCheck returns true when the update-check fetch should be
 // skipped entirely. This is the *fetch* gate — it prevents any outbound HTTP
-// request. It is deliberately broad so CI systems and explicit opt-outs never
-// pay the 800 ms latency cost.
+// request. CI environments intentionally receive the update check so teams
+// stay informed about newer versions.
 func shouldSkipUpdateCheck(cmd *cobra.Command) bool {
 	if v, _ := cmd.Flags().GetBool("no-update-check"); v {
 		return true
 	}
 	if os.Getenv("PATHFINDER_NO_UPDATE_CHECK") != "" {
 		return true
-	}
-	for _, k := range []string{
-		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE",
-		"CIRCLECI", "TRAVIS", "JENKINS_URL", "TF_BUILD",
-	} {
-		if os.Getenv(k) != "" {
-			return true
-		}
 	}
 	return false
 }

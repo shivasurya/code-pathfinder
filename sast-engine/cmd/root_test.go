@@ -181,18 +181,12 @@ func runPreRun(t *testing.T, flags map[string]string) {
 	rootCmd.PersistentPreRun(cmd, []string{})
 }
 
-// clearCIEnvVars unsets all environment variables that shouldSkipUpdateCheck
-// treats as CI signals. Required in tests that must observe the non-skip path,
-// because the CI runner itself exports these vars.
+// clearSkipEnvVars unsets environment variables that shouldSkipUpdateCheck
+// treats as opt-out signals. Required in tests that must observe the non-skip
+// path, because CI runners may export PATHFINDER_NO_UPDATE_CHECK.
 func clearCIEnvVars(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{
-		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE",
-		"CIRCLECI", "TRAVIS", "JENKINS_URL", "TF_BUILD",
-		"PATHFINDER_NO_UPDATE_CHECK",
-	} {
-		t.Setenv(k, "")
-	}
+	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
 }
 
 // --- shouldSkipUpdateCheck unit tests ---------------------------------------
@@ -204,7 +198,7 @@ func TestShouldSkipUpdateCheck_Flag(t *testing.T) {
 }
 
 func TestShouldSkipUpdateCheck_FlagFalse(t *testing.T) {
-	clearCIEnvVars(t)
+	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("no-update-check", false, "")
 	assert.False(t, shouldSkipUpdateCheck(cmd))
@@ -217,25 +211,10 @@ func TestShouldSkipUpdateCheck_EnvVar(t *testing.T) {
 	assert.True(t, shouldSkipUpdateCheck(cmd))
 }
 
-func TestShouldSkipUpdateCheck_CIEnvVars(t *testing.T) {
-	ciVars := []string{
-		"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE",
-		"CIRCLECI", "TRAVIS", "JENKINS_URL", "TF_BUILD",
-	}
-	for _, k := range ciVars {
-		t.Run(k, func(t *testing.T) {
-			t.Setenv(k, "true")
-			cmd := &cobra.Command{}
-			cmd.Flags().Bool("no-update-check", false, "")
-			assert.True(t, shouldSkipUpdateCheck(cmd))
-		})
-	}
-}
-
 func TestShouldSkipUpdateCheck_NoFlagReturnsDefault(t *testing.T) {
 	// If the flag is not registered on cmd, GetBool returns false+err;
-	// the error is ignored and the check falls through to the env/CI tests.
-	clearCIEnvVars(t)
+	// the error is ignored and the check falls through to the env check.
+	t.Setenv("PATHFINDER_NO_UPDATE_CHECK", "")
 	cmd := &cobra.Command{}
 	assert.False(t, shouldSkipUpdateCheck(cmd))
 }
@@ -285,22 +264,6 @@ func TestPersistentPreRun_EnvVarSkips(t *testing.T) {
 
 	runPreRun(t, nil)
 	assert.Equal(t, int64(0), hits.Load(), "CDN must not be hit when PATHFINDER_NO_UPDATE_CHECK=1")
-}
-
-// TestPersistentPreRun_CIDetected_Skips verifies that CI=true prevents any
-// HTTP call to the CDN.
-func TestPersistentPreRun_CIDetected_Skips(t *testing.T) {
-	t.Setenv("CI", "true")
-
-	srv, hits := startFakeCDN(t)
-	defer srv.Close()
-
-	old := updateCheckManifestURL
-	updateCheckManifestURL = srv.URL
-	defer func() { updateCheckManifestURL = old }()
-
-	runPreRun(t, nil)
-	assert.Equal(t, int64(0), hits.Load(), "CDN must not be hit in CI environments")
 }
 
 // TestPersistentPreRun_NonTTY_FetchesButDoesNotRender verifies that in a
