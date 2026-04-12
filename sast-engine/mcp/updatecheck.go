@@ -3,6 +3,7 @@ package mcp
 import (
 	"fmt"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/updatecheck"
 )
 
@@ -54,4 +55,47 @@ func TruncateNotice(s string, n int) string {
 		return ellipsis
 	}
 	return s[:n-3] + ellipsis
+}
+
+// reportReachIfNeeded fires analytics reach events for upgrade notices and
+// announcements at most once per 24-hour window per process. It is a no-op
+// when analytics are disabled, updateInfo is nil, or the dedup window has
+// not yet expired for the given key.
+//
+// Called from handleToolsList after description injection — fired every
+// tools/list, but the ReachReporter deduplicates to at most one event per day.
+func (s *Server) reportReachIfNeeded() {
+	if analytics.IsDisabled() {
+		return
+	}
+	r := s.updateInfo
+	if r == nil || s.reachReporter == nil {
+		return
+	}
+	if r.Upgrade != nil && s.reachReporter.ShouldReport("upgrade:"+r.Upgrade.Latest) {
+		analytics.ReportEventWithProperties("update_notice_shown", map[string]any{
+			"current":                 r.Upgrade.Current,
+			"latest":                  r.Upgrade.Latest,
+			"level":                   r.Upgrade.Level,
+			"surface":                 "mcp",
+			"triggered_min_supported": r.Upgrade.Level == "warn",
+		})
+	}
+	if r.Announcement != nil && s.reachReporter.ShouldReport("announcement:"+r.Announcement.ID) {
+		kind := "generic"
+		if r.Announcement.VersionRange != "" {
+			kind = "version_targeted"
+		}
+		props := map[string]any{
+			"id":      r.Announcement.ID,
+			"level":   r.Announcement.Level,
+			"kind":    kind,
+			"surface": "mcp",
+			"current": s.version,
+		}
+		if kind == "version_targeted" {
+			props["version_range"] = r.Announcement.VersionRange
+		}
+		analytics.ReportEventWithProperties("announcement_shown", props)
+	}
 }

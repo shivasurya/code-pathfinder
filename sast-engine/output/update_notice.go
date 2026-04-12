@@ -6,8 +6,16 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/analytics"
 	"github.com/shivasurya/code-pathfinder/sast-engine/updatecheck"
 )
+
+// defaultReporter deduplicates reach events per process (24-hour window).
+// Replaced in tests to isolate event firing from time.
+var defaultReporter = updatecheck.NewReachReporter()
+
+// reportEvent is the analytics call site. Replaced in tests to assert/suppress calls.
+var reportEvent = analytics.ReportEventWithProperties
 
 // Notice box geometry.
 // Total visual line width = noticeBoxDashes + 2 (for ╭/╮ or ╰/╯ corner chars).
@@ -88,15 +96,26 @@ func printUpdateNotice(w io.Writer, n *updatecheck.UpgradeNotice, tty bool) {
 
 	if tty {
 		printNoticeBox(w, levelColor(n.Level), heading, lines)
-		return
+	} else {
+		// Non-TTY: single plain line.
+		fmt.Fprintf(w, "[update] %s → %s", n.Current, n.Latest)
+		if n.Message != "" {
+			fmt.Fprintf(w, "  %s", n.Message)
+		}
+		fmt.Fprintln(w)
 	}
 
-	// Non-TTY: single plain line.
-	fmt.Fprintf(w, "[update] %s → %s", n.Current, n.Latest)
-	if n.Message != "" {
-		fmt.Fprintf(w, "  %s", n.Message)
+	// Fire reach analytics once per 24-hour window. Gated on metrics being
+	// enabled — no call reaches the wire when --disable-metrics is set.
+	if !analytics.IsDisabled() && defaultReporter.ShouldReport("upgrade:"+n.Latest) {
+		reportEvent("update_notice_shown", map[string]any{
+			"current":                  n.Current,
+			"latest":                   n.Latest,
+			"level":                    n.Level,
+			"surface":                  "cli",
+			"triggered_min_supported":  n.Level == "warn",
+		})
 	}
-	fmt.Fprintln(w)
 }
 
 // PrintAnnouncement renders an operator notice to w.
@@ -129,15 +148,33 @@ func printAnnouncement(w io.Writer, a *updatecheck.Announcement, tty bool) {
 
 	if tty {
 		printNoticeBox(w, levelColor(a.Level), heading, lines)
-		return
+	} else {
+		// Non-TTY: single plain line.
+		fmt.Fprintf(w, "[notice] %s: %s", a.Title, a.Text)
+		if a.URL != "" {
+			fmt.Fprintf(w, "  %s", a.URL)
+		}
+		fmt.Fprintln(w)
 	}
 
-	// Non-TTY: single plain line.
-	fmt.Fprintf(w, "[notice] %s: %s", a.Title, a.Text)
-	if a.URL != "" {
-		fmt.Fprintf(w, "  %s", a.URL)
+	// Fire reach analytics once per 24-hour window.
+	if !analytics.IsDisabled() && defaultReporter.ShouldReport("announcement:"+a.ID) {
+		kind := "generic"
+		if a.VersionRange != "" {
+			kind = "version_targeted"
+		}
+		props := map[string]any{
+			"id":      a.ID,
+			"level":   a.Level,
+			"kind":    kind,
+			"surface": "cli",
+			"current": "", // filled in by callers that know the version; empty is safe
+		}
+		if kind == "version_targeted" {
+			props["version_range"] = a.VersionRange
+		}
+		reportEvent("announcement_shown", props)
 	}
-	fmt.Fprintln(w)
 }
 
 // printNoticeBox renders the complete colored Unicode box to w.

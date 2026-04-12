@@ -42,6 +42,12 @@ func Init(disableMetrics bool) {
 	enableMetrics = !disableMetrics
 }
 
+// IsDisabled reports whether analytics have been disabled by the caller.
+// Use this to gate analytics calls in packages that import analytics.
+func IsDisabled() bool {
+	return !enableMetrics
+}
+
 func SetVersion(version string) {
 	appVersion = version
 }
