@@ -1,0 +1,43 @@
+// GO-XSS-001 positive test cases — all SHOULD be detected
+package main
+
+import (
+	"html/template"
+	"net/http"
+)
+
+func xssTemplateHTML(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")        // source
+	safe := template.HTML(name)        // SINK: bypasses auto-escaping
+	_ = safe
+}
+
+func xssTemplateCSS(w http.ResponseWriter, r *http.Request) {
+	style := r.FormValue("style")      // source
+	safe := template.CSS(style)        // SINK: CSS injection
+	_ = safe
+}
+
+func xssTemplateJS(w http.ResponseWriter, r *http.Request) {
+	code := r.FormValue("code")        // source
+	safe := template.JS(code)          // SINK: JS injection
+	_ = safe
+}
+
+func xssTemplateURL(w http.ResponseWriter, r *http.Request) {
+	link := r.FormValue("url")         // source
+	safe := template.URL(link)         // SINK: URL injection
+	_ = safe
+}
+
+func xssTemplateHTMLAttr(w http.ResponseWriter, r *http.Request) {
+	attr := r.FormValue("attr")        // source
+	safe := template.HTMLAttr(attr)    // SINK: HTML attribute injection
+	_ = safe
+}
+
+func xssTemplateViaPath(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path                 // source: URL path
+	safe := template.HTML(path)        // SINK: XSS via path
+	_ = safe
+}

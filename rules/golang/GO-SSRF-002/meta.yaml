@@ -1,0 +1,233 @@
+# Rule Identity
+id: GO-SSRF-002
+name: SSRF via Outbound net/http Client Calls
+short_description: User-controlled input flows into net/http standard library client methods without URL validation, enabling SSRF attacks against internal services and cloud metadata endpoints.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-SSRF-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-918
+    name: "Server-Side Request Forgery (SSRF)"
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
+tags:
+  - go
+  - security
+  - ssrf
+  - net-http
+  - cloud-metadata
+  - CWE-918
+  - OWASP-A10
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  This rule detects SSRF flows where user input from HTTP request parameters reaches Go's
+  standard library net/http client calls (http.Get, http.Post, http.Head, http.PostForm,
+  and http.Client.Do). These are the most common HTTP client patterns in Go applications.
+
+  **SSRF via net/http is particularly common** because many Go web services implement
+  "URL preview", "webhook registration", "avatar URL", or "external feed fetch" features
+  using net/http without considering that users can supply internal or metadata URLs.
+
+  **Go URL parsing edge cases** that bypass naive host-string matching:
+  - `url.Parse("http://169.254.169.254")` correctly identifies host as "169.254.169.254"
+    but `url.Parse("http://169.254.169.254%2Flatest%2Fmeta-data")` or similar URL-encoded
+    variants may bypass simple string comparison.
+  - Protocol-relative URLs: `url.Parse("//169.254.169.254")` has an empty Scheme field
+    but Host = "169.254.169.254" — validation that only checks Scheme may miss this.
+  - IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]` — url.Parse sets Host to
+    `[::ffff:169.254.169.254]`, which is equal to 169.254.169.254 when parsed as IP.
+
+  **Redirect following**: Go's http.Client follows redirects by default. An SSRF
+  prevention check that validates the initial URL but doesn't validate redirect targets
+  allows redirect-chain bypass: `https://attacker.com/redirect?to=http://169.254.169.254`.
+  Override `CheckRedirect` to validate each redirect destination.
+
+  Complements GO-SSRF-001 which covers go-resty client. Together these rules cover
+  the two most common Go HTTP client patterns.
+
+message: |
+  User input flows into net/http client call. Validate URLs against an allowlist,
+  check resolved IPs against private IP blocklist (not just URL strings), and configure
+  CheckRedirect to validate redirect targets.
+
+security_implications:
+  - title: AWS IAM Credential Exfiltration
+    description: |
+      `http.Get("http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>")`
+      returns temporary AWS credentials when IMDSv1 is enabled. With these credentials,
+      attackers can access any AWS service the instance role permits.
+  - title: Internal Network Reconnaissance
+    description: |
+      By varying IP and port in the target URL, attackers map internal services.
+      HTTP response status codes and timing reveal which ports are open and what
+      services respond.
+  - title: Kubernetes API Server Access
+    description: |
+      `http.Get("https://kubernetes.default.svc/api/v1/secrets")` with a valid service
+      account token (if mounted) reveals secrets across the namespace or cluster.
+
+vulnerable_example: |
+  // VULNERABLE: net/http.Get with user-controlled URL
+  func fetchURL(w http.ResponseWriter, r *http.Request) {
+      target := r.FormValue("url")
+      // Attacker sends: url=http://169.254.169.254/latest/meta-data/
+      resp, err := http.Get(target)
+      if err != nil {
+          http.Error(w, err.Error(), 500)
+          return
+      }
+      defer resp.Body.Close()
+      io.Copy(w, resp.Body) // Returns metadata to attacker
+  }
+
+  // VULNERABLE: http.Client with user-constructed request
+  func webhookTest(w http.ResponseWriter, r *http.Request) {
+      endpoint := r.FormValue("endpoint")
+      client := &http.Client{Timeout: 10 * time.Second}
+      req, _ := http.NewRequest("POST", endpoint, strings.NewReader("test"))
+      resp, _ := client.Do(req)
+      // ...
+  }
+
+  // VULNERABLE: naive host check — bypassable with URL encoding or IPv6
+  func naiveCheck(w http.ResponseWriter, r *http.Request) {
+      rawURL := r.FormValue("url")
+      // BYPASS: http://169.254.169.254%2Flatest bypasses simple Contains check
+      if strings.Contains(rawURL, "169.254.169.254") {
+          http.Error(w, "blocked", 403)
+          return
+      }
+      http.Get(rawURL) // still vulnerable to bypass techniques
+  }
+
+secure_example: |
+  // SECURE: allowlist + resolved IP validation + redirect control
+  import (
+      "context"
+      "net"
+      "net/http"
+      "net/url"
+  )
+
+  var allowedHosts = map[string]bool{
+      "api.partner.com":  true,
+      "cdn.example.com":  true,
+  }
+
+  func isPrivateIP(ip net.IP) bool {
+      for _, cidr := range []string{
+          "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+          "127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7",
+      } {
+          _, network, _ := net.ParseCIDR(cidr)
+          if network.Contains(ip) {
+              return true
+          }
+      }
+      return false
+  }
+
+  func safeHTTPClient() *http.Client {
+      // Custom dialer that validates resolved IPs before connecting
+      dialer := &net.Dialer{}
+      transport := &http.Transport{
+          DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+              host, port, _ := net.SplitHostPort(addr)
+              ips, err := net.DefaultResolver.LookupHost(ctx, host)
+              if err != nil {
+                  return nil, fmt.Errorf("DNS resolution failed")
+              }
+              for _, ip := range ips {
+                  if isPrivateIP(net.ParseIP(ip)) {
+                      return nil, fmt.Errorf("IP %s is in a private range", ip)
+                  }
+              }
+              return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+          },
+      }
+      return &http.Client{
+          Transport: transport,
+          Timeout:   10 * time.Second,
+          // Validate redirect targets too
+          CheckRedirect: func(req *http.Request, via []*http.Request) error {
+              if !allowedHosts[req.URL.Hostname()] {
+                  return fmt.Errorf("redirect to non-allowlisted host: %s", req.URL.Host)
+              }
+              return nil
+          },
+      }
+  }
+
+  func fetchURL(w http.ResponseWriter, r *http.Request) {
+      rawURL := r.FormValue("url")
+      parsed, err := url.Parse(rawURL)
+      if err != nil || !allowedHosts[parsed.Hostname()] {
+          http.Error(w, "invalid or disallowed URL", 400)
+          return
+      }
+      client := safeHTTPClient()
+      resp, err := client.Get(rawURL)
+      // ...
+  }
+
+recommendations:
+  - Validate outbound URL hosts against a strict allowlist.
+  - After DNS resolution, verify resolved IPs are not in private ranges.
+  - Override http.Client.CheckRedirect to validate redirect destinations.
+  - Disable redirects entirely if not needed: CheckRedirect returning http.ErrUseLastResponse.
+  - Set connection timeouts to prevent slow-loris-style attacks on SSRF targets.
+  - Enable AWS IMDSv2 to require session tokens for metadata access.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources to net/http package-level functions
+  (http.Get, http.Post, http.Head, http.PostForm) and http.Client.Do method calls
+  with global inter-procedural scope.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 — Server-Side Request Forgery"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-918 — Server-Side Request Forgery"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against SSRF attacks"
+
+# References
+references:
+  - title: "CWE-918: Server-Side Request Forgery — MITRE"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: "OWASP SSRF Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: "Go net/http package documentation"
+    url: https://pkg.go.dev/net/http
+  - title: "AWS IMDSv2 — requiring session tokens for metadata access"
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+  - title: "GCP metadata server documentation"
+    url: https://cloud.google.com/compute/docs/metadata/overview
+  - title: "RFC 3986 — Uniform Resource Identifier (URI)"
+    url: https://www.rfc-editor.org/rfc/rfc3986
+
+# Similar Rules
+similar_rules:
+  - GO-SSRF-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,245 @@
+# Rule Identity
+id: GO-SEC-001
+name: SQL Injection via database/sql
+short_description: User-controlled input reaches database/sql query methods without parameterization, enabling SQL injection — ranked #3 in OWASP Top 10 and #6 in CWE Top 25 (2024).
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-SEC-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - sql-injection
+  - database/sql
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  SQL injection occurs when user-controlled input is concatenated into a SQL query string
+  instead of being passed as a parameterized argument. Go's database/sql package provides
+  safe parameterized queries using placeholder syntax ($1/$2 for PostgreSQL, ? for MySQL
+  and SQLite, @name for named parameters). When developers instead use string concatenation,
+  the database driver interprets user-supplied content as SQL syntax.
+
+  **Attack mechanics**: An attacker sends crafted input that closes the current SQL context
+  and injects new SQL statements. For example, in `"SELECT * FROM users WHERE id = " + id`,
+  the attacker provides `1 OR 1=1` to return all rows, or `1; DROP TABLE users; --` on
+  databases that support stacked queries.
+
+  **Real-world impact in Go ecosystem**:
+  - **CVE-2024-35181** (Meshery, CVSS 8.8): SQL injection via parameter manipulation
+    in the meshery/meshery API, allowing authenticated attackers to read arbitrary data
+    from the database.
+  - **CVE-2024-35182** (Meshery, CVSS 8.8): Companion vulnerability in the same codebase.
+  - **CVE-2024-37896** (gin-vue-admin, CVSS 9.8): SQL injection via unsanitized query
+    parameters in GORM-based queries in the gin-vue-admin administrative framework.
+
+  **OWASP testing**: SQL injection is consistently the most frequently tested vulnerability
+  class in penetration tests. The OWASP Go Testing Guide documents Go-specific patterns
+  including ORM-level injections that bypass naive pattern matching.
+
+  This rule tracks taint flow from HTTP request sources (net/http, gin, echo, fiber, chi,
+  gorilla/mux) to database/sql sink methods (Query, Exec, QueryRow, and their Context
+  variants). The sanitized_by list includes strconv conversion functions that confirm the
+  value was parsed as a number (making SQL injection impossible for numeric inputs).
+
+message: |
+  User-controlled input flows into a database/sql query without parameterization. Use
+  db.Query("SELECT * WHERE id = $1", userID) instead of string concatenation.
+
+security_implications:
+  - title: Authentication Bypass
+    description: |
+      Injecting ` OR '1'='1` into a login query bypasses credential checks, granting access
+      to any account. Injecting ` OR '1'='1' LIMIT 1` targets the first user (often admin).
+  - title: Full Database Exfiltration
+    description: |
+      UNION SELECT attacks dump tables not intended for the current query.
+      INFORMATION_SCHEMA allows discovering all table and column names, enabling systematic
+      extraction of the entire database contents.
+  - title: Data Destruction
+    description: |
+      On databases that support stacked queries (SQL Server, PostgreSQL with some drivers),
+      injected DROP TABLE or DELETE statements destroy production data.
+  - title: Out-of-Band Data Exfiltration
+    description: |
+      Blind SQL injection via time delays (SLEEP(), pg_sleep()) or DNS callbacks
+      (xp_dirtree on SQL Server, LOAD_FILE on MySQL) allows data extraction without
+      visible query results.
+  - title: Privilege Escalation
+    description: |
+      Stored procedures with higher privileges (xp_cmdshell on SQL Server) can be invoked
+      through injection, enabling operating system command execution from a database query.
+
+vulnerable_example: |
+  // VULNERABLE: string concatenation in SQL query
+  func getUserByID(db *sql.DB, r *http.Request) {
+      id := r.FormValue("id")
+      // Attacker sends: id=1 UNION SELECT username,password,null FROM users--
+      row := db.QueryRow("SELECT name FROM users WHERE id = " + id)
+      var name string
+      row.Scan(&name)
+  }
+
+  // VULNERABLE: fmt.Sprintf to build query
+  func searchUsers(db *sql.DB, r *http.Request) {
+      name := r.FormValue("name")
+      query := fmt.Sprintf("SELECT * FROM users WHERE name = '%s'", name)
+      // Attacker sends: name=' OR '1'='1
+      rows, _ := db.Query(query)
+      defer rows.Close()
+  }
+
+  // VULNERABLE: query via gin handler
+  func getProduct(db *sql.DB, c *gin.Context) {
+      productID := c.Param("id")
+      row := db.QueryRow("SELECT * FROM products WHERE id = " + productID)
+      // ...
+  }
+
+secure_example: |
+  // SECURE: parameterized query ($1 placeholder for PostgreSQL)
+  func getUserByID(db *sql.DB, r *http.Request) {
+      id := r.FormValue("id")
+      row := db.QueryRow("SELECT name FROM users WHERE id = $1", id)
+      var name string
+      row.Scan(&name)
+  }
+
+  // SECURE: multiple parameters with context
+  func searchUsers(db *sql.DB, r *http.Request) {
+      name := r.FormValue("name")
+      active := r.FormValue("active")
+      ctx := r.Context()
+      rows, err := db.QueryContext(ctx,
+          "SELECT id, name FROM users WHERE name = $1 AND active = $2",
+          name, active)
+      if err != nil {
+          // handle error
+      }
+      defer rows.Close()
+  }
+
+  // SECURE: numeric ID validated before use (strconv acts as sanitizer)
+  func getProduct(db *sql.DB, c *gin.Context) {
+      productID, err := strconv.Atoi(c.Param("id"))
+      if err != nil {
+          c.JSON(400, gin.H{"error": "invalid id"})
+          return
+      }
+      row := db.QueryRow("SELECT * FROM products WHERE id = $1", productID)
+      // ...
+  }
+
+  // SECURE: dynamic ORDER BY via allowlist (cannot be parameterized in SQL)
+  func listUsers(db *sql.DB, r *http.Request) {
+      sortCol := r.FormValue("sort")
+      allowed := map[string]bool{"name": true, "created_at": true, "email": true}
+      if !allowed[sortCol] {
+          sortCol = "created_at"
+      }
+      rows, _ := db.Query("SELECT * FROM users ORDER BY " + sortCol + " DESC")
+      defer rows.Close()
+  }
+
+recommendations:
+  - Always use parameterized queries: db.Query("... WHERE id = $1", id) not string concat.
+  - For MySQL/SQLite, use ? placeholder; for PostgreSQL, use $1/$2; for SQL Server, use @p1.
+  - Use strconv.Atoi or strconv.ParseInt to validate numeric IDs before use (also sanitizes).
+  - For dynamic ORDER BY columns, validate against an explicit string allowlist.
+  - Use an ORM like GORM with named parameters for complex queries — see GO-GORM-SQLI rules.
+  - Apply least-privilege database accounts: read-only accounts cannot DROP TABLE.
+  - Enable query logging in staging environments to detect unparameterized queries.
+
+detection_scope: |
+  Tracks taint from net/http.Request, gin.Context, echo.Context, fiber.Ctx, chi.URLParam,
+  gorilla/mux.Vars to database/sql DB/Tx/Stmt query methods (Query, QueryContext, QueryRow,
+  QueryRowContext, Exec, ExecContext, Prepare, PrepareContext) with global inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2024-35181
+    description: |
+      SQL injection in Meshery (open-source cloud-native management platform). CVSS 8.8.
+      Allows authenticated attackers to read arbitrary data from the database via parameter
+      manipulation in the meshery/meshery API. The vulnerability was in Go code using
+      database/sql with unsanitized query construction.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-35181
+  - id: CVE-2024-35182
+    description: |
+      Companion SQL injection vulnerability in Meshery (same codebase, different endpoint).
+      CVSS 8.8. Both CVE-2024-35181 and CVE-2024-35182 were fixed in v0.7.22.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-35182
+  - id: CVE-2024-37896
+    description: |
+      SQL injection in gin-vue-admin (popular Go administrative framework, 20k+ GitHub stars).
+      CVSS 9.8 Critical. Unsanitized query parameters in GORM-based queries allowed
+      unauthenticated SQL injection enabling full database read.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-37896
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection (SQL injection is the primary sub-category)"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-89 — SQL Injection (ranked #6)"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 6.2.4 — Software engineering techniques to prevent or mitigate
+      common software attacks, including injection attacks. SQL injection must be
+      addressed in all applications that handle cardholder data.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SI-10 — Information Input Validation"
+  - standard: HIPAA Security Rule
+    requirement: "§164.312(a)(1) — Access control; database access must be protected"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "Go database/sql package documentation"
+    url: https://pkg.go.dev/database/sql
+  - title: "Go database/sql tutorial — The Go Wiki"
+    url: https://go.dev/doc/database/
+  - title: "Avoiding SQL injection — Go database documentation"
+    url: https://go.dev/doc/database/sql-injection
+  - title: "OWASP SQL Injection Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: "OWASP Testing Guide: Testing for SQL Injection (v4.2)"
+    url: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05-Testing_for_SQL_Injection
+  - title: "CVE-2024-35181 — Meshery SQL injection (GitHub Advisory)"
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-35181
+  - title: "CVE-2024-37896 — gin-vue-admin SQL injection (GitHub Advisory)"
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-37896
+
+# Similar Rules
+similar_rules:
+  - GO-SQLI-002
+  - GO-SQLI-003
+  - GO-GORM-SQLI-001
+  - GO-GORM-SQLI-002
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

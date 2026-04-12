@@ -1,14 +1,63 @@
 {
     "category": "golang",
     "language": "Go",
-    "description": "Security rules for Go applications including SQL injection, command injection, path traversal, and credential management vulnerabilities",
+    "description": "Security rules for Go applications covering SQL injection, command injection, XSS, path traversal, SSRF, weak cryptography, JWT vulnerabilities, insecure network, and credential management",
     "bundles": {
         "security": {
             "name": "Go Security Rules",
-            "description": "Critical and high-severity security vulnerabilities in Go code (GO-SEC-001 through GO-SEC-004)",
+            "description": "22 security rules for Go applications covering CRITICAL and HIGH severity vulnerabilities",
             "severity_filter": ["CRITICAL", "HIGH"],
             "recommended": true,
-            "tags": ["security", "go", "cwe", "owasp", "injection", "credentials"]
+            "tags": ["security", "go", "cwe", "owasp", "injection", "credentials", "crypto", "xss", "ssrf", "jwt"]
+        },
+        "sql-injection": {
+            "name": "Go SQL Injection Rules",
+            "description": "SQL injection detection for database/sql (GO-SEC-001), pgx (GO-SQLI-002), sqlx (GO-SQLI-003), and GORM (GO-GORM-SQLI-001, GO-GORM-SQLI-002)",
+            "severity_filter": ["CRITICAL", "HIGH"],
+            "recommended": true,
+            "tags": ["security", "sql-injection", "go", "cwe-89", "owasp-a03"]
+        },
+        "xss": {
+            "name": "Go XSS Rules",
+            "description": "Cross-Site Scripting detection via unsafe html/template type conversions (GO-XSS-001), fmt.Fprintf (GO-XSS-002), and io.WriteString (GO-XSS-003)",
+            "severity_filter": ["HIGH"],
+            "recommended": true,
+            "tags": ["security", "xss", "go", "cwe-79", "owasp-a03"]
+        },
+        "crypto": {
+            "name": "Go Cryptography Rules",
+            "description": "Weak cryptography detection: MD5 (GO-CRYPTO-001), SHA1 (GO-CRYPTO-002), DES (GO-CRYPTO-003), RC4 (GO-CRYPTO-004), MD5 for passwords (GO-CRYPTO-005)",
+            "severity_filter": ["CRITICAL", "HIGH"],
+            "recommended": true,
+            "tags": ["security", "crypto", "go", "cwe-327", "cwe-328", "owasp-a02"]
+        },
+        "injection": {
+            "name": "Go Injection Rules",
+            "description": "Command injection (GO-SEC-002), SSRF via resty (GO-SSRF-001), SSRF via net/http (GO-SSRF-002), path traversal (GO-PATH-001), open redirect (GO-REDIRECT-001)",
+            "severity_filter": ["CRITICAL", "HIGH"],
+            "recommended": true,
+            "tags": ["security", "injection", "ssrf", "path-traversal", "go", "cwe-78", "cwe-22", "cwe-601", "cwe-918", "owasp-a03"]
+        },
+        "network": {
+            "name": "Go Network Security Rules",
+            "description": "Insecure network: HTTP without TLS (GO-NET-001), gRPC without TLS (GO-NET-002)",
+            "severity_filter": ["HIGH"],
+            "recommended": true,
+            "tags": ["security", "network", "tls", "grpc", "go", "cwe-300", "cwe-319", "owasp-a02", "owasp-a07"]
+        },
+        "jwt": {
+            "name": "Go JWT Security Rules",
+            "description": "JWT vulnerability detection: ParseUnverified skips signature validation (GO-JWT-002)",
+            "severity_filter": ["HIGH"],
+            "recommended": true,
+            "tags": ["security", "jwt", "go", "cwe-345", "owasp-a08"]
+        },
+        "secrets": {
+            "name": "Go Secrets and Credentials Rules",
+            "description": "Hardcoded credential detection: credential-named variables flowing into function calls (GO-SEC-004)",
+            "severity_filter": ["HIGH"],
+            "recommended": true,
+            "tags": ["security", "credentials", "hardcoded-secrets", "go", "cwe-798", "owasp-a07"]
         }
     }
 }

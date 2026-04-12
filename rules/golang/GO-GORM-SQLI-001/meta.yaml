@@ -1,0 +1,194 @@
+# Rule Identity
+id: GO-GORM-SQLI-001
+name: SQL Injection via GORM Raw/Exec
+short_description: User-controlled input flows into GORM Raw() or Exec() raw SQL methods without parameterization — GORM's ORM safety guarantees do not apply to Raw/Exec with string concatenation.
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-GORM-SQLI-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - sql-injection
+  - gorm
+  - raw-sql
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  GORM is the most widely used Go ORM library. Its query builder methods (Where, Find,
+  First, Create, etc.) automatically parameterize struct conditions — those are generally
+  safe. However, GORM provides Raw() and Exec() methods for executing arbitrary SQL,
+  and these are vulnerable to injection when user input is concatenated into the query
+  string rather than passed as parameterized arguments.
+
+  GORM's parameterization syntax uses `?` positional placeholders for MySQL/SQLite and
+  `@name` named parameters for all databases. The critical mistake is using fmt.Sprintf
+  or string concatenation to build the query string passed to Raw()/Exec().
+
+  **CVE-2024-37896** (gin-vue-admin, CVSS 9.8 Critical): The most prominent recent Go
+  SQL injection CVE involved a GORM-based application where query parameters were passed
+  to GORM methods without sanitization, enabling authenticated attackers to perform full
+  SQL injection. gin-vue-admin has 20,000+ GitHub stars and is used in many production
+  administrative systems.
+
+  **GORM Security documentation** explicitly warns: "Raw SQL user inputs should be sanitized
+  to prevent SQL injection." The GORM docs list known unsafe patterns, including passing
+  user input directly to Raw(), Exec(), Order(), Group(), and Having().
+
+  **The false sense of security problem**: Developers using GORM often assume the ORM
+  prevents SQL injection everywhere. The Raw/Exec escape hatch is frequently added for
+  complex queries and is not protected by GORM's builder safety.
+
+message: |
+  User-controlled input flows into GORM Raw() or Exec() without parameterization.
+  Use db.Raw("SELECT * WHERE name = ?", name) with ? placeholders, or use GORM's
+  struct-based query builder which parameterizes automatically.
+
+security_implications:
+  - title: Bypasses ORM Safety Assumptions
+    description: |
+      GORM's structured query methods (Where with struct, Find, First) are parameterized
+      automatically. The Raw/Exec pattern breaks this guarantee. Developers who trust GORM
+      for safety may not inspect Raw/Exec calls during security review.
+  - title: Full Database Exfiltration via UNION
+    description: |
+      UNION SELECT injection against a GORM Raw() call can dump arbitrary tables.
+      GORM automatically scans UNION results into the destination struct — making
+      exfiltrated data immediately available to the attacker in the response.
+  - title: Blind Injection via Scan()
+    description: |
+      Even when Raw().Scan() appears to limit output to the expected struct fields,
+      blind time-based injection (pg_sleep, SLEEP, WAITFOR) enables data exfiltration
+      via timing channels.
+
+vulnerable_example: |
+  // VULNERABLE: GORM Raw with string concatenation
+  import "gorm.io/gorm"
+
+  func searchProducts(db *gorm.DB, r *http.Request) {
+      search := r.FormValue("search")
+      var results []Product
+      // Attacker sends: search=' OR '1'='1' --
+      db.Raw("SELECT * FROM products WHERE name = '" + search + "'").Scan(&results)
+  }
+
+  // VULNERABLE: GORM Exec with fmt.Sprintf
+  func updateUserRole(db *gorm.DB, r *http.Request) {
+      userID := r.FormValue("user_id")
+      role := r.FormValue("role")
+      query := fmt.Sprintf("UPDATE users SET role = '%s' WHERE id = %s", role, userID)
+      db.Exec(query)
+  }
+
+  // VULNERABLE: GORM Raw with dynamic WHERE clause
+  func filterUsers(db *gorm.DB, r *http.Request) {
+      field := r.FormValue("field")
+      value := r.FormValue("value")
+      var users []User
+      db.Raw("SELECT * FROM users WHERE " + field + " = '" + value + "'").Scan(&users)
+  }
+
+secure_example: |
+  // SECURE: GORM Raw with ? placeholders
+  func searchProducts(db *gorm.DB, r *http.Request) {
+      search := r.FormValue("search")
+      var results []Product
+      db.Raw("SELECT * FROM products WHERE name LIKE ?", "%"+search+"%").Scan(&results)
+  }
+
+  // SECURE: GORM Exec with ? placeholders
+  func updateUserRole(db *gorm.DB, r *http.Request) {
+      userID := r.FormValue("user_id")
+      role := r.FormValue("role")
+      db.Exec("UPDATE users SET role = ? WHERE id = ?", role, userID)
+  }
+
+  // SECURE: GORM struct-based query builder (automatically parameterized)
+  func getActiveUsers(db *gorm.DB, r *http.Request) {
+      status := r.FormValue("status")
+      var users []User
+      // Struct condition: GORM parameterizes the value automatically
+      db.Where(&User{Status: status}).Find(&users)
+  }
+
+  // SECURE: named parameters with @name syntax
+  func findUserByName(db *gorm.DB, name string) {
+      var user User
+      db.Raw("SELECT * FROM users WHERE name = @name", sql.Named("name", name)).Scan(&user)
+  }
+
+recommendations:
+  - Use ? positional placeholders in GORM Raw() and Exec(): db.Raw("WHERE id = ?", id).
+  - Use @name named parameters for complex queries with multiple reused values.
+  - Prefer GORM's struct-based query builder (Where, Find, First, Create) over Raw/Exec.
+  - Validate dynamic column/table names against an explicit allowlist before use.
+  - Enable GORM's Logger in development to review generated SQL for unexpected patterns.
+  - See GORM security documentation for the authoritative list of unsafe patterns.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources (net/http, gin, echo, fiber) to gorm.DB
+  Raw() and Exec() methods with global inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2024-37896
+    description: |
+      SQL injection in gin-vue-admin (20k+ GitHub stars, popular Go admin framework).
+      CVSS 9.8 Critical. Unsanitized query parameters passed to GORM methods allowed
+      authenticated attackers to perform full SQL injection enabling database read.
+      Fixed in v2.6.4.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-37896
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-89 — SQL Injection (ranked #6)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "GORM Security documentation"
+    url: https://gorm.io/docs/security.html
+  - title: "GORM SQL Builder documentation"
+    url: https://gorm.io/docs/sql_builder.html
+  - title: "CVE-2024-37896 — gin-vue-admin SQL injection (GitHub Advisory)"
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-37896
+  - title: "OWASP SQL Injection Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-GORM-SQLI-002
+  - GO-SEC-001
+  - GO-SQLI-003
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,253 @@
+# Rule Identity
+id: GO-SSRF-001
+name: Server-Side Request Forgery via go-resty HTTP Client
+short_description: User-controlled input flows into go-resty HTTP client calls without URL validation, enabling SSRF attacks that steal cloud metadata credentials or probe internal services.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-SSRF-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-918
+    name: "Server-Side Request Forgery (SSRF)"
+    url: https://cwe.mitre.org/data/definitions/918.html
+
+owasp:
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+
+tags:
+  - go
+  - security
+  - ssrf
+  - resty
+  - http-client
+  - cloud-metadata
+  - CWE-918
+  - OWASP-A10
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  Server-Side Request Forgery (SSRF) occurs when an attacker can control the URL for an
+  outbound HTTP request made by the server. The application acts as a proxy, sending
+  requests to attacker-specified destinations that may be unreachable directly.
+
+  **go-resty** (github.com/go-resty/resty) is a popular HTTP client library for Go with
+  a fluent API. When user-controlled input reaches resty's URL parameters (R.Get(), R.Post(),
+  R.SetURL(), etc.) without validation, SSRF vulnerabilities arise.
+
+  **Cloud metadata endpoint attacks** (most critical impact):
+  - **AWS IMDSv1** (169.254.169.254): `GET /latest/meta-data/iam/security-credentials/<role>`
+    returns temporary AWS credentials (AccessKeyId, SecretAccessKey, Token) in JSON.
+    These credentials have the IAM permissions of the EC2 instance role — potentially
+    S3 read/write, RDS access, Lambda invocation, etc. IMDSv1 requires no session token
+    and is accessible from any process on the instance, including SSRF payloads.
+  - **AWS IMDSv2**: Requires a PUT request first to obtain a session token, then GET
+    requests must include `X-aws-ec2-metadata-token`. Mitigates SSRF but is not universal
+    — many older deployments still use IMDSv1.
+  - **GCP metadata**: `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token`
+    returns an OAuth2 access token with the instance's service account permissions.
+    Requires `Metadata-Flavor: Google` header — but many SSRF tools set this automatically.
+  - **Azure IMDS**: `http://169.254.169.254/metadata/instance?api-version=2021-02-01`
+    (requires `Metadata: true` header). Returns instance metadata and managed identity tokens.
+
+  **URL bypass techniques**: Naive host-string matching is bypassed by:
+  - Decimal IP: `http://2130706433` = 127.0.0.1
+  - IPv6: `http://[::1]`, `http://[0:0:0:0:0:ffff:7f00:1]`
+  - IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]`
+  - URL encoding: `http://169.254.169.254%2F` or `http://169.254.169%2e254`
+  - DNS rebinding: hostname resolves to external IP first (passes check), then attacker's
+    DNS returns 169.254.169.254 before the actual HTTP request — bypasses IP allowlisting
+    based on DNS resolution at validation time.
+
+  The correct defense is to validate URLs by resolving them first and checking the
+  **resolved IP address** against a blocklist of private ranges, not just the URL string.
+
+message: |
+  User input flows into go-resty HTTP client call. Validate URLs against an allowlist
+  of permitted hosts AND block private IP ranges (10/8, 172.16/12, 192.168/16, 127/8,
+  169.254.169.254) after DNS resolution — URL string matching is bypassable.
+
+security_implications:
+  - title: Cloud IAM Credential Theft (AWS/GCP/Azure)
+    description: |
+      SSRF to 169.254.169.254 retrieves cloud instance metadata including temporary IAM
+      credentials. An attacker with these credentials can access AWS S3, invoke Lambda,
+      read RDS databases, or perform any action the instance role permits — often providing
+      full account access through privilege escalation via IAM.
+  - title: Internal Service Enumeration
+    description: |
+      The server can probe internal IPs and ports not accessible from the internet.
+      Responses (HTTP status codes, error messages, content length) reveal which services
+      are running, their versions, and internal network topology.
+  - title: Internal API Exploitation
+    description: |
+      Internal services often have weaker authentication assumptions ("only internal
+      clients reach this"). SSRF provides access to admin APIs, monitoring endpoints,
+      and service-to-service APIs without authentication.
+  - title: Kubernetes Service Account Token Theft
+    description: |
+      In Kubernetes environments, SSRF to the Kubernetes API server or the metadata
+      service can retrieve service account tokens. These tokens may have cluster-admin
+      permissions or access to secrets across namespaces.
+
+vulnerable_example: |
+  // VULNERABLE: go-resty with user-controlled URL
+  import "github.com/go-resty/resty/v2"
+
+  func proxyHandler(c *gin.Context) {
+      target := c.Query("url")
+      // Attacker sends: url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
+      client := resty.New()
+      resp, err := client.R().Get(target)
+      if err != nil {
+          c.JSON(500, gin.H{"error": err.Error()})
+          return
+      }
+      c.String(200, resp.String()) // Returns AWS IAM credentials to attacker
+  }
+
+  // VULNERABLE: resty with format string construction
+  func fetchUserAvatar(c *echo.Context) {
+      userID := c.QueryParam("user_id")
+      avatarURL := c.QueryParam("avatar_url")
+      // Attacker sends: avatar_url=http://internal-admin.corp/api/users
+      client := resty.New()
+      resp, _ := client.R().Get(avatarURL)
+      // ...
+  }
+
+secure_example: |
+  // SECURE: allowlist validation + resolved IP check
+  import (
+      "net"
+      "net/url"
+      "strings"
+  )
+
+  var allowedHosts = map[string]bool{
+      "api.partner.com": true,
+      "cdn.example.com": true,
+  }
+
+  // Block private/metadata IP ranges AFTER DNS resolution (prevents DNS rebinding)
+  func isPrivateIP(ip net.IP) bool {
+      privateRanges := []string{
+          "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+          "127.0.0.0/8", "169.254.0.0/16", "::1/128",
+          "fc00::/7", "fe80::/10",
+      }
+      for _, cidr := range privateRanges {
+          _, network, _ := net.ParseCIDR(cidr)
+          if network.Contains(ip) {
+              return true
+          }
+      }
+      return false
+  }
+
+  func validateURL(rawURL string) error {
+      parsed, err := url.Parse(rawURL)
+      if err != nil {
+          return fmt.Errorf("invalid URL")
+      }
+      if parsed.Scheme != "https" {
+          return fmt.Errorf("only HTTPS allowed")
+      }
+      if !allowedHosts[parsed.Hostname()] {
+          return fmt.Errorf("host not in allowlist")
+      }
+      // Resolve IP and check it's not private (prevents DNS rebinding)
+      addrs, err := net.LookupHost(parsed.Hostname())
+      if err != nil || len(addrs) == 0 {
+          return fmt.Errorf("DNS resolution failed")
+      }
+      for _, addr := range addrs {
+          if isPrivateIP(net.ParseIP(addr)) {
+              return fmt.Errorf("resolved IP is in private range")
+          }
+      }
+      return nil
+  }
+
+  func proxyHandler(c *gin.Context) {
+      target := c.Query("url")
+      if err := validateURL(target); err != nil {
+          c.JSON(400, gin.H{"error": err.Error()})
+          return
+      }
+      client := resty.New()
+      resp, err := client.R().Get(target)
+      // ...
+  }
+
+recommendations:
+  - Validate outbound URLs against an explicit allowlist of permitted hosts.
+  - After DNS resolution, verify the resolved IP is not in private ranges (10/8, 172.16/12,
+    192.168/16, 127/8, 169.254/16) to prevent DNS rebinding bypass.
+  - Block cloud metadata endpoints: 169.254.169.254 and metadata.google.internal.
+  - Enforce HTTPS-only for outbound requests in security-sensitive contexts.
+  - Disable HTTP redirects in the HTTP client or re-validate URLs after each redirect.
+  - Enable AWS IMDSv2 (instance metadata service v2) to require session tokens.
+  - Apply network-level egress filtering as defense-in-depth.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources (gin.Context, echo.Context, fiber.Ctx,
+  net/http.Request) to go-resty client methods (R().Get, R().Post, R().Execute,
+  R().SetURL) with global inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2019-11510
+    description: |
+      Pulse Secure VPN SSRF: server fetched user-controlled URLs without validation,
+      leading to credential exfiltration. Not Go-specific but demonstrates the
+      impact pattern — remote access credentials stolen from enterprise VPN users.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-11510
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A10:2021 — Server-Side Request Forgery (SSRF) — added as a standalone category in 2021"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-918 — Server-Side Request Forgery"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against server-side request forgery attacks"
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SC-7 — Boundary Protection; CA-3 — System Interconnections"
+
+# References
+references:
+  - title: "CWE-918: Server-Side Request Forgery — MITRE"
+    url: https://cwe.mitre.org/data/definitions/918.html
+  - title: "OWASP SSRF Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+  - title: "OWASP Top 10 A10:2021 — SSRF"
+    url: https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+  - title: "AWS IMDSv1 vs IMDSv2 — AWS documentation"
+    url: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
+  - title: "GCP Instance Metadata — Cloud documentation"
+    url: https://cloud.google.com/compute/docs/metadata/overview
+  - title: "go-resty documentation"
+    url: https://github.com/go-resty/resty
+  - title: "RFC 3986 — Uniform Resource Identifier (URI)"
+    url: https://www.rfc-editor.org/rfc/rfc3986
+
+# Similar Rules
+similar_rules:
+  - GO-SSRF-002
+  - GO-REDIRECT-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

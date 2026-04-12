@@ -1,0 +1,253 @@
+# Rule Identity
+id: GO-CRYPTO-001
+name: Use of MD5 Weak Hash Algorithm
+short_description: Detects use of MD5 (crypto/md5) which is cryptographically broken — collision attacks are feasible in seconds and GPU cracking reaches 164 billion hashes/second.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-CRYPTO-001
+
+# Vulnerability Details
+cwe:
+  - id: CWE-328
+    name: "Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+  - id: CWE-916
+    name: "Use of Password Hash With Insufficient Computational Effort"
+    url: https://cwe.mitre.org/data/definitions/916.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+tags:
+  - go
+  - security
+  - crypto
+  - md5
+  - weak-hash
+  - collision-attack
+  - CWE-328
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  MD5 was designed in 1992 and has been cryptographically broken since Xiaoyun Wang et al.
+  demonstrated practical collision attacks at CRYPTO 2004. The Wang-Yu attack finds two
+  distinct inputs with the same MD5 digest in under one second on modern hardware using
+  differential cryptanalysis with modular arithmetic differentials.
+
+  The Flame malware (June 2012) is the highest-profile real-world exploitation: Flame's
+  operators used a chosen-prefix MD5 collision to forge a Microsoft code-signing certificate.
+  The forged certificate passed Windows Update's chain-of-trust validation, allowing Flame
+  to spread via a man-in-the-middle attack against Windows Update — the first documented
+  deployment of a live MD5 collision attack in the wild.
+
+  On an NVIDIA RTX 4090, hashcat computes 164.1 billion MD5 hashes per second. An 8-character
+  mixed-case alphanumeric password space (218 trillion combinations) is exhausted in under
+  22 minutes. Any MD5-hashed password database is practically unprotected against GPU cracking.
+
+  MD5 is not recognized as an approved algorithm in any FIPS 140-2/3 validated cryptographic
+  module. NIST SP 800-131A Rev 2 does not list MD5 as acceptable for any cryptographic security
+  purpose. The Go standard library retains crypto/md5 only for legacy interoperability —
+  the package documentation notes it is "cryptographically broken and should not be used
+  for secure applications."
+
+  **Acceptable uses**: Non-security file transfer checksums (detecting accidental bit-flips
+  when an adversary is not present), partition key derivation in distributed databases,
+  legacy cache key generation where collision does not have security consequences.
+
+message: |
+  MD5 is cryptographically broken — collision attacks are practical and GPU cracking runs at
+  164 billion hashes/second. Replace crypto/md5 with crypto/sha256 (general hashing) or
+  golang.org/x/crypto/bcrypt / argon2id (password hashing).
+
+security_implications:
+  - title: Forged Digital Signatures
+    description: |
+      A chosen-prefix MD5 collision allows an attacker to create two documents with the same
+      MD5 digest but different content. If a CA signs one, the signature is valid for the
+      other. The Flame malware exploited exactly this to forge a Microsoft Windows Update
+      code-signing certificate (June 2012).
+  - title: File Integrity Bypass
+    description: |
+      If MD5 is used to verify file integrity (firmware updates, software downloads), an
+      attacker who can intercept the download or control the distribution server can replace
+      a legitimate binary with a malicious one that shares the same MD5 hash, passing the
+      integrity check.
+  - title: Password Database Cracking
+    description: |
+      MD5 password hashes can be cracked at 164 billion attempts per second on a single
+      RTX 4090 GPU. An 8-character password is recovered in under 22 minutes. Rainbow tables
+      for unsalted MD5 cover most real-world passwords. MD5-hashed password databases from
+      breaches are routinely cracked and published within hours.
+  - title: Certificate Spoofing
+    description: |
+      PKI systems that use MD5 for certificate fingerprinting or signing are vulnerable to
+      certificate impersonation. The CA/Browser Forum banned MD5 in TLS certificates in 2008
+      after the Sotirov et al. rogue CA attack.
+
+vulnerable_example: |
+  // VULNERABLE: MD5 for file integrity — collision possible
+  import "crypto/md5"
+
+  func checksumFile(data []byte) string {
+      h := md5.Sum(data)
+      return fmt.Sprintf("%x", h)
+  }
+
+  // VULNERABLE: MD5 for password storage — crackable in seconds
+  func hashPassword(password string) string {
+      h := md5.Sum([]byte(password))
+      return fmt.Sprintf("%x", h)
+  }
+
+  // VULNERABLE: MD5 for token generation — predictable
+  func generateToken(userID string) string {
+      h := md5.Sum([]byte(userID + time.Now().String()))
+      return fmt.Sprintf("%x", h)
+  }
+
+secure_example: |
+  // SECURE: SHA-256 for general integrity hashing
+  import "crypto/sha256"
+
+  func checksumFile(data []byte) string {
+      h := sha256.Sum256(data)
+      return fmt.Sprintf("%x", h)
+  }
+
+  // SECURE: bcrypt for password storage (minimum cost 12 for 2024+)
+  import "golang.org/x/crypto/bcrypt"
+
+  func hashPassword(password string) (string, error) {
+      hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+      if err != nil {
+          return "", err
+      }
+      return string(hash), nil
+  }
+
+  // SECURE: argon2id for new systems (PHC winner, memory-hard)
+  import (
+      "crypto/rand"
+      "golang.org/x/crypto/argon2"
+  )
+
+  func hashPasswordArgon2(password string) ([]byte, []byte, error) {
+      salt := make([]byte, 16)
+      if _, err := rand.Read(salt); err != nil {
+          return nil, nil, err
+      }
+      // OWASP recommended: time=1, memory=46MiB, threads=1
+      hash := argon2.IDKey([]byte(password), salt, 1, 46*1024, 1, 32)
+      return hash, salt, nil
+  }
+
+  // SECURE: crypto/rand for token generation
+  import "crypto/rand"
+
+  func generateToken() (string, error) {
+      b := make([]byte, 32)
+      if _, err := rand.Read(b); err != nil {
+          return "", err
+      }
+      return fmt.Sprintf("%x", b), nil
+  }
+
+recommendations:
+  - Replace md5.New() and md5.Sum() with sha256.New() and sha256.Sum256() for integrity hashing.
+  - For password hashing, use golang.org/x/crypto/bcrypt (cost >= 12) or argon2.IDKey.
+  - Never use MD5 for digital signatures, certificate fingerprints, or token generation.
+  - If migrating from MD5 passwords: at next successful login, re-hash with bcrypt/argon2id.
+  - For TLS/HMAC: the Go crypto/tls package and crypto/hmac with SHA-256 are safe defaults.
+  - MD5 is acceptable ONLY for non-security checksums (detecting accidental bit-flips) when
+    no adversary is present and cannot substitute inputs.
+
+detection_scope: |
+  Detects all calls to crypto/md5 package methods (New(), Sum()). Fires on any use —
+  regardless of context — because MD5 has no safe use in security-critical paths and
+  sha256 is a zero-friction drop-in replacement.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2012-0013
+    description: |
+      Flame malware Windows Update MiTM: Flame's operators used a chosen-prefix MD5
+      collision to forge a Microsoft Terminal Services Licensing certificate with
+      code-signing capability, then used it to sign Flame payloads distributed via
+      Windows Update. First documented in-the-wild use of an MD5 collision attack.
+    url: https://www.microsoft.com/en-us/msrc/blog/2012/06/flame-malware-collision-attack-explained
+
+# Compliance
+compliance:
+  - standard: NIST SP 800-131A Rev 2 (2019)
+    requirement: |
+      MD5 was never approved. Table 1 lists approved hash algorithms: SHA-1 (restricted),
+      SHA-2 family (approved), SHA-3 family (approved). MD5 does not appear.
+      URL: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - standard: FIPS 140-2/3
+    requirement: |
+      MD5 is not an approved algorithm for use in FIPS 140-2/3 validated modules.
+      FIPS-approved algorithms are listed in FIPS 180-4 (SHA family) and FIPS 202 (SHA-3).
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 4.2.1 — Strong cryptography required for transmission of cardholder data.
+      Requirement 6.2.4 — Protect against cryptographic failures.
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures"
+
+# References
+references:
+  - title: "IACR: Wang et al. MD5 Collision Attack (2004)"
+    url: https://eprint.iacr.org/2004/199.pdf
+  - title: "IACR: Wang & Yu 'How to Break MD5' (Eurocrypt 2005)"
+    url: https://iacr.org/archive/eurocrypt2005/34940019/34940019.pdf
+  - title: "Flame malware collision attack explained — Microsoft MSRC"
+    url: https://www.microsoft.com/en-us/msrc/blog/2012/06/flame-malware-collision-attack-explained
+  - title: "Analyzing the MD5 collision in Flame — Trail of Bits"
+    url: https://blog.trailofbits.com/2012/06/11/analyzing-the-md5-collision-in-flame/
+  - title: "Flame, certificates, collisions. Oh my. — Matthew Green's Cryptography Blog"
+    url: https://blog.cryptographyengineering.com/2012/06/05/flame-certificates-collisions-oh-my/
+  - title: "HashClash — MD5 chosen-prefix collision tool (Marc Stevens, CWI)"
+    url: https://github.com/cr-marcstevens/hashclash
+  - title: "NIST SP 800-131A Revision 2 — Transitioning Cryptographic Algorithms"
+    url: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - title: "NIST SP 800-131A Rev 2 — Transitioning Cryptographic Algorithms (CSRC)"
+    url: https://csrc.nist.gov/pubs/sp/800/131/a/r2/final
+  - title: "Hashcat RTX 4090 benchmark (MD5: 164.1 GH/s)"
+    url: https://gist.github.com/Chick3nman/32e662a5bb63bc4f51b847bb422222fd
+  - title: "OWASP Password Storage Cheat Sheet (bcrypt, argon2id recommendations)"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+  - title: "Go crypto/md5 package documentation"
+    url: https://pkg.go.dev/crypto/md5
+  - title: "Go crypto/sha256 package documentation"
+    url: https://pkg.go.dev/crypto/sha256
+  - title: "Go golang.org/x/crypto/bcrypt package"
+    url: https://pkg.go.dev/golang.org/x/crypto/bcrypt
+  - title: "Go golang.org/x/crypto/argon2 package"
+    url: https://pkg.go.dev/golang.org/x/crypto/argon2
+  - title: "RFC 9106 — Argon2 Memory-Hard Function for Password Hashing"
+    url: https://www.rfc-editor.org/rfc/rfc9106
+  - title: "CWE-328: Use of Weak Hash"
+    url: https://cwe.mitre.org/data/definitions/328.html
+
+# Similar Rules
+similar_rules:
+  - GO-CRYPTO-002
+  - GO-CRYPTO-003
+  - GO-CRYPTO-004
+  - GO-CRYPTO-005
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

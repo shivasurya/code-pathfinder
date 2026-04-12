@@ -1,0 +1,202 @@
+# Rule Identity
+id: GO-SQLI-003
+name: SQL Injection via sqlx
+short_description: User-controlled input reaches sqlx query methods without parameterization — sqlx's convenience wrappers (Get, Select, NamedExec) are also vulnerable when used with raw string concatenation.
+
+# Classification
+severity: CRITICAL
+category: security
+language: go
+ruleset: golang/GO-SQLI-003
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - sql-injection
+  - sqlx
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  sqlx (github.com/jmoiron/sqlx) is a popular Go library that extends database/sql
+  with struct scanning, named parameters, and more ergonomic query methods like Get,
+  Select, and NamedExec. sqlx wraps database/sql and supports the same placeholder
+  syntax ($1/$2 for PostgreSQL, ? for MySQL/SQLite).
+
+  Despite sqlx's convenience features, the underlying query execution is identical to
+  database/sql — SQL injection occurs when user input is concatenated into the query
+  string rather than passed as a parameterized argument.
+
+  **sqlx-specific pitfalls**:
+  - `db.Get(&dest, "SELECT * FROM users WHERE id = " + id)` — vulnerable Get
+  - `db.Select(&dest, query)` where query is built with fmt.Sprintf — vulnerable Select
+  - `db.NamedExec(query, params)` where query string itself contains concatenation
+  - `db.Queryx("SELECT " + column + " FROM table")` — dynamic column injection
+
+  **Named parameters** (`:name` syntax) in sqlx's NamedExec/NamedQuery are safe for
+  values — but the query template string itself must not contain user input.
+
+  sqlx's `In()` helper is also worth noting: `sqlx.In("SELECT * WHERE id IN (?)", ids)`
+  correctly handles expanding a slice to multiple placeholders. Do not build IN clauses
+  manually with string concatenation.
+
+message: |
+  User-controlled input flows into sqlx query methods without parameterization.
+  Use positional $1 placeholders or sqlx named parameters (:name) with NamedExec/NamedQuery.
+
+security_implications:
+  - title: Struct Scanning of Injected Data
+    description: |
+      sqlx's Get() and Select() scan query results directly into Go structs. SQL injection
+      via these methods can return arbitrary data from any table, not just the target struct's
+      table — the data is silently scanned into struct fields that match column names.
+  - title: Authentication Bypass via Get()
+    description: |
+      `db.Get(&user, "SELECT * FROM users WHERE username='"+u+"' AND password='"+p+"'")`
+      is bypassed by supplying `username=admin'--` which comments out the password check.
+  - title: Dynamic Column/Table Injection
+    description: |
+      Injecting into SELECT column lists or table names is not preventable by parameterization
+      alone. Dynamic schema or column selection must use strict allowlist validation.
+
+vulnerable_example: |
+  // VULNERABLE: sqlx Get with string concatenation
+  import "github.com/jmoiron/sqlx"
+
+  func getUser(db *sqlx.DB, r *http.Request) {
+      id := r.FormValue("id")
+      var user User
+      // Attacker sends: id=1 OR 1=1 LIMIT 1
+      db.Get(&user, "SELECT * FROM users WHERE id = " + id)
+  }
+
+  // VULNERABLE: sqlx Select with fmt.Sprintf
+  func listOrders(db *sqlx.DB, r *http.Request) {
+      status := r.FormValue("status")
+      var orders []Order
+      query := fmt.Sprintf("SELECT * FROM orders WHERE status = '%s'", status)
+      db.Select(&orders, query)
+  }
+
+  // VULNERABLE: dynamic column in query
+  func sortedUsers(db *sqlx.DB, r *http.Request) {
+      sortCol := r.FormValue("sort")
+      var users []User
+      db.Select(&users, "SELECT * FROM users ORDER BY "+sortCol)
+  }
+
+secure_example: |
+  // SECURE: sqlx Get with positional parameter
+  func getUser(db *sqlx.DB, r *http.Request) {
+      id := r.FormValue("id")
+      var user User
+      if err := db.Get(&user, "SELECT * FROM users WHERE id = $1", id); err != nil {
+          // handle error
+      }
+  }
+
+  // SECURE: sqlx Select with positional parameter
+  func listOrders(db *sqlx.DB, r *http.Request) {
+      status := r.FormValue("status")
+      var orders []Order
+      if err := db.Select(&orders, "SELECT * FROM orders WHERE status = $1", status); err != nil {
+          // handle error
+      }
+  }
+
+  // SECURE: sqlx NamedExec with named parameters
+  func createUser(db *sqlx.DB, r *http.Request) {
+      user := User{
+          Name:  r.FormValue("name"),
+          Email: r.FormValue("email"),
+      }
+      _, err := db.NamedExec("INSERT INTO users (name, email) VALUES (:name, :email)", &user)
+      if err != nil {
+          // handle error
+      }
+  }
+
+  // SECURE: IN clause using sqlx.In
+  func getUsersByIDs(db *sqlx.DB, ids []int) ([]User, error) {
+      query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", ids)
+      if err != nil {
+          return nil, err
+      }
+      query = db.Rebind(query) // convert ? to $1/$2 for PostgreSQL
+      var users []User
+      return users, db.Select(&users, query, args...)
+  }
+
+  // SECURE: dynamic ORDER BY with allowlist
+  func sortedUsers(db *sqlx.DB, r *http.Request) {
+      sortCol := r.FormValue("sort")
+      allowed := map[string]bool{"name": true, "created_at": true, "email": true}
+      if !allowed[sortCol] {
+          sortCol = "created_at"
+      }
+      var users []User
+      db.Select(&users, "SELECT * FROM users ORDER BY "+sortCol+" ASC")
+  }
+
+recommendations:
+  - Use sqlx positional parameters ($1, ? depending on database driver) for all user values.
+  - Use sqlx.NamedExec / db.NamedQuery with :name syntax for complex struct-mapped queries.
+  - Use sqlx.In() for IN clauses with variable argument lists — never build them with join.
+  - For dynamic ORDER BY columns, validate against an explicit string allowlist.
+  - Validate numeric IDs with strconv.Atoi before use (also acts as a sanitizer).
+  - Keep sqlx and the underlying driver up to date.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources (net/http, gin, echo, fiber, chi) to sqlx
+  DB/Tx/Stmt query methods (Query, QueryContext, Queryx, QueryRowx, Get, Select,
+  NamedExec, NamedQuery, Exec, ExecContext) with global inter-procedural scope.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-89 — SQL Injection (ranked #6)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "sqlx — Extensions to database/sql (GitHub)"
+    url: https://github.com/jmoiron/sqlx
+  - title: "sqlx documentation (pkg.go.dev)"
+    url: https://pkg.go.dev/github.com/jmoiron/sqlx
+  - title: "OWASP SQL Injection Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: "Go database SQL injection avoidance — official documentation"
+    url: https://go.dev/doc/database/sql-injection
+
+# Similar Rules
+similar_rules:
+  - GO-SEC-001
+  - GO-SQLI-002
+  - GO-GORM-SQLI-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

@@ -1,0 +1,209 @@
+# Rule Identity
+id: GO-GORM-SQLI-002
+name: SQL Injection via GORM Query Builder Methods
+short_description: User-controlled input flows into GORM query builder methods (Order, Where, Group, Having) that accept raw SQL string fragments — GORM does not escape these clause arguments.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-GORM-SQLI-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-89
+    name: "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+owasp:
+  - id: A03:2021
+    name: Injection
+    url: https://owasp.org/Top10/A03_2021-Injection/
+
+tags:
+  - go
+  - security
+  - sql-injection
+  - gorm
+  - query-builder
+  - order-by-injection
+  - CWE-89
+  - OWASP-A03
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  GORM's query builder methods — Order(), Group(), Having(), Where() with string arguments,
+  Select(), Distinct(), Pluck() — accept raw SQL string fragments for clause construction.
+  Unlike GORM's struct-based conditions which are automatically parameterized, these
+  string-accepting methods pass the argument directly into the SQL clause without escaping.
+
+  **ORDER BY injection** is the most common pattern: sorting direction and column selection
+  are frequently exposed as API parameters (`?sort=name&direction=asc`). ORDER BY cannot
+  be parameterized in SQL (placeholders only work for values, not identifiers like column
+  names). This creates a structural injection risk unless column names are validated against
+  an allowlist before being passed to GORM.
+
+  **GORM's own documentation** explicitly warns about this pattern in the Security section:
+  "User's inputs should be validated before being used as a query parameter. When using
+  Order(), Group(), or Having() with user input, use allowlist validation."
+
+  **Attack example**: `db.Order(r.FormValue("sort"))` with sort value `(SELECT SLEEP(3))`
+  causes a time delay, confirming blind injection. With `name; DROP TABLE users;--` on
+  MySQL, stacked queries may execute.
+
+  **Real-world pattern — Fleet**: Fleet (open-source device management platform, 25k+
+  GitHub stars) has historically exposed API sort parameters directly to GORM's Order()
+  method without allowlist validation. ORDER BY injection is a structural risk in any
+  data-table API that exposes sort column parameters to users.
+
+message: |
+  User-controlled input flows into GORM query builder methods (Order, Group, Having, Where)
+  as raw SQL. Validate against an allowlist of permitted column/clause values — these
+  methods do not parameterize string arguments.
+
+security_implications:
+  - title: Blind Time-Based SQL Injection
+    description: |
+      Injecting `(SELECT SLEEP(5))` (MySQL) or `(SELECT pg_sleep(5))` (PostgreSQL) into
+      an Order() call causes a response delay, confirming injection. Attackers can then
+      exfiltrate data character-by-character via timing channels without any visible
+      output change.
+  - title: ORDER BY Column Enumeration
+    description: |
+      Injecting column names not in the SELECT list (e.g., `password ASC`) causes a
+      database error revealing schema information. This enables attackers to discover
+      table columns for targeted UNION attacks.
+  - title: Stacked Query Execution
+    description: |
+      On MySQL and SQL Server where stacked queries are supported, injected semicolons
+      can terminate the ORDER BY clause and execute additional SQL statements, enabling
+      data manipulation or schema changes.
+  - title: Authenticated API Exploitation
+    description: |
+      These vulnerabilities often appear in administrative API endpoints that expose
+      sort/filter parameters for data tables. Authenticated attackers (including low-privilege
+      users) can exploit these endpoints to access data they should not see.
+
+vulnerable_example: |
+  // VULNERABLE: GORM Order with user input — ORDER BY injection
+  import "gorm.io/gorm"
+
+  func listUsers(db *gorm.DB, c *gin.Context) {
+      sort := c.Query("sort")
+      // Attacker sends: sort=(SELECT SLEEP(5)) or sort=name; DROP TABLE users;--
+      var users []User
+      db.Order(sort).Find(&users) // raw string injected into ORDER BY clause
+  }
+
+  // VULNERABLE: GORM Where with raw string — WHERE clause injection
+  func filterProducts(db *gorm.DB, r *http.Request) {
+      field := r.FormValue("field")
+      value := r.FormValue("value")
+      var products []Product
+      // Attacker sends: field=1=1) OR (1
+      db.Where(field + " = ?", value).Find(&products)
+  }
+
+  // VULNERABLE: GORM Having with user input
+  func groupedStats(db *gorm.DB, r *http.Request) {
+      having := r.FormValue("having")
+      var results []Result
+      db.Group("category").Having(having).Find(&results)
+  }
+
+secure_example: |
+  // SECURE: allowlist validation for ORDER BY column
+  func listUsers(db *gorm.DB, c *gin.Context) {
+      sort := c.Query("sort")
+      dir := c.Query("dir")
+
+      allowedColumns := map[string]bool{
+          "name": true, "created_at": true, "email": true, "last_login": true,
+      }
+      allowedDirs := map[string]bool{"asc": true, "desc": true}
+
+      if !allowedColumns[sort] {
+          sort = "created_at"
+      }
+      if !allowedDirs[strings.ToLower(dir)] {
+          dir = "asc"
+      }
+
+      var users []User
+      db.Order(sort + " " + dir).Find(&users)
+  }
+
+  // SECURE: struct-based Where conditions (auto-parameterized)
+  func filterProducts(db *gorm.DB, r *http.Request) {
+      category := r.FormValue("category")
+      var products []Product
+      // Struct condition: GORM parameterizes automatically
+      db.Where(&Product{Category: category}).Find(&products)
+  }
+
+  // SECURE: typed Where with ? placeholder
+  func getOrdersByStatus(db *gorm.DB, r *http.Request) {
+      status := r.FormValue("status")
+      var orders []Order
+      db.Where("status = ?", status).Find(&orders)
+  }
+
+recommendations:
+  - Validate all user-supplied ORDER BY column names against an explicit string allowlist.
+  - Never pass raw user input to Order(), Group(), Having(), or Select() as a string.
+  - Use GORM struct conditions for WHERE clauses: db.Where(&Model{Field: value}).
+  - Use ? placeholder for string-based Where with values: db.Where("col = ?", value).
+  - For complex filtering APIs, define a mapping from API parameter names to SQL column names.
+  - Enable GORM logging in staging to inspect all generated SQL.
+
+detection_scope: |
+  Tracks taint from HTTP framework sources to GORM query builder methods that accept
+  raw SQL strings: Order(), Group(), Having(), Where() with string first argument,
+  Select(), Joins(), with global inter-procedural scope.
+
+# Real-World CVEs
+cves:
+  - id: CVE-2024-37896
+    description: |
+      SQL injection in gin-vue-admin (popular Go admin framework, 20k+ GitHub stars).
+      CVSS 9.8 Critical. Unsanitized query parameters in GORM query builder methods
+      enabled full SQL injection, demonstrating that GORM's ORM layer does not protect
+      against injection in Order(), Group(), and raw SQL string arguments.
+    url: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-37896
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A03:2021 — Injection"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-89 — SQL Injection (ranked #6)"
+  - standard: PCI DSS v4.0
+    requirement: "Requirement 6.2.4 — Protect against injection attacks"
+
+# References
+references:
+  - title: "CWE-89: SQL Injection — MITRE"
+    url: https://cwe.mitre.org/data/definitions/89.html
+  - title: "GORM Security documentation"
+    url: https://gorm.io/docs/security.html
+  - title: "GORM Query documentation"
+    url: https://gorm.io/docs/query.html
+  - title: "OWASP SQL Injection Prevention Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+  - title: "CWE-89: Improper Neutralization of Special Elements in SQL Command"
+    url: https://cwe.mitre.org/data/definitions/89.html
+
+# Similar Rules
+similar_rules:
+  - GO-GORM-SQLI-001
+  - GO-SEC-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/

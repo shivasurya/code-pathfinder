@@ -1,0 +1,216 @@
+# Rule Identity
+id: GO-NET-002
+name: gRPC Client Without TLS
+short_description: Detects gRPC client using grpc.WithInsecure() or grpc.WithNoTLS() which disables transport encryption — all RPC calls including auth tokens and payloads travel in plaintext.
+
+# Classification
+severity: HIGH
+category: security
+language: go
+ruleset: golang/GO-NET-002
+
+# Vulnerability Details
+cwe:
+  - id: CWE-300
+    name: "Channel Accessible by Non-Endpoint"
+    url: https://cwe.mitre.org/data/definitions/300.html
+  - id: CWE-319
+    name: "Cleartext Transmission of Sensitive Information"
+    url: https://cwe.mitre.org/data/definitions/319.html
+
+owasp:
+  - id: A02:2021
+    name: Cryptographic Failures
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+
+tags:
+  - go
+  - security
+  - grpc
+  - tls
+  - insecure
+  - cleartext
+  - microservices
+  - CWE-300
+  - CWE-319
+  - OWASP-A02
+
+# Author
+author:
+  name: Shivasurya
+  url: https://x.com/sshivasurya
+
+# Content
+description: |
+  gRPC (google.golang.org/grpc) is the dominant RPC framework for Go microservices.
+  By default, gRPC requires transport security. Developers explicitly opt out using
+  `grpc.WithInsecure()` (deprecated in gRPC-Go v1.35+, March 2021) or the replacement
+  `grpc.WithNoTLS()` (insecure.NewCredentials()) — both disable TLS entirely.
+
+  Without TLS, all gRPC communication travels unencrypted:
+  - Authentication tokens in gRPC metadata headers (Bearer tokens, API keys)
+  - Method names and service identifiers
+  - Request and response protobuf payloads
+  - Streaming data (client/server/bidirectional)
+
+  **History of WithInsecure() deprecation**: grpc-go v1.35 (released March 2021)
+  deprecated `grpc.WithInsecure()` and replaced it with `insecure.NewCredentials()`
+  from `google.golang.org/grpc/credentials/insecure`. The rename was intentional —
+  the `insecure` package name makes the security choice explicit. However, both the old
+  and new forms are equally insecure for production traffic.
+
+  **Microservice context**: gRPC is primarily used for service-to-service communication.
+  Many teams assume internal network communication doesn't need TLS because it's "inside
+  the cluster." However:
+  - Kubernetes cluster-internal traffic is not encrypted by default
+  - Container-to-container traffic on the same node bypasses network policies
+  - Service mesh (Istio, Linkerd) can provide mTLS but is not universally deployed
+  - Compromised pods can intercept unencrypted gRPC traffic
+
+  **Mutual TLS (mTLS)** is the recommended pattern for microservices: both client and
+  server present certificates, enabling bidirectional authentication. This prevents
+  a compromised service from accepting connections from unauthorized clients.
+
+message: |
+  grpc.WithInsecure()/WithNoTLS() disables gRPC transport encryption — all RPC payloads
+  and auth tokens travel in cleartext. Use grpc.WithTransportCredentials(credentials.NewTLS(tlsConf))
+  or mutual TLS for production.
+
+security_implications:
+  - title: Auth Token Interception
+    description: |
+      gRPC metadata headers carrying Bearer tokens, API keys, or service account
+      credentials are transmitted in cleartext. Any network observer on the path
+      can capture these credentials and replay them against the target service.
+  - title: Microservice Impersonation
+    description: |
+      Without TLS certificate verification, a compromised service can MITM gRPC calls
+      between services, reading all payloads and injecting crafted responses.
+  - title: Data Exfiltration
+    description: |
+      gRPC streaming calls (often used for bulk data transfer) send their entire
+      payload in plaintext. An observer can capture complete request/response payloads
+      without any decryption.
+  - title: Pod-to-Pod Traffic Exposure
+    description: |
+      In Kubernetes, all pods on the same node share the same network namespace.
+      A compromised pod can use tcpdump to capture unencrypted gRPC traffic between
+      other pods on the same node, bypassing Kubernetes NetworkPolicy.
+
+vulnerable_example: |
+  // VULNERABLE: gRPC with WithInsecure (deprecated but still works)
+  import "google.golang.org/grpc"
+
+  func connectDeprecated(addr string) (*grpc.ClientConn, error) {
+      // grpc.WithInsecure() deprecated since v1.35 but still compiled
+      return grpc.Dial(addr, grpc.WithInsecure())
+  }
+
+  // VULNERABLE: gRPC with insecure.NewCredentials (the new form of WithInsecure)
+  import (
+      "google.golang.org/grpc"
+      "google.golang.org/grpc/credentials/insecure"
+  )
+
+  func connectInsecure(addr string) (*grpc.ClientConn, error) {
+      return grpc.Dial(addr,
+          grpc.WithTransportCredentials(insecure.NewCredentials()))
+  }
+
+secure_example: |
+  // SECURE: standard TLS with system CA roots
+  import (
+      "crypto/tls"
+      "google.golang.org/grpc"
+      "google.golang.org/grpc/credentials"
+  )
+
+  func connectTLS(addr string) (*grpc.ClientConn, error) {
+      tlsConfig := &tls.Config{
+          MinVersion: tls.VersionTLS12,
+      }
+      creds := credentials.NewTLS(tlsConfig)
+      return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+  }
+
+  // SECURE: mutual TLS (mTLS) — client and server both present certificates
+  func connectMTLS(addr, clientCert, clientKey, caCert string) (*grpc.ClientConn, error) {
+      cert, err := tls.LoadX509KeyPair(clientCert, clientKey)
+      if err != nil {
+          return nil, err
+      }
+      caCertPool := x509.NewCertPool()
+      caCertBytes, err := os.ReadFile(caCert)
+      if err != nil {
+          return nil, err
+      }
+      caCertPool.AppendCertsFromPEM(caCertBytes)
+
+      tlsConfig := &tls.Config{
+          Certificates: []tls.Certificate{cert},
+          RootCAs:      caCertPool,
+          MinVersion:   tls.VersionTLS12,
+      }
+      return grpc.Dial(addr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+  }
+
+  // ACCEPTABLE: loopback-only with insecure (local testing, same process)
+  // Only if addr is guaranteed to be "localhost" or "127.0.0.1"
+  func connectLocalTest(addr string) (*grpc.ClientConn, error) {
+      if !strings.HasPrefix(addr, "localhost") && !strings.HasPrefix(addr, "127.0.0.1") {
+          return nil, fmt.Errorf("insecure transport only permitted for localhost")
+      }
+      return grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+  }
+
+recommendations:
+  - Use grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)) for all production connections.
+  - For microservice mesh environments, prefer mutual TLS (mTLS) for bidirectional authentication.
+  - Set tls.Config.MinVersion to tls.VersionTLS12 or tls.VersionTLS13.
+  - grpc.WithInsecure()/WithNoTLS() is only acceptable for localhost-only connections.
+  - Consider Istio or Linkerd for cluster-wide mTLS without per-service configuration.
+  - Use grpc.DialContext with context-based connection management for production.
+
+detection_scope: |
+  Detects calls to grpc.WithInsecure() and usage of insecure.NewCredentials()
+  from google.golang.org/grpc/credentials/insecure. Both forms disable TLS.
+
+# Compliance
+compliance:
+  - standard: OWASP Top 10
+    requirement: "A02:2021 — Cryptographic Failures; A07:2021 — Authentication Failures"
+  - standard: PCI DSS v4.0
+    requirement: |
+      Requirement 4.2.1 — Strong cryptography for transmission of cardholder data.
+      Applies to all service-to-service communication handling cardholder data.
+  - standard: NIST SP 800-53 Rev 5
+    requirement: "SC-8 — Transmission Confidentiality and Integrity"
+  - standard: CWE Top 25 (2024)
+    requirement: "CWE-319 — Cleartext Transmission of Sensitive Information"
+
+# References
+references:
+  - title: "CWE-300: Channel Accessible by Non-Endpoint — MITRE"
+    url: https://cwe.mitre.org/data/definitions/300.html
+  - title: "gRPC Go authentication documentation"
+    url: https://grpc.io/docs/guides/auth/
+  - title: "gRPC Go TLS — pkg.go.dev"
+    url: https://pkg.go.dev/google.golang.org/grpc/credentials
+  - title: "grpc.WithInsecure deprecation note (grpc-go v1.35 changelog)"
+    url: https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-auth-support.md
+  - title: "google.golang.org/grpc/credentials/insecure package"
+    url: https://pkg.go.dev/google.golang.org/grpc/credentials/insecure
+  - title: "OWASP Transport Layer Security Cheat Sheet"
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+
+# Similar Rules
+similar_rules:
+  - GO-NET-001
+
+# Test Files
+tests:
+  positive: tests/positive/
+  negative: tests/negative/
