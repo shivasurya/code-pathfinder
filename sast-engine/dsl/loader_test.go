@@ -162,6 +162,24 @@ this is not valid python`
 		assert.Contains(t, err.Error(), "failed to execute Python rules")
 	})
 
+	t.Run("logs debug message when rule file fails in directory and logger is set", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// File with code analysis decorator but invalid Python — passes early filter, fails execution
+		invalidRule := `from codepathfinder import rule
+this is not valid python`
+		err := os.WriteFile(filepath.Join(tmpDir, "bad_rule.py"), []byte(invalidRule), 0644)
+		require.NoError(t, err)
+
+		ml := &mockLogger{}
+		loader := NewRuleLoader(tmpDir)
+		rules, loadErr := loader.LoadRules(ml)
+
+		require.NoError(t, loadErr) // directory walker swallows individual file errors
+		assert.Empty(t, rules)
+		assert.True(t, ml.debugCalled, "expected Debug to be called when a rule file fails to load")
+	})
+
 	t.Run("handles invalid JSON output", func(t *testing.T) {
 		// Include decorator so it passes early filtering
 		rulesContent := `from codepathfinder import rule
@@ -922,6 +940,16 @@ func TestExecuteRule_TypeConstrainedAttribute_ViaLoader(t *testing.T) {
 	assert.NotEmpty(t, detections, "Should find type_constrained_attribute match")
 	assert.Equal(t, "myapp.views.index", detections[0].FunctionFQN)
 }
+
+// mockLogger captures Debug calls for testing the logger path in loadRulesFromDirectory.
+type mockLogger struct {
+	debugCalled bool
+}
+
+func (m *mockLogger) Debug(_ string, _ ...any)     { m.debugCalled = true }
+func (m *mockLogger) Statistic(_ string, _ ...any) {}
+func (m *mockLogger) IsDebug() bool                { return true }
+func (m *mockLogger) IsVerbose() bool              { return false }
 
 // Helper: Create temporary Python file for testing.
 func createTempPythonFile(t *testing.T, content string) string {
