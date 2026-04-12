@@ -6,15 +6,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// testLogger is a minimal DebugLogger implementation for tests.
+type testLogger struct{ w io.Writer }
+
+func (l *testLogger) Debug(format string, args ...any) {
+	fmt.Fprintf(l.w, "[debug] "+format+"\n", args...)
+}
 
 // startManifestServer starts an httptest server that responds with m.
 func startManifestServer(t *testing.T, m Manifest) *httptest.Server {
@@ -129,7 +137,7 @@ func TestCheck_FetchFails_LoggerDebugCalled(t *testing.T) {
 	srv.Close()
 
 	var buf bytes.Buffer
-	logger := output.NewLoggerWithWriter(output.VerbosityDebug, &buf)
+	logger := &testLogger{w: &buf}
 
 	result := Check(context.Background(), "2.0.0", "cli", Options{
 		ManifestURL: srv.URL,

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 )
 
 // Result bundles whatever is worth surfacing to the user from the manifest.
@@ -60,6 +58,13 @@ type Announcement struct {
 	VersionRange string
 }
 
+// DebugLogger is a minimal interface for receiving debug-level diagnostics.
+// *output.Logger satisfies this interface, but the updatecheck package does
+// not import output — callers pass in whatever logger they have.
+type DebugLogger interface {
+	Debug(format string, args ...any)
+}
+
 // Options configures the behavior of Check.
 type Options struct {
 	// DisableCheck silences the check entirely (equivalent to --no-update-check).
@@ -69,7 +74,8 @@ type Options struct {
 	// HTTPTimeout caps the manifest fetch. Default: 800 ms (CLI), 5 s (MCP).
 	HTTPTimeout time.Duration
 	// Logger receives debug-level diagnostics when the fetch fails.
-	Logger *output.Logger
+	// Pass nil to suppress diagnostics entirely.
+	Logger DebugLogger
 }
 
 // Manifest is the wire-format representation of latest.json.
