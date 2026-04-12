@@ -54,8 +54,29 @@ type InitializeResult struct {
 
 // ServerInfo identifies this MCP server.
 type ServerInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name     string          `json:"name"`
+	Version  string          `json:"version"`
+	Metadata *ServerMetadata `json:"metadata,omitempty"`
+}
+
+// ServerMetadata carries optional update-check information in the initialize
+// response. All fields use omitempty so the payload stays compact when nothing
+// is available.
+type ServerMetadata struct {
+	LatestVersion string            `json:"latest_version,omitempty"`  //nolint:tagliatelle
+	UpdateMessage string            `json:"update_message,omitempty"`  //nolint:tagliatelle
+	ReleaseURL    string            `json:"release_url,omitempty"`     //nolint:tagliatelle
+	Announcement  *AnnouncementInfo `json:"announcement,omitempty"`
+}
+
+// AnnouncementInfo is the wire shape of a single operator announcement
+// embedded in ServerMetadata and in the structured status tool result.
+type AnnouncementInfo struct {
+	ID    string `json:"id"`
+	Level string `json:"level"`
+	Title string `json:"title"`
+	Text  string `json:"text"`
+	URL   string `json:"url,omitempty"`
 }
 
 // Capabilities advertises server features.

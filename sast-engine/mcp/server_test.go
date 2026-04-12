@@ -388,7 +388,7 @@ func TestHandleToolsList(t *testing.T) {
 
 	result, ok := resp.Result.(ToolsListResult)
 	require.True(t, ok)
-	assert.Equal(t, 12, len(result.Tools)) // Docker MCP: 12 tools (added find_dockerfile_instructions, find_compose_services, get_dockerfile_details, get_docker_dependencies)
+	assert.Equal(t, 13, len(result.Tools)) // PR-03: 13 tools (added status)
 }
 
 func TestHandleToolsCall_GetIndexInfo(t *testing.T) {
