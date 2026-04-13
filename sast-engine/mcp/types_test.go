@@ -221,7 +221,7 @@ func TestInitializeResult_Serialization(t *testing.T) {
 		ProtocolVersion: "2024-11-05",
 		ServerInfo: ServerInfo{
 			Name:    "dev.codepathfinder/pathfinder",
-			Version: "2.0.2",
+			Version: "2.1.0",
 		},
 		Capabilities: Capabilities{
 			Tools: &ToolsCapability{ListChanged: true},
