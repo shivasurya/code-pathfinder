@@ -245,7 +245,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Security Scan
-        uses: shivasurya/code-pathfinder@v2.0.2
+        uses: shivasurya/code-pathfinder@v2.1.0
         with:
           ruleset: python/all, docker/all, docker-compose/all
           verbose: true
