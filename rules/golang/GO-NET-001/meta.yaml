@@ -43,12 +43,12 @@ description: |
   or modified by any network observer on the path between client and server.
 
   **Threat model**:
-  - **Same network (Wi-Fi, corporate LAN)**: Any device on the same network can passively
+  - "**Same network (Wi-Fi, corporate LAN)**: Any device on the same network can passively"
     capture all HTTP traffic using standard tools (Wireshark, tcpdump). Coffee shop Wi-Fi,
     shared office networks, and corporate LANs are all attacked this way.
-  - **Network infrastructure**: ISPs, VPN providers, and enterprise proxies can inspect
+  - "**Network infrastructure**: ISPs, VPN providers, and enterprise proxies can inspect"
     and modify HTTP traffic in transit.
-  - **MITM attacks**: ARP poisoning, rogue Wi-Fi access points, and BGP hijacking can
+  - "**MITM attacks**: ARP poisoning, rogue Wi-Fi access points, and BGP hijacking can"
     redirect HTTP traffic through attacker-controlled infrastructure.
 
   **Cookie theft**: Session cookies transmitted over HTTP can be stolen and used to
@@ -176,7 +176,7 @@ recommendations:
   - For automatic certificate management, use golang.org/x/crypto/acme/autocert (Let's Encrypt).
   - Set TLSConfig.MinVersion to tls.VersionTLS12 or tls.VersionTLS13.
   - Add HTTP Strict Transport Security (HSTS) header with a long max-age.
-  - Set secure cookie flags: `Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode`.
+  - "Set secure cookie flags: `Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode`."
   - http.ListenAndServe is acceptable only on loopback (127.0.0.1) for internal health checks.
 
 detection_scope: |

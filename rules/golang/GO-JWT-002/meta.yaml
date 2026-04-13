@@ -67,7 +67,7 @@ description: |
   **RFC 8725 — "JSON Web Token Best Current Practices"** (published 2020) explicitly
   recommends:
   - Always perform algorithm validation against an allowlist
-  - Reject tokens with `"alg": "none"`
+  - "Reject tokens with `\"alg\": \"none\"`"
   - Validate all claims (iss, sub, aud, exp, nbf, iat)
   - Use only one key per algorithm family
 
@@ -184,7 +184,7 @@ secure_example: |
 recommendations:
   - Use jwt.Parse() or jwt.ParseWithClaims() with an explicit key validation function.
   - In the key validation function, check t.Method against the expected signing method type.
-  - Validate all standard claims: iss, aud, exp, nbf, iat using jwt.With* options.
+  - "Validate all standard claims: iss, aud, exp, nbf, iat using jwt.With* options."
   - Explicitly reject tokens with alg=none in the key validation function.
   - Keep golang-jwt/jwt updated — CVE-2024-51744 was fixed in v5.2.2.
   - Store JWT secrets in environment variables or secrets managers, never in source code.

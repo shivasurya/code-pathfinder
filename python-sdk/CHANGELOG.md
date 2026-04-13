@@ -122,12 +122,12 @@ No python-sdk specific changes. Version bump for binary compatibility.
 - **JSON/SARIF/CSV output formats** with file output support (#432)
   - `--output-format json|sarif|csv|text`
   - `--output-file <path>` for saving results
-- **Auto-execution support for Python DSL rules** (#435)
+- **Auto-execution support for Python SDK rules** (#435)
   - Rules execute automatically when scan completes
   - Streamlined workflow without manual execution
 
 ### Fixed
-- `/lib64` bind mount to nsjail for Python DSL rule loading (#438)
+- `/lib64` bind mount to nsjail for Python SDK rule loading (#438)
 - Removed hardcoded version in JSON/SARIF formatters (#436)
 
 ### Removed
@@ -138,8 +138,8 @@ No python-sdk specific changes. Version bump for binary compatibility.
 ### Added
 - **Docker container security rules** expanded from 18 to 47 rules (#428)
   - Container security rule executor and infrastructure (#422)
-  - Python DSL advanced features for Docker rules (#421)
-  - Python DSL core for container rules (#420)
+  - Python SDK advanced features for Docker rules (#421)
+  - Python SDK core for container rules (#420)
   - Docker-compose parser with security queries (#419)
   - Comprehensive instruction converters for all Dockerfile instructions (#418)
   - Tree-sitter Dockerfile parsing integration (#417)
@@ -149,13 +149,13 @@ No python-sdk specific changes. Version bump for binary compatibility.
 
 ### Added
 - **Initial PyPI release of codepathfinder Python SDK**
-- Python DSL for writing custom security rules
+- Python SDK for writing custom security rules
 - Rule execution with dataflow analysis
 - Multiple output formats: JSON, SARIF, CSV, text
 - Binary distribution with automatic platform detection
 
 ### Features
-- **Python DSL Rule System**
+- **Python SDK Rule System**
   - Decorator-based rule definitions with `@rule`
   - Matchers: `calls()` and `variable()` with wildcard support
   - Dataflow analysis: source-to-sink tracking

@@ -167,8 +167,8 @@ recommendations:
   - Replace md5.New() and md5.Sum() with sha256.New() and sha256.Sum256() for integrity hashing.
   - For password hashing, use golang.org/x/crypto/bcrypt (cost >= 12) or argon2.IDKey.
   - Never use MD5 for digital signatures, certificate fingerprints, or token generation.
-  - If migrating from MD5 passwords: at next successful login, re-hash with bcrypt/argon2id.
-  - For TLS/HMAC: the Go crypto/tls package and crypto/hmac with SHA-256 are safe defaults.
+  - "If migrating from MD5 passwords: at next successful login, re-hash with bcrypt/argon2id."
+  - "For TLS/HMAC: the Go crypto/tls package and crypto/hmac with SHA-256 are safe defaults."
   - MD5 is acceptable ONLY for non-security checksums (detecting accidental bit-flips) when
     no adversary is present and cannot substitute inputs.
 

@@ -1,7 +1,7 @@
 """GO-SEC-004: Hardcoded credentials (passwords, API keys, tokens) in source code."""
 
 from codepathfinder import variable, Or
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 @go_rule(

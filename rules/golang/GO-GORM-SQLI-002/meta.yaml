@@ -156,8 +156,8 @@ secure_example: |
 recommendations:
   - Validate all user-supplied ORDER BY column names against an explicit string allowlist.
   - Never pass raw user input to Order(), Group(), Having(), or Select() as a string.
-  - Use GORM struct conditions for WHERE clauses: db.Where(&Model{Field: value}).
-  - Use ? placeholder for string-based Where with values: db.Where("col = ?", value).
+  - "Use GORM struct conditions for WHERE clauses: db.Where(&Model{Field: value})."
+  - "Use ? placeholder for string-based Where with values: db.Where(\"col = ?\", value)."
   - For complex filtering APIs, define a mapping from API parameter names to SQL column names.
   - Enable GORM logging in staging to inspect all generated SQL.
 

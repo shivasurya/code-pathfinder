@@ -49,7 +49,7 @@ REFERENCES:
 
 from codepathfinder.go_rule import QueryType
 from codepathfinder import calls
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 class GoJWTLib(QueryType):

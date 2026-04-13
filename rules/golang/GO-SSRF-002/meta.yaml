@@ -48,9 +48,9 @@ description: |
   - `url.Parse("http://169.254.169.254")` correctly identifies host as "169.254.169.254"
     but `url.Parse("http://169.254.169.254%2Flatest%2Fmeta-data")` or similar URL-encoded
     variants may bypass simple string comparison.
-  - Protocol-relative URLs: `url.Parse("//169.254.169.254")` has an empty Scheme field
+  - "Protocol-relative URLs: `url.Parse(\"//169.254.169.254\")` has an empty Scheme field"
     but Host = "169.254.169.254" — validation that only checks Scheme may miss this.
-  - IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]` — url.Parse sets Host to
+  - "IPv6-mapped IPv4: `http://[::ffff:169.254.169.254]` — url.Parse sets Host to"
     `[::ffff:169.254.169.254]`, which is equal to 169.254.169.254 when parsed as IP.
 
   **Redirect following**: Go's http.Client follows redirects by default. An SSRF
@@ -190,7 +190,7 @@ recommendations:
   - Validate outbound URL hosts against a strict allowlist.
   - After DNS resolution, verify resolved IPs are not in private ranges.
   - Override http.Client.CheckRedirect to validate redirect destinations.
-  - Disable redirects entirely if not needed: CheckRedirect returning http.ErrUseLastResponse.
+  - "Disable redirects entirely if not needed: CheckRedirect returning http.ErrUseLastResponse."
   - Set connection timeouts to prevent slow-loris-style attacks on SSRF targets.
   - Enable AWS IMDSv2 to require session tokens for metadata access.
 

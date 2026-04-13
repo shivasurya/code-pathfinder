@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-OWASP Top 10 Security Rules using codepathfinder Python DSL.
+OWASP Top 10 Security Rules using codepathfinder Python SDK.
 
 This file demonstrates real-world security vulnerability detection patterns
-using the integrated Python DSL → JSON IR → Go executor pipeline.
+using the integrated Python SDK → JSON IR → Go executor pipeline.
 """
 
 from codepathfinder import calls, flows, rule

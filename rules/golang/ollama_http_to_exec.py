@@ -16,7 +16,7 @@ L1: GoGinContext + GoHTTPRequest sources, GoOSExec sink — both sides QueryType
 from codepathfinder.go_rule import GoGinContext, GoHTTPRequest, GoOSExec
 from codepathfinder import flows
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule
+from codepathfinder.go_decorators import go_rule
 
 
 @go_rule(id="OLLAMA-SEC-001", severity="CRITICAL", cwe="CWE-78", owasp="A03:2021")

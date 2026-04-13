@@ -1,5 +1,5 @@
 """
-codepathfinder - Python DSL for static analysis security patterns
+codepathfinder - Python SDK for static analysis security patterns
 
 Examples:
     Basic matchers:

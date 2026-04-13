@@ -11,7 +11,7 @@ import (
 
 // TestQueryType_SQLInjection_EndToEnd simulates the full SQL injection detection
 // pipeline: TypeConstrainedCallIR JSON → executor → detections.
-// This mirrors the Python DSL rule:
+// This mirrors the Python SDK rule:
 //
 //	flows(source=WebRequest.method("get", "args"), sink=DBCursor.method("execute"))
 func TestQueryType_SQLInjection_EndToEnd(t *testing.T) {
@@ -77,7 +77,7 @@ func TestQueryType_SQLInjection_EndToEnd(t *testing.T) {
 		},
 	}
 
-	// Build the dataflow IR as it would come from the Python DSL.
+	// Build the dataflow IR as it would come from the Python SDK.
 	sourceIR := TypeConstrainedCallIR{
 		Type:          "type_constrained_call",
 		ReceiverTypes: []string{"flask.Request"},
@@ -335,7 +335,7 @@ func TestQueryType_DataflowViaLoader_FullPath(t *testing.T) {
 		},
 	}
 
-	// Build rule IR as the Python DSL would produce it via JSON.
+	// Build rule IR as the Python SDK would produce it via JSON.
 	rule := &RuleIR{
 		Matcher: map[string]any{
 			"type": "dataflow",

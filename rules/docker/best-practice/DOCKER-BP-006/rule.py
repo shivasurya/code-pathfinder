@@ -1,6 +1,6 @@
-from rules.container_decorators import dockerfile_rule
-from rules.container_matchers import instruction
-from rules.container_combinators import any_of
+from codepathfinder.container_decorators import dockerfile_rule
+from codepathfinder.container_matchers import instruction
+from codepathfinder.container_combinators import any_of
 
 
 @dockerfile_rule(

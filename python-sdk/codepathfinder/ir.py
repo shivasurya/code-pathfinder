@@ -1,7 +1,7 @@
 """
 JSON Intermediate Representation (IR) for pathfinder DSL.
 
-The Python DSL serializes to JSON IR, which the Go executor consumes.
+The Python SDK serializes to JSON IR, which the Go executor consumes.
 This enables language-agnostic pattern definitions (future: JS, Rust DSLs).
 """
 

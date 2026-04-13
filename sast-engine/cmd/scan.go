@@ -26,8 +26,8 @@ import (
 
 var scanCmd = &cobra.Command{
 	Use:   "scan",
-	Short: "Scan code for security vulnerabilities using Python DSL rules",
-	Long: `Scan codebase using Python DSL security rules.
+	Short: "Scan code for security vulnerabilities using Python SDK rules",
+	Long: `Scan codebase using Python SDK security rules.
 
 Examples:
   # Scan with a single rules file
@@ -288,7 +288,7 @@ Examples:
 			}
 		}
 
-		// Step 4: Load Python DSL rules
+		// Step 4: Load Python SDK rules
 		logger.StartProgress("Loading rules", -1)
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
@@ -1054,7 +1054,7 @@ func getCacheDir() string {
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
-	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
+	scanCmd.Flags().StringP("rules", "r", "", "Path to Python SDK rules file or directory")
 	scanCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
 	scanCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")

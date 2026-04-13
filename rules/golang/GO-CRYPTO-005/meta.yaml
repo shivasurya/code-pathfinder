@@ -53,10 +53,10 @@ description: |
   GPU (hashcat v6.2.6 benchmark).
 
   **Cracking speed in context**:
-  - 8-char lowercase alphanumeric (36^8 ≈ 2.8 trillion): exhausted in ~17 seconds.
-  - 8-char mixed-case + digits (62^8 ≈ 218 trillion): exhausted in ~22 minutes.
-  - bcrypt cost-10 on the same RTX 4090: ~184,000 hashes/second — ~892,000x slower.
-  - argon2id: ~1,000–10,000 hashes/second — ~16,000,000x slower than MD5.
+  - "8-char lowercase alphanumeric (36^8 ≈ 2.8 trillion): exhausted in ~17 seconds."
+  - "8-char mixed-case + digits (62^8 ≈ 218 trillion): exhausted in ~22 minutes."
+  - "bcrypt cost-10 on the same RTX 4090: ~184,000 hashes/second — ~892,000x slower."
+  - "argon2id: ~1,000–10,000 hashes/second — ~16,000,000x slower than MD5."
 
   **Why salted SHA-256 is also insufficient**: Adding a salt stops rainbow table attacks
   but does not slow the attacker on GPUs. Salted SHA-256 is still computed at billions
@@ -174,7 +174,7 @@ secure_example: |
 recommendations:
   - Replace all MD5 password hashing with bcrypt (golang.org/x/crypto/bcrypt, cost >= 12).
   - For new systems, prefer argon2id (golang.org/x/crypto/argon2) — PHC winner, memory-hard.
-  - For migration: at next successful login, re-hash the password with bcrypt/argon2id.
+  - "For migration: at next successful login, re-hash the password with bcrypt/argon2id."
   - Never use any fast hash (MD5, SHA-1, SHA-256) directly for password storage — even salted.
   - bcrypt has a 72-byte input limit — enforce this or pre-hash input before passing to bcrypt.
   - Use constant-time comparison (bcrypt.CompareHashAndPassword) to prevent timing attacks.
