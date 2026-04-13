@@ -5,6 +5,20 @@ All notable changes to the codepathfinder Python SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-12
+
+### Added
+- `python_decorators`, `python_ir`, `container_matchers`, `container_combinators`,
+  `container_programmatic` modules now live in `codepathfinder` package as canonical home
+- 22 Go security rules with L1 precision covering SQL injection (pgx, sqlx, GORM),
+  SSRF, XSS, path traversal, open redirect, command injection, weak crypto, JWT, and gRPC
+- Isolated Go module setup (`go.mod` + `go.sum`) for each rule's positive/negative test directories
+
+### Changed
+- All 158 Python rules updated to import from `codepathfinder.python_decorators` instead of `rules.python_decorators`
+- All 47 container rules updated to import from `codepathfinder.container_*` instead of `rules.container_*`
+- `rules/` package retains backward-compatible shims for all moved modules
+
 ## [2.0.1] - 2026-03-27
 
 ### Added
