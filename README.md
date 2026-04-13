@@ -13,6 +13,7 @@
 [![Apache-2.0 License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/shivasurya/code-pathfinder/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/shivasurya/code-pathfinder?style=flat)](https://github.com/shivasurya/code-pathfinder/stargazers)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shivasurya/code-pathfinder)
+[![SafeSkill 77/100](https://img.shields.io/badge/SafeSkill-77%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/shivasurya-code-pathfinder)
 
 </div>
 
