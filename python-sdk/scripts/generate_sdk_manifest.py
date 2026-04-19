@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import inspect
 import json
 import sys
 from datetime import datetime, timezone
@@ -31,8 +30,8 @@ from typing import Any
 
 # ── Resolve paths ──────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
-SDK_ROOT    = SCRIPT_DIR.parent
-RULES_DIR   = SDK_ROOT / "rules"
+SDK_ROOT = SCRIPT_DIR.parent
+RULES_DIR = SDK_ROOT / "rules"
 OUTPUT_DEFAULT = SDK_ROOT.parent.parent / "cpf-website" / "public" / "sdk-manifest.json"
 
 sys.path.insert(0, str(SDK_ROOT))
@@ -48,13 +47,33 @@ LANGUAGE_CONFIG: dict[str, dict] = {
         "import_prefix": "from codepathfinder.go_rule import ",
         "install": "pip install codepathfinder",
         "meta_module": "codepathfinder.go_rule_meta",
-        "sdk_module":  "codepathfinder.go_rule",
+        "sdk_module": "codepathfinder.go_rule",
         "categories": [
-            {"id": "web-frameworks", "name": "Web Frameworks",  "description": "HTTP sources for Gin, Echo, Fiber, Chi, Gorilla Mux"},
-            {"id": "databases",      "name": "Databases",        "description": "ORM and driver sinks: GORM, sqlx, pgx, database/sql"},
-            {"id": "stdlib",         "name": "Standard Library", "description": "Go stdlib: os/exec, net/http, path/filepath, strconv"},
-            {"id": "http-clients",   "name": "HTTP Clients",     "description": "Outbound HTTP: net/http, go-resty — SSRF sinks"},
-            {"id": "auth-config",    "name": "Auth & Config",    "description": "JWT verification, gRPC, Viper, YAML"},
+            {
+                "id": "web-frameworks",
+                "name": "Web Frameworks",
+                "description": "HTTP sources for Gin, Echo, Fiber, Chi, Gorilla Mux",
+            },
+            {
+                "id": "databases",
+                "name": "Databases",
+                "description": "ORM and driver sinks: GORM, sqlx, pgx, database/sql",
+            },
+            {
+                "id": "stdlib",
+                "name": "Standard Library",
+                "description": "Go stdlib: os/exec, net/http, path/filepath, strconv",
+            },
+            {
+                "id": "http-clients",
+                "name": "HTTP Clients",
+                "description": "Outbound HTTP: net/http, go-resty — SSRF sinks",
+            },
+            {
+                "id": "auth-config",
+                "name": "Auth & Config",
+                "description": "JWT verification, gRPC, Viper, YAML",
+            },
         ],
     },
     "python": {
@@ -65,23 +84,60 @@ LANGUAGE_CONFIG: dict[str, dict] = {
         "import_prefix": "from codepathfinder import calls, flows\nfrom codepathfinder.python_decorators import python_rule",
         "install": "pip install codepathfinder",
         "meta_module": "codepathfinder.python_rule_meta",
-        "sdk_module":  None,  # Python rules use calls() not QueryType
+        "sdk_module": None,  # Python rules use calls() not QueryType
         "categories": [
-            {"id": "web-frameworks",    "name": "Web Frameworks",    "description": "Flask, Django, FastAPI request sources and response sinks"},
-            {"id": "command-execution", "name": "Command Execution", "description": "subprocess, os — command injection sinks"},
-            {"id": "databases",         "name": "Databases",          "description": "sqlite3, psycopg2, pymongo, redis — SQL and NoSQL sinks"},
-            {"id": "deserialization",   "name": "Deserialization",    "description": "pickle, marshal, yaml — unsafe deserialization"},
-            {"id": "http-clients",      "name": "HTTP Clients",       "description": "requests, httpx, urllib — SSRF sinks"},
-            {"id": "file-system",       "name": "File System",        "description": "os.path, tempfile, pathlib — path traversal and temp file handling"},
-            {"id": "archives",          "name": "Archives",           "description": "tarfile, zipfile — archive extraction (zip slip, bombs)"},
-            {"id": "crypto",            "name": "Cryptography",       "description": "hashlib, hmac, ssl, secrets — weak crypto detection"},
-            {"id": "templating",        "name": "Templating",         "description": "jinja2, string.Template — SSTI and XSS sinks"},
+            {
+                "id": "web-frameworks",
+                "name": "Web Frameworks",
+                "description": "Flask, Django, FastAPI request sources and response sinks",
+            },
+            {
+                "id": "command-execution",
+                "name": "Command Execution",
+                "description": "subprocess, os — command injection sinks",
+            },
+            {
+                "id": "databases",
+                "name": "Databases",
+                "description": "sqlite3, psycopg2, pymongo, redis — SQL and NoSQL sinks",
+            },
+            {
+                "id": "deserialization",
+                "name": "Deserialization",
+                "description": "pickle, marshal, yaml — unsafe deserialization",
+            },
+            {
+                "id": "http-clients",
+                "name": "HTTP Clients",
+                "description": "requests, httpx, urllib — SSRF sinks",
+            },
+            {
+                "id": "file-system",
+                "name": "File System",
+                "description": "os.path, tempfile, pathlib — path traversal and temp file handling",
+            },
+            {
+                "id": "archives",
+                "name": "Archives",
+                "description": "tarfile, zipfile — archive extraction (zip slip, bombs)",
+            },
+            {
+                "id": "crypto",
+                "name": "Cryptography",
+                "description": "hashlib, hmac, ssl, secrets — weak crypto detection",
+            },
+            {
+                "id": "templating",
+                "name": "Templating",
+                "description": "jinja2, string.Template — SSTI and XSS sinks",
+            },
         ],
     },
 }
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _collect_all_meta() -> dict[str, dict]:
     """
@@ -97,11 +153,15 @@ def _collect_all_meta() -> dict[str, dict]:
         except ModuleNotFoundError:
             print(f"  [skip] {meta_module_name} not found — skipping {lang_id}")
         except AttributeError:
-            print(f"  [warn] {meta_module_name} has no SDK_META dict — skipping {lang_id}")
+            print(
+                f"  [warn] {meta_module_name} has no SDK_META dict — skipping {lang_id}"
+            )
     return results
 
 
-def _validate_methods(class_name: str, meta_methods: dict, sdk_module_name: str | None) -> list[str]:
+def _validate_methods(
+    class_name: str, meta_methods: dict, sdk_module_name: str | None
+) -> list[str]:
     """
     Check that methods listed in SDK_META exist on the real SDK class.
     Returns a list of validation warnings (empty = all good).
@@ -150,18 +210,30 @@ def _build_class_manifest(
     """Build the per-class entry for sdk-manifest.json."""
     methods_out = []
     for method_name, mdata in meta.get("methods", {}).items():
-        methods_out.append({
-            "name": method_name,
-            "signature": mdata.get("signature", f"{method_name}(...)"),
-            "description": mdata.get("description", ""),
-            "role": mdata.get("role", "neutral"),  # source | sink | sanitizer | neutral
-            "tracks": mdata.get("tracks", []),
-            "where_example": mdata.get("where_example"),
-        })
+        methods_out.append(
+            {
+                "name": method_name,
+                "signature": mdata.get("signature", f"{method_name}(...)"),
+                "description": mdata.get("description", ""),
+                "role": mdata.get(
+                    "role", "neutral"
+                ),  # source | sink | sanitizer | neutral
+                "tracks": mdata.get("tracks", []),
+                "where_example": mdata.get("where_example"),
+            }
+        )
 
     # FQNs: prefer real SDK class attrs, fall back to meta-provided fqns
-    fqns     = getattr(sdk_class, "fqns",     meta.get("fqns",     [])) if sdk_class else meta.get("fqns",     [])
-    patterns = getattr(sdk_class, "patterns", meta.get("patterns", [])) if sdk_class else meta.get("patterns", [])
+    fqns = (
+        getattr(sdk_class, "fqns", meta.get("fqns", []))
+        if sdk_class
+        else meta.get("fqns", [])
+    )
+    patterns = (
+        getattr(sdk_class, "patterns", meta.get("patterns", []))
+        if sdk_class
+        else meta.get("patterns", [])
+    )
 
     return {
         "id": class_name,
@@ -181,6 +253,7 @@ def _build_class_manifest(
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def generate(out_path: Path, verbose: bool = False) -> None:
     print(f"Generating SDK manifest → {out_path}")
@@ -216,7 +289,9 @@ def generate(out_path: Path, verbose: bool = False) -> None:
 
         for class_name, meta in sdk_meta.items():
             sdk_class = getattr(sdk_mod, class_name, None) if sdk_mod else None
-            warnings = _validate_methods(class_name, meta.get("methods", {}), sdk_module_name)
+            warnings = _validate_methods(
+                class_name, meta.get("methods", {}), sdk_module_name
+            )
             all_warnings.extend(warnings)
 
             classes_out[class_name] = _build_class_manifest(
@@ -224,7 +299,9 @@ def generate(out_path: Path, verbose: bool = False) -> None:
             )
             if verbose:
                 method_count = len(meta.get("methods", {}))
-                print(f"    {class_name}: {method_count} methods, {usage_counts.get(class_name, 0)} rules")
+                print(
+                    f"    {class_name}: {method_count} methods, {usage_counts.get(class_name, 0)} rules"
+                )
 
         if all_warnings:
             print(f"  Validation warnings for {lang_id}:")
@@ -235,15 +312,18 @@ def generate(out_path: Path, verbose: bool = False) -> None:
         categories_out = []
         for cat in lang_cfg["categories"]:
             cat_classes = [
-                cid for cid, cmeta in sdk_meta.items()
+                cid
+                for cid, cmeta in sdk_meta.items()
                 if cmeta.get("category") == cat["id"]
             ]
-            categories_out.append({
-                "id": cat["id"],
-                "name": cat["name"],
-                "description": cat["description"],
-                "class_ids": cat_classes,
-            })
+            categories_out.append(
+                {
+                    "id": cat["id"],
+                    "name": cat["name"],
+                    "description": cat["description"],
+                    "class_ids": cat_classes,
+                }
+            )
 
         manifest["languages"][lang_id] = {
             "id": lang_id,
@@ -259,8 +339,10 @@ def generate(out_path: Path, verbose: bool = False) -> None:
             "total_methods": sum(len(c["methods"]) for c in classes_out.values()),
         }
 
-        print(f"  {lang_id}: {len(classes_out)} classes, "
-              f"{manifest['languages'][lang_id]['total_methods']} methods")
+        print(
+            f"  {lang_id}: {len(classes_out)} classes, "
+            f"{manifest['languages'][lang_id]['total_methods']} methods"
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -283,11 +365,14 @@ if __name__ == "__main__":
         # Chain CDN indexers: stubs for every CDN module we don't cover by hand.
         print()
         import subprocess
+
         for indexer_name in ("index_python_from_cdn.py", "index_go_from_cdn.py"):
             indexer = SCRIPT_DIR / indexer_name
             if indexer.exists():
                 result = subprocess.run([sys.executable, str(indexer)], check=False)
                 if result.returncode != 0:
-                    print(f"[warn] {indexer_name} returned non-zero — handcrafted manifest still written.")
+                    print(
+                        f"[warn] {indexer_name} returned non-zero — handcrafted manifest still written."
+                    )
             else:
                 print(f"[info] CDN indexer not found at {indexer} — skipping.")

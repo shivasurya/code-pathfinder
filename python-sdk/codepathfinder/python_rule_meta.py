@@ -11,11 +11,9 @@
 # the FQN is the dotted path (e.g., "sqlite3.Cursor", "psycopg2.extensions.cursor").
 
 SDK_META: dict = {
-
     # =====================================================================
     # Command execution
     # =====================================================================
-
     "PySubprocess": {
         "description": (
             "The subprocess standard library module for spawning child processes. "
@@ -91,7 +89,6 @@ def detect_subprocess_shell_injection():
 """,
         "rules_using": [],
     },
-
     "PyOS": {
         "description": (
             "The os standard library module. os.system() and os.popen() always invoke a shell "
@@ -147,11 +144,9 @@ def detect_subprocess_shell_injection():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Deserialization
     # =====================================================================
-
     "PyPickle": {
         "description": (
             "The pickle module for Python object serialization. pickle.load() and pickle.loads() "
@@ -212,7 +207,6 @@ def detect_pickle_deserialization():
 """,
         "rules_using": ["PYTHON-DESER-001"],
     },
-
     "PyMarshal": {
         "description": (
             "The marshal module for Python internal object serialization. Like pickle, "
@@ -238,11 +232,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Databases — stdlib
     # =====================================================================
-
     "PySqlite3": {
         "description": (
             "The sqlite3 module wraps the SQLite C library. cursor.execute() and executemany() "
@@ -280,11 +272,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Databases — third party
     # =====================================================================
-
     "PyPsycopg2": {
         "description": (
             "psycopg2 is the canonical PostgreSQL driver for Python. Cursor.execute() and "
@@ -322,7 +312,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPyMongo": {
         "description": (
             "PyMongo is the official MongoDB driver for Python. Collection methods accept filter "
@@ -366,7 +355,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyRedis": {
         "description": (
             "redis-py is the de-facto Redis client for Python. Most commands are typed and safe. "
@@ -410,11 +398,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Web frameworks
     # =====================================================================
-
     "PyFlask": {
         "description": (
             "Flask is a popular Python web microframework. The flask.request global exposes all "
@@ -476,7 +462,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyDjango": {
         "description": (
             "Django is a full-featured Python web framework. HttpRequest exposes request data; "
@@ -526,7 +511,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyFastAPI": {
         "description": (
             "FastAPI is a modern Python web framework built on Starlette and Pydantic. Path / query / "
@@ -576,11 +560,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Templating
     # =====================================================================
-
     "PyJinja2": {
         "description": (
             "Jinja2 is the template engine behind Flask and many Python frameworks. "
@@ -613,11 +595,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # HTTP clients
     # =====================================================================
-
     "PyRequests": {
         "description": (
             "requests is the most popular HTTP client for Python. All top-level methods and "
@@ -661,7 +641,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyUrllib": {
         "description": (
             "urllib.request (stdlib) is the lowest-level HTTP client in Python. urlopen() accepts "
@@ -687,11 +666,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Deserialization — third party
     # =====================================================================
-
     "PyYaml": {
         "description": (
             "PyYAML is the standard YAML library. yaml.load() with the default Loader (or "
@@ -735,11 +712,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # File system
     # =====================================================================
-
     "PyOSPath": {
         "description": (
             "The os.path module for path manipulation. join() concatenates path components but "
@@ -778,7 +753,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyTempfile": {
         "description": (
             "The tempfile module. mktemp() is deprecated and insecure (race condition between "
@@ -810,11 +784,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Archives
     # =====================================================================
-
     "PyTarfile": {
         "description": (
             "The tarfile module. extractall() and extract() follow archive entry paths as-is — "
@@ -846,7 +818,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyZipfile": {
         "description": (
             "The zipfile module. ZipFile.extractall() and extract() are zip-slip sinks when the "
@@ -872,11 +843,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Cryptography
     # =====================================================================
-
     "PyHashlib": {
         "description": (
             "The hashlib module provides cryptographic hash functions. md5 and sha1 are "
@@ -920,7 +889,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyHmac": {
         "description": (
             "The hmac module for keyed message authentication. compare_digest is the only "
@@ -945,7 +913,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PySecrets": {
         "description": (
             "The secrets module provides cryptographically strong random values suitable for "
@@ -989,7 +956,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyRandom": {
         "description": (
             "The random module uses a Mersenne Twister PRNG — NOT suitable for cryptography. "
@@ -1033,7 +999,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PySsl": {
         "description": (
             "The ssl module for TLS / SSL. SSLContext with verify_mode=CERT_NONE disables "
@@ -1071,11 +1036,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — parsers & eval
     # =====================================================================
-
     "PyAst": {
         "description": (
             "The ast module exposes Python's abstract syntax tree. ast.literal_eval is a safe "
@@ -1119,7 +1082,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyJson": {
         "description": (
             "The json module for JSON encode / decode. Unlike pickle, json is safe by default — "
@@ -1157,11 +1119,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — HTTP / networking
     # =====================================================================
-
     "PyHttpClient": {
         "description": (
             "The http.client module provides low-level HTTP primitives. HTTPConnection / "
@@ -1169,7 +1129,11 @@ def detect_pickle_deserialization():
             "HTTPSConnection with context=None falls back to system default TLS settings."
         ),
         "category": "http-clients",
-        "fqns": ["http.client", "http.client.HTTPConnection", "http.client.HTTPSConnection"],
+        "fqns": [
+            "http.client",
+            "http.client.HTTPConnection",
+            "http.client.HTTPSConnection",
+        ],
         "pip_snippet": "# stdlib — no install required",
         "methods": {
             "HTTPConnection": {
@@ -1193,7 +1157,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PySocket": {
         "description": (
             "The socket module for low-level network operations. socket.connect() is an SSRF "
@@ -1231,7 +1194,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyUrllibParse": {
         "description": (
             "The urllib.parse module for URL parsing and building. urljoin is commonly used to "
@@ -1269,7 +1231,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyFtplib": {
         "description": (
             "The ftplib module for FTP (insecure plaintext protocol). FTP() connects unencrypted; "
@@ -1295,7 +1256,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyTelnetlib": {
         "description": (
             "The telnetlib module for Telnet (insecure plaintext protocol). Any use of Telnet is "
@@ -1314,7 +1274,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PySmtplib": {
         "description": (
             "The smtplib module for SMTP. SMTP() uses plaintext unless starttls() is called. "
@@ -1346,11 +1305,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — file system
     # =====================================================================
-
     "PyPathlib": {
         "description": (
             "The pathlib module is the modern OO path API. Path.resolve() expands symlinks "
@@ -1394,7 +1351,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyShutil": {
         "description": (
             "The shutil module for high-level file operations. unpack_archive automatically "
@@ -1438,7 +1394,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyShlex": {
         "description": (
             "The shlex module provides shell-compatible tokenization and quoting. shlex.quote "
@@ -1470,11 +1425,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — XML
     # =====================================================================
-
     "PyXmlEtree": {
         "description": (
             "xml.etree.ElementTree is the stdlib XML parser. The C-accelerated parser has some "
@@ -1506,7 +1459,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyXmlSax": {
         "description": (
             "xml.sax is the stdlib SAX parser. By default it resolves external entities — XXE "
@@ -1538,7 +1490,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyXmlDom": {
         "description": (
             "xml.dom.minidom for DOM-style XML parsing. Built on pyexpat which by default does "
@@ -1564,7 +1515,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyXmlrpc": {
         "description": (
             "xmlrpc.client and xmlrpc.server. ServerProxy RPCs execute arbitrary methods — "
@@ -1590,11 +1540,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — misc
     # =====================================================================
-
     "PyZlib": {
         "description": (
             "The zlib module for compression. decompress() on untrusted input can consume "
@@ -1619,7 +1567,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyShelve": {
         "description": (
             "The shelve module persists arbitrary Python objects — backed by pickle under the "
@@ -1639,7 +1586,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyLogging": {
         "description": (
             "The logging module. Most uses are neutral. Log-injection findings arise when "
@@ -1677,11 +1623,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — databases
     # =====================================================================
-
     "PySqlalchemy": {
         "description": (
             "SQLAlchemy is the most-used Python ORM. The text() wrapper and raw execute() are "
@@ -1719,7 +1663,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPymysql": {
         "description": (
             "PyMySQL is a pure-Python MySQL driver. Cursor.execute() accepts a raw query and "
@@ -1751,7 +1694,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyMysqlDb": {
         "description": (
             "MySQLdb (mysqlclient) is a C-extension MySQL driver. Cursor.execute() is an SQL "
@@ -1782,11 +1724,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — HTTP
     # =====================================================================
-
     "PyHttpx": {
         "description": (
             "httpx is a modern async-capable HTTP client. Identical SSRF surface to requests — "
@@ -1830,7 +1770,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyHttplib2": {
         "description": (
             "httplib2 is an HTTP client with advanced caching features. Http.request() is an "
@@ -1855,11 +1794,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — XML / parsing
     # =====================================================================
-
     "PyLxml": {
         "description": (
             "lxml is the C-backed XML / HTML parser. etree.parse / fromstring with a custom "
@@ -1897,7 +1834,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyDefusedXml": {
         "description": (
             "defusedxml is the hardened XML parser suite. It wraps xml.etree, xml.sax, xml.dom, "
@@ -1923,11 +1859,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — auth / crypto
     # =====================================================================
-
     "PyJose": {
         "description": (
             "python-jose implements JWT / JWS / JWE. jwt.decode() is the canonical validation "
@@ -1965,7 +1899,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyAuthlib": {
         "description": (
             "Authlib is a comprehensive OAuth / OpenID / JWT library. JsonWebToken.decode() and "
@@ -1990,7 +1923,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyParamiko": {
         "description": (
             "paramiko is the SSH / SFTP client for Python. SSHClient.set_missing_host_key_policy "
@@ -2028,7 +1960,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyLdap3": {
         "description": (
             "ldap3 is a pure-Python LDAP client. Connection.search() accepts a search_filter — "
@@ -2060,11 +1991,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — misc
     # =====================================================================
-
     "PyBleach": {
         "description": (
             "bleach is an HTML sanitizer library. bleach.clean() strips dangerous tags and "
@@ -2089,7 +2018,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyWerkzeug": {
         "description": (
             "Werkzeug is the WSGI toolkit Flask is built on. safe_join() is the canonical "
@@ -2121,7 +2049,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyJsonschema": {
         "description": (
             "jsonschema validates JSON documents against a schema. validate() is a sanitizer for "
@@ -2140,7 +2067,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPydantic": {
         "description": (
             "Pydantic provides strict type-validated models. BaseModel parses / coerces input and "
@@ -2172,7 +2098,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyBoto3": {
         "description": (
             "boto3 is the AWS SDK for Python. client('s3').get_object(...) and similar operations "
@@ -2198,7 +2123,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyAiofiles": {
         "description": (
             "aiofiles provides async file I/O. aiofiles.open() is a path-traversal sink when "
@@ -2217,11 +2141,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — HTML / escaping / templating
     # =====================================================================
-
     "PyHtml": {
         "description": (
             "The html module. html.escape() is the canonical XSS sanitizer for writing user "
@@ -2247,7 +2169,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyStringTemplate": {
         "description": (
             "string.Template and string.Formatter. Template($var) substitution is safe when "
@@ -2273,11 +2194,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — regex / validation
     # =====================================================================
-
     "PyRe": {
         "description": (
             "The re module. Catastrophic backtracking in regex patterns (ReDoS) — finding when a "
@@ -2315,7 +2234,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyIpaddress": {
         "description": (
             "The ipaddress module for IP address parsing and classification. IPv4Address / "
@@ -2341,11 +2259,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — CSV / email / config
     # =====================================================================
-
     "PyCsv": {
         "description": (
             "The csv module. csv.writer + writerow on user-controlled cells produces CSV-formula "
@@ -2383,7 +2299,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyEmail": {
         "description": (
             "The email package. email.message.EmailMessage assembly with user-controlled Subject, "
@@ -2415,7 +2330,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyConfigparser": {
         "description": (
             "The configparser module reads INI-style config files. Values read via get() are "
@@ -2447,11 +2361,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — HTTP server / cookies / IMAP / POP3 / CGI / WSGI
     # =====================================================================
-
     "PyHttpServer": {
         "description": (
             "The http.server module. SimpleHTTPRequestHandler serves files from the current "
@@ -2477,7 +2389,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyHttpCookies": {
         "description": (
             "The http.cookies module for cookie parsing. SimpleCookie accepts raw Cookie headers "
@@ -2503,7 +2414,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyImaplib": {
         "description": (
             "The imaplib module. IMAP4() uses plaintext; IMAP4_SSL is the encrypted variant. "
@@ -2528,7 +2438,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPoplib": {
         "description": (
             "The poplib module. POP3() is plaintext; POP3_SSL encrypts. Plaintext POP3 is a "
@@ -2553,7 +2462,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyCgi": {
         "description": (
             "The cgi module (deprecated in 3.11, removed in 3.13). cgi.FieldStorage collects form "
@@ -2578,7 +2486,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyWsgiref": {
         "description": (
             "The wsgiref module for WSGI utilities. simple_server.make_server is dev-only — "
@@ -2604,7 +2511,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyGetpass": {
         "description": (
             "The getpass module. getpass.getpass() prompts for a password without echoing. "
@@ -2629,7 +2535,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyGlob": {
         "description": (
             "The glob module. glob.glob() resolves shell-style patterns against the filesystem — "
@@ -2654,11 +2559,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Stdlib — FFI / crypto legacy
     # =====================================================================
-
     "PyCtypes": {
         "description": (
             "The ctypes module for calling C libraries. LoadLibrary / CDLL on user-controlled "
@@ -2690,7 +2593,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyCrypt": {
         "description": (
             "The crypt module (deprecated in 3.11, removed in 3.13). crypt.crypt() wraps the "
@@ -2710,7 +2612,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyDbm": {
         "description": (
             "The dbm family (dbm.gnu, dbm.ndbm, dbm.dumb). dbm.open() on untrusted files reads "
@@ -2729,11 +2630,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — web frameworks / servers
     # =====================================================================
-
     "PyAiohttp": {
         "description": (
             "aiohttp provides async HTTP client and server. ClientSession.get / post and the "
@@ -2783,7 +2682,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyStarlette": {
         "description": (
             "Starlette is the ASGI toolkit behind FastAPI. Request exposes HTTP input; the "
@@ -2833,7 +2731,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyRestFramework": {
         "description": (
             "Django REST Framework (DRF). request.data is the primary source for JSON / form "
@@ -2872,7 +2769,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyFlaskCors": {
         "description": (
             "flask-cors configures CORS headers on Flask apps. CORS(app, origins='*') with "
@@ -2898,7 +2794,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyWerkzeugSecurity": {
         "description": (
             "werkzeug.security provides generate_password_hash and check_password_hash. The "
@@ -2924,11 +2819,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — additional crypto / auth
     # =====================================================================
-
     "PyPyjwt": {
         "description": (
             "PyJWT decodes and validates JWTs. jwt.decode() with algorithms=['none'] or "
@@ -2954,7 +2847,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyOauthlib": {
         "description": (
             "oauthlib implements the OAuth 1 / OAuth 2 protocols. WebApplicationClient.parse_request_uri_response "
@@ -2980,7 +2872,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyCryptography": {
         "description": (
             "The cryptography package provides recipes (Fernet) and primitives (hazmat). Fernet "
@@ -3018,7 +2909,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyHvac": {
         "description": (
             "hvac is the Python client for HashiCorp Vault. Client.secrets.kv.v2.read_secret_version "
@@ -3044,11 +2934,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — additional HTTP / sockets
     # =====================================================================
-
     "PyPycurl": {
         "description": (
             "pycurl wraps libcurl. curl.setopt(pycurl.URL, ...) is an SSRF sink on user-controlled "
@@ -3079,7 +2967,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPysftp": {
         "description": (
             "pysftp wraps paramiko with a simpler SFTP interface. Connection(host, cnopts=...) "
@@ -3110,11 +2997,9 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     # =====================================================================
     # Third-party — infra / misc
     # =====================================================================
-
     "PyDocker": {
         "description": (
             "The docker SDK. DockerClient.containers.run with privileged=True is a container-"
@@ -3140,7 +3025,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyCelery": {
         "description": (
             "Celery is a distributed task queue. Celery(broker=..., backend=...) configures brokers — "
@@ -3166,7 +3050,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyWaitress": {
         "description": (
             "waitress is a production WSGI server. serve() with host='0.0.0.0' exposes the app "
@@ -3185,7 +3068,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyGunicorn": {
         "description": (
             "gunicorn is a production WSGI server. Commonly run via CLI but programmatic use via "
@@ -3204,7 +3086,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPyasn1": {
         "description": (
             "pyasn1 decodes ASN.1 structures. der_decoder.decode() on untrusted DER bytes can "
@@ -3224,7 +3105,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyDockerfileParse": {
         "description": (
             "dockerfile_parse parses Dockerfiles. Returned structures reflect user-controlled "
@@ -3243,7 +3123,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyToml": {
         "description": (
             "toml parses TOML configuration. toml.load() is a neutral data loader — values "
@@ -3269,7 +3148,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyXmltodict": {
         "description": (
             "xmltodict parses XML into nested dicts (uses expat under the hood). Entity expansion "
@@ -3289,7 +3167,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyWtforms": {
         "description": (
             "WTForms provides form validation for Flask / Django-style apps. Form().validate_on_submit() "
@@ -3315,7 +3192,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyDjangoFilters": {
         "description": (
             "django-filter builds Django QuerySet filters from query params. FilterSet.qs runs the "
@@ -3335,7 +3211,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyPexpect": {
         "description": (
             "pexpect spawns interactive subprocesses with expect/respond patterns. spawn(cmd, ...) "
@@ -3360,7 +3235,6 @@ def detect_pickle_deserialization():
         },
         "rules_using": [],
     },
-
     "PyCffi": {
         "description": (
             "cffi calls C libraries without writing a C extension. FFI.dlopen() loads a shared "

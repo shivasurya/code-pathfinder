@@ -20,28 +20,66 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).parent
-MANIFEST_PATH = SCRIPT_DIR.parent.parent.parent / "cpf-website" / "public" / "sdk-manifest.json"
+MANIFEST_PATH = (
+    SCRIPT_DIR.parent.parent.parent / "cpf-website" / "public" / "sdk-manifest.json"
+)
 
-STDLIB_MANIFEST_URL = "https://assets.codepathfinder.dev/registries/go1.21/stdlib/v1/manifest.json"
-THIRDPARTY_MANIFEST_URL = "https://assets.codepathfinder.dev/registries/go-thirdparty/v1/manifest.json"
+STDLIB_MANIFEST_URL = (
+    "https://assets.codepathfinder.dev/registries/go1.21/stdlib/v1/manifest.json"
+)
+THIRDPARTY_MANIFEST_URL = (
+    "https://assets.codepathfinder.dev/registries/go-thirdparty/v1/manifest.json"
+)
 
 # Category rules applied in order. Head of the import path is checked first.
 CATEGORY_EXACT: dict[str, str] = {
     # stdlib security-relevant (already covered by handcrafted entries; these are fallbacks)
-    "os": "stdlib", "os/exec": "stdlib", "net/http": "stdlib", "net": "stdlib",
-    "net/url": "stdlib", "net/smtp": "stdlib", "crypto": "stdlib", "crypto/tls": "stdlib",
-    "crypto/x509": "stdlib", "crypto/aes": "stdlib", "crypto/cipher": "stdlib",
-    "crypto/hmac": "stdlib", "crypto/rand": "stdlib", "crypto/sha256": "stdlib",
-    "crypto/sha512": "stdlib", "encoding/json": "stdlib", "encoding/xml": "stdlib",
-    "encoding/base64": "stdlib", "encoding/binary": "stdlib", "encoding/csv": "stdlib",
-    "encoding/gob": "stdlib", "encoding/hex": "stdlib", "database/sql": "stdlib",
-    "path/filepath": "stdlib", "io": "stdlib", "io/fs": "stdlib", "bufio": "stdlib",
-    "archive/tar": "stdlib", "archive/zip": "stdlib", "html/template": "stdlib",
-    "text/template": "stdlib", "mime/multipart": "stdlib", "log": "stdlib",
-    "log/slog": "stdlib", "math/rand": "stdlib", "plugin": "stdlib",
-    "reflect": "stdlib", "regexp": "stdlib", "runtime": "stdlib",
-    "strconv": "stdlib", "strings": "stdlib", "sync": "stdlib", "syscall": "stdlib",
-    "time": "stdlib", "fmt": "stdlib", "context": "stdlib",
+    "os": "stdlib",
+    "os/exec": "stdlib",
+    "net/http": "stdlib",
+    "net": "stdlib",
+    "net/url": "stdlib",
+    "net/smtp": "stdlib",
+    "crypto": "stdlib",
+    "crypto/tls": "stdlib",
+    "crypto/x509": "stdlib",
+    "crypto/aes": "stdlib",
+    "crypto/cipher": "stdlib",
+    "crypto/hmac": "stdlib",
+    "crypto/rand": "stdlib",
+    "crypto/sha256": "stdlib",
+    "crypto/sha512": "stdlib",
+    "encoding/json": "stdlib",
+    "encoding/xml": "stdlib",
+    "encoding/base64": "stdlib",
+    "encoding/binary": "stdlib",
+    "encoding/csv": "stdlib",
+    "encoding/gob": "stdlib",
+    "encoding/hex": "stdlib",
+    "database/sql": "stdlib",
+    "path/filepath": "stdlib",
+    "io": "stdlib",
+    "io/fs": "stdlib",
+    "bufio": "stdlib",
+    "archive/tar": "stdlib",
+    "archive/zip": "stdlib",
+    "html/template": "stdlib",
+    "text/template": "stdlib",
+    "mime/multipart": "stdlib",
+    "log": "stdlib",
+    "log/slog": "stdlib",
+    "math/rand": "stdlib",
+    "plugin": "stdlib",
+    "reflect": "stdlib",
+    "regexp": "stdlib",
+    "runtime": "stdlib",
+    "strconv": "stdlib",
+    "strings": "stdlib",
+    "sync": "stdlib",
+    "syscall": "stdlib",
+    "time": "stdlib",
+    "fmt": "stdlib",
+    "context": "stdlib",
 }
 
 # Prefix-based routing for third-party packages
@@ -54,7 +92,6 @@ THIRD_PARTY_PREFIXES: list[tuple[str, str]] = [
     ("github.com/gorilla/mux", "web-frameworks"),
     ("github.com/flosch/pongo2", "web-frameworks"),
     ("github.com/go-playground/validator", "web-frameworks"),
-
     # Databases
     ("gorm.io/gorm", "databases"),
     ("github.com/jackc/pgx", "databases"),
@@ -62,12 +99,10 @@ THIRD_PARTY_PREFIXES: list[tuple[str, str]] = [
     ("github.com/redis/go-redis", "databases"),
     ("go.mongodb.org/mongo-driver", "databases"),
     ("k8s.io/client-go", "databases"),
-
     # HTTP clients
     ("github.com/go-resty/resty", "http-clients"),
     ("github.com/aws/aws-sdk-go-v2", "http-clients"),
     ("cloud.google.com/go", "http-clients"),
-
     # Auth / Config
     ("github.com/golang-jwt/jwt", "auth-config"),
     ("github.com/spf13/viper", "auth-config"),
@@ -75,23 +110,23 @@ THIRD_PARTY_PREFIXES: list[tuple[str, str]] = [
     ("gopkg.in/yaml.v3", "auth-config"),
     ("github.com/pelletier/go-toml", "auth-config"),
     ("google.golang.org/grpc", "auth-config"),
-
     # Logging / observability
     ("github.com/sirupsen/logrus", "auth-config"),
     ("go.uber.org/zap", "auth-config"),
-
     # Testing
     ("github.com/stretchr/testify", "auth-config"),
-
     # CLI
     ("github.com/codeskyblue/go-sh", "auth-config"),
 ]
 
 
 def fetch_json(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "codepathfinder-indexer/1.0"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "codepathfinder-indexer/1.0"}
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        data: dict = json.loads(resp.read().decode("utf-8"))
+        return data
 
 
 def to_pascal_case_go(import_path: str) -> str:
@@ -169,14 +204,18 @@ def extract_top_symbols(detail: dict, limit: int = 10) -> list[dict]:
             elif ret_types:
                 ret_str = " (" + ", ".join(t for t in ret_types if t) + ")"
         sig = f"{fn_name}({', '.join(param_strs)}){ret_str}".strip()
-        doc = (fn.get("docstring") or fn.get("description") or "").strip().split("\n")[0][:180] or f"{fn_name} function."
-        methods.append({
-            "name": fn_name,
-            "signature": sig,
-            "description": doc,
-            "role": "neutral",
-            "tracks": [],
-        })
+        doc = (fn.get("docstring") or fn.get("description") or "").strip().split("\n")[
+            0
+        ][:180] or f"{fn_name} function."
+        methods.append(
+            {
+                "name": fn_name,
+                "signature": sig,
+                "description": doc,
+                "role": "neutral",
+                "tracks": [],
+            }
+        )
         if len(methods) >= limit:
             return methods
 
@@ -184,14 +223,18 @@ def extract_top_symbols(detail: dict, limit: int = 10) -> list[dict]:
     for type_name, tdef in (detail.get("types") or {}).items():
         if type_name.startswith("_") or type_name[:1].islower():
             continue
-        doc = (tdef.get("docstring") or tdef.get("description") or "").strip().split("\n")[0][:180] or f"{type_name} type."
-        methods.append({
-            "name": type_name,
-            "signature": f"type {type_name} ...",
-            "description": doc,
-            "role": "neutral",
-            "tracks": [],
-        })
+        doc = (tdef.get("docstring") or tdef.get("description") or "").strip().split(
+            "\n"
+        )[0][:180] or f"{type_name} type."
+        methods.append(
+            {
+                "name": type_name,
+                "signature": f"type {type_name} ...",
+                "description": doc,
+                "role": "neutral",
+                "tracks": [],
+            }
+        )
         if len(methods) >= limit:
             return methods
 
@@ -240,7 +283,9 @@ def build_stub(
 
 def main() -> None:
     if not MANIFEST_PATH.exists():
-        raise SystemExit(f"Manifest not found at {MANIFEST_PATH}. Run generate_sdk_manifest.py first.")
+        raise SystemExit(
+            f"Manifest not found at {MANIFEST_PATH}. Run generate_sdk_manifest.py first."
+        )
 
     manifest = json.loads(MANIFEST_PATH.read_text())
     go = manifest["languages"].setdefault("golang", {})
@@ -272,7 +317,9 @@ def main() -> None:
     thirdparty = fetch_json(THIRDPARTY_MANIFEST_URL)
 
     stdlib_base = stdlib.get("base_url", STDLIB_MANIFEST_URL.rsplit("/", 1)[0])
-    thirdparty_base = thirdparty.get("base_url", THIRDPARTY_MANIFEST_URL.rsplit("/", 1)[0])
+    thirdparty_base = thirdparty.get(
+        "base_url", THIRDPARTY_MANIFEST_URL.rsplit("/", 1)[0]
+    )
 
     added = 0
     skipped = 0
@@ -337,7 +384,14 @@ def main() -> None:
         cat = centry.get("category", "stdlib")
         if cat not in id_by_cat:
             # Unknown category encountered; register it
-            categories.append({"id": cat, "name": cat.replace("-", " ").title(), "description": "", "class_ids": []})
+            categories.append(
+                {
+                    "id": cat,
+                    "name": cat.replace("-", " ").title(),
+                    "description": "",
+                    "class_ids": [],
+                }
+            )
             id_by_cat[cat] = []
         id_by_cat[cat].append(cid)
 
@@ -348,7 +402,9 @@ def main() -> None:
     go["total_methods"] = sum(len(c["methods"]) for c in classes.values())
 
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
-    print(f"Added {added} Go stubs, skipped {skipped} already-covered packages, resolved {collisions} id collisions.")
+    print(
+        f"Added {added} Go stubs, skipped {skipped} already-covered packages, resolved {collisions} id collisions."
+    )
     print(f"Go total: {go['total_classes']} classes, {go['total_methods']} methods")
 
 

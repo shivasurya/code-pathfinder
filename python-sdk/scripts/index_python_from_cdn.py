@@ -24,162 +24,462 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).parent
-MANIFEST_PATH = SCRIPT_DIR.parent.parent.parent / "cpf-website" / "public" / "sdk-manifest.json"
+MANIFEST_PATH = (
+    SCRIPT_DIR.parent.parent.parent / "cpf-website" / "public" / "sdk-manifest.json"
+)
 
-STDLIB_MANIFEST_URL = "https://assets.codepathfinder.dev/registries/python3.11/stdlib/v1/manifest.json"
-THIRDPARTY_MANIFEST_URL = "https://assets.codepathfinder.dev/registries/thirdparty/v1/manifest.json"
+STDLIB_MANIFEST_URL = (
+    "https://assets.codepathfinder.dev/registries/python3.11/stdlib/v1/manifest.json"
+)
+THIRDPARTY_MANIFEST_URL = (
+    "https://assets.codepathfinder.dev/registries/thirdparty/v1/manifest.json"
+)
 
 # Category rules applied in order. First match wins.
 # Modules not matching any rule land in "utilities".
 CATEGORY_EXACT: dict[str, str] = {
     # command-execution
-    "subprocess": "command-execution", "os": "command-execution", "pty": "command-execution",
-    "pexpect": "command-execution", "docker": "command-execution", "ctypes": "command-execution",
-    "cffi": "command-execution", "fcntl": "command-execution", "signal": "command-execution",
-
+    "subprocess": "command-execution",
+    "os": "command-execution",
+    "pty": "command-execution",
+    "pexpect": "command-execution",
+    "docker": "command-execution",
+    "ctypes": "command-execution",
+    "cffi": "command-execution",
+    "fcntl": "command-execution",
+    "signal": "command-execution",
     # deserialization
-    "pickle": "deserialization", "pickletools": "deserialization", "marshal": "deserialization",
-    "json": "deserialization", "simplejson": "deserialization", "yaml": "deserialization",
-    "csv": "deserialization", "xml": "deserialization", "lxml": "deserialization",
-    "defusedxml": "deserialization", "xmltodict": "deserialization", "xmlrpc": "deserialization",
-    "shelve": "deserialization", "dbm": "deserialization", "pyasn1": "deserialization",
-    "toml": "deserialization", "tomllib": "deserialization", "plistlib": "deserialization",
-    "ast": "deserialization", "pyexpat": "deserialization",
-
+    "pickle": "deserialization",
+    "pickletools": "deserialization",
+    "marshal": "deserialization",
+    "json": "deserialization",
+    "simplejson": "deserialization",
+    "yaml": "deserialization",
+    "csv": "deserialization",
+    "xml": "deserialization",
+    "lxml": "deserialization",
+    "defusedxml": "deserialization",
+    "xmltodict": "deserialization",
+    "xmlrpc": "deserialization",
+    "shelve": "deserialization",
+    "dbm": "deserialization",
+    "pyasn1": "deserialization",
+    "toml": "deserialization",
+    "tomllib": "deserialization",
+    "plistlib": "deserialization",
+    "ast": "deserialization",
+    "pyexpat": "deserialization",
     # databases
-    "sqlite3": "databases", "psycopg2": "databases", "pymongo": "databases",
-    "redis": "databases", "sqlalchemy": "databases", "pymysql": "databases",
-    "MySQLdb": "databases", "ldap3": "databases", "hdbcli": "databases",
-    "ibm_db": "databases", "playhouse": "databases", "pony": "databases",
-
+    "sqlite3": "databases",
+    "psycopg2": "databases",
+    "pymongo": "databases",
+    "redis": "databases",
+    "sqlalchemy": "databases",
+    "pymysql": "databases",
+    "MySQLdb": "databases",
+    "ldap3": "databases",
+    "hdbcli": "databases",
+    "ibm_db": "databases",
+    "playhouse": "databases",
+    "pony": "databases",
     # http-clients
-    "requests": "http-clients", "urllib": "http-clients", "http": "http-clients",
-    "socket": "http-clients", "ftplib": "http-clients", "telnetlib": "http-clients",
-    "smtplib": "http-clients", "smtpd": "http-clients", "httpx": "http-clients",
-    "httplib2": "http-clients", "aiohttp": "http-clients", "pycurl": "http-clients",
-    "imaplib": "http-clients", "poplib": "http-clients", "nntplib": "http-clients",
-    "email": "http-clients", "ipaddress": "http-clients", "netaddr": "http-clients",
-    "netifaces": "http-clients", "boto3": "http-clients", "aws_xray_sdk": "http-clients",
-    "mailbox": "http-clients", "mailcap": "http-clients", "netrc": "http-clients",
-    "webob": "http-clients", "slumber": "http-clients", "pika": "http-clients",
+    "requests": "http-clients",
+    "urllib": "http-clients",
+    "http": "http-clients",
+    "socket": "http-clients",
+    "ftplib": "http-clients",
+    "telnetlib": "http-clients",
+    "smtplib": "http-clients",
+    "smtpd": "http-clients",
+    "httpx": "http-clients",
+    "httplib2": "http-clients",
+    "aiohttp": "http-clients",
+    "pycurl": "http-clients",
+    "imaplib": "http-clients",
+    "poplib": "http-clients",
+    "nntplib": "http-clients",
+    "email": "http-clients",
+    "ipaddress": "http-clients",
+    "netaddr": "http-clients",
+    "netifaces": "http-clients",
+    "boto3": "http-clients",
+    "aws_xray_sdk": "http-clients",
+    "mailbox": "http-clients",
+    "mailcap": "http-clients",
+    "netrc": "http-clients",
+    "webob": "http-clients",
+    "slumber": "http-clients",
+    "pika": "http-clients",
     "pysocks": "http-clients",
-
     # file-system
-    "pathlib": "file-system", "tempfile": "file-system", "shutil": "file-system",
-    "logging": "file-system", "aiofiles": "file-system", "glob": "file-system",
-    "fnmatch": "file-system", "re": "file-system", "regex": "file-system",
-    "configparser": "file-system", "dockerfile_parse": "file-system", "mimetypes": "file-system",
+    "pathlib": "file-system",
+    "tempfile": "file-system",
+    "shutil": "file-system",
+    "logging": "file-system",
+    "aiofiles": "file-system",
+    "glob": "file-system",
+    "fnmatch": "file-system",
+    "re": "file-system",
+    "regex": "file-system",
+    "configparser": "file-system",
+    "dockerfile_parse": "file-system",
+    "mimetypes": "file-system",
     "fileinput": "file-system",
-
     # archives
-    "tarfile": "archives", "zipfile": "archives", "zlib": "archives",
-    "gzip": "archives", "bz2": "archives", "lzma": "archives",
-    "zipapp": "archives", "zipimport": "archives", "zstd": "archives",
-
+    "tarfile": "archives",
+    "zipfile": "archives",
+    "zlib": "archives",
+    "gzip": "archives",
+    "bz2": "archives",
+    "lzma": "archives",
+    "zipapp": "archives",
+    "zipimport": "archives",
+    "zstd": "archives",
     # crypto
-    "hashlib": "crypto", "hmac": "crypto", "secrets": "crypto",
-    "random": "crypto", "ssl": "crypto", "jose": "crypto",
-    "authlib": "crypto", "paramiko": "crypto", "getpass": "crypto",
-    "crypt": "crypto", "pysftp": "crypto", "jwt": "crypto",
-    "jwcrypto": "crypto", "jks": "crypto", "oauthlib": "crypto",
-    "requests_oauthlib": "crypto", "auth0": "crypto", "hvac": "crypto",
-    "passpy": "crypto", "tgcrypto": "crypto", "zxcvbn": "crypto",
+    "hashlib": "crypto",
+    "hmac": "crypto",
+    "secrets": "crypto",
+    "random": "crypto",
+    "ssl": "crypto",
+    "jose": "crypto",
+    "authlib": "crypto",
+    "paramiko": "crypto",
+    "getpass": "crypto",
+    "crypt": "crypto",
+    "pysftp": "crypto",
+    "jwt": "crypto",
+    "jwcrypto": "crypto",
+    "jks": "crypto",
+    "oauthlib": "crypto",
+    "requests_oauthlib": "crypto",
+    "auth0": "crypto",
+    "hvac": "crypto",
+    "passpy": "crypto",
+    "tgcrypto": "crypto",
+    "zxcvbn": "crypto",
     "cryptography": "crypto",
-
     # templating
-    "jinja2": "templating", "bleach": "templating", "html": "templating",
-    "html5lib": "templating", "string": "templating", "chevron": "templating",
-    "markdown": "templating", "docutils": "templating", "reportlab": "templating",
-    "fpdf": "templating", "webencodings": "templating",
-
+    "jinja2": "templating",
+    "bleach": "templating",
+    "html": "templating",
+    "html5lib": "templating",
+    "string": "templating",
+    "chevron": "templating",
+    "markdown": "templating",
+    "docutils": "templating",
+    "reportlab": "templating",
+    "fpdf": "templating",
+    "webencodings": "templating",
     # web-frameworks
-    "flask": "web-frameworks", "flask_cors": "web-frameworks",
-    "flask_migrate": "web-frameworks", "flask_socketio": "web-frameworks",
-    "django": "web-frameworks", "django_filters": "web-frameworks",
-    "fastapi": "web-frameworks", "starlette": "web-frameworks",
-    "rest_framework": "web-frameworks", "channels": "web-frameworks",
-    "gunicorn": "web-frameworks", "waitress": "web-frameworks",
-    "uwsgi": "web-frameworks", "cgi": "web-frameworks", "cgitb": "web-frameworks",
-    "wsgiref": "web-frameworks", "pydantic": "web-frameworks",
-    "wtforms": "web-frameworks", "jsonschema": "web-frameworks",
-    "celery": "web-frameworks", "grpc": "web-frameworks",
-    "grpc_channelz": "web-frameworks", "grpc_health": "web-frameworks",
-    "grpc_reflection": "web-frameworks", "grpc_status": "web-frameworks",
-    "simple_websocket": "web-frameworks", "gevent": "web-frameworks",
-    "greenlet": "web-frameworks", "fanstatic": "web-frameworks",
+    "flask": "web-frameworks",
+    "flask_cors": "web-frameworks",
+    "flask_migrate": "web-frameworks",
+    "flask_socketio": "web-frameworks",
+    "django": "web-frameworks",
+    "django_filters": "web-frameworks",
+    "fastapi": "web-frameworks",
+    "starlette": "web-frameworks",
+    "rest_framework": "web-frameworks",
+    "channels": "web-frameworks",
+    "gunicorn": "web-frameworks",
+    "waitress": "web-frameworks",
+    "uwsgi": "web-frameworks",
+    "cgi": "web-frameworks",
+    "cgitb": "web-frameworks",
+    "wsgiref": "web-frameworks",
+    "pydantic": "web-frameworks",
+    "wtforms": "web-frameworks",
+    "jsonschema": "web-frameworks",
+    "celery": "web-frameworks",
+    "grpc": "web-frameworks",
+    "grpc_channelz": "web-frameworks",
+    "grpc_health": "web-frameworks",
+    "grpc_reflection": "web-frameworks",
+    "grpc_status": "web-frameworks",
+    "simple_websocket": "web-frameworks",
+    "gevent": "web-frameworks",
+    "greenlet": "web-frameworks",
+    "fanstatic": "web-frameworks",
     "werkzeug": "web-frameworks",
 }
 
 CATEGORY_PATTERNS: list[tuple[str, list[str]]] = [
-    ("language", [
-        "abc", "typing", "types", "dataclasses", "enum", "collections", "contextlib", "contextvars",
-        "functools", "itertools", "operator", "numbers", "decimal", "fractions", "statistics",
-        "math", "cmath", "array", "bisect", "heapq", "graphlib", "weakref", "copy", "copyreg",
-        "gc", "errno", "atexit", "warnings", "traceback", "sys", "platform", "sysconfig",
-        "builtins", "importlib", "imp", "runpy", "site", "compileall", "keyword", "symtable",
-        "token", "tokenize", "linecache", "pkgutil", "pyclbr", "pydoc", "pydoc_data",
-        "rlcompleter", "code", "codeop", "dis", "inspect", "opcode", "py_compile", "tabnanny",
-        "encodings", "codecs", "textwrap", "unicodedata", "stringprep", "readline",
-        "modulefinder", "struct", "faulthandler", "resource", "select", "selectors", "termios",
-        "singledispatch", "six", "decorator", "deprecated", "mypy_extensions", "entrypoints",
-        "toposort", "boltons", "cachetools", "objgraph", "retry", "punq",
-        "watchpoints", "usersettings",
-    ]),
-    ("concurrency", [
-        "asyncio", "asynchat", "asyncore", "threading", "multiprocessing", "queue",
-        "sched", "concurrent",
-    ]),
-    ("testing", [
-        "unittest", "doctest", "atheris", "mock", "assertpy", "behave",
-        "editdistance", "pytest_lazy_fixture",
-    ]),
-    ("datetime", [
-        "datetime", "time", "zoneinfo", "locale", "gettext", "calendar",
-        "dateparser_data", "dateutil", "croniter", "pytz", "python_crontab",
-        "lunardate", "convertdate", "ephem", "icalendar", "workalendar",
-        "pymeeus", "pyluach", "tzdata", "vobject", "rfc3339_validator",
-    ]),
-    ("io", [
-        "io", "filecmp", "difflib", "stat", "pipes", "ossaudiodev", "wave",
-        "sunau", "aifc", "audioop", "chunk", "sndhdr", "imghdr", "uu", "quopri",
-        "base64", "binascii", "xdrlib", "mmap", "datauri", "dirhash",
-        "binaryornot", "str2bool", "unidiff", "whatthepatch", "xmldiff",
-        "untangle", "olefile",
-    ]),
-    ("cli", [
-        "argparse", "getopt", "optparse", "cmd", "shlex", "click",
-        "colorama", "colorful", "consolemenu", "keyboard",
-        "pyautogui", "pyperclip", "pynput", "pyscreeze", "send2trash",
-        "tabulate", "tqdm", "pygments", "capturer", "wurlitzer",
-    ]),
-    ("gui", [
-        "tkinter", "curses", "turtle", "turtledemo", "pyi_splash",
-        "ttkthemes", "Xlib", "jack", "pyaudio",
-    ]),
-    ("data-science", [
-        "tensorflow", "networkx", "geopandas", "shapely", "seaborn",
-        "pycocotools", "hnswlib", "resampy", "openpyxl", "et_xmlfile",
-        "xlrd", "pyfarmhash", "qrcode", "qrbill",
-    ]),
-    ("dev-tools", [
-        "distutils", "ensurepip", "venv", "lib2to3", "idlelib", "bdb", "pdb",
-        "trace", "tracemalloc", "timeit", "cProfile", "profile", "pstats",
-        "flake8", "pyflakes", "pep8_naming", "gdb", "pythonwin", "portpicker",
-        "dockerfile_parse", "jenkins", "jmespath", "fire",
-    ]),
+    (
+        "language",
+        [
+            "abc",
+            "typing",
+            "types",
+            "dataclasses",
+            "enum",
+            "collections",
+            "contextlib",
+            "contextvars",
+            "functools",
+            "itertools",
+            "operator",
+            "numbers",
+            "decimal",
+            "fractions",
+            "statistics",
+            "math",
+            "cmath",
+            "array",
+            "bisect",
+            "heapq",
+            "graphlib",
+            "weakref",
+            "copy",
+            "copyreg",
+            "gc",
+            "errno",
+            "atexit",
+            "warnings",
+            "traceback",
+            "sys",
+            "platform",
+            "sysconfig",
+            "builtins",
+            "importlib",
+            "imp",
+            "runpy",
+            "site",
+            "compileall",
+            "keyword",
+            "symtable",
+            "token",
+            "tokenize",
+            "linecache",
+            "pkgutil",
+            "pyclbr",
+            "pydoc",
+            "pydoc_data",
+            "rlcompleter",
+            "code",
+            "codeop",
+            "dis",
+            "inspect",
+            "opcode",
+            "py_compile",
+            "tabnanny",
+            "encodings",
+            "codecs",
+            "textwrap",
+            "unicodedata",
+            "stringprep",
+            "readline",
+            "modulefinder",
+            "struct",
+            "faulthandler",
+            "resource",
+            "select",
+            "selectors",
+            "termios",
+            "singledispatch",
+            "six",
+            "decorator",
+            "deprecated",
+            "mypy_extensions",
+            "entrypoints",
+            "toposort",
+            "boltons",
+            "cachetools",
+            "objgraph",
+            "retry",
+            "punq",
+            "watchpoints",
+            "usersettings",
+        ],
+    ),
+    (
+        "concurrency",
+        [
+            "asyncio",
+            "asynchat",
+            "asyncore",
+            "threading",
+            "multiprocessing",
+            "queue",
+            "sched",
+            "concurrent",
+        ],
+    ),
+    (
+        "testing",
+        [
+            "unittest",
+            "doctest",
+            "atheris",
+            "mock",
+            "assertpy",
+            "behave",
+            "editdistance",
+            "pytest_lazy_fixture",
+        ],
+    ),
+    (
+        "datetime",
+        [
+            "datetime",
+            "time",
+            "zoneinfo",
+            "locale",
+            "gettext",
+            "calendar",
+            "dateparser_data",
+            "dateutil",
+            "croniter",
+            "pytz",
+            "python_crontab",
+            "lunardate",
+            "convertdate",
+            "ephem",
+            "icalendar",
+            "workalendar",
+            "pymeeus",
+            "pyluach",
+            "tzdata",
+            "vobject",
+            "rfc3339_validator",
+        ],
+    ),
+    (
+        "io",
+        [
+            "io",
+            "filecmp",
+            "difflib",
+            "stat",
+            "pipes",
+            "ossaudiodev",
+            "wave",
+            "sunau",
+            "aifc",
+            "audioop",
+            "chunk",
+            "sndhdr",
+            "imghdr",
+            "uu",
+            "quopri",
+            "base64",
+            "binascii",
+            "xdrlib",
+            "mmap",
+            "datauri",
+            "dirhash",
+            "binaryornot",
+            "str2bool",
+            "unidiff",
+            "whatthepatch",
+            "xmldiff",
+            "untangle",
+            "olefile",
+        ],
+    ),
+    (
+        "cli",
+        [
+            "argparse",
+            "getopt",
+            "optparse",
+            "cmd",
+            "shlex",
+            "click",
+            "colorama",
+            "colorful",
+            "consolemenu",
+            "keyboard",
+            "pyautogui",
+            "pyperclip",
+            "pynput",
+            "pyscreeze",
+            "send2trash",
+            "tabulate",
+            "tqdm",
+            "pygments",
+            "capturer",
+            "wurlitzer",
+        ],
+    ),
+    (
+        "gui",
+        [
+            "tkinter",
+            "curses",
+            "turtle",
+            "turtledemo",
+            "pyi_splash",
+            "ttkthemes",
+            "Xlib",
+            "jack",
+            "pyaudio",
+        ],
+    ),
+    (
+        "data-science",
+        [
+            "tensorflow",
+            "networkx",
+            "geopandas",
+            "shapely",
+            "seaborn",
+            "pycocotools",
+            "hnswlib",
+            "resampy",
+            "openpyxl",
+            "et_xmlfile",
+            "xlrd",
+            "pyfarmhash",
+            "qrcode",
+            "qrbill",
+        ],
+    ),
+    (
+        "dev-tools",
+        [
+            "distutils",
+            "ensurepip",
+            "venv",
+            "lib2to3",
+            "idlelib",
+            "bdb",
+            "pdb",
+            "trace",
+            "tracemalloc",
+            "timeit",
+            "cProfile",
+            "profile",
+            "pstats",
+            "flake8",
+            "pyflakes",
+            "pep8_naming",
+            "gdb",
+            "pythonwin",
+            "portpicker",
+            "dockerfile_parse",
+            "jenkins",
+            "jmespath",
+            "fire",
+        ],
+    ),
 ]
 
 
 def fetch_json(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "codepathfinder-indexer/1.0"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "codepathfinder-indexer/1.0"}
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        data: dict = json.loads(resp.read().decode("utf-8"))
+        return data
 
 
 def to_pascal_case(name: str) -> str:
     """abc -> PyAbc; xml.etree -> PyXmlEtree; http.client -> PyHttpClient."""
     parts = re.split(r"[._-]+", name)
-    return "Py" + "".join(p[:1].upper() + p[1:].lower() if p else "" for p in parts if p)
+    return "Py" + "".join(
+        p[:1].upper() + p[1:].lower() if p else "" for p in parts if p
+    )
 
 
 def categorize(module_name: str) -> str:
@@ -213,14 +513,18 @@ def extract_top_methods(detail: dict, limit: int = 10) -> list[dict]:
             elif isinstance(p, str):
                 param_strs.append(p)
         sig = f"{fn_name}({', '.join(param_strs)})"
-        doc = (fn.get("docstring") or fn.get("description") or "").strip().split("\n")[0][:180] or f"{fn_name} function."
-        methods.append({
-            "name": fn_name,
-            "signature": sig,
-            "description": doc,
-            "role": "neutral",
-            "tracks": [],
-        })
+        doc = (fn.get("docstring") or fn.get("description") or "").strip().split("\n")[
+            0
+        ][:180] or f"{fn_name} function."
+        methods.append(
+            {
+                "name": fn_name,
+                "signature": sig,
+                "description": doc,
+                "role": "neutral",
+                "tracks": [],
+            }
+        )
         if len(methods) >= limit:
             return methods
 
@@ -228,14 +532,18 @@ def extract_top_methods(detail: dict, limit: int = 10) -> list[dict]:
     for cls_name, cls in (detail.get("classes") or {}).items():
         if cls_name.startswith("_"):
             continue
-        doc = (cls.get("docstring") or cls.get("description") or "").strip().split("\n")[0][:180] or f"{cls_name} class."
-        methods.append({
-            "name": cls_name,
-            "signature": f"{cls_name}(...)",
-            "description": doc,
-            "role": "neutral",
-            "tracks": [],
-        })
+        doc = (cls.get("docstring") or cls.get("description") or "").strip().split(
+            "\n"
+        )[0][:180] or f"{cls_name} class."
+        methods.append(
+            {
+                "name": cls_name,
+                "signature": f"{cls_name}(...)",
+                "description": doc,
+                "role": "neutral",
+                "tracks": [],
+            }
+        )
         if len(methods) >= limit:
             return methods
 
@@ -267,7 +575,11 @@ def build_stub(module: dict, source: str, base_url: str, install_hint: str) -> d
         "patterns": [],
         "go_mod": None,
         "pip_snippet": install_hint,
-        "import_stmt": f"import {name}" if "." not in name else f"from {name.rsplit('.', 1)[0]} import {name.rsplit('.', 1)[1]}",
+        "import_stmt": (
+            f"import {name}"
+            if "." not in name
+            else f"from {name.rsplit('.', 1)[0]} import {name.rsplit('.', 1)[1]}"
+        ),
         "methods": methods,
         "example_rule": None,
         "rules_using": [],
@@ -276,22 +588,60 @@ def build_stub(module: dict, source: str, base_url: str, install_hint: str) -> d
 
 
 EXTRA_CATEGORIES = [
-    {"id": "language", "name": "Language Features", "description": "Python language primitives: typing, collections, abc, functools"},
-    {"id": "concurrency", "name": "Concurrency", "description": "asyncio, threading, multiprocessing, queue"},
-    {"id": "datetime", "name": "Date & Time", "description": "datetime, time, zoneinfo, dateutil"},
-    {"id": "io", "name": "I/O & Encoding", "description": "io streams, base64, binascii, plistlib"},
-    {"id": "cli", "name": "CLI & Terminal", "description": "argparse, click, colorama, tqdm"},
+    {
+        "id": "language",
+        "name": "Language Features",
+        "description": "Python language primitives: typing, collections, abc, functools",
+    },
+    {
+        "id": "concurrency",
+        "name": "Concurrency",
+        "description": "asyncio, threading, multiprocessing, queue",
+    },
+    {
+        "id": "datetime",
+        "name": "Date & Time",
+        "description": "datetime, time, zoneinfo, dateutil",
+    },
+    {
+        "id": "io",
+        "name": "I/O & Encoding",
+        "description": "io streams, base64, binascii, plistlib",
+    },
+    {
+        "id": "cli",
+        "name": "CLI & Terminal",
+        "description": "argparse, click, colorama, tqdm",
+    },
     {"id": "gui", "name": "GUI", "description": "tkinter, curses, turtle"},
-    {"id": "testing", "name": "Testing", "description": "unittest, doctest, mock, pytest tooling"},
-    {"id": "dev-tools", "name": "Developer Tools", "description": "distutils, venv, pdb, linters"},
-    {"id": "data-science", "name": "Data Science", "description": "tensorflow, networkx, geopandas, openpyxl"},
-    {"id": "utilities", "name": "Utilities", "description": "Miscellaneous modules without a dedicated category"},
+    {
+        "id": "testing",
+        "name": "Testing",
+        "description": "unittest, doctest, mock, pytest tooling",
+    },
+    {
+        "id": "dev-tools",
+        "name": "Developer Tools",
+        "description": "distutils, venv, pdb, linters",
+    },
+    {
+        "id": "data-science",
+        "name": "Data Science",
+        "description": "tensorflow, networkx, geopandas, openpyxl",
+    },
+    {
+        "id": "utilities",
+        "name": "Utilities",
+        "description": "Miscellaneous modules without a dedicated category",
+    },
 ]
 
 
 def main() -> None:
     if not MANIFEST_PATH.exists():
-        raise SystemExit(f"Manifest not found at {MANIFEST_PATH}. Run generate_sdk_manifest.py first.")
+        raise SystemExit(
+            f"Manifest not found at {MANIFEST_PATH}. Run generate_sdk_manifest.py first."
+        )
 
     manifest = json.loads(MANIFEST_PATH.read_text())
     py = manifest["languages"].setdefault("python", {})
@@ -317,7 +667,9 @@ def main() -> None:
     thirdparty = fetch_json(THIRDPARTY_MANIFEST_URL)
 
     stdlib_base = stdlib.get("base_url", STDLIB_MANIFEST_URL.rsplit("/", 1)[0])
-    thirdparty_base = thirdparty.get("base_url", THIRDPARTY_MANIFEST_URL.rsplit("/", 1)[0])
+    thirdparty_base = thirdparty.get(
+        "base_url", THIRDPARTY_MANIFEST_URL.rsplit("/", 1)[0]
+    )
 
     added = 0
     skipped = 0
@@ -327,7 +679,9 @@ def main() -> None:
         if name in covered_fqns:
             skipped += 1
             continue
-        stub = build_stub(module, "Python stdlib", stdlib_base, "# stdlib — no install required")
+        stub = build_stub(
+            module, "Python stdlib", stdlib_base, "# stdlib — no install required"
+        )
         classes[stub["id"]] = stub
         added += 1
 
@@ -336,7 +690,9 @@ def main() -> None:
         if name in covered_fqns:
             skipped += 1
             continue
-        stub = build_stub(module, "Third-party Python package", thirdparty_base, f"pip install {name}")
+        stub = build_stub(
+            module, "Third-party Python package", thirdparty_base, f"pip install {name}"
+        )
         classes[stub["id"]] = stub
         added += 1
 
@@ -346,7 +702,9 @@ def main() -> None:
         cat = centry.get("category", "utilities")
         if cat not in id_by_cat:
             id_by_cat[cat] = []
-            categories.append({"id": cat, "name": cat.title(), "description": "", "class_ids": []})
+            categories.append(
+                {"id": cat, "name": cat.title(), "description": "", "class_ids": []}
+            )
         id_by_cat[cat].append(cid)
 
     for cat in categories:
