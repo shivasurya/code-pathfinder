@@ -35,7 +35,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "docker.io/shivasurya/code-pathfinder:v2.0.2",
+      "identifier": "docker.io/shivasurya/code-pathfinder:v2.1.0",
       "transport": {
         "type": "stdio"
       }
