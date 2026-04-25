@@ -5,6 +5,21 @@ All notable changes to the codepathfinder Python SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-04-24
+
+### Fixed
+- Python type inference now resolves `with X() as y:` bindings, closing a gap
+  that prevented pure-L3 matchers (`QueryType.method(...)`) from firing on
+  `with tarfile.open(p) as tar: tar.extractall()` and similar context-manager
+  patterns across `zipfile`, `gzip`, `tempfile`, `sqlite3`, `socket`, `open`.
+- Typed function parameters (`def f(bundle: tarfile.TarFile): ...`) now seed
+  the function scope, so `bundle.method()` resolves via the annotation.
+  Supports `Optional[T]`, `Union[T, None]`, `T | None`, generics, forward
+  references (`"MyClass"`), and import-aliased names.
+- Nested-function scope FQNs now match Pass 1's indexing (`module.parent.nested`
+  instead of the previous `module.ClassName.nested`), so call-site receiver-type
+  lookups find bindings in helpers nested inside class methods.
+
 ## [2.1.0] - 2026-04-12
 
 ### Added

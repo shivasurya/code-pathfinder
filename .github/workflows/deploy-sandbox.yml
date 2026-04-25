@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Pathfinder version to deploy (e.g., 2.1.0)'
+        description: 'Pathfinder version to deploy (e.g., 2.1.1)'
         required: true
         type: string
 
@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 15
     env:
       # Use input version for dispatch, hardcoded for PR test
-      VERSION: ${{ github.event.inputs.version || '2.1.0' }}
+      VERSION: ${{ github.event.inputs.version || '2.1.1' }}
     steps:
       - name: Validate version format
         run: |
