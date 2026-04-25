@@ -124,29 +124,72 @@ func traverseForAssignments(
 	if nodeType == "function_definition" {
 		functionName := extractFunctionName(node, sourceCode)
 		if functionName != "" {
-			// Build class-qualified FQN for methods (matching Pass 1 behavior)
+			// Match Pass 1's FQN scheme exactly so call-site lookups
+			// (resolveCallTarget → typeEngine.GetScope(callerFQN)) find the
+			// bindings created here.
+			//
+			//   Top-level function f                  → module.f
+			//   Direct method m of class C            → module.C.m
+			//   Nested fn inner inside top-level outer → module.outer.inner
+			//   Nested fn helper inside method m of C  → module.m.helper
+			//                                            (NOT class-qualified —
+			//                                             nested fns are typed
+			//                                             function_definition,
+			//                                             not method)
 			switch {
-			case currentClass != "":
-				// This is a method inside a class
+			case currentClass != "" && currentFunction == "":
 				currentFunction = fmt.Sprintf("%s.%s.%s", modulePath, currentClass, functionName)
-			case currentFunction == "":
-				// Module-level function
-				currentFunction = modulePath + "." + functionName
+			case currentFunction != "":
+				// Nested: prepend the parent's qualified name (no class part).
+				parent := strings.TrimPrefix(currentFunction, modulePath+".")
+				if currentClass != "" {
+					parent = strings.TrimPrefix(parent, currentClass+".")
+				}
+				currentFunction = modulePath + "." + parent + "." + functionName
 			default:
-				// Nested function
-				currentFunction = currentFunction + "." + functionName
+				currentFunction = modulePath + "." + functionName
 			}
 
 			// Ensure scope exists for this function
 			if typeEngine.GetScope(currentFunction) == nil {
 				typeEngine.AddScope(resolution.NewFunctionScope(currentFunction))
 			}
+
+			// Extract typed parameters as variable bindings so method calls
+			// on them (e.g., `bundle.extract()` where `bundle: tarfile.TarFile`)
+			// can be resolved by Phase B receiver-type matching.
+			processTypedParameters(
+				node,
+				sourceCode,
+				filePath,
+				currentFunction,
+				typeEngine,
+				builtinRegistry,
+				importMap,
+			)
 		}
 	}
 
 	// Process assignment statements
 	if nodeType == "assignment" {
 		processAssignment(
+			node,
+			sourceCode,
+			filePath,
+			modulePath,
+			currentFunction,
+			typeEngine,
+			registry,
+			builtinRegistry,
+			importMap,
+		)
+	}
+
+	// Process `with ... as var` bindings (Gap 19): treat each `as_pattern`
+	// the same as a plain assignment so Phase A's stdlib resolver can resolve
+	// patterns like `with tarfile.open(p) as tar:`.
+	if nodeType == "with_statement" {
+		processWithStatement(
 			node,
 			sourceCode,
 			filePath,
@@ -278,6 +321,242 @@ func processAssignment(
 	}
 
 	scope.Variables[varName] = append(scope.Variables[varName], binding)
+}
+
+// processTypedParameters walks a function definition's parameter list and
+// adds a typed VariableBinding for each `typed_parameter` /
+// `typed_default_parameter`. This enables receiver-type matching for code
+// like `def f(bundle: tarfile.TarFile): bundle.extract(...)`.
+//
+// Type resolution rules:
+//   - Strip Optional[T] / Union[T, None] / T | None → T
+//   - Dotted names (e.g., tarfile.TarFile) → use as-is (already qualified)
+//   - Bare identifiers → look up in importMap; if found, use FQN
+//   - Builtin names (int, str, list, ...) → builtins.<name>
+//   - Otherwise → use the stripped name as-is (best-effort)
+func processTypedParameters(
+	funcNode *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	currentFunction string,
+	typeEngine *resolution.TypeInferenceEngine,
+	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
+) {
+	params := funcNode.ChildByFieldName("parameters")
+	if params == nil {
+		return
+	}
+
+	scope := typeEngine.GetScope(currentFunction)
+	if scope == nil {
+		return
+	}
+
+	for i := 0; i < int(params.ChildCount()); i++ {
+		param := params.Child(i)
+		if param == nil {
+			continue
+		}
+		if param.Type() != "typed_parameter" && param.Type() != "typed_default_parameter" {
+			continue
+		}
+
+		// Locate the parameter name (identifier).
+		// typed_parameter: identifier, ":", type
+		// typed_default_parameter: identifier, ":", type, "=", default_value
+		var identNode *sitter.Node
+		for j := 0; j < int(param.ChildCount()); j++ {
+			c := param.Child(j)
+			if c != nil && c.Type() == "identifier" {
+				identNode = c
+				break
+			}
+		}
+		if identNode == nil {
+			continue
+		}
+		paramName := strings.TrimSpace(identNode.Content(sourceCode))
+		if paramName == "" || paramName == "self" || paramName == "cls" {
+			continue
+		}
+
+		typeNode := param.ChildByFieldName("type")
+		if typeNode == nil {
+			continue
+		}
+
+		typeFQN := resolveParamType(typeNode.Content(sourceCode), importMap, builtinRegistry)
+		if typeFQN == "" {
+			continue
+		}
+
+		binding := &resolution.VariableBinding{
+			VarName: paramName,
+			Type: &core.TypeInfo{
+				TypeFQN:    typeFQN,
+				Confidence: 0.95,
+				Source:     "param_annotation",
+			},
+			Location: resolution.Location{
+				File:   filePath,
+				Line:   identNode.StartPoint().Row + 1,
+				Column: identNode.StartPoint().Column + 1,
+			},
+		}
+		scope.Variables[paramName] = append(scope.Variables[paramName], binding)
+	}
+}
+
+// resolveParamType normalizes a parameter annotation source string to an FQN.
+func resolveParamType(annotation string, importMap *core.ImportMap, builtinRegistry *registry.BuiltinRegistry) string {
+	trimmed := strings.TrimSpace(annotation)
+	// Forward references: `def f(x: "MyClass")` — strip surrounding quotes.
+	if len(trimmed) >= 2 {
+		first, last := trimmed[0], trimmed[len(trimmed)-1]
+		if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+			trimmed = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+		}
+	}
+	stripped := stripTypeHintWrappers(trimmed)
+	if stripped == "" || stripped == "None" {
+		return ""
+	}
+	// Drop generic args: `dict[str, int]` → `dict`.
+	if idx := strings.Index(stripped, "["); idx > 0 {
+		stripped = strings.TrimSpace(stripped[:idx])
+	}
+
+	// Already-dotted name → assume fully qualified (matches Langflow's
+	// `tarfile.TarFile` pattern). The first segment may itself be an
+	// imported alias; if so, expand it via importMap.
+	if strings.Contains(stripped, ".") {
+		if importMap != nil {
+			head, rest, _ := strings.Cut(stripped, ".")
+			if fqn, ok := importMap.Resolve(head); ok {
+				return fqn + "." + rest
+			}
+		}
+		return stripped
+	}
+
+	// Bare identifier — try import map first.
+	if importMap != nil {
+		if fqn, ok := importMap.Resolve(stripped); ok {
+			return fqn
+		}
+	}
+
+	// Builtin? Normalize to builtins.<name>.
+	if builtinRegistry != nil {
+		if t := builtinRegistry.GetType("builtins." + stripped); t != nil {
+			return "builtins." + stripped
+		}
+	}
+
+	return stripped
+}
+
+// processWithStatement extracts `with ... as var` bindings as if they were
+// plain assignments, feeding them through the same inferTypeFromExpression
+// pipeline. Handles single, multiple, and `async with` items. Tuple-pattern
+// aliases (`with f() as (a, b):`) are skipped, mirroring processAssignment.
+func processWithStatement(
+	node *sitter.Node,
+	sourceCode []byte,
+	filePath string,
+	modulePath string,
+	currentFunction string,
+	typeEngine *resolution.TypeInferenceEngine,
+	registry *core.ModuleRegistry,
+	builtinRegistry *registry.BuiltinRegistry,
+	importMap *core.ImportMap,
+) {
+	// AST shape: with_statement → with_clause → (with_item | as_pattern)+
+	// Each as_pattern has fields: value (context-manager expr) and alias (target).
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		if child == nil {
+			continue
+		}
+		if child.Type() != "with_clause" && child.Type() != "with_item" {
+			continue
+		}
+
+		for j := 0; j < int(child.NamedChildCount()); j++ {
+			item := child.NamedChild(j)
+			if item == nil {
+				continue
+			}
+
+			asPat := item
+			if item.Type() == "with_item" {
+				for k := 0; k < int(item.NamedChildCount()); k++ {
+					inner := item.NamedChild(k)
+					if inner != nil && inner.Type() == "as_pattern" {
+						asPat = inner
+						break
+					}
+				}
+			}
+			if asPat == nil || asPat.Type() != "as_pattern" {
+				continue
+			}
+
+			// tree-sitter-python exposes only the `alias` field on as_pattern;
+			// the value is the first named child.
+			aliasNode := asPat.ChildByFieldName("alias")
+			if aliasNode == nil {
+				if n := int(asPat.NamedChildCount()); n >= 2 {
+					aliasNode = asPat.NamedChild(n - 1)
+				}
+			}
+			var valueNode *sitter.Node
+			if asPat.NamedChildCount() > 0 {
+				valueNode = asPat.NamedChild(0)
+			}
+			if aliasNode == nil || valueNode == nil {
+				continue
+			}
+
+			varName := strings.TrimSpace(aliasNode.Content(sourceCode))
+			// Skip tuple/list unpacking (e.g. `as (a, b)`) — same as processAssignment.
+			if varName == "" || strings.ContainsAny(varName, "(),[] \t\n") {
+				continue
+			}
+
+			typeInfo := inferTypeFromExpression(valueNode, sourceCode, modulePath, registry, builtinRegistry, importMap)
+			if typeInfo == nil {
+				continue
+			}
+
+			binding := &resolution.VariableBinding{
+				VarName: varName,
+				Type:    typeInfo,
+				Location: resolution.Location{
+					File:   filePath,
+					Line:   aliasNode.StartPoint().Row + 1,
+					Column: aliasNode.StartPoint().Column + 1,
+				},
+			}
+			if valueNode.Type() == "call" {
+				if calleeName := extractCalleeName(valueNode, sourceCode); calleeName != "" {
+					binding.AssignedFrom = calleeName
+				}
+			}
+
+			scopeFQN := currentFunction
+			if scopeFQN == "" {
+				scopeFQN = modulePath
+			}
+			scope := typeEngine.GetScope(scopeFQN)
+			if scope == nil {
+				scope = resolution.NewFunctionScope(scopeFQN)
+				typeEngine.AddScope(scope)
+			}
+			scope.Variables[varName] = append(scope.Variables[varName], binding)
+		}
+	}
 }
 
 // inferTypeFromExpression infers the type of an expression.
