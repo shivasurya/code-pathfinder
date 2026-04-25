@@ -825,6 +825,175 @@ def f(bundle: Optional[tarfile.TarFile] = None):
 	}
 }
 
+// TestExtractVariableAssignments_TypedParameter_SkipsSelfAndCls verifies that
+// implicit method receivers (`self`, `cls`) never produce typed-parameter
+// bindings even if annotated, since they're never the target of receiver-type
+// matching.
+func TestExtractVariableAssignments_TypedParameter_SkipsSelfAndCls(t *testing.T) {
+	sourceCode := []byte(`
+class Foo:
+    def instance_method(self: "Foo", x: int):
+        pass
+
+    @classmethod
+    def cls_method(cls: "Foo", x: int):
+        pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	instScope := typeEngine.GetScope("test.Foo.instance_method")
+	assert.NotNil(t, instScope)
+	assert.Empty(t, instScope.Variables["self"], "self should never get a binding")
+	assert.NotEmpty(t, instScope.Variables["x"], "non-self typed params should still bind")
+
+	clsScope := typeEngine.GetScope("test.Foo.cls_method")
+	assert.NotNil(t, clsScope)
+	assert.Empty(t, clsScope.Variables["cls"], "cls should never get a binding")
+	assert.NotEmpty(t, clsScope.Variables["x"])
+}
+
+// TestResolveParamType_EdgeCases pins the smaller branches of resolveParamType
+// (wrapper stripping, generic truncation, builtin normalization, importMap
+// alias expansion, None/empty rejection).
+func TestResolveParamType_EdgeCases(t *testing.T) {
+	builtins := registry.NewBuiltinRegistry()
+	importMap := core.NewImportMap("/x.py")
+	importMap.AddImport("Controller", "myapp.controllers.Controller")
+	importMap.AddImport("mm", "myapp.module")
+
+	tests := []struct {
+		name       string
+		annotation string
+		expected   string
+	}{
+		{"empty", "", ""},
+		{"None literal", "None", ""},
+		{"Optional wrapper", "Optional[Controller]", "myapp.controllers.Controller"},
+		{"Union T None", "Union[Controller, None]", "myapp.controllers.Controller"},
+		{"pipe None", "Controller | None", "myapp.controllers.Controller"},
+		{"generic args dropped", "list[int]", "builtins.list"},
+		{"dotted alias expanded", "mm.Thing", "myapp.module.Thing"},
+		{"dotted no-alias passes through", "tarfile.TarFile", "tarfile.TarFile"},
+		{"bare identifier unknown", "Mystery", "Mystery"},
+		{"single-quoted forward ref", "'Controller'", "myapp.controllers.Controller"},
+		{"double-quoted forward ref", "\"tarfile.TarFile\"", "tarfile.TarFile"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveParamType(tt.annotation, importMap, builtins)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestExtractVariableAssignments_WithStatement_TupleAlias verifies tuple-pattern
+// aliases (`with f() as (a, b):`) are skipped, mirroring processAssignment's
+// pattern_list skip behavior.
+func TestExtractVariableAssignments_WithStatement_TupleAlias(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def f(p):
+    with tarfile.open(p) as (tar, _):
+        pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.f")
+	if scope != nil {
+		// Tuple alias must not produce bindings under either name.
+		assert.Empty(t, scope.Variables["tar"])
+		assert.Empty(t, scope.Variables["_"])
+	}
+}
+
+// TestExtractVariableAssignments_WithStatement_NoAlias covers `with X():` (no
+// `as` clause) — there's nothing to bind, so processWithStatement should
+// no-op without panicking.
+func TestExtractVariableAssignments_WithStatement_NoAlias(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def f(p):
+    with tarfile.open(p):
+        pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err) // Just verify no crash — no bindings expected.
+}
+
+// TestExtractVariableAssignments_WithStatement_NonCallValue covers the branch
+// where the context-manager expression isn't a call (e.g., an already-resolved
+// name). The binding should still be created — just without AssignedFrom.
+func TestExtractVariableAssignments_WithStatement_NonCallValue(t *testing.T) {
+	sourceCode := []byte(`
+def f(existing_cm):
+    with existing_cm as ctx:
+        pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+	// inferTypeFromExpression may or may not return a type for a bare
+	// identifier — what matters is no crash and AssignedFrom is empty.
+	scope := typeEngine.GetScope("test.f")
+	if scope != nil {
+		for _, b := range scope.Variables["ctx"] {
+			assert.Empty(t, b.AssignedFrom, "non-call value should not set AssignedFrom")
+		}
+	}
+}
+
 // TestExtractVariableAssignments_TypedParameter_NestedInMethod is the Langflow
 // shape: a typed-parameter helper nested inside a class method. The scope FQN
 // must match Pass 1's `findContainingFunction` output — `module.method.helper`
