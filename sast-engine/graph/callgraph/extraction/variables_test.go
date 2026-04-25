@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/stretchr/testify/assert"
@@ -259,12 +260,15 @@ def process():
 }
 
 // TestExtractVariableAssignments_NestedFunctions tests nested function scopes.
+// Nested functions are indexed under `module.<funcName>` (matching Pass 1's
+// `findContainingFunction`) — without this, call-site receiver-type lookups
+// can't find bindings created here.
 func TestExtractVariableAssignments_NestedFunctions(t *testing.T) {
 	sourceCode := []byte(`
-def outer():
+def outer_fn():
     x = "outer"
 
-    def inner():
+    def inner_fn():
         y = "inner"
 `)
 
@@ -285,13 +289,14 @@ def outer():
 	assert.NoError(t, err)
 
 	// Verify outer function scope
-	outerScope := typeEngine.GetScope("test.outer")
+	outerScope := typeEngine.GetScope("test.outer_fn")
 	assert.NotNil(t, outerScope)
 	assert.True(t, len(outerScope.Variables["x"]) > 0)
 	assert.Equal(t, "builtins.str", outerScope.Variables["x"][0].Type.TypeFQN)
 
-	// Verify inner function scope
-	innerScope := typeEngine.GetScope("test.outer.inner")
+	// Verify inner function scope — nested funcs are qualified with parent
+	// name (matches Pass 1's qualifiedFunctionName: outer_fn.inner_fn).
+	innerScope := typeEngine.GetScope("test.outer_fn.inner_fn")
 	assert.NotNil(t, innerScope)
 	assert.True(t, len(innerScope.Variables["y"]) > 0)
 	assert.Equal(t, "builtins.str", innerScope.Variables["y"][0].Type.TypeFQN)
@@ -590,4 +595,381 @@ def test():
 	assert.True(t, len(xBindings) > 0, "Variable x should be bound")
 	binding := xBindings[0]
 	assert.Equal(t, "builtins.str", binding.Type.TypeFQN, "Should infer string type from right operand")
+}
+
+// TestExtractVariableAssignments_WithStatement covers Gap 19: variables bound
+// via `with ... as` should produce the same call-placeholder binding that plain
+// `x = expr` produces, so Phase A stdlib resolution can resolve them.
+func TestExtractVariableAssignments_WithStatement(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def extract(path):
+    with tarfile.open(path, "r") as tar:
+        tar.extractall()
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.extract")
+	assert.NotNil(t, scope, "function scope should exist")
+
+	tarBindings := scope.Variables["tar"]
+	assert.Len(t, tarBindings, 1, "with-statement alias 'tar' should produce one binding")
+	if len(tarBindings) == 1 {
+		assert.Equal(t, "call:tarfile.open", tarBindings[0].Type.TypeFQN,
+			"binding should be a call-placeholder Phase A can resolve")
+		assert.Equal(t, "function_call_placeholder", tarBindings[0].Type.Source)
+	}
+}
+
+// TestExtractVariableAssignments_WithStatement_ModuleLevel covers module-level
+// `with` statements (the test_module_with.py reproduction case).
+func TestExtractVariableAssignments_WithStatement_ModuleLevel(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+with tarfile.open("archive.tar.gz") as tar:
+    tar.extractall(path="/tmp/output")
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	// Module-level scope uses the module FQN
+	scope := typeEngine.GetScope("test")
+	assert.NotNil(t, scope, "module scope should exist")
+
+	tarBindings := scope.Variables["tar"]
+	assert.Len(t, tarBindings, 1, "module-level with alias should produce one binding")
+	if len(tarBindings) == 1 {
+		assert.Equal(t, "call:tarfile.open", tarBindings[0].Type.TypeFQN)
+	}
+}
+
+// TestExtractVariableAssignments_WithStatement_MultipleItems covers the
+// `with a as x, b as y:` form with multiple context managers in one clause.
+func TestExtractVariableAssignments_WithStatement_MultipleItems(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+import gzip
+
+def extract(tar_path, gz_path):
+    with tarfile.open(tar_path) as tar, gzip.open(gz_path) as gz:
+        tar.extractall()
+        gz.read()
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.extract")
+	assert.NotNil(t, scope)
+
+	tarBindings := scope.Variables["tar"]
+	assert.Len(t, tarBindings, 1)
+	if len(tarBindings) == 1 {
+		assert.Equal(t, "call:tarfile.open", tarBindings[0].Type.TypeFQN)
+	}
+
+	gzBindings := scope.Variables["gz"]
+	assert.Len(t, gzBindings, 1)
+	if len(gzBindings) == 1 {
+		assert.Equal(t, "call:gzip.open", gzBindings[0].Type.TypeFQN)
+	}
+}
+
+// TestExtractVariableAssignments_TypedParameter_DottedAnnotation covers the
+// Langflow shape: `def f(bundle: tarfile.TarFile, ...): bundle.extract(...)`.
+// The `bundle` parameter must enter the function scope as a typed variable so
+// downstream method-call resolution can match it as a tarfile.TarFile receiver.
+func TestExtractVariableAssignments_TypedParameter_DottedAnnotation(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def _safe_extract_tar(bundle: tarfile.TarFile, output_dir):
+    bundle.extract("foo")
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test._safe_extract_tar")
+	assert.NotNil(t, scope, "function scope should exist")
+
+	bundleBindings := scope.Variables["bundle"]
+	assert.Len(t, bundleBindings, 1, "typed parameter 'bundle' should produce one binding")
+	if len(bundleBindings) == 1 {
+		assert.Equal(t, "tarfile.TarFile", bundleBindings[0].Type.TypeFQN,
+			"binding should use the fully-qualified annotation directly")
+		assert.Equal(t, "param_annotation", bundleBindings[0].Type.Source)
+	}
+}
+
+// TestExtractVariableAssignments_TypedParameter_BareIdentifierWithImport covers
+// `from tarfile import TarFile` followed by `def f(bundle: TarFile)` — bare
+// identifier annotation should resolve to the FQN via the import map.
+func TestExtractVariableAssignments_TypedParameter_BareIdentifierWithImport(t *testing.T) {
+	sourceCode := []byte(`
+from tarfile import TarFile
+
+def f(bundle: TarFile):
+    bundle.extract("foo")
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	importMap := core.NewImportMap(filePath)
+	importMap.AddImport("TarFile", "tarfile.TarFile")
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, importMap)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.f")
+	assert.NotNil(t, scope)
+
+	bundleBindings := scope.Variables["bundle"]
+	assert.Len(t, bundleBindings, 1)
+	if len(bundleBindings) == 1 {
+		assert.Equal(t, "tarfile.TarFile", bundleBindings[0].Type.TypeFQN,
+			"bare identifier should resolve via import map")
+	}
+}
+
+// TestExtractVariableAssignments_TypedParameter_OptionalWrapper verifies wrapper
+// stripping (Optional[T] → T) works for parameter annotations too.
+func TestExtractVariableAssignments_TypedParameter_OptionalWrapper(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def f(bundle: Optional[tarfile.TarFile] = None):
+    pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.f")
+	assert.NotNil(t, scope)
+
+	bundleBindings := scope.Variables["bundle"]
+	assert.Len(t, bundleBindings, 1)
+	if len(bundleBindings) == 1 {
+		assert.Equal(t, "tarfile.TarFile", bundleBindings[0].Type.TypeFQN,
+			"Optional[T] wrapper should be stripped to T")
+	}
+}
+
+// TestExtractVariableAssignments_TypedParameter_NestedInMethod is the Langflow
+// shape: a typed-parameter helper nested inside a class method. The scope FQN
+// must match Pass 1's `findContainingFunction` output — `module.method.helper`
+// — so the call-site receiver-type lookup at `bundle.extract(...)` finds the
+// `bundle: tarfile.TarFile` binding.
+func TestExtractVariableAssignments_TypedParameter_NestedInMethod(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+class BaseFileComponent:
+    def _unpack_bundle(self, bundle_path, output_dir):
+        def _safe_extract_tar(bundle: tarfile.TarFile, output_dir):
+            bundle.extract("member", path=output_dir)
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	// Pass 1 indexes the nested helper as `_unpack_bundle._safe_extract_tar`
+	// (no class qualifier — nested funcs are typed function_definition).
+	scope := typeEngine.GetScope("test._unpack_bundle._safe_extract_tar")
+	assert.NotNil(t, scope, "nested helper scope must match Pass 1 FQN")
+
+	bundleBindings := scope.Variables["bundle"]
+	assert.Len(t, bundleBindings, 1)
+	if len(bundleBindings) == 1 {
+		assert.Equal(t, "tarfile.TarFile", bundleBindings[0].Type.TypeFQN)
+	}
+}
+
+// TestExtractVariableAssignments_TypedParameter_ForwardReference covers PEP 484
+// forward references where the annotation is quoted (used to avoid circular
+// imports or for lazy resolution).
+func TestExtractVariableAssignments_TypedParameter_ForwardReference(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+def f(bundle: "tarfile.TarFile"):
+    bundle.extract("foo")
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.f")
+	assert.NotNil(t, scope)
+
+	bundleBindings := scope.Variables["bundle"]
+	assert.Len(t, bundleBindings, 1, "quoted annotation should still produce a binding")
+	if len(bundleBindings) == 1 {
+		assert.Equal(t, "tarfile.TarFile", bundleBindings[0].Type.TypeFQN,
+			"surrounding quotes should be stripped")
+	}
+}
+
+// TestExtractVariableAssignments_WithStatement_InsideMethod pins the
+// scope FQN behavior for `with` inside a class method (the second half of
+// Langflow's shape). Without this regression test, a future FQN change could
+// silently break the bind even though existing assertions still pass.
+func TestExtractVariableAssignments_WithStatement_InsideMethod(t *testing.T) {
+	sourceCode := []byte(`
+import tarfile
+
+class BaseFileComponent:
+    def _unpack_bundle(self, bundle_path):
+        with tarfile.open(bundle_path, "r:*") as tar_bundle:
+            tar_bundle.extract("foo")
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	// Method scope is class-qualified; with-binding lives there.
+	scope := typeEngine.GetScope("test.BaseFileComponent._unpack_bundle")
+	assert.NotNil(t, scope, "method scope should exist")
+
+	tarBindings := scope.Variables["tar_bundle"]
+	assert.Len(t, tarBindings, 1, "with-alias inside method should produce one binding")
+	if len(tarBindings) == 1 {
+		assert.Equal(t, "call:tarfile.open", tarBindings[0].Type.TypeFQN)
+	}
+}
+
+// TestExtractVariableAssignments_TypedDefaultParameter verifies that
+// `x: int = 5` (typed_default_parameter AST node) is also handled.
+func TestExtractVariableAssignments_TypedDefaultParameter(t *testing.T) {
+	sourceCode := []byte(`
+def f(count: int = 5):
+    pass
+`)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.py")
+	err := os.WriteFile(filePath, sourceCode, 0644)
+	assert.NoError(t, err)
+
+	modRegistry, err := registry.BuildModuleRegistry(tmpDir, false)
+	assert.NoError(t, err)
+
+	typeEngine := resolution.NewTypeInferenceEngine(modRegistry)
+	typeEngine.Builtins = registry.NewBuiltinRegistry()
+
+	err = ExtractVariableAssignments(filePath, sourceCode, typeEngine, modRegistry, typeEngine.Builtins, nil)
+	assert.NoError(t, err)
+
+	scope := typeEngine.GetScope("test.f")
+	assert.NotNil(t, scope)
+
+	countBindings := scope.Variables["count"]
+	assert.Len(t, countBindings, 1)
+	if len(countBindings) == 1 {
+		// `int` is a builtin — should be normalized to builtins.int
+		assert.Contains(t, []string{"builtins.int", "int"}, countBindings[0].Type.TypeFQN)
+	}
 }
