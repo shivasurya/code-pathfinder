@@ -15,7 +15,7 @@ import (
 
 var (
 	verboseFlag            bool
-	Version                = "2.1.0"
+	Version                = "2.1.1"
 	GitCommit              = "HEAD"
 	updateCheckManifestURL string // empty = use updatecheck default; overridable in tests
 )
