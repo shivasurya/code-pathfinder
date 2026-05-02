@@ -18,9 +18,12 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	// language. C/C++ branches come first because the dispatcher is the
 	// only place these node types are handled.
 	case "function_definition":
-		if isCFile {
+		switch {
+		case isCFile:
 			currentContext = parseCFunctionDefinition(node, sourceCode, graph, file)
-		} else if isPythonSourceFile {
+		case isCppFile:
+			currentContext = parseCppFunctionDefinition(node, sourceCode, graph, file, currentContext)
+		case isPythonSourceFile:
 			currentContext = parsePythonFunctionDefinition(node, sourceCode, graph, file, currentContext)
 		}
 
@@ -59,33 +62,50 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 			parsePythonAssignment(node, sourceCode, graph, file, currentContext)
 		}
 
-	// Java-specific node types
+	// Java-specific node types. The C/C++ grammars emit several of these
+	// same node types (block, if/while/do/for, binary_expression) with
+	// different AST shapes, so the Java handlers must be gated by language —
+	// otherwise they pollute C/C++ graphs with Java-tagged nodes.
 	case "block":
-		parseBlockStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseBlockStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 
 	case "yield_statement":
-		parseYieldStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseYieldStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 
 	case "if_statement":
-		parseIfStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseIfStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 		if isGoSourceFile {
 			parseGoIfStatement(node, sourceCode, graph, file)
 		}
 
 	case "while_statement":
-		parseWhileStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseWhileStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 
 	case "do_statement":
-		parseDoStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseDoStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 
 	case "for_statement":
-		parseForStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			parseForStatement(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 		if isGoSourceFile {
 			parseGoForStatement(node, sourceCode, graph, file)
 		}
 
 	case "binary_expression":
-		currentContext = parseJavaBinaryExpression(node, sourceCode, graph, file, isJavaSourceFile)
+		if isJavaSourceFile {
+			currentContext = parseJavaBinaryExpression(node, sourceCode, graph, file, isJavaSourceFile)
+		}
 
 	case "method_declaration":
 		if isJavaSourceFile {
@@ -98,13 +118,31 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		parseJavaMethodInvocation(node, sourceCode, graph, currentContext, file)
 
 	case "class_declaration":
-		parseJavaClassDeclaration(node, sourceCode, graph, file)
+		if isJavaSourceFile {
+			parseJavaClassDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "block_comment":
-		parseJavaBlockComment(node, sourceCode, graph, file)
+		if isJavaSourceFile {
+			parseJavaBlockComment(node, sourceCode, graph, file)
+		}
 
-	case "local_variable_declaration", "field_declaration":
+	case "local_variable_declaration":
 		parseJavaVariableDeclaration(node, sourceCode, graph, file)
+
+	case "field_declaration":
+		// tree-sitter overloads field_declaration:
+		//   - Java: class fields (handled by parseJavaVariableDeclaration)
+		//   - C:    struct fields (handled by parseCStructSpecifier via clike;
+		//           the bare nodes here are siblings of an already-recorded
+		//           struct, so we skip them to avoid duplicate nodes)
+		//   - C++:  data members AND inline method declarations inside a
+		//           class body (handled by parseCppFieldDeclaration)
+		if isCppFile {
+			parseCppFieldDeclaration(node, sourceCode, graph, file, currentContext)
+		} else if !isCFile {
+			parseJavaVariableDeclaration(node, sourceCode, graph, file)
+		}
 
 	case "object_creation_expression":
 		parseJavaObjectCreation(node, sourceCode, graph, file)
@@ -121,28 +159,37 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "call_expression":
-		if isCFile {
+		switch {
+		case isCFile:
 			parseCCallExpression(node, sourceCode, graph, file, currentContext)
-		} else if isGoSourceFile {
+		case isCppFile:
+			parseCppCallExpression(node, sourceCode, graph, file, currentContext)
+		case isGoSourceFile:
 			parseGoCallExpression(node, sourceCode, graph, file, currentContext)
 		}
 
-	// C/C++ specific node types. struct_specifier appears in C only at the
-	// top level (C++ uses class_specifier for the equivalent construct);
-	// the remaining four are shared between C and C++.
+	// C and C++ shared node types — each language has its own parse
+	// function that sets the right Language tag and handles language-
+	// specific concerns (e.g. C++ struct inheritance via base_class_clause).
 	case "struct_specifier":
 		if isCFile {
 			parseCStructSpecifier(node, sourceCode, graph, file)
+		} else if isCppFile {
+			parseCppStructSpecifier(node, sourceCode, graph, file)
 		}
 
 	case "enum_specifier":
-		if isCFile || isCppFile {
+		if isCFile {
 			parseCEnumSpecifier(node, sourceCode, graph, file)
+		} else if isCppFile {
+			parseCppEnumSpecifier(node, sourceCode, graph, file)
 		}
 
 	case "type_definition":
-		if isCFile || isCppFile {
+		if isCFile {
 			parseCTypeDefinition(node, sourceCode, graph, file)
+		} else if isCppFile {
+			parseCppTypeDefinition(node, sourceCode, graph, file)
 		}
 
 	case "declaration":
@@ -153,6 +200,39 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 	case "preproc_include":
 		if isCFile || isCppFile {
 			parseCLikeInclude(node, sourceCode, graph, file, isCppFile)
+		}
+
+	// C++-only node types. The dispatcher returns the new node from
+	// class_specifier and namespace_definition so the recursion picks up
+	// the surrounding scope as currentContext for member resolution.
+	case "class_specifier":
+		if isCppFile {
+			currentContext = parseCppClassSpecifier(node, sourceCode, graph, file, currentContext)
+		}
+
+	case "namespace_definition":
+		if isCppFile {
+			currentContext = parseCppNamespaceDefinition(node, sourceCode, graph, file, currentContext)
+		}
+
+	case "template_declaration":
+		if isCppFile {
+			parseCppTemplateDeclaration(node, sourceCode, graph, file)
+		}
+
+	case "throw_statement":
+		if isCppFile {
+			parseCppThrowStatement(node, sourceCode, graph, file, currentContext)
+		}
+
+	case "try_statement":
+		if isCppFile {
+			parseCppTryStatement(node, sourceCode, graph, file, currentContext)
+		}
+
+	case "access_specifier":
+		if isCppFile {
+			recordAccessSpecifier(node, sourceCode, currentContext)
 		}
 
 	case "short_var_declaration":

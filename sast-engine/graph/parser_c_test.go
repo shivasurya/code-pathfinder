@@ -51,7 +51,7 @@ func findFirstNodeOfType(node *sitter.Node, nodeType string) *sitter.Node {
 	return nil
 }
 
-// TestParseCEndToEnd parses testdata/c/ as a complete project via Initialize
+// TestParseCEndToEnd parses ../testdata/c/ as a complete project via Initialize
 // and asserts that every node type the C parser is responsible for —
 // function definitions, forward declarations, structs, enums, typedefs,
 // variable declarations, includes, and call expressions — produces graph
@@ -64,7 +64,7 @@ func findFirstNodeOfType(node *sitter.Node, nodeType string) *sitter.Node {
 // parser.go. If a future refactor moves parse functions into a subpackage
 // or changes the dispatch order, this test will catch behavioural drift.
 func TestParseCEndToEnd(t *testing.T) {
-	graph := Initialize("testdata/c", nil)
+	graph := Initialize("../testdata/c", nil)
 	if graph == nil {
 		t.Fatal("Initialize returned nil")
 	}

@@ -7,17 +7,23 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-// parser_c.go converts tree-sitter C AST nodes into graph.Node objects. The
-// dispatcher in buildGraphFromAST (parser.go) selects the parse functions
-// declared here for files whose extension routes them to the tree-sitter C
-// grammar — every entry point sets Language="c" on the produced node.
+// parser_c.go converts tree-sitter C AST nodes into graph.Node objects.
+// The dispatcher in buildGraphFromAST (parser.go) selects the parse
+// functions declared here for files whose extension routes them to the
+// tree-sitter C grammar — every entry point sets Language="c" on the
+// produced node.
 //
-// All AST extraction (function metadata, type strings, parameter lists,
-// struct fields, call info) goes through the graph/clike helper package
-// so that parser_cpp.go (PR-04) can reuse the same primitives without
-// duplicating logic. Two helpers in this file — parseCLikeDeclaration and
-// parseCLikeInclude — are deliberately language-neutral and accept an
-// isCpp flag so the C++ parser can call them directly.
+// C++ has its own dispatcher (parser_cpp.go) — separate file, separate
+// constructs (classes, namespaces, templates, throw/try). The two parsers
+// share the AST extraction primitives in graph/clike (function metadata,
+// type strings, parameter lists, struct fields, call info), and a small
+// set of language-neutral helpers (childrenByFieldName, bareIdentifierName,
+// extractTaggedName, lineRange, newSourceLocation, scopeFromContext,
+// languageOfFile, normaliseIncludePath) that live at the bottom of this
+// file. Two parse functions — parseCLikeDeclaration and parseCLikeInclude —
+// are deliberately language-neutral and accept an isCpp flag because the
+// AST shape for variable declarations and #include directives is identical
+// between the two grammars.
 
 // Language tags used as Node.Language values for the C/C++ parsers.
 const (
@@ -25,7 +31,9 @@ const (
 	languageCpp = "cpp"
 )
 
-// Node.Type values produced by the C/C++ parsers.
+// Node.Type values produced by the C parser. C++-only types
+// (method_declaration, class_declaration, ThrowStmt, TryStmt, …) live in
+// parser_cpp.go.
 const (
 	nodeTypeFunctionDefinition = "function_definition"
 	nodeTypeStructDeclaration  = "struct_declaration"
@@ -36,9 +44,11 @@ const (
 	nodeTypeIncludeStatement   = "include_statement"
 )
 
-// Metadata keys used by the C/C++ parsers. Keeping these as constants makes
-// downstream consumers (rule writers, the call-graph builder) discoverable
-// and prevents key drift.
+// Metadata keys produced by the C parser. The keys covering call-shape
+// detection (is_method / is_arrow / is_qualified / receiver) are shared
+// with the C++ parser because clike.CallInfo classifies all four call
+// shapes regardless of language — C can also produce arrow-method calls
+// through function pointers.
 const (
 	metaIsDeclaration  = "is_declaration"
 	metaSystemInclude  = "system_include"
@@ -46,6 +56,10 @@ const (
 	metaEnumerators    = "enumerators"
 	metaUnderlyingType = "underlying_type"
 	metaIsAnonymous    = "is_anonymous"
+	metaIsMethod       = "is_method"
+	metaIsArrow        = "is_arrow"
+	metaIsQualified    = "is_qualified"
+	metaReceiver       = "receiver"
 )
 
 // =============================================================================
@@ -197,7 +211,7 @@ func parseCTypeDefinition(node *sitter.Node, sourceCode []byte, graph *CodeGraph
 		underlying = strings.TrimSpace(typeNode.Content(sourceCode))
 	}
 
-	for _, declarator := range childrenByFieldName(node, "declarator") {
+	for _, declarator := range childDeclarators(node) {
 		aliasName := bareIdentifierName(declarator, sourceCode)
 		if aliasName == "" {
 			aliasName = strings.TrimSpace(declarator.Content(sourceCode))
@@ -241,7 +255,19 @@ func parseCLikeDeclaration(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 	// function_definition node so callers and call-graph builders find it
 	// alongside actual definitions; Metadata["is_declaration"] = true
 	// distinguishes the prototype from a body-bearing definition.
+	//
+	// In C++, the same shape is used by tree-sitter for destructors and
+	// inline method declarations that don't go through field_declaration
+	// (e.g. `~ClassName();` inside a class body). When we are in class
+	// context we route to the C++ helper which emits a method_declaration
+	// node instead — keeping rule writers free of dispatch concerns.
 	if isFunctionPrototype(node) {
+		if isCpp {
+			if classNode := classFromContext(currentContext); classNode != nil {
+				emitCppMethodDeclarationFromDeclaration(node, sourceCode, graph, file, classNode)
+				return
+			}
+		}
 		emitFunctionDeclaration(node, sourceCode, graph, file, isCpp)
 		return
 	}
@@ -251,7 +277,7 @@ func parseCLikeDeclaration(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 	language := languageOfFile(isCpp)
 	lineNumber := node.StartPoint().Row + 1
 
-	for _, declarator := range childrenByFieldName(node, "declarator") {
+	for _, declarator := range childDeclarators(node) {
 		name, valueText := bareIdentifierAndInitialiser(declarator, sourceCode)
 		if name == "" {
 			continue
@@ -279,7 +305,7 @@ func parseCLikeDeclaration(node *sitter.Node, sourceCode []byte, graph *CodeGrap
 // any declarator being a function_declarator is enough to treat the whole
 // declaration as a prototype, which matches what real C codebases do.
 func isFunctionPrototype(node *sitter.Node) bool {
-	for _, declarator := range childrenByFieldName(node, "declarator") {
+	for _, declarator := range childDeclarators(node) {
 		for cur := declarator; cur != nil; cur = cur.ChildByFieldName("declarator") {
 			if cur.Type() == "function_declarator" {
 				return true
@@ -341,16 +367,16 @@ func parseCCallExpression(node *sitter.Node, sourceCode []byte, graph *CodeGraph
 
 	metadata := map[string]any{}
 	if info.IsMethod {
-		metadata["is_method"] = true
+		metadata[metaIsMethod] = true
 	}
 	if info.IsArrow {
-		metadata["is_arrow"] = true
+		metadata[metaIsArrow] = true
 	}
 	if info.IsQualified {
-		metadata["is_qualified"] = true
+		metadata[metaIsQualified] = true
 	}
 	if info.Receiver != "" {
-		metadata["receiver"] = info.Receiver
+		metadata[metaReceiver] = info.Receiver
 	}
 
 	callNode := &Node{
@@ -421,15 +447,16 @@ func collectStorageClassSpecifiers(node *sitter.Node, sourceCode []byte) []strin
 	return classes
 }
 
-// childrenByFieldName returns every direct child of node whose field name
-// matches name. tree-sitter exposes ChildByFieldName for the *first* match
-// only, but several C constructs (declaration with multiple init_declarators,
-// type_definition with multiple alias names) repeat the same field — this
-// helper iterates the full child list and yields all of them in order.
-func childrenByFieldName(node *sitter.Node, name string) []*sitter.Node {
+// childDeclarators returns every direct child of node whose field name is
+// "declarator". tree-sitter's stdlib ChildByFieldName returns the *first*
+// match only, but several C/C++ constructs (declaration with multiple
+// init_declarators, type_definition with multiple alias names) repeat the
+// same field — this helper iterates the full child list and yields all
+// of them in order.
+func childDeclarators(node *sitter.Node) []*sitter.Node {
 	var matches []*sitter.Node
 	for i := 0; i < int(node.ChildCount()); i++ {
-		if node.FieldNameForChild(i) == name {
+		if node.FieldNameForChild(i) == "declarator" {
 			if c := node.Child(i); c != nil {
 				matches = append(matches, c)
 			}
