@@ -259,6 +259,88 @@ func TestGetFilesComprehensive(t *testing.T) {
 	}
 }
 
+// TestGetFilesIncludesCAndCpp asserts that getFiles discovers every
+// supported C and C++ source/header extension and skips the build-artifact
+// directories that are typical in C/C++ projects (build/, cmake-build-*,
+// third_party/, external/, obj/, bin/, dist/, .cache/).
+func TestGetFilesIncludesCAndCpp(t *testing.T) {
+	dir, err := os.MkdirTemp("", "getfiles_clike")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	files := []string{
+		"a.c", "b.cpp", "c.cc", "d.cxx",
+		"e.h", "f.hpp", "g.hh", "h.hxx",
+		"keep.java", "keep.py", "keep.go",
+		"build/skip.c",
+		"cmake-build-debug/skip.cpp",
+		"cmake-build-release/skip.h",
+		"cmake-build-foo/skip.cpp",
+		"third_party/skip.c",
+		"external/skip.h",
+		"obj/skip.c",
+		"bin/skip.cpp",
+		"dist/skip.h",
+		".cache/skip.c",
+		"src/keep.cpp",
+		"include/keep.hpp",
+	}
+
+	for _, f := range files {
+		full := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("// stub\n"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	got, err := getFiles(dir)
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+
+	gotSet := make(map[string]bool, len(got))
+	for _, p := range got {
+		rel, _ := filepath.Rel(dir, p)
+		gotSet[rel] = true
+	}
+
+	wantPresent := []string{
+		"a.c", "b.cpp", "c.cc", "d.cxx",
+		"e.h", "f.hpp", "g.hh", "h.hxx",
+		"keep.java", "keep.py", "keep.go",
+		filepath.Join("src", "keep.cpp"),
+		filepath.Join("include", "keep.hpp"),
+	}
+	for _, w := range wantPresent {
+		if !gotSet[w] {
+			t.Errorf("expected %q in result, missing", w)
+		}
+	}
+
+	wantAbsent := []string{
+		filepath.Join("build", "skip.c"),
+		filepath.Join("cmake-build-debug", "skip.cpp"),
+		filepath.Join("cmake-build-release", "skip.h"),
+		filepath.Join("cmake-build-foo", "skip.cpp"),
+		filepath.Join("third_party", "skip.c"),
+		filepath.Join("external", "skip.h"),
+		filepath.Join("obj", "skip.c"),
+		filepath.Join("bin", "skip.cpp"),
+		filepath.Join("dist", "skip.h"),
+		filepath.Join(".cache", "skip.c"),
+	}
+	for _, w := range wantAbsent {
+		if gotSet[w] {
+			t.Errorf("expected %q to be excluded but found in result", w)
+		}
+	}
+}
+
 func TestGetFilesErrors(t *testing.T) {
 	tests := []struct {
 		name      string

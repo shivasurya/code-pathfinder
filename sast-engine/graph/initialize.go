@@ -7,7 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/clike"
 	sitter "github.com/smacker/go-tree-sitter"
+	clang "github.com/smacker/go-tree-sitter/c"
+	cpplang "github.com/smacker/go-tree-sitter/cpp"
 	"github.com/smacker/go-tree-sitter/golang"
 	"github.com/smacker/go-tree-sitter/java"
 	"github.com/smacker/go-tree-sitter/python"
@@ -90,18 +93,27 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 				continue
 			}
 
-			// Handle tree-sitter based parsing for Java and Python
-			switch fileExt {
-			case ".java":
+			// For .h files, classify as C vs C++ once and cache the result so
+			// per-AST-node language checks remain zero-I/O during traversal.
+			if fileExt == ".h" {
+				clike.CacheHeaderLanguage(file, clike.DetectCppInHeader(file))
+			}
+
+			// Handle tree-sitter based parsing for Java, Python, Go, C, and C++.
+			// C/C++ cases come first because .h is shared across both grammars and
+			// must route via the cached heuristic, not a simple extension match.
+			switch {
+			case clike.IsCSourceFile(file):
+				parser.SetLanguage(clang.GetLanguage())
+			case clike.IsCppSourceFile(file):
+				parser.SetLanguage(cpplang.GetLanguage())
+			case fileExt == ".java":
 				parser.SetLanguage(java.GetLanguage())
-			case ".py":
+			case fileExt == ".py":
 				parser.SetLanguage(python.GetLanguage())
-			case ".go":
+			case fileExt == ".go":
 				parser.SetLanguage(golang.GetLanguage())
 			default:
-				// NOTE: This case is currently unreachable because getFiles() only returns
-				// .java, .py, Dockerfile*, and docker-compose* files. This exists as defensive
-				// programming in case getFiles() is modified to include additional file types.
 				Log("Unsupported file type:", file)
 				if callbacks != nil && callbacks.OnProgress != nil {
 					callbacks.OnProgress()

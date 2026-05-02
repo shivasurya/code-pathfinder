@@ -252,8 +252,9 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
-// getFiles walks through a directory and returns all source files (Java, Python, Go, Dockerfile, docker-compose).
-// It skips vendor/, testdata/, node_modules/, .git/, and directories starting with "_".
+// getFiles walks through a directory and returns all source files (Java, Python, Go, C/C++, Dockerfile, docker-compose).
+// It skips vendor/, testdata/, node_modules/, .git/, common C/C++ build artifact directories,
+// and directories starting with "_".
 func getFiles(directory string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
@@ -264,21 +265,28 @@ func getFiles(directory string) ([]string, error) {
 		if info.IsDir() {
 			name := info.Name()
 			switch name {
-			case "vendor", "testdata", "node_modules", ".git":
+			case "vendor", "testdata", "node_modules", ".git",
+				"build", "cmake-build-debug", "cmake-build-release",
+				"third_party", "external", "obj", "bin", "dist", ".cache":
 				return filepath.SkipDir
 			}
-			if strings.HasPrefix(name, "_") {
+			if strings.HasPrefix(name, "_") || strings.HasPrefix(name, "cmake-build-") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		// append java, python, go, dockerfile, and docker-compose files
+		// append java, python, go, c/c++, dockerfile, and docker-compose files
 		ext := filepath.Ext(path)
 		base := filepath.Base(path)
 		baseLower := strings.ToLower(base)
 
 		switch {
 		case ext == ".java" || ext == ".py" || ext == ".go":
+			files = append(files, path)
+		case ext == ".c" || ext == ".h":
+			files = append(files, path)
+		case ext == ".cpp" || ext == ".cc" || ext == ".cxx" ||
+			ext == ".hpp" || ext == ".hh" || ext == ".hxx":
 			files = append(files, path)
 		case strings.HasPrefix(baseLower, "dockerfile"):
 			// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
