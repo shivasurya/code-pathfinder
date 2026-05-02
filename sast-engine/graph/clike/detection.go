@@ -1,11 +1,3 @@
-// Package clike contains shared helpers for parsing C and C++ source files.
-//
-// The parsing pipeline treats C and C++ as two distinct languages with separate
-// tree-sitter grammars but a large amount of shared structure (declarations,
-// statements, type strings). The helpers in this package live alongside the
-// language-specific siblings (graph/golang, graph/python, graph/java) and
-// provide the cross-cutting primitives — language detection today, AST and
-// type extraction in subsequent PRs.
 package clike
 
 import (
