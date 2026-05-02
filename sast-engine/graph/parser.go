@@ -1,17 +1,26 @@
 package graph
 
-import sitter "github.com/smacker/go-tree-sitter"
+import (
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/clike"
+	sitter "github.com/smacker/go-tree-sitter"
+)
 
 // buildGraphFromAST builds a code graph from an Abstract Syntax Tree.
 func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, currentContext *Node, file string) {
 	isJavaSourceFile := isJavaSourceFile(file)
 	isPythonSourceFile := isPythonSourceFile(file)
 	isGoSourceFile := isGoSourceFile(file)
+	isCFile := clike.IsCSourceFile(file)
+	isCppFile := clike.IsCppSourceFile(file)
 
 	switch node.Type() {
-	// Python-specific node types
+	// Python and C share the function_definition node type — dispatch by
+	// language. C/C++ branches come first because the dispatcher is the
+	// only place these node types are handled.
 	case "function_definition":
-		if isPythonSourceFile {
+		if isCFile {
+			currentContext = parseCFunctionDefinition(node, sourceCode, graph, file)
+		} else if isPythonSourceFile {
 			currentContext = parsePythonFunctionDefinition(node, sourceCode, graph, file, currentContext)
 		}
 
@@ -112,8 +121,38 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		}
 
 	case "call_expression":
-		if isGoSourceFile {
+		if isCFile {
+			parseCCallExpression(node, sourceCode, graph, file, currentContext)
+		} else if isGoSourceFile {
 			parseGoCallExpression(node, sourceCode, graph, file, currentContext)
+		}
+
+	// C/C++ specific node types. struct_specifier appears in C only at the
+	// top level (C++ uses class_specifier for the equivalent construct);
+	// the remaining four are shared between C and C++.
+	case "struct_specifier":
+		if isCFile {
+			parseCStructSpecifier(node, sourceCode, graph, file)
+		}
+
+	case "enum_specifier":
+		if isCFile || isCppFile {
+			parseCEnumSpecifier(node, sourceCode, graph, file)
+		}
+
+	case "type_definition":
+		if isCFile || isCppFile {
+			parseCTypeDefinition(node, sourceCode, graph, file)
+		}
+
+	case "declaration":
+		if isCFile || isCppFile {
+			parseCLikeDeclaration(node, sourceCode, graph, file, currentContext, isCppFile)
+		}
+
+	case "preproc_include":
+		if isCFile || isCppFile {
+			parseCLikeInclude(node, sourceCode, graph, file, isCppFile)
 		}
 
 	case "short_var_declaration":
