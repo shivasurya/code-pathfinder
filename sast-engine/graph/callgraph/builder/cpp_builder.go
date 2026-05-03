@@ -411,6 +411,11 @@ func isCppCallNode(node *graph.Node) bool {
 // corresponding edge / CallSite record to the call graph. Unresolved
 // sites are still recorded (Resolved=false) for diagnostics — stdlib
 // and external calls remain visible.
+//
+// Phase 2 (PR-02): if the C++ resolver and the embedded C resolver both
+// fail, the C++ stdlib registry is consulted (handled inside
+// resolveCppCallTarget). The optional *core.CStdlibFunction return value
+// flows return type and security tag into the emitted CallSite.
 func resolveCppCallSites(
 	sites []*CallSiteInternal,
 	callGraph *core.CallGraph,
@@ -419,8 +424,8 @@ func resolveCppCallSites(
 	classes map[string][]cppClassByteRange,
 ) {
 	for _, cs := range sites {
-		targetFQN, resolved := resolveCppCallTarget(cs, callGraph, registry, typeEngine, classes)
-		callSite := buildCCallSite(cs, targetFQN, resolved)
+		targetFQN, resolved, stdlibFn := resolveCppCallTarget(cs, callGraph, registry, typeEngine, classes)
+		callSite := buildCCallSite(cs, targetFQN, resolved, stdlibFn)
 		callGraph.AddCallSite(cs.CallerFQN, callSite)
 		if resolved {
 			callGraph.AddEdge(cs.CallerFQN, targetFQN)
@@ -441,30 +446,269 @@ func resolveCppCallSites(
 //
 // Each step short-circuits on the first hit; later steps are tried
 // only if earlier ones miss.
+//
+// Phase 2 (PR-02): a stdlib step is inserted between project-internal
+// resolution and the C-fallthrough. The C++ stdlib registry is consulted
+// for namespaced free functions (std::move) and for class methods on a
+// receiver whose type the type engine has identified (vec.push_back
+// where vec is std::vector<int>). The C-fallthrough also picks up <stdio.h>
+// and friends via the embedded C registry's stdlib loader.
 func resolveCppCallTarget(
 	cs *CallSiteInternal,
 	callGraph *core.CallGraph,
 	registry *core.CppModuleRegistry,
 	typeEngine *resolution.CppTypeInferenceEngine,
 	classes map[string][]cppClassByteRange,
-) (string, bool) {
+) (string, bool, *core.CStdlibFunction) {
 	if cs.FunctionName == "" {
-		return "", false
+		return "", false, nil
 	}
 
 	if fqn, ok := lookupQualifiedCall(cs.FunctionName, registry); ok {
-		return fqn, true
+		return fqn, true, nil
 	}
 	if cs.ObjectName == receiverThis {
 		if fqn, ok := lookupThisMethod(cs, callGraph, registry, classes); ok {
-			return fqn, true
+			return fqn, true, nil
 		}
 	} else if cs.ObjectName != "" {
 		if fqn, ok := lookupReceiverMethod(cs, registry, typeEngine); ok {
-			return fqn, true
+			return fqn, true, nil
+		}
+		// Phase 2: try C++ stdlib method dispatch on the receiver's type.
+		if registry.StdlibCppRegistry != nil {
+			if fqn, fn := lookupCppStdlibMethod(cs, registry, typeEngine); fn != nil {
+				return fqn, true, fn
+			}
 		}
 	}
+
+	// Phase 2: try C++ stdlib free-function (std::move, std::swap, …) before
+	// falling through to the C resolver. Qualified-call lookup above already
+	// caught the project-internal forms; this step covers the registry side.
+	if registry.StdlibCppRegistry != nil {
+		if fqn, fn := lookupCppStdlibFreeFunction(cs, &registry.CModuleRegistry, registry.StdlibCppRegistry); fn != nil {
+			return fqn, true, fn
+		}
+	}
+
 	return resolveCCallTarget(cs, callGraph, &registry.CModuleRegistry)
+}
+
+// lookupCppStdlibMethod resolves `obj.method()` against the C++ stdlib
+// registry. Steps:
+//
+//  1. Look up the receiver's declared type via the type engine.
+//  2. Strip template arguments to get the registry key
+//     ("std::vector<int>" → "std::vector").
+//  3. Walk the caller's `#include <...>` list and ask the registry for
+//     a method with that name on that class. First hit wins.
+//
+// Returns the synthetic FQN ("<class>::<method>") and the registry record
+// on success; "", nil on miss. A receiver type the engine cannot resolve
+// is silently treated as a miss — Phase 1's behaviour for unresolved
+// receivers is preserved.
+func lookupCppStdlibMethod(
+	cs *CallSiteInternal,
+	registry *core.CppModuleRegistry,
+	typeEngine *resolution.CppTypeInferenceEngine,
+) (string, *core.CStdlibFunction) {
+	if typeEngine == nil {
+		return "", nil
+	}
+	scope := typeEngine.GetScope(cs.CallerFQN)
+	if scope == nil {
+		return "", nil
+	}
+	binding := scope.GetVariable(cs.ObjectName)
+	if binding == nil || binding.Type == nil {
+		return "", nil
+	}
+	receiverFQN := canonicalizeStdlibType(normaliseTypeName(binding.Type.TypeFQN))
+	if receiverFQN == "" {
+		return "", nil
+	}
+	prefix, ok := registry.FileToPrefix[cs.CallerFile]
+	if !ok {
+		return "", nil
+	}
+	for _, header := range registry.SystemIncludes[prefix] {
+		method, err := registry.StdlibCppRegistry.GetMethod(header, receiverFQN, cs.FunctionName)
+		if err == nil && method != nil {
+			// Substitute template parameters using the receiver's concrete
+			// args (e.g. vector<int>::operator[] T& → int&). Phase 2 covers
+			// the common single-T cases; extension to K/V/U is built in.
+			cloned := substituteTemplateMethodReturn(method, binding.Type.TypeFQN)
+			fqn := receiverFQN + fqnSeparator + cs.FunctionName
+			return fqn, cloned
+		}
+	}
+	return "", nil
+}
+
+// lookupCppStdlibFreeFunction asks the registry for a namespaced free
+// function. The call's FunctionName MUST already be the qualified form
+// ("std::move") for the registry's GetFreeFunction to succeed — bare
+// names like "move" without the namespace are a different lookup path
+// and stay out of scope here.
+func lookupCppStdlibFreeFunction(
+	cs *CallSiteInternal,
+	cReg *core.CModuleRegistry,
+	cppLoader core.CppStdlibLoader,
+) (string, *core.CStdlibFunction) {
+	if !strings.Contains(cs.FunctionName, fqnSeparator) {
+		return "", nil
+	}
+	prefix, ok := cReg.FileToPrefix[cs.CallerFile]
+	if !ok {
+		return "", nil
+	}
+	for _, header := range cReg.SystemIncludes[prefix] {
+		fn, err := cppLoader.GetFreeFunction(header, cs.FunctionName)
+		if err == nil && fn != nil {
+			return fn.FQN, fn
+		}
+	}
+	return "", nil
+}
+
+// canonicalizeStdlibType strips the template-argument suffix from a type
+// FQN to produce the registry key used by GetClass / GetMethod. Examples:
+//
+//	"std::vector<int>"               → "std::vector"
+//	"std::map<std::string, int>"     → "std::map"
+//	"std::unique_ptr<MyClass>"       → "std::unique_ptr"
+//	"int"                            → "int"
+//
+// The first '<' wins; nested template arguments are ignored at the key
+// level (the receiver's own FQN still carries them for substitution).
+func canonicalizeStdlibType(typeFQN string) string {
+	if idx := strings.IndexByte(typeFQN, '<'); idx > 0 {
+		return strings.TrimSpace(typeFQN[:idx])
+	}
+	return typeFQN
+}
+
+// substituteTemplateMethodReturn replaces the canonical template parameter
+// names (T, U, V, K) in the registry's recorded return type with the
+// concrete arguments parsed from the receiver's FQN. Returns a SHALLOW
+// COPY of the registry function with the substituted type — never mutates
+// the registry's data, since the registry is shared across calls.
+//
+// Phase 2 covers common cases: T, T&, T*, const T&, std::pair<T, U>&. More
+// elaborate forms (`typename T::iterator`, conditional types, parameter
+// packs) fall through unchanged — the resolver still records the resolution,
+// just with the original generic form. PR-04's `--diagnose-stdlib` will
+// surface these as opportunities for future overlay refinement.
+func substituteTemplateMethodReturn(method *core.CStdlibFunction, receiverFQN string) *core.CStdlibFunction {
+	args := parseTemplateArgs(receiverFQN)
+	if len(args) == 0 {
+		return method
+	}
+	cloned := *method // shallow copy — Params slice still points at the original
+	cloned.ReturnType = applyTemplateSubstitution(method.ReturnType, args)
+	return &cloned
+}
+
+// parseTemplateArgs extracts the comma-separated template arguments from a
+// type FQN. "std::vector<int>" → ["int"]; "std::map<std::string, int>" →
+// ["std::string", "int"]. Returns nil for non-template FQNs. The parser is
+// brace-counting so nested templates are handled correctly:
+// "std::map<int, std::vector<int>>" → ["int", "std::vector<int>"].
+func parseTemplateArgs(typeFQN string) []string {
+	open := strings.IndexByte(typeFQN, '<')
+	if open < 0 {
+		return nil
+	}
+	closeIdx := strings.LastIndexByte(typeFQN, '>')
+	if closeIdx <= open {
+		return nil
+	}
+	body := typeFQN[open+1 : closeIdx]
+
+	args := make([]string, 0, 2)
+	depth := 0
+	start := 0
+	for i, r := range body {
+		switch r {
+		case '<':
+			depth++
+		case '>':
+			depth--
+		case ',':
+			if depth == 0 {
+				args = append(args, strings.TrimSpace(body[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	args = append(args, strings.TrimSpace(body[start:]))
+	return args
+}
+
+// applyTemplateSubstitution replaces the canonical placeholder names with
+// concrete types in returnType. Substitution is whole-word — we don't
+// replace "T" inside "Type" or "std::pair". Registered placeholders, in
+// the order the receiver's args bind to:
+//
+//	T  → first arg
+//	U  → second arg
+//	V  → third arg
+//	K  → first arg (alias used by std::map / std::unordered_map)
+//
+// This matches the convention the cpp_stdlib_overlay.yaml authors use.
+func applyTemplateSubstitution(returnType string, args []string) string {
+	placeholders := []string{"T", "U", "V", "K"}
+	out := returnType
+	for i, ph := range placeholders {
+		if i >= len(args) && ph != "K" {
+			break
+		}
+		// "K" is an alias for the first arg in map-shaped containers.
+		idx := i
+		if ph == "K" {
+			idx = 0
+		}
+		if idx >= len(args) {
+			continue
+		}
+		out = replaceWholeWord(out, ph, args[idx])
+	}
+	return out
+}
+
+// replaceWholeWord replaces every occurrence of `from` in `s` with `to`,
+// but only when `from` is at a word boundary. This avoids T inside Type
+// being replaced when args=["int"]: "Type" stays "Type", "T&" becomes "int&".
+func replaceWholeWord(s, from, to string) string {
+	if from == "" {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		if i+len(from) <= len(s) && s[i:i+len(from)] == from &&
+			!isWordChar(byteAt(s, i-1)) && !isWordChar(byteAt(s, i+len(from))) {
+			b.WriteString(to)
+			i += len(from)
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
+}
+
+func byteAt(s string, i int) byte {
+	if i < 0 || i >= len(s) {
+		return 0
+	}
+	return s[i]
+}
+
+func isWordChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9') || b == '_'
 }
 
 // lookupQualifiedCall handles `ns::func` and `Class::staticMethod` by
