@@ -1,0 +1,404 @@
+# C++ stdlib overlay — hand-curated augmentations to tree-sitter extraction.
+#
+# Tree-sitter parses C++ headers structurally but cannot substitute template
+# parameters into return types (e.g. `std::vector<T>::operator[]` extracts as
+# `T&` but the resolver wants `int&` when the receiver is `std::vector<int>`).
+# The Phase 2 design accepts this limitation and uses overlay entries to record
+# the canonical templated form; runtime substitution happens at resolution
+# time (PR-02) via the receiver type.
+#
+# Schema: see tools/internal/clikeextract/overlay.go.
+
+schema_version: "1.0.0"
+language: "cpp"
+
+overrides:
+  # =========================================================================
+  # <vector> — sequence container methods with template return types.
+  # =========================================================================
+  - header: vector
+    class: std::vector
+    method: push_back
+    return_type: void
+    params:
+      - { name: value, type: "const T&" }
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: emplace_back
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: pop_back
+    return_type: void
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: at
+    return_type: "T&"
+    params:
+      - { name: pos, type: size_t }
+    confidence: 1.0
+    throws: std::out_of_range
+
+  - header: vector
+    class: std::vector
+    method: "operator[]"
+    return_type: "T&"
+    params:
+      - { name: pos, type: size_t }
+    confidence: 1.0
+    note: "No bounds check — CWE-129 candidate"
+
+  - header: vector
+    class: std::vector
+    method: front
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: back
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: data
+    return_type: "T*"
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: begin
+    return_type: iterator
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: end
+    return_type: iterator
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: size
+    return_type: size_t
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: capacity
+    return_type: size_t
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: empty
+    return_type: bool
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: reserve
+    return_type: void
+    params:
+      - { name: n, type: size_t }
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: resize
+    return_type: void
+    confidence: 1.0
+
+  - header: vector
+    class: std::vector
+    method: clear
+    return_type: void
+    confidence: 1.0
+
+  # =========================================================================
+  # <string> — std::basic_string surface.
+  # =========================================================================
+  - header: string
+    class: std::basic_string
+    method: c_str
+    return_type: "const CharT*"
+    confidence: 1.0
+    note: "Critical for use-after-free analysis on string ownership"
+
+  - header: string
+    class: std::basic_string
+    method: data
+    return_type: "const CharT*"
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: size
+    return_type: size_t
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: length
+    return_type: size_t
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: empty
+    return_type: bool
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: find
+    return_type: size_t
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: substr
+    return_type: "std::basic_string<CharT>"
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: append
+    return_type: "std::basic_string&"
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: at
+    return_type: "CharT&"
+    params:
+      - { name: pos, type: size_t }
+    confidence: 1.0
+    throws: std::out_of_range
+
+  - header: string
+    class: std::basic_string
+    method: "operator[]"
+    return_type: "CharT&"
+    params:
+      - { name: pos, type: size_t }
+    confidence: 1.0
+
+  - header: string
+    class: std::basic_string
+    method: "operator+="
+    return_type: "std::basic_string&"
+    confidence: 1.0
+
+  # =========================================================================
+  # <memory> — smart-pointer accessor methods.
+  # =========================================================================
+  - header: memory
+    class: std::unique_ptr
+    method: get
+    return_type: "T*"
+    confidence: 1.0
+
+  - header: memory
+    class: std::unique_ptr
+    method: release
+    return_type: "T*"
+    confidence: 1.0
+
+  - header: memory
+    class: std::unique_ptr
+    method: reset
+    return_type: void
+    confidence: 1.0
+
+  - header: memory
+    class: std::unique_ptr
+    method: "operator*"
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: memory
+    class: std::unique_ptr
+    method: "operator->"
+    return_type: "T*"
+    confidence: 1.0
+
+  - header: memory
+    class: std::shared_ptr
+    method: get
+    return_type: "T*"
+    confidence: 1.0
+
+  - header: memory
+    class: std::shared_ptr
+    method: reset
+    return_type: void
+    confidence: 1.0
+
+  - header: memory
+    class: std::shared_ptr
+    method: use_count
+    return_type: long
+    confidence: 1.0
+
+  - header: memory
+    class: std::shared_ptr
+    method: "operator*"
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: memory
+    class: std::shared_ptr
+    method: "operator->"
+    return_type: "T*"
+    confidence: 1.0
+
+  # =========================================================================
+  # <utility> — std::move / forward / pair primitives.
+  # =========================================================================
+  - header: utility
+    function: std::move
+    return_type: "T&&"
+    params:
+      - { name: x, type: "T&" }
+    confidence: 1.0
+
+  - header: utility
+    function: std::forward
+    return_type: "T&&"
+    params:
+      - { name: x, type: "T&" }
+    confidence: 1.0
+
+  # =========================================================================
+  # <map> / <unordered_map> — associative container surface.
+  # =========================================================================
+  - header: map
+    class: std::map
+    method: find
+    return_type: iterator
+    confidence: 1.0
+
+  - header: map
+    class: std::map
+    method: insert
+    return_type: "std::pair<iterator, bool>"
+    confidence: 1.0
+
+  - header: map
+    class: std::map
+    method: "operator[]"
+    return_type: "T&"
+    params:
+      - { name: key, type: "const Key&" }
+    confidence: 1.0
+    note: "Inserts default-constructed value if key missing"
+
+  - header: map
+    class: std::map
+    method: at
+    return_type: "T&"
+    params:
+      - { name: key, type: "const Key&" }
+    confidence: 1.0
+    throws: std::out_of_range
+
+  - header: map
+    class: std::map
+    method: size
+    return_type: size_t
+    confidence: 1.0
+
+  - header: map
+    class: std::map
+    method: empty
+    return_type: bool
+    confidence: 1.0
+
+  - header: unordered_map
+    class: std::unordered_map
+    method: find
+    return_type: iterator
+    confidence: 1.0
+
+  - header: unordered_map
+    class: std::unordered_map
+    method: "operator[]"
+    return_type: "T&"
+    confidence: 1.0
+
+  - header: unordered_map
+    class: std::unordered_map
+    method: insert
+    return_type: "std::pair<iterator, bool>"
+    confidence: 1.0
+
+  - header: unordered_map
+    class: std::unordered_map
+    method: at
+    return_type: "T&"
+    confidence: 1.0
+    throws: std::out_of_range
+
+  # =========================================================================
+  # <optional> — value access and presence checks.
+  # =========================================================================
+  - header: optional
+    class: std::optional
+    method: value
+    return_type: "T&"
+    confidence: 1.0
+    throws: std::bad_optional_access
+
+  - header: optional
+    class: std::optional
+    method: value_or
+    return_type: "T"
+    confidence: 1.0
+
+  - header: optional
+    class: std::optional
+    method: has_value
+    return_type: bool
+    confidence: 1.0
+
+  - header: optional
+    class: std::optional
+    method: "operator*"
+    return_type: "T&"
+    confidence: 1.0
+
+  # =========================================================================
+  # <iostream> / <ostream> — stream operators.
+  # =========================================================================
+  - header: ostream
+    class: std::ostream
+    method: "operator<<"
+    return_type: "std::ostream&"
+    confidence: 1.0
+
+  - header: istream
+    class: std::istream
+    method: "operator>>"
+    return_type: "std::istream&"
+    confidence: 1.0
+
+# Cross-platform aliases. Tree-sitter sometimes reaches the libstdc++-internal
+# namespaces; record canonical aliases so the loader can normalise.
+# (None for now — std::__cxx11 stripping happens directly in normalize.go,
+# not via the alias mechanism. Reserved for cross-platform header-name
+# divergence in PR-03.)
+cross_platform_aliases: []
+
+skip:
+  - prefix: __builtin_
+  - prefix: _GLIBCXX_
+  - prefix: _LIBCPP_
+  - prefix: __cxxabiv1
