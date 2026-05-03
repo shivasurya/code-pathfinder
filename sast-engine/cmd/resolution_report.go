@@ -14,7 +14,6 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
-	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
@@ -89,27 +88,9 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 			}
 		}
 
-		// Build C and C++ call graphs and merge them in. Mirror scan.go's
-		// buildClikeCallGraphs gate: only run a builder when the parsed
-		// CodeGraph actually contains nodes for that language.
-		if hasLanguageNodes(codeGraph, "c") {
-			cReg := registry.BuildCModuleRegistry(projectInput, codeGraph)
-			cTE := resolution.NewCTypeInferenceEngine(cReg)
-			if cCG, cErr := builder.BuildCCallGraph(codeGraph, cReg, cTE); cErr == nil {
-				builder.MergeCallGraphs(cg, cCG)
-			} else {
-				fmt.Fprintf(os.Stderr, "Warning: failed to build C call graph: %v\n", cErr)
-			}
-		}
-		if hasLanguageNodes(codeGraph, "cpp") {
-			cppReg := registry.BuildCppModuleRegistry(projectInput, codeGraph)
-			cppTE := resolution.NewCppTypeInferenceEngine(cppReg)
-			if cppCG, cppErr := builder.BuildCppCallGraph(codeGraph, cppReg, cppTE); cppErr == nil {
-				builder.MergeCallGraphs(cg, cppCG)
-			} else {
-				fmt.Fprintf(os.Stderr, "Warning: failed to build C++ call graph: %v\n", cppErr)
-			}
-		}
+		// Reuse scan.go's helper so both commands stay aligned. It gates
+		// each builder on hasLanguageNodes and merges into cg in place.
+		buildClikeCallGraphs(cg, codeGraph, projectInput, logger)
 
 		fmt.Printf("\nResolution Report for %s\n", projectInput)
 		fmt.Println("===============================================")
