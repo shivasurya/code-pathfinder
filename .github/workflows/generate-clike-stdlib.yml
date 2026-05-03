@@ -1,0 +1,218 @@
+name: Generate C/C++ Stdlib Registries
+
+# Generates C and C++ stdlib registries for Linux, Windows, and Darwin and
+# uploads them to Cloudflare R2 (the same backend that serves the Go stdlib
+# registries). Three jobs run in parallel:
+#
+#   - generate-linux   ubuntu-latest with libc6-dev + libstdc++-13-dev
+#   - generate-windows ubuntu-latest with mingw-w64 (Win32 + mingw libstdc++)
+#   - generate-darwin  macos-latest using xcrun's Command Line Tools SDK
+#
+# The publish job collects the six manifest sets and uploads them to R2 only
+# when both R2 secrets are present — running this workflow on a fork without
+# secrets still validates that generation works.
+#
+# Trigger: push to main when generator code or overlays change, or on demand
+# via workflow_dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sast-engine/tools/generate_clike_stdlib_registry.go'
+      - 'sast-engine/tools/internal/clikeextract/**'
+      - 'sast-engine/tools/c_stdlib_overlay.yaml'
+      - 'sast-engine/tools/cpp_stdlib_overlay.yaml'
+      - '.github/workflows/generate-clike-stdlib.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Install Linux stdlib headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev libstdc++-13-dev
+
+      - name: Generate Linux C registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=linux --language=c \
+            --output-dir=/tmp/clike-out/linux/c/v1
+
+      - name: Generate Linux C++ registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=linux --language=cpp \
+            --output-dir=/tmp/clike-out/linux/cpp/v1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clike-registries-linux
+          path: /tmp/clike-out/linux/
+          retention-days: 7
+
+  generate-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Install mingw-w64 (Win32 + libstdc++ headers on Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 g++-mingw-w64
+
+      - name: Generate Windows C registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=windows --language=c \
+            --output-dir=/tmp/clike-out/windows/c/v1
+
+      - name: Generate Windows C++ registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=windows --language=cpp \
+            --output-dir=/tmp/clike-out/windows/cpp/v1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clike-registries-windows
+          path: /tmp/clike-out/windows/
+          retention-days: 7
+
+  generate-darwin:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Verify SDK availability
+        run: |
+          xcrun --show-sdk-path
+          ls /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdio.h
+          ls /Library/Developer/CommandLineTools/usr/include/c++/v1/vector
+
+      - name: Generate Darwin C registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=darwin --language=c \
+            --output-dir=/tmp/clike-out/darwin/c/v1
+
+      - name: Generate Darwin C++ registry
+        run: |
+          cd sast-engine
+          go run -tags cpf_generate_stdlib_registry ./tools/generate_clike_stdlib_registry.go \
+            --target=darwin --language=cpp \
+            --output-dir=/tmp/clike-out/darwin/cpp/v1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clike-registries-darwin
+          path: /tmp/clike-out/darwin/
+          retention-days: 7
+
+  publish:
+    needs: [generate-linux, generate-windows, generate-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/clike-out
+          pattern: clike-registries-*
+          merge-multiple: false
+
+      - name: Stage registries into the expected layout
+        run: |
+          mkdir -p /tmp/clike-staged
+          for plat in linux windows darwin; do
+            mkdir -p /tmp/clike-staged/$plat
+            if [ -d "/tmp/clike-out/clike-registries-$plat/$plat" ]; then
+              cp -R /tmp/clike-out/clike-registries-$plat/$plat/* /tmp/clike-staged/$plat/
+            fi
+          done
+
+      - name: Verify all 6 manifest.json files
+        run: |
+          for combo in linux/c linux/cpp windows/c windows/cpp darwin/c darwin/cpp; do
+            path="/tmp/clike-staged/$combo/v1/manifest.json"
+            test -f "$path" || { echo "Missing: $path"; exit 1; }
+            echo "OK $combo/v1/manifest.json ($(wc -c < "$path") bytes)"
+          done
+
+      # Cloudflare R2 upload runs only when both secrets are configured. On a
+      # fork or before the secrets are provisioned the workflow still passes
+      # generation + verification and skips the upload — keeps the pipeline
+      # green during operator setup.
+      - name: Upload to Cloudflare R2
+        if: ${{ env.HAS_R2_CREDS == 'true' }}
+        env:
+          HAS_R2_CREDS: ${{ secrets.R2_ACCOUNT_ID != '' && secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          for combo in linux/c linux/cpp windows/c windows/cpp darwin/c darwin/cpp; do
+            echo "Uploading $combo..."
+            aws s3 sync "/tmp/clike-staged/$combo/v1/" \
+              "s3://code-pathfinder-assets/registries/$combo/v1/" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --delete \
+              --content-type "application/json" \
+              --cache-control "public, max-age=86400"
+          done
+
+      - name: Verify CDN URLs
+        if: ${{ env.HAS_R2_CREDS == 'true' }}
+        env:
+          HAS_R2_CREDS: ${{ secrets.R2_ACCOUNT_ID != '' && secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' }}
+        run: |
+          for combo in linux/c linux/cpp windows/c windows/cpp darwin/c darwin/cpp; do
+            url="https://assets.codepathfinder.dev/registries/$combo/v1/manifest.json"
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            echo "$status $url"
+            test "$status" = "200" || { echo "URL not reachable: $url"; exit 1; }
+          done
+
+      - name: Summary
+        run: |
+          echo "## C/C++ Stdlib Registry Generation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for combo in linux/c linux/cpp windows/c windows/cpp darwin/c darwin/cpp; do
+            mf="/tmp/clike-staged/$combo/v1/manifest.json"
+            if [ -f "$mf" ]; then
+              size=$(wc -c < "$mf")
+              echo "- ${combo} manifest.json: ${size} bytes" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
