@@ -661,10 +661,10 @@ func applyTemplateSubstitution(returnType string, args []string) string {
 	placeholders := []string{"T", "U", "V", "K"}
 	out := returnType
 	for i, ph := range placeholders {
-		if i >= len(args) && ph != "K" {
-			break
-		}
-		// "K" is an alias for the first arg in map-shaped containers.
+		// "K" is an alias for the first arg in map-shaped containers — it
+		// shares an index with T but is iterated separately so a return
+		// type written as "K" still resolves when the registry exposes
+		// only T/U bindings.
 		idx := i
 		if ph == "K" {
 			idx = 0

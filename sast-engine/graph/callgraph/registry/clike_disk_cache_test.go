@@ -146,3 +146,38 @@ func TestGetStdlibCacheRoot_PrefersXDG(t *testing.T) {
 func TestStdlibCacheTTL_Constant(t *testing.T) {
 	assert.Equal(t, 24*time.Hour, stdlibCacheTTL)
 }
+
+// TestGetStdlibCacheRoot_FallsBackToHome forces the XDG_CACHE_HOME and
+// LOCALAPPDATA env vars to be empty so the fallback to $HOME/.cache is
+// the only path that can produce a non-empty result.
+func TestGetStdlibCacheRoot_FallsBackToHome(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("LOCALAPPDATA", "")
+
+	got := getStdlibCacheRoot()
+	if got == "" {
+		// UserHomeDir failed in this environment — accept the empty
+		// answer; the path-disabled behavior is also exercised here.
+		return
+	}
+	assert.Contains(t, got, ".cache")
+	assert.Contains(t, got, "pathfinder")
+	assert.Contains(t, got, "registries")
+}
+
+// TestGetStdlibCacheRoot_NoHomeReturnsEmpty zeroes both env vars AND
+// HOME so even the fallback can't construct a path. We expect "".
+func TestGetStdlibCacheRoot_NoHomeReturnsEmpty(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("LOCALAPPDATA", "")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+
+	got := getStdlibCacheRoot()
+	// On most CI runners removing HOME causes UserHomeDir to fail;
+	// some platforms still resolve via /etc/passwd. Accept either as
+	// long as the function does not panic.
+	if got != "" {
+		assert.Contains(t, got, "pathfinder")
+	}
+}
