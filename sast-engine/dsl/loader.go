@@ -163,6 +163,8 @@ func hasCodeAnalysisRuleDecorators(filePath string) bool {
 	// rule files where @rule appears at the top level.
 	return strings.Contains(fileContent, "@rule(") ||
 		strings.Contains(fileContent, "@go_rule(") ||
+		strings.Contains(fileContent, "@c_rule(") ||
+		strings.Contains(fileContent, "@cpp_rule(") ||
 		strings.Contains(fileContent, "from codepathfinder import") ||
 		strings.Contains(fileContent, "import codepathfinder")
 }
