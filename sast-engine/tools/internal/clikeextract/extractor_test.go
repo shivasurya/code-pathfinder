@@ -140,14 +140,18 @@ func TestRun_OverlayLoadError(t *testing.T) {
 }
 
 func TestRun_DiscoveryError(t *testing.T) {
+	// Windows + missing mingw toolchain → discovery error with remediation
+	// hint. Pre-PR-03 this asserted the stub message; now it asserts the
+	// "headers not found" path.
+	withTempMingwRoot(t, "/definitely/missing")
 	cfg := Config{
-		Target:    core.PlatformWindows, // PR-01 doesn't ship windows
+		Target:    core.PlatformWindows,
 		Language:  core.LanguageC,
 		OutputDir: t.TempDir(),
 	}
 	err := NewExtractor(cfg).Run()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PR-03")
+	assert.Contains(t, err.Error(), "mingw-w64")
 }
 
 func TestRun_WalkError(t *testing.T) {
