@@ -1,8 +1,8 @@
 """Tests for pathfinder.matchers module."""
 
 import pytest
-from codepathfinder import calls, variable
-from codepathfinder.matchers import CallMatcher, VariableMatcher
+from codepathfinder import calls, variable, attribute
+from codepathfinder.matchers import CallMatcher, VariableMatcher, AttributeMatcher
 
 
 class TestCallMatcher:
@@ -340,3 +340,75 @@ class TestCallMatcherEdgeCases:
         assert ir["keywordArgs"]["enabled"]["value"] is True
         assert ir["keywordArgs"]["host"]["value"] == "localhost"
         assert ir["keywordArgs"]["retry"]["value"] == 5.5
+
+
+class TestAttributeMatcher:
+    """Test suite for attribute() matcher."""
+
+    def test_single_pattern(self):
+        matcher = attribute("request.url")
+        assert isinstance(matcher, AttributeMatcher)
+        assert matcher.patterns == ["request.url"]
+
+    def test_multiple_patterns(self):
+        matcher = attribute("request.url", "request.host", "request.data")
+        assert matcher.patterns == ["request.url", "request.host", "request.data"]
+
+    def test_to_ir(self):
+        ir = attribute("request.url").to_ir()
+        assert ir["type"] == "attribute_matcher"
+        assert ir["patterns"] == ["request.url"]
+
+    def test_repr(self):
+        assert repr(attribute("request.url")) == 'attribute("request.url")'
+        assert repr(attribute("a", "b")) == 'attribute("a", "b")'
+
+    def test_empty_raises(self):
+        with pytest.raises(ValueError, match="requires at least one pattern"):
+            attribute()
+
+    def test_empty_string_pattern_raises(self):
+        with pytest.raises(ValueError, match="non-empty strings"):
+            attribute("")
+
+    def test_non_string_pattern_raises(self):
+        with pytest.raises(ValueError, match="non-empty strings"):
+            attribute(123)
+
+    def test_mixed_valid_invalid_raises(self):
+        with pytest.raises(ValueError, match="non-empty strings"):
+            attribute("request.url", "")
+
+    # GAP-012: Subscript-on-attribute patterns (e.g., request.GET["key"])
+    # The engine extracts AttributeAccess from subscript value nodes.
+    # Rule writers use the same attribute() API — no new API surface needed.
+
+    def test_django_get_subscript_pattern(self):
+        """attribute('request.GET') matches x = request.GET['key']."""
+        matcher = attribute("request.GET", "request.POST")
+        ir = matcher.to_ir()
+        assert ir["type"] == "attribute_matcher"
+        assert ir["patterns"] == ["request.GET", "request.POST"]
+
+    def test_flask_form_subscript_pattern(self):
+        """attribute('flask.request.form') matches x = flask.request.form['field']."""
+        matcher = attribute("flask.request.form", "request.form")
+        assert matcher.patterns == ["flask.request.form", "request.form"]
+
+    def test_os_environ_subscript_pattern(self):
+        """attribute('os.environ') matches x = os.environ['VAR']."""
+        ir = attribute("os.environ").to_ir()
+        assert ir["patterns"] == ["os.environ"]
+
+    def test_subscript_patterns_in_flows(self):
+        """Subscript attribute sources work inside flows() dataflow matcher."""
+        from codepathfinder import flows
+
+        result = flows(
+            from_sources=attribute("request.GET", "request.POST"),
+            to_sinks=calls("subprocess.run"),
+            scope="local",
+        )
+        ir = result.to_ir()
+        assert ir["sources"][0]["type"] == "attribute_matcher"
+        assert ir["sources"][0]["patterns"] == ["request.GET", "request.POST"]

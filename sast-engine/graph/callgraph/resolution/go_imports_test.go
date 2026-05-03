@@ -355,6 +355,10 @@ func (m *mockResolutionStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, e
 	return nil, errMockResolutionNotFound
 }
 
+func (m *mockResolutionStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errMockResolutionNotFound
+}
+
 func (m *mockResolutionStdlibLoader) PackageCount() int {
 	return len(m.packages)
 }

@@ -1,5 +1,5 @@
-from rules.container_decorators import dockerfile_rule
-from rules.container_matchers import instruction
+from codepathfinder.container_decorators import dockerfile_rule
+from codepathfinder.container_matchers import instruction
 
 
 @dockerfile_rule(

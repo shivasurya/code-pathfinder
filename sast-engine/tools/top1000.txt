@@ -1,0 +1,69 @@
+# Tier 1: Security-relevant Go packages (validation set)
+# Format: module@version
+# These packages are chosen for security analysis coverage:
+#   - Web frameworks (tainted input sources)
+#   - Database/ORM (SQL injection sinks)
+#   - HTTP clients (SSRF sinks)
+#   - Auth/crypto (authentication vulnerabilities)
+#   - Template engines (XSS sinks)
+#   - Configuration (credential exposure)
+
+# Web frameworks (source of tainted input)
+github.com/gin-gonic/gin@v1.10.0
+github.com/labstack/echo/v4@v4.12.0
+github.com/gofiber/fiber/v2@v2.52.5
+github.com/go-chi/chi/v5@v5.1.0
+github.com/gorilla/mux@v1.8.1
+
+# Database / ORM (SQL injection sinks)
+gorm.io/gorm@v1.25.12
+github.com/jmoiron/sqlx@v1.4.0
+github.com/jackc/pgx/v5@v5.7.1
+
+# NoSQL (injection sinks)
+go.mongodb.org/mongo-driver@v1.17.1
+github.com/redis/go-redis/v9@v9.7.0
+
+# Authentication / crypto
+github.com/golang-jwt/jwt/v5@v5.2.1
+golang.org/x/crypto@v0.28.0
+
+# HTTP clients (SSRF sinks)
+github.com/go-resty/resty/v2@v2.14.0
+
+# Template engines (XSS sinks)
+github.com/flosch/pongo2/v6@v6.0.0
+
+# Configuration (credential exposure)
+github.com/spf13/viper@v1.19.0
+
+# Serialization (deserialization vulnerabilities)
+gopkg.in/yaml.v3@v3.0.1
+github.com/pelletier/go-toml/v2@v2.2.3
+
+# Logging (log injection)
+go.uber.org/zap@v1.27.0
+github.com/sirupsen/logrus@v1.9.3
+
+# Cloud SDKs
+github.com/aws/aws-sdk-go-v2@v1.32.2
+cloud.google.com/go@v0.116.0
+
+# gRPC
+google.golang.org/grpc@v1.68.0
+google.golang.org/protobuf@v1.35.1
+
+# Kubernetes
+k8s.io/client-go@v0.31.2
+
+# Command execution
+github.com/codeskyblue/go-sh@v0.0.0-20200712050446-30169cf553fe
+
+# File handling
+github.com/spf13/afero@v1.11.0
+
+# Validation
+github.com/go-playground/validator/v10@v10.22.1
+
+# Testing utilities (for completeness)
+github.com/stretchr/testify@v1.9.0

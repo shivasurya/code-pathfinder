@@ -309,3 +309,115 @@ func TestResolveStdlibVariableBindings_NoKnownModule(t *testing.T) {
 	assert.NotNil(t, binding)
 	assert.Equal(t, "call:unknownmod.func1", binding.Type.TypeFQN) // unchanged
 }
+
+func TestResolveStdlibVariableBindings_PhaseA_ClassMethodAlias(t *testing.T) {
+	// tarfile.open is a module-level alias for TarFile.open (classmethod).
+	// GetFunction("tarfile", "open") returns nil because it's not in Functions.
+	// GetClass("tarfile", "open") returns nil because "open" is not a class.
+	// FindClassMethodAlias should find TarFile.open and resolve its return type.
+	loader := newTestStdlibLoader(map[string]*core.StdlibModule{
+		"tarfile": {
+			Module:    "tarfile",
+			Functions: map[string]*core.StdlibFunction{},
+			Classes: map[string]*core.StdlibClass{
+				"TarFile": {
+					Type: "class",
+					Methods: map[string]*core.StdlibFunction{
+						"open": {
+							ReturnType: "tarfile.Self",
+							Confidence: 0.95,
+						},
+						"extractall": {
+							ReturnType: "builtins.NoneType",
+							Confidence: 0.95,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	typeEngine := resolution.NewTypeInferenceEngine(nil)
+	typeEngine.StdlibRemote = loader
+
+	scope := resolution.NewFunctionScope("app.extract_archive")
+	typeEngine.Scopes["app.extract_archive"] = scope
+	scope.AddVariable(&resolution.VariableBinding{
+		VarName: "tar",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:tarfile.open",
+			Confidence: 0.5,
+		},
+	})
+
+	logger := output.NewLogger(output.VerbosityDefault)
+	resolveStdlibVariableBindings(typeEngine, logger)
+
+	binding := scope.GetVariable("tar")
+	assert.NotNil(t, binding)
+	// "tarfile.Self" should be resolved to "tarfile.TarFile"
+	assert.Equal(t, "tarfile.TarFile", binding.Type.TypeFQN)
+	assert.Equal(t, "tarfile.open", binding.AssignedFrom)
+	assert.Equal(t, "stdlib", binding.Type.Source)
+}
+
+func TestResolveStdlibVariableBindings_PhaseA_ClassMethodAlias_ChainToPhaseB(t *testing.T) {
+	// Full chain: tarfile.open() → TarFile, then tar.extractall() via Phase B.
+	loader := newTestStdlibLoader(map[string]*core.StdlibModule{
+		"tarfile": {
+			Module:    "tarfile",
+			Functions: map[string]*core.StdlibFunction{},
+			Classes: map[string]*core.StdlibClass{
+				"TarFile": {
+					Type: "class",
+					Methods: map[string]*core.StdlibFunction{
+						"open": {
+							ReturnType: "tarfile.Self",
+							Confidence: 0.95,
+						},
+						"extractall": {
+							ReturnType: "builtins.NoneType",
+							Confidence: 0.95,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	typeEngine := resolution.NewTypeInferenceEngine(nil)
+	typeEngine.StdlibRemote = loader
+
+	scope := resolution.NewFunctionScope("app.extract_archive")
+	typeEngine.Scopes["app.extract_archive"] = scope
+
+	// tar = tarfile.open(...)
+	scope.AddVariable(&resolution.VariableBinding{
+		VarName: "tar",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:tarfile.open",
+			Confidence: 0.5,
+		},
+	})
+	// result = tar.extractall(...)
+	scope.AddVariable(&resolution.VariableBinding{
+		VarName: "result",
+		Type: &core.TypeInfo{
+			TypeFQN:    "call:tar.extractall",
+			Confidence: 0.5,
+		},
+	})
+
+	logger := output.NewLogger(output.VerbosityDefault)
+	resolveStdlibVariableBindings(typeEngine, logger)
+
+	// Phase A: tar → tarfile.TarFile
+	tarBinding := scope.GetVariable("tar")
+	assert.Equal(t, "tarfile.TarFile", tarBinding.Type.TypeFQN)
+
+	// Phase B: result → builtins.NoneType (via TarFile.extractall)
+	resultBinding := scope.GetVariable("result")
+	assert.NotNil(t, resultBinding)
+	assert.Equal(t, "builtins.NoneType", resultBinding.Type.TypeFQN)
+	assert.Equal(t, "tarfile.TarFile.extractall", resultBinding.AssignedFrom)
+}

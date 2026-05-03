@@ -1666,7 +1666,7 @@ func TestTrackedParam_LocalVDG_ByName(t *testing.T) {
 		Name: "query", ParentFQN: calleeFQN, Line: 1,
 	}
 	cg.Parameters[calleeFQN+".params"] = &core.ParameterSymbol{
-		Name: "params", ParentFQN: calleeFQN, Line: 1,
+		Name: "params", ParentFQN: calleeFQN, Line: 2,
 	}
 
 	cg.CallSites[funcFQN] = []core.CallSite{

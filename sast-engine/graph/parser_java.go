@@ -283,7 +283,6 @@ func parseJavaVariableDeclaration(node *sitter.Node, sourceCode []byte, graph *C
 	variableType := ""
 	variableModifier := ""
 	variableValue := ""
-	hasAccessValue := false
 	var scope string
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
@@ -325,7 +324,6 @@ func parseJavaVariableDeclaration(node *sitter.Node, sourceCode []byte, graph *C
 		DataType:         variableType,
 		Scope:            scope,
 		VariableValue:    variableValue,
-		hasAccess:        hasAccessValue,
 		File:             file,
 		isJavaSourceFile: true,
 		Language:         "java",

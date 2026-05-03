@@ -26,8 +26,8 @@ import (
 
 var scanCmd = &cobra.Command{
 	Use:   "scan",
-	Short: "Scan code for security vulnerabilities using Python DSL rules",
-	Long: `Scan codebase using Python DSL security rules.
+	Short: "Scan code for security vulnerabilities using Python SDK rules",
+	Long: `Scan codebase using Python SDK security rules.
 
 Examples:
   # Scan with a single rules file
@@ -255,12 +255,32 @@ Examples:
 			} else {
 				// Initialize Go stdlib loader and type inference engine
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
+
+				// Initialize Go third-party type loader (vendor/ + GOMODCACHE).
+				// Pass refreshRules so --refresh-rules also flushes the go-thirdparty disk cache.
+				builder.InitGoThirdPartyLoader(goRegistry, projectPath, refreshRules, logger)
+
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine)
+				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
+				var analysisCache *builder.AnalysisCache
+				if enableDBCache {
+					var cacheErr error
+					analysisCache, cacheErr = builder.OpenAnalysisCache(projectPath)
+					if cacheErr != nil {
+						logger.Warning("Could not open analysis cache: %v — running full analysis", cacheErr)
+					} else {
+						defer analysisCache.Close()
+					}
+				}
+
+				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
 				} else {
+					if analysisCache != nil {
+						logger.Progress("Cache: incremental analysis cache updated")
+					}
 					builder.MergeCallGraphs(cg, goCG)
 					logger.Statistic("Go call graph merged: %d functions, %d call sites",
 						len(goCG.Functions), countTotalCallSites(goCG))
@@ -268,7 +288,7 @@ Examples:
 			}
 		}
 
-		// Step 4: Load Python DSL rules
+		// Step 4: Load Python SDK rules
 		logger.StartProgress("Loading rules", -1)
 		rules, err := loader.LoadRules(logger)
 		logger.FinishProgress()
@@ -1034,7 +1054,7 @@ func getCacheDir() string {
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
-	scanCmd.Flags().StringP("rules", "r", "", "Path to Python DSL rules file or directory")
+	scanCmd.Flags().StringP("rules", "r", "", "Path to Python SDK rules file or directory")
 	scanCmd.Flags().StringArray("ruleset", []string{}, "Ruleset bundle (e.g., docker/security) or individual rule ID (e.g., docker/DOCKER-BP-007). Can be specified multiple times.")
 	scanCmd.Flags().Bool("refresh-rules", false, "Force refresh of cached rulesets")
 	scanCmd.Flags().StringP("project", "p", "", "Path to project directory to scan (required)")
@@ -1047,5 +1067,6 @@ func init() {
 	scanCmd.Flags().Bool("diff-aware", false, "Enable diff-aware scanning (only report findings in changed files)")
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
+	scanCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
 	scanCmd.MarkFlagRequired("project")
 }

@@ -45,6 +45,11 @@ func MergeCallGraphs(dst, src *core.CallGraph) {
 		dst.ReverseEdges[callee] = append(dst.ReverseEdges[callee], callers...)
 	}
 
-	// Parameters, Summaries, Attributes, TypeEngine are language-specific
-	// and should not be merged (Go doesn't populate these in PR-09)
+	// Merge dataflow analysis data (Statements, CFGs, CFGBlockStatements, Summaries).
+	// These maps are keyed by FQN — Go and Python FQN namespaces are disjoint,
+	// so maps.Copy is safe (no key collisions).
+	maps.Copy(dst.Statements, src.Statements)
+	maps.Copy(dst.CFGs, src.CFGs)
+	maps.Copy(dst.CFGBlockStatements, src.CFGBlockStatements)
+	maps.Copy(dst.Summaries, src.Summaries)
 }

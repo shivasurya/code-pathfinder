@@ -1,4 +1,4 @@
-from rules.python_decorators import python_rule
+from codepathfinder.python_decorators import python_rule
 from codepathfinder import calls, Or, QueryType
 
 class FlaskApp(QueryType):

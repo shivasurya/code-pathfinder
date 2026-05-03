@@ -549,16 +549,71 @@ func extractAssignment(node *sitter.Node, sourceCode []byte) *core.Statement {
 
 	stmt.CallTarget = rightNode.Content(sourceCode)
 
-	if rightNode.Type() == "call" {
+	switch rightNode.Type() {
+	case "call":
 		callStmt := extractCall(rightNode, sourceCode)
 		if callStmt != nil {
 			stmt.Uses = callStmt.Uses
+			stmt.CallChain = callStmt.CallChain
 		}
-	} else {
+
+	case "subscript":
+		// Unwrap nested subscripts to find the innermost non-subscript value.
+		innermostValue := rightNode.ChildByFieldName("value")
+		for innermostValue != nil && innermostValue.Type() == "subscript" {
+			innermostValue = innermostValue.ChildByFieldName("value")
+		}
+		if innermostValue != nil {
+			switch innermostValue.Type() {
+			case "attribute":
+				stmt.AttributeAccess = extractFullAttributeChain(innermostValue, sourceCode)
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			case "call":
+				callStmt := extractCall(innermostValue, sourceCode)
+				if callStmt != nil {
+					stmt.CallTarget = callStmt.CallTarget
+					stmt.CallChain = callStmt.CallChain
+					stmt.Uses = callStmt.Uses
+				}
+			default:
+				stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+			}
+		} else {
+			stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+		}
+
+	case "attribute":
+		stmt.AttributeAccess = extractFullAttributeChain(rightNode, sourceCode)
+		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
+
+	default:
 		stmt.Uses = extractIdentifiers(rightNode, sourceCode)
 	}
 
 	return stmt
+}
+
+// extractFullAttributeChain recursively builds the full dotted attribute chain
+// from a tree-sitter attribute node (e.g., request.GET → "request.GET").
+func extractFullAttributeChain(node *sitter.Node, sourceCode []byte) string {
+	if node == nil {
+		return ""
+	}
+	switch node.Type() {
+	case "identifier":
+		return node.Content(sourceCode)
+	case "attribute":
+		obj := node.ChildByFieldName("object")
+		attr := node.ChildByFieldName("attribute")
+		if obj != nil && attr != nil {
+			prefix := extractFullAttributeChain(obj, sourceCode)
+			if prefix != "" {
+				return prefix + "." + attr.Content(sourceCode)
+			}
+			return attr.Content(sourceCode)
+		}
+	}
+	return ""
 }
 
 // extractAugmentedAssignment processes "x += expr" nodes.
@@ -602,7 +657,7 @@ func extractCall(callNode *sitter.Node, sourceCode []byte) *core.Statement {
 
 	functionNode := callNode.ChildByFieldName("function")
 	if functionNode != nil {
-		stmt.CallTarget = extractCallTarget(functionNode, sourceCode)
+		stmt.CallTarget, stmt.CallChain = extractCallTarget(functionNode, sourceCode)
 		targetIds := extractIdentifiers(functionNode, sourceCode)
 		stmt.Uses = append(stmt.Uses, targetIds...)
 	}
@@ -635,23 +690,28 @@ func extractReturn(node *sitter.Node, sourceCode []byte) *core.Statement {
 	return stmt
 }
 
-// extractCallTarget extracts the function name from a call expression function node.
-func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) string {
+// extractCallTarget extracts the function name and full dotted chain from a call expression.
+func extractCallTarget(functionNode *sitter.Node, sourceCode []byte) (string, string) {
 	if functionNode == nil {
-		return ""
+		return "", ""
 	}
 
 	switch functionNode.Type() {
 	case "identifier":
-		return functionNode.Content(sourceCode)
+		name := functionNode.Content(sourceCode)
+		return name, name
 	case "attribute":
 		attrNode := functionNode.ChildByFieldName("attribute")
 		if attrNode != nil {
-			return attrNode.Content(sourceCode)
+			target := attrNode.Content(sourceCode)
+			chain := extractFullAttributeChain(functionNode, sourceCode)
+			return target, chain
 		}
-		return functionNode.Content(sourceCode)
+		content := functionNode.Content(sourceCode)
+		return content, content
 	default:
-		return functionNode.Content(sourceCode)
+		content := functionNode.Content(sourceCode)
+		return content, content
 	}
 }
 

@@ -157,19 +157,4 @@ func buildGraphFromAST(node *sitter.Node, sourceCode []byte, graph *CodeGraph, c
 		child := node.Child(i)
 		buildGraphFromAST(child, sourceCode, graph, currentContext, file)
 	}
-
-	// Post-processing: Link method invocations to declarations
-	for _, node := range graph.Nodes {
-		if node.Type == "method_declaration" {
-			for _, invokedNode := range graph.Nodes {
-				if invokedNode.Type == "method_invocation" {
-					if invokedNode.Name == node.Name {
-						if len(invokedNode.MethodArgumentsValue) == len(node.MethodArgumentsType) {
-							node.hasAccess = true
-						}
-					}
-				}
-			}
-		}
-	}
 }

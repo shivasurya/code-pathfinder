@@ -5,6 +5,47 @@ All notable changes to the codepathfinder Python SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-04-24
+
+### Fixed
+- Python type inference now resolves `with X() as y:` bindings, closing a gap
+  that prevented pure-L3 matchers (`QueryType.method(...)`) from firing on
+  `with tarfile.open(p) as tar: tar.extractall()` and similar context-manager
+  patterns across `zipfile`, `gzip`, `tempfile`, `sqlite3`, `socket`, `open`.
+- Typed function parameters (`def f(bundle: tarfile.TarFile): ...`) now seed
+  the function scope, so `bundle.method()` resolves via the annotation.
+  Supports `Optional[T]`, `Union[T, None]`, `T | None`, generics, forward
+  references (`"MyClass"`), and import-aliased names.
+- Nested-function scope FQNs now match Pass 1's indexing (`module.parent.nested`
+  instead of the previous `module.ClassName.nested`), so call-site receiver-type
+  lookups find bindings in helpers nested inside class methods.
+
+## [2.1.0] - 2026-04-12
+
+### Added
+- `python_decorators`, `python_ir`, `container_matchers`, `container_combinators`,
+  `container_programmatic` modules now live in `codepathfinder` package as canonical home
+- 22 Go security rules with L1 precision covering SQL injection (pgx, sqlx, GORM),
+  SSRF, XSS, path traversal, open redirect, command injection, weak crypto, JWT, and gRPC
+- Isolated Go module setup (`go.mod` + `go.sum`) for each rule's positive/negative test directories
+
+### Changed
+- All 158 Python rules updated to import from `codepathfinder.python_decorators` instead of `rules.python_decorators`
+- All 47 container rules updated to import from `codepathfinder.container_*` instead of `rules.container_*`
+- `rules/` package retains backward-compatible shims for all moved modules
+
+## [2.0.1] - 2026-03-27
+
+### Added
+- `attribute()` matcher for taint sources that are property accesses, not function calls (e.g., `request.url`, `file.filename`, `request.data`)
+- `QueryType.attr()` for type-constrained attribute matching (e.g., `FlaskRequest.attr("url", "host")`)
+- `AttributeMethodMatcher` class returned by `QueryType.attr()`
+- `ATTRIBUTE_MATCHER` and `TYPE_CONSTRAINED_ATTRIBUTE` IR types
+- `attribute()` works inside `flows()` as source, sink, or sanitizer
+
+### Changed
+- `AnyMatcher` union type now includes `AttributeMatcher` and `AttributeMethodMatcher`
+
 ## [2.0.0] - 2026-03-21
 
 ### Added
@@ -110,12 +151,12 @@ No python-sdk specific changes. Version bump for binary compatibility.
 - **JSON/SARIF/CSV output formats** with file output support (#432)
   - `--output-format json|sarif|csv|text`
   - `--output-file <path>` for saving results
-- **Auto-execution support for Python DSL rules** (#435)
+- **Auto-execution support for Python SDK rules** (#435)
   - Rules execute automatically when scan completes
   - Streamlined workflow without manual execution
 
 ### Fixed
-- `/lib64` bind mount to nsjail for Python DSL rule loading (#438)
+- `/lib64` bind mount to nsjail for Python SDK rule loading (#438)
 - Removed hardcoded version in JSON/SARIF formatters (#436)
 
 ### Removed
@@ -126,8 +167,8 @@ No python-sdk specific changes. Version bump for binary compatibility.
 ### Added
 - **Docker container security rules** expanded from 18 to 47 rules (#428)
   - Container security rule executor and infrastructure (#422)
-  - Python DSL advanced features for Docker rules (#421)
-  - Python DSL core for container rules (#420)
+  - Python SDK advanced features for Docker rules (#421)
+  - Python SDK core for container rules (#420)
   - Docker-compose parser with security queries (#419)
   - Comprehensive instruction converters for all Dockerfile instructions (#418)
   - Tree-sitter Dockerfile parsing integration (#417)
@@ -137,13 +178,13 @@ No python-sdk specific changes. Version bump for binary compatibility.
 
 ### Added
 - **Initial PyPI release of codepathfinder Python SDK**
-- Python DSL for writing custom security rules
+- Python SDK for writing custom security rules
 - Rule execution with dataflow analysis
 - Multiple output formats: JSON, SARIF, CSV, text
 - Binary distribution with automatic platform detection
 
 ### Features
-- **Python DSL Rule System**
+- **Python SDK Rule System**
   - Decorator-based rule definitions with `@rule`
   - Matchers: `calls()` and `variable()` with wildcard support
   - Dataflow analysis: source-to-sink tracking

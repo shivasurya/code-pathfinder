@@ -368,3 +368,293 @@ func TestBuildCFG_BlockStatementsPreserveDefUse(t *testing.T) {
 	assert.True(t, foundYDef, "should have y definition")
 	assert.True(t, foundSinkUse, "should have sink using y")
 }
+
+// ========== GAP-012: Subscript handling in CFG block statements ==========
+
+func TestBuildCFG_SubscriptOnAttribute_SetsAttributeAccess(t *testing.T) {
+	source := `def vuln(request):
+    cmd = request.GET["cmd"]
+    subprocess.run(cmd)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.vuln", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	// Find the assignment statement and verify AttributeAccess is set
+	foundAttrAccess := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "cmd" {
+				assert.Equal(t, "request.GET", stmt.AttributeAccess,
+					"CFG builder must set AttributeAccess for subscript on attribute")
+				assert.Contains(t, stmt.Uses, "request")
+				foundAttrAccess = true
+			}
+		}
+	}
+	assert.True(t, foundAttrAccess, "should find cmd assignment with AttributeAccess")
+}
+
+func TestBuildCFG_SubscriptOnCall_UnmasksCallTarget(t *testing.T) {
+	source := `def fetch(url):
+    data = requests.get(url).json()["results"]
+    process(data)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.fetch", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	foundCall := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "data" {
+				assert.Equal(t, "json", stmt.CallTarget,
+					"CFG builder must unmask call target through subscript")
+				assert.Contains(t, stmt.Uses, "url")
+				foundCall = true
+			}
+		}
+	}
+	assert.True(t, foundCall, "should find data assignment with unmasked CallTarget")
+}
+
+func TestBuildCFG_PureAttributeAccess_SetsAttributeAccess(t *testing.T) {
+	source := `def handler(request):
+    url = request.url
+    fetch(url)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	cfGraph, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+	require.NotNil(t, cfGraph)
+
+	foundAttr := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "url" {
+				assert.Equal(t, "request.url", stmt.AttributeAccess,
+					"CFG builder must set AttributeAccess for pure attribute access")
+				foundAttr = true
+			}
+		}
+	}
+	assert.True(t, foundAttr, "should find url assignment with AttributeAccess")
+}
+
+func TestBuildCFG_NestedSubscriptOnAttribute(t *testing.T) {
+	source := `def handler(request):
+    val = request.GET["a"]["b"]
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "request.GET", stmt.AttributeAccess,
+					"Nested subscript should unwrap to innermost attribute chain")
+				assert.Contains(t, stmt.Uses, "request")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_SubscriptOnPlainIdentifier(t *testing.T) {
+	source := `def handler(data):
+    val = data["key"]
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "", stmt.AttributeAccess,
+					"Plain subscript should not set AttributeAccess")
+				assert.Contains(t, stmt.Uses, "data")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_DeepAttributeChain(t *testing.T) {
+	source := `def handler(app):
+    val = app.config.SECRET_KEY
+    sink(val)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "val" {
+				assert.Equal(t, "app.config.SECRET_KEY", stmt.AttributeAccess)
+			}
+		}
+	}
+}
+
+func TestExtractFullAttributeChain_NilNode(t *testing.T) {
+	assert.Equal(t, "", extractFullAttributeChain(nil, []byte("")))
+}
+
+func TestExtractCallTarget_NilNode_CFG(t *testing.T) {
+	target, chain := extractCallTarget(nil, []byte(""))
+	assert.Equal(t, "", target)
+	assert.Equal(t, "", chain)
+}
+
+// ========== CALL CHAIN TESTS (GAP-004) ==========
+
+func TestBuildCFG_CallChain_MethodCall(t *testing.T) {
+	source := `def handler(request):
+    query = request.args.get("q")
+    process(query)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.handler", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "query" {
+				assert.Equal(t, "request.args.get", stmt.CallChain,
+					"CFG builder must extract full call chain")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_CallChain_ThreeLevel(t *testing.T) {
+	source := `def reconnect(self):
+    script = self.pyload.config.get("script")
+    run(script)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.reconnect", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "script" {
+				assert.Equal(t, "self.pyload.config.get", stmt.CallChain)
+			}
+		}
+	}
+}
+
+func TestBuildCFG_CallChain_SimpleCall(t *testing.T) {
+	source := `def foo():
+    x = bar()
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "x" {
+				assert.Equal(t, "bar", stmt.CallChain, "Simple call: chain equals target")
+			}
+		}
+	}
+}
+
+func TestBuildCFG_AugmentedAssignment(t *testing.T) {
+	source := `def foo():
+    x = 10
+    x += 5
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	totalStmts := 0
+	foundAugmented := false
+	for _, stmts := range blockStmts {
+		totalStmts += len(stmts)
+		for _, stmt := range stmts {
+			if stmt.Def == "x" && len(stmt.Uses) > 0 {
+				for _, u := range stmt.Uses {
+					if u == "x" {
+						foundAugmented = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, foundAugmented, "should find augmented assignment x += 5")
+	assert.GreaterOrEqual(t, totalStmts, 3, "should have at least 3 statements")
+}
+
+func TestBuildCFG_BareCallStatement(t *testing.T) {
+	source := `def foo():
+    print("hello")
+    subprocess.run(cmd)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	foundBareCall := false
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.CallTarget == "run" && stmt.CallChain == "subprocess.run" {
+				foundBareCall = true
+			}
+		}
+	}
+	assert.True(t, foundBareCall, "should find bare call subprocess.run with chain")
+}
+
+func TestBuildCFG_LambdaCall(t *testing.T) {
+	// Lambda call has a complex expression as function node (not identifier or attribute)
+	source := `def foo():
+    x = (lambda y: y)(10)
+    sink(x)
+`
+	funcNode := parsePythonFunction(t, source)
+	sourceBytes := []byte(source)
+
+	_, blockStmts, err := BuildCFGFromAST("test.foo", funcNode, sourceBytes)
+	require.NoError(t, err)
+
+	for _, stmts := range blockStmts {
+		for _, stmt := range stmts {
+			if stmt.Def == "x" {
+				assert.NotEmpty(t, stmt.CallChain, "Lambda call should have non-empty chain")
+			}
+		}
+	}
+}

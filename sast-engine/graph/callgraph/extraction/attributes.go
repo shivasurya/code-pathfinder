@@ -631,6 +631,19 @@ func inferFromFunctionCall(node *sitter.Node, sourceCode []byte, _ *resolution.T
 		}
 	}
 
+	// Dotted function/constructor call: module.func() or module.Class()
+	// Examples: sqlite3.connect(path), configparser.ConfigParser(), logging.getLogger(name)
+	if funcNode.Type() == "attribute" {
+		fullName := funcNode.Content(sourceCode)
+		if len(fullName) > 0 && strings.Contains(fullName, ".") {
+			return &core.TypeInfo{
+				TypeFQN:    "call:" + fullName,
+				Confidence: 0.8,
+				Source:     "function_call_attribute",
+			}
+		}
+	}
+
 	return nil
 }
 

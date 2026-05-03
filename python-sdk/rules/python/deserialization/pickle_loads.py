@@ -419,7 +419,7 @@ LIMITATION:
 - May miss complex multi-function deserialization patterns
 """
 
-from rules.python_decorators import python_rule
+from codepathfinder.python_decorators import python_rule
 from codepathfinder import calls, flows
 from codepathfinder.presets import PropagationPresets
 

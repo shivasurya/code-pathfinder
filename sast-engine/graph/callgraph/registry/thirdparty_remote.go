@@ -171,6 +171,14 @@ func (r *ThirdPartyRegistryRemote) HasModule(moduleName string) bool {
 	return false
 }
 
+// GetCachedModule retrieves a module from the in-memory cache without triggering a CDN download.
+// Returns nil if the module is not cached. Safe to call without a logger.
+func (r *ThirdPartyRegistryRemote) GetCachedModule(moduleName string) *core.StdlibModule {
+	r.CacheMutex.RLock()
+	defer r.CacheMutex.RUnlock()
+	return r.ModuleCache[moduleName]
+}
+
 // GetFunction retrieves a function from a module, downloading the module if needed.
 func (r *ThirdPartyRegistryRemote) GetFunction(moduleName, functionName string, logger *output.Logger) *core.StdlibFunction {
 	module, err := r.GetModule(moduleName, logger)

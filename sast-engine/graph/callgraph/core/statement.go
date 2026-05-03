@@ -64,9 +64,23 @@ type Statement struct {
 	// Empty string for non-call statements
 	CallTarget string
 
+	// CallChain is the full dotted attribute chain for method calls.
+	// Example: for "self.app.config.get(x)", CallChain = "self.app.config.get"
+	// Example: for "request.args.get(x)", CallChain = "request.args.get"
+	// Example: for "foo(x)", CallChain = "foo" (same as CallTarget)
+	// Empty string for non-call statements or when not applicable.
+	CallChain string
+
 	// CallArgs are the argument variables passed to the call (if Type == StatementTypeCall)
 	// Only includes variable names, not literals
 	CallArgs []string
+
+	// AttributeAccess is the full dotted attribute chain on the RHS of an assignment.
+	// Example: for "x = request.url", AttributeAccess = "request.url"
+	// Example: for "y = file.filename", AttributeAccess = "file.filename"
+	// Example: for "z = self.config.SECRET", AttributeAccess = "self.config.SECRET"
+	// Empty string if the RHS is not a pure attribute access (e.g., calls, literals, binary ops).
+	AttributeAccess string
 
 	// NestedStatements contains statements inside this statement's body
 	// Used for if/for/while/with/try blocks

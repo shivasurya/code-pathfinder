@@ -422,3 +422,37 @@ func TestClampConfidenceExported(t *testing.T) {
 	assert.Equal(t, 0.0, ClampConfidence(math.NaN()))
 	assert.Equal(t, 0.0, ClampConfidence(math.Inf(-1)))
 }
+
+// --- AttributeMatcherIR validation tests ---
+
+func TestValidateAttributeMatcherIR_Valid(t *testing.T) {
+	ir := &AttributeMatcherIR{
+		Type:     "attribute_matcher",
+		Patterns: []string{"request.url"},
+	}
+	dc := NewDiagnosticCollector()
+	err := validateAttributeMatcherIR(ir, dc)
+	assert.NoError(t, err)
+}
+
+func TestValidateAttributeMatcherIR_EmptyPatterns(t *testing.T) {
+	ir := &AttributeMatcherIR{
+		Type:     "attribute_matcher",
+		Patterns: []string{},
+	}
+	dc := NewDiagnosticCollector()
+	err := validateAttributeMatcherIR(ir, dc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "patterns list is empty")
+}
+
+func TestValidateAttributeMatcherIR_EmptyStringPattern(t *testing.T) {
+	ir := &AttributeMatcherIR{
+		Type:     "attribute_matcher",
+		Patterns: []string{"request.url", ""},
+	}
+	dc := NewDiagnosticCollector()
+	err := validateAttributeMatcherIR(ir, dc)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty pattern")
+}

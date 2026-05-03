@@ -62,6 +62,30 @@ func BuildTaintTransferSummary(
 	callGraph *core.CallGraph,
 	calleeSummaries map[string]*TaintTransferSummary,
 ) *TaintTransferSummary {
+	// Check builtin summaries first — avoids analyzing stdlib function bodies
+	// that aren't available in user source code.
+	if params, ok := IsBuiltinTaintTransparent(functionFQN); ok {
+		summary := &TaintTransferSummary{
+			FunctionFQN:     functionFQN,
+			ParamNames:      paramNames,
+			ParamToReturn:   make(map[int]bool),
+			ParamToSink:     make(map[int]bool),
+			ParamToSinkLine: make(map[int]uint32),
+			ParamToSinkCall: make(map[int]string),
+		}
+		for _, idx := range params {
+			if idx == -1 {
+				// ALL params propagate
+				for i := range paramNames {
+					summary.ParamToReturn[i] = true
+				}
+			} else {
+				summary.ParamToReturn[idx] = true
+			}
+		}
+		return summary
+	}
+
 	summary := &TaintTransferSummary{
 		FunctionFQN:     functionFQN,
 		ParamNames:      paramNames,

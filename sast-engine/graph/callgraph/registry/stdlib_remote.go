@@ -214,6 +214,14 @@ func (r *StdlibRegistryRemote) HasModule(moduleName string) bool {
 	return false
 }
 
+// GetCachedModule retrieves a module from the in-memory cache without triggering a CDN download.
+// Returns nil if the module is not cached. Safe to call without a logger.
+func (r *StdlibRegistryRemote) GetCachedModule(moduleName string) *core.StdlibModule {
+	r.CacheMutex.RLock()
+	defer r.CacheMutex.RUnlock()
+	return r.ModuleCache[moduleName]
+}
+
 // GetFunction retrieves a function from a module, downloading the module if needed.
 //
 // Parameters:
@@ -293,6 +301,42 @@ func (r *StdlibRegistryRemote) GetClassMethod(moduleName, className, methodName 
 	}
 
 	return nil
+}
+
+// FindClassMethodAlias searches all classes in a module for a method matching
+// the given name. This handles module-level aliases like tarfile.open which is
+// actually TarFile.open (a classmethod exposed at module level).
+//
+// When multiple classes have a method with the same name, the class whose name
+// matches the module (e.g., TarFile in tarfile) is preferred for determinism.
+// Also checks inherited methods via GetClassMethod.
+//
+// Returns the matching StdlibFunction and the owning class name, or nil/"" if
+// no match is found.
+func (r *StdlibRegistryRemote) FindClassMethodAlias(moduleName, functionName string, logger *output.Logger) (*core.StdlibFunction, string) {
+	module, err := r.GetModule(moduleName, logger)
+	if err != nil || module == nil {
+		return nil, ""
+	}
+
+	var bestMethod *core.StdlibFunction
+	var bestClassName string
+
+	for className := range module.Classes {
+		method := r.GetClassMethod(moduleName, className, functionName, logger)
+		if method == nil {
+			continue
+		}
+		if bestMethod == nil {
+			bestMethod = method
+			bestClassName = className
+		} else if strings.EqualFold(className, moduleName) {
+			// Prefer the class matching the module name (e.g., TarFile in tarfile)
+			bestMethod = method
+			bestClassName = className
+		}
+	}
+	return bestMethod, bestClassName
 }
 
 // ModuleCount returns the number of modules in the manifest.

@@ -17,6 +17,7 @@ type mockGoStdlibLoader struct {
 	packageSet map[string]bool
 	functions  map[string]*GoStdlibFunction
 	types      map[string]*GoStdlibType
+	packages   map[string]*GoStdlibPackage
 	pkgCount   int
 }
 
@@ -40,6 +41,15 @@ func (m *mockGoStdlibLoader) GetType(importPath, typeName string) (*GoStdlibType
 		return nil, errors.New("type not found")
 	}
 	return typ, nil
+}
+
+func (m *mockGoStdlibLoader) GetPackage(importPath string) (*GoStdlibPackage, error) {
+	if m.packages != nil {
+		if pkg, ok := m.packages[importPath]; ok {
+			return pkg, nil
+		}
+	}
+	return nil, errors.New("package not found")
 }
 
 func (m *mockGoStdlibLoader) PackageCount() int {

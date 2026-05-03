@@ -1237,3 +1237,155 @@ func (b *Buffer) Write(p []byte) (int, error) { return 0, nil }
 	// Also available as a top-level function with receiver prefix.
 	assert.Contains(t, pkg.Functions, "Buffer.Write")
 }
+
+// --- Tests for ExtractSinglePackage ---
+
+func TestExtractSinglePackage_ValidPackage(t *testing.T) {
+	dir := t.TempDir()
+	src := `package mypkg
+
+// DB is a database handle.
+type DB struct {
+	Name string
+}
+
+// Query executes a raw SQL query.
+func (db *DB) Query(sql string) (string, error) { return "", nil }
+
+// Open opens a new database connection.
+func Open(dsn string) (*DB, error) { return nil, nil }
+
+const DefaultTimeout = 30
+
+var DefaultDB *DB
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "db.go"), []byte(src), 0o644))
+
+	e := NewExtractor(Config{GoVersion: "1.26"})
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.NoError(t, err)
+	require.NotNil(t, pkg)
+
+	assert.Equal(t, "example.com/mypkg", pkg.ImportPath)
+	assert.Equal(t, "1.26", pkg.GoVersion)
+	assert.NotEmpty(t, pkg.GeneratedAt)
+
+	// Exported type must be present.
+	assert.Contains(t, pkg.Types, "DB")
+	assert.Equal(t, "struct", pkg.Types["DB"].Kind)
+	assert.Contains(t, pkg.Types["DB"].Fields, pkg.Types["DB"].Fields[0]) // Name field
+
+	// Method on DB must be in Functions with receiver prefix.
+	assert.Contains(t, pkg.Functions, "DB.Query")
+	assert.Contains(t, pkg.Functions, "Open")
+
+	// Constants and variables.
+	assert.Contains(t, pkg.Constants, "DefaultTimeout")
+	assert.Contains(t, pkg.Variables, "DefaultDB")
+}
+
+func TestExtractSinglePackage_MultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+	src1 := "package mypkg\n\nfunc Alpha() {}\n"
+	src2 := "package mypkg\n\nfunc Beta() {}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.go"), []byte(src1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.go"), []byte(src2), 0o644))
+
+	e := NewExtractor(Config{})
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.NoError(t, err)
+	assert.Contains(t, pkg.Functions, "Alpha")
+	assert.Contains(t, pkg.Functions, "Beta")
+}
+
+func TestExtractSinglePackage_TestFilesExcluded(t *testing.T) {
+	dir := t.TempDir()
+	src := "package mypkg\n\nfunc Exported() {}\n"
+	testSrc := "package mypkg\n\nfunc TestHelper() {}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkg.go"), []byte(src), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkg_test.go"), []byte(testSrc), 0o644))
+
+	e := NewExtractor(Config{})
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.NoError(t, err)
+
+	assert.Contains(t, pkg.Functions, "Exported")
+	assert.NotContains(t, pkg.Functions, "TestHelper")
+}
+
+func TestExtractSinglePackage_UnexportedSymbolsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	src := "package mypkg\n\nfunc exported() {}\nfunc Exported() {}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkg.go"), []byte(src), 0o644))
+
+	e := NewExtractor(Config{})
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.NoError(t, err)
+
+	assert.Contains(t, pkg.Functions, "Exported")
+	assert.NotContains(t, pkg.Functions, "exported")
+}
+
+func TestExtractSinglePackage_NoGoFiles(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# pkg"), 0o644))
+
+	e := NewExtractor(Config{})
+	_, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no .go files found")
+}
+
+func TestExtractSinglePackage_OnlyTestFiles(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, "pkg_test.go"),
+		[]byte("package mypkg_test\n\nfunc TestSomething() {}\n"),
+		0o644,
+	))
+
+	e := NewExtractor(Config{})
+	_, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no .go files found")
+}
+
+func TestExtractSinglePackage_NonExistentDir(t *testing.T) {
+	e := NewExtractor(Config{})
+	_, err := e.ExtractSinglePackage("/nonexistent/path/that/does/not/exist", "example.com/mypkg")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading directory")
+}
+
+func TestExtractSinglePackage_ParseErrorSkipped(t *testing.T) {
+	dir := t.TempDir()
+	// Valid file with an exported function.
+	validSrc := "package mypkg\n\nfunc GoodFunc() {}\n"
+	// Invalid Go syntax — parser will fail but must be skipped gracefully.
+	invalidSrc := "package mypkg\n\nthis is not valid go syntax !!!\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "good.go"), []byte(validSrc), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.go"), []byte(invalidSrc), 0o644))
+
+	e := NewExtractor(Config{})
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	// Must succeed despite the bad file.
+	require.NoError(t, err)
+	assert.Contains(t, pkg.Functions, "GoodFunc")
+}
+
+func TestExtractSinglePackage_TestOnlyPackageNameSkipped(t *testing.T) {
+	dir := t.TempDir()
+	// A file with package name ending in _test (external test package) is not named *_test.go
+	// but uses a _test package suffix — it should be skipped.
+	testPkgSrc := "package mypkg_test\n\nfunc Helper() {}\n"
+	goodSrc := "package mypkg\n\nfunc Exported() {}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "external_test.go"), []byte(testPkgSrc), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkg.go"), []byte(goodSrc), 0o644))
+
+	e := NewExtractor(Config{})
+	// external_test.go is named *_test.go so it's excluded by the filename filter.
+	pkg, err := e.ExtractSinglePackage(dir, "example.com/mypkg")
+	require.NoError(t, err)
+	assert.Contains(t, pkg.Functions, "Exported")
+	assert.NotContains(t, pkg.Functions, "Helper")
+}

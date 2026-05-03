@@ -343,7 +343,7 @@ This rule uses simple pattern matching to detect app.run(debug=True) calls. It d
 require dataflow analysis as it's a configuration issue, not a data flow vulnerability.
 """
 
-from rules.python_decorators import python_rule
+from codepathfinder.python_decorators import python_rule
 from codepathfinder import calls, Or
 
 

@@ -150,6 +150,11 @@ type CallGraph struct {
 	// *registry.StdlibRegistryRemote (stored as any to avoid import cycle)
 	// Implements dsl.InheritanceChecker interface.
 	StdlibRemote any
+
+	// GoStructFieldIndex maps "pkgPath.TypeName.FieldName" → resolved field type FQN.
+	// Populated during call graph construction (Pass 4 setup) from struct_definition nodes.
+	// Used by resolveGoCallTarget Source 4 to resolve chained field access like a.Field.Method().
+	GoStructFieldIndex map[string]string
 }
 
 // NewCallGraph creates and initializes a new CallGraph instance.
@@ -165,6 +170,7 @@ func NewCallGraph() *CallGraph {
 		Statements:         make(map[string][]*Statement),
 		CFGs:               make(map[string]any),
 		CFGBlockStatements: make(map[string]any),
+		GoStructFieldIndex: make(map[string]string),
 	}
 }
 
@@ -381,6 +387,10 @@ type GoModuleRegistry struct {
 	// It is initialized lazily from the CDN registry during call graph construction.
 	// Nil when stdlib registry loading is disabled or unavailable.
 	StdlibLoader GoStdlibLoader
+
+	// ThirdPartyLoader provides type metadata for Go third-party libraries.
+	// Parses from vendor/ or GOMODCACHE. Nil when unavailable.
+	ThirdPartyLoader GoThirdPartyLoader
 }
 
 // NewGoModuleRegistry creates an initialized GoModuleRegistry.
@@ -526,7 +536,28 @@ type GoStdlibLoader interface {
 	// Returns a non-nil error if the package or type is not found in the registry.
 	GetType(importPath, typeName string) (*GoStdlibType, error)
 
+	// GetPackage returns all type and function metadata for a stdlib package.
+	// Used to scan for interface types that expose promoted methods.
+	GetPackage(importPath string) (*GoStdlibPackage, error)
+
 	// PackageCount returns the total number of stdlib packages available in the registry.
+	PackageCount() int
+}
+
+// GoThirdPartyLoader provides access to Go third-party library type metadata.
+// Mirrors GoStdlibLoader and reuses the same GoStdlibType/GoStdlibFunction structs.
+// Implemented by registry.GoThirdPartyLocalLoader.
+type GoThirdPartyLoader interface {
+	// ValidateImport reports whether the given import path is a known third-party package.
+	ValidateImport(importPath string) bool
+
+	// GetFunction returns the metadata for a named function in the given third-party package.
+	GetFunction(importPath, funcName string) (*GoStdlibFunction, error)
+
+	// GetType returns the metadata for a named type in the given third-party package.
+	GetType(importPath, typeName string) (*GoStdlibType, error)
+
+	// PackageCount returns the total number of third-party packages available.
 	PackageCount() int
 }
 

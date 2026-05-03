@@ -60,6 +60,19 @@ func validateTypeConstrainedAttributeIR(ir *TypeConstrainedAttributeIR, dc *Diag
 	return nil
 }
 
+// validateAttributeMatcherIR validates an AttributeMatcherIR before execution.
+func validateAttributeMatcherIR(ir *AttributeMatcherIR, _ *DiagnosticCollector) error {
+	if len(ir.Patterns) == 0 {
+		return fmt.Errorf("attribute_matcher: patterns list is empty")
+	}
+	for _, p := range ir.Patterns {
+		if p == "" {
+			return fmt.Errorf("attribute_matcher: empty pattern in patterns list")
+		}
+	}
+	return nil
+}
+
 // validateDataflowIR validates a DataflowIR before execution.
 func validateDataflowIR(ir *DataflowIR, dc *DiagnosticCollector) error {
 	if ir == nil {

@@ -39,6 +39,10 @@ func (m *mockMCPStdlibLoader) GetType(_, _ string) (*core.GoStdlibType, error) {
 	return nil, errMockStdlibNotFound
 }
 
+func (m *mockMCPStdlibLoader) GetPackage(_ string) (*core.GoStdlibPackage, error) {
+	return nil, errMockStdlibNotFound
+}
+
 func (m *mockMCPStdlibLoader) PackageCount() int {
 	return len(m.stdlibPkgs)
 }

@@ -31,7 +31,6 @@ type Node struct {
 	DataType             string
 	Scope                string
 	VariableValue        string
-	hasAccess            bool
 	File                 string
 	isJavaSourceFile     bool
 	isPythonSourceFile   bool

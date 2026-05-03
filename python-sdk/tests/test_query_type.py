@@ -355,3 +355,59 @@ def test_call_matcher_no_tracks():
     """CallMatcher without tracks() has no trackedParams in IR."""
     ir = calls("eval").to_ir()
     assert "trackedParams" not in ir
+
+
+# --- AttributeMethodMatcher tests (QueryType.attr()) ---
+
+
+def test_querytype_attr_single():
+    """QueryType.attr() with a single attribute name."""
+
+    class FlaskRequest(QueryType):
+        fqns = ["flask.wrappers.Request"]
+        patterns = ["flask.request"]
+        match_subclasses = True
+
+    matcher = FlaskRequest.attr("url")
+    ir = matcher.to_ir()
+    assert ir["type"] == "type_constrained_attribute"
+    assert ir["receiverTypes"] == ["flask.wrappers.Request"]
+    assert ir["receiverPatterns"] == ["flask.request"]
+    assert ir["matchSubclasses"] is True
+    assert ir["attributeNames"] == ["url"]
+    assert ir["minConfidence"] == 0.5
+    assert ir["fallbackMode"] == "none"
+
+
+def test_querytype_attr_multiple():
+    """QueryType.attr() with multiple attribute names."""
+
+    class FlaskRequest(QueryType):
+        fqns = ["flask.wrappers.Request"]
+        patterns = []
+
+    matcher = FlaskRequest.attr("url", "host", "data")
+    ir = matcher.to_ir()
+    assert ir["attributeNames"] == ["url", "host", "data"]
+
+
+def test_querytype_attr_empty_raises():
+    """QueryType.attr() with no names raises ValueError."""
+
+    class FlaskRequest(QueryType):
+        fqns = ["flask.wrappers.Request"]
+        patterns = []
+
+    with pytest.raises(ValueError, match="requires at least one"):
+        FlaskRequest.attr()
+
+
+def test_querytype_attr_repr():
+    """AttributeMethodMatcher has a useful repr."""
+
+    class FlaskRequest(QueryType):
+        fqns = ["flask.wrappers.Request"]
+        patterns = []
+
+    matcher = FlaskRequest.attr("url", "host")
+    assert repr(matcher) == 'AttributeMethodMatcher("url", "host")'

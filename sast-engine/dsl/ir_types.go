@@ -18,6 +18,7 @@ const (
 	IRTypeLogicNot                 IRType = "logic_not"
 	IRTypeTypeConstrainedCall      IRType = "type_constrained_call"
 	IRTypeTypeConstrainedAttribute IRType = "type_constrained_attribute"
+	IRTypeAttributeMatcher         IRType = "attribute_matcher"
 )
 
 // MatcherIR is the base interface for all matcher IR types.
@@ -65,7 +66,7 @@ type CallMatcherIR struct {
 
 	// PositionalArgs maps positional argument index (as string) to expected value(s).
 	// Example: {"0": ArgumentConstraint{Value: "0.0.0.0"}}
-	// Position is stored as string key to match JSON format from Python DSL.
+	// Position is stored as string key to match JSON format from Python SDK.
 	// This field is optional and will be omitted from JSON if empty.
 	PositionalArgs map[string]ArgumentConstraint `json:"positionalArgs,omitempty"`
 
@@ -96,15 +97,29 @@ func (v *VariableMatcherIR) GetType() IRType {
 	return IRTypeVariableMatcher
 }
 
-// DataflowIR represents dataflow (taint analysis) JSON IR from Python DSL.
+// AttributeMatcherIR represents attribute_matcher JSON IR.
+// Matches pure attribute access patterns (not calls) on the RHS of assignments,
+// e.g. {"type": "attribute_matcher", "patterns": ["request.url", "file.filename"]}.
+type AttributeMatcherIR struct {
+	Type     string   `json:"type"`     // "attribute_matcher"
+	Patterns []string `json:"patterns"` // ["request.url", "file.filename"]
+}
+
+// GetType returns the IR type.
+func (a *AttributeMatcherIR) GetType() IRType {
+	return IRTypeAttributeMatcher
+}
+
+// DataflowIR represents dataflow (taint analysis) JSON IR from Python SDK.
 // Sources/Sinks/Sanitizers accept any matcher type (CallMatcherIR or TypeConstrainedCallIR).
 type DataflowIR struct {
-	Type        string            `json:"type"`        // "dataflow"
-	Sources     []json.RawMessage `json:"sources"`     // Any matcher IR
-	Sinks       []json.RawMessage `json:"sinks"`       // Any matcher IR
-	Sanitizers  []json.RawMessage `json:"sanitizers"`  // Any matcher IR
-	Propagation []PropagationIR   `json:"propagation"` // How taint flows (for future use)
-	Scope       string            `json:"scope"`       // "local" or "global"
+	Type        string            `json:"type"`                  // "dataflow"
+	Sources     []json.RawMessage `json:"sources"`               // Any matcher IR
+	Sinks       []json.RawMessage `json:"sinks"`                 // Any matcher IR
+	Sanitizers  []json.RawMessage `json:"sanitizers"`            // Any matcher IR
+	Propagation []PropagationIR   `json:"propagation"`           // How taint flows (for future use)
+	Scope       string            `json:"scope"`                 // "local" or "global"
+	Language    string            `json:"language,omitempty"`     // "go", "python", "" (any)
 }
 
 // GetType returns the IR type.
@@ -148,7 +163,7 @@ type DataflowDetection struct {
 // TypeConstrainedCallIR represents type_constrained_call JSON IR.
 // Matches call sites where the receiver variable has a specific inferred type.
 //
-//nolint:tagliatelle // JSON tags match Python DSL format.
+//nolint:tagliatelle // JSON tags match Python SDK format.
 type TypeConstrainedCallIR struct {
 	Type             string  `json:"type"`                       // "type_constrained_call"
 	ReceiverType     string  `json:"receiverType,omitempty"`     // backward compat: single FQN
@@ -197,18 +212,42 @@ func (t *TypeConstrainedCallIR) GetType() IRType {
 // TypeConstrainedAttributeIR represents type_constrained_attribute JSON IR.
 // Matches attribute access on variables with a specific inferred type.
 //
-//nolint:tagliatelle // JSON tags match Python DSL format.
+//nolint:tagliatelle // JSON tags match Python SDK format.
 type TypeConstrainedAttributeIR struct {
-	Type          string  `json:"type"`          // "type_constrained_attribute"
-	ReceiverType  string  `json:"receiverType"`  // e.g., "django.http.HttpRequest"
-	AttributeName string  `json:"attributeName"` // e.g., "GET"
-	MinConfidence float64 `json:"minConfidence"` // default 0.5
-	FallbackMode  string  `json:"fallbackMode"`  // "name", "none"
+	Type           string   `json:"type"`                       // "type_constrained_attribute"
+	ReceiverType   string   `json:"receiverType"`               // singular — backward compat
+	ReceiverTypes  []string `json:"receiverTypes,omitempty"`    // plural — from Python SDK
+	AttributeName  string   `json:"attributeName"`              // singular — backward compat
+	AttributeNames []string `json:"attributeNames,omitempty"`   // plural — from Python SDK
+	MinConfidence  float64  `json:"minConfidence"`              // default 0.5
+	FallbackMode   string   `json:"fallbackMode"`               // "name", "none"
 }
 
 // GetType returns the IR type.
 func (t *TypeConstrainedAttributeIR) GetType() IRType {
 	return IRTypeTypeConstrainedAttribute
+}
+
+// getReceiverTypes returns the receiver type list, merging singular and plural fields.
+func (t *TypeConstrainedAttributeIR) getReceiverTypes() []string {
+	if len(t.ReceiverTypes) > 0 {
+		return t.ReceiverTypes
+	}
+	if t.ReceiverType != "" {
+		return []string{t.ReceiverType}
+	}
+	return nil
+}
+
+// getAttributeNames returns the attribute name list, merging singular and plural fields.
+func (t *TypeConstrainedAttributeIR) getAttributeNames() []string {
+	if len(t.AttributeNames) > 0 {
+		return t.AttributeNames
+	}
+	if t.AttributeName != "" {
+		return []string{t.AttributeName}
+	}
+	return nil
 }
 
 // RuleIR represents a complete rule with metadata.

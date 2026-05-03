@@ -58,13 +58,19 @@ func (e *Enricher) EnrichDetection(detection dsl.DataflowDetection, rule dsl.Rul
 			if enriched.Detection.SourceFile == "" {
 				enriched.Detection.SourceFile = sourceLoc.FilePath
 			}
+			// Store resolved source location for display
+			enriched.SourceLocation = sourceLoc
+			// Extract source code snippet for inter-procedural display
+			if srcSnippet, err := e.extractSnippet(sourceLoc); err == nil {
+				enriched.SourceSnippet = srcSnippet
+			}
 		} else {
 			// Same file for source and sink
 			enriched.Detection.SourceFile = enriched.Detection.SinkFile
 		}
 	}
 
-	// Extract code snippet
+	// Extract code snippet (sink)
 	snippet, err := e.extractSnippet(loc)
 	if err == nil {
 		enriched.Snippet = snippet

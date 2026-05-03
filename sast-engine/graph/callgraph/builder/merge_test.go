@@ -6,6 +6,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMergeCallGraphs(t *testing.T) {
@@ -82,4 +83,50 @@ func TestMergeCallGraphs_EmptyDestination(t *testing.T) {
 
 	assert.Len(t, dst.Functions, 1)
 	assert.Len(t, dst.Edges, 1)
+}
+
+func TestMergeCallGraphs_DataflowMaps(t *testing.T) {
+	// Create Python call graph (dst) with statements
+	pythonCG := core.NewCallGraph()
+	pythonCG.Functions["myapp.handler"] = &graph.Node{ID: "py1", Language: "python"}
+	pythonCG.Statements["myapp.handler"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "x", LineNumber: 1},
+	}
+	pythonCG.Summaries["myapp.handler"] = core.NewTaintSummary("myapp.handler")
+
+	// Create Go call graph (src) with statements
+	goCG := core.NewCallGraph()
+	goCG.Functions["github.com/app/handlers.Handle"] = &graph.Node{ID: "go1", Language: "go"}
+	goCG.Statements["github.com/app/handlers.Handle"] = []*core.Statement{
+		{Type: core.StatementTypeAssignment, Def: "query", LineNumber: 5},
+		{Type: core.StatementTypeCall, CallTarget: "Query", LineNumber: 6},
+	}
+	goCG.Summaries["github.com/app/handlers.Handle"] = core.NewTaintSummary("github.com/app/handlers.Handle")
+
+	// Merge
+	MergeCallGraphs(pythonCG, goCG)
+
+	// Verify Statements merged
+	require.Len(t, pythonCG.Statements, 2, "Should have statements for both Python and Go functions")
+	assert.Contains(t, pythonCG.Statements, "myapp.handler")
+	assert.Contains(t, pythonCG.Statements, "github.com/app/handlers.Handle")
+	assert.Len(t, pythonCG.Statements["github.com/app/handlers.Handle"], 2)
+
+	// Verify Summaries merged
+	assert.Len(t, pythonCG.Summaries, 2)
+	assert.Contains(t, pythonCG.Summaries, "github.com/app/handlers.Handle")
+}
+
+func TestMergeCallGraphs_DataflowMaps_CFGs(t *testing.T) {
+	dst := core.NewCallGraph()
+	src := core.NewCallGraph()
+
+	// Simulate CFG data (stored as any)
+	src.CFGs["github.com/app.Func"] = "mock_cfg"
+	src.CFGBlockStatements["github.com/app.Func"] = "mock_blockstmts"
+
+	MergeCallGraphs(dst, src)
+
+	assert.Equal(t, "mock_cfg", dst.CFGs["github.com/app.Func"])
+	assert.Equal(t, "mock_blockstmts", dst.CFGBlockStatements["github.com/app.Func"])
 }

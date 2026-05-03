@@ -300,10 +300,12 @@ func (e *DataflowExecutor) executeGlobal() []DataflowDetection {
 	}
 
 	// Dedup: multiple matchers can produce identical findings for the same flow
+	// Dedup by sink location only: multiple sources can reach the same sink,
+	// but we report each sink once (with the first source that reaches it).
 	seen := make(map[string]bool)
 	deduped := make([]DataflowDetection, 0, len(detections))
 	for _, det := range detections {
-		key := fmt.Sprintf("%s:%d:%d:%s", det.FunctionFQN, det.SourceLine, det.SinkLine, det.SinkCall)
+		key := fmt.Sprintf("%s:%d:%s", det.FunctionFQN, det.SinkLine, det.SinkCall)
 		if !seen[key] {
 			seen[key] = true
 			deduped = append(deduped, det)
@@ -342,7 +344,17 @@ func (e *DataflowExecutor) summaryConfirmsFlow(
 				break
 			}
 		}
-		if !hasParamToReturn {
+		// Also accept when a param transitively reaches a sink (e.g., HTTP handler
+		// that calls a source, assigns to local var, then passes to callee with ParamToSink).
+		// ConvertHandler: r → r.FormValue() → filename → service.Convert → exec.Command
+		hasParamToSink := false
+		for _, flows := range sourceSummary.ParamToSink {
+			if flows {
+				hasParamToSink = true
+				break
+			}
+		}
+		if !hasParamToReturn && !hasParamToSink {
 			return false
 		}
 	}
@@ -504,6 +516,48 @@ func (e *DataflowExecutor) resolveMatchers(rawMatchers []json.RawMessage) []Call
 					FunctionFQN:   det.FunctionFQN,
 					Line:          det.SourceLine,
 					TrackedParams: ir.TrackedParams,
+				})
+			}
+
+		case "type_constrained_attribute":
+			var ir TypeConstrainedAttributeIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			tcaExecutor := &TypeConstrainedAttributeExecutor{
+				IR:               &ir,
+				CallGraph:        e.CallGraph,
+				Config:           e.Config,
+				ThirdPartyRemote: extractInheritanceChecker(e.CallGraph),
+				Diagnostics:      e.Diagnostics,
+			}
+			for _, det := range tcaExecutor.Execute() {
+				cs := core.CallSite{
+					Target:   det.SinkCall,
+					Location: core.Location{Line: det.SourceLine},
+				}
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    cs,
+					FunctionFQN: det.FunctionFQN,
+					Line:        det.SourceLine,
+				})
+			}
+
+		case "attribute_matcher":
+			var ir AttributeMatcherIR
+			if err := json.Unmarshal(raw, &ir); err != nil {
+				continue
+			}
+			if err := validateAttributeMatcherIR(&ir, e.Diagnostics); err != nil {
+				e.Diagnostics.Addf("skip", "ir_validation", "skipping attribute_matcher: %v", err)
+				continue
+			}
+			attrExecutor := NewAttributeMatcherExecutor(&ir, e.CallGraph)
+			for _, match := range attrExecutor.Execute() {
+				allMatches = append(allMatches, CallSiteMatch{
+					CallSite:    match.CallSite,
+					FunctionFQN: match.FunctionFQN,
+					Line:        match.Line,
 				})
 			}
 		}
@@ -878,6 +932,14 @@ func (e *DataflowExecutor) findFunctionsWithSourcesAndSinks(sources, sinks []Cal
 	functions := []string{}
 	for funcFQN := range sourceMap {
 		if sinkMap[funcFQN] {
+			// Language filter: skip if rule is language-scoped and function doesn't match.
+			if e.IR.Language != "" && e.CallGraph != nil {
+				if funcNode, ok := e.CallGraph.Functions[funcFQN]; ok {
+					if funcNode.Language != e.IR.Language {
+						continue
+					}
+				}
+			}
 			functions = append(functions, funcFQN)
 		}
 	}

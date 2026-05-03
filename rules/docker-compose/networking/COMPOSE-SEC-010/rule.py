@@ -1,5 +1,5 @@
-from rules.container_decorators import compose_rule
-from rules.container_matchers import service_has
+from codepathfinder.container_decorators import compose_rule
+from codepathfinder.container_matchers import service_has
 
 
 @compose_rule(

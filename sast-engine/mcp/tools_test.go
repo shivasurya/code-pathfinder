@@ -509,7 +509,7 @@ func TestGetToolDefinitions(t *testing.T) {
 
 	tools := server.getToolDefinitions()
 
-	assert.Len(t, tools, 12) // Updated for Docker MCP: added find_dockerfile_instructions, find_compose_services, get_dockerfile_details, get_docker_dependencies
+	assert.Len(t, tools, 13) // Updated for PR-03: added status tool
 
 	// Verify each tool has required fields.
 	for _, tool := range tools {
@@ -534,6 +534,7 @@ func TestGetToolDefinitions(t *testing.T) {
 	assert.True(t, toolNames["find_dockerfile_instructions"])
 	assert.True(t, toolNames["find_compose_services"])
 	assert.True(t, toolNames["get_dockerfile_details"])
+	assert.True(t, toolNames["status"])
 }
 
 // ============================================================================

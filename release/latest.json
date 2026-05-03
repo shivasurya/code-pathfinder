@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "latest": {
+    "version": "2.0.2",
+    "released_at": "2026-04-03T00:00:00Z",
+    "release_url": "https://github.com/shivasurya/code-pathfinder/releases/tag/v2.0.2"
+  },
+  "channels": {
+    "stable": "2.0.2"
+  },
+  "message": {
+    "level": "info",
+    "text": "Code Pathfinder static analysis engine."
+  },
+  "announcements": [],
+  "min_supported": "1.9.0"
+}

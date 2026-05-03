@@ -1,7 +1,7 @@
 """Integration tests for QueryType → IR generation pipeline.
 
 Tests that QueryType subclasses produce correct IR JSON that the Go engine
-would consume. Validates the full path: Python DSL → IR → JSON.
+would consume. Validates the full path: Python SDK → IR → JSON.
 """
 
 import json

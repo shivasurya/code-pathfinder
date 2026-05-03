@@ -598,3 +598,27 @@ func TestVerifyThirdPartyChecksum_Deterministic(t *testing.T) {
 	assert.True(t, verifyThirdPartyChecksum(data2, checksum),
 		"checksum of first marshal must verify against second marshal")
 }
+
+func TestThirdPartyRegistryRemote_GetCachedModule(t *testing.T) {
+	remote := NewThirdPartyRegistryRemote("https://example.com")
+	remote.Manifest = &core.Manifest{
+		Modules: []*core.ModuleEntry{{Name: "flask"}},
+	}
+
+	// Not cached — returns nil without downloading
+	result := remote.GetCachedModule("flask")
+	assert.Nil(t, result, "should return nil when module not in cache")
+
+	// Pre-populate cache
+	module := &core.StdlibModule{Module: "flask", Functions: map[string]*core.StdlibFunction{}}
+	remote.ModuleCache["flask"] = module
+
+	// Now cached — returns the module
+	result = remote.GetCachedModule("flask")
+	assert.NotNil(t, result)
+	assert.Equal(t, "flask", result.Module)
+
+	// Different module — still nil
+	result = remote.GetCachedModule("django")
+	assert.Nil(t, result)
+}

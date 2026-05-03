@@ -226,7 +226,7 @@ pathfinder scan --ruleset python/all --project . --verbose
 ## GitHub Action
 
 ```yaml
-name: Security Scan
+name: Code Pathfinder Security SAST Scan
 
 on:
   pull_request:
@@ -245,9 +245,9 @@ jobs:
           fetch-depth: 0
 
       - name: Run Security Scan
-        uses: shivasurya/code-pathfinder@v2.0.0
+        uses: shivasurya/code-pathfinder@v2.1.1
         with:
-          ruleset: python/django, python/flask, docker/security, docker/best-practice
+          ruleset: python/all, docker/all, docker-compose/all
           verbose: true
           pr-comment: ${{ github.event_name == 'pull_request' }}
           pr-inline: ${{ github.event_name == 'pull_request' }}
@@ -260,7 +260,7 @@ jobs:
           sarif_file: pathfinder-results.sarif
 ```
 
-See the full example: [`.github/workflows/example-security-scan.yml`](.github/workflows/example-security-scan.yml)
+See the full example: [`.github/workflows/code-pathfinder-scan.yml`](.github/workflows/code-pathfinder-scan.yml)
 
 <details>
 <summary><strong>Action Inputs</strong></summary>
@@ -300,6 +300,14 @@ Either `rules` or `ruleset` is required.
 ## Contributing
 
 Contributions are welcome. Read the [Contributing Guide](./CONTRIBUTING.md) for setup instructions, how to run tests locally, and the PR process.
+
+### Pushing an in-product announcement
+
+In-product announcements (workshops, blog posts, security advisories) are
+managed via `release/latest.json`. Add an entry to `announcements[]`,
+open a PR, and once it merges to `main` the publish workflow uploads the
+manifest to the CDN within ~60 seconds. See the version-update-check tech
+spec for the schema and `version_range` semantics.
 
 All contributors must sign the [Contributor License Agreement (CLA)](./CLA.md) before any pull request can be merged.
 
