@@ -170,14 +170,17 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 		close(resultChan)
 	}()
 
-	// Collect results
+	// Collect results.
+	// Each worker already populated edge.From.OutgoingEdges via localGraph.AddEdge,
+	// and node pointers are shared across local/global graphs, so we transfer the
+	// edge structs without re-attaching them — calling codeGraph.AddEdge here would
+	// double every entry in OutgoingEdges and break callers that walk it (e.g. the
+	// C/C++ call-graph builders).
 	for localGraph := range resultChan {
 		for _, node := range localGraph.Nodes {
 			codeGraph.AddNode(node)
 		}
-		for _, edge := range localGraph.Edges {
-			codeGraph.AddEdge(edge.From, edge.To)
-		}
+		codeGraph.Edges = append(codeGraph.Edges, localGraph.Edges...)
 	}
 
 	// Resolve transitive inheritance for Python classes.

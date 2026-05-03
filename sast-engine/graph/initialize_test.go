@@ -631,3 +631,141 @@ func TestInitializeWithPythonFileReadError(t *testing.T) {
 		t.Errorf("OnProgress should be called once for unreadable Python file, got %d", progressCalls)
 	}
 }
+
+// TestInitialize_NoDuplicateOutgoingEdges guards against a regression where
+// the result-collection step in Initialize re-attached every per-file edge to
+// its source node (calling codeGraph.AddEdge on edges already inserted by the
+// worker). That doubled OutgoingEdges and surfaced as 2× detections on every
+// rule that walked the call graph (PR-07/08 C/C++ builders, etc.).
+//
+// The test parses a tiny C source containing two distinct calls inside one
+// function and asserts that the function node ends up with exactly two
+// OutgoingEdges, not four.
+func TestInitialize_NoDuplicateOutgoingEdges(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_no_dup_edges")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	src := `void f(const char *s) {
+    strcpy(0, s);
+    system(s);
+}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.c"), []byte(src), 0644); err != nil {
+		t.Fatalf("write c source: %v", err)
+	}
+
+	g := Initialize(tmpDir, nil)
+	if g == nil {
+		t.Fatal("Initialize returned nil")
+	}
+
+	var fn *Node
+	for _, n := range g.Nodes {
+		if n != nil && n.Language == "c" && n.Type == "function_definition" && n.Name == "f" {
+			fn = n
+			break
+		}
+	}
+	if fn == nil {
+		t.Fatal("expected function_definition for f")
+	}
+
+	if got := len(fn.OutgoingEdges); got != 2 {
+		t.Fatalf("expected 2 outgoing edges (one per distinct call), got %d", got)
+	}
+
+	seen := map[string]int{}
+	for _, e := range fn.OutgoingEdges {
+		if e == nil || e.To == nil {
+			t.Fatalf("nil edge or destination on f")
+		}
+		key := e.To.Name + "@" + e.To.ID
+		seen[key]++
+	}
+	for k, c := range seen {
+		if c != 1 {
+			t.Errorf("edge %s seen %d times, expected exactly 1", k, c)
+		}
+	}
+}
+
+// TestInitialize_PreservesDistinctSameLineCalls guards the dedup fix's
+// non-regression contract: when several calls live on the same line — either
+// distinct targets (`printf("%s", strdup(s));`) or the same target nested
+// (`strcpy(a, strcpy(b, c))`) — every call site must remain visible. The fix
+// removes a duplicate edge that was attached twice to the same OutgoingEdges
+// slice; it must not collapse genuinely distinct sites that happen to share a
+// line number.
+func TestInitialize_PreservesDistinctSameLineCalls(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "test_same_line_calls")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	src := `void f(const char *src) {
+    char a[16], b[16], c[16];
+    printf("%s", strdup(src));
+    strcpy(c, strcpy(a, b));
+    memcpy(strcat(a, strdup(src)), b, 4);
+}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.c"), []byte(src), 0644); err != nil {
+		t.Fatalf("write c source: %v", err)
+	}
+
+	g := Initialize(tmpDir, nil)
+	if g == nil {
+		t.Fatal("Initialize returned nil")
+	}
+
+	var fn *Node
+	for _, n := range g.Nodes {
+		if n != nil && n.Language == "c" && n.Type == "function_definition" && n.Name == "f" {
+			fn = n
+			break
+		}
+	}
+	if fn == nil {
+		t.Fatal("expected function_definition for f")
+	}
+
+	// Line 3: printf(...) + strdup(...) — 2 calls
+	// Line 4: strcpy(c, ...) outer + strcpy(a, b) inner — 2 calls of the same target
+	// Line 5: memcpy(...) + strcat(...) + strdup(...) — 3 calls
+	// Total: 7 syntactic call sites.
+	const expectedTotal = 7
+	if got := len(fn.OutgoingEdges); got != expectedTotal {
+		t.Fatalf("expected %d outgoing edges across all same-line calls, got %d", expectedTotal, got)
+	}
+
+	byTarget := map[string]int{}
+	byLine := map[uint32]int{}
+	for _, e := range fn.OutgoingEdges {
+		if e == nil || e.To == nil {
+			t.Fatalf("nil edge or destination on f")
+		}
+		byTarget[e.To.Name]++
+		byLine[e.To.LineNumber]++
+	}
+
+	// Both nested strcpys on line 4 must survive (same target, same line).
+	if got := byTarget["strcpy"]; got != 2 {
+		t.Errorf("expected 2 strcpy edges on line 4 (outer + nested), got %d", got)
+	}
+	// Distinct targets on line 3 must both survive.
+	if got := byTarget["printf"]; got != 1 {
+		t.Errorf("expected 1 printf edge on line 3, got %d", got)
+	}
+	// strdup appears once on line 3 and once on line 5 — both must survive.
+	if got := byTarget["strdup"]; got != 2 {
+		t.Errorf("expected 2 strdup edges (line 3 + line 5), got %d", got)
+	}
+	// Three distinct calls on the multi-call line must all survive.
+	for _, n := range []string{"memcpy", "strcat"} {
+		if got := byTarget[n]; got != 1 {
+			t.Errorf("expected 1 %s edge on the 3-call line, got %d", n, got)
+		}
+	}
+}
