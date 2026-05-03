@@ -57,6 +57,92 @@ func TestCountTotalCallSites(t *testing.T) {
 	})
 }
 
+// newTestLogger returns a logger that writes to a discard buffer so
+// tests do not pollute stdout. Using NewLoggerWithWriter avoids any
+// dependency on the environment's terminal detection.
+func newTestLogger() *output.Logger {
+	return output.NewLoggerWithWriter(output.VerbosityDebug, io.Discard)
+}
+
+// TestBuildClikeCallGraphs_NoNodes verifies the entry helper short-
+// circuits when neither C nor C++ source files appear in the graph.
+// `cg` must remain untouched.
+func TestBuildClikeCallGraphs_NoNodes(t *testing.T) {
+	cg := core.NewCallGraph()
+	codeGraph := graph.NewCodeGraph()
+	codeGraph.AddNode(&graph.Node{ID: "py-1", Language: "python", Type: "function_definition", Name: "f"})
+
+	buildClikeCallGraphs(cg, codeGraph, "/projects/app", newTestLogger())
+
+	assert.Empty(t, cg.Functions, "no C/C++ nodes => no merge")
+}
+
+// TestBuildClikeCallGraphs_CFunctionsMerged constructs a tiny C
+// CodeGraph and verifies the helper indexes the function and merges
+// it into the destination graph.
+func TestBuildClikeCallGraphs_CFunctionsMerged(t *testing.T) {
+	root := "/projects/app"
+	codeGraph := graph.NewCodeGraph()
+	codeGraph.AddNode(&graph.Node{
+		ID:         "fn:src/main.c::main",
+		Type:       "function_definition",
+		Name:       "main",
+		File:       root + "/src/main.c",
+		Language:   "c",
+		ReturnType: "int",
+	})
+
+	cg := core.NewCallGraph()
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+
+	assert.Contains(t, cg.Functions, "src/main.c::main")
+}
+
+// TestBuildClikeCallGraphs_CppFunctionsMerged verifies C++ nodes flow
+// through the helper without being misclassified as C.
+func TestBuildClikeCallGraphs_CppFunctionsMerged(t *testing.T) {
+	root := "/projects/app"
+	codeGraph := graph.NewCodeGraph()
+	codeGraph.AddNode(&graph.Node{
+		ID:             "fn:src/main.cpp::main",
+		Type:           "function_definition",
+		Name:           "main",
+		File:           root + "/src/main.cpp",
+		Language:       "cpp",
+		ReturnType:     "int",
+		SourceLocation: &graph.SourceLocation{File: root + "/src/main.cpp", StartByte: 0, EndByte: 30},
+	})
+
+	cg := core.NewCallGraph()
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+
+	assert.Contains(t, cg.Functions, "src/main.cpp::main")
+	assert.NotContains(t, cg.Functions, "src/main.c::main", "C++ node must not appear in C namespace")
+}
+
+// TestBuildClikeCallGraphs_MixedProject confirms that a graph
+// containing both C and C++ nodes produces both call graphs and
+// merges them into the same destination.
+func TestBuildClikeCallGraphs_MixedProject(t *testing.T) {
+	root := "/projects/app"
+	codeGraph := graph.NewCodeGraph()
+	codeGraph.AddNode(&graph.Node{
+		ID: "c-fn", Type: "function_definition", Name: "c_main",
+		File: root + "/src/main.c", Language: "c",
+	})
+	codeGraph.AddNode(&graph.Node{
+		ID: "cpp-fn", Type: "function_definition", Name: "cpp_main",
+		File: root + "/src/main.cpp", Language: "cpp",
+		SourceLocation: &graph.SourceLocation{File: root + "/src/main.cpp", StartByte: 0, EndByte: 30},
+	})
+
+	cg := core.NewCallGraph()
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+
+	assert.Contains(t, cg.Functions, "src/main.c::c_main")
+	assert.Contains(t, cg.Functions, "src/main.cpp::cpp_main")
+}
+
 // TestHasLanguageNodes covers the per-language gate that decides
 // whether scan.go runs the C / C++ call-graph builders. The gate must
 // be false for a nil graph, false when no nodes match, and true as
