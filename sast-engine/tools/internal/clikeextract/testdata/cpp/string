@@ -1,0 +1,28 @@
+// Synthetic <string> fixture.
+
+#ifndef _GLIBCXX_STRING
+#define _GLIBCXX_STRING
+
+namespace std {
+
+  typedef unsigned long size_t;
+
+  template<typename CharT>
+  class basic_string {
+   public:
+    basic_string();
+    basic_string(const CharT* s);
+
+    const CharT* c_str() const;
+    const CharT* data() const;
+    size_t size() const;
+    size_t length() const;
+    bool empty() const;
+    basic_string& operator+=(const basic_string& rhs);
+  };
+
+  typedef basic_string<char> string;
+
+}
+
+#endif

@@ -1,0 +1,30 @@
+// Synthetic <utility> fixture: free functions and a non-template helper.
+
+#ifndef _GLIBCXX_UTILITY
+#define _GLIBCXX_UTILITY
+
+namespace std {
+
+  template<typename T>
+  T&& move(T& x);
+
+  template<typename T>
+  T&& forward(T& x);
+
+  // Skipped — leading underscore + lowercase = library-private.
+  void _internal_helper();
+
+  // Skipped — double underscore = compiler-implementation.
+  void __detail_helper();
+
+}
+
+// File-scope free function (no namespace). Should land in h.Functions.
+int file_scope_func(int x);
+
+// Compiler-internal namespace — entire body skipped.
+namespace __detail {
+  void should_not_appear();
+}
+
+#endif
