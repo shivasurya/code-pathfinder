@@ -64,13 +64,58 @@ func NewCppStdlibRegistryRemote(baseURL, platform string) *CppStdlibRegistryRemo
 	}
 }
 
-// LoadManifest reads the top-level manifest.json. file:// path is wired in
-// PR-02; HTTP path is the PR-03 stub.
+// LoadManifest reads the top-level manifest.json over file:// or HTTPS.
+// HTTP failures fall back to the on-disk cache regardless of TTL so an
+// offline scan still resolves stdlib calls when a previous run populated
+// the cache.
 func (r *CppStdlibRegistryRemote) LoadManifest(logger core.CStdlibLogger) error {
 	if r.fileBase != "" {
 		return r.loadManifestFromFile(logger)
 	}
-	return errors.New("CppStdlibRegistryRemote: HTTP loader not yet implemented; tracked in PR-03")
+	return r.loadManifestFromHTTP(logger)
+}
+
+// loadManifestFromHTTP is the C++ counterpart to the C loader's HTTP path.
+// The URL layout is identical except for the language segment ("/cpp/v1/"
+// instead of "/c/v1/").
+func (r *CppStdlibRegistryRemote) loadManifestFromHTTP(logger core.CStdlibLogger) error {
+	url := joinURL(r.baseURL, r.platform, "cpp", "v1", "manifest.json")
+	if logger != nil {
+		logger.Debug("Downloading C++ stdlib manifest: %s", url)
+	}
+
+	data, err := fetchURL(r.httpClient, url)
+	if err != nil {
+		if cached, cerr := r.diskCache.GetManifest(); cerr == nil {
+			if logger != nil {
+				logger.Warning("Network failed for %s; serving cached manifest. Underlying: %v", url, err)
+			}
+			r.cacheMutex.Lock()
+			r.manifest = cached
+			r.cacheMutex.Unlock()
+			return nil
+		}
+		return fmt.Errorf("loadManifestFromHTTP: %w", err)
+	}
+
+	var manifest core.CStdlibManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("loadManifestFromHTTP: parsing manifest from %s: %w", url, err)
+	}
+
+	if cerr := r.diskCache.SaveManifest(data); cerr != nil && logger != nil {
+		logger.Warning("Failed to save C++ manifest to disk cache: %v", cerr)
+	}
+
+	r.cacheMutex.Lock()
+	r.manifest = &manifest
+	r.cacheMutex.Unlock()
+
+	if logger != nil {
+		logger.Statistic("Loaded C++ stdlib manifest over HTTP: %d headers for %s",
+			len(manifest.Headers), r.platform)
+	}
+	return nil
 }
 
 func (r *CppStdlibRegistryRemote) loadManifestFromFile(logger core.CStdlibLogger) error {
@@ -132,7 +177,50 @@ func (r *CppStdlibRegistryRemote) fetchHeaderLocked(name string) (*core.CStdlibH
 	if r.fileBase != "" {
 		return r.fetchHeaderFromFile(entry)
 	}
-	return nil, errors.New("CppStdlibRegistryRemote: HTTP fetch not yet implemented; tracked in PR-03")
+	return r.fetchHeaderFromHTTP(entry)
+}
+
+// fetchHeaderFromHTTP downloads one per-header JSON over HTTP. Mirrors
+// the C loader's strategy: disk-cache freshness on the way in, stale-cache
+// fallback on network failure, optional checksum verification.
+func (r *CppStdlibRegistryRemote) fetchHeaderFromHTTP(entry *core.CStdlibHeaderEntry) (*core.CStdlibHeader, error) {
+	if r.diskCache.IsFresh(entry.File, stdlibCacheTTL) {
+		if cached, err := r.diskCache.GetHeader(entry.File); err == nil {
+			return cached, nil
+		}
+	}
+
+	url := r.headerURL(entry)
+	data, err := fetchURL(r.httpClient, url)
+	if err != nil {
+		if cached, cerr := r.diskCache.GetHeader(entry.File); cerr == nil {
+			return cached, nil
+		}
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: %w", err)
+	}
+
+	if err := verifyChecksum(data, entry.Checksum); err != nil {
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: %s: %w", entry.Header, err)
+	}
+
+	var h core.CStdlibHeader
+	if err := json.Unmarshal(data, &h); err != nil {
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: parsing %s: %w", url, err)
+	}
+
+	_ = r.diskCache.SaveHeader(entry.File, data) // best-effort
+
+	return &h, nil
+}
+
+// headerURL prefers the manifest-embedded URL when present and falls back
+// to <baseURL>/<platform>/cpp/v1/<file> for manifests that predate the
+// per-entry URL field.
+func (r *CppStdlibRegistryRemote) headerURL(entry *core.CStdlibHeaderEntry) string {
+	if entry.URL != "" {
+		return entry.URL
+	}
+	return joinURL(r.baseURL, r.platform, "cpp", "v1", entry.File)
 }
 
 func (r *CppStdlibRegistryRemote) fetchHeaderFromFile(entry *core.CStdlibHeaderEntry) (*core.CStdlibHeader, error) {

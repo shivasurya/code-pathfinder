@@ -107,11 +107,57 @@ func (r *CStdlibRegistryRemote) loadManifestFromFile(logger core.CStdlibLogger) 
 	return nil
 }
 
-// loadManifestFromHTTP is the PR-03 hook. PR-02 ships it as a deliberate stub
-// so the type satisfies CStdlibLoader without any half-built network code
-// shipping early.
-func (r *CStdlibRegistryRemote) loadManifestFromHTTP(_ core.CStdlibLogger) error {
-	return errors.New("CStdlibRegistryRemote: HTTP loader not yet implemented; tracked in PR-03")
+// loadManifestFromHTTP downloads the top-level manifest.json over HTTP, with
+// fallback to a stale on-disk cache when the network is unreachable. Layout:
+//
+//	GET <baseURL>/<platform>/c/v1/manifest.json
+//	└─ on success: parse JSON, write to disk cache, populate r.manifest
+//	└─ on network failure: read disk cache (regardless of TTL), warn, continue
+//	└─ on cache miss too: surface the original network error
+//
+// Disk-cache writes are best-effort: a failed write logs a warning but does
+// not block in-memory population (the scan still benefits from this run, the
+// next run just has to re-fetch).
+func (r *CStdlibRegistryRemote) loadManifestFromHTTP(logger core.CStdlibLogger) error {
+	url := joinURL(r.baseURL, r.platform, "c", "v1", "manifest.json")
+	if logger != nil {
+		logger.Debug("Downloading C stdlib manifest: %s", url)
+	}
+
+	data, err := fetchURL(r.httpClient, url)
+	if err != nil {
+		// Network failed — try disk cache irrespective of freshness so a
+		// scan in a no-network environment still resolves stdlib calls.
+		if cached, cerr := r.diskCache.GetManifest(); cerr == nil {
+			if logger != nil {
+				logger.Warning("Network failed for %s; serving cached manifest. Underlying: %v", url, err)
+			}
+			r.cacheMutex.Lock()
+			r.manifest = cached
+			r.cacheMutex.Unlock()
+			return nil
+		}
+		return fmt.Errorf("loadManifestFromHTTP: %w", err)
+	}
+
+	var manifest core.CStdlibManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("loadManifestFromHTTP: parsing manifest from %s: %w", url, err)
+	}
+
+	if cerr := r.diskCache.SaveManifest(data); cerr != nil && logger != nil {
+		logger.Warning("Failed to save C manifest to disk cache: %v", cerr)
+	}
+
+	r.cacheMutex.Lock()
+	r.manifest = &manifest
+	r.cacheMutex.Unlock()
+
+	if logger != nil {
+		logger.Statistic("Loaded C stdlib manifest over HTTP: %d headers for %s",
+			len(manifest.Headers), r.platform)
+	}
+	return nil
 }
 
 // GetHeader retrieves the per-header content, fetching on first reference and
@@ -179,10 +225,55 @@ func (r *CStdlibRegistryRemote) fetchHeaderFromFile(entry *core.CStdlibHeaderEnt
 	return &h, nil
 }
 
-// fetchHeaderFromHTTP is the PR-03 hook. PR-02 stub keeps the type
-// satisfying its interface contract without shipping half-built network code.
-func (r *CStdlibRegistryRemote) fetchHeaderFromHTTP(_ *core.CStdlibHeaderEntry) (*core.CStdlibHeader, error) {
-	return nil, errors.New("CStdlibRegistryRemote: HTTP fetch not yet implemented; tracked in PR-03")
+// fetchHeaderFromHTTP downloads one per-header JSON over HTTP, with disk-cache
+// freshness checks on the way in and stale-cache fallback on network failure.
+//
+// The lookup chain:
+//  1. Disk cache hit AND fresh (< 24h) → return cached, no network.
+//  2. Otherwise GET the entry's URL (or construct one from baseURL + entry.File
+//     when the manifest predates URL embedding).
+//  3. On 200 OK: verify checksum (when present in the manifest), parse JSON,
+//     persist to disk cache, return.
+//  4. On any network or parse failure: try the on-disk cache irrespective of
+//     freshness — a stale registry beats no resolution at all.
+func (r *CStdlibRegistryRemote) fetchHeaderFromHTTP(entry *core.CStdlibHeaderEntry) (*core.CStdlibHeader, error) {
+	if r.diskCache.IsFresh(entry.File, stdlibCacheTTL) {
+		if cached, err := r.diskCache.GetHeader(entry.File); err == nil {
+			return cached, nil
+		}
+	}
+
+	url := r.headerURL(entry)
+	data, err := fetchURL(r.httpClient, url)
+	if err != nil {
+		if cached, cerr := r.diskCache.GetHeader(entry.File); cerr == nil {
+			return cached, nil
+		}
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: %w", err)
+	}
+
+	if err := verifyChecksum(data, entry.Checksum); err != nil {
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: %s: %w", entry.Header, err)
+	}
+
+	var h core.CStdlibHeader
+	if err := json.Unmarshal(data, &h); err != nil {
+		return nil, fmt.Errorf("fetchHeaderFromHTTP: parsing %s: %w", url, err)
+	}
+
+	_ = r.diskCache.SaveHeader(entry.File, data) // best-effort
+
+	return &h, nil
+}
+
+// headerURL prefers the manifest-embedded URL when present (lets the registry
+// publisher point individual files at a different host or a versioned path)
+// and otherwise constructs one from the loader's baseURL + entry.File.
+func (r *CStdlibRegistryRemote) headerURL(entry *core.CStdlibHeaderEntry) string {
+	if entry.URL != "" {
+		return entry.URL
+	}
+	return joinURL(r.baseURL, r.platform, "c", "v1", entry.File)
 }
 
 // GetFunction is a convenience accessor: GetHeader followed by a function
