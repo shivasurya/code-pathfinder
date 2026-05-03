@@ -235,10 +235,15 @@ func stringMetadata(node *graph.Node, key string) string {
 // FQN. Resolved sites add a forward edge in the call graph and record a
 // CallSite{Resolved:true} entry; unresolved sites are still recorded so
 // rule writers and diagnostics can see external/unknown calls.
+//
+// Phase 2 (PR-02): when the project-internal lookup fails AND
+// registry.StdlibRegistry is configured, the resolver consults the stdlib
+// registry. A stdlib hit also flows return-type metadata and any overlay
+// security tag into the emitted core.CallSite.
 func resolveCCallSites(sites []*CallSiteInternal, callGraph *core.CallGraph, registry *core.CModuleRegistry) {
 	for _, cs := range sites {
-		targetFQN, resolved := resolveCCallTarget(cs, callGraph, registry)
-		callSite := buildCCallSite(cs, targetFQN, resolved)
+		targetFQN, resolved, stdlibFn := resolveCCallTarget(cs, callGraph, registry)
+		callSite := buildCCallSite(cs, targetFQN, resolved, stdlibFn)
 		callGraph.AddCallSite(cs.CallerFQN, callSite)
 		if resolved {
 			callGraph.AddEdge(cs.CallerFQN, targetFQN)
@@ -263,29 +268,58 @@ func resolveCCallSites(sites []*CallSiteInternal, callGraph *core.CallGraph, reg
 //     declaration FQN; later phases can still treat it as the entry
 //     point for a stdlib/third-party call.
 //
-// Returns ("", false) when no candidate matches.
+// Returns ("", false, nil) when no candidate matches. When the third
+// return value (the *core.CStdlibFunction) is non-nil, the caller knows the
+// resolution went through the stdlib registry — return type, security tag,
+// and confidence are read from that struct.
 func resolveCCallTarget(
 	cs *CallSiteInternal,
 	callGraph *core.CallGraph,
 	registry *core.CModuleRegistry,
-) (string, bool) {
+) (string, bool, *core.CStdlibFunction) {
 	if cs.FunctionName == "" {
-		return "", false
+		return "", false, nil
 	}
 
 	if fqn, ok := lookupSameFile(cs.CallerFile, cs.FunctionName, registry, callGraph, true); ok {
-		return fqn, true
+		return fqn, true, nil
 	}
 	if fqn, ok := lookupGlobalDefinition(cs.FunctionName, registry, callGraph); ok {
-		return fqn, true
+		return fqn, true, nil
 	}
 	if fqn, ok := lookupSameFile(cs.CallerFile, cs.FunctionName, registry, callGraph, false); ok {
-		return fqn, true
+		return fqn, true, nil
 	}
 	if fqn, ok := lookupViaIncludes(cs.CallerFile, cs.FunctionName, registry, callGraph); ok {
-		return fqn, true
+		return fqn, true, nil
 	}
-	return "", false
+
+	// Phase 2 fallback: consult the stdlib registry by walking the caller's
+	// system includes. First include with a matching symbol wins.
+	if registry.StdlibRegistry != nil {
+		if fqn, fn := lookupCStdlib(cs.CallerFile, cs.FunctionName, registry); fn != nil {
+			return fqn, true, fn
+		}
+	}
+	return "", false, nil
+}
+
+// lookupCStdlib walks the caller file's `#include <...>` list and asks the
+// stdlib registry for a function with the requested name in each header.
+// First match wins; ties are unlikely (stdlib symbols are uniquely owned by
+// one header) but if they do happen, the include order in source decides.
+func lookupCStdlib(callerFile, funcName string, registry *core.CModuleRegistry) (string, *core.CStdlibFunction) {
+	prefix, ok := registry.FileToPrefix[callerFile]
+	if !ok {
+		return "", nil
+	}
+	for _, header := range registry.SystemIncludes[prefix] {
+		fn, err := registry.StdlibRegistry.GetFunction(header, funcName)
+		if err == nil && fn != nil {
+			return fn.FQN, fn
+		}
+	}
+	return "", nil
 }
 
 // lookupSameFile returns the FQN of a function named `name` declared in
@@ -370,22 +404,40 @@ func isDeclaration(node *graph.Node) bool {
 // the resolution outcome. Tracking unresolved calls (rather than
 // dropping them) enables stdlib/third-party rules to inspect external
 // invocations.
-func buildCCallSite(cs *CallSiteInternal, targetFQN string, resolved bool) core.CallSite {
+//
+// stdlibFn is non-nil only when resolution went through the stdlib registry
+// (Phase 2). When set, its return type, confidence, and security tag are
+// propagated into the emitted CallSite.
+func buildCCallSite(cs *CallSiteInternal, targetFQN string, resolved bool, stdlibFn *core.CStdlibFunction) core.CallSite {
 	site := core.CallSite{
 		Target:    cs.FunctionName,
 		Location:  core.Location{File: cs.CallerFile, Line: int(cs.CallLine)},
 		Arguments: buildCallSiteArguments(cs.Arguments),
 		Resolved:  resolved,
 	}
-	if resolved {
-		site.TargetFQN = targetFQN
-		// Confidence 1.0 because resolution went through the FQN
-		// registry, not type inference. Source kept consistent with
-		// the explicit-types convention used by the type engine.
-		site.TypeConfidence = 1.0
-		site.TypeSource = declarationConfidenceSource
-	} else {
+	if !resolved {
 		site.FailureReason = resolutionFailedExternal
+		return site
 	}
+	site.TargetFQN = targetFQN
+	if stdlibFn != nil {
+		// Phase 2 stdlib resolution — populate type info from the registry.
+		site.TypeConfidence = stdlibFn.Confidence
+		site.TypeSource = stdlibSource
+		site.InferredType = stdlibFn.ReturnType
+		site.SecurityTag = stdlibFn.SecurityTag
+		return site
+	}
+	// Project-internal resolution — Phase 1 path.
+	// Confidence 1.0 because resolution went through the FQN registry,
+	// not type inference. Source kept consistent with the explicit-types
+	// convention used by the type engine.
+	site.TypeConfidence = 1.0
+	site.TypeSource = declarationConfidenceSource
 	return site
 }
+
+// stdlibSource is the value stamped on CallSite.TypeSource when resolution
+// went through the C/C++ stdlib registry. Distinct from the Phase 1
+// declarationConfidenceSource so downstream consumers can filter on it.
+const stdlibSource = "stdlib"

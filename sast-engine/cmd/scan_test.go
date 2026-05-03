@@ -72,7 +72,7 @@ func TestBuildClikeCallGraphs_NoNodes(t *testing.T) {
 	codeGraph := graph.NewCodeGraph()
 	codeGraph.AddNode(&graph.Node{ID: "py-1", Language: "python", Type: "function_definition", Name: "f"})
 
-	buildClikeCallGraphs(cg, codeGraph, "/projects/app", newTestLogger())
+	buildClikeCallGraphs(cg, codeGraph, "/projects/app", newTestLogger(), clikeStdlibConfig{})
 
 	assert.Empty(t, cg.Functions, "no C/C++ nodes => no merge")
 }
@@ -93,7 +93,7 @@ func TestBuildClikeCallGraphs_CFunctionsMerged(t *testing.T) {
 	})
 
 	cg := core.NewCallGraph()
-	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger(), clikeStdlibConfig{})
 
 	assert.Contains(t, cg.Functions, "src/main.c::main")
 }
@@ -114,7 +114,7 @@ func TestBuildClikeCallGraphs_CppFunctionsMerged(t *testing.T) {
 	})
 
 	cg := core.NewCallGraph()
-	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger(), clikeStdlibConfig{})
 
 	assert.Contains(t, cg.Functions, "src/main.cpp::main")
 	assert.NotContains(t, cg.Functions, "src/main.c::main", "C++ node must not appear in C namespace")
@@ -137,7 +137,7 @@ func TestBuildClikeCallGraphs_MixedProject(t *testing.T) {
 	})
 
 	cg := core.NewCallGraph()
-	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger())
+	buildClikeCallGraphs(cg, codeGraph, root, newTestLogger(), clikeStdlibConfig{})
 
 	assert.Contains(t, cg.Functions, "src/main.c::c_main")
 	assert.Contains(t, cg.Functions, "src/main.cpp::cpp_main")

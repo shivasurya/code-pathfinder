@@ -1,5 +1,41 @@
 package core
 
+// CStdlibLoader is the interface the C call-graph builder uses to query the
+// stdlib registry. The PR-02 file:// loader and the upcoming PR-03 HTTP loader
+// both satisfy it; tests substitute fakes.
+//
+// The interface deliberately keeps Logger out of the per-symbol accessors:
+// LoadManifest is the one-shot startup operation that needs progress logging,
+// and the per-symbol queries happen in tight resolver loops where logging
+// would be noise.
+type CStdlibLoader interface {
+	LoadManifest(logger CStdlibLogger) error
+	GetHeader(name string) (*CStdlibHeader, error)
+	GetFunction(headerName, funcName string) (*CStdlibFunction, error)
+	Platform() string
+	HeaderCount() int
+}
+
+// CppStdlibLoader extends CStdlibLoader with C++-specific accessors. Free
+// functions like std::move that live in a namespace map are looked up via
+// GetFreeFunction; class methods (vector::push_back) via GetMethod.
+type CppStdlibLoader interface {
+	CStdlibLoader
+	GetClass(headerName, classFQN string) (*CppStdlibClass, error)
+	GetMethod(headerName, classFQN, methodName string) (*CStdlibFunction, error)
+	GetFreeFunction(headerName, fqn string) (*CStdlibFunction, error)
+}
+
+// CStdlibLogger is the subset of *output.Logger that loaders need. Defining a
+// narrow interface here (rather than importing the full output package into
+// core/) keeps the dependency direction clean — core has no upstream
+// dependencies on output.
+type CStdlibLogger interface {
+	Debug(format string, args ...any)
+	Statistic(format string, args ...any)
+	Warning(format string, args ...any)
+}
+
 // CStdlibRegistry is the root in-memory container for C/C++ stdlib data on a single
 // (platform, language) axis (e.g. linux/c, linux/cpp, windows/c). It is populated by
 // the loader (PR-02) from registry JSON hosted on the CDN and consulted by the call

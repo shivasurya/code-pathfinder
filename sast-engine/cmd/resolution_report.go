@@ -90,7 +90,12 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 
 		// Reuse scan.go's helper so both commands stay aligned. It gates
 		// each builder on hasLanguageNodes and merges into cg in place.
-		buildClikeCallGraphs(cg, codeGraph, projectInput, logger)
+		// Stdlib resolution mirrors scan.go: --target overrides platform
+		// detection; --stdlib-base-url selects the registry source.
+		clikeTarget, _ := cmd.Flags().GetString("target")
+		stdlibBaseURL, _ := cmd.Flags().GetString("stdlib-base-url")
+		stdlibCfg, _ := initClikeStdlib(projectInput, clikeTarget, stdlibBaseURL, logger)
+		buildClikeCallGraphs(cg, codeGraph, projectInput, logger, stdlibCfg)
 
 		fmt.Printf("\nResolution Report for %s\n", projectInput)
 		fmt.Println("===============================================")
@@ -936,4 +941,6 @@ func init() {
 	resolutionReportCmd.Flags().String("csv", "", "Export unresolved calls to CSV file (e.g., --csv unresolved.csv)")
 	resolutionReportCmd.Flags().String("dump-callsites-json", "", "Export all Go call sites as JSONL for accuracy validation (e.g., --dump-callsites-json callsites.jsonl)")
 	resolutionReportCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental). Caches Pass 2b scopes and Pass 3 call sites per file keyed by content hash; only changed files are re-analysed on subsequent runs.")
+	resolutionReportCmd.Flags().String("target", "", "Override C/C++ target platform: linux, darwin, or windows (default: auto-detect)")
+	resolutionReportCmd.Flags().String("stdlib-base-url", "", "Base URL for the C/C++ stdlib registry (file://path or https://host). Empty disables stdlib resolution.")
 }
