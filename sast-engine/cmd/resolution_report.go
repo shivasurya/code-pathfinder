@@ -14,6 +14,7 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/builder"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
+	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/registry"
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/resolution"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/spf13/cobra"
@@ -47,7 +48,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 
 		fmt.Println("Building call graph...")
 		logger := output.NewLogger(output.VerbosityDefault)
-		cg, registry, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, logger)
+		cg, modReg, _, err := callgraph.InitializeCallGraph(codeGraph, projectInput, logger)
 		if err != nil {
 			fmt.Printf("Error building call graph: %v\n", err)
 			return
@@ -85,6 +86,28 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 				if enableDBCache && analysisCache != nil {
 					fmt.Println("Cache: incremental analysis cache updated")
 				}
+			}
+		}
+
+		// Build C and C++ call graphs and merge them in. Mirror scan.go's
+		// buildClikeCallGraphs gate: only run a builder when the parsed
+		// CodeGraph actually contains nodes for that language.
+		if hasLanguageNodes(codeGraph, "c") {
+			cReg := registry.BuildCModuleRegistry(projectInput, codeGraph)
+			cTE := resolution.NewCTypeInferenceEngine(cReg)
+			if cCG, cErr := builder.BuildCCallGraph(codeGraph, cReg, cTE); cErr == nil {
+				builder.MergeCallGraphs(cg, cCG)
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to build C call graph: %v\n", cErr)
+			}
+		}
+		if hasLanguageNodes(codeGraph, "cpp") {
+			cppReg := registry.BuildCppModuleRegistry(projectInput, codeGraph)
+			cppTE := resolution.NewCppTypeInferenceEngine(cppReg)
+			if cppCG, cppErr := builder.BuildCppCallGraph(codeGraph, cppReg, cppTE); cppErr == nil {
+				builder.MergeCallGraphs(cg, cppCG)
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to build C++ call graph: %v\n", cppErr)
 			}
 		}
 
@@ -128,7 +151,7 @@ Use --csv to export unresolved calls with file, line, target, and reason.`,
 		printTopUnresolvedPatterns(stats, 20)
 		fmt.Println()
 
-		fmt.Printf("Module registry: %d modules\n", len(registry.Modules))
+		fmt.Printf("Module registry: %d modules\n", len(modReg.Modules))
 
 		// Export CSV if requested
 		if csvOutput != "" {
