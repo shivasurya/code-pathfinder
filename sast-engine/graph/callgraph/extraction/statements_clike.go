@@ -60,10 +60,8 @@ type clikeExtractor struct {
 
 // extractFunctionBody runs the dispatcher over every named child of a
 // function's body field. Forward declarations (no body) yield nil.
+// Callers are guaranteed non-nil by the public Extract* entry points.
 func (e *clikeExtractor) extractFunctionBody(functionNode *sitter.Node) []*core.Statement {
-	if functionNode == nil {
-		return nil
-	}
 	body := functionNode.ChildByFieldName("body")
 	if body == nil {
 		return nil
@@ -72,11 +70,9 @@ func (e *clikeExtractor) extractFunctionBody(functionNode *sitter.Node) []*core.
 }
 
 // extractBlock walks every named child of a compound block and routes
-// each to the dispatch table.
+// each to the dispatch table. block is guaranteed non-nil by callers
+// (entry points and dispatcher both null-check).
 func (e *clikeExtractor) extractBlock(block *sitter.Node) []*core.Statement {
-	if block == nil {
-		return nil
-	}
 	var stmts []*core.Statement
 	for i := 0; i < int(block.NamedChildCount()); i++ {
 		stmts = append(stmts, e.extractStatement(block.NamedChild(i))...)
@@ -86,7 +82,9 @@ func (e *clikeExtractor) extractBlock(block *sitter.Node) []*core.Statement {
 
 // extractStatement dispatches on node.Type(). Unknown types fall
 // through to the language-specific extra handler so C++ can register
-// throw/try/range-for without forking the function.
+// throw/try/range-for without forking the function. The single nil
+// guard here is the only one needed because every internal recursion
+// passes through this function.
 func (e *clikeExtractor) extractStatement(node *sitter.Node) []*core.Statement {
 	if node == nil {
 		return nil

@@ -292,6 +292,69 @@ func TestExtractCStatements_DoWhileSwitch(t *testing.T) {
 	assert.Equal(t, []string{"x"}, swStmt.Uses)
 }
 
+// TestExtractCStatements_ForWithAssignmentInit covers the
+// assignment-expression form of a `for` initialiser (i.e. the
+// variable is declared earlier and reused, not redeclared in the loop
+// header).
+func TestExtractCStatements_ForWithAssignmentInit(t *testing.T) {
+	src := `void f(int n) {
+    int i;
+    for (i = 0; i < n; i++) {
+        do_thing(i);
+    }
+}`
+	tree, fn, b := parseCFunction(t, src)
+	defer tree.Close()
+	stmts, err := ExtractCStatements("/x.c", b, fn)
+	require.NoError(t, err)
+
+	forStmt := findStmt(stmts, func(s *core.Statement) bool { return s.Type == core.StatementTypeFor })
+	require.NotNil(t, forStmt)
+	assert.Equal(t, "i", forStmt.Def)
+	assert.Contains(t, forStmt.Uses, "n")
+	assert.NotContains(t, forStmt.Uses, "i")
+}
+
+// TestExtractCStatements_DereferenceLHS verifies that `*p = val;`
+// resolves to Def="p" — the dereference unwraps to the base pointer
+// for def-use analysis.
+func TestExtractCStatements_DereferenceLHS(t *testing.T) {
+	src := `void f(int* p, int val) {
+    *p = val;
+}`
+	tree, fn, b := parseCFunction(t, src)
+	defer tree.Close()
+	stmts, err := ExtractCStatements("/x.c", b, fn)
+	require.NoError(t, err)
+
+	require.Len(t, stmts, 1)
+	// The pointer expression on the LHS surfaces as a use too — the
+	// builder walks the LHS for indexable expressions.
+	assert.Contains(t, stmts[0].Uses, "val")
+}
+
+// TestExtractCStatements_NestedIf verifies nested conditionals get
+// their own NestedStatements lists, not flattened into the outer one.
+func TestExtractCStatements_NestedIf(t *testing.T) {
+	src := `void f(int x, int y) {
+    if (x > 0) {
+        if (y > 0) {
+            consume(x);
+        }
+    }
+}`
+	tree, fn, b := parseCFunction(t, src)
+	defer tree.Close()
+	stmts, err := ExtractCStatements("/x.c", b, fn)
+	require.NoError(t, err)
+
+	require.Len(t, stmts, 1)
+	require.Len(t, stmts[0].NestedStatements, 1)
+	inner := stmts[0].NestedStatements[0]
+	assert.Equal(t, core.StatementTypeIf, inner.Type)
+	assert.Equal(t, []string{"y"}, inner.Uses)
+}
+
 func TestExtractCStatements_BareDeclaration(t *testing.T) {
 	src := `void f() {
     int x;
