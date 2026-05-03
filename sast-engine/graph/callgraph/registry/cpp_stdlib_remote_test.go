@@ -148,22 +148,15 @@ func TestCppStdlibRegistry_GetFunctionMissing(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCppStdlibRegistry_HTTPStub(t *testing.T) {
-	r := NewCppStdlibRegistryRemote("https://x/", core.PlatformLinux)
+// TestCppStdlibRegistry_HTTPMode_NetworkFailureNoCacheSurfacesError mirrors
+// the C-loader test: with the disk cache explicitly disabled, an HTTP-only
+// loader pointed at an unreachable port must surface the error.
+func TestCppStdlibRegistry_HTTPMode_NetworkFailureNoCacheSurfacesError(t *testing.T) {
+	r := NewCppStdlibRegistryRemote("http://127.0.0.1:1/registries", core.PlatformLinux)
+	r.diskCache = nil
 	err := r.LoadManifest(noopLogger{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PR-03")
-}
-
-func TestCppStdlibRegistry_HTTPFetchStub(t *testing.T) {
-	dir := t.TempDir()
-	writeCppRegistry(t, dir)
-	r := NewCppStdlibRegistryFile(dir, core.PlatformLinux)
-	require.NoError(t, r.LoadManifest(noopLogger{}))
-	r.fileBase = "" // simulate HTTP-only mode
-	_, err := r.GetHeader("vector")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PR-03")
+	assert.Contains(t, err.Error(), "loadManifestFromHTTP")
 }
 
 func TestCppStdlibRegistry_HeaderCountBeforeLoad(t *testing.T) {

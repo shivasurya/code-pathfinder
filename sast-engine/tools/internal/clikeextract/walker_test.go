@@ -41,19 +41,26 @@ func TestDiscoverHeaderSources_LinuxCpp_NotInstalled(t *testing.T) {
 	assert.Contains(t, err.Error(), "libstdc++")
 }
 
-func TestDiscoverHeaderSources_NotImplementedTargets(t *testing.T) {
-	deferred := []struct {
-		platform, language string
+// TestDiscoverHeaderSources_CrossPlatformHeadersMissing verifies that when
+// the cross-platform toolchains aren't installed on the host, each target
+// surfaces a remediation hint instead of crashing. PR-03 implements the
+// dispatch; the host-installation case is covered by walker_xplat_test.go.
+func TestDiscoverHeaderSources_CrossPlatformHeadersMissing(t *testing.T) {
+	withTempMingwRoot(t, "/definitely/missing")
+	withTempDarwinRoots(t, []string{"/missing/sdk"}, []string{"/missing/cpp"})
+
+	cases := []struct {
+		platform, language, fragment string
 	}{
-		{core.PlatformWindows, core.LanguageC},
-		{core.PlatformWindows, core.LanguageCpp},
-		{core.PlatformDarwin, core.LanguageC},
-		{core.PlatformDarwin, core.LanguageCpp},
+		{core.PlatformWindows, core.LanguageC, "mingw-w64"},
+		{core.PlatformWindows, core.LanguageCpp, "mingw libstdc++"},
+		{core.PlatformDarwin, core.LanguageC, "macOS SDK"},
+		{core.PlatformDarwin, core.LanguageCpp, "libc++"},
 	}
-	for _, tt := range deferred {
+	for _, tt := range cases {
 		_, err := DiscoverHeaderSources(tt.platform, tt.language)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "PR-03")
+		assert.Contains(t, err.Error(), tt.fragment)
 	}
 }
 

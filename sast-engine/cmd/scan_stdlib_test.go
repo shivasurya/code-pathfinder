@@ -119,11 +119,19 @@ func TestInitClikeStdlib_BarePathTreatedAsFile(t *testing.T) {
 	require.NotNil(t, cfg.cppLoader)
 }
 
-func TestInitClikeStdlib_HTTPSchemeIsStubbed(t *testing.T) {
-	// HTTP path returns a constructed loader, but LoadManifest fails
-	// with the PR-03 stub error. Both loaders should be nil after the
-	// failed load.
-	cfg, wired := initClikeStdlib(t.TempDir(), "linux", "https://example.test/registries", newTestLogger())
+func TestInitClikeStdlib_HTTPSchemeFailsGracefullyOnUnreachableHost(t *testing.T) {
+	// PR-03 wires HTTP up — when the URL doesn't resolve and there's no
+	// disk cache to fall back on, both loaders fail to load and stay
+	// nil. The scan continues under Phase 1 behavior.
+	//
+	// Point the cache at a fresh temp dir so a previously populated
+	// developer cache (e.g. from running another test) cannot serve a
+	// stale manifest and turn this into a false-positive success.
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+
+	cfg, wired := initClikeStdlib(t.TempDir(), "linux", "http://127.0.0.1:1/registries", newTestLogger())
 	assert.False(t, wired)
 	assert.Nil(t, cfg.cLoader)
 	assert.Nil(t, cfg.cppLoader)

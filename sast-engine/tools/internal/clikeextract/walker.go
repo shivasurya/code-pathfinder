@@ -77,13 +77,33 @@ func DiscoverHeaderSources(target, language string) ([]HeaderSource, error) {
 		}
 		return []HeaderSource{src}, nil
 
-	case core.PlatformWindows + "/" + core.LanguageC,
-		core.PlatformWindows + "/" + core.LanguageCpp,
-		core.PlatformDarwin + "/" + core.LanguageC,
-		core.PlatformDarwin + "/" + core.LanguageCpp:
-		return nil, fmt.Errorf("DiscoverHeaderSources: target %q language %q is scheduled for PR-03; "+
-			"PR-01 only ships %s/%s and %s/%s", target, language,
-			core.PlatformLinux, core.LanguageC, core.PlatformLinux, core.LanguageCpp)
+	case core.PlatformWindows + "/" + core.LanguageC:
+		src, err := windowsCSource()
+		if err != nil {
+			return nil, err
+		}
+		return []HeaderSource{src}, nil
+
+	case core.PlatformWindows + "/" + core.LanguageCpp:
+		src, err := windowsCppSource()
+		if err != nil {
+			return nil, err
+		}
+		return []HeaderSource{src}, nil
+
+	case core.PlatformDarwin + "/" + core.LanguageC:
+		src, err := darwinCSource()
+		if err != nil {
+			return nil, err
+		}
+		return []HeaderSource{src}, nil
+
+	case core.PlatformDarwin + "/" + core.LanguageCpp:
+		src, err := darwinCppSource()
+		if err != nil {
+			return nil, err
+		}
+		return []HeaderSource{src}, nil
 
 	default:
 		return nil, fmt.Errorf("DiscoverHeaderSources: unknown target+language combination %q+%q", target, language)

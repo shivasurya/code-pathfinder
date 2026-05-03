@@ -233,27 +233,16 @@ func TestCStdlibRegistry_DoubleCheckLocking(t *testing.T) {
 	}
 }
 
-func TestCStdlibRegistry_HTTPMode_Stub(t *testing.T) {
-	r := NewCStdlibRegistryRemote("https://example.com/registries", core.PlatformLinux)
+// TestCStdlibRegistry_HTTPMode_NetworkFailureNoCacheSurfacesError verifies
+// that an HTTP-only loader with no on-disk cache surfaces the underlying
+// network error rather than swallowing it. Uses an unreachable port on
+// localhost so the test never depends on external connectivity.
+func TestCStdlibRegistry_HTTPMode_NetworkFailureNoCacheSurfacesError(t *testing.T) {
+	r := NewCStdlibRegistryRemote("http://127.0.0.1:1/registries", core.PlatformLinux)
+	r.diskCache = nil // no cache → no fallback path
 	err := r.LoadManifest(noopLogger{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PR-03")
-}
-
-func TestCStdlibRegistry_HTTPMode_FetchHeaderStub(t *testing.T) {
-	// Construct the HTTP loader with an in-memory manifest by going through
-	// a file:// loader first, then forcing the fetch path to HTTP.
-	dir := t.TempDir()
-	writeCRegistry(t, dir)
-	r := NewCStdlibRegistryFile(dir, core.PlatformLinux)
-	require.NoError(t, r.LoadManifest(noopLogger{}))
-
-	// Switch to HTTP mode mid-flight by clearing fileBase. Tests-only —
-	// production code never does this.
-	r.fileBase = ""
-	_, err := r.GetHeader("stdio.h") // fresh header (not yet cached)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PR-03")
+	assert.Contains(t, err.Error(), "loadManifestFromHTTP")
 }
 
 func TestCStdlibRegistry_RemoteCtor_TrimsTrailingSlash(t *testing.T) {
