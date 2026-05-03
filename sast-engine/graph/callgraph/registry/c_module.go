@@ -80,6 +80,7 @@ func BuildCModuleRegistry(projectPath string, codeGraph *graph.CodeGraph) *core.
 
 	indexFilesAndFunctions(codeGraph, projectPath, languageC, registry, nil)
 	registry.Includes = BuildCIncludeMap(projectPath, codeGraph, languageC)
+	registry.SystemIncludes = BuildCSystemIncludeMap(projectPath, codeGraph, languageC)
 	return registry
 }
 
@@ -118,6 +119,7 @@ func BuildCppModuleRegistry(projectPath string, codeGraph *graph.CodeGraph) *cor
 	})
 
 	registry.Includes = BuildCIncludeMap(projectPath, codeGraph, languageCpp)
+	registry.SystemIncludes = BuildCSystemIncludeMap(projectPath, codeGraph, languageCpp)
 	return registry
 }
 
@@ -170,6 +172,52 @@ func BuildCIncludeMap(projectPath string, codeGraph *graph.CodeGraph, language s
 		includes[relSource] = appendUnique(includes[relSource], relResolved)
 	}
 	return includes
+}
+
+// BuildCSystemIncludeMap collects system-include directives (`#include <...>`)
+// per source file. The returned map is keyed by project-relative source path,
+// values are the bare header names (`stdio.h`, `vector`, `sys/socket.h`).
+//
+// This is the data structure the C/C++ stdlib resolver (PR-02 c_builder /
+// cpp_builder fallback) consults to decide which registry header to query
+// when a call goes unresolved. Counterpart to BuildCIncludeMap, which holds
+// project-local includes only.
+//
+// Files with no system includes are absent from the map (not present with an
+// empty slice) so callers can iterate without nil checks. The function never
+// returns nil; an empty map signals "no system includes" rather than "registry
+// not built".
+func BuildCSystemIncludeMap(projectPath string, codeGraph *graph.CodeGraph, language string) map[string][]string {
+	systems := make(map[string][]string)
+	if codeGraph == nil {
+		return systems
+	}
+
+	for _, node := range codeGraph.Nodes {
+		if !isSystemInclude(node, language) {
+			continue
+		}
+		relSource, ok := relativeProjectPath(projectPath, node.File)
+		if !ok {
+			continue
+		}
+		systems[relSource] = appendUnique(systems[relSource], node.Name)
+	}
+	return systems
+}
+
+// isSystemInclude is the mirror of isProjectInclude: returns true exactly when
+// the node is an `#include <...>` for the given language. Empty header names
+// and nodes from other languages are excluded.
+func isSystemInclude(node *graph.Node, language string) bool {
+	if node == nil || node.Language != language || node.Type != cNodeIncludeStatement {
+		return false
+	}
+	if node.Name == "" || node.File == "" {
+		return false
+	}
+	v, ok := node.Metadata[metaSystemInclude].(bool)
+	return ok && v
 }
 
 // indexFilesAndFunctions populates FileToPrefix and FunctionIndex on the

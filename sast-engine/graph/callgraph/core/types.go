@@ -34,6 +34,13 @@ type CallSite struct {
 	// IsStdlib is true when the resolved target is a Go standard library function.
 	// Set during Go call graph construction when StdlibLoader is available.
 	IsStdlib bool
+
+	// Phase 2 (C/C++ stdlib): SecurityTag carries an overlay-curated marker
+	// (e.g. "command_injection_sink", "format_string_sink") propagated from the
+	// stdlib registry. Empty when the resolved target has no security tag or
+	// the call did not resolve via stdlib. Consumed by future C/C++ rules and
+	// by `pathfinder resolution-report --diagnose-stdlib` (PR-04).
+	SecurityTag string
 }
 
 // Resolution failure reason categories for diagnostics:

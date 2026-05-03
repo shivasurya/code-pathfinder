@@ -51,6 +51,26 @@ type CModuleRegistry struct {
 	// computation. Stored so consumers can re-derive prefixes for ad-hoc
 	// files (e.g. an include resolved at query time).
 	ProjectRoot string
+
+	// SystemIncludes maps a project-relative file path to the system header
+	// names (e.g., "stdio.h", "sys/socket.h", "vector") referenced via
+	// `#include <...>` from that file. Populated alongside Includes by the
+	// registry builder.
+	//
+	// Phase 2 (C/C++ stdlib): the call-graph builder consults this when an
+	// unresolved call site needs to be matched against the stdlib registry.
+	// Kept separate from Includes (which holds project-local headers only)
+	// so Phase 1's project-internal resolution stays untouched.
+	SystemIncludes map[string][]string
+
+	// StdlibRegistry is the stdlib loader injected by cmd/scan.go before the
+	// builder runs. nil when stdlib resolution is disabled (manifest failed
+	// to load, the --target platform isn't supported yet, or the user passed
+	// --no-stdlib). Builders MUST nil-check before consulting.
+	//
+	// Phase 2 — added in PR-02; populated by registry.NewCStdlibRegistryFile
+	// (or its HTTP counterpart in PR-03).
+	StdlibRegistry CStdlibLoader
 }
 
 // NewCModuleRegistry returns an empty CModuleRegistry rooted at projectRoot.
@@ -58,10 +78,11 @@ type CModuleRegistry struct {
 // checks.
 func NewCModuleRegistry(projectRoot string) *CModuleRegistry {
 	return &CModuleRegistry{
-		FileToPrefix:  make(map[string]string),
-		Includes:      make(map[string][]string),
-		FunctionIndex: make(map[string][]string),
-		ProjectRoot:   projectRoot,
+		FileToPrefix:   make(map[string]string),
+		Includes:       make(map[string][]string),
+		FunctionIndex:  make(map[string][]string),
+		SystemIncludes: make(map[string][]string),
+		ProjectRoot:    projectRoot,
 	}
 }
 
@@ -104,6 +125,15 @@ type CppModuleRegistry struct {
 	//	    "include/socket.hpp::mylib::Socket",
 	//	]
 	ClassIndex map[string][]string
+
+	// StdlibCppRegistry is the C++-specific stdlib loader (vector, string,
+	// std::move, …). Distinct from the embedded CModuleRegistry.StdlibRegistry
+	// because C++ has class methods + free functions in namespaces that C
+	// cannot reach. Both fields may be set on a single CppModuleRegistry —
+	// one for C-shape headers (<stdio.h>) and one for C++-shape (<vector>).
+	//
+	// Phase 2 — added in PR-02.
+	StdlibCppRegistry CppStdlibLoader
 }
 
 // NewCppModuleRegistry returns an empty CppModuleRegistry rooted at
