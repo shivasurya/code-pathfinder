@@ -288,7 +288,10 @@ Examples:
 			}
 		}
 
-		buildClikeCallGraphs(cg, codeGraph, projectPath, logger)
+		clikeTarget, _ := cmd.Flags().GetString("target")
+		stdlibBaseURL, _ := cmd.Flags().GetString("stdlib-base-url")
+		stdlibCfg, _ := initClikeStdlib(projectPath, clikeTarget, stdlibBaseURL, logger)
+		buildClikeCallGraphs(cg, codeGraph, projectPath, logger, stdlibCfg)
 
 		// Step 4: Load Python SDK rules
 		logger.StartProgress("Loading rules", -1)
@@ -480,6 +483,18 @@ func countTotalCallSites(cg *core.CallGraph) int {
 	return total
 }
 
+// clikeStdlibConfig carries the optional stdlib loaders into the
+// C / C++ call-graph builders. A zero value (all fields nil/empty) is
+// valid: the builders fall back to Phase 1 behavior — system-include
+// calls remain unresolved but everything else continues to work.
+//
+// Phase 2 — added in PR-02.
+type clikeStdlibConfig struct {
+	cLoader   core.CStdlibLoader
+	cppLoader core.CppStdlibLoader
+	platform  string
+}
+
 // buildClikeCallGraphs runs the C and C++ call-graph builders against
 // codeGraph (when those languages are present) and merges the results
 // into cg. Each builder is independent: a failure or skip on one
@@ -489,20 +504,26 @@ func countTotalCallSites(cg *core.CallGraph) int {
 // manifest file. We instead look at the already-parsed CodeGraph for
 // nodes tagged with the right `Language` so the builder skips the
 // work entirely on Python-only or Go-only projects.
-func buildClikeCallGraphs(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) {
+//
+// stdlib is the optional Phase 2 loader bundle. Pass an empty
+// clikeStdlibConfig to disable stdlib resolution (Phase 1 behavior).
+func buildClikeCallGraphs(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger, stdlib clikeStdlibConfig) {
 	if hasLanguageNodes(codeGraph, "c") {
-		buildCCallGraphAndMerge(cg, codeGraph, projectPath, logger)
+		buildCCallGraphAndMerge(cg, codeGraph, projectPath, logger, stdlib)
 	}
 	if hasLanguageNodes(codeGraph, "cpp") {
-		buildCppCallGraphAndMerge(cg, codeGraph, projectPath, logger)
+		buildCppCallGraphAndMerge(cg, codeGraph, projectPath, logger, stdlib)
 	}
 }
 
 // buildCCallGraphAndMerge constructs the C call graph and merges it
 // into cg. Build failures emit a warning and leave cg untouched.
-func buildCCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) {
+func buildCCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger, stdlib clikeStdlibConfig) {
 	logger.Debug("Detected C source files, building C call graph...")
 	cRegistry := registry.BuildCModuleRegistry(projectPath, codeGraph)
+	if stdlib.cLoader != nil {
+		cRegistry.StdlibRegistry = stdlib.cLoader
+	}
 	cTypeEngine := resolution.NewCTypeInferenceEngine(cRegistry)
 	cCG, err := builder.BuildCCallGraph(codeGraph, cRegistry, cTypeEngine)
 	if err != nil {
@@ -516,9 +537,17 @@ func buildCCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, pro
 
 // buildCppCallGraphAndMerge constructs the C++ call graph and merges
 // it into cg. Build failures emit a warning and leave cg untouched.
-func buildCppCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger) {
+func buildCppCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, projectPath string, logger *output.Logger, stdlib clikeStdlibConfig) {
 	logger.Debug("Detected C++ source files, building C++ call graph...")
 	cppRegistry := registry.BuildCppModuleRegistry(projectPath, codeGraph)
+	// C++ source files routinely call into <stdio.h> / <stdlib.h> too,
+	// so wire BOTH loaders when available.
+	if stdlib.cLoader != nil {
+		cppRegistry.StdlibRegistry = stdlib.cLoader
+	}
+	if stdlib.cppLoader != nil {
+		cppRegistry.StdlibCppRegistry = stdlib.cppLoader
+	}
 	cppTypeEngine := resolution.NewCppTypeInferenceEngine(cppRegistry)
 	cppCG, err := builder.BuildCppCallGraph(codeGraph, cppRegistry, cppTypeEngine)
 	if err != nil {
@@ -528,6 +557,114 @@ func buildCppCallGraphAndMerge(cg *core.CallGraph, codeGraph *graph.CodeGraph, p
 	builder.MergeCallGraphs(cg, cppCG)
 	logger.Statistic("C++ call graph merged: %d functions, %d call sites",
 		len(cppCG.Functions), countTotalCallSites(cppCG))
+}
+
+// initClikeStdlib bootstraps the C and C++ stdlib loaders for a scan.
+//
+// targetOverride may be empty to trigger auto-detection (defaults to
+// the host platform when no source-file evidence is found). baseURL
+// selects the registry source: file:// paths read directly from disk;
+// https:// is reserved for PR-03 and currently returns an error.
+//
+// The function ALWAYS returns a usable config: failures degrade to
+// nil loaders + a warning, so the rest of the scan keeps Phase 1
+// behavior. The boolean reports whether at least one loader was
+// successfully wired (useful for telemetry and resolution-report).
+func initClikeStdlib(projectPath, targetOverride, baseURL string, logger *output.Logger) (clikeStdlibConfig, bool) {
+	platform := registry.DetectClikeTarget(projectPath, targetOverride)
+
+	trimmed := strings.TrimSpace(baseURL)
+	if trimmed == "" {
+		return clikeStdlibConfig{platform: platform}, false
+	}
+
+	cfg := clikeStdlibConfig{platform: platform}
+	wired := false
+
+	if cLoader, ok := loadCStdlibFromBase(trimmed, platform, logger); ok {
+		cfg.cLoader = cLoader
+		wired = true
+	}
+	if cppLoader, ok := loadCppStdlibFromBase(trimmed, platform, logger); ok {
+		cfg.cppLoader = cppLoader
+		wired = true
+	}
+	return cfg, wired
+}
+
+// loadCStdlibFromBase constructs the right C-stdlib loader for the
+// given URL/path and calls LoadManifest. Failures log a warning and
+// return false; callers fall back to Phase 1 resolution.
+func loadCStdlibFromBase(baseURL, platform string, logger *output.Logger) (core.CStdlibLoader, bool) {
+	loader := buildCStdlibLoader(baseURL, platform)
+	if err := loader.LoadManifest(stdlibLoggerAdapter{logger}); err != nil {
+		logger.Warning("C stdlib manifest load failed: %v (continuing without C stdlib resolution)", err)
+		return nil, false
+	}
+	logger.Debug("C stdlib registry: loaded %d headers for platform %s", loader.HeaderCount(), platform)
+	return loader, true
+}
+
+// loadCppStdlibFromBase is the C++ counterpart to loadCStdlibFromBase.
+func loadCppStdlibFromBase(baseURL, platform string, logger *output.Logger) (core.CppStdlibLoader, bool) {
+	loader := buildCppStdlibLoader(baseURL, platform)
+	if err := loader.LoadManifest(stdlibLoggerAdapter{logger}); err != nil {
+		logger.Warning("C++ stdlib manifest load failed: %v (continuing without C++ stdlib resolution)", err)
+		return nil, false
+	}
+	logger.Debug("C++ stdlib registry: loaded %d headers for platform %s", loader.HeaderCount(), platform)
+	return loader, true
+}
+
+// buildCStdlibLoader picks the right loader constructor for a base
+// URL. file:// (or a bare path) → file loader; http(s):// → HTTP
+// loader (PR-03). Splitting this from the load path keeps the
+// constructor-selection logic isolated and easy to test.
+func buildCStdlibLoader(baseURL, platform string) core.CStdlibLoader {
+	switch {
+	case strings.HasPrefix(baseURL, "file://"):
+		return registry.NewCStdlibRegistryFile(filepath.Join(strings.TrimPrefix(baseURL, "file://"), platform, "c", "v1"), platform)
+	case strings.HasPrefix(baseURL, "http://"), strings.HasPrefix(baseURL, "https://"):
+		return registry.NewCStdlibRegistryRemote(baseURL, platform)
+	default:
+		// Treat as a bare local path.
+		return registry.NewCStdlibRegistryFile(filepath.Join(baseURL, platform, "c", "v1"), platform)
+	}
+}
+
+// buildCppStdlibLoader is the C++ counterpart to buildCStdlibLoader.
+func buildCppStdlibLoader(baseURL, platform string) core.CppStdlibLoader {
+	switch {
+	case strings.HasPrefix(baseURL, "file://"):
+		return registry.NewCppStdlibRegistryFile(filepath.Join(strings.TrimPrefix(baseURL, "file://"), platform, "cpp", "v1"), platform)
+	case strings.HasPrefix(baseURL, "http://"), strings.HasPrefix(baseURL, "https://"):
+		return registry.NewCppStdlibRegistryRemote(baseURL, platform)
+	default:
+		return registry.NewCppStdlibRegistryFile(filepath.Join(baseURL, platform, "cpp", "v1"), platform)
+	}
+}
+
+// stdlibLoggerAdapter bridges the cmd-package output.Logger into the
+// core.CStdlibLogger interface the loader expects. Method names match
+// the latter; calls forward unchanged.
+type stdlibLoggerAdapter struct{ logger *output.Logger }
+
+func (a stdlibLoggerAdapter) Debug(format string, args ...any) {
+	if a.logger != nil {
+		a.logger.Debug(format, args...)
+	}
+}
+
+func (a stdlibLoggerAdapter) Statistic(format string, args ...any) {
+	if a.logger != nil {
+		a.logger.Statistic(format, args...)
+	}
+}
+
+func (a stdlibLoggerAdapter) Warning(format string, args ...any) {
+	if a.logger != nil {
+		a.logger.Warning(format, args...)
+	}
 }
 
 // hasLanguageNodes reports whether codeGraph contains at least one
@@ -1136,5 +1273,7 @@ func init() {
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	scanCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
+	scanCmd.Flags().String("target", "", "Override C/C++ target platform: linux, darwin, or windows (default: auto-detect)")
+	scanCmd.Flags().String("stdlib-base-url", "", "Base URL for the C/C++ stdlib registry (file://path or https://host). Empty disables stdlib resolution.")
 	scanCmd.MarkFlagRequired("project")
 }
