@@ -62,11 +62,19 @@ func TestExtractFunctionFromFQN(t *testing.T) {
 		fqn      string
 		expected string
 	}{
+		// Dot-separated (Python, Go, Java).
 		{"myapp.auth.login", "login"},
 		{"package.Class.method", "method"},
 		{"singlename", "singlename"},
 		{"", ""},
 		{"a.b.c.d.e.f.g", "g"},
+		{"github.com/shivasurya/app/handlers.Handle", "Handle"},
+		// C/C++ scope-resolved FQNs.
+		{"src/main.c::main", "main"},
+		{"src/buffer.c::create_buffer", "create_buffer"},
+		{"src/utils.cpp::mylib::process", "process"},
+		{"src/socket.cpp::mylib::Socket::connect", "connect"},
+		{"src/app.cpp::App::run", "run"},
 	}
 
 	for _, tt := range tests {
@@ -513,6 +521,75 @@ func TestFallbackLocationFQNToJavaFileResolution(t *testing.T) {
 
 	assert.Equal(t, javaFile, loc.FilePath)
 	assert.Equal(t, filepath.Join("com", "example", "Main.java"), loc.RelPath)
+}
+
+// TestFallbackLocationCFQN verifies that a C scope-resolved FQN like
+// "src/main.c::main" is split correctly: the file is resolved against
+// the project root, the function name is taken from the trailing
+// segment, and there is no class component.
+func TestFallbackLocationCFQN(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	mainC := filepath.Join(srcDir, "main.c")
+	require.NoError(t, os.WriteFile(mainC, []byte("int main(){}"), 0o644))
+
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "src/main.c::main",
+		SinkLine:    1,
+	}
+	loc := e.fallbackLocation(detection)
+
+	assert.Equal(t, mainC, loc.FilePath)
+	assert.Equal(t, "src/main.c", loc.RelPath)
+	assert.Equal(t, "main", loc.Function)
+	assert.Empty(t, loc.ClassName, "C FQN has no class component")
+}
+
+// TestFallbackLocationCppFQN verifies that a C++ scope-resolved FQN
+// like "src/socket.cpp::ns::Socket::connect" extracts the file path,
+// the trailing function name (`connect`), and the immediate class
+// component (`Socket`).
+func TestFallbackLocationCppFQN(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	socketCpp := filepath.Join(srcDir, "socket.cpp")
+	require.NoError(t, os.WriteFile(socketCpp, []byte("// stub"), 0o644))
+
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "src/socket.cpp::mylib::Socket::connect",
+		SinkLine:    7,
+	}
+	loc := e.fallbackLocation(detection)
+
+	assert.Equal(t, socketCpp, loc.FilePath)
+	assert.Equal(t, "src/socket.cpp", loc.RelPath)
+	assert.Equal(t, "connect", loc.Function)
+	assert.Equal(t, "Socket", loc.ClassName)
+}
+
+// TestFallbackLocationCFQN_MissingFile guards the case where the FQN
+// is well-formed but the resolved file doesn't exist on disk: the
+// fallback drops through to dot-based resolution rather than returning
+// a phantom path.
+func TestFallbackLocationCFQN_MissingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	e := NewEnricher(nil, &OutputOptions{ProjectRoot: tmpDir})
+
+	detection := dsl.DataflowDetection{
+		FunctionFQN: "src/missing.c::ghost",
+		SinkLine:    3,
+	}
+	loc := e.fallbackLocation(detection)
+
+	assert.Empty(t, loc.FilePath, "must not invent a file path")
+	// Function name still parsed from the FQN tail via the dot-split fallback.
+	assert.NotEmpty(t, loc.Function)
 }
 
 func TestFallbackLocationUnresolvableFQN(t *testing.T) {

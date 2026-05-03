@@ -151,6 +151,34 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 		}
 	}
 
+	// C/C++ FQN format: "<relative/path>::<funcname>" or
+	// "<relative/path>::<ns>::<class>::<method>". The first `::`-segment
+	// is the project-relative source path; everything after is the
+	// scope chain. Resolve the file path against the project root and
+	// extract the function name from the trailing component.
+	if strings.Contains(detection.FunctionFQN, "::") {
+		segments := strings.SplitN(detection.FunctionFQN, "::", 2)
+		relFile := segments[0]
+		if relFile != "" {
+			candidate := relFile
+			if e.options.ProjectRoot != "" {
+				candidate = filepath.Join(e.options.ProjectRoot, relFile)
+			}
+			if _, err := os.Stat(candidate); err == nil {
+				loc.FilePath = candidate
+				loc.RelPath = relFile
+				if len(segments) > 1 {
+					tail := strings.Split(segments[1], "::")
+					loc.Function = tail[len(tail)-1]
+					if len(tail) >= 2 {
+						loc.ClassName = tail[len(tail)-2]
+					}
+				}
+				return loc
+			}
+		}
+	}
+
 	// Try to extract file path from FQN
 	// Format: module.submodule.function or package.Class.method
 	parts := strings.Split(detection.FunctionFQN, ".")
@@ -183,8 +211,21 @@ func (e *Enricher) fallbackLocation(detection dsl.DataflowDetection) dsl.Locatio
 	return loc
 }
 
-// extractFunctionFromFQN extracts function name from fully qualified name.
+// extractFunctionFromFQN extracts the bare function name from a fully
+// qualified name. Two FQN shapes are supported:
+//
+//   - Dot-separated (Python, Go, Java): "pkg.Mod.func"  → "func"
+//   - C/C++ scope-resolved:             "src/main.c::main",
+//     "src/utils.cpp::ns::Class::method" → "main", "method"
+//
+// The C/C++ form is detected by the presence of "::" — C/C++ FQNs
+// always contain at least one because the prefix is itself a path
+// segment joined to the symbol with "::".
 func extractFunctionFromFQN(fqn string) string {
+	if strings.Contains(fqn, "::") {
+		parts := strings.Split(fqn, "::")
+		return parts[len(parts)-1]
+	}
 	parts := strings.Split(fqn, ".")
 	if len(parts) > 0 {
 		return parts[len(parts)-1]

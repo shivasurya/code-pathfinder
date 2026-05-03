@@ -57,6 +57,39 @@ func TestCountTotalCallSites(t *testing.T) {
 	})
 }
 
+// TestHasLanguageNodes covers the per-language gate that decides
+// whether scan.go runs the C / C++ call-graph builders. The gate must
+// be false for a nil graph, false when no nodes match, and true as
+// soon as a single node carries the requested Language tag.
+func TestHasLanguageNodes(t *testing.T) {
+	t.Run("nil graph returns false", func(t *testing.T) {
+		assert.False(t, hasLanguageNodes(nil, "c"))
+	})
+
+	t.Run("empty graph returns false", func(t *testing.T) {
+		assert.False(t, hasLanguageNodes(graph.NewCodeGraph(), "c"))
+	})
+
+	t.Run("returns false when no node matches", func(t *testing.T) {
+		cg := graph.NewCodeGraph()
+		cg.AddNode(&graph.Node{ID: "py-1", Language: "python"})
+		cg.AddNode(&graph.Node{ID: "go-1", Language: "go"})
+		assert.False(t, hasLanguageNodes(cg, "c"))
+		assert.False(t, hasLanguageNodes(cg, "cpp"))
+	})
+
+	t.Run("returns true on first matching node", func(t *testing.T) {
+		cg := graph.NewCodeGraph()
+		cg.AddNode(&graph.Node{ID: "py-1", Language: "python"})
+		cg.AddNode(&graph.Node{ID: "c-1", Language: "c"})
+		cg.AddNode(&graph.Node{ID: "cpp-1", Language: "cpp"})
+		assert.True(t, hasLanguageNodes(cg, "c"))
+		assert.True(t, hasLanguageNodes(cg, "cpp"))
+		assert.True(t, hasLanguageNodes(cg, "python"))
+		assert.False(t, hasLanguageNodes(cg, "rust"))
+	})
+}
+
 func TestPrintDetections(t *testing.T) {
 	t.Run("prints detections with all fields", func(t *testing.T) {
 		// Capture stdout

@@ -112,6 +112,12 @@ func (b *cfgBuilder) processBody(bodyNode *sitter.Node, currentBlockID string) s
 		case "with_statement":
 			currentBlockID = b.processWith(actualNode, stmtNode, currentBlockID)
 
+		case "switch_statement":
+			currentBlockID = b.processSwitch(actualNode, stmtNode, currentBlockID)
+
+		case "do_statement":
+			currentBlockID = b.processDoWhile(actualNode, stmtNode, currentBlockID)
+
 		case "return_statement":
 			stmt := b.extractStatement(actualNode, stmtNode)
 			if stmt != nil {
@@ -450,6 +456,120 @@ func (b *cfgBuilder) processTry(tryNode, _ *sitter.Node, predBlockID string) str
 	}
 
 	return mergeBlockID
+}
+
+// processSwitch handles C/C++ switch statements.
+//
+// A switch produces a fan-out/fan-in CFG: a header block evaluates the
+// condition and branches to one block per case (and optionally a
+// default block); each case body falls through to the next case unless
+// it ends with a break, in which case the edge goes to the merge block.
+//
+// CFG shape for `switch (x) { case 1: ...; case 2: ...; default: ... }`:
+//
+//	[header: cond=x]
+//	   ├──> [case_1] ──> [body_1] ──fallthrough/break──> [body_2] / [merge]
+//	   ├──> [case_2] ──> [body_2] ──fallthrough/break──> [default_body] / [merge]
+//	   └──> [default] ─> [body_default] ────────────────> [merge]
+//
+// Phase 1 keeps the model simple: every case head connects to its
+// predecessor case body so fallthrough is the default; explicit `break`
+// statements are emitted as ordinary statements inside each body and
+// will be lifted into edges by a later refactor. The header's
+// successors-only fan-out captures the most important property —
+// reachability of every case — for current dataflow consumers.
+func (b *cfgBuilder) processSwitch(switchNode, stmtNode *sitter.Node, predBlockID string) string {
+	headerBlockID := b.newBlockID("switch_header")
+	b.addBlock(headerBlockID, BlockTypeSwitch)
+	b.cfGraph.AddEdge(predBlockID, headerBlockID)
+
+	if condNode := switchNode.ChildByFieldName("condition"); condNode != nil {
+		b.appendStmt(headerBlockID, &core.Statement{
+			Type:       core.StatementTypeIf,
+			LineNumber: stmtNode.StartPoint().Row + 1,
+			Uses:       extractIdentifiers(condNode, b.sourceCode),
+		})
+	}
+
+	mergeBlockID := b.newBlockID("switch_after")
+	b.addBlock(mergeBlockID, BlockTypeNormal)
+
+	bodyNode := switchNode.ChildByFieldName("body")
+	if bodyNode == nil {
+		// Empty switch — header falls straight through to merge.
+		b.cfGraph.AddEdge(headerBlockID, mergeBlockID)
+		return mergeBlockID
+	}
+
+	var prevCaseEnd string
+	for i := 0; i < int(bodyNode.NamedChildCount()); i++ {
+		child := bodyNode.NamedChild(i)
+		if child == nil || child.Type() != "case_statement" {
+			continue
+		}
+		caseBlockID := b.newBlockID("case")
+		b.addBlock(caseBlockID, BlockTypeNormal)
+		b.cfGraph.AddEdge(headerBlockID, caseBlockID)
+		if prevCaseEnd != "" {
+			// Fallthrough from the previous case.
+			b.cfGraph.AddEdge(prevCaseEnd, caseBlockID)
+		}
+		prevCaseEnd = b.processBody(child, caseBlockID)
+	}
+
+	// Last case (or empty body) flows into the merge block. Without a
+	// trailing default, the header itself can also bypass every case
+	// (e.g. condition matches none) — represent that with a header→merge
+	// edge so reachability stays accurate.
+	if prevCaseEnd != "" {
+		b.cfGraph.AddEdge(prevCaseEnd, mergeBlockID)
+	}
+	b.cfGraph.AddEdge(headerBlockID, mergeBlockID)
+
+	return mergeBlockID
+}
+
+// processDoWhile handles C/C++ do-while loops.
+//
+// Unlike `while`, the body always executes at least once because the
+// condition is evaluated at the end. The CFG mirrors that: the
+// predecessor flows directly into the body (no header gate), the body
+// flows into the condition, and the condition either loops back to the
+// body or falls through to the after block.
+//
+//	[pred] ──> [body] ──> [cond] ──true──> [body]
+//	                      [cond] ──false─> [after]
+func (b *cfgBuilder) processDoWhile(doNode, stmtNode *sitter.Node, predBlockID string) string {
+	bodyBlockID := b.newBlockID("do_body")
+	b.addBlock(bodyBlockID, BlockTypeNormal)
+	b.cfGraph.AddEdge(predBlockID, bodyBlockID)
+
+	bodyNode := doNode.ChildByFieldName("body")
+	bodyEndID := bodyBlockID
+	if bodyNode != nil {
+		bodyEndID = b.processBody(bodyNode, bodyBlockID)
+	}
+
+	condBlockID := b.newBlockID("do_cond")
+	b.addBlock(condBlockID, BlockTypeLoop)
+	if bodyEndID != "" {
+		b.cfGraph.AddEdge(bodyEndID, condBlockID)
+	}
+	if condNode := doNode.ChildByFieldName("condition"); condNode != nil {
+		b.appendStmt(condBlockID, &core.Statement{
+			Type:       core.StatementTypeWhile,
+			LineNumber: stmtNode.StartPoint().Row + 1,
+			Uses:       extractIdentifiers(condNode, b.sourceCode),
+		})
+	}
+
+	// True edge loops back to the body; false edge falls through.
+	b.cfGraph.AddEdge(condBlockID, bodyBlockID)
+
+	afterBlockID := b.newBlockID("do_after")
+	b.addBlock(afterBlockID, BlockTypeNormal)
+	b.cfGraph.AddEdge(condBlockID, afterBlockID)
+	return afterBlockID
 }
 
 // processWith handles with-statements.

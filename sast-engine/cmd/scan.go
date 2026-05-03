@@ -288,6 +288,39 @@ Examples:
 			}
 		}
 
+		// Build C call graph if any C source files were parsed.
+		// Unlike Go (which checks go.mod up front), C/C++ has no single
+		// manifest — we look at the already-parsed CodeGraph for nodes
+		// tagged with the right Language.
+		if hasLanguageNodes(codeGraph, "c") {
+			logger.Debug("Detected C source files, building C call graph...")
+			cRegistry := registry.BuildCModuleRegistry(projectPath, codeGraph)
+			cTypeEngine := resolution.NewCTypeInferenceEngine(cRegistry)
+			cCG, err := builder.BuildCCallGraph(codeGraph, cRegistry, cTypeEngine)
+			if err != nil {
+				logger.Warning("Failed to build C call graph: %v", err)
+			} else {
+				builder.MergeCallGraphs(cg, cCG)
+				logger.Statistic("C call graph merged: %d functions, %d call sites",
+					len(cCG.Functions), countTotalCallSites(cCG))
+			}
+		}
+
+		// Build C++ call graph if any C++ source files were parsed.
+		if hasLanguageNodes(codeGraph, "cpp") {
+			logger.Debug("Detected C++ source files, building C++ call graph...")
+			cppRegistry := registry.BuildCppModuleRegistry(projectPath, codeGraph)
+			cppTypeEngine := resolution.NewCppTypeInferenceEngine(cppRegistry)
+			cppCG, err := builder.BuildCppCallGraph(codeGraph, cppRegistry, cppTypeEngine)
+			if err != nil {
+				logger.Warning("Failed to build C++ call graph: %v", err)
+			} else {
+				builder.MergeCallGraphs(cg, cppCG)
+				logger.Statistic("C++ call graph merged: %d functions, %d call sites",
+					len(cppCG.Functions), countTotalCallSites(cppCG))
+			}
+		}
+
 		// Step 4: Load Python SDK rules
 		logger.StartProgress("Loading rules", -1)
 		rules, err := loader.LoadRules(logger)
@@ -476,6 +509,22 @@ func countTotalCallSites(cg *core.CallGraph) int {
 		total += len(sites)
 	}
 	return total
+}
+
+// hasLanguageNodes reports whether codeGraph contains at least one
+// node tagged with the given Language. Used to gate per-language call
+// graph builders so we skip the work when no source files of that
+// language were parsed.
+func hasLanguageNodes(codeGraph *graph.CodeGraph, language string) bool {
+	if codeGraph == nil {
+		return false
+	}
+	for _, node := range codeGraph.Nodes {
+		if node != nil && node.Language == language {
+			return true
+		}
+	}
+	return false
 }
 
 // extractContainerFiles extracts unique Docker and docker-compose file paths from CodeGraph.
