@@ -33,6 +33,12 @@ func extractCppHeader(file HeaderFile, src HeaderSource) (*core.CStdlibHeader, e
 		return nil, fmt.Errorf("extractCppHeader: reading %q: %w", file.Path, err)
 	}
 
+	// libstdc++ headers borrow the same `__attribute__((...))` /
+	// `__nonnull((...))` decorations as glibc — strip them before parsing
+	// so trailing attribute chains don't trip tree-sitter into ERROR nodes
+	// that swallow class methods or free function declarations.
+	source = preprocessGlibcAttributes(source)
+
 	parser := sitter.NewParser()
 	parser.SetLanguage(cpplang.GetLanguage())
 	tree, err := parser.ParseCtx(context.Background(), nil, source)
