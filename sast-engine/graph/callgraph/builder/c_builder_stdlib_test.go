@@ -42,6 +42,14 @@ func (f *fakeCStdlibLoader) Platform() string { return "linux" }
 
 func (f *fakeCStdlibLoader) HeaderCount() int { return len(f.headers) }
 
+func (f *fakeCStdlibLoader) ListHeaders() []string {
+	out := make([]string, 0, len(f.headers))
+	for k := range f.headers {
+		out = append(out, k)
+	}
+	return out
+}
+
 // TestBuildCCallGraph_StdlibFallback verifies that an unresolved call
 // falls through to the stdlib registry and emits an enriched CallSite
 // (TargetFQN, return type, confidence, security tag).

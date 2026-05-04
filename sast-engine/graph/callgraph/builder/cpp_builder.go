@@ -551,21 +551,48 @@ func lookupCppStdlibMethod(
 // ("std::move") for the registry's GetFreeFunction to succeed — bare
 // names like "move" without the namespace are a different lookup path
 // and stay out of scope here.
+//
+// The lookup happens in two stages:
+//
+//  1. Walk the caller file's direct system includes. This is the fast
+//     path and catches the common case where the calling file
+//     `#include <utility>` itself.
+//  2. If the direct walk doesn't yield a hit, fall back to scanning
+//     every header in the manifest. Real-world C++ code routinely
+//     relies on transitive includes (a header pulling in another that
+//     pulls in <utility>), so without this fallback std::move /
+//     std::forward / std::swap fail to resolve in the majority of
+//     calling files.
+//
+// The fallback is bounded to fully-qualified names (containing "::") so
+// unqualified project-internal symbols can never accidentally bind to a
+// stdlib entry. Performance is fine: the scan is O(headers) per
+// unresolved namespaced call, ~120 headers on libstdc++; first hit wins.
 func lookupCppStdlibFreeFunction(
 	cs *CallSiteInternal,
 	cReg *core.CModuleRegistry,
 	cppLoader core.CppStdlibLoader,
 ) (string, *core.CStdlibFunction) {
-	if !strings.Contains(cs.FunctionName, fqnSeparator) {
+	if !strings.Contains(cs.FunctionName, fqnSeparator) || cppLoader == nil {
 		return "", nil
 	}
-	prefix, ok := cReg.FileToPrefix[cs.CallerFile]
-	if !ok {
-		return "", nil
+
+	// Stage 1: direct system includes from the caller file.
+	if prefix, ok := cReg.FileToPrefix[cs.CallerFile]; ok {
+		for _, header := range cReg.SystemIncludes[prefix] {
+			if fn, err := cppLoader.GetFreeFunction(header, cs.FunctionName); err == nil && fn != nil {
+				return fn.FQN, fn
+			}
+		}
 	}
-	for _, header := range cReg.SystemIncludes[prefix] {
-		fn, err := cppLoader.GetFreeFunction(header, cs.FunctionName)
-		if err == nil && fn != nil {
+
+	// Stage 2: transitive-include fallback. Walk every manifest header.
+	// We're trading a constant-time loop per unresolved namespaced call
+	// for the ability to resolve symbols pulled in transitively. First
+	// hit wins; stdlib FQNs are unique across headers so order doesn't
+	// affect correctness (only speed-of-first-hit).
+	for _, header := range cppLoader.ListHeaders() {
+		if fn, err := cppLoader.GetFreeFunction(header, cs.FunctionName); err == nil && fn != nil {
 			return fn.FQN, fn
 		}
 	}

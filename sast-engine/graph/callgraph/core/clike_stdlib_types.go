@@ -14,6 +14,14 @@ type CStdlibLoader interface {
 	GetFunction(headerName, funcName string) (*CStdlibFunction, error)
 	Platform() string
 	HeaderCount() int
+	// ListHeaders returns every header name in the loaded manifest in
+	// deterministic order. The resolver uses this to fall back to a
+	// global manifest scan when a call site doesn't directly #include
+	// the header that owns the symbol — common with C++ codebases that
+	// rely on transitive includes (vector pulling in utility, etc).
+	//
+	// Returns an empty slice when LoadManifest has not been called.
+	ListHeaders() []string
 }
 
 // CppStdlibLoader extends CStdlibLoader with C++-specific accessors. Free
