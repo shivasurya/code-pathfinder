@@ -304,18 +304,45 @@ func resolveCCallTarget(
 	return "", false, nil
 }
 
-// lookupCStdlib walks the caller file's `#include <...>` list and asks the
-// stdlib registry for a function with the requested name in each header.
-// First match wins; ties are unlikely (stdlib symbols are uniquely owned by
-// one header) but if they do happen, the include order in source decides.
+// lookupCStdlib resolves a free function against the C stdlib registry.
+//
+// The lookup runs in two stages:
+//
+//  1. Direct system includes — walk the caller file's own `#include <…>`
+//     list. This is the fast path and covers the case where the calling
+//     file directly pulls in the header that owns the symbol.
+//  2. Manifest-wide fallback — when the direct walk doesn't yield a hit,
+//     scan every header in the manifest. Real-world C codebases routinely
+//     route stdlib pulls through a project-internal "common.h" header
+//     (redis does this with `server.h`), so without this fallback every
+//     `.c` file that doesn't redundantly `#include <string.h>` itself
+//     would lose strlen / strcmp / memcpy / etc.
+//
+// First hit wins. Stdlib symbols are uniquely owned by one header in the
+// real world, so first-hit-wins is effectively the same as best-match.
+// The fallback is bounded to the manifest's loaded headers — symbols not
+// in the manifest can never resolve, so there's no risk of binding a
+// project-internal symbol to a stdlib FQN.
 func lookupCStdlib(callerFile, funcName string, registry *core.CModuleRegistry) (string, *core.CStdlibFunction) {
-	prefix, ok := registry.FileToPrefix[callerFile]
-	if !ok {
+	loader := registry.StdlibRegistry
+	if loader == nil {
 		return "", nil
 	}
-	for _, header := range registry.SystemIncludes[prefix] {
-		fn, err := registry.StdlibRegistry.GetFunction(header, funcName)
-		if err == nil && fn != nil {
+
+	// Stage 1: direct system includes from the caller file.
+	if prefix, ok := registry.FileToPrefix[callerFile]; ok {
+		for _, header := range registry.SystemIncludes[prefix] {
+			if fn, err := loader.GetFunction(header, funcName); err == nil && fn != nil {
+				return fn.FQN, fn
+			}
+		}
+	}
+
+	// Stage 2: transitive-include fallback. Walk every manifest header.
+	// O(headers) per unresolved call — ~1900 headers on Linux glibc;
+	// bounded and predictable. Mirrors the PR-04 C++ resolver fallback.
+	for _, header := range loader.ListHeaders() {
+		if fn, err := loader.GetFunction(header, funcName); err == nil && fn != nil {
 			return fn.FQN, fn
 		}
 	}

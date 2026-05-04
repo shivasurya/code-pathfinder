@@ -143,10 +143,13 @@ func TestBuildCCallGraph_StdlibFallback_NotConsultedWhenProjectDefinitionExists(
 	assert.Empty(t, sites[0].SecurityTag, "project resolution must not pick up stdlib SecurityTag")
 }
 
-// TestBuildCCallGraph_StdlibFallback_NoIncludesLeavesUnresolved verifies
-// that a call to an unknown function with no matching system include
-// stays unresolved — the registry must not return arbitrary symbols.
-func TestBuildCCallGraph_StdlibFallback_NoIncludesLeavesUnresolved(t *testing.T) {
+// TestBuildCCallGraph_StdlibFallback_TransitiveIncludeResolves verifies
+// the PR-05 transitive-include fallback. Real C codebases route stdlib
+// pulls through a project-internal "common.h" header, so files that
+// call printf without a direct `#include <stdio.h>` still need to
+// resolve. The resolver scans every manifest header when the file's
+// direct system-include list doesn't yield a hit.
+func TestBuildCCallGraph_StdlibFallback_TransitiveIncludeResolves(t *testing.T) {
 	root := fixtureRoot
 	mainC := root + "/src/main.c"
 
@@ -154,7 +157,9 @@ func TestBuildCCallGraph_StdlibFallback_NoIncludesLeavesUnresolved(t *testing.T)
 	mainFn := f.addFunction(t, mainC, "src/main.c", "main", "int", false)
 	f.addCall(t, mainFn, "printf", nil)
 
-	// No SystemIncludes entry for this file → stdlib lookup is a no-op.
+	// Notice: no SystemIncludes entry for src/main.c. Pre-PR-05 this
+	// stayed unresolved; with the manifest-wide fallback the resolver
+	// finds printf via the (only) loaded header.
 	f.registry.StdlibRegistry = newFakeCStdlibLoader(map[string]map[string]*core.CStdlibFunction{
 		"stdio.h": {"printf": {FQN: "c::stdio::printf", ReturnType: "int"}},
 	})
@@ -163,5 +168,29 @@ func TestBuildCCallGraph_StdlibFallback_NoIncludesLeavesUnresolved(t *testing.T)
 
 	sites := cg.CallSites["src/main.c::main"]
 	require.Len(t, sites, 1)
-	assert.False(t, sites[0].Resolved, "no matching include => stdlib must not be consulted")
+	assert.True(t, sites[0].Resolved, "transitive fallback must resolve printf")
+	assert.Equal(t, "c::stdio::printf", sites[0].TargetFQN)
+}
+
+// TestBuildCCallGraph_StdlibFallback_UnknownSymbolStaysUnresolved is the
+// safety guard: a call whose name doesn't appear anywhere in the
+// manifest must not bind to an arbitrary entry. Bounds the fallback to
+// "names actually in the manifest".
+func TestBuildCCallGraph_StdlibFallback_UnknownSymbolStaysUnresolved(t *testing.T) {
+	root := fixtureRoot
+	mainC := root + "/src/main.c"
+
+	f := newCFixture(t)
+	mainFn := f.addFunction(t, mainC, "src/main.c", "main", "int", false)
+	f.addCall(t, mainFn, "totally_made_up_function", nil)
+
+	f.registry.StdlibRegistry = newFakeCStdlibLoader(map[string]map[string]*core.CStdlibFunction{
+		"stdio.h": {"printf": {FQN: "c::stdio::printf", ReturnType: "int"}},
+	})
+
+	cg, _ := f.build(t)
+
+	sites := cg.CallSites["src/main.c::main"]
+	require.Len(t, sites, 1)
+	assert.False(t, sites[0].Resolved, "unknown symbol must stay unresolved")
 }
