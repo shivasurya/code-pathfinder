@@ -286,12 +286,24 @@ func (r *CppStdlibRegistryRemote) GetMethod(headerName, classFQN, methodName str
 // GetFreeFunction looks up a namespaced free function by its full FQN
 // (e.g. "std::move", "std::swap"). Distinct from GetFunction so the resolver
 // can be explicit about which form it expects.
+//
+// Looks in both `free_functions` and `functions` because the PR-01
+// generator currently emits some overlay-only namespaced symbols
+// (notably std::move, std::forward, std::swap on certain headers) into
+// `functions` rather than `free_functions`. A resolver that consulted
+// only one map would miss those entries even though they're present in
+// the manifest. A future cleanup pass on the generator could canonicalise
+// the placement, but the resolver-side fallback is a strict superset and
+// stays correct either way.
 func (r *CppStdlibRegistryRemote) GetFreeFunction(headerName, fqn string) (*core.CStdlibFunction, error) {
 	h, err := r.GetHeader(headerName)
 	if err != nil {
 		return nil, err
 	}
 	if f, ok := h.FreeFunctions[fqn]; ok {
+		return f, nil
+	}
+	if f, ok := h.Functions[fqn]; ok {
 		return f, nil
 	}
 	return nil, fmt.Errorf("GetFreeFunction: %q not in header %q", fqn, headerName)
@@ -310,6 +322,23 @@ func (r *CppStdlibRegistryRemote) HeaderCount() int {
 		return 0
 	}
 	return len(r.manifest.Headers)
+}
+
+// ListHeaders returns every header name in the loaded manifest. Mirrors
+// the C loader's contract — the resolver uses this for transitive-include
+// fallback when a namespaced std::* call appears in a file that doesn't
+// directly #include the owning header.
+func (r *CppStdlibRegistryRemote) ListHeaders() []string {
+	r.cacheMutex.RLock()
+	defer r.cacheMutex.RUnlock()
+	if r.manifest == nil {
+		return nil
+	}
+	out := make([]string, 0, len(r.manifest.Headers))
+	for _, e := range r.manifest.Headers {
+		out = append(out, e.Header)
+	}
+	return out
 }
 
 var _ core.CppStdlibLoader = (*CppStdlibRegistryRemote)(nil)

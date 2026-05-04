@@ -79,6 +79,14 @@ func (f *fakeCppStdlibLoader) GetFreeFunction(headerName, fqn string) (*core.CSt
 func (f *fakeCppStdlibLoader) Platform() string { return "linux" }
 func (f *fakeCppStdlibLoader) HeaderCount() int { return len(f.headers) }
 
+func (f *fakeCppStdlibLoader) ListHeaders() []string {
+	out := make([]string, 0, len(f.headers))
+	for k := range f.headers {
+		out = append(out, k)
+	}
+	return out
+}
+
 // TestBuildCppCallGraph_StdlibClassMethod resolves `vec.push_back(...)`
 // against the C++ stdlib registry. The receiver type comes from the
 // type engine; the resolver canonicalises std::vector<int> → std::vector
@@ -149,6 +157,39 @@ func TestBuildCppCallGraph_StdlibClassMethod_TemplateSubstitution(t *testing.T) 
 	require.Len(t, sites, 1)
 	assert.True(t, sites[0].Resolved)
 	assert.Equal(t, "int&", sites[0].InferredType, "T must be replaced with the concrete template argument")
+}
+
+// TestBuildCppCallGraph_StdlibFreeFunction_TransitiveFallback covers the
+// PR-04 transitive-include fallback. A file that calls `std::move`
+// without directly including <utility> still resolves because the
+// resolver scans every manifest header when the direct include list
+// doesn't yield a hit.
+func TestBuildCppCallGraph_StdlibFreeFunction_TransitiveFallback(t *testing.T) {
+	root := cppFixtureRoot
+	mainCpp := root + "/src/main.cpp"
+
+	f := newCppFixture(t)
+	main := f.addFreeFunction(t, mainCpp, "src/main.cpp", "", "main", "int")
+	f.addCall(t, main, "std::move", "")
+
+	// Notice: NO entry in SystemIncludes for src/main.cpp — the file
+	// gets std::move via a transitive include we can't see at the
+	// CodeGraph level. Pre-PR-04 this stayed unresolved.
+	f.registry.StdlibCppRegistry = newFakeCppStdlibLoader(map[string]*core.CStdlibHeader{
+		"utility": {
+			Header: "utility",
+			FreeFunctions: map[string]*core.CStdlibFunction{
+				"std::move": {FQN: "std::move", ReturnType: "T&&", Source: core.SourceOverlay, Confidence: 1.0},
+			},
+		},
+	})
+
+	cg := f.build(t)
+
+	sites := cg.CallSites["src/main.cpp::main"]
+	require.Len(t, sites, 1)
+	assert.True(t, sites[0].Resolved, "transitive-include fallback must resolve std::move")
+	assert.Equal(t, "std::move", sites[0].TargetFQN)
 }
 
 // TestBuildCppCallGraph_StdlibFreeFunction handles `std::move(x)` —

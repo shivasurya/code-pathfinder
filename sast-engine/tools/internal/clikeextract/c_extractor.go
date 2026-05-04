@@ -28,6 +28,15 @@ func extractCHeader(file HeaderFile, src HeaderSource) (*core.CStdlibHeader, err
 		return nil, fmt.Errorf("extractCHeader: reading %q: %w", file.Path, err)
 	}
 
+	// glibc declarations carry trailing GCC attribute macros (__THROW,
+	// __attribute_pure__, __nonnull((1)), __attr_access((__read_only__,1,2)))
+	// that tree-sitter's C grammar can't digest — the parser collapses the
+	// entire surrounding declaration into an ERROR node, and the walker
+	// below skips ERROR nodes by design. Strip those macros to whitespace
+	// up front so the parser sees clean C and produces normal `declaration`
+	// nodes for strlen / strcmp / snprintf and similar.
+	source = preprocessGlibcAttributes(source)
+
 	parser := sitter.NewParser()
 	parser.SetLanguage(clang.GetLanguage())
 	tree, err := parser.ParseCtx(context.Background(), nil, source)

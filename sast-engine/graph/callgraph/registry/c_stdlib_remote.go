@@ -309,6 +309,27 @@ func (r *CStdlibRegistryRemote) HeaderCount() int {
 	return len(r.manifest.Headers)
 }
 
+// ListHeaders returns every header name in the loaded manifest in the
+// order it was emitted. Resolver-side transitive-include fallback uses
+// this to scan all stdlib headers when the caller's direct #include list
+// doesn't yield a hit.
+//
+// Returns nil when LoadManifest has not been called. Allocates a fresh
+// slice on each call so callers may sort or filter without mutating the
+// loader state.
+func (r *CStdlibRegistryRemote) ListHeaders() []string {
+	r.cacheMutex.RLock()
+	defer r.cacheMutex.RUnlock()
+	if r.manifest == nil {
+		return nil
+	}
+	out := make([]string, 0, len(r.manifest.Headers))
+	for _, e := range r.manifest.Headers {
+		out = append(out, e.Header)
+	}
+	return out
+}
+
 // Compile-time interface checks — fail at build time if the struct ever
 // drifts from the contract.
 var _ core.CStdlibLoader = (*CStdlibRegistryRemote)(nil)

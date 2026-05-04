@@ -157,6 +157,39 @@ func TestExtractCHeader_FileNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "reading")
 }
 
+// TestExtractCHeader_GlibcAttributesRecovered is the regression test for
+// PR-04 Gap 1: declarations decorated with __THROW / __attribute_pure__ /
+// __nonnull((...)) / __attr_access((...)) used to vanish into an ERROR
+// node and never reach the manifest. The preprocess step strips the
+// macros to whitespace so tree-sitter parses clean C.
+func TestExtractCHeader_GlibcAttributesRecovered(t *testing.T) {
+	src := cTestSource()
+	hf := HeaderFile{Name: "glibc_string.h", Path: filepath.Join(cFixtureDir, "glibc_string.h")}
+
+	h, err := extractCHeader(hf, src)
+	require.NoError(t, err)
+
+	// Each entry below was confirmed missing from the manifest before the
+	// preprocess step landed (verified against /usr/include/string.h on
+	// Ubuntu during PR-04 validation).
+	for _, name := range []string{
+		"strlen", "strcmp", "strncmp", "strcasecmp", "memcmp", "memmem", "strerror_r",
+		"snprintf", "vsnprintf",
+	} {
+		fn := h.Functions[name]
+		require.NotNilf(t, fn, "expected glibc-decorated function %q to be recovered", name)
+		assert.NotContainsf(t, fn.FQN, "__", "FQN %q must not carry leftover macro tokens", fn.FQN)
+		assert.NotEmptyf(t, fn.ReturnType, "%q must have a return type", name)
+	}
+
+	// strlen has a single const-char-pointer parameter; check the
+	// param table doesn't collapse to zero-length under the preprocessed
+	// source.
+	strlen := h.Functions["strlen"]
+	require.Len(t, strlen.Params, 1)
+	assert.Equal(t, "size_t", strlen.ReturnType)
+}
+
 func TestStripTrailingComment(t *testing.T) {
 	tests := []struct {
 		in, want string

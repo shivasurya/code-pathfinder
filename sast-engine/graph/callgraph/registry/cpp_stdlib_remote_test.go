@@ -138,6 +138,38 @@ func TestCppStdlibRegistry_GetFunctionFreeFunctionFallback(t *testing.T) {
 	assert.Equal(t, "std::swap", got.FQN)
 }
 
+// TestCppStdlibRegistry_GetFreeFunction_FunctionsMapFallback pins the
+// PR-04 fix: when the generator stores a namespaced symbol under
+// `functions` instead of `free_functions` (current PR-01 behaviour for
+// std::move and std::forward), GetFreeFunction must still find it.
+//
+// We mutate the cached header directly to simulate the generator output
+// rather than redefining writeCppRegistry, keeping the existing fixture
+// stable for other tests.
+func TestCppStdlibRegistry_GetFreeFunction_FunctionsMapFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeCppRegistry(t, dir)
+	r := NewCppStdlibRegistryFile(dir, core.PlatformLinux)
+	require.NoError(t, r.LoadManifest(noopLogger{}))
+
+	// Force a one-time fetch so the header is in the cache, then move
+	// std::move out of the FreeFunctions map and into Functions —
+	// mimicking what the generator currently emits in the wild.
+	h, err := r.GetHeader("utility")
+	require.NoError(t, err)
+	moved := h.FreeFunctions["std::move"]
+	require.NotNil(t, moved)
+	delete(h.FreeFunctions, "std::move")
+	if h.Functions == nil {
+		h.Functions = map[string]*core.CStdlibFunction{}
+	}
+	h.Functions["std::move"] = moved
+
+	got, err := r.GetFreeFunction("utility", "std::move")
+	require.NoError(t, err)
+	assert.Equal(t, "T&&", got.ReturnType)
+}
+
 func TestCppStdlibRegistry_GetFunctionMissing(t *testing.T) {
 	dir := t.TempDir()
 	writeCppRegistry(t, dir)
@@ -221,6 +253,28 @@ func TestCppStdlibRegistry_LoadManifestCorrupt(t *testing.T) {
 func TestCppStdlibRegistry_RemoteCtorTrimsSlash(t *testing.T) {
 	r := NewCppStdlibRegistryRemote("https://x/registries/", core.PlatformLinux)
 	assert.Equal(t, "https://x/registries", r.baseURL)
+}
+
+// TestCppStdlibRegistry_ListHeaders confirms the C++ loader exposes the
+// manifest's header list for transitive-include fallback. Same contract
+// as the C loader: deterministic order, fresh slice each call.
+func TestCppStdlibRegistry_ListHeaders(t *testing.T) {
+	dir := t.TempDir()
+	writeCppRegistry(t, dir)
+	r := NewCppStdlibRegistryFile(dir, core.PlatformLinux)
+	require.NoError(t, r.LoadManifest(noopLogger{}))
+
+	headers := r.ListHeaders()
+	assert.ElementsMatch(t, []string{"vector", "utility"}, headers)
+
+	headers[0] = "tampered"
+	again := r.ListHeaders()
+	assert.NotEqual(t, "tampered", again[0])
+}
+
+func TestCppStdlibRegistry_ListHeaders_BeforeLoad(t *testing.T) {
+	r := NewCppStdlibRegistryFile(t.TempDir(), core.PlatformLinux)
+	assert.Nil(t, r.ListHeaders())
 }
 
 func TestCppStdlibRegistry_ImplementsInterface(t *testing.T) {
