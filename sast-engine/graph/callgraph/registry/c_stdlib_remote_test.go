@@ -254,3 +254,27 @@ func TestCStdlibRegistry_ImplementsInterface(t *testing.T) {
 	var _ core.CStdlibLoader = NewCStdlibRegistryFile(t.TempDir(), core.PlatformLinux)
 	var _ core.CStdlibLoader = NewCStdlibRegistryRemote("https://x", core.PlatformLinux)
 }
+
+// TestCStdlibRegistry_ListHeaders verifies the manifest-wide enumerator
+// the resolver uses for transitive-include fallback. The order should
+// follow the manifest's Headers slice; the result must be a fresh slice
+// (callers may sort/filter without mutating loader state).
+func TestCStdlibRegistry_ListHeaders(t *testing.T) {
+	dir := t.TempDir()
+	writeCRegistry(t, dir)
+	r := NewCStdlibRegistryFile(dir, core.PlatformLinux)
+	require.NoError(t, r.LoadManifest(noopLogger{}))
+
+	headers := r.ListHeaders()
+	assert.ElementsMatch(t, []string{"stdio.h", "stdlib.h"}, headers)
+
+	// Mutating the returned slice must not affect a subsequent call.
+	headers[0] = "tampered"
+	again := r.ListHeaders()
+	assert.NotEqual(t, "tampered", again[0], "ListHeaders must return an independent slice")
+}
+
+func TestCStdlibRegistry_ListHeaders_BeforeLoad(t *testing.T) {
+	r := NewCStdlibRegistryFile(t.TempDir(), core.PlatformLinux)
+	assert.Nil(t, r.ListHeaders())
+}

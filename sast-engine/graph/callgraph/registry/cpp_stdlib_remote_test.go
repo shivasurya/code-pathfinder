@@ -255,6 +255,28 @@ func TestCppStdlibRegistry_RemoteCtorTrimsSlash(t *testing.T) {
 	assert.Equal(t, "https://x/registries", r.baseURL)
 }
 
+// TestCppStdlibRegistry_ListHeaders confirms the C++ loader exposes the
+// manifest's header list for transitive-include fallback. Same contract
+// as the C loader: deterministic order, fresh slice each call.
+func TestCppStdlibRegistry_ListHeaders(t *testing.T) {
+	dir := t.TempDir()
+	writeCppRegistry(t, dir)
+	r := NewCppStdlibRegistryFile(dir, core.PlatformLinux)
+	require.NoError(t, r.LoadManifest(noopLogger{}))
+
+	headers := r.ListHeaders()
+	assert.ElementsMatch(t, []string{"vector", "utility"}, headers)
+
+	headers[0] = "tampered"
+	again := r.ListHeaders()
+	assert.NotEqual(t, "tampered", again[0])
+}
+
+func TestCppStdlibRegistry_ListHeaders_BeforeLoad(t *testing.T) {
+	r := NewCppStdlibRegistryFile(t.TempDir(), core.PlatformLinux)
+	assert.Nil(t, r.ListHeaders())
+}
+
 func TestCppStdlibRegistry_ImplementsInterface(t *testing.T) {
 	var _ core.CppStdlibLoader = NewCppStdlibRegistryFile(t.TempDir(), core.PlatformLinux)
 	var _ core.CppStdlibLoader = NewCppStdlibRegistryRemote("https://x", core.PlatformLinux)
