@@ -138,6 +138,38 @@ func TestCppStdlibRegistry_GetFunctionFreeFunctionFallback(t *testing.T) {
 	assert.Equal(t, "std::swap", got.FQN)
 }
 
+// TestCppStdlibRegistry_GetFreeFunction_FunctionsMapFallback pins the
+// PR-04 fix: when the generator stores a namespaced symbol under
+// `functions` instead of `free_functions` (current PR-01 behaviour for
+// std::move and std::forward), GetFreeFunction must still find it.
+//
+// We mutate the cached header directly to simulate the generator output
+// rather than redefining writeCppRegistry, keeping the existing fixture
+// stable for other tests.
+func TestCppStdlibRegistry_GetFreeFunction_FunctionsMapFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeCppRegistry(t, dir)
+	r := NewCppStdlibRegistryFile(dir, core.PlatformLinux)
+	require.NoError(t, r.LoadManifest(noopLogger{}))
+
+	// Force a one-time fetch so the header is in the cache, then move
+	// std::move out of the FreeFunctions map and into Functions —
+	// mimicking what the generator currently emits in the wild.
+	h, err := r.GetHeader("utility")
+	require.NoError(t, err)
+	moved := h.FreeFunctions["std::move"]
+	require.NotNil(t, moved)
+	delete(h.FreeFunctions, "std::move")
+	if h.Functions == nil {
+		h.Functions = map[string]*core.CStdlibFunction{}
+	}
+	h.Functions["std::move"] = moved
+
+	got, err := r.GetFreeFunction("utility", "std::move")
+	require.NoError(t, err)
+	assert.Equal(t, "T&&", got.ReturnType)
+}
+
 func TestCppStdlibRegistry_GetFunctionMissing(t *testing.T) {
 	dir := t.TempDir()
 	writeCppRegistry(t, dir)
