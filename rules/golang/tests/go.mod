@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/labstack/echo/v4 v4.15.1
 	golang.org/x/crypto v0.50.0
