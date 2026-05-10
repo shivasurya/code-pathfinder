@@ -82,8 +82,7 @@ class TestCRuleDecorator:
             return calls("strcpy")
 
         assert (
-            get_c_rules()[0].metadata.message
-            == "Security issue detected by C-MSG-001"
+            get_c_rules()[0].metadata.message == "Security issue detected by C-MSG-001"
         )
 
     def test_returns_underlying_function(self):

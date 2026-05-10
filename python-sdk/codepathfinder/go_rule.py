@@ -296,7 +296,10 @@ class GoGorillaMuxRouter(QueryType):
 class GoRestyClient(QueryType):
     """Resty HTTP client (Client and Request)."""
 
-    fqns = ["github.com/go-resty/resty/v2.Client", "github.com/go-resty/resty/v2.Request"]
+    fqns = [
+        "github.com/go-resty/resty/v2.Client",
+        "github.com/go-resty/resty/v2.Request",
+    ]
     patterns = ["*.Client", "*.Request"]
     match_subclasses = False
 

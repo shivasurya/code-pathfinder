@@ -53,7 +53,9 @@ class TestGoThirdPartyQueryTypes:
         """All FQNs must be strings."""
         for qt in _ALL_THIRD_PARTY_TYPES:
             for fqn in qt.fqns:
-                assert isinstance(fqn, str), f"{qt.__name__} FQN {fqn!r} is not a string"
+                assert isinstance(
+                    fqn, str
+                ), f"{qt.__name__} FQN {fqn!r} is not a string"
 
     def test_fqns_are_fully_qualified(self):
         """All FQNs must contain a dot (package.Type format)."""
@@ -76,7 +78,10 @@ class TestGoThirdPartyQueryTypes:
         assert "github.com/gofiber/fiber/v2.Ctx" in GoFiberCtx.fqns
 
     def test_grpc_stream_fqns(self):
-        assert "google.golang.org/grpc.ServerTransportStream" in GoGRPCServerTransportStream.fqns
+        assert (
+            "google.golang.org/grpc.ServerTransportStream"
+            in GoGRPCServerTransportStream.fqns
+        )
 
     def test_redis_client_fqns(self):
         assert "github.com/redis/go-redis/v9.Client" in GoRedisClient.fqns
@@ -176,7 +181,7 @@ class TestGoThirdPartyQueryTypes:
         seen: dict[str, str] = {}
         for qt in _ALL_THIRD_PARTY_TYPES:
             for fqn in qt.fqns:
-                assert fqn not in seen, (
-                    f"Duplicate FQN {fqn!r} in {qt.__name__} and {seen[fqn]}"
-                )
+                assert (
+                    fqn not in seen
+                ), f"Duplicate FQN {fqn!r} in {qt.__name__} and {seen[fqn]}"
                 seen[fqn] = qt.__name__

@@ -31,7 +31,8 @@ def compile_python_rules() -> List[Dict[str, Any]]:
                 "severity": rule.metadata.severity.lower(),  # Normalize to lowercase
                 "cwe": rule.metadata.cwe,
                 "owasp": rule.metadata.owasp,
-                "description": rule.metadata.message or f"Security issue detected by {rule.metadata.id}",
+                "description": rule.metadata.message
+                or f"Security issue detected by {rule.metadata.id}",
             },
             "matcher": rule.matcher,
         }

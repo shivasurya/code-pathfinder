@@ -698,14 +698,20 @@ func TestOpenAnalysisCache_UserCacheDirFallback(t *testing.T) {
 func TestOpenAnalysisCache_MkdirError(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Place a regular file where the "pathfinder" directory should be created.
-	blockingFile := filepath.Join(tmp, "pathfinder")
-	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0o444))
-
-	// Point XDG_CACHE_HOME at our temp dir so pfDir = tmp/pathfinder (the file above).
+	// Redirect os.UserCacheDir() into our temp dir on every platform:
+	// linux/freebsd honour XDG_CACHE_HOME; darwin uses $HOME/Library/Caches.
+	t.Setenv("HOME", tmp)
 	t.Setenv("XDG_CACHE_HOME", tmp)
 
-	_, err := OpenAnalysisCache(t.TempDir())
+	// Resolve where OpenAnalysisCache will try to create the "pathfinder" subdir
+	// and plant a regular file there so os.MkdirAll fails.
+	cacheDir, err := os.UserCacheDir()
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+	blockingFile := filepath.Join(cacheDir, "pathfinder")
+	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0o444))
+
+	_, err = OpenAnalysisCache(t.TempDir())
 	assert.Error(t, err, "os.MkdirAll should fail when a file blocks the cache dir")
 }
 

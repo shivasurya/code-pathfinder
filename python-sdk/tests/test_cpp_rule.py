@@ -164,9 +164,7 @@ class TestCppIRCompiler:
             return calls("strcpy")
 
         ir = compile_cpp_rules()[0]
-        assert (
-            ir["rule"]["description"] == "Security issue detected by CPP-NOMSG-001"
-        )
+        assert ir["rule"]["description"] == "Security issue detected by CPP-NOMSG-001"
 
     def test_compile_json_serializable(self):
         @cpp_rule(id="CPP-JSON-001", severity="HIGH")
