@@ -268,7 +268,7 @@ export class ProfileStorageService {
       const secretAPIKey = await settingsManager.getApiKey();
       if (!secretAPIKey) {
         throw new Error(
-          'API Key is required for profiling. Please set it using the SecureFlow: Set API Key command.'
+          'API Key is required for profiling. Please set it using the Code Pathfinder: Set API Key command.'
         );
       }
       // Profile the workspace

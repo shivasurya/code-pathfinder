@@ -33,7 +33,7 @@ export function registerScanCommands(context: vscode.ExtensionContext): void {
           // Create a new webview to display the scan results
           const panel = vscode.window.createWebviewPanel(
             'secureflowScanResult',
-            `SecureFlow Scan #${scan.scanNumber}`,
+            `Code Pathfinder Scan #${scan.scanNumber}`,
             vscode.ViewColumn.One,
             { enableScripts: true }
           );
@@ -113,7 +113,7 @@ function generateScanResultHtml(scan: any): string {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SecureFlow Scan #${scan.scanNumber}</title>
+            <title>Code Pathfinder Scan #${scan.scanNumber}</title>
             <style>
                 body { font-family: var(--vscode-font-family); padding: 20px; }
                 .header { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 15px; margin-bottom: 20px; }
@@ -136,7 +136,7 @@ function generateScanResultHtml(scan: any): string {
         </head>
         <body>
             <div class="header">
-                <h1>SecureFlow Scan #${scan.scanNumber}</h1>
+                <h1>Code Pathfinder Scan #${scan.scanNumber}</h1>
                 <div class="scan-info">
                     <div class="info-item">
                         <span class="info-label">Timestamp</span>

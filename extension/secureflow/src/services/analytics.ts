@@ -35,7 +35,7 @@ export class AnalyticsService {
 
     // Check user preference from VS Code settings
     this.userEnabled = vscode.workspace
-      .getConfiguration('secureflow')
+      .getConfiguration('codePathfinder')
       .get('analytics.enabled', true);
 
     // Only initialize if user has analytics enabled
@@ -79,7 +79,7 @@ export class AnalyticsService {
       vscode_extension_version:
         vscode.extensions.getExtension('secureflow')?.packageJSON.version,
       vscode_build_version: vscode.version,
-      ai_model: vscode.workspace.getConfiguration('secureflow').get('AIModel')
+      ai_model: vscode.workspace.getConfiguration('codePathfinder').get('AIModel')
     };
 
     await this.sharedService.trackEvent(eventName, vsCodeProperties);

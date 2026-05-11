@@ -490,7 +490,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
           });
 
           try {
-            const config = vscode.workspace.getConfiguration('secureflow');
+            const config = vscode.workspace.getConfiguration('codePathfinder');
             if (message.provider) {
               console.log('SecureFlow: Updating provider to:', message.provider);
               await config.update(
@@ -536,7 +536,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             if (!message.skipScan) {
               // Show success notification
               vscode.window.showInformationMessage(
-                'SecureFlow configuration saved! Starting workspace security scan...'
+                'Code Pathfinder configuration saved! Starting workspace security scan...'
               );
 
               // Automatically start workspace scan
@@ -569,14 +569,14 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             } else {
               // Just show success notification for settings update
               vscode.window.showInformationMessage(
-                'SecureFlow settings saved successfully!'
+                'Code Pathfinder settings saved successfully!'
               );
             }
           } catch (error) {
             console.error('SecureFlow: Error saving configuration:', error);
 
             vscode.window.showErrorMessage(
-              'Failed to save SecureFlow configuration. Please try again.'
+              'Failed to save Code Pathfinder configuration. Please try again.'
             );
 
             if (this._view) {
@@ -602,7 +602,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     // Create a new webview panel for displaying scan results
     const panel = vscode.window.createWebviewPanel(
       'secureflowScanResult',
-      `SecureFlow Scan #${scan.scanNumber}`,
+      `Code Pathfinder Scan #${scan.scanNumber}`,
       vscode.ViewColumn.Two,
       {
         enableScripts: true,
@@ -948,7 +948,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>SecureFlow Scan #${scan.scanNumber}</title>
+                <title>Code Pathfinder Scan #${scan.scanNumber}</title>
                 <style>
                     body { 
                         font-family: var(--vscode-font-family); 
@@ -1074,7 +1074,7 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             </head>
             <body>
                 <div class="header">
-                    <h1>SecureFlow Scan #${scan.scanNumber}</h1>
+                    <h1>Code Pathfinder Scan #${scan.scanNumber}</h1>
                     <div class="scan-info">
                         <div class="info-item">
                             <span class="info-label">Scan Time</span>
@@ -1192,9 +1192,9 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
   </style>
 </head>
 <body>
-  <h3>SecureFlow - Error Loading View</h3>
+  <h3>Code Pathfinder - Error Loading View</h3>
   <div class="error">
-    <p>Failed to load SecureFlow webview.</p>
+    <p>Failed to load Code Pathfinder webview.</p>
     <p>Error: ${error instanceof Error ? error.message : String(error)}</p>
     <p>Please check the Extension Host output for more details.</p>
   </div>

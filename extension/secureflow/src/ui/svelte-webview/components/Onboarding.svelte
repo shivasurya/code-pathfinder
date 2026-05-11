@@ -173,7 +173,7 @@
           <path d="M24 22L28 24V28L24 30L20 28V24L24 22Z" fill="var(--vscode-button-background)"/>
         </svg>
       </div>
-      <h1>Welcome to SecureFlow AI</h1>
+      <h1>Welcome to Code Pathfinder AI</h1>
       <p class="subtitle">powered by codepathfinder.dev</p>
     </div>
 
@@ -233,7 +233,7 @@
             <strong>Setup Complete!</strong>
             {#if scanCompleted}
               <p>Found {profileCount} application profile{profileCount !== 1 ? 's' : ''} in your workspace.</p>
-              <p style="margin-top: 12px; font-weight: 500;">👈 Check the <strong>SecureFlow</strong> panel in the Activity Bar (left sidebar) to view your security profiles!</p>
+              <p style="margin-top: 12px; font-weight: 500;">👈 Check the <strong>Code Pathfinder</strong> panel in the Activity Bar (left sidebar) to view your security profiles!</p>
             {:else}
               <p>Configuration saved. Analyzing your workspace...</p>
             {/if}
@@ -261,7 +261,7 @@
 
     <div class="footer">
       <p class="disclaimer">
-        SecureFlow is powered by AI. While our analysis strives to be thorough,
+        Code Pathfinder is powered by AI. While our analysis strives to be thorough,
         please review all suggestions carefully before implementation.
       </p>
     </div>

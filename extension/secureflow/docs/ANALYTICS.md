@@ -1,7 +1,7 @@
-# SecureFlow Analytics Privacy Policy
+# Code Pathfinder Analytics Privacy Policy
 
 ## Overview
-SecureFlow collects anonymous usage analytics to help improve the product. These analytics are completely optional and can be disabled at any time through VSCode settings.
+Code Pathfinder collects anonymous usage analytics to help improve the product. These analytics are completely optional and can be disabled at any time through VSCode settings.
 
 ## What We Collect
 When analytics are enabled, we collect only the following anonymous metrics:
@@ -20,8 +20,8 @@ We never collect:
 
 ## How to Disable Analytics
 1. Open VSCode Settings (Cmd+, on Mac)
-2. Search for "SecureFlow Analytics"
-3. Toggle "SecureFlow Analytics: Enabled" to OFF
+2. Search for "Code Pathfinder Analytics"
+3. Toggle "Code Pathfinder Analytics: Enabled" to OFF
 4. Restart Editor to apply this change
 
 ## Contact

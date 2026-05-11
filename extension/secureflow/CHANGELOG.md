@@ -1,4 +1,4 @@
-# SecureFlow Changelog
+# Code Pathfinder Changelog
 
 ## Version 0.0.19 - March 7, 2026
 
@@ -99,7 +99,7 @@
 
 ### 🚀 What's New?
 
-- **Secureflow CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
+- **Code Pathfinder CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
 - **Grok AI Model Support**: Added Grok 4 Fast Reasoning AI model support for enhanced security analysis
 - **Say bye to claude-sonnet-3-5 model**: Removed deprecated claude-sonnet-3-5 model
 
@@ -111,7 +111,7 @@
 
 ### 🚀 What's New?
 
-- **SecureFlow CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
+- **Code Pathfinder CLI Package**: Introduced standalone CLI tool for security analysis outside VS Code
 - **AI-Powered Security Scanner**: New iterative file analysis system with intelligent file request handling
 - **Full Workspace Scanning**: Comprehensive security scanning with up to 10 iterations for thorough analysis
 - **CLI Project Profiling**: AI-powered workspace analysis and profiling capabilities via command line
@@ -202,15 +202,15 @@
 ## Version 0.0.3 - July 27, 2025
 
 ### 🎯 What's New?
-- **Gemini Client**: SecureFlow now supports Gemini 2.5 Pro and Gemini 2.5 Flash models.
-- **Analytics**: SecureFlow now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
+- **Gemini Client**: Code Pathfinder now supports Gemini 2.5 Pro and Gemini 2.5 Flash models.
+- **Analytics**: Code Pathfinder now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
   - **AI Model** - AI model used for security analysis
   
 
 ## Version 0.0.2 - July 26, 2025
 
 ### 🎯 What's New?
-- **Analytics**: SecureFlow now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
+- **Analytics**: Code Pathfinder now collects anonymous usage data to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change.
 
 ## Version 0.0.1 - July 25, 2025
 
@@ -243,9 +243,9 @@
 - Simple setup with minimal configuration
 
 ### 🔧 Getting Started
-1. Install SecureFlow from VS Code Marketplace
+1. Install Code Pathfinder from VS Code Marketplace
 2. Add your preferred AI model's API key
-3. Start coding - SecureFlow works automatically in the background
+3. Start coding - Code Pathfinder works automatically in the background
 
 ### 📝 Note
 This is our first release! We're actively working on improvements and would love your feedback.

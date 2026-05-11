@@ -19,9 +19,65 @@ import { SentryService } from './services/sentry-service';
  * its own entry point and must NOT import this module.
  */
 
+const SETTINGS_MIGRATION_KEY = 'codePathfinder.settingsMigratedFromSecureflow';
+const MIGRATED_SETTING_KEYS = [
+  'Provider',
+  'AIModel',
+  'APIKey',
+  'analytics.enabled',
+  'errorReporting.enabled'
+];
+
+async function migrateLegacySettings(
+  context: vscode.ExtensionContext
+): Promise<void> {
+  if (context.globalState.get<boolean>(SETTINGS_MIGRATION_KEY)) {
+    return;
+  }
+  const oldConfig = vscode.workspace.getConfiguration('secureflow');
+  const newConfig = vscode.workspace.getConfiguration('codePathfinder');
+  for (const key of MIGRATED_SETTING_KEYS) {
+    const inspected = oldConfig.inspect(key);
+    if (!inspected) {
+      continue;
+    }
+    if (inspected.globalValue !== undefined) {
+      await newConfig.update(
+        key,
+        inspected.globalValue,
+        vscode.ConfigurationTarget.Global
+      );
+      await oldConfig.update(
+        key,
+        undefined,
+        vscode.ConfigurationTarget.Global
+      );
+    }
+    if (inspected.workspaceValue !== undefined) {
+      await newConfig.update(
+        key,
+        inspected.workspaceValue,
+        vscode.ConfigurationTarget.Workspace
+      );
+      await oldConfig.update(
+        key,
+        undefined,
+        vscode.ConfigurationTarget.Workspace
+      );
+    }
+  }
+  await context.globalState.update(SETTINGS_MIGRATION_KEY, true);
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
+  try {
+    await migrateLegacySettings(context);
+  } catch (error) {
+    console.error('Failed to migrate legacy secureflow settings:', error);
+  }
+
   try {
     // Initialize Sentry error reporting first
     const sentry = SentryService.getInstance();
@@ -31,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize analytics if enabled
     const analytics = AnalyticsService.getInstance();
     const analyticsEnabled = vscode.workspace
-      .getConfiguration('secureflow')
+      .getConfiguration('codePathfinder')
       .get('analytics.enabled', true);
 
     if (analyticsEnabled) {
@@ -63,7 +119,7 @@ export async function activate(context: vscode.ExtensionContext) {
   SecureFlowExplorer.register(context);
 
   const outputChannel = vscode.window.createOutputChannel(
-    'SecureFlow Security Diagnostics'
+    'Code Pathfinder Security Diagnostics'
   );
 
   try {
@@ -98,7 +154,7 @@ export async function activate(context: vscode.ExtensionContext) {
       console.error('Failed to capture activation error:', sentryError);
     }
 
-    vscode.window.showErrorMessage(`SecureFlow activation failed: ${error}`);
+    vscode.window.showErrorMessage(`Code Pathfinder activation failed: ${error}`);
   }
 }
 

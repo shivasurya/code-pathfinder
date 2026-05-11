@@ -45,7 +45,7 @@ export class WorkspaceProfilerCommand {
 
     // Create output channel if it doesn't exist
     const outputChannel = vscode.window.createOutputChannel(
-      'SecureFlow Workspace Profiler'
+      'Code Pathfinder Workspace Profiler'
     );
     outputChannel.clear();
     outputChannel.show(true);

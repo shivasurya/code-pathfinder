@@ -7,9 +7,9 @@
 
 </div>
 
-# SecureFlow AI
+# Code Pathfinder AI
 
-[SecureFlow AI](https://codepathfinder.dev/secureflow-ai) is a VS Code extension that runs AI-powered security analysis on your code. It finds potential vulnerabilities without leaving your editor.
+[Code Pathfinder AI](https://codepathfinder.dev/secureflow-ai) is a VS Code extension that runs AI-powered security analysis on your code. It finds potential vulnerabilities without leaving your editor.
 
 ## Features
 
@@ -25,7 +25,7 @@
 
 ### 1. Installation
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) or search for "SecureFlow" in VS Code Extensions.
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codepathfinder.secureflow) or search for "Code Pathfinder" in VS Code Extensions.
 
 ### 2. Configuration
 
@@ -52,13 +52,13 @@ Configure your AI provider in VS Code settings:
 ### 3. Usage
 
 **Profile Your Workspace:**
-1. Open the SecureFlow view in the Activity Bar
-2. Click "Profile Workspace" or run command: `SecureFlow: Profile Workspace for Security Analysis`
+1. Open the Code Pathfinder view in the Activity Bar
+2. Click "Profile Workspace" or run command: `Code Pathfinder: Profile Workspace for Security Analysis`
 3. Review detected application profiles and select one to scan
 
 **Run Security Analysis:**
 - **Full Profile Scan**: Click "Scan" button on any detected profile
-- **Git Changes**: Run `SecureFlow: Review Git Changes for Security Issues`
+- **Git Changes**: Run `Code Pathfinder: Review Git Changes for Security Issues`
 - **Quick Scan**: Use the "Scan Profile" action from the profiles list
 
 **View Results:**

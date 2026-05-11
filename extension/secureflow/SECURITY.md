@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within SecureFlow, please follow these steps:
+If you discover a security vulnerability within Code Pathfinder, please follow these steps:
 
 1. **DO NOT** disclose the vulnerability publicly
 2. Send a detailed report to security@codepathfinder.dev
@@ -15,7 +15,7 @@ If you discover a security vulnerability within SecureFlow, please follow these 
 ## Scope
 
 This security policy covers:
-- SecureFlow VS Code Extension
+- Code Pathfinder VS Code Extension
 
 ## Contact
 

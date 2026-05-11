@@ -33,7 +33,7 @@ export class SettingsManager {
    * Get the selected AI Provider from user preferences
    */
   public getSelectedProvider(): AIProvider {
-    const config = vscode.workspace.getConfiguration('secureflow');
+    const config = vscode.workspace.getConfiguration('codePathfinder');
     return config.get<AIProvider>('Provider') || 'auto';
   }
 
@@ -42,7 +42,7 @@ export class SettingsManager {
    * Note: For OpenRouter, this can be any model ID (e.g., "anthropic/claude-3-5-sonnet")
    */
   public getSelectedAIModel(): string {
-    const config = vscode.workspace.getConfiguration('secureflow');
+    const config = vscode.workspace.getConfiguration('codePathfinder');
     return config.get<string>('AIModel') || 'claude-sonnet-4-6';
   }
 
@@ -52,7 +52,7 @@ export class SettingsManager {
    */
   public async getApiKey(): Promise<string | undefined> {
     // just get from workspace settings
-    const config = vscode.workspace.getConfiguration('secureflow');
+    const config = vscode.workspace.getConfiguration('codePathfinder');
     return config.get<string>('APIKey');
   }
 }

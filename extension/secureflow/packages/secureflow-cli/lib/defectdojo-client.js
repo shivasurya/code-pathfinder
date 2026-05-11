@@ -15,7 +15,7 @@ class DefectDojoClient {
     this.token = options.token;
     this.productId = options.productId;
     this.engagementId = options.engagementId; // Can be null, will be created if needed
-    this.testTitle = options.testTitle || 'SecureFlow Scan';
+    this.testTitle = options.testTitle || 'Code Pathfinder Scan';
     
     if (!this.baseUrl) {
       throw new Error('DefectDojo URL is required');
@@ -69,7 +69,7 @@ class DefectDojoClient {
       target_end: new Date().toISOString().split('T')[0],
       environment: 1, // Default environment
       scan_type: 'Static',
-      description: `Automated security scan performed by SecureFlow CLI at ${new Date().toISOString()}`
+      description: `Automated security scan performed by Code Pathfinder CLI at ${new Date().toISOString()}`
     };
 
     const response = await this._makeRequest('POST', '/api/v2/tests/', testData);
@@ -415,8 +415,8 @@ class DefectDojoClient {
    */
   async _createEngagement(product) {
     const engagementData = {
-      name: `SecureFlow Engagement - ${new Date().toISOString().split('T')[0]}`,
-      description: `Automated engagement created by SecureFlow CLI for security scanning`,
+      name: `Code Pathfinder Engagement - ${new Date().toISOString().split('T')[0]}`,
+      description: `Automated engagement created by Code Pathfinder CLI for security scanning`,
       product: parseInt(this.productId),
       target_start: new Date().toISOString().split('T')[0],
       target_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now

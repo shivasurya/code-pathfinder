@@ -63,7 +63,7 @@ async function main() {
     .option('--defectdojo-token <token>', 'DefectDojo API token for authentication')
     .option('--defectdojo-product-id <id>', 'DefectDojo product ID to submit findings to')
     .option('--defectdojo-engagement-id <id>', 'DefectDojo engagement ID (optional - will create if not provided)')
-    .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "SecureFlow Scan")')
+    .option('--defectdojo-test-title <title>', 'Title for the DefectDojo test (defaults to "Code Pathfinder Scan")')
     .action(async (projectPath, options) => {
     try {
       // Load config to get actual model being used
@@ -93,7 +93,7 @@ async function main() {
           token: options.defectdojoToken,
           productId: options.defectdojoProductId,
           engagementId: options.defectdojoEngagementId,
-          testTitle: options.defectdojoTestTitle || 'SecureFlow Scan'
+          testTitle: options.defectdojoTestTitle || 'Code Pathfinder Scan'
         }
       });
       await scanCommand.execute(projectPath, options);
@@ -155,7 +155,7 @@ async function main() {
     }
 
     const cfg = opts.raw ? loadConfig() : getMaskedConfig();
-    console.log(cyan('SecureFlow CLI configuration'));
+    console.log(cyan('Code Pathfinder CLI configuration'));
     console.log(JSON.stringify(cfg, null, 2));
     process.exitCode = 0;
   });
@@ -169,7 +169,7 @@ async function main() {
       
       if (action === 'status') {
         console.log(cyan('Analytics Status:'), currentStatus);
-        console.log('\nAnalytics help improve SecureFlow by collecting anonymous usage metrics.');
+        console.log('\nAnalytics help improve Code Pathfinder by collecting anonymous usage metrics.');
         console.log('No personal information, code, or file paths are collected.');
         console.log('\nCommands:');
         console.log('  secureflow analytics enable   - Enable analytics permanently');
@@ -178,7 +178,7 @@ async function main() {
       } else if (action === 'enable') {
         if (setAnalyticsEnabled(true)) {
           console.log(cyan('✓ Analytics enabled'));
-          console.log('Thank you for helping improve SecureFlow!');
+          console.log('Thank you for helping improve Code Pathfinder!');
         } else {
           console.error(red('✗ Failed to update analytics preference'));
         }

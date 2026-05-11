@@ -36,7 +36,7 @@ class CLIProfileCommand {
         process.exit(1);
       }
 
-      console.log(cyan('🔍 SecureFlow Workspace Profiler'));
+      console.log(cyan('🔍 Code Pathfinder Workspace Profiler'));
       console.log(`📂 Analyzing project at: ${resolvedPath}`);
       console.log('');
 

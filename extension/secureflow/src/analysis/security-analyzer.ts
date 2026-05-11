@@ -166,7 +166,7 @@ function generateSelectionAnalysisHtml(
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SecureFlow Selection Analysis</title>
+            <title>Code Pathfinder Selection Analysis</title>
             <style>
                 body { 
                     font-family: var(--vscode-font-family); 
@@ -310,7 +310,7 @@ function generateSelectionAnalysisHtml(
         </head>
         <body>
             <div class="header">
-                <h1>SecureFlow Selection Analysis</h1>
+                <h1>Code Pathfinder Selection Analysis</h1>
                 <div class="scan-info">
                     <div class="info-item">
                         <span class="info-label">Scan #</span>
@@ -424,7 +424,7 @@ export function registerAnalyzeSelectionCommand(
       if (!resultsPanel) {
         resultsPanel = vscode.window.createWebviewPanel(
           'secureflowSelectionResults',
-          'SecureFlow Selection Analysis',
+          'Code Pathfinder Selection Analysis',
           vscode.ViewColumn.Two,
           {
             enableScripts: true,
@@ -441,7 +441,7 @@ export function registerAnalyzeSelectionCommand(
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'SecureFlow: Analyzing selected code...',
+          title: 'Code Pathfinder: Analyzing selected code...',
           cancellable: true
         },
         async (progress, token) => {
@@ -503,7 +503,7 @@ export function registerAnalyzeSelectionCommand(
           if (securityIssues.length === 0) {
             vscode.window
               .showInformationMessage(
-                `SecureFlow Analysis #${scanNumber}: No security issues found in the selected code.`,
+                `Code Pathfinder Analysis #${scanNumber}: No security issues found in the selected code.`,
                 'View Results'
               )
               .then((selection) => {
@@ -514,7 +514,7 @@ export function registerAnalyzeSelectionCommand(
           } else {
             vscode.window
               .showWarningMessage(
-                `SecureFlow Analysis #${scanNumber}: Found ${securityIssues.length} potential security issues.`,
+                `Code Pathfinder Analysis #${scanNumber}: Found ${securityIssues.length} potential security issues.`,
                 'View Results'
               )
               .then((selection) => {

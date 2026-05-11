@@ -6,11 +6,11 @@
 
 </div>
 
-# SecureFlow CLI
+# Code Pathfinder CLI
 
 AI-powered security analysis for your codebase from the command line.
 
-SecureFlow CLI runs security analysis on your projects using AI models. It analyzes code structure, identifies vulnerabilities, and provides actionable security insights with a TUI interface.
+Code Pathfinder CLI runs security analysis on your projects using AI models. It analyzes code structure, identifies vulnerabilities, and provides actionable security insights with a TUI interface.
 
 ## Features
 
@@ -37,7 +37,7 @@ npm install -g @codepathfinder/secureflow-cli
 
 ### 2. Configure Your AI Model
 
-SecureFlow CLI requires an AI model to perform analysis. Set up your API key:
+Code Pathfinder CLI requires an AI model to perform analysis. Set up your API key:
 
 ```bash
 # Check current configuration
@@ -99,7 +99,7 @@ secureflow scan \
 - `--defectdojo-token <token>` - API token for authentication
 - `--defectdojo-product-id <id>` - Product ID to submit findings
 - `--defectdojo-engagement-id <id>` - Engagement ID (optional, will create if not provided)
-- `--defectdojo-test-title <title>` - Test title (default: "SecureFlow Scan")
+- `--defectdojo-test-title <title>` - Test title (default: "Code Pathfinder Scan")
 
 ### `profile` - Project Analysis
 
@@ -125,7 +125,7 @@ secureflow config --show --raw    # Show raw configuration (use with caution)
 
 ## Configuration
 
-SecureFlow CLI stores configuration in a local config file. The location is shown when running `secureflow config --show`.
+Code Pathfinder CLI stores configuration in a local config file. The location is shown when running `secureflow config --show`.
 
 **Example Configuration:**
 ```json
@@ -191,7 +191,7 @@ secureflow scan \
 
 ## How It Works
 
-SecureFlow CLI uses an LLM file request system that works like tool calling:
+Code Pathfinder CLI uses an LLM file request system that works like tool calling:
 
 1. **Project Discovery** - Analyzes project structure and identifies key files
 2. **Iterative Analysis** - AI makes targeted file requests using XML-like syntax:

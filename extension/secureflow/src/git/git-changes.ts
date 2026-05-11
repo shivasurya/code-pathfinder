@@ -70,7 +70,7 @@ export function registerSecureFlowReviewCommand(
     vscode.StatusBarAlignment.Right,
     100
   );
-  statusBarItem.text = '$(shield) SecureFlow';
+  statusBarItem.text = '$(shield) Code Pathfinder';
   statusBarItem.tooltip = 'Scan git changes for security issues';
   statusBarItem.command = 'secureflow.reviewChanges';
   statusBarItem.show();
@@ -95,7 +95,7 @@ export function registerSecureFlowReviewCommand(
           if (!resultsPanel) {
             resultsPanel = vscode.window.createWebviewPanel(
               'secureflowResults',
-              'SecureFlow Results',
+              'Code Pathfinder Results',
               vscode.ViewColumn.Two,
               {
                 enableScripts: true,
@@ -112,7 +112,7 @@ export function registerSecureFlowReviewCommand(
           await vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
-              title: 'SecureFlow: Scanning git changes...',
+              title: 'Code Pathfinder: Scanning git changes...',
               cancellable: true
             },
             async (progress, token) => {
@@ -125,7 +125,7 @@ export function registerSecureFlowReviewCommand(
               if (changes.length === 0) {
                 updateWebview(resultsPanel!, 0, new Date(), []);
                 vscode.window.showInformationMessage(
-                  'SecureFlow: No git changes found to scan.'
+                  'Code Pathfinder: No git changes found to scan.'
                 );
                 return;
               }
@@ -343,7 +343,7 @@ export function registerSecureFlowReviewCommand(
               if (allIssues.length > 0) {
                 vscode.window
                   .showWarningMessage(
-                    `SecureFlow Scan #${savedScan.scanNumber}: Found ${allIssues.length} security issues in your git changes.`,
+                    `Code Pathfinder Scan #${savedScan.scanNumber}: Found ${allIssues.length} security issues in your git changes.`,
                     'View Results'
                   )
                   .then((selection) => {
@@ -353,7 +353,7 @@ export function registerSecureFlowReviewCommand(
                   });
               } else {
                 vscode.window.showInformationMessage(
-                  `SecureFlow Scan #${savedScan.scanNumber}: No security issues found in your git changes.`
+                  `Code Pathfinder Scan #${savedScan.scanNumber}: No security issues found in your git changes.`
                 );
               }
             }
@@ -361,7 +361,7 @@ export function registerSecureFlowReviewCommand(
         } catch (error) {
           console.error('Error during security review:', error);
           vscode.window.showErrorMessage(
-            `SecureFlow: Error during security review: ${error}`
+            `Code Pathfinder: Error during security review: ${error}`
           );
 
           // Capture the error with Sentry (additional error handling within the wrapped function)

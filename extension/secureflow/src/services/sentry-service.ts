@@ -28,7 +28,7 @@ export class SentryService {
     this.context = context;
 
     // Check if error reporting is enabled (respects user privacy)
-    const config = vscode.workspace.getConfiguration('secureflow');
+    const config = vscode.workspace.getConfiguration('codePathfinder');
     const errorReportingEnabled = config.get('errorReporting.enabled', true);
     const analyticsEnabled = config.get('analytics.enabled', true);
 
@@ -316,7 +316,7 @@ export class SentryService {
 
         // Show user-friendly error message
         vscode.window.showErrorMessage(
-          `SecureFlow: An error occurred while executing ${commandName}. Please check the output panel for details.`
+          `Code Pathfinder: An error occurred while executing ${commandName}. Please check the output panel for details.`
         );
       }
     };

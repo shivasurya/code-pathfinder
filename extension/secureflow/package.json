@@ -1,6 +1,6 @@
 {
   "name": "secureflow",
-  "displayName": "SecureFlow Code Reviewer",
+  "displayName": "Code Pathfinder",
   "description": "AI-powered security copilot that analyzes your code for vulnerabilities, performs threat modeling, and provides real-time security recommendations",
   "version": "0.0.20",
   "publisher": "codepathfinder",
@@ -9,7 +9,7 @@
     "email": "support@codepathfinder.dev"
   },
   "license": "Apache-2.0",
-  "homepage": "https://codepathfinder.dev/secureflow-ai",
+  "homepage": "https://codepathfinder.dev/",
   "bugs": {
     "url": "https://github.com/shivasurya/code-pathfinder/issues",
     "email": "support@codepathfinder.dev"
@@ -80,7 +80,7 @@
       "activitybar": [
         {
           "id": "secureflow-explorer",
-          "title": "SecureFlow",
+          "title": "Code Pathfinder",
           "icon": "$(shield)"
         }
       ]
@@ -90,14 +90,14 @@
         {
           "type": "webview",
           "id": "secureflow.mainView",
-          "name": "SecureFlow"
+          "name": "Code Pathfinder"
         }
       ]
     },
     "configuration": {
-      "title": "SecureFlow",
+      "title": "Code Pathfinder",
       "properties": {
-        "secureflow.Provider": {
+        "codePathfinder.Provider": {
           "type": "string",
           "default": "auto",
           "enum": [
@@ -120,7 +120,7 @@
           ],
           "markdownDescription": "Select the AI provider. Choose **OpenRouter** to access 300+ models with a single API key.\n\nWhen using OpenRouter, enter the full model ID in the Model field (e.g., `deepseek/deepseek-v3.2`, `qwen/qwen3-coder-next`). Browse models at [openrouter.ai/models](https://openrouter.ai/models)"
         },
-        "secureflow.AIModel": {
+        "codePathfinder.AIModel": {
           "type": "string",
           "default": "claude-sonnet-4-6",
           "markdownDescription": "AI Model to use for security analysis.\n\n**For standard providers:** Use model IDs like `claude-sonnet-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`.\n\n**For OpenRouter:** Enter the full model ID (e.g., `deepseek/deepseek-v3.2`, `qwen/qwen3-coder-next`, `moonshotai/kimi-k2.5`). Browse all 300+ available models at [openrouter.ai/models](https://openrouter.ai/models)",
@@ -173,18 +173,18 @@
             "OpenRouter DeepSeek V3.2 (2025) - High computational efficiency with strong reasoning and agentic tool-use performance"
           ]
         },
-        "secureflow.APIKey": {
+        "codePathfinder.APIKey": {
           "type": "string",
           "default": "",
           "description": "API Key for the selected AI provider",
           "markdownDescription": "API Key for the selected AI provider.\n\n**Get your API key from:**\n- OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)\n- Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)\n- Google: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)\n- OpenRouter: [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)\n\nAlternatively, use environment variables: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`"
         },
-        "secureflow.analytics.enabled": {
+        "codePathfinder.analytics.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable anonymous analytics to help improve the product. Only aggregated usage metrics are collected with no personal information. Restart Editor to apply this change."
         },
-        "secureflow.errorReporting.enabled": {
+        "codePathfinder.errorReporting.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable anonymous error reporting to help improve the product stability. Only error information is collected with no personal data. Restart Editor to apply this change."
@@ -194,11 +194,11 @@
     "commands": [
       {
         "command": "secureflow.analyzeSelection",
-        "title": "SecureFlow: Analyze Selected Code for Security Issues"
+        "title": "Code Pathfinder: Analyze Selected Code for Security Issues"
       },
       {
         "command": "secureflow.reviewChanges",
-        "title": "SecureFlow: Review Git Changes for Security Issues",
+        "title": "Code Pathfinder: Review Git Changes for Security Issues",
         "icon": {
           "light": "resources/light/shield.svg",
           "dark": "resources/dark/shield.svg"
@@ -206,7 +206,7 @@
       },
       {
         "command": "secureflow.profileWorkspace",
-        "title": "SecureFlow: Profile Workspace for Security Analysis"
+        "title": "Code Pathfinder: Profile Workspace for Security Analysis"
       }
     ],
     "keybindings": [

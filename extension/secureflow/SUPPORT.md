@@ -1,6 +1,6 @@
 # Support & Community
 
-Need help with SecureFlow? We're here to help!
+Need help with Code Pathfinder? We're here to help!
 
 ## 🌟 Official Channels
 
