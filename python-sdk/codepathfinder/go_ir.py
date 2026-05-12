@@ -3,7 +3,7 @@ JSON IR (Intermediate Representation) compiler for Go security rules.
 Mirrors python_ir.py.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from .go_decorators import get_go_rules
 

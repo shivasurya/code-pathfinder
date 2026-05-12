@@ -1,12 +1,13 @@
 """Tests for container rule decorators."""
 
 import pytest
+
 from rules.container_decorators import (
-    dockerfile_rule,
-    compose_rule,
-    get_dockerfile_rules,
-    get_compose_rules,
     clear_rules,
+    compose_rule,
+    dockerfile_rule,
+    get_compose_rules,
+    get_dockerfile_rules,
 )
 from rules.container_matchers import (
     instruction,

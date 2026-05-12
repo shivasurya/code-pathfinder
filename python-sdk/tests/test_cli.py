@@ -2,15 +2,15 @@
 
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 from codepathfinder.cli import (
+    _ENV_OVERRIDE,
     get_binary_name,
     get_binary_path,
     main,
-    _ENV_OVERRIDE,
 )
 
 # ---------------------------------------------------------------------------
@@ -19,7 +19,6 @@ from codepathfinder.cli import (
 
 
 class TestGetBinaryName:
-
     def test_unix(self):
         with patch.object(sys, "platform", "linux"):
             assert get_binary_name() == "pathfinder"
@@ -39,7 +38,6 @@ class TestGetBinaryName:
 
 
 class TestEnvOverride:
-
     def test_valid_env_binary(self, tmp_path):
         binary = tmp_path / "pathfinder"
         binary.write_bytes(b"\x7fELF fake binary")
@@ -100,7 +98,6 @@ class TestEnvOverride:
 
 
 class TestBundledBinary:
-
     def _setup_package(self, tmp_path, create_binary=True, executable=True):
         """Create a fake package layout and return the expected binary path."""
         pkg_dir = tmp_path / "codepathfinder"
@@ -153,7 +150,6 @@ class TestBundledBinary:
 
 
 class TestMain:
-
     def test_success(self, tmp_path):
         binary = tmp_path / "pathfinder"
         mock_result = MagicMock(returncode=0)

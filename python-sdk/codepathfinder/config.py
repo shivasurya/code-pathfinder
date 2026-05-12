@@ -5,6 +5,7 @@ Allows setting default propagation, scope, etc.
 """
 
 from typing import List, Optional
+
 from .propagation import PropagationPrimitive
 
 
@@ -26,7 +27,7 @@ class PathfinderConfig:
         return self._default_propagation
 
     @default_propagation.setter
-    def default_propagation(self, value: List[PropagationPrimitive]):
+    def default_propagation(self, value: List[PropagationPrimitive]) -> None:
         """Set default propagation primitives."""
         self._default_propagation = value
 
@@ -36,7 +37,7 @@ class PathfinderConfig:
         return self._default_scope
 
     @default_scope.setter
-    def default_scope(self, value: str):
+    def default_scope(self, value: str) -> None:
         """Set default scope."""
         if value not in ["local", "global"]:
             raise ValueError(f"scope must be 'local' or 'global', got '{value}'")

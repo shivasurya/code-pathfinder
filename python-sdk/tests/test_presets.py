@@ -1,7 +1,7 @@
 """Tests for PropagationPresets."""
 
 from codepathfinder.presets import PropagationPresets
-from codepathfinder.propagation import PropagationType, PropagationPrimitive
+from codepathfinder.propagation import PropagationPrimitive, PropagationType
 
 
 class TestPropagationPresets:
@@ -95,7 +95,7 @@ class TestPresetUsage:
 
     def test_preset_can_be_used_with_flows(self):
         """Test presets can be passed to flows() propagates_through parameter."""
-        from codepathfinder import flows, calls
+        from codepathfinder import calls, flows
 
         matcher = flows(
             from_sources=calls("request.GET"),
@@ -106,7 +106,7 @@ class TestPresetUsage:
 
     def test_preset_standard_with_flows(self):
         """Test standard preset with flows()."""
-        from codepathfinder import flows, calls
+        from codepathfinder import calls, flows
 
         matcher = flows(
             from_sources=calls("request.GET"),

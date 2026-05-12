@@ -1,9 +1,10 @@
 """Tests for logic operators."""
 
 import pytest
-from codepathfinder import calls, variable, flows, And, Or, Not, propagates
-from codepathfinder.logic import AndOperator, OrOperator, NotOperator
+
+from codepathfinder import And, Not, Or, calls, flows, propagates, variable
 from codepathfinder.ir import IRType
+from codepathfinder.logic import AndOperator, NotOperator, OrOperator
 
 
 class TestAndOperator:

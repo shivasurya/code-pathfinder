@@ -3,10 +3,11 @@ Tests for dataflow matcher and flows() function.
 """
 
 import pytest
+
 from codepathfinder.dataflow import DataflowMatcher, flows
+from codepathfinder.ir import IRType
 from codepathfinder.matchers import calls, variable
 from codepathfinder.propagation import propagates
-from codepathfinder.ir import IRType
 
 
 class TestDataflowMatcherInit:

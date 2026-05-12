@@ -2,8 +2,8 @@
 Matcher functions for Dockerfile and docker-compose rules.
 """
 
-from typing import Optional, Any, List, Dict
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass
@@ -62,7 +62,7 @@ def instruction(
     regex: Optional[str] = None,
     not_regex: Optional[str] = None,
     # Custom validation
-    validate: Optional[callable] = None,
+    validate: Optional[Callable[..., Any]] = None,
 ) -> Matcher:
     """
     Match a Dockerfile instruction by type and properties.
@@ -72,7 +72,7 @@ def instruction(
         instruction(type="USER", user_name="root")
         instruction(type="ARG", arg_name_regex=r"(?i).*password.*")
     """
-    params = {"instruction": type}
+    params: Dict[str, Any] = {"instruction": type}
 
     # Add non-None parameters
     if base_image is not None:
@@ -148,7 +148,7 @@ def missing(
         missing(instruction="HEALTHCHECK")
         missing(instruction="LABEL", label_key="maintainer")
     """
-    params = {"instruction": instruction}
+    params: Dict[str, Any] = {"instruction": instruction}
     if label_key is not None:
         params["label_key"] = label_key
 
@@ -181,7 +181,7 @@ def service_has(
         service_has(key="volumes", contains="/var/run/docker.sock")
         service_has(key="network_mode", equals="host")
     """
-    params = {"key": key}
+    params: Dict[str, Any] = {"key": key}
 
     if equals is not None:
         params["equals"] = equals

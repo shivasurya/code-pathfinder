@@ -3,25 +3,26 @@
 import json
 
 import pytest
+
 from codepathfinder import calls, flows
 from codepathfinder.go_rule import (
-    GoHTTPRequest,
-    GoSQLDB,
-    GoOS,
-    GoOSExec,
-    GoFmt,
-    GoIO,
-    GoFilepath,
-    GoStrconv,
-    GoJSON,
-    GoTemplate,
     GoContext,
     GoCrypto,
+    GoFilepath,
+    GoFmt,
     GoHTTPClient,
+    GoHTTPRequest,
     GoHTTPResponseWriter,
+    GoIO,
+    GoJSON,
+    GoOS,
+    GoOSExec,
+    GoSQLDB,
+    GoStrconv,
+    GoTemplate,
 )
 from codepathfinder.presets import PropagationPresets
-from rules.go_decorators import go_rule, get_go_rules, clear_go_rules
+from rules.go_decorators import clear_go_rules, get_go_rules, go_rule
 from rules.go_ir import compile_go_rules
 
 
@@ -95,9 +96,9 @@ class TestGoQueryTypes:
         ]
         for qt in types:
             assert len(qt.fqns) > 0, f"{qt.__name__} must have non-empty fqns"
-            assert all(
-                isinstance(f, str) for f in qt.fqns
-            ), f"{qt.__name__} fqns must be strings"
+            assert all(isinstance(f, str) for f in qt.fqns), (
+                f"{qt.__name__} fqns must be strings"
+            )
 
 
 # ========== @go_rule Decorator Tests ==========

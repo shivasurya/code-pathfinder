@@ -1,15 +1,15 @@
 """Tests for logic combinators."""
 
-from rules.container_matchers import instruction, missing
 from rules.container_combinators import (
     all_of,
     any_of,
-    none_of,
+    final_stage_has,
     instruction_after,
     instruction_before,
+    none_of,
     stage,
-    final_stage_has,
 )
+from rules.container_matchers import instruction, missing
 
 
 class TestAllOf:

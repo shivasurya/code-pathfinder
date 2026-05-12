@@ -7,22 +7,23 @@ name = "codepathfinder"
 version = "2.1.1"
 description = "Python SDK for code-pathfinder static analysis for modern security teams"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 authors = [{name = "code-pathfinder contributors"}]
 keywords = ["sast", "security", "static-analysis", "codeql-alternative"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security",
     "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
 ]
 
 [project.scripts]
@@ -37,7 +38,6 @@ Documentation = "https://codepathfinder.dev"
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
 ]
@@ -61,22 +61,59 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
-[tool.black]
-line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
-
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "RUF", # ruff-specific rules
+    # "UP" (pyupgrade) is deliberately omitted for now: enabling it would
+    # rewrite ~120 type annotations (typing.List -> list, etc.) across the
+    # package in one go. Track that as a dedicated modernization pass.
+]
+# B008:   function calls in argument defaults — used for `field(default_factory=...)`
+# E501:   line length is enforced by the formatter, not the linter
+# RUF012: mutable class defaults — the QueryType DSL exposes `fqns = [...]` /
+#         `patterns = [...]` as the public API surface; ClassVar would obscure it
+ignore = ["B008", "E501", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+# Handcrafted metadata dicts — very long strings/lines, no security cost.
+"codepathfinder/python_rule_meta.py" = ["E501", "RUF"]
+"codepathfinder/go_rule_meta.py" = ["E501", "RUF"]
+# Tests may use builtin shadowing in fixtures, etc.
+"tests/*" = ["B011"]
 
 [tool.mypy]
-python_version = "3.9"
+# CI runs mypy on each Python in the matrix; let mypy infer python_version
+# from the running interpreter instead of pinning here (mypy dropped 3.9 as
+# a valid `python_version` setting in recent releases).
 warn_return_any = true
 warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+
+# Handcrafted metadata dicts (`SDK_META`) are intentionally `Dict[str, Any]`
+# with nested arbitrary shapes. Strict checking would add noise without value.
+[[tool.mypy.overrides]]
+module = [
+    "codepathfinder.python_rule_meta",
+    "codepathfinder.go_rule_meta",
+]
+ignore_errors = true
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["codepathfinder*", "rules*"]
 
 [tool.setuptools.package-data]
-codepathfinder = ["bin/*"]
+codepathfinder = ["bin/*", "py.typed"]

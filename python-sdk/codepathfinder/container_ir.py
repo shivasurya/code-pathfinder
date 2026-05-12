@@ -3,11 +3,11 @@ JSON IR (Intermediate Representation) compiler for container rules.
 """
 
 import json
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from .container_decorators import (
-    get_dockerfile_rules,
     get_compose_rules,
+    get_dockerfile_rules,
 )
 
 
@@ -91,7 +91,7 @@ def compile_to_json(pretty: bool = True) -> str:
     return json.dumps(compiled)
 
 
-def write_ir_file(filepath: str, pretty: bool = True):
+def write_ir_file(filepath: str, pretty: bool = True) -> None:
     """
     Write compiled rules to JSON file.
 

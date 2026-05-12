@@ -1,8 +1,9 @@
 """Tests for pathfinder.ir module."""
 
 import pytest
+
+from codepathfinder import calls, flows, propagates, variable
 from codepathfinder.ir import IRType, serialize_ir, validate_ir
-from codepathfinder import calls, variable, flows, propagates
 
 
 class TestIRType:

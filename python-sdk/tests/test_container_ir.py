@@ -3,19 +3,20 @@
 import json
 import os
 import tempfile
+
 from rules.container_decorators import (
-    dockerfile_rule,
-    compose_rule,
     clear_rules,
+    compose_rule,
+    dockerfile_rule,
 )
-from rules.container_matchers import instruction, missing, service_has
 from rules.container_ir import (
-    compile_dockerfile_rules,
-    compile_compose_rules,
     compile_all_rules,
+    compile_compose_rules,
+    compile_dockerfile_rules,
     compile_to_json,
     write_ir_file,
 )
+from rules.container_matchers import instruction, missing, service_has
 
 
 class TestIRCompilation:
@@ -90,7 +91,7 @@ class TestIRCompilation:
         try:
             write_ir_file(filepath, pretty=True)
 
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 content = f.read()
                 parsed = json.loads(content)
                 assert "dockerfile" in parsed

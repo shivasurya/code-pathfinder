@@ -5,7 +5,8 @@ Presets bundle propagation primitives for convenience.
 """
 
 from typing import List
-from .propagation import propagates, PropagationPrimitive
+
+from .propagation import PropagationPrimitive, propagates
 
 
 class PropagationPresets:

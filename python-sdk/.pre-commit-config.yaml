@@ -1,0 +1,38 @@
+# Pre-commit hooks for the python-sdk package.
+#
+# Setup (once per clone):
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+#
+# Note: mypy is intentionally NOT a pre-commit hook — it's slow and the
+# package-wide check needs cross-file context. CI gates mypy on every PR.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        files: ^python-sdk/
+      - id: end-of-file-fixer
+        files: ^python-sdk/
+      - id: check-yaml
+        files: ^python-sdk/
+      - id: check-toml
+        files: ^python-sdk/
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+        files: ^python-sdk/
+      - id: check-merge-conflict
+        files: ^python-sdk/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^python-sdk/.*\.py$
+      - id: ruff-format
+        files: ^python-sdk/.*\.py$

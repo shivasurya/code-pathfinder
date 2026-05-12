@@ -2,7 +2,8 @@
 
 import json
 from unittest.mock import patch
-from codepathfinder import rule, calls, variable
+
+from codepathfinder import calls, rule, variable
 from codepathfinder.decorators import (
     Rule,
     _enable_auto_execute,

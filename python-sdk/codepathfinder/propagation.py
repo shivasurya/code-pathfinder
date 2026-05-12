@@ -5,8 +5,8 @@ These primitives define HOW taint propagates through code constructs.
 Developers specify which primitives to enable via propagates_through parameter.
 """
 
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class PropagationType(Enum):

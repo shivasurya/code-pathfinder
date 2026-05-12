@@ -6,8 +6,8 @@ Mirrors python_decorators.py for Go-specific rules.
 import atexit
 import json
 import sys
-from typing import Callable, List
 from dataclasses import dataclass
+from typing import Callable, List
 
 
 @dataclass

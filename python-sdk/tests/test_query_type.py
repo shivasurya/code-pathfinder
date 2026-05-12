@@ -1,8 +1,9 @@
 """Tests for QueryType, MethodMatcher, and qualifiers."""
 
 import pytest
-from codepathfinder import QueryType, Or, And, flows, calls
-from codepathfinder.qualifiers import lt, gt, lte, gte, regex, missing
+
+from codepathfinder import And, Or, QueryType, calls, flows
+from codepathfinder.qualifiers import gt, gte, lt, lte, missing, regex
 from codepathfinder.query_type import MethodMatcher
 
 # --- Test QueryType subclasses ---

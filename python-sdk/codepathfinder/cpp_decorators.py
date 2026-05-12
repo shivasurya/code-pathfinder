@@ -12,8 +12,8 @@ matching the @go_rule contract — see PR-11 spec, Gap 1 / Gap 4.
 import atexit
 import json
 import sys
-from typing import Callable, List
 from dataclasses import dataclass
+from typing import Callable, List
 
 
 @dataclass

@@ -6,10 +6,10 @@ would consume. Validates the full path: Python SDK → IR → JSON.
 
 import json
 
-from codepathfinder import QueryType, gt, regex, missing
+from codepathfinder import QueryType, gt, missing, regex
 from codepathfinder.dataflow import flows
-from codepathfinder.logic import Or, And
 from codepathfinder.ir import IRType
+from codepathfinder.logic import And, Or
 
 # --- QueryType definitions (as a user would write them) ---
 

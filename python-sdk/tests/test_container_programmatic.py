@@ -1,10 +1,10 @@
 """Tests for programmatic access."""
 
 from rules.container_programmatic import (
-    custom_check,
-    ProgrammaticMatcher,
-    DockerfileAccess,
     ComposeAccess,
+    DockerfileAccess,
+    ProgrammaticMatcher,
+    custom_check,
 )
 
 

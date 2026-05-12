@@ -6,7 +6,7 @@ display/filtering. The same field is also present inside the matcher dict
 (injected by ``@c_rule``) for runtime DataflowExecutor scoping.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from .c_decorators import get_c_rules
 

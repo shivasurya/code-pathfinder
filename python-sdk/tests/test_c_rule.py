@@ -5,9 +5,9 @@ import json
 import pytest
 
 from codepathfinder import calls, flows
+from codepathfinder.c_decorators import c_rule, clear_c_rules, get_c_rules
+from codepathfinder.c_ir import compile_all_rules, compile_c_rules
 from codepathfinder.presets import PropagationPresets
-from codepathfinder.c_decorators import c_rule, get_c_rules, clear_c_rules
-from codepathfinder.c_ir import compile_c_rules, compile_all_rules
 
 
 @pytest.fixture(autouse=True)

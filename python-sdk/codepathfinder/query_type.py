@@ -10,8 +10,8 @@ Example:
     DBCursor.method("execute").arg("timeout", missing())
 """
 
-from .qualifiers import Qualifier
 from .ir import IRType
+from .qualifiers import Qualifier
 
 
 class MethodMatcher:
@@ -28,7 +28,9 @@ class MethodMatcher:
         self.keyword_args = {}
         self._tracked_params = []
 
-    def where(self, position_or_name, constraint=None) -> "MethodMatcher":
+    def where(
+        self, position_or_name: object, constraint: object = None
+    ) -> "MethodMatcher":
         """Filter call sites by argument value. Chainable.
 
         Args:
@@ -42,11 +44,13 @@ class MethodMatcher:
             self.keyword_args[position_or_name] = ac
         return self
 
-    def arg(self, position_or_name, constraint=None) -> "MethodMatcher":
+    def arg(
+        self, position_or_name: object, constraint: object = None
+    ) -> "MethodMatcher":
         """Alias for .where() — backward compatibility."""
         return self.where(position_or_name, constraint)
 
-    def tracks(self, *positions_or_names) -> "MethodMatcher":
+    def tracks(self, *positions_or_names: object) -> "MethodMatcher":
         """Specify which parameters are taint-sensitive in dataflow analysis.
 
         When used on a sink in flows(), only detections where tainted data

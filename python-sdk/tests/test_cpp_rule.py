@@ -5,9 +5,9 @@ import json
 import pytest
 
 from codepathfinder import calls, flows
+from codepathfinder.cpp_decorators import clear_cpp_rules, cpp_rule, get_cpp_rules
+from codepathfinder.cpp_ir import compile_all_rules, compile_cpp_rules
 from codepathfinder.presets import PropagationPresets
-from codepathfinder.cpp_decorators import cpp_rule, get_cpp_rules, clear_cpp_rules
-from codepathfinder.cpp_ir import compile_cpp_rules, compile_all_rules
 
 
 @pytest.fixture(autouse=True)
@@ -207,8 +207,8 @@ class TestRegistryIsolation:
     def test_c_and_cpp_registries_are_independent(self):
         from codepathfinder.c_decorators import (
             c_rule,
-            get_c_rules,
             clear_c_rules,
+            get_c_rules,
         )
 
         clear_c_rules()

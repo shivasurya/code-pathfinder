@@ -6,8 +6,8 @@ bundled native binary and delegates all arguments to it.
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 _ENV_OVERRIDE = "PATHFINDER_BINARY"
@@ -110,7 +110,7 @@ def main() -> None:
         sys.exit(2)
 
     try:
-        result = subprocess.run([str(binary)] + sys.argv[1:])
+        result = subprocess.run([str(binary), *sys.argv[1:]])
         sys.exit(result.returncode)
     except KeyboardInterrupt:
         sys.exit(130)

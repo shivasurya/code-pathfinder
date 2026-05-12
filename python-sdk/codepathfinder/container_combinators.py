@@ -2,8 +2,9 @@
 Logic combinators for container rules.
 """
 
-from typing import List, Dict, Any, Union, Callable
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Union
+
 from .container_matchers import Matcher
 
 
@@ -16,9 +17,9 @@ class CombinatorMatcher:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON IR."""
-        serialized_conditions = []
+        serialized_conditions: List[Any] = []
         for cond in self.conditions:
-            if hasattr(cond, "to_dict"):
+            if isinstance(cond, (Matcher, CombinatorMatcher)):
                 serialized_conditions.append(cond.to_dict())
             elif isinstance(cond, dict):
                 serialized_conditions.append(cond)
@@ -163,9 +164,9 @@ class StageMatcher:
 
 
 def stage(
-    alias: str = None,
-    base_image: str = None,
-    is_final: bool = None,
+    alias: Optional[str] = None,
+    base_image: Optional[str] = None,
+    is_final: Optional[bool] = None,
 ) -> StageMatcher:
     """
     Query a specific build stage.
@@ -175,7 +176,7 @@ def stage(
         stage(is_final=True)
         stage(base_image="alpine")
     """
-    params = {}
+    params: Dict[str, Any] = {}
     if alias is not None:
         params["alias"] = alias
     if base_image is not None:
@@ -187,8 +188,8 @@ def stage(
 
 
 def final_stage_has(
-    instruction: Union[str, Matcher] = None,
-    missing_instruction: str = None,
+    instruction: Optional[Union[str, Matcher]] = None,
+    missing_instruction: Optional[str] = None,
 ) -> StageMatcher:
     """
     Check properties of the final build stage.
@@ -197,7 +198,7 @@ def final_stage_has(
         final_stage_has(missing_instruction="USER")
         final_stage_has(instruction=instruction(type="USER", user_name="root"))
     """
-    params = {}
+    params: Dict[str, Any] = {}
     if instruction is not None:
         if isinstance(instruction, str):
             params["instruction"] = instruction

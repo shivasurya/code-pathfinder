@@ -4,7 +4,8 @@ Core matchers for the pathfinder Python SDK.
 These matchers generate JSON IR for the Go executor.
 """
 
-from typing import Dict, Optional, Union, List, Any
+from typing import Any, Dict, List, Optional, Union
+
 from .ir import IRType
 
 ArgumentValue = Union[str, int, float, bool, List[Union[str, int, float, bool]]]
@@ -84,7 +85,7 @@ class CallMatcher:
 
         return {"value": value, "wildcard": has_wildcard}
 
-    def tracks(self, *positions_or_names) -> "CallMatcher":
+    def tracks(self, *positions_or_names: object) -> "CallMatcher":
         """Specify which parameters are taint-sensitive in dataflow analysis.
 
         Same API as MethodMatcher.tracks(). See MethodMatcher for full docs.

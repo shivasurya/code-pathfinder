@@ -1,10 +1,11 @@
 """Logic operators for combining matchers."""
 
 from typing import Union
-from .matchers import CallMatcher, VariableMatcher
+
 from .dataflow import DataflowMatcher
-from .query_type import MethodMatcher
 from .ir import IRType
+from .matchers import CallMatcher, VariableMatcher
+from .query_type import MethodMatcher
 
 MatcherType = Union[
     CallMatcher,
@@ -84,7 +85,7 @@ class NotOperator:
         }
 
     def __repr__(self) -> str:
-        return f"Not({repr(self.matcher)})"
+        return f"Not({self.matcher!r})"
 
 
 # Public API

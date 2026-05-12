@@ -1,6 +1,6 @@
 """Tests for Phase 2 propagation primitives."""
 
-from codepathfinder.propagation import propagates, PropagationType, PropagationPrimitive
+from codepathfinder.propagation import PropagationPrimitive, PropagationType, propagates
 
 
 class TestPhase2Primitives:

@@ -2,8 +2,8 @@
 Programmatic access to Dockerfile and docker-compose objects.
 """
 
-from typing import Callable, Dict, Any
 from dataclasses import dataclass
+from typing import Any, Callable, Dict
 
 
 @dataclass
@@ -48,13 +48,13 @@ class DockerfileAccess:
     def __init__(self, dockerfile_graph):
         self._graph = dockerfile_graph
 
-    def get_instructions(self, instruction_type: str):
+    def get_instructions(self, instruction_type: str) -> Any:
         """Get all instructions of a type."""
         return self._graph.GetInstructions(instruction_type)
 
     def has_instruction(self, instruction_type: str) -> bool:
         """Check if instruction type exists."""
-        return self._graph.HasInstruction(instruction_type)
+        return bool(self._graph.HasInstruction(instruction_type))
 
     def get_final_user(self):
         """Get the last USER instruction."""
@@ -62,7 +62,7 @@ class DockerfileAccess:
 
     def is_running_as_root(self) -> bool:
         """Check if container runs as root."""
-        return self._graph.IsRunningAsRoot()
+        return bool(self._graph.IsRunningAsRoot())
 
     def get_stages(self):
         """Get all build stages."""
@@ -70,9 +70,9 @@ class DockerfileAccess:
 
     def is_multi_stage(self) -> bool:
         """Check if Dockerfile uses multi-stage build."""
-        return self._graph.IsMultiStage()
+        return bool(self._graph.IsMultiStage())
 
-    def get_stage_by_alias(self, alias: str):
+    def get_stage_by_alias(self, alias: str) -> Any:
         """Get a stage by its AS alias."""
         return self._graph.GetStageByAlias(alias)
 
@@ -94,11 +94,11 @@ class ComposeAccess:
         """Get all service names."""
         return self._graph.GetServices()
 
-    def service_has(self, service_name: str, key: str, value) -> bool:
+    def service_has(self, service_name: str, key: str, value: Any) -> bool:
         """Check if service has property with value."""
-        return self._graph.ServiceHas(service_name, key, value)
+        return bool(self._graph.ServiceHas(service_name, key, value))
 
-    def service_get(self, service_name: str, key: str):
+    def service_get(self, service_name: str, key: str) -> Any:
         """Get service property value."""
         return self._graph.ServiceGet(service_name, key)
 

@@ -6,11 +6,12 @@ It describes how tainted data flows from sources to sinks.
 """
 
 from typing import List, Optional, Union
-from .matchers import CallMatcher, AttributeMatcher
-from .query_type import MethodMatcher, AttributeMethodMatcher
-from .propagation import PropagationPrimitive, create_propagation_list
-from .ir import IRType
+
 from .config import get_default_propagation, get_default_scope
+from .ir import IRType
+from .matchers import AttributeMatcher, CallMatcher
+from .propagation import PropagationPrimitive, create_propagation_list
+from .query_type import AttributeMethodMatcher, MethodMatcher
 
 # Union type for any matcher that can be used as source/sink/sanitizer.
 # Logic operators (Or/And/Not) are also valid matchers.

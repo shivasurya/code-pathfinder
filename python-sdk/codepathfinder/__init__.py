@@ -24,35 +24,35 @@ Examples:
 
 __version__ = "2.1.1"
 
-from .matchers import calls, variable, attribute
-from .decorators import rule
-from .dataflow import flows
-from .propagation import propagates
-from .presets import PropagationPresets
 from .config import set_default_propagation, set_default_scope
-from .logic import And, Or, Not
+from .dataflow import flows
+from .decorators import rule
+from .logic import And, Not, Or
+from .matchers import attribute, calls, variable
+from .presets import PropagationPresets
+from .propagation import propagates
+from .qualifiers import gt, gte, lt, lte, missing, regex
 from .query_type import QueryType
-from .qualifiers import lt, gt, lte, gte, regex, missing
 
 __all__ = [
+    "And",
+    "Not",
+    "Or",
+    "PropagationPresets",
+    "QueryType",
+    "__version__",
     "attribute",
     "calls",
-    "variable",
-    "rule",
     "flows",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "missing",
     "propagates",
-    "PropagationPresets",
+    "regex",
+    "rule",
     "set_default_propagation",
     "set_default_scope",
-    "And",
-    "Or",
-    "Not",
-    "QueryType",
-    "lt",
-    "gt",
-    "lte",
-    "gte",
-    "regex",
-    "missing",
-    "__version__",
+    "variable",
 ]

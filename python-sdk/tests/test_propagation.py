@@ -3,10 +3,10 @@ Tests for taint propagation primitives.
 """
 
 from codepathfinder.propagation import (
-    PropagationType,
     PropagationPrimitive,
-    propagates,
+    PropagationType,
     create_propagation_list,
+    propagates,
 )
 
 

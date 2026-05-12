@@ -1,20 +1,21 @@
 """Tests for Go third-party framework QueryType classes (PR-04)."""
 
 import pytest
+
 from codepathfinder.go_rule import (
-    GoGormDB,
-    GoGinContext,
+    GoChiRouter,
     GoEchoContext,
     GoFiberCtx,
-    GoGRPCServerTransportStream,
-    GoPgxConn,
-    GoSqlxDB,
-    GoRedisClient,
-    GoMongoCollection,
-    GoJWTToken,
+    GoGinContext,
     GoGorillaMuxRouter,
+    GoGormDB,
+    GoGRPCServerTransportStream,
+    GoJWTToken,
+    GoMongoCollection,
+    GoPgxConn,
+    GoRedisClient,
     GoRestyClient,
-    GoChiRouter,
+    GoSqlxDB,
     GoViperConfig,
     GoYAMLDecoder,
 )
@@ -39,7 +40,6 @@ _ALL_THIRD_PARTY_TYPES = [
 
 
 class TestGoThirdPartyQueryTypes:
-
     def test_all_querytypes_importable(self):
         """All 15 QueryType classes must be importable from go_rule."""
         assert len(_ALL_THIRD_PARTY_TYPES) == 15
@@ -53,9 +53,9 @@ class TestGoThirdPartyQueryTypes:
         """All FQNs must be strings."""
         for qt in _ALL_THIRD_PARTY_TYPES:
             for fqn in qt.fqns:
-                assert isinstance(
-                    fqn, str
-                ), f"{qt.__name__} FQN {fqn!r} is not a string"
+                assert isinstance(fqn, str), (
+                    f"{qt.__name__} FQN {fqn!r} is not a string"
+                )
 
     def test_fqns_are_fully_qualified(self):
         """All FQNs must contain a dot (package.Type format)."""
@@ -181,7 +181,7 @@ class TestGoThirdPartyQueryTypes:
         seen: dict[str, str] = {}
         for qt in _ALL_THIRD_PARTY_TYPES:
             for fqn in qt.fqns:
-                assert (
-                    fqn not in seen
-                ), f"Duplicate FQN {fqn!r} in {qt.__name__} and {seen[fqn]}"
+                assert fqn not in seen, (
+                    f"Duplicate FQN {fqn!r} in {qt.__name__} and {seen[fqn]}"
+                )
                 seen[fqn] = qt.__name__

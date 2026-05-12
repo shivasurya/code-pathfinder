@@ -1,18 +1,19 @@
 """Tests for global configuration."""
 
 import pytest
+
 from codepathfinder import (
+    PropagationPresets,
+    calls,
+    flows,
+    propagates,
     set_default_propagation,
     set_default_scope,
-    PropagationPresets,
-    flows,
-    calls,
-    propagates,
 )
 from codepathfinder.config import (
+    PathfinderConfig,
     get_default_propagation,
     get_default_scope,
-    PathfinderConfig,
 )
 
 

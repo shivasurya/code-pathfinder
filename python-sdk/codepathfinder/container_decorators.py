@@ -5,8 +5,8 @@ Decorators for Dockerfile and docker-compose rules.
 import atexit
 import json
 import sys
-from typing import Callable, Dict, Any, List
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List
 
 
 @dataclass
