@@ -19,8 +19,10 @@ class CombinatorMatcher:
         """Convert to JSON IR."""
         serialized_conditions: List[Any] = []
         for cond in self.conditions:
-            if isinstance(cond, (Matcher, CombinatorMatcher)):
-                serialized_conditions.append(cond.to_dict())
+            # Duck-typed on .to_dict() so user-defined rule combinators that
+            # aren't strict Matcher subclasses still serialise correctly.
+            if hasattr(cond, "to_dict"):
+                serialized_conditions.append(cond.to_dict())  # pyright: ignore[reportAttributeAccessIssue, reportFunctionMemberAccess]
             elif isinstance(cond, dict):
                 serialized_conditions.append(cond)
             elif callable(cond):
