@@ -167,10 +167,14 @@
   <Card>
     <div class="header">
       <div class="icon">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect width="48" height="48" rx="12" fill="var(--vscode-button-background)" opacity="0.1"/>
-          <path d="M24 14L16 20V28L24 34L32 28V20L24 14Z" stroke="var(--vscode-button-background)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M24 22L28 24V28L24 30L20 28V24L24 22Z" fill="var(--vscode-button-background)"/>
+        <svg width="48" height="48" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="256" cy="256" r="256" fill="#f0ebe0"/>
+          <defs><clipPath id="onboarding-circle-clip"><circle cx="256" cy="256" r="256"/></clipPath></defs>
+          <g clip-path="url(#onboarding-circle-clip)">
+            <path d="M798 1560 318 -224H20L500 1560Z" fill="#9de500" transform="translate(106.399 339.076) scale(0.11151 -0.12266)"/>
+            <path d="M115 -418V1118H460V926H472Q493 976 533.0 1023.5Q573 1071 636.0 1101.5Q699 1132 788 1132Q906 1132 1007.5 1070.0Q1109 1008 1171.5 881.0Q1234 754 1234 558Q1234 368 1173.5 240.5Q1113 113 1011.5 48.5Q910 -16 786 -16Q658 -16 581.5 44.5Q505 105 472 181H464V-418ZM667 256Q768 256 821.5 339.0Q875 422 875 558Q875 694 821.5 776.5Q768 859 667 859Q567 859 511.5 778.0Q456 697 456 558Q456 421 511.5 338.5Q567 256 667 256Z" fill="#0a0a0a" transform="translate(188.592 339.076) scale(0.11151 -0.11151)"/>
+            <path d="M361 -21Q281 -21 226.5 32.5Q172 86 172 165Q172 245 226.5 298.5Q281 352 361 352Q441 352 495.5 298.5Q550 245 550 165Q550 86 495.5 32.5Q441 -21 361 -21Z" fill="#9de500" transform="translate(325.090 339.076) scale(0.11151 -0.11151)"/>
+          </g>
         </svg>
       </div>
       <h1>Welcome to Code Pathfinder AI</h1>

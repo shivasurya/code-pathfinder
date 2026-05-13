@@ -81,7 +81,7 @@
         {
           "id": "secureflow-explorer",
           "title": "Code Pathfinder",
-          "icon": "$(shield)"
+          "icon": "resources/pathfinder-activitybar.svg"
         }
       ]
     },
@@ -200,8 +200,8 @@
         "command": "secureflow.reviewChanges",
         "title": "Code Pathfinder: Review Git Changes for Security Issues",
         "icon": {
-          "light": "resources/light/shield.svg",
-          "dark": "resources/dark/shield.svg"
+          "light": "resources/light/pathfinder.svg",
+          "dark": "resources/dark/pathfinder.svg"
         }
       },
       {

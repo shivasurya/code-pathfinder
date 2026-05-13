@@ -70,7 +70,7 @@ export function registerSecureFlowReviewCommand(
     vscode.StatusBarAlignment.Right,
     100
   );
-  statusBarItem.text = '$(shield) Code Pathfinder';
+  statusBarItem.text = '$(compass) Code Pathfinder';
   statusBarItem.tooltip = 'Scan git changes for security issues';
   statusBarItem.command = 'secureflow.reviewChanges';
   statusBarItem.show();
