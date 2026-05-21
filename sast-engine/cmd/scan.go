@@ -68,6 +68,7 @@ Examples:
 		outputFormat, _ := cmd.Flags().GetString("output")
 		outputFile, _ := cmd.Flags().GetString("output-file")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+		rawExcludes, _ := cmd.Flags().GetStringArray("exclude")
 		diffAware, _ := cmd.Flags().GetBool("diff-aware")
 		baseRef, _ := cmd.Flags().GetString("base")
 		headRef, _ := cmd.Flags().GetString("head")
@@ -96,6 +97,11 @@ Examples:
 				"phase":      "initialization",
 			})
 			return fmt.Errorf("--project flag is required")
+		}
+
+		excludes, err := validateExcludePatterns(rawExcludes)
+		if err != nil {
+			return err
 		}
 
 		// Setup logger with appropriate verbosity
@@ -183,6 +189,7 @@ Examples:
 			OnProgress: func() {
 				logger.UpdateProgress(1)
 			},
+			ExcludePatterns: excludes,
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
@@ -1132,6 +1139,7 @@ func init() {
 	scanCmd.Flags().Bool("debug", false, "Show detailed debug diagnostics with file-level progress and timestamps")
 	scanCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	scanCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
+	scanCmd.Flags().StringArray("exclude", nil, "Exclude files or directories from the scan. Repo-relative path prefix; repeatable. e.g. --exclude rules/ --exclude sast-engine/test-fixtures")
 	scanCmd.Flags().Bool("diff-aware", false, "Enable diff-aware scanning (only report findings in changed files)")
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")

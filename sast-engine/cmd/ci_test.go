@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -447,4 +449,76 @@ func TestCICmdEnableDBCacheOpenError(t *testing.T) {
 	// Should warn about cache failure but continue without error.
 	err := ciCmd.RunE(ciCmd, []string{})
 	require.NoError(t, err)
+}
+
+// setCIExcludeFlag replaces (not appends) the StringArray exclude flag on ciCmd.
+// pflag's StringArray.Set appends after the first call; Replace resets cleanly.
+func setCIExcludeFlag(cmd *cobra.Command, values []string) {
+	flag := cmd.Flags().Lookup("exclude")
+	if sv, ok := flag.Value.(pflag.SliceValue); ok {
+		sv.Replace(values)
+		flag.Changed = len(values) > 0
+	}
+}
+
+// TestCICmdExcludeFlag verifies --exclude flag registration and validation.
+func TestCICmdExcludeFlag(t *testing.T) {
+	t.Run("flag is registered", func(t *testing.T) {
+		flag := ciCmd.Flags().Lookup("exclude")
+		require.NotNil(t, flag, "exclude flag should be registered on ci command")
+	})
+
+	// resetForExclude puts the command in a state where RunE reaches validateExcludePatterns.
+	resetForExclude := func(t *testing.T) {
+		t.Helper()
+		ciCmd.Flags().Set("rules", "/tmp/fake-rules.py")
+		ciCmd.Flags().Set("project", "/tmp/fake-project")
+		ciCmd.Flags().Set("output", "sarif")
+		ciCmd.Flags().Set("output-file", "")
+		ciCmd.Flags().Set("verbose", "false")
+		ciCmd.Flags().Set("debug", "false")
+		ciCmd.Flags().Set("fail-on", "")
+		ciCmd.Flags().Set("skip-tests", "true")
+		ciCmd.Flags().Set("no-diff", "true")
+		ciCmd.Flags().Set("base", "")
+		ciCmd.Flags().Set("head", "HEAD")
+		ciCmd.Flags().Set("ruleset", "")
+		ciCmd.Flags().Set("github-token", "")
+		ciCmd.Flags().Set("github-repo", "")
+		ciCmd.Flags().Set("github-pr", "0")
+		ciCmd.Flags().Set("pr-comment", "false")
+		ciCmd.Flags().Set("pr-inline", "false")
+		ciCmd.Flags().Set("enable-db-cache", "false")
+		setCIExcludeFlag(ciCmd, nil) // clear exclude before each test
+	}
+
+	t.Run("absolute pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setCIExcludeFlag(ciCmd, []string{"/etc/passwd"})
+		defer setCIExcludeFlag(ciCmd, nil)
+
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no leading slash")
+	})
+
+	t.Run("traversal pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setCIExcludeFlag(ciCmd, []string{"../outside"})
+		defer setCIExcludeFlag(ciCmd, nil)
+
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "..")
+	})
+
+	t.Run("backslash pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setCIExcludeFlag(ciCmd, []string{"foo\\bar"})
+		defer setCIExcludeFlag(ciCmd, nil)
+
+		err := ciCmd.RunE(ciCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "backslash")
+	})
 }

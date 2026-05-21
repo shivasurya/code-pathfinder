@@ -12,6 +12,8 @@ import (
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 	"github.com/shivasurya/code-pathfinder/sast-engine/output"
 	"github.com/shivasurya/code-pathfinder/sast-engine/ruleset"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -936,4 +938,73 @@ func TestScanCmdEnableDBCacheOpenError(t *testing.T) {
 		assert.Contains(t, err.Error(), "rule",
 			"unexpected error: %v", err)
 	}
+}
+
+// setExcludeFlag replaces (not appends) the StringArray exclude flag with the
+// given values, working around pflag's append-after-first-Set behaviour by
+// using the SliceValue.Replace interface.
+func setExcludeFlag(cmd *cobra.Command, values []string) {
+	flag := cmd.Flags().Lookup("exclude")
+	if sv, ok := flag.Value.(pflag.SliceValue); ok {
+		sv.Replace(values)
+		flag.Changed = len(values) > 0
+	}
+}
+
+// TestScanCmdExcludeFlag verifies --exclude flag registration and validation.
+func TestScanCmdExcludeFlag(t *testing.T) {
+	t.Run("flag is registered", func(t *testing.T) {
+		flag := scanCmd.Flags().Lookup("exclude")
+		require.NotNil(t, flag, "exclude flag should be registered on scan command")
+	})
+
+	// resetForExclude puts the command in a known good state so RunE reaches
+	// validateExcludePatterns before hitting any other early-exit error.
+	resetForExclude := func(t *testing.T) {
+		t.Helper()
+		scanCmd.Flags().Set("rules", "/tmp/fake-rules.py")
+		scanCmd.Flags().Set("project", "/tmp/fake-project")
+		scanCmd.Flags().Set("output", "text")
+		scanCmd.Flags().Set("output-file", "")
+		scanCmd.Flags().Set("verbose", "false")
+		scanCmd.Flags().Set("debug", "false")
+		scanCmd.Flags().Set("fail-on", "")
+		scanCmd.Flags().Set("skip-tests", "true")
+		scanCmd.Flags().Set("diff-aware", "false")
+		scanCmd.Flags().Set("base", "")
+		scanCmd.Flags().Set("head", "HEAD")
+		scanCmd.Flags().Set("ruleset", "")
+		scanCmd.Flags().Set("enable-db-cache", "false")
+		setExcludeFlag(scanCmd, nil) // clear exclude before each test
+	}
+
+	t.Run("absolute pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setExcludeFlag(scanCmd, []string{"/etc/passwd"})
+		defer setExcludeFlag(scanCmd, nil)
+
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no leading slash")
+	})
+
+	t.Run("traversal pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setExcludeFlag(scanCmd, []string{"../outside"})
+		defer setExcludeFlag(scanCmd, nil)
+
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "..")
+	})
+
+	t.Run("backslash pattern rejected", func(t *testing.T) {
+		resetForExclude(t)
+		setExcludeFlag(scanCmd, []string{"foo\\bar"})
+		defer setExcludeFlag(scanCmd, nil)
+
+		err := scanCmd.RunE(scanCmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "backslash")
+	})
 }
