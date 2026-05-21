@@ -92,6 +92,26 @@ func TestValidateExcludePatterns_UnicodeAllowed(t *testing.T) {
 	assert.Equal(t, []string{"src/testi18n/世界"}, got)
 }
 
+func TestValidateExcludePatterns_ExactDuplicatesDropped(t *testing.T) {
+	got, err := validateExcludePatterns([]string{"rules", "vendor", "rules"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rules", "vendor"}, got)
+}
+
+func TestValidateExcludePatterns_DuplicatesAfterNormalization(t *testing.T) {
+	// "rules/" and "rules" both normalize to "rules"; only one survives.
+	// "/vendor/" and "vendor" both normalize to "vendor".
+	got, err := validateExcludePatterns([]string{"rules/", "rules", "vendor", "vendor/"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rules", "vendor"}, got)
+}
+
+func TestValidateExcludePatterns_DedupPreservesFirstOccurrenceOrder(t *testing.T) {
+	got, err := validateExcludePatterns([]string{"c", "a", "b", "a", "c"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c", "a", "b"}, got)
+}
+
 // --- isExcluded ---
 
 func TestIsExcluded_EmptyPatterns(t *testing.T) {

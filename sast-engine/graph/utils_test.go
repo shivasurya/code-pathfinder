@@ -791,6 +791,47 @@ func TestGetFilesWithExcludePatterns(t *testing.T) {
 	}
 }
 
+// TestGetFilesExcludeIndividualFile exercises the file-level (non-directory)
+// exclude branch in getFiles: the excluded pattern targets a single file, not
+// a directory subtree.
+func TestGetFilesExcludeIndividualFile(t *testing.T) {
+	dir, err := os.MkdirTemp("", "getfiles_exclude_file")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	layout := []string{
+		"src/keep.py",
+		"src/skip_me.py",
+	}
+	for _, f := range layout {
+		full := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("# stub\n"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	got, err := getFiles(dir, []string{"src/skip_me.py"})
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+	gotSet := make(map[string]bool, len(got))
+	for _, p := range got {
+		rel, _ := filepath.Rel(dir, p)
+		gotSet[filepath.ToSlash(rel)] = true
+	}
+	if gotSet["src/skip_me.py"] {
+		t.Error("src/skip_me.py should have been excluded but was returned")
+	}
+	if !gotSet["src/keep.py"] {
+		t.Error("src/keep.py should be included")
+	}
+}
+
 func BenchmarkGenerateMethodID(b *testing.B) {
 	params := []string{"int", "String", "Object"}
 	for i := 0; i < b.N; i++ {

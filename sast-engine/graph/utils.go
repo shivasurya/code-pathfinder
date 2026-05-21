@@ -265,11 +265,10 @@ func getFiles(directory string, excludePatterns []string) ([]string, error) {
 			return err
 		}
 
-		// Compute repo-relative path once so both directory and file checks can use it.
-		relPath, relErr := filepath.Rel(directory, path)
-		if relErr != nil {
-			relPath = path
-		}
+		// Compute repo-relative path once so both directory and file checks can
+		// use it. filepath.Walk guarantees `path` is rooted at `directory`, so
+		// filepath.Rel cannot fail here in practice; we ignore its error.
+		relPath, _ := filepath.Rel(directory, path)
 		relSlash := filepath.ToSlash(relPath)
 
 		// Apply user-specified exclude patterns before any other check.

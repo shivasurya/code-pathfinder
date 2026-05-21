@@ -16,9 +16,12 @@ import (
 //   - contains a backslash (only forward slashes are allowed)
 //   - exceeds 512 characters
 //
-// Valid patterns are normalized: leading slashes stripped, trailing slashes stripped.
+// Valid patterns are normalized: leading slashes stripped, trailing slashes
+// stripped. Exact duplicates (after normalization) are dropped silently so the
+// caller can repeat --exclude flags without bloating the per-file check loop.
 func validateExcludePatterns(patterns []string) ([]string, error) {
 	cleaned := make([]string, 0, len(patterns))
+	seen := make(map[string]struct{}, len(patterns))
 	for _, p := range patterns {
 		if len(p) > 512 {
 			return nil, fmt.Errorf("--exclude pattern too long (>512 chars): %q", p)
@@ -39,6 +42,10 @@ func validateExcludePatterns(patterns []string) ([]string, error) {
 				return nil, fmt.Errorf("--exclude pattern must not contain '..': %q", p)
 			}
 		}
+		if _, dup := seen[norm]; dup {
+			continue
+		}
+		seen[norm] = struct{}{}
 		cleaned = append(cleaned, norm)
 	}
 	return cleaned, nil
