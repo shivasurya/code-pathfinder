@@ -233,7 +233,7 @@ func TestGetFilesComprehensive(t *testing.T) {
 	}
 
 	// Test getFiles
-	files, err := getFiles(tmpDir)
+	files, err := getFiles(tmpDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles failed: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestGetFilesIncludesCAndCpp(t *testing.T) {
 		}
 	}
 
-	got, err := getFiles(dir)
+	got, err := getFiles(dir, nil)
 	if err != nil {
 		t.Fatalf("getFiles: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestGetFilesErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			files, err := getFiles(tt.directory)
+			files, err := getFiles(tt.directory, nil)
 
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
@@ -713,6 +713,81 @@ func TestIsGitHubActionsComprehensive(t *testing.T) {
 				t.Errorf("Expected %v, got %v (env=%q)", tt.expected, result, tt.envValue)
 			}
 		})
+	}
+}
+
+// TestIsExcludedPath covers the graph-internal prefix-match helper.
+func TestIsExcludedPath(t *testing.T) {
+	cases := []struct {
+		rel      string
+		patterns []string
+		want     bool
+	}{
+		{"rules/foo.py", []string{"rules"}, true},
+		{"rulesx/foo.py", []string{"rules"}, false},        // no separator boundary
+		{"rules", []string{"rules"}, true},                 // exact match
+		{"sast-engine/cmd/scan.go", []string{"rules"}, false},
+		{"a/b/c.py", []string{"a/b"}, true},
+		{"a/b/c.py", []string{"a"}, true},
+		{"a/b/c.py", []string{"x"}, false},
+		{"any.py", []string{""}, false},                    // empty pattern is no-op
+		{"any.py", nil, false},
+	}
+	for _, c := range cases {
+		got := isExcludedPath(c.rel, c.patterns)
+		if got != c.want {
+			t.Errorf("isExcludedPath(%q, %v) = %v, want %v", c.rel, c.patterns, got, c.want)
+		}
+	}
+}
+
+// TestGetFilesWithExcludePatterns verifies that getFiles skips files whose
+// repo-relative path starts with an excluded prefix.
+func TestGetFilesWithExcludePatterns(t *testing.T) {
+	dir, err := os.MkdirTemp("", "getfiles_exclude")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create a small project layout:
+	//   src/main.py      (include)
+	//   rules/rule.py    (exclude via "rules")
+	//   rulesx/other.py  (include, must NOT be caught by "rules" prefix)
+	layout := []string{
+		"src/main.py",
+		"rules/rule.py",
+		"rulesx/other.py",
+	}
+	for _, f := range layout {
+		full := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("# stub\n"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	got, err := getFiles(dir, []string{"rules"})
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+
+	gotSet := make(map[string]bool, len(got))
+	for _, p := range got {
+		rel, _ := filepath.Rel(dir, p)
+		gotSet[filepath.ToSlash(rel)] = true
+	}
+
+	if gotSet["rules/rule.py"] {
+		t.Error("rules/rule.py should have been excluded but was returned")
+	}
+	if !gotSet["src/main.py"] {
+		t.Error("src/main.py should be included but was missing")
+	}
+	if !gotSet["rulesx/other.py"] {
+		t.Error("rulesx/other.py should be included (prefix 'rules' must not match 'rulesx')")
 	}
 }
 

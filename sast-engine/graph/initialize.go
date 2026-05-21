@@ -22,6 +22,10 @@ type ProgressCallbacks struct {
 	OnStart func(totalFiles int)
 	// OnProgress is called after each file is processed (successfully or with error).
 	OnProgress func()
+	// ExcludePatterns holds validated, normalized repo-relative path prefixes.
+	// A file is skipped during the walk if its repo-relative path starts with any prefix.
+	// Use validateExcludePatterns in the cmd package to produce this slice.
+	ExcludePatterns []string
 }
 
 // Initialize initializes the code graph by parsing all source files in a directory.
@@ -30,7 +34,11 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 	codeGraph := NewCodeGraph()
 	start := time.Now()
 
-	files, err := getFiles(directory)
+	var excludePatterns []string
+	if callbacks != nil {
+		excludePatterns = callbacks.ExcludePatterns
+	}
+	files, err := getFiles(directory, excludePatterns)
 	if err != nil {
 		//nolint:all
 		Log("Directory not found:", err)

@@ -254,13 +254,32 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 
 // getFiles walks through a directory and returns all source files (Java, Python, Go, C/C++, Dockerfile, docker-compose).
 // It skips vendor/, testdata/, node_modules/, .git/, common C/C++ build artifact directories,
-// and directories starting with "_".
-func getFiles(directory string) ([]string, error) {
+// directories starting with "_", and any path covered by excludePatterns.
+//
+// excludePatterns is a list of normalized, repo-relative path prefixes (no leading or trailing slash).
+// A path is skipped when its repo-relative form starts with "<prefix>/", or equals the prefix exactly.
+func getFiles(directory string, excludePatterns []string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+
+		// Compute repo-relative path once so both directory and file checks can use it.
+		relPath, relErr := filepath.Rel(directory, path)
+		if relErr != nil {
+			relPath = path
+		}
+		relSlash := filepath.ToSlash(relPath)
+
+		// Apply user-specified exclude patterns before any other check.
+		if len(excludePatterns) > 0 && isExcludedPath(relSlash, excludePatterns) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
 		// Skip directories that should never be scanned
 		if info.IsDir() {
 			name := info.Name()
@@ -298,6 +317,22 @@ func getFiles(directory string) ([]string, error) {
 		return nil
 	})
 	return files, err
+}
+
+// isExcludedPath reports whether relPath (forward-slash, repo-relative) is covered
+// by any of the given prefix patterns. A match requires that relPath equals the
+// pattern exactly, or that relPath begins with "<pattern>/", so that "rules" covers
+// "rules/foo.py" but not "rulesx/foo.py".
+func isExcludedPath(relPath string, patterns []string) bool {
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if relPath == p || strings.HasPrefix(relPath, p+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // readFile reads the contents of a file.
