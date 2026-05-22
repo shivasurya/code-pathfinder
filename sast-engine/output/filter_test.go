@@ -74,14 +74,17 @@ func TestDiffFilter_Filter(t *testing.T) {
 			wantRelPaths: []string{"app/views.py", "app/auth.py"},
 		},
 		{
-			name:         "empty changed files returns all detections",
+			// An empty changed-files set means "nothing in the diff to match";
+			// the right answer is zero detections, not pass-through. Callers
+			// that want "no filtering" must skip Filter entirely.
+			name:         "empty changed files filters everything out",
 			changedFiles: []string{},
 			detections: []*dsl.EnrichedDetection{
 				makeDetection("app/views.py", "critical"),
 				makeDetection("app/models.py", "high"),
 			},
-			wantCount:    2,
-			wantRelPaths: []string{"app/views.py", "app/models.py"},
+			wantCount:    0,
+			wantRelPaths: nil,
 		},
 		{
 			name:         "nil detections",
@@ -257,12 +260,15 @@ func TestDiffFilter_FilteredCount(t *testing.T) {
 			wantFiltered: 2,
 		},
 		{
-			name:         "empty changed files means no filtering",
+			// With an empty changed-files set, every detection would be
+			// removed by Filter (see Filter's contract): FilteredCount must
+			// report that as well, not 0.
+			name:         "empty changed files reports all as removed",
 			changedFiles: []string{},
 			detections: []*dsl.EnrichedDetection{
 				makeDetection("app/views.py", "critical"),
 			},
-			wantFiltered: 0,
+			wantFiltered: 1,
 		},
 		{
 			name:         "nil detections",

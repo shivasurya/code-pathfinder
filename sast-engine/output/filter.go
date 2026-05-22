@@ -20,11 +20,13 @@ func NewDiffFilter(changedFiles []string) *DiffFilter {
 }
 
 // Filter returns only detections whose RelPath is in the changed files set.
-// If no changed files were provided (empty set), all detections are returned.
+// An empty set filters everything out: a DiffFilter constructed with no
+// changed files represents "nothing in the diff to match," and the right
+// answer is zero detections, not pass-through. Callers that want "no
+// filtering" must not call Filter at all (see cmd.applyDiffFilter which
+// gates on the diffEnabled flag for exactly this reason). Falling back to
+// pass-through was the May 2026 207-findings regression.
 func (f *DiffFilter) Filter(detections []*dsl.EnrichedDetection) []*dsl.EnrichedDetection {
-	if len(f.changedFiles) == 0 {
-		return detections
-	}
 	filtered := make([]*dsl.EnrichedDetection, 0, len(detections))
 	for _, det := range detections {
 		if f.changedFiles[det.Location.RelPath] {
@@ -35,10 +37,9 @@ func (f *DiffFilter) Filter(detections []*dsl.EnrichedDetection) []*dsl.Enriched
 }
 
 // FilteredCount returns the number of detections that would be removed.
+// With an empty changed-files set, every detection would be removed, so
+// the count equals len(detections). See Filter for the rationale.
 func (f *DiffFilter) FilteredCount(detections []*dsl.EnrichedDetection) int {
-	if len(f.changedFiles) == 0 {
-		return 0
-	}
 	count := 0
 	for _, det := range detections {
 		if !f.changedFiles[det.Location.RelPath] {

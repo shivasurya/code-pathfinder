@@ -356,11 +356,14 @@ Examples:
 		// Merge container detections with code analysis detections
 		allEnriched = append(allEnriched, containerDetections...)
 
-		// Apply diff filter when diff-aware mode is active.
-		if diffAware && len(changedFiles) > 0 {
-			totalBefore := len(allEnriched)
-			diffFilter := output.NewDiffFilter(changedFiles)
-			allEnriched = diffFilter.Filter(allEnriched)
+		// Apply diff filter when diff-aware mode is active. Shared with
+		// cmd/ci.go via applyDiffFilter to keep the empty-diff contract
+		// (return zero findings, do NOT fall back to a full scan) honoured
+		// in both commands. See cmd/diff_filter.go for the rationale.
+		totalBefore := len(allEnriched)
+		var filterApplied bool
+		allEnriched, filterApplied = applyDiffFilter(allEnriched, changedFiles, diffAware)
+		if filterApplied {
 			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
 		}
 

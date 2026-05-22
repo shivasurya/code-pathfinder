@@ -366,38 +366,29 @@ Examples:
 		// Merge container detections with code analysis detections.
 		allEnriched = append(allEnriched, containerDetections...)
 
-		// Apply diff filter when diff-aware mode is active. We deliberately do
-		// NOT guard on len(changedFiles) > 0: an empty list means the diff
-		// genuinely covers no source files (e.g. a deletion-only PR, a docs-only
-		// PR, or an empty PR), and the right answer in that case is 0 findings,
-		// not "fall back to a full repo scan." Falling back was the May 2026
-		// regression that surfaced as 207 findings on a PR that only deleted a
-		// YAML workflow file.
-		if diffEnabled {
-			totalBefore := len(allEnriched)
-			diffFilter := output.NewDiffFilter(changedFiles)
-			allEnriched = diffFilter.Filter(allEnriched)
+		// Apply diff filter when diff-aware mode is active. See
+		// applyDiffFilter for the explicit "do not fall back to full scan
+		// on empty diff" contract this commit enforces.
+		totalBefore := len(allEnriched)
+		var filterApplied bool
+		allEnriched, filterApplied = applyDiffFilter(allEnriched, changedFiles, diffEnabled)
+		if filterApplied {
 			logger.Progress("Diff filter: %d/%d findings in changed files", len(allEnriched), totalBefore)
 		}
 
 		// Total rules = code analysis rules loaded + container rules loaded.
 		totalRules := len(rules) + containerRulesCount
 
-		// Count unique source files. When diff-aware, only count changed files
-		// (including 0 when the diff covers no source: see the diff-filter
-		// comment above for why we don't fall back to a full scan here either).
-		var filesScanned int
-		if diffEnabled {
-			filesScanned = len(changedFiles)
-		} else {
-			uniqueFiles := make(map[string]bool)
-			for _, node := range codeGraph.Nodes {
-				if node.File != "" {
-					uniqueFiles[node.File] = true
-				}
+		// Count unique source files for the report. countScannedFiles picks
+		// len(changedFiles) when diff-aware (including 0, by design), else
+		// the unique-file count derived from the code graph.
+		uniqueFiles := make(map[string]bool)
+		for _, node := range codeGraph.Nodes {
+			if node.File != "" {
+				uniqueFiles[node.File] = true
 			}
-			filesScanned = len(uniqueFiles)
 		}
+		filesScanned := countScannedFiles(diffEnabled, len(changedFiles), len(uniqueFiles))
 
 		logger.Statistic("Scan complete. Found %d vulnerabilities", len(allEnriched))
 		logger.Progress("Generating %s output...", outputFormat)
