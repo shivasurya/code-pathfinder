@@ -84,4 +84,8 @@ type Edge struct {
 type CodeGraph struct {
 	Nodes map[string]*Node
 	Edges []*Edge
+	// ProjectStats summarises what the file walk saw. Set by Initialize.
+	// Callers read it to render meaningful empty-state messages when
+	// len(Nodes) == 0 (e.g. "Detected: TypeScript (32), JavaScript (8)").
+	ProjectStats ProjectStats
 }

@@ -76,6 +76,13 @@ func (l *Logger) Debug(format string, args ...any) {
 	}
 }
 
+// Info logs informational messages that should always be visible to the
+// user, regardless of verbosity. No prefix. Use for high-signal status that
+// isn't a warning (e.g. the "no source files found" empty-project block).
+func (l *Logger) Info(format string, args ...any) {
+	fmt.Fprintf(l.writer, format+"\n", args...)
+}
+
 // Warning logs warnings (always shown).
 func (l *Logger) Warning(format string, args ...any) {
 	fmt.Fprintf(l.writer, "Warning: %s\n", fmt.Sprintf(format, args...))

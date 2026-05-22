@@ -221,7 +221,7 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
-			logger.Progress("No source files found in project")
+			reportEmptyProject(logger, codeGraph.ProjectStats)
 		} else {
 			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}

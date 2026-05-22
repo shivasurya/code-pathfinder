@@ -226,7 +226,7 @@ func TestGetFiles(t *testing.T) {
 	}
 
 	// Run getFiles
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestGetFilesEmptyDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestGetFilesEmptyDirectory(t *testing.T) {
 
 func TestGetFilesNonExistentDirectory(t *testing.T) {
 	nonExistentDir := "/path/to/non/existent/directory"
-	_, err := getFiles(nonExistentDir, nil)
+	_, _, err := getFiles(nonExistentDir, nil)
 	if err == nil {
 		t.Error("Expected an error for non-existent directory, but got nil")
 	}
@@ -297,7 +297,7 @@ func TestGetFilesWithSymlinks(t *testing.T) {
 		t.Fatalf("Failed to create symlink: %v", err)
 	}
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -992,7 +992,7 @@ func TestGetFilesMixedLanguages(t *testing.T) {
 	}
 
 	// Run getFiles
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -1412,7 +1412,7 @@ func TestGetFilesIncludesGo(t *testing.T) {
 		}
 	}
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -1468,7 +1468,7 @@ func TestGetFilesSkipsVendor(t *testing.T) {
 		t.Fatalf("Failed to create vendor file: %v", err)
 	}
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -1499,7 +1499,7 @@ func TestGetFilesSkipsTestdata(t *testing.T) {
 		t.Fatalf("Failed to create testdata file: %v", err)
 	}
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}
@@ -1530,7 +1530,7 @@ func TestGetFilesSkipsUnderscoreDirs(t *testing.T) {
 		t.Fatalf("Failed to create underscore dir file: %v", err)
 	}
 
-	files, err := getFiles(tempDir, nil)
+	files, _, err := getFiles(tempDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles returned an error: %v", err)
 	}

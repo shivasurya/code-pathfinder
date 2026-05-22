@@ -193,13 +193,16 @@ Examples:
 		})
 		logger.FinishProgress()
 		if len(codeGraph.Nodes) == 0 {
-			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
-				"error_type": "empty_project",
-				"phase":      "graph_building",
-			})
-			return fmt.Errorf("no source files found in project")
+			// No supported source under projectPath. Fall through to the
+			// formatter step so a valid (empty) output document is still
+			// written: downstream consumers like cpf-executor read the
+			// JSON regardless of finding count, and treating this as a
+			// hard error misclassifies "repo we don't analyze yet" as a
+			// scanner failure.
+			reportEmptyProject(logger, codeGraph.ProjectStats)
+		} else {
+			logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 		}
-		logger.Statistic("Code graph built: %d nodes", len(codeGraph.Nodes))
 
 		// Step 1.5: Execute container rules if Docker/Compose files are present
 		var containerDetections []*dsl.EnrichedDetection

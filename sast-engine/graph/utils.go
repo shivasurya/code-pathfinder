@@ -252,14 +252,20 @@ func extractMethodName(node *sitter.Node, sourceCode []byte, filepath string) (s
 	return methodName, methodID
 }
 
-// getFiles walks through a directory and returns all source files (Java, Python, Go, C/C++, Dockerfile, docker-compose).
+// getFiles walks through a directory and returns all source files (Java, Python, Go, C/C++, Dockerfile, docker-compose)
+// along with a ProjectStats summary of every file the walk observed (both
+// supported and unsupported).
+//
 // It skips vendor/, testdata/, node_modules/, .git/, common C/C++ build artifact directories,
-// directories starting with "_", and any path covered by excludePatterns.
+// directories starting with "_", and any path covered by excludePatterns. Files inside skipped
+// directories are not counted in ProjectStats either: the stats reflect "files the user expected
+// pathfinder to look at," not every regular file on disk.
 //
 // excludePatterns is a list of normalized, repo-relative path prefixes (no leading or trailing slash).
 // A path is skipped when its repo-relative form starts with "<prefix>/", or equals the prefix exactly.
-func getFiles(directory string, excludePatterns []string) ([]string, error) {
+func getFiles(directory string, excludePatterns []string) ([]string, ProjectStats, error) {
 	var files []string
+	var stats ProjectStats
 	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -298,24 +304,31 @@ func getFiles(directory string, excludePatterns []string) ([]string, error) {
 		base := filepath.Base(path)
 		baseLower := strings.ToLower(base)
 
+		var supported bool
 		switch {
 		case ext == ".java" || ext == ".py" || ext == ".go":
 			files = append(files, path)
+			supported = true
 		case ext == ".c" || ext == ".h":
 			files = append(files, path)
+			supported = true
 		case ext == ".cpp" || ext == ".cc" || ext == ".cxx" ||
 			ext == ".hpp" || ext == ".hh" || ext == ".hxx":
 			files = append(files, path)
+			supported = true
 		case strings.HasPrefix(baseLower, "dockerfile"):
 			// Match Dockerfile, Dockerfile.dev, dockerfile, etc.
 			files = append(files, path)
+			supported = true
 		case strings.Contains(baseLower, "docker-compose") && (ext == ".yml" || ext == ".yaml"):
 			// Match docker-compose.yml, docker-compose.yaml, etc.
 			files = append(files, path)
+			supported = true
 		}
+		stats.recordFile(path, supported)
 		return nil
 	})
-	return files, err
+	return files, stats, err
 }
 
 // isExcludedPath reports whether relPath (forward-slash, repo-relative) is covered

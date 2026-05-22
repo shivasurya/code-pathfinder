@@ -38,7 +38,8 @@ func Initialize(directory string, callbacks *ProgressCallbacks) *CodeGraph {
 	if callbacks != nil {
 		excludePatterns = callbacks.ExcludePatterns
 	}
-	files, err := getFiles(directory, excludePatterns)
+	files, stats, err := getFiles(directory, excludePatterns)
+	codeGraph.ProjectStats = stats
 	if err != nil {
 		//nolint:all
 		Log("Directory not found:", err)

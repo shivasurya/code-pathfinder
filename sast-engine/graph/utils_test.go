@@ -233,7 +233,7 @@ func TestGetFilesComprehensive(t *testing.T) {
 	}
 
 	// Test getFiles
-	files, err := getFiles(tmpDir, nil)
+	files, _, err := getFiles(tmpDir, nil)
 	if err != nil {
 		t.Fatalf("getFiles failed: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestGetFilesIncludesCAndCpp(t *testing.T) {
 		}
 	}
 
-	got, err := getFiles(dir, nil)
+	got, _, err := getFiles(dir, nil)
 	if err != nil {
 		t.Fatalf("getFiles: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestGetFilesErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			files, err := getFiles(tt.directory, nil)
+			files, _, err := getFiles(tt.directory, nil)
 
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
@@ -769,7 +769,7 @@ func TestGetFilesWithExcludePatterns(t *testing.T) {
 		}
 	}
 
-	got, err := getFiles(dir, []string{"rules"})
+	got, _, err := getFiles(dir, []string{"rules"})
 	if err != nil {
 		t.Fatalf("getFiles: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestGetFilesExcludeIndividualFile(t *testing.T) {
 		}
 	}
 
-	got, err := getFiles(dir, []string{"src/skip_me.py"})
+	got, _, err := getFiles(dir, []string{"src/skip_me.py"})
 	if err != nil {
 		t.Fatalf("getFiles: %v", err)
 	}
@@ -831,6 +831,132 @@ func TestGetFilesExcludeIndividualFile(t *testing.T) {
 		t.Error("src/keep.py should be included")
 	}
 }
+
+// --- ProjectStats integration coverage on getFiles -----------------------
+
+// TestGetFiles_ProjectStats_OnlyUnsupported exercises the empty-graph
+// branch's input: a directory where every regular file is in a language
+// pathfinder doesn't analyze. ScannedFiles must be 0, TotalFiles must equal
+// the number of real files seen, ByLanguage must bucket them.
+func TestGetFiles_ProjectStats_OnlyUnsupported(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		"src/app.ts",
+		"src/util.ts",
+		"src/index.js",
+		"README.md",
+		"package.json",
+	}
+	for _, rel := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("// stub\n"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	got, stats, err := getFiles(dir, nil)
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected zero scanned files, got %d (%v)", len(got), got)
+	}
+	if stats.ScannedFiles != 0 {
+		t.Errorf("ScannedFiles = %d, want 0", stats.ScannedFiles)
+	}
+	if stats.TotalFiles != len(files) {
+		t.Errorf("TotalFiles = %d, want %d", stats.TotalFiles, len(files))
+	}
+	if got, want := stats.ByLanguage["TypeScript"], 2; got != want {
+		t.Errorf("TypeScript = %d, want %d", got, want)
+	}
+	if got, want := stats.ByLanguage["JavaScript"], 1; got != want {
+		t.Errorf("JavaScript = %d, want %d", got, want)
+	}
+	if got, want := stats.ByLanguage["Markdown"], 1; got != want {
+		t.Errorf("Markdown = %d, want %d", got, want)
+	}
+	if got, want := stats.ByLanguage["JSON"], 1; got != want {
+		t.Errorf("JSON = %d, want %d", got, want)
+	}
+}
+
+// TestGetFiles_ProjectStats_Mixed verifies stats when supported and
+// unsupported files coexist. ScannedFiles should reflect only supported.
+func TestGetFiles_ProjectStats_Mixed(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		"Main.java",         // supported
+		"app/api.py",        // supported
+		"web/index.ts",      // unsupported
+		"web/styles.css",    // unsupported
+	}
+	for _, rel := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("// stub\n"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	got, stats, err := getFiles(dir, nil)
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len(got) = %d, want 2", len(got))
+	}
+	if stats.ScannedFiles != 2 {
+		t.Errorf("ScannedFiles = %d, want 2", stats.ScannedFiles)
+	}
+	if stats.TotalFiles != 4 {
+		t.Errorf("TotalFiles = %d, want 4", stats.TotalFiles)
+	}
+	if stats.UnsupportedFileCount() != 2 {
+		t.Errorf("UnsupportedFileCount = %d, want 2", stats.UnsupportedFileCount())
+	}
+}
+
+// TestGetFiles_ProjectStats_SkipDirsNotCounted confirms files inside the
+// always-skipped directories (node_modules, vendor, .git, ...) do NOT
+// inflate the stats, even though the walker descends into the parent path.
+func TestGetFiles_ProjectStats_SkipDirsNotCounted(t *testing.T) {
+	dir := t.TempDir()
+	for _, rel := range []string{
+		"src/app.ts",
+		"node_modules/foo/index.js",
+		"node_modules/foo/package.json",
+		"vendor/bar/lib.go",
+		".git/HEAD",
+	} {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("stub"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	_, stats, err := getFiles(dir, nil)
+	if err != nil {
+		t.Fatalf("getFiles: %v", err)
+	}
+	// Only src/app.ts should be counted.
+	if stats.TotalFiles != 1 {
+		t.Errorf("TotalFiles = %d, want 1 (everything else lives under skip dirs)", stats.TotalFiles)
+	}
+	if stats.ByLanguage["TypeScript"] != 1 {
+		t.Errorf("TypeScript = %d, want 1", stats.ByLanguage["TypeScript"])
+	}
+	if _, ok := stats.ByLanguage["JavaScript"]; ok {
+		t.Error("JavaScript must not be counted (lives in node_modules)")
+	}
+}
+
 
 func BenchmarkGenerateMethodID(b *testing.B) {
 	params := []string{"int", "String", "Object"}

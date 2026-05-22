@@ -131,6 +131,22 @@ func TestLoggerWarningAlwaysShown(t *testing.T) {
 	}
 }
 
+func TestLoggerInfoAlwaysShown(t *testing.T) {
+	// Info is unconditional output (used for empty-project explanations
+	// where the user must see the message regardless of verbosity). Verify
+	// it prints at every level, with no "Info:" or other prefix.
+	verbosities := []VerbosityLevel{VerbosityDefault, VerbosityVerbose, VerbosityDebug}
+	for _, v := range verbosities {
+		var buf bytes.Buffer
+		l := NewLoggerWithWriter(v, &buf)
+		l.Info("hello %s", "world")
+		got := buf.String()
+		if got != "hello world\n" {
+			t.Errorf("verbosity %v: expected %q, got %q", v, "hello world\n", got)
+		}
+	}
+}
+
 func TestLoggerErrorAlwaysShown(t *testing.T) {
 	verbosities := []VerbosityLevel{VerbosityDefault, VerbosityVerbose, VerbosityDebug}
 
