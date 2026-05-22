@@ -59,13 +59,17 @@ func (p *GitDiffProvider) findMergeBase() (string, error) {
 }
 
 // diffFiles runs git diff --name-only to list changed files from merge-base to head.
-// Uses --diff-filter=ACMR to include Added, Copied, Modified, and Renamed files only.
+// Uses --diff-filter=ACMRD to include Added, Copied, Modified, Renamed, AND Deleted
+// files. Deletions matter because callers use this list as a sentinel: an empty list
+// signals "no files in the diff," and dropping deletions would make a delete-only PR
+// look identical to an empty PR, which historically caused the diff filter at
+// cmd/ci.go to fall back to a full-repo scan.
 func (p *GitDiffProvider) diffFiles(mergeBase string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	diffRange := mergeBase + ".." + p.HeadRef
-	cmd := exec.CommandContext(ctx, "git", "diff", "--name-only", "--diff-filter=ACMR", diffRange)
+	cmd := exec.CommandContext(ctx, "git", "diff", "--name-only", "--diff-filter=ACMRD", diffRange)
 	cmd.Dir = p.ProjectRoot
 
 	output, err := cmd.Output()

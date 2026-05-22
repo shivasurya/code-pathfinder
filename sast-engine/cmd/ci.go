@@ -366,8 +366,14 @@ Examples:
 		// Merge container detections with code analysis detections.
 		allEnriched = append(allEnriched, containerDetections...)
 
-		// Apply diff filter when diff-aware mode is active.
-		if diffEnabled && len(changedFiles) > 0 {
+		// Apply diff filter when diff-aware mode is active. We deliberately do
+		// NOT guard on len(changedFiles) > 0: an empty list means the diff
+		// genuinely covers no source files (e.g. a deletion-only PR, a docs-only
+		// PR, or an empty PR), and the right answer in that case is 0 findings,
+		// not "fall back to a full repo scan." Falling back was the May 2026
+		// regression that surfaced as 207 findings on a PR that only deleted a
+		// YAML workflow file.
+		if diffEnabled {
 			totalBefore := len(allEnriched)
 			diffFilter := output.NewDiffFilter(changedFiles)
 			allEnriched = diffFilter.Filter(allEnriched)
@@ -377,9 +383,11 @@ Examples:
 		// Total rules = code analysis rules loaded + container rules loaded.
 		totalRules := len(rules) + containerRulesCount
 
-		// Count unique source files. When diff-aware, only count changed files.
+		// Count unique source files. When diff-aware, only count changed files
+		// (including 0 when the diff covers no source: see the diff-filter
+		// comment above for why we don't fall back to a full scan here either).
 		var filesScanned int
-		if diffEnabled && len(changedFiles) > 0 {
+		if diffEnabled {
 			filesScanned = len(changedFiles)
 		} else {
 			uniqueFiles := make(map[string]bool)

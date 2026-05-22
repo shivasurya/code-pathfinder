@@ -109,18 +109,20 @@ func TestGitDiffProvider_BranchWithMergeBase(t *testing.T) {
 	assert.Equal(t, []string{"feature.py"}, files)
 }
 
-func TestGitDiffProvider_DeletedFileExcluded(t *testing.T) {
-	// Tests that deleted files are excluded (--diff-filter=ACMR does not include D).
+func TestGitDiffProvider_DeletedFileIncluded(t *testing.T) {
+	// Deleted files MUST appear in GetChangedFiles. They drive a separate
+	// downstream signal: cmd/ci.go treats an empty list as "no source in the
+	// diff" and refuses to fall back to a full scan, so dropping deletions
+	// would make a delete-only PR look identical to an empty PR. See the
+	// comment on diffFiles for the full rationale (--diff-filter=ACMRD).
 	dir := setupTestRepo(t)
 
-	// Add a file on main.
 	writeFile(t, filepath.Join(dir, "to_delete.py"), "# will be deleted")
 	runGit(t, dir, "add", ".")
 	runGit(t, dir, "commit", "-m", "add file to delete")
 
 	runGit(t, dir, "checkout", "-b", "feature")
 
-	// Delete the file and add a new one.
 	require.NoError(t, os.Remove(filepath.Join(dir, "to_delete.py")))
 	writeFile(t, filepath.Join(dir, "new_file.py"), "# new")
 	runGit(t, dir, "add", ".")
@@ -134,8 +136,36 @@ func TestGitDiffProvider_DeletedFileExcluded(t *testing.T) {
 
 	files, err := provider.GetChangedFiles()
 	require.NoError(t, err)
-	// to_delete.py should NOT appear (deleted). Only new_file.py.
-	assert.Equal(t, []string{"new_file.py"}, files)
+	assert.ElementsMatch(t, []string{"to_delete.py", "new_file.py"}, files)
+}
+
+func TestGitDiffProvider_DeletionOnlyPR(t *testing.T) {
+	// Regression for the May 2026 207-findings incident: a PR that only
+	// deletes a file (no additions or modifications) must surface that
+	// deletion in GetChangedFiles. Returning an empty list here looks
+	// identical to an empty PR and historically caused cmd/ci.go to skip
+	// the diff filter entirely, dumping every full-scan finding.
+	dir := setupTestRepo(t)
+
+	writeFile(t, filepath.Join(dir, ".github", "workflows", "doomed.yml"), "name: doomed\n")
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-m", "add workflow we'll later delete")
+
+	runGit(t, dir, "checkout", "-b", "feature")
+	require.NoError(t, os.Remove(filepath.Join(dir, ".github", "workflows", "doomed.yml")))
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-m", "delete the workflow")
+
+	provider := &GitDiffProvider{
+		ProjectRoot: dir,
+		BaseRef:     "main",
+		HeadRef:     "HEAD",
+	}
+
+	files, err := provider.GetChangedFiles()
+	require.NoError(t, err)
+	assert.Equal(t, []string{".github/workflows/doomed.yml"}, files,
+		"deletion-only diff must surface the deleted path so callers don't mistake it for an empty PR")
 }
 
 func TestGitDiffProvider_EmptyDiff(t *testing.T) {

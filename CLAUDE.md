@@ -356,6 +356,15 @@ expr.Run(program, envMap) // Returns bool
 
 Methods are bound at runtime to actual node fields, enabling type-safe queries without reflection.
 
+### Diff-Aware Scanning (`pathfinder ci --base`)
+CI mode filters findings to files touched by the PR. The wire is:
+
+1. `diff.GetChangedFiles()` runs `git diff --name-only --diff-filter=ACMRD <merge-base>..HEAD`.
+2. The flag set is **ACMRD** (Added, Copied, Modified, Renamed, **Deleted**). Deletions matter because the downstream filter at `cmd/ci.go` uses the list as a sentinel — an empty list means "no source in the diff," which a deletion-only PR would otherwise look identical to.
+3. `cmd/ci.go` applies `output.NewDiffFilter(changedFiles)` whenever `diffEnabled`, **without** a `len(changedFiles) > 0` guard. An empty diff intersection returns zero findings; it does NOT fall back to a full-repo scan. Falling back was the May 2026 regression that surfaced as 207 findings on a PR that only deleted a YAML workflow file.
+
+If you ever need to bring back the full-scan fallback (e.g., for `--no-diff`), do it by turning off `diffEnabled` rather than by smuggling logic into the filter guard. The two states must stay separable: "diff-aware on, nothing matched" vs "diff-aware off, scan everything."
+
 ### SARIF Report Generation
 CI mode generates SARIF reports for GitHub Advanced Security:
 ```go
