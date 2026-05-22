@@ -43,7 +43,7 @@ jobs:
           echo "Release v${VERSION} verified"
 
       - name: Checkout cpf-registry-server
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: shivasurya/cpf-registry-server
           token: ${{ secrets.REGISTRY_SERVER_PAT }}
