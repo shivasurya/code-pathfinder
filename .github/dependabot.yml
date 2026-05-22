@@ -1,26 +1,41 @@
-# Dependabot version-update configuration.
+# Dependabot configuration: security-only.
 #
-# Why this file exists:
-# Without an explicit allowlist, Dependabot's auto-discovery walks every
-# manifest in the repo, including the 70+ go.mod files we keep under
-# rules/**/tests/ and sast-engine/test-fixtures/. Those are intentionally
-# vulnerable fixtures used to self-test pathfinder's rules; the deps they
-# pin are deliberately old (e.g. dgrijalva/jwt-go@v3.2.0 for GO-JWT-002,
-# vulnerable gorm releases for GO-GORM-SQLI-*). Letting Dependabot file
-# version-update PRs against them would break the very thing they exist
-# to test.
+# What this enables:
+#   - Dependabot security updates: PRs opened automatically when a tracked
+#     manifest contains a dependency with a published advisory. Triggered
+#     by Dependabot alerts; not subject to schedule or open-pr-limit.
 #
-# This config explicitly enumerates the SEVEN real manifest locations.
-# Anything not listed here is left untouched. Test-fixture go.mods stay
-# at their pinned vulnerable versions.
+# What this disables:
+#   - Routine "bump axios from 1.2.3 to 1.2.4" version-bump PRs. Each
+#     ecosystem below sets open-pull-requests-limit: 0, which the GitHub
+#     docs document as the supported way to keep an ecosystem registered
+#     for security updates while suppressing every version-update PR.
 #
-# Note: this file controls version-update PRs only. Dependabot ALERTS
-# (the Security tab) are built off the dependency graph and have no
-# repo-file mechanism to exclude paths. For those, use
-# Settings -> Security -> Dependabot -> Auto-triage rules in the GitHub
-# UI to auto-dismiss alerts whose manifest path matches
-# rules/** or sast-engine/test-fixtures/** with reason
-# "tolerable_risk" or "not_used".
+# Why security-only:
+#   Supply-chain attacks via npm/PyPI/Go modules have become routine
+#   (chained typosquats, post-install scripts, account takeovers of
+#   maintainer accounts). A constant stream of merge-this-patch-bump PRs
+#   produces alert fatigue and tempts a quick rubber-stamp on a malicious
+#   release. Reserving Dependabot's noise budget for actual CVEs keeps
+#   reviewer attention where it matters.
+#
+# Why the explicit allowlist still matters:
+#   Without the seven entries below, Dependabot's auto-discovery would
+#   also track the ~70 go.mod files under rules/**/tests/ and
+#   sast-engine/test-fixtures/, which pin deliberately vulnerable
+#   versions (dgrijalva/jwt-go@v3.2.0 for GO-JWT-002, vulnerable gorm
+#   releases for GO-GORM-SQLI-*, etc.). Letting Dependabot file
+#   "security updates" against those would silently break the rules
+#   they exist to test. The allowlist scopes BOTH version AND security
+#   updates to the seven real manifest locations.
+#
+# Severity filtering (high/critical only):
+#   open-pull-requests-limit cannot filter by severity. To suppress
+#   medium/low security update PRs, add auto-triage rules under
+#   Settings -> Security -> Dependabot -> Auto-triage rules with
+#   action = "Auto-dismiss alert", filter on severity <= medium. Those
+#   rules also dismiss the underlying alerts from the Security tab,
+#   keeping the queue focused on what actually merits a hotfix.
 
 version: 2
 
@@ -31,29 +46,23 @@ updates:
     directory: "/sast-engine"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "go"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
-    groups:
-      go-minor-patch:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "gomod"
     directory: "/sast-engine/tools/validate_go_resolution"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "go"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
 
@@ -63,10 +72,10 @@ updates:
     directory: "/sast-engine"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
 
@@ -76,29 +85,23 @@ updates:
     directory: "/python-sdk"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "python"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
-    groups:
-      python-minor-patch:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/sast-engine/tools/typeshed-converter"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "python"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
 
@@ -108,27 +111,21 @@ updates:
     directory: "/extension/secureflow"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
-    groups:
-      npm-minor-patch:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "npm"
     directory: "/extension/secureflow/packages/secureflow-cli"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
 
@@ -139,16 +136,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "github_actions"
+      - "security"
     commit-message:
       prefix: "chore(deps)"
-    groups:
-      gh-actions-minor-patch:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
