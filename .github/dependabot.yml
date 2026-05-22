@@ -1,0 +1,154 @@
+# Dependabot version-update configuration.
+#
+# Why this file exists:
+# Without an explicit allowlist, Dependabot's auto-discovery walks every
+# manifest in the repo, including the 70+ go.mod files we keep under
+# rules/**/tests/ and sast-engine/test-fixtures/. Those are intentionally
+# vulnerable fixtures used to self-test pathfinder's rules; the deps they
+# pin are deliberately old (e.g. dgrijalva/jwt-go@v3.2.0 for GO-JWT-002,
+# vulnerable gorm releases for GO-GORM-SQLI-*). Letting Dependabot file
+# version-update PRs against them would break the very thing they exist
+# to test.
+#
+# This config explicitly enumerates the SEVEN real manifest locations.
+# Anything not listed here is left untouched. Test-fixture go.mods stay
+# at their pinned vulnerable versions.
+#
+# Note: this file controls version-update PRs only. Dependabot ALERTS
+# (the Security tab) are built off the dependency graph and have no
+# repo-file mechanism to exclude paths. For those, use
+# Settings -> Security -> Dependabot -> Auto-triage rules in the GitHub
+# UI to auto-dismiss alerts whose manifest path matches
+# rules/** or sast-engine/test-fixtures/** with reason
+# "tolerable_risk" or "not_used".
+
+version: 2
+
+updates:
+  # --- Go ---
+
+  - package-ecosystem: "gomod"
+    directory: "/sast-engine"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      go-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "gomod"
+    directory: "/sast-engine/tools/validate_go_resolution"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # --- Java (Gradle) ---
+
+  - package-ecosystem: "gradle"
+    directory: "/sast-engine"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # --- Python ---
+
+  - package-ecosystem: "pip"
+    directory: "/python-sdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/sast-engine/tools/typeshed-converter"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # --- npm (VS Code extension monorepo) ---
+
+  - package-ecosystem: "npm"
+    directory: "/extension/secureflow"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/extension/secureflow/packages/secureflow-cli"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # --- GitHub Actions ---
+  # Tracks SHA-pinned action references across .github/workflows/*.yml.
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github_actions"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gh-actions-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
