@@ -71,6 +71,7 @@ Examples:
 		failOnStr, _ := cmd.Flags().GetString("fail-on")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 		rawExcludes, _ := cmd.Flags().GetStringArray("exclude")
+		rawDisableRules, _ := cmd.Flags().GetStringArray("disable-rule")
 		baseRef, _ := cmd.Flags().GetString("base")
 		headRef, _ := cmd.Flags().GetString("head")
 		noDiff, _ := cmd.Flags().GetBool("no-diff")
@@ -134,6 +135,11 @@ Examples:
 		}
 
 		excludes, err := validateExcludePatterns(rawExcludes)
+		if err != nil {
+			return err
+		}
+
+		disabledRules, err := validateDisableRules(rawDisableRules)
 		if err != nil {
 			return err
 		}
@@ -326,6 +332,29 @@ Examples:
 			return fmt.Errorf("failed to load rules: %w", err)
 		}
 		logger.Statistic("Loaded %d rules", len(rules))
+
+		// Apply --disable-rule. Mirrors --exclude: cheap up-front filter on the
+		// rule slice before any matcher work runs. Rule IDs are matched
+		// case-sensitively because the loader emits them verbatim.
+		if len(disabledRules) > 0 {
+			disabledSet := make(map[string]struct{}, len(disabledRules))
+			for _, id := range disabledRules {
+				disabledSet[id] = struct{}{}
+			}
+			kept := rules[:0]
+			skipped := 0
+			for _, r := range rules {
+				if _, drop := disabledSet[r.Rule.ID]; drop {
+					skipped++
+					continue
+				}
+				kept = append(kept, r)
+			}
+			rules = kept
+			if skipped > 0 {
+				logger.Statistic("Disabled %d rules via --disable-rule", skipped)
+			}
+		}
 
 		// Execute rules against callgraph
 		logger.Progress("Running security scan...")
@@ -521,6 +550,7 @@ func init() {
 	ciCmd.Flags().String("fail-on", "", "Fail with exit code 1 if findings match severities (e.g., critical,high)")
 	ciCmd.Flags().Bool("skip-tests", true, "Skip test files (test_*.py, *_test.py, conftest.py, etc.)")
 	ciCmd.Flags().StringArray("exclude", nil, "Exclude files or directories from the scan. Repo-relative path prefix; repeatable. e.g. --exclude rules/ --exclude sast-engine/test-fixtures")
+	ciCmd.Flags().StringArray("disable-rule", nil, "Disable a rule by ID; repeatable. e.g. --disable-rule SAST-CMD-001 --disable-rule GO-SSRF-001. IDs must match [A-Za-z0-9_-]{1,64}.")
 	ciCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (auto-detected in CI)")
 	ciCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	ciCmd.Flags().Bool("no-diff", false, "Disable diff-aware scanning (scan all files)")
