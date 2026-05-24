@@ -1,0 +1,34 @@
+// Synthetic <vector> fixture for clikeextract C++ tests.
+// Mirrors libstdc++'s public surface without the macro magic.
+
+#ifndef _GLIBCXX_VECTOR
+#define _GLIBCXX_VECTOR
+
+namespace std {
+
+  template<typename T, typename Allocator>
+  class vector {
+   public:
+    vector();
+    vector(size_t n);
+    vector(const vector& other);
+
+    void push_back(const T& value);
+    T& at(size_t pos);
+    T& operator[](size_t pos);
+    size_t size() const;
+    bool empty() const;
+    T* data();
+    void clear();
+
+   private:
+    T* data_;
+    size_t size_;
+  };
+
+  template<typename T, typename Allocator>
+  void swap(vector<T, Allocator>& a, vector<T, Allocator>& b);
+
+}  // namespace std
+
+#endif

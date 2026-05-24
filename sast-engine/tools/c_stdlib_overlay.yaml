@@ -1,0 +1,260 @@
+# C stdlib overlay — hand-curated augmentations to tree-sitter extraction.
+#
+# This file complements the generator's automatic header parse with entries
+# tree-sitter cannot capture or that need richer metadata for downstream
+# security analysis: __attribute__((format)) annotations stripped during
+# parsing, security-tag classifications (sinks for command-injection,
+# format-string, buffer-overflow), and skip rules for compiler-internal
+# symbols.
+#
+# Schema: see tools/internal/clikeextract/overlay.go.
+# Validation: language must equal the generator's --language flag; each
+# override must specify exactly one of {function, typedef, constant}.
+
+schema_version: "1.0.0"
+language: "c"
+
+overrides:
+  # =========================================================================
+  # <stdio.h> — format-string sinks and core file-IO surface.
+  # =========================================================================
+  - header: stdio.h
+    function: printf
+    return_type: int
+    confidence: 1.0
+    security_tag: format_string_sink
+    attribute: format(printf, 1, 2)
+    note: "Variadic format string — CWE-134"
+
+  - header: stdio.h
+    function: fprintf
+    return_type: int
+    confidence: 1.0
+    security_tag: format_string_sink
+    attribute: format(printf, 2, 3)
+
+  - header: stdio.h
+    function: sprintf
+    return_type: int
+    confidence: 1.0
+    security_tag: buffer_overflow_sink
+    note: "Use snprintf instead — CWE-120"
+
+  - header: stdio.h
+    function: vsprintf
+    return_type: int
+    confidence: 1.0
+    security_tag: buffer_overflow_sink
+
+  - header: stdio.h
+    function: gets
+    return_type: char*
+    confidence: 1.0
+    security_tag: buffer_overflow_sink
+    note: "Removed in C11; never safe — CWE-242"
+
+  - header: stdio.h
+    function: scanf
+    return_type: int
+    confidence: 1.0
+    security_tag: format_string_sink
+    attribute: format(scanf, 1, 2)
+
+  - header: stdio.h
+    function: fscanf
+    return_type: int
+    confidence: 1.0
+    security_tag: format_string_sink
+
+  - header: stdio.h
+    function: sscanf
+    return_type: int
+    confidence: 1.0
+    security_tag: format_string_sink
+
+  # =========================================================================
+  # <stdlib.h> — process-control + memory-allocation sinks.
+  # =========================================================================
+  - header: stdlib.h
+    function: system
+    return_type: int
+    params:
+      - { name: command, type: const char* }
+    confidence: 1.0
+    security_tag: command_injection_sink
+    note: "Calls /bin/sh -c — CWE-78"
+
+  - header: stdlib.h
+    function: popen
+    return_type: FILE*
+    params:
+      - { name: command, type: const char* }
+      - { name: type, type: const char* }
+    confidence: 1.0
+    security_tag: command_injection_sink
+
+  - header: stdlib.h
+    function: getenv
+    return_type: char*
+    params:
+      - { name: name, type: const char* }
+    confidence: 1.0
+    security_tag: tainted_source
+    note: "Environment variable — untrusted input source"
+
+  - header: stdlib.h
+    function: setenv
+    return_type: int
+    params:
+      - { name: name, type: const char* }
+      - { name: value, type: const char* }
+      - { name: overwrite, type: int }
+    confidence: 1.0
+
+  - header: stdlib.h
+    function: malloc
+    return_type: void*
+    params:
+      - { name: size, type: size_t }
+    confidence: 1.0
+    security_tag: allocation_source
+
+  - header: stdlib.h
+    function: calloc
+    return_type: void*
+    params:
+      - { name: nmemb, type: size_t }
+      - { name: size, type: size_t }
+    confidence: 1.0
+    security_tag: allocation_source
+
+  - header: stdlib.h
+    function: realloc
+    return_type: void*
+    params:
+      - { name: ptr, type: void* }
+      - { name: size, type: size_t }
+    confidence: 1.0
+    security_tag: allocation_source
+
+  - header: stdlib.h
+    function: free
+    return_type: void
+    params:
+      - { name: ptr, type: void* }
+    confidence: 1.0
+    security_tag: deallocation_sink
+
+  # =========================================================================
+  # <string.h> — banned/dangerous string functions.
+  # =========================================================================
+  - header: string.h
+    function: strcpy
+    return_type: char*
+    confidence: 1.0
+    security_tag: buffer_overflow_sink
+    note: "No bound checking — CWE-120"
+
+  - header: string.h
+    function: strcat
+    return_type: char*
+    confidence: 1.0
+    security_tag: buffer_overflow_sink
+
+  - header: string.h
+    function: strncpy
+    return_type: char*
+    confidence: 1.0
+    note: "Bounded but does not always NUL-terminate"
+
+  - header: string.h
+    function: strncat
+    return_type: char*
+    confidence: 1.0
+
+  - header: string.h
+    function: memcpy
+    return_type: void*
+    confidence: 1.0
+    note: "Undefined behaviour on overlapping regions — use memmove"
+
+  # =========================================================================
+  # <unistd.h> — exec family + file-descriptor sinks (POSIX).
+  # =========================================================================
+  - header: unistd.h
+    function: execve
+    return_type: int
+    params:
+      - { name: pathname, type: const char* }
+      - { name: argv, type: "char* const[]" }
+      - { name: envp, type: "char* const[]" }
+    confidence: 1.0
+    security_tag: command_injection_sink
+
+  - header: unistd.h
+    function: execvp
+    return_type: int
+    confidence: 1.0
+    security_tag: command_injection_sink
+
+  - header: unistd.h
+    function: execl
+    return_type: int
+    confidence: 1.0
+    security_tag: command_injection_sink
+
+  - header: unistd.h
+    function: execlp
+    return_type: int
+    confidence: 1.0
+    security_tag: command_injection_sink
+
+  - header: unistd.h
+    function: read
+    return_type: ssize_t
+    params:
+      - { name: fd, type: int }
+      - { name: buf, type: void* }
+      - { name: count, type: size_t }
+    confidence: 1.0
+    security_tag: tainted_source
+
+  # =========================================================================
+  # <fcntl.h> — file-open helpers.
+  # =========================================================================
+  - header: fcntl.h
+    function: open
+    return_type: int
+    params:
+      - { name: pathname, type: const char* }
+      - { name: flags, type: int }
+    confidence: 1.0
+
+  # =========================================================================
+  # <stdarg.h> — variadic-argument macros.
+  # Tree-sitter sees these as macros and skips them; record their canonical
+  # form so security rules can reference them.
+  # =========================================================================
+  - header: stdarg.h
+    typedef: va_list
+    type: __builtin_va_list
+
+# Cross-platform aliases. Tracked for use by the loader (PR-02) when a
+# project includes a platform-specific spelling — e.g. mingw uses _stdio.h
+# in some compatibility shims.
+cross_platform_aliases:
+  - alias: _stdio.h
+    canonical: stdio.h
+  - alias: _string.h
+    canonical: string.h
+
+# Skip rules. Applied AFTER overrides, so any override on a name that also
+# matches a skip is silently dropped (matches the user expectation of
+# "skip is the final say").
+skip:
+  - prefix: __builtin_
+  - prefix: __GLIBC_
+  - prefix: _GLIBCXX_
+  - prefix: _LIBCPP_
+  - exact: __asm
+  - exact: __asm__
