@@ -3,6 +3,7 @@
   import Settings from './components/Settings.svelte';
   import ProfilesList from './components/ProfilesList.svelte';
   import ProfileDetails from './components/ProfileDetails.svelte';
+  import AuthHeader from './components/AuthHeader.svelte';
   import { onMount } from 'svelte';
 
   // VSCode API - acquire it safely
@@ -18,6 +19,7 @@
   let selectedProfile: any = null;
   let scans: any[] = [];
   let isConfigured: boolean = false;
+  let authUser: any = null;
 
   onMount(() => {
     // Acquire VSCode API
@@ -93,6 +95,10 @@
         case 'backToProfiles':
           currentView = 'profiles';
           break;
+
+        case 'auth:state':
+          authUser = message.user || null;
+          break;
       }
     });
 
@@ -100,6 +106,7 @@
     if (vscode) {
       vscode.postMessage({ type: 'checkOnboardingStatus' });
       vscode.postMessage({ type: 'getProfiles' });
+      vscode.postMessage({ type: 'auth:getState' });
     }
   });
 
@@ -109,24 +116,27 @@
   }
 </script>
 
-<main>
-  {#if modelConfig}
-    {#if currentView === 'onboarding'}
-      <Onboarding {vscode} {modelConfig} />
-    {:else if currentView === 'settings'}
-      <Settings {vscode} {modelConfig} />
-    {:else if currentView === 'profiles'}
-      <ProfilesList {vscode} {profiles} />
-    {:else if currentView === 'profileDetails' && selectedProfile}
-      <ProfileDetails {vscode} profile={selectedProfile} {scans} onBack={handleBackToProfiles} />
+<div class="app-shell">
+  <AuthHeader {vscode} user={authUser} />
+  <main>
+    {#if modelConfig}
+      {#if currentView === 'onboarding'}
+        <Onboarding {vscode} {modelConfig} />
+      {:else if currentView === 'settings'}
+        <Settings {vscode} {modelConfig} />
+      {:else if currentView === 'profiles'}
+        <ProfilesList {vscode} {profiles} />
+      {:else if currentView === 'profileDetails' && selectedProfile}
+        <ProfileDetails {vscode} profile={selectedProfile} {scans} onBack={handleBackToProfiles} />
+      {/if}
+    {:else}
+      <div class="loading">
+        <p>Loading configuration...</p>
+        <p style="font-size: 12px; margin-top: 10px;">If this persists, check the Developer Tools console (Help > Toggle Developer Tools)</p>
+      </div>
     {/if}
-  {:else}
-    <div class="loading">
-      <p>Loading configuration...</p>
-      <p style="font-size: 12px; margin-top: 10px;">If this persists, check the Developer Tools console (Help > Toggle Developer Tools)</p>
-    </div>
-  {/if}
-</main>
+  </main>
+</div>
 
 <style>
   :global(body) {
@@ -163,9 +173,15 @@
     border: 1px solid rgba(34, 197, 94, 0.3);
   }
 
-  main {
-    width: 100%;
+  .app-shell {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;

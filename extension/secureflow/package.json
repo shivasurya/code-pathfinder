@@ -72,7 +72,11 @@
     "onView:secureflow.mainView",
     "onCommand:secureflow.analyzeWorkspace",
     "onCommand:secureflow.analyzeSelection",
-    "onCommand:secureflow.reviewChanges"
+    "onCommand:secureflow.reviewChanges",
+    "onCommand:secureflow.login",
+    "onCommand:secureflow.logout",
+    "onCommand:secureflow.showAccount",
+    "onUri"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -207,6 +211,18 @@
       {
         "command": "secureflow.profileWorkspace",
         "title": "Code Pathfinder: Profile Workspace for Security Analysis"
+      },
+      {
+        "command": "secureflow.login",
+        "title": "Code Pathfinder: Sign in with GitHub"
+      },
+      {
+        "command": "secureflow.logout",
+        "title": "Code Pathfinder: Sign out"
+      },
+      {
+        "command": "secureflow.showAccount",
+        "title": "Code Pathfinder: Show Signed-in Account"
       }
     ],
     "keybindings": [
