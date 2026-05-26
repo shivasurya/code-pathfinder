@@ -4,6 +4,7 @@ out/**
 node_modules/**
 src/**
 coverage/**
+scripts/**
 .gitignore
 .yarnrc
 webpack.config.js

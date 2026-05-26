@@ -273,6 +273,15 @@
           "when": "view == scm"
         }
       ]
+    },
+    "icons": {
+      "codepathfinder-logo": {
+        "description": "Code Pathfinder logo",
+        "default": {
+          "fontPath": "./resources/icon-font/codepathfinder-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
     }
   },
   "scripts": {
@@ -286,7 +295,8 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "format": "prettier --config .prettierrc 'src/**/*.ts' --write",
-    "test:coverage": "vscode-test --coverage"
+    "test:coverage": "vscode-test --coverage",
+    "build:icon-font": "node scripts/build-icon-font.mjs"
   },
   "dependencies": {
     "@codepathfinder/secureflow-cli": "file:packages/secureflow-cli",
@@ -314,6 +324,8 @@
     "svelte-loader": "^3.2.4",
     "svelte-preprocess": "^6.0.3",
     "ts-loader": "^9.5.2",
+    "svgpath": "^2.6.0",
+    "svgtofont": "^6.5.2",
     "typescript": "^5.8.3",
     "webpack": "^5.105.0",
     "webpack-cli": "^6.0.1"

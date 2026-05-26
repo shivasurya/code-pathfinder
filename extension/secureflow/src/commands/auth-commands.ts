@@ -75,10 +75,10 @@ export function createAuthStatusBarItem(
   const auth = AuthService.getInstance();
   const render = (user: UserInfo | undefined) => {
     if (user) {
-      item.text = `$(github) ${formatUser(user)}`;
+      item.text = `$(codepathfinder-logo) ${formatUser(user)}`;
       item.tooltip = 'Code Pathfinder — signed in. Click to manage.';
     } else {
-      item.text = '$(github) Sign in';
+      item.text = '$(codepathfinder-logo) Sign in';
       item.tooltip = 'Code Pathfinder — sign in with GitHub via Auth0';
     }
     item.show();
