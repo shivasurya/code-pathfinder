@@ -9,6 +9,7 @@ import { ScanResult } from '../models/scan-result';
 import { AnalyticsService } from '../services/analytics';
 import { SettingsManager } from '../settings/settings-manager';
 import { ModelConfig } from '../generated/model-config';
+import { AuthService } from '../services/auth-service';
 
 export class SecureFlowExplorer {
   private static instance: SecureFlowExplorer;
@@ -133,6 +134,15 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     };
 
     console.log('SecureFlow: Webview options set, generating HTML...');
+
+    const auth = AuthService.getInstance();
+    const authSubscription = auth.onDidChangeSession((session) => {
+      this._view?.webview.postMessage({
+        type: 'auth:state',
+        session
+      });
+    });
+    this._context.subscriptions.push(authSubscription);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       console.log('SecureFlow: Received message from webview:', message.type);
@@ -477,6 +487,28 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             }
           }
           break;
+        case 'auth:loginWithProvider':
+          await vscode.commands.executeCommand(
+            'secureflow.login',
+            message.connection
+          );
+          break;
+        case 'auth:continueAsGuest':
+          await vscode.commands.executeCommand('secureflow.continueAsGuest');
+          break;
+        case 'auth:logout':
+          await vscode.commands.executeCommand('secureflow.logout');
+          break;
+        case 'auth:getState': {
+          const session = await AuthService.getInstance().getSession();
+          if (this._view) {
+            this._view.webview.postMessage({
+              type: 'auth:state',
+              session
+            });
+          }
+          break;
+        }
         case 'saveConfig':
           console.log('SecureFlow: saveConfig message received', {
             provider: message.provider,

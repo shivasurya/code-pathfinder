@@ -12,6 +12,11 @@ import { WorkspaceProfilerCommand } from './profiler/workspace-profiler-command'
 import { SecureFlowExplorer } from './ui/secureflow-explorer';
 import { AnalyticsService } from './services/analytics';
 import { SentryService } from './services/sentry-service';
+import { AuthService } from './services/auth-service';
+import {
+  createAuthStatusBarItem,
+  registerAuthCommands
+} from './commands/auth-commands';
 
 /**
  * TODO(CLI): This file is EXTENSION-ONLY. It wires up VS Code activation,
@@ -47,11 +52,7 @@ async function migrateLegacySettings(
         inspected.globalValue,
         vscode.ConfigurationTarget.Global
       );
-      await oldConfig.update(
-        key,
-        undefined,
-        vscode.ConfigurationTarget.Global
-      );
+      await oldConfig.update(key, undefined, vscode.ConfigurationTarget.Global);
     }
     if (inspected.workspaceValue !== undefined) {
       await newConfig.update(
@@ -116,6 +117,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  // Initialize Auth0 + GitHub login before the webview registers,
+  // so the sidepanel can query auth state on first resolve.
+  AuthService.getInstance().initialize(context);
+
   SecureFlowExplorer.register(context);
 
   const outputChannel = vscode.window.createOutputChannel(
@@ -139,6 +144,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register the git changes review command and status bar button
     registerSecureFlowReviewCommand(context, outputChannel, settingsManager);
 
+    // Register auth commands + status bar (AuthService already initialized above)
+    registerAuthCommands(context);
+    createAuthStatusBarItem(context);
+
     console.log('SecureFlow extension fully activated!');
   } catch (error) {
     console.error(`SecureFlow activation failed: ${error}`);
@@ -154,7 +163,9 @@ export async function activate(context: vscode.ExtensionContext) {
       console.error('Failed to capture activation error:', sentryError);
     }
 
-    vscode.window.showErrorMessage(`Code Pathfinder activation failed: ${error}`);
+    vscode.window.showErrorMessage(
+      `Code Pathfinder activation failed: ${error}`
+    );
   }
 }
 
