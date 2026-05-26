@@ -3,7 +3,8 @@
   import Settings from './components/Settings.svelte';
   import ProfilesList from './components/ProfilesList.svelte';
   import ProfileDetails from './components/ProfileDetails.svelte';
-  import AuthHeader from './components/AuthHeader.svelte';
+  import LoginPage from './components/LoginPage.svelte';
+  import ProfileMenu from './components/ProfileMenu.svelte';
   import { onMount } from 'svelte';
 
   // VSCode API - acquire it safely
@@ -19,7 +20,12 @@
   let selectedProfile: any = null;
   let scans: any[] = [];
   let isConfigured: boolean = false;
-  let authUser: any = null;
+
+  type Session =
+    | { kind: 'user'; user: any }
+    | { kind: 'guest' }
+    | { kind: 'none' };
+  let session: Session | undefined = undefined;
 
   onMount(() => {
     // Acquire VSCode API
@@ -97,7 +103,7 @@
           break;
 
         case 'auth:state':
-          authUser = message.user || null;
+          session = (message.session as Session) ?? { kind: 'none' };
           break;
       }
     });
@@ -116,27 +122,45 @@
   }
 </script>
 
-<div class="app-shell">
-  <AuthHeader {vscode} user={authUser} />
-  <main>
-    {#if modelConfig}
-      {#if currentView === 'onboarding'}
-        <Onboarding {vscode} {modelConfig} />
-      {:else if currentView === 'settings'}
-        <Settings {vscode} {modelConfig} />
-      {:else if currentView === 'profiles'}
-        <ProfilesList {vscode} {profiles} />
-      {:else if currentView === 'profileDetails' && selectedProfile}
-        <ProfileDetails {vscode} profile={selectedProfile} {scans} onBack={handleBackToProfiles} />
-      {/if}
-    {:else}
-      <div class="loading">
-        <p>Loading configuration...</p>
-        <p style="font-size: 12px; margin-top: 10px;">If this persists, check the Developer Tools console (Help > Toggle Developer Tools)</p>
-      </div>
-    {/if}
+{#if session === undefined}
+  <!-- Waiting for initial auth state to avoid a login-page flash on load -->
+{:else if session.kind === 'none'}
+  <main class="login-shell">
+    <LoginPage {vscode} />
   </main>
-</div>
+{:else}
+  <div class="app-shell">
+    <div class="topbar">
+      <ProfileMenu {vscode} {session} />
+    </div>
+    <main>
+      {#if modelConfig}
+        {#if currentView === 'onboarding'}
+          <Onboarding {vscode} {modelConfig} />
+        {:else if currentView === 'settings'}
+          <Settings {vscode} {modelConfig} />
+        {:else if currentView === 'profiles'}
+          <ProfilesList {vscode} {profiles} />
+        {:else if currentView === 'profileDetails' && selectedProfile}
+          <ProfileDetails
+            {vscode}
+            profile={selectedProfile}
+            {scans}
+            onBack={handleBackToProfiles}
+          />
+        {/if}
+      {:else}
+        <div class="loading">
+          <p>Loading configuration...</p>
+          <p style="font-size: 12px; margin-top: 10px;">
+            If this persists, check the Developer Tools console (Help > Toggle
+            Developer Tools)
+          </p>
+        </div>
+      {/if}
+    </main>
+  </div>
+{/if}
 
 <style>
   :global(body) {
@@ -179,6 +203,12 @@
     min-height: 100vh;
   }
 
+  .topbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 12px 0;
+  }
+
   main {
     flex: 1;
     width: 100%;
@@ -186,6 +216,16 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .login-shell {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
     box-sizing: border-box;
   }
 

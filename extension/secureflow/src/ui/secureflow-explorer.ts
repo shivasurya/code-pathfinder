@@ -136,10 +136,10 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
     console.log('SecureFlow: Webview options set, generating HTML...');
 
     const auth = AuthService.getInstance();
-    const authSubscription = auth.onDidChangeSession((user) => {
+    const authSubscription = auth.onDidChangeSession((session) => {
       this._view?.webview.postMessage({
         type: 'auth:state',
-        user: user ?? null
+        session
       });
     });
     this._context.subscriptions.push(authSubscription);
@@ -487,18 +487,24 @@ class SecureFlowWebViewProvider implements vscode.WebviewViewProvider {
             }
           }
           break;
-        case 'auth:login':
-          await vscode.commands.executeCommand('secureflow.login');
+        case 'auth:loginWithProvider':
+          await vscode.commands.executeCommand(
+            'secureflow.login',
+            message.connection
+          );
+          break;
+        case 'auth:continueAsGuest':
+          await vscode.commands.executeCommand('secureflow.continueAsGuest');
           break;
         case 'auth:logout':
           await vscode.commands.executeCommand('secureflow.logout');
           break;
         case 'auth:getState': {
-          const user = await AuthService.getInstance().getCurrentUser();
+          const session = await AuthService.getInstance().getSession();
           if (this._view) {
             this._view.webview.postMessage({
               type: 'auth:state',
-              user: user ?? null
+              session
             });
           }
           break;

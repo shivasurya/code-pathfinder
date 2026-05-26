@@ -76,6 +76,7 @@
     "onCommand:secureflow.login",
     "onCommand:secureflow.logout",
     "onCommand:secureflow.showAccount",
+    "onCommand:secureflow.continueAsGuest",
     "onUri"
   ],
   "main": "./dist/extension.js",
@@ -223,6 +224,10 @@
       {
         "command": "secureflow.showAccount",
         "title": "Code Pathfinder: Show Signed-in Account"
+      },
+      {
+        "command": "secureflow.continueAsGuest",
+        "title": "Code Pathfinder: Continue as Guest"
       }
     ],
     "keybindings": [

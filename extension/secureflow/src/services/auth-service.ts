@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import {
   AUTH0_CLIENT_ID,
-  AUTH0_CONNECTION,
   AUTH0_DOMAIN,
   AUTH0_REDIRECT_URI,
   AUTH0_SCOPES,
-  AUTH_SECRET_KEYS
+  AUTH_SECRET_KEYS,
+  AUTH_STATE_KEYS,
+  Auth0Connection
 } from '../settings/auth-config';
 
 export interface UserInfo {
@@ -16,6 +17,11 @@ export interface UserInfo {
   email?: string;
   picture?: string;
 }
+
+export type Session =
+  | { kind: 'user'; user: UserInfo }
+  | { kind: 'guest' }
+  | { kind: 'none' };
 
 interface PendingLogin {
   codeVerifier: string;
@@ -28,9 +34,7 @@ export class AuthService implements vscode.UriHandler {
   private static instance: AuthService;
   private context?: vscode.ExtensionContext;
   private pending?: PendingLogin;
-  private readonly _onDidChangeSession = new vscode.EventEmitter<
-    UserInfo | undefined
-  >();
+  private readonly _onDidChangeSession = new vscode.EventEmitter<Session>();
   public readonly onDidChangeSession = this._onDidChangeSession.event;
 
   private constructor() {}
@@ -48,21 +52,31 @@ export class AuthService implements vscode.UriHandler {
     context.subscriptions.push(this._onDidChangeSession);
   }
 
-  public async getCurrentUser(): Promise<UserInfo | undefined> {
-    const raw = await this.requireContext().secrets.get(
-      AUTH_SECRET_KEYS.userInfo
-    );
-    return raw ? (JSON.parse(raw) as UserInfo) : undefined;
+  public async getSession(): Promise<Session> {
+    const ctx = this.requireContext();
+    const raw = await ctx.secrets.get(AUTH_SECRET_KEYS.userInfo);
+    if (raw) {
+      return { kind: 'user', user: JSON.parse(raw) as UserInfo };
+    }
+    if (ctx.globalState.get<boolean>(AUTH_STATE_KEYS.guest)) {
+      return { kind: 'guest' };
+    }
+    return { kind: 'none' };
   }
 
   public async getAccessToken(): Promise<string | undefined> {
     return this.requireContext().secrets.get(AUTH_SECRET_KEYS.accessToken);
   }
 
-  public async login(): Promise<UserInfo> {
+  public async login(connection: Auth0Connection): Promise<UserInfo> {
     if (this.pending) {
       throw new Error('A login is already in progress.');
     }
+    // Signing in clears any prior guest flag — the user is opting into a real account.
+    await this.requireContext().globalState.update(
+      AUTH_STATE_KEYS.guest,
+      undefined
+    );
 
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = computeCodeChallenge(codeVerifier);
@@ -73,7 +87,7 @@ export class AuthService implements vscode.UriHandler {
     authorizeUrl.searchParams.set('client_id', AUTH0_CLIENT_ID);
     authorizeUrl.searchParams.set('redirect_uri', AUTH0_REDIRECT_URI);
     authorizeUrl.searchParams.set('scope', AUTH0_SCOPES);
-    authorizeUrl.searchParams.set('connection', AUTH0_CONNECTION);
+    authorizeUrl.searchParams.set('connection', connection);
     authorizeUrl.searchParams.set('code_challenge', codeChallenge);
     authorizeUrl.searchParams.set('code_challenge_method', 'S256');
     authorizeUrl.searchParams.set('state', state);
@@ -107,15 +121,21 @@ export class AuthService implements vscode.UriHandler {
     }
   }
 
+  public async continueAsGuest(): Promise<void> {
+    await this.requireContext().globalState.update(AUTH_STATE_KEYS.guest, true);
+    this._onDidChangeSession.fire({ kind: 'guest' });
+  }
+
   public async logout(): Promise<void> {
     const ctx = this.requireContext();
     await Promise.all([
       ctx.secrets.delete(AUTH_SECRET_KEYS.accessToken),
       ctx.secrets.delete(AUTH_SECRET_KEYS.idToken),
       ctx.secrets.delete(AUTH_SECRET_KEYS.refreshToken),
-      ctx.secrets.delete(AUTH_SECRET_KEYS.userInfo)
+      ctx.secrets.delete(AUTH_SECRET_KEYS.userInfo),
+      ctx.globalState.update(AUTH_STATE_KEYS.guest, undefined)
     ]);
-    this._onDidChangeSession.fire(undefined);
+    this._onDidChangeSession.fire({ kind: 'none' });
   }
 
   public async handleUri(uri: vscode.Uri): Promise<void> {
@@ -151,7 +171,7 @@ export class AuthService implements vscode.UriHandler {
       const tokens = await exchangeCodeForTokens(code, pending.codeVerifier);
       const userInfo = await fetchUserInfo(tokens.access_token);
       await this.persistSession(tokens, userInfo);
-      this._onDidChangeSession.fire(userInfo);
+      this._onDidChangeSession.fire({ kind: 'user', user: userInfo });
       pending.resolve(userInfo);
     } catch (err) {
       pending.reject(err as Error);
