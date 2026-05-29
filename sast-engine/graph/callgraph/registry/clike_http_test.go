@@ -229,19 +229,27 @@ func TestCStdlibRegistry_HTTP_ChecksumUnsupportedFormat(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported checksum format")
 }
 
-func TestCStdlibRegistry_HTTP_ManifestEmbeddedURL(t *testing.T) {
+// TestCStdlibRegistry_HTTP_ManifestEmbeddedURLIgnored pins the post-bugfix
+// contract: even when the manifest's per-entry URL points elsewhere, the
+// loader ignores it and constructs the fetch URL from its own baseURL.
+//
+// The bug this guards: the generator stamps every manifest with the
+// production CDN URL by default, so any `--stdlib-base-url` override (or
+// local HTTP server) would silently bypass the override if entry.URL won.
+func TestCStdlibRegistry_HTTP_ManifestEmbeddedURLIgnored(t *testing.T) {
 	f := newCFixture()
 	srv := serveFixture(t, f)
 
-	// Override the entry's URL to something at a different path; the loader
-	// must follow it instead of constructing one from baseURL.
-	f.manifestC.Headers[0].URL = srv.URL + "/registries/linux/c/v1/stdio_stdlib.json"
+	// Embed a URL on a host the test fixture doesn't even know about.
+	// If the loader followed entry.URL, the fetch would fail (or hang).
+	// The loader must ignore it and use baseURL + entry.File.
+	f.manifestC.Headers[0].URL = "https://nowhere.test/this/would/not/work.json"
 
 	r := NewCStdlibRegistryRemote(srv.URL+"/registries", core.PlatformLinux)
 	withTempCacheRoot(t, r)
 	require.NoError(t, r.LoadManifest(noopLogger{}))
 	h, err := r.GetHeader("stdio.h")
-	require.NoError(t, err)
+	require.NoError(t, err, "loader must use its own baseURL, not entry.URL")
 	require.Contains(t, h.Functions, "printf")
 }
 
@@ -345,16 +353,18 @@ func TestCppStdlibRegistry_HTTP_ChecksumMismatch(t *testing.T) {
 	assert.Contains(t, err.Error(), "digest mismatch")
 }
 
-func TestCppStdlibRegistry_HTTP_ManifestEmbeddedURL(t *testing.T) {
+// TestCppStdlibRegistry_HTTP_ManifestEmbeddedURLIgnored — C++ counterpart
+// to the C-loader test. Same contract: entry.URL is ignored.
+func TestCppStdlibRegistry_HTTP_ManifestEmbeddedURLIgnored(t *testing.T) {
 	f := newCFixture()
 	srv := serveFixture(t, f)
-	f.manifestCpp.Headers[0].URL = srv.URL + "/registries/linux/cpp/v1/vector_stdlib.json"
+	f.manifestCpp.Headers[0].URL = "https://nowhere.test/would/not/work.json"
 
 	r := NewCppStdlibRegistryRemote(srv.URL+"/registries", core.PlatformLinux)
 	withTempCacheRootCpp(t, r)
 	require.NoError(t, r.LoadManifest(noopLogger{}))
 	_, err := r.GetClass("vector", "std::vector")
-	require.NoError(t, err)
+	require.NoError(t, err, "loader must use its own baseURL, not entry.URL")
 }
 
 // --- helpers --------------------------------------------------------------

@@ -118,7 +118,7 @@ func collapseWhitespace(s string) string {
 // so we should never see it here — but the keep rule means even if we do, we
 // don't accidentally drop something that's just an oddly-named keyword.
 func IsPrivateSymbol(name string) bool {
-	if len(name) == 0 {
+	if len(name) < 2 {
 		return false
 	}
 	if !strings.HasPrefix(name, "_") {

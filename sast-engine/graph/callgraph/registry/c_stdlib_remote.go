@@ -266,13 +266,19 @@ func (r *CStdlibRegistryRemote) fetchHeaderFromHTTP(entry *core.CStdlibHeaderEnt
 	return &h, nil
 }
 
-// headerURL prefers the manifest-embedded URL when present (lets the registry
-// publisher point individual files at a different host or a versioned path)
-// and otherwise constructs one from the loader's baseURL + entry.File.
+// headerURL constructs the URL for a per-header JSON by joining the
+// loader's configured baseURL with the manifest's relative path.
+//
+// We DO NOT use entry.URL even when present. The reason: manifests are
+// generated against a default `--base-url` (the production CDN), so the
+// embedded URLs always point at the prod CDN. Honoring entry.URL would
+// silently bypass `--stdlib-base-url` overrides — every test, local
+// server, or staging deploy would still hit the production CDN. The
+// loader's baseURL is the single source of truth.
+//
+// entry.URL stays in the schema for forward compatibility (mirrors,
+// CDN inspection) but the loader ignores it.
 func (r *CStdlibRegistryRemote) headerURL(entry *core.CStdlibHeaderEntry) string {
-	if entry.URL != "" {
-		return entry.URL
-	}
 	return joinURL(r.baseURL, r.platform, "c", "v1", entry.File)
 }
 
