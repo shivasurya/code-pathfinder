@@ -213,13 +213,10 @@ func (r *CppStdlibRegistryRemote) fetchHeaderFromHTTP(entry *core.CStdlibHeaderE
 	return &h, nil
 }
 
-// headerURL prefers the manifest-embedded URL when present and falls back
-// to <baseURL>/<platform>/cpp/v1/<file> for manifests that predate the
-// per-entry URL field.
+// headerURL constructs the URL for a per-header JSON by joining the
+// loader's configured baseURL with the manifest's relative path. See
+// the C loader's headerURL comment for why entry.URL is ignored.
 func (r *CppStdlibRegistryRemote) headerURL(entry *core.CStdlibHeaderEntry) string {
-	if entry.URL != "" {
-		return entry.URL
-	}
 	return joinURL(r.baseURL, r.platform, "cpp", "v1", entry.File)
 }
 
