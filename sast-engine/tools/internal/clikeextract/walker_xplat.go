@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/shivasurya/code-pathfinder/sast-engine/graph/callgraph/core"
 )
@@ -13,18 +14,30 @@ import (
 // Windows headers, accessed cross-platform via mingw-w64 on Ubuntu.
 //
 // `apt install mingw-w64` on ubuntu-latest places the Win32 + MSVCRT headers
-// under /usr/x86_64-w64-mingw32/include and the mingw libstdc++ tree at
-// /usr/x86_64-w64-mingw32/include/c++/<version>. Using mingw on Linux beats
-// running a Windows GitHub Actions runner for cost and simplicity, and gives
-// us a faithful Win32 surface for stdlib resolution.
+// under /usr/x86_64-w64-mingw32/include. The mingw libstdc++ tree can live
+// in two different places depending on the packaging:
+//
+//   - /usr/x86_64-w64-mingw32/include/c++/<version>        (mingw upstream)
+//   - /usr/lib/gcc/x86_64-w64-mingw32/<ver>-<thread>/include/c++  (Ubuntu)
+//
+// Ubuntu's apt-packaged g++-mingw-w64 splits the C++ headers under the
+// gcc tree instead of the mingw sysroot. We probe both layouts so the
+// generator works regardless of distro packaging.
 //
 // All paths exposed as package vars (rather than literals) so tests can
 // override them to exercise both the hit and miss branches without depending
 // on whether the host actually has mingw installed.
 var (
-	// windowsMingwRoot is the canonical mingw-w64 install root. Subdirectories
-	// `include` (C) and `include/c++/<version>` (C++) live underneath.
+	// windowsMingwRoot is the canonical mingw-w64 install root. Subdirectory
+	// `include` (C) lives underneath; C++ may also live here for upstream
+	// mingw installs.
 	windowsMingwRoot = "/usr/x86_64-w64-mingw32"
+
+	// ubuntuMingwGccRoot is the directory holding `<ver>-<thread>` subdirs
+	// (e.g. `13-posix`, `13-win32`) on Debian/Ubuntu. The C++ headers live at
+	// <root>/<ver>-<thread>/include/c++. We probe this only when the
+	// upstream layout under windowsMingwRoot doesn't carry C++ headers.
+	ubuntuMingwGccRoot = "/usr/lib/gcc/x86_64-w64-mingw32"
 
 	// darwinSDKRoots is the ordered list of macOS SDK include directories the
 	// generator probes. Command Line Tools first because that's the lighter
@@ -61,26 +74,87 @@ func windowsCSource() (HeaderSource, error) {
 	}, nil
 }
 
-// windowsCppSource finds the mingw libstdc++ header tree. Returns an error
-// when no version directory exists — without one, the C++ surface is
-// unrecoverable (the directory name encodes the version).
+// windowsCppSource finds the mingw libstdc++ header tree. Probes both the
+// upstream mingw layout (headers under the sysroot) and the Debian/Ubuntu
+// layout (headers split under /usr/lib/gcc). Returns an error only when
+// neither layout yields a versioned directory.
 //
 // The walk lists the C++ STL tree only. Win32 C headers are exposed via
 // windowsCSource; mixing both into one source would conflate languages.
 func windowsCppSource() (HeaderSource, error) {
-	root := filepath.Join(windowsMingwRoot, "include", "c++")
-	dir, version := findVersionedDir(root)
+	dir, version, layout := findWindowsMingwCppDir()
 	if dir == "" {
 		return HeaderSource{}, fmt.Errorf("windowsCppSource: no mingw libstdc++ headers under %s "+
-			"(install with: apt install g++-mingw-w64)", root)
+			"or %s (install with: apt install g++-mingw-w64)",
+			filepath.Join(windowsMingwRoot, "include", "c++"), ubuntuMingwGccRoot)
 	}
 	return HeaderSource{
 		Platform:   core.PlatformWindows,
 		Language:   core.LanguageCpp,
 		SearchDirs: []string{dir},
 		HeaderExts: []string{".h", ".hpp", ".hxx", ""},
-		SystemTag:  "mingw-w64-libstdc++-" + version,
+		SystemTag:  "mingw-w64-libstdc++-" + version + "-" + layout,
 	}, nil
+}
+
+// findWindowsMingwCppDir locates the mingw libstdc++ header tree. Returns
+// (dir, version, layout-tag) where layout-tag identifies which packaging
+// shape matched ("upstream" or "ubuntu") so the SystemTag downstream can
+// disambiguate. Returns ("","","") when no layout matches.
+//
+// Layout precedence:
+//
+//  1. Upstream mingw: <root>/include/c++/<ver>  (version-keyed subdirs)
+//  2. Ubuntu split:   /usr/lib/gcc/x86_64-w64-mingw32/<ver>-<thread>/include/c++
+//     prefers the posix threading variant (the libstdc++ shipped under win32
+//     threading is functionally identical but the posix one is the platform
+//     default for general apps).
+func findWindowsMingwCppDir() (dir, version, layout string) {
+	upstream := filepath.Join(windowsMingwRoot, "include", "c++")
+	if d, v := findVersionedDir(upstream); d != "" {
+		return d, v, "upstream"
+	}
+	if d, v := findUbuntuMingwCppDir(); d != "" {
+		return d, v, "ubuntu"
+	}
+	return "", "", ""
+}
+
+// findUbuntuMingwCppDir resolves the Debian/Ubuntu mingw libstdc++ tree.
+// Scans /usr/lib/gcc/x86_64-w64-mingw32/ for `<ver>-<thread>` subdirs,
+// prefers `<ver>-posix`, falls back to `<ver>-win32`. Returns ("","")
+// when no candidate exists or the candidate doesn't carry an
+// include/c++ subtree.
+func findUbuntuMingwCppDir() (dir, version string) {
+	entries, err := os.ReadDir(ubuntuMingwGccRoot)
+	if err != nil {
+		return "", ""
+	}
+	var posix, win32 []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		switch {
+		case strings.HasSuffix(name, "-posix"):
+			posix = append(posix, name)
+		case strings.HasSuffix(name, "-win32"):
+			win32 = append(win32, name)
+		}
+	}
+	for _, candidates := range [][]string{posix, win32} {
+		if len(candidates) == 0 {
+			continue
+		}
+		sort.Strings(candidates)
+		newest := candidates[len(candidates)-1]
+		cppDir := filepath.Join(ubuntuMingwGccRoot, newest, "include", "c++")
+		if dirExists(cppDir) {
+			return cppDir, newest
+		}
+	}
+	return "", ""
 }
 
 // darwinCSource probes the canonical macOS SDK include locations and uses
@@ -165,14 +239,15 @@ func firstExistingDir(candidates []string) string {
 	return ""
 }
 
-// detectMingwVersion derives a version string from the libstdc++ directory
-// name embedded under the mingw root. Returns "unknown" when the tree has
-// not been probed yet (windowsCppSource hits this path before the C source
-// builder runs). Lightweight on purpose: parsing `gcc --version` would add
-// an exec dependency that complicates testing for marginal accuracy gain.
+// detectMingwVersion derives a short version tag for the C HeaderSource's
+// SystemTag. Uses the libstdc++ directory under whichever mingw layout the
+// host actually has installed, so the tag stays consistent across
+// upstream-mingw and Ubuntu packaging. Returns "unknown" when neither
+// layout has C++ headers (only the C side is installed). Lightweight on
+// purpose: parsing `gcc --version` would add an exec dependency that
+// complicates testing for marginal accuracy gain.
 func detectMingwVersion() string {
-	root := filepath.Join(windowsMingwRoot, "include", "c++")
-	_, v := findVersionedDir(root)
+	_, v, _ := findWindowsMingwCppDir()
 	if v == "" {
 		return "unknown"
 	}
