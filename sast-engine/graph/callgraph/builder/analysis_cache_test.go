@@ -4,11 +4,28 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestMain points default-location index resolution at a throwaway directory so
+// the package's tests never write SQLite files into the developer's real
+// $HOME/.codepathfinder. It deliberately does not touch $HOME itself: other
+// resolvers in this package read $HOME to locate GOMODCACHE.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "cpf-index-tests")
+	if err != nil {
+		panic(err)
+	}
+	indexParentDirOverride = dir
+	code := m.Run()
+	indexParentDirOverride = ""
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 // ---- helpers ----
 
@@ -38,17 +55,19 @@ func TestAnalysisCache_OpenClose(t *testing.T) {
 	require.NoError(t, cache.Close())
 }
 
-// TestAnalysisCache_OpenClose_InvalidDir verifies that a truly unwritable path
-// returns an error instead of panicking.
+// TestAnalysisCache_OpenClose_InvalidDir verifies that an index path whose
+// parent cannot be created returns an error instead of panicking. A regular
+// file is planted where the index directory would go, so os.MkdirAll fails.
 func TestAnalysisCache_OpenClose_InvalidDir(t *testing.T) {
-	// Use a path under a non-existent root that os.MkdirAll should fail on.
-	// On Linux, writing under /proc is not permitted.
-	_, err := OpenAnalysisCache("/proc/nonexistent_cpf_test/project")
-	// We expect either an error from MkdirAll or from sql.Open — either way not nil.
-	// If the test machine somehow allows it we just skip.
-	if err == nil {
-		t.Skip("unexpected success — running as root or unusual kernel config")
-	}
+	tmp := t.TempDir()
+	blocker := filepath.Join(tmp, "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o644))
+
+	// IndexPath points inside the blocking file, so MkdirAll on its parent fails.
+	_, err := OpenAnalysisCacheWithOptions(CacheOptions{
+		ProjectRoot: tmp,
+		IndexPath:   filepath.Join(blocker, "sub", "index.sqlite"),
+	})
 	assert.Error(t, err)
 }
 
@@ -56,9 +75,11 @@ func TestAnalysisCache_OpenClose_InvalidDir(t *testing.T) {
 
 func TestAnalysisCache_DBPath(t *testing.T) {
 	cache := openTempCache(t)
-	// DBPath uses PRAGMA database_list; the returned path may be empty on in-memory
-	// DBs or non-empty for file-backed ones. Either way it should not panic.
-	_ = cache.DBPath()
+	// DBPath returns the resolved index file. With the test override active it
+	// lives under the isolated temp dir and ends in .sqlite.
+	path := cache.DBPath()
+	assert.Equal(t, indexParentDirOverride, filepath.Dir(path))
+	assert.True(t, strings.HasSuffix(path, ".sqlite"), "got %q", path)
 }
 
 // ---- Per-table version wipe tests ----
@@ -561,7 +582,7 @@ func TestGetFileCached_CorruptCallSitesJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert row with correct hash but invalid call_sites_json.
-	_, err = cache.db.ExecContext(context.Background(), 
+	_, err = cache.db.ExecContext(context.Background(),
 		`INSERT OR REPLACE INTO file_cache(file_path, content_hash, updated_at, call_sites_json, scope_json)
 		 VALUES(?,?,?,?,?)`,
 		goFile, hash, 1, "NOT_VALID_JSON", `{"function_scopes":{}}`,
@@ -582,7 +603,7 @@ func TestGetFileCached_CorruptScopeJSON(t *testing.T) {
 	hash, err := hashFile(goFile)
 	require.NoError(t, err)
 
-	_, err = cache.db.ExecContext(context.Background(), 
+	_, err = cache.db.ExecContext(context.Background(),
 		`INSERT OR REPLACE INTO file_cache(file_path, content_hash, updated_at, call_sites_json, scope_json)
 		 VALUES(?,?,?,?,?)`,
 		goFile, hash, 1, `[]`, `NOT_VALID_JSON`,
@@ -601,7 +622,7 @@ func TestLoadPass4Results_CorruptEdgesJSON(t *testing.T) {
 	goFile := writeTempGoFile(t, dir, "corrupt_edges.go", "package main\n")
 
 	hash, _ := hashFile(goFile)
-	_, err := cache.db.ExecContext(context.Background(), 
+	_, err := cache.db.ExecContext(context.Background(),
 		`INSERT OR REPLACE INTO pass4_results(file_path, content_hash, updated_at, edges_json, unresolved_json)
 		 VALUES(?,?,?,?,?)`,
 		goFile, hash, 1, "NOT_VALID_JSON", `[]`,
@@ -619,7 +640,7 @@ func TestLoadPass4Results_CorruptUnresolvedJSON(t *testing.T) {
 	goFile := writeTempGoFile(t, dir, "corrupt_unresolved.go", "package main\n")
 
 	hash, _ := hashFile(goFile)
-	_, err := cache.db.ExecContext(context.Background(), 
+	_, err := cache.db.ExecContext(context.Background(),
 		`INSERT OR REPLACE INTO pass4_results(file_path, content_hash, updated_at, edges_json, unresolved_json)
 		 VALUES(?,?,?,?,?)`,
 		goFile, hash, 1, `[]`, `NOT_VALID_JSON`,
@@ -667,52 +688,6 @@ func TestLoadFunctionIndex_ClosedDB(t *testing.T) {
 	// Should return empty map, not panic, on closed DB.
 	idx := cache.LoadFunctionIndex()
 	assert.Empty(t, idx)
-}
-
-// TestOpenAnalysisCache_UserCacheDirFallback verifies that OpenAnalysisCache
-// gracefully falls back to os.TempDir() when os.UserCacheDir() cannot determine
-// the home directory. This covers the fallback branch in OpenAnalysisCache.
-func TestOpenAnalysisCache_UserCacheDirFallback(t *testing.T) {
-	// Force os.UserCacheDir() to fail by clearing both HOME and XDG_CACHE_HOME.
-	// Go's UserCacheDir on Linux returns an error when neither is set.
-	t.Setenv("HOME", "")
-	t.Setenv("XDG_CACHE_HOME", "")
-
-	// Set TMPDIR to an isolated fresh directory so os.TempDir() → fresh dir/pathfinder,
-	// avoiding collisions with pre-existing /tmp/pathfinder entries on the test host.
-	t.Setenv("TMPDIR", t.TempDir())
-
-	// OpenAnalysisCache should still succeed using os.TempDir() as the fallback.
-	cache, err := OpenAnalysisCache(t.TempDir())
-	if err != nil {
-		// If HOME="" breaks more than just UserCacheDir (e.g. sqlite temp files),
-		// that's acceptable to skip — the important thing is it doesn't panic.
-		t.Skipf("env-cleared run produced error (acceptable): %v", err)
-	}
-	require.NoError(t, cache.Close())
-}
-
-// TestOpenAnalysisCache_MkdirError verifies that OpenAnalysisCache returns an
-// error when it cannot create the cache directory (e.g., because a file already
-// exists at the target path).
-func TestOpenAnalysisCache_MkdirError(t *testing.T) {
-	tmp := t.TempDir()
-
-	// Redirect os.UserCacheDir() into our temp dir on every platform:
-	// linux/freebsd honour XDG_CACHE_HOME; darwin uses $HOME/Library/Caches.
-	t.Setenv("HOME", tmp)
-	t.Setenv("XDG_CACHE_HOME", tmp)
-
-	// Resolve where OpenAnalysisCache will try to create the "pathfinder" subdir
-	// and plant a regular file there so os.MkdirAll fails.
-	cacheDir, err := os.UserCacheDir()
-	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	blockingFile := filepath.Join(cacheDir, "pathfinder")
-	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0o444))
-
-	_, err = OpenAnalysisCache(t.TempDir())
-	assert.Error(t, err, "os.MkdirAll should fail when a file blocks the cache dir")
 }
 
 // TestSaveFunctionIndex_TableDropped verifies that SaveFunctionIndex returns an
@@ -817,4 +792,188 @@ func TestOpenAnalysisCache_VersionMismatch_OnlyWipesAffectedTable(t *testing.T) 
 	// file_cache should still be warm.
 	_, hit := cache2.GetFileCached(goFile)
 	assert.True(t, hit, "file_cache should survive a pass4_version bump")
+}
+
+// ---- Global schema / engine version + rebuild (PR-01) ----
+
+// seedFqnRow inserts one row directly into fqn_index (no writer exists yet).
+func seedFqnRow(t *testing.T, cache *AnalysisCache) {
+	t.Helper()
+	_, err := cache.db.ExecContext(context.Background(),
+		`INSERT INTO fqn_index(fqn, language, kind, source, schema_version) VALUES(?,?,?,?,?)`,
+		"pkg.Fn", "python", "function", "project", currentSchemaVersion)
+	require.NoError(t, err)
+}
+
+func countFqnRows(t *testing.T, cache *AnalysisCache) int {
+	t.Helper()
+	var n int
+	require.NoError(t, cache.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM fqn_index`).Scan(&n))
+	return n
+}
+
+func TestInitSchema_FreshDB_StampsVersions(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir, EngineVersion: "9.9.9"})
+	require.NoError(t, err)
+	defer cache.Close()
+
+	for key, want := range map[string]string{
+		metaSchemaVersion:        currentSchemaVersion,
+		metaEngineVersion:        "9.9.9",
+		"fqn_index_version":      fqnIndexVersion,
+		"call_sites_version":     callSitesVersion,
+		"file_cache_version":     fileCacheVersion,
+		"pass4_version":          pass4Version,
+		"function_index_version": functionIndexVersion,
+	} {
+		got, err := getMetaValue(cache.db, key)
+		require.NoError(t, err, "meta key %s should be stamped", key)
+		assert.Equal(t, want, got, "meta key %s", key)
+	}
+}
+
+func TestInitSchema_NewTablesQueryable(t *testing.T) {
+	cache := openTempCache(t)
+	// Both new tables should accept a query without error.
+	assert.Zero(t, countFqnRows(t, cache))
+	var cs int
+	require.NoError(t, cache.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM call_sites`).Scan(&cs))
+	assert.Zero(t, cs)
+}
+
+func TestInitSchema_SchemaVersionMismatch_FullRebuild(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "schema_bump.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	require.NoError(t, cache.PutFileCached(goFile, cs, &CachedScope{FunctionScopes: map[string]CachedFunctionScope{}}))
+	seedFqnRow(t, cache)
+
+	// Stamp an older schema version to trigger the open-time full rebuild.
+	require.NoError(t, setMetaValue(cache.db, metaSchemaVersion, "1"))
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	_, hit := cache2.GetFileCached(goFile)
+	assert.False(t, hit, "file_cache should be wiped on schema version mismatch")
+	assert.Zero(t, countFqnRows(t, cache2), "fqn_index should be wiped on schema version mismatch")
+
+	got, err := getMetaValue(cache2.db, metaSchemaVersion)
+	require.NoError(t, err)
+	assert.Equal(t, currentSchemaVersion, got, "schema version should be re-stamped after rebuild")
+}
+
+func TestInitSchema_EngineVersionMismatch_FullRebuild(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir, EngineVersion: "2.1.0"})
+	require.NoError(t, err)
+	seedFqnRow(t, cache)
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir, EngineVersion: "2.2.0"})
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	assert.Zero(t, countFqnRows(t, cache2), "fqn_index should be wiped on engine version mismatch")
+	got, err := getMetaValue(cache2.db, metaEngineVersion)
+	require.NoError(t, err)
+	assert.Equal(t, "2.2.0", got)
+}
+
+// TestInitSchema_EngineVersionUnknown_DoesNotWipeOrClobber verifies that a
+// command that does not know its version (EngineVersion == "") neither wipes the
+// cache nor overwrites the stamp a versioned command wrote.
+func TestInitSchema_EngineVersionUnknown_DoesNotWipeOrClobber(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir, EngineVersion: "2.1.0"})
+	require.NoError(t, err)
+	seedFqnRow(t, cache)
+	require.NoError(t, cache.Close())
+
+	// Reopen with no engine version (e.g. an auxiliary command or a test).
+	cache2, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir})
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	assert.Equal(t, 1, countFqnRows(t, cache2), "unknown engine version must not wipe the cache")
+	got, err := getMetaValue(cache2.db, metaEngineVersion)
+	require.NoError(t, err)
+	assert.Equal(t, "2.1.0", got, "unknown engine version must not clobber the existing stamp")
+}
+
+// TestInitSchema_LegacyDBNoSchemaStamp_Survives simulates a database written by
+// a binary that predates the schema_version stamp: it must be upgraded in place
+// (new tables added, stamp written) without wiping the warm data.
+func TestInitSchema_LegacyDBNoSchemaStamp_Survives(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "legacy.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	require.NoError(t, cache.PutFileCached(goFile, cs, &CachedScope{FunctionScopes: map[string]CachedFunctionScope{}}))
+
+	// Remove the schema_version stamp to look like a pre-stamp database.
+	_, err = cache.db.ExecContext(context.Background(), `DELETE FROM meta WHERE key=?`, metaSchemaVersion)
+	require.NoError(t, err)
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	_, hit := cache2.GetFileCached(goFile)
+	assert.True(t, hit, "a legacy DB without a schema stamp must not be wiped on upgrade")
+	got, err := getMetaValue(cache2.db, metaSchemaVersion)
+	require.NoError(t, err)
+	assert.Equal(t, currentSchemaVersion, got, "schema version should be stamped on upgrade")
+}
+
+func TestInitSchema_ForceRebuild_WipesAll(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "force.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	require.NoError(t, cache.PutFileCached(goFile, cs, &CachedScope{FunctionScopes: map[string]CachedFunctionScope{}}))
+	seedFqnRow(t, cache)
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: dir, ForceRebuild: true})
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	_, hit := cache2.GetFileCached(goFile)
+	assert.False(t, hit, "--rebuild-index should wipe file_cache")
+	assert.Zero(t, countFqnRows(t, cache2), "--rebuild-index should wipe fqn_index")
+}
+
+func TestInitSchema_FqnIndexVersionBump_WipesOnlyFqnIndex(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+
+	goFile := writeTempGoFile(t, dir, "fqn_bump.go", "package main\n")
+	cs := []CachedCallSite{{CallerFQN: "pkg.Fn", FunctionName: "f", CallerFile: goFile, CallLine: 1}}
+	require.NoError(t, cache.PutFileCached(goFile, cs, &CachedScope{FunctionScopes: map[string]CachedFunctionScope{}}))
+	seedFqnRow(t, cache)
+
+	// Bump only the fqn_index per-table version.
+	require.NoError(t, setMetaValue(cache.db, "fqn_index_version", "999"))
+	require.NoError(t, cache.Close())
+
+	cache2, err := OpenAnalysisCache(dir)
+	require.NoError(t, err)
+	defer cache2.Close()
+
+	assert.Zero(t, countFqnRows(t, cache2), "fqn_index should be wiped on its own version bump")
+	_, hit := cache2.GetFileCached(goFile)
+	assert.True(t, hit, "file_cache should survive an fqn_index_version bump")
 }

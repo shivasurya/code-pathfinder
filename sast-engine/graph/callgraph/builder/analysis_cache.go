@@ -6,10 +6,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,10 +30,23 @@ import (
 // At worst, an affected table is wiped and rebuilt from a single full analysis
 // run; unaffected tables stay warm.
 const (
-	fileCacheVersion    = "1"
+	fileCacheVersion     = "1"
 	functionIndexVersion = "1"
-	pass4Version        = "1"
+	pass4Version         = "1"
+	fqnIndexVersion      = "1"
+	callSitesVersion     = "1"
 )
+
+// currentSchemaVersion is the global on-disk schema version. It is written into
+// every fqn_index / call_sites row and stamped in meta at open time.
+//
+// Bump it when a change makes previously-cached analysis data invalid in a way
+// the per-table version constants above do not capture (for example, a change
+// in how FQNs are computed). On a bump, a database stamped with an older
+// non-empty version is fully rebuilt at open time (see reconcileVersions). A database
+// with no stamp at all (one written before this field existed) is NOT wiped: it
+// is simply stamped, so existing warm Go caches survive the first upgrade.
+const currentSchemaVersion = "2"
 
 // CachedCallSite is the minimal data needed to reconstruct a CallSiteInternal.
 type CachedCallSite struct {
@@ -107,8 +120,8 @@ type CachedPass4Edge struct {
 
 // CachedPass4Result holds the cached Pass 4 output for one source file.
 type CachedPass4Result struct {
-	ContentHash     string            `json:"contentHash"`
-	Edges           []CachedPass4Edge `json:"edges"`
+	ContentHash string            `json:"contentHash"`
+	Edges       []CachedPass4Edge `json:"edges"`
 	// UnresolvedNames are the FunctionName values of unresolved call sites in this
 	// file.  They are stored so that, when new functions are added to the index,
 	// we can detect that a previously-failing call site might now resolve and mark
@@ -124,25 +137,44 @@ type CachedPass4Result struct {
 // Thread-safety: the DB connection serialises writes; parallel goroutines should
 // only call Get* (reads) and flush with Put* sequentially afterwards.
 type AnalysisCache struct {
-	db *sql.DB
+	db   *sql.DB
+	path string
+}
+
+// CacheOptions configures where the index lives and how aggressively it is
+// rebuilt. ProjectRoot is required; the rest default to the zero value.
+type CacheOptions struct {
+	// ProjectRoot is the absolute or relative path to the project being scanned.
+	// It seeds the default index location and the project-root invalidation key.
+	ProjectRoot string
+	// IndexPath overrides the index location (the --index-path flag). Empty means
+	// fall back to the env var, then the default $HOME location.
+	IndexPath string
+	// EngineVersion is the running binary's version. A mismatch with the stored
+	// version triggers a full rebuild. Empty means "unknown": the stored stamp is
+	// left untouched and never compared, so callers that do not know the version
+	// (tests, auxiliary commands) cannot clobber another command's stamp.
+	EngineVersion string
+	// ForceRebuild drops all cached data on open, as --rebuild-index requests.
+	ForceRebuild bool
 }
 
 // OpenAnalysisCache opens (or creates) the SQLite cache for the given project
-// root. The database lives at ~/.cache/pathfinder/<hex(sha256(projectRoot))[:16]>.db.
+// root at the default location, with no engine-version stamp and no forced
+// rebuild. It is the convenience form for callers that only need the default
+// behaviour; richer callers use OpenAnalysisCacheWithOptions.
 func OpenAnalysisCache(projectRoot string) (*AnalysisCache, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		cacheDir = os.TempDir()
-	}
-	pfDir := filepath.Join(cacheDir, "pathfinder")
-	if err := os.MkdirAll(pfDir, 0o755); err != nil {
-		return nil, fmt.Errorf("analysis cache: cannot create cache dir %s: %w", pfDir, err)
-	}
+	return OpenAnalysisCacheWithOptions(CacheOptions{ProjectRoot: projectRoot})
+}
 
-	// Derive a short, stable identifier from the project root path.
-	h := sha256.Sum256([]byte(projectRoot))
-	dbName := hex.EncodeToString(h[:])[:16] + ".db"
-	dbPath := filepath.Join(pfDir, dbName)
+// OpenAnalysisCacheWithOptions opens (or creates) the SQLite index per opts.
+// The index lives at $HOME/.codepathfinder/<hash>.sqlite unless overridden by
+// opts.IndexPath or the CODEPATHFINDER_INDEX_PATH env var.
+func OpenAnalysisCacheWithOptions(opts CacheOptions) (*AnalysisCache, error) {
+	dbPath, err := ResolveIndexPath(opts.ProjectRoot, opts.IndexPath, os.Getenv(IndexEnvVar))
+	if err != nil {
+		return nil, err
+	}
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -155,105 +187,184 @@ func OpenAnalysisCache(projectRoot string) (*AnalysisCache, error) {
 		return nil, fmt.Errorf("analysis cache: set WAL mode: %w", err)
 	}
 
-	if err := initSchema(db, projectRoot); err != nil {
+	if err := applySchema(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := reconcileVersions(db, opts); err != nil {
 		db.Close()
 		return nil, err
 	}
 
-	return &AnalysisCache{db: db}, nil
+	return &AnalysisCache{db: db, path: dbPath}, nil
 }
 
 // DBPath returns the filesystem path of the SQLite database file, for diagnostics.
 func (c *AnalysisCache) DBPath() string {
-	// Query sqlite_master for the database filename via the pragma.
-	var path string
-	_ = c.db.QueryRowContext(context.Background(), `PRAGMA database_list`).Scan(nil, nil, &path)
-	return path
+	return c.path
 }
 
-// initSchema creates tables and runs per-table version checks.
-// Only tables whose stored version differs from the current version are wiped;
-// unchanged tables keep their warm data.
-func initSchema(db *sql.DB, projectRoot string) error {
-	createStmts := []string{
-		`CREATE TABLE IF NOT EXISTS meta (
-			key   TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS file_cache (
-			file_path        TEXT    PRIMARY KEY,
-			content_hash     TEXT    NOT NULL,
-			updated_at       INTEGER NOT NULL,
-			call_sites_json  TEXT    NOT NULL,
-			scope_json       TEXT    NOT NULL
-		)`,
-		// Pass 1 function index snapshot — one row per (file, fqn) pair.
-		`CREATE TABLE IF NOT EXISTS function_index (
-			file_path TEXT NOT NULL,
-			fqn       TEXT NOT NULL,
-			PRIMARY KEY (file_path, fqn)
-		)`,
-		// Pass 4 resolved-edge cache — one row per source file.
-		`CREATE TABLE IF NOT EXISTS pass4_results (
-			file_path       TEXT    PRIMARY KEY,
-			content_hash    TEXT    NOT NULL,
-			updated_at      INTEGER NOT NULL,
-			edges_json      TEXT    NOT NULL,
-			unresolved_json TEXT    NOT NULL
-		)`,
-	}
-	for _, stmt := range createStmts {
-		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
-			return fmt.Errorf("analysis cache: create schema: %w", err)
-		}
+// tableVersion ties a per-table version constant to its meta key and table.
+// When the stored version differs from the constant, only that table is wiped;
+// every other table keeps its warm data.
+type tableVersion struct {
+	metaKey string
+	current string
+	table   string
+}
+
+var tableVersions = []tableVersion{
+	{"file_cache_version", fileCacheVersion, "file_cache"},
+	{"function_index_version", functionIndexVersion, "function_index"},
+	{"pass4_version", pass4Version, "pass4_results"},
+	{"fqn_index_version", fqnIndexVersion, "fqn_index"},
+	{"call_sites_version", callSitesVersion, "call_sites"},
+}
+
+// reconcileVersions decides how much cached data to discard, assuming the
+// schema has already been applied (see applySchema).
+//
+// A full rebuild (all data tables emptied) happens on, in priority order:
+//   - opts.ForceRebuild (the --rebuild-index flag),
+//   - a global schema_version mismatch,
+//   - an engine_version mismatch (when both versions are known),
+//   - a project_root change.
+//
+// In each case a stored value that is absent is treated as "fresh, leave it":
+// a database written by an older binary is stamped on first open rather than
+// wiped, so existing warm caches survive an upgrade. When no full rebuild is
+// needed, the cheaper per-table version check runs: only tables whose version
+// constant changed are wiped. Finally every version stamp is refreshed.
+func reconcileVersions(db *sql.DB, opts CacheOptions) error {
+	fullRebuild, reason, err := needsFullRebuild(db, opts)
+	if err != nil {
+		return err
 	}
 
-	// Always upsert project_root so a moved project gets its own DB.
-	var storedRoot string
-	_ = db.QueryRowContext(context.Background(), `SELECT value FROM meta WHERE key='project_root'`).Scan(&storedRoot)
-	if storedRoot != "" && storedRoot != projectRoot {
-		// Project root changed — wipe everything; this is a different project.
-		for _, tbl := range []string{"file_cache", "function_index", "pass4_results"} {
-			if _, err := db.ExecContext(context.Background(), `DELETE FROM `+tbl); err != nil {
-				return fmt.Errorf("analysis cache: wipe table %s on project root change: %w", tbl, err)
-			}
+	if fullRebuild {
+		fmt.Fprintf(os.Stderr, "[cache] rebuilding index: %s\n", reason)
+		if err := wipeDataTables(db); err != nil {
+			return err
 		}
+	} else if err := wipeStaleTables(db); err != nil {
+		return err
 	}
 
-	// Per-table version check: only wipe tables whose version changed.
-	tableVersions := []struct {
-		metaKey string
-		current string
-		table   string
-	}{
-		{"file_cache_version", fileCacheVersion, "file_cache"},
-		{"function_index_version", functionIndexVersion, "function_index"},
-		{"pass4_version", pass4Version, "pass4_results"},
+	return stampMeta(db, opts)
+}
+
+// needsFullRebuild reports whether every data table must be discarded, and a
+// human-readable reason for the one-line log. An absent stored value never
+// triggers a rebuild (see reconcileVersions).
+func needsFullRebuild(db *sql.DB, opts CacheOptions) (bool, string, error) {
+	if opts.ForceRebuild {
+		return true, "rebuild requested", nil
 	}
+
+	// Read the three invalidation stamps in one query so there is a single
+	// error path. An absent stamp reads as "" and never triggers a rebuild.
+	s, err := readRebuildStamps(db)
+	if err != nil {
+		return false, "", err
+	}
+
+	switch {
+	case s.schema != "" && s.schema != currentSchemaVersion:
+		return true, fmt.Sprintf("schema v%s -> v%s", s.schema, currentSchemaVersion), nil
+	case opts.EngineVersion != "" && s.engine != "" && s.engine != opts.EngineVersion:
+		return true, fmt.Sprintf("engine %s -> %s", s.engine, opts.EngineVersion), nil
+	case s.projectRoot != "" && s.projectRoot != opts.ProjectRoot:
+		return true, "project root changed", nil
+	default:
+		return false, "", nil
+	}
+}
+
+// rebuildStamps holds the meta values that gate a full rebuild.
+type rebuildStamps struct {
+	schema      string
+	engine      string
+	projectRoot string
+}
+
+// readRebuildStamps reads the schema, engine, and project-root stamps in a
+// single query. Missing rows leave their fields "".
+func readRebuildStamps(db *sql.DB) (rebuildStamps, error) {
+	rows, err := db.QueryContext(context.Background(),
+		`SELECT key, value FROM meta WHERE key IN (?,?,?)`,
+		metaSchemaVersion, metaEngineVersion, metaProjectRoot)
+	if err != nil {
+		return rebuildStamps{}, fmt.Errorf("analysis cache: read rebuild stamps: %w", err)
+	}
+	defer rows.Close()
+
+	var s rebuildStamps
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return rebuildStamps{}, fmt.Errorf("analysis cache: scan rebuild stamp: %w", err)
+		}
+		switch key {
+		case metaSchemaVersion:
+			s.schema = value
+		case metaEngineVersion:
+			s.engine = value
+		case metaProjectRoot:
+			s.projectRoot = value
+		}
+	}
+	return s, rows.Err()
+}
+
+// readOptionalMeta returns the stored value for key, or "" when the key is
+// absent. A real SQL error is propagated; a missing key is not an error.
+func readOptionalMeta(db *sql.DB, key string) (string, error) {
+	value, err := getMetaValue(db, key)
+	if errors.Is(err, errMetaKeyMissing) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// wipeStaleTables wipes only the tables whose version constant differs from the
+// stored stamp. Tables that are up to date keep their warm data.
+func wipeStaleTables(db *sql.DB) error {
 	for _, tv := range tableVersions {
-		var stored string
-		_ = db.QueryRowContext(context.Background(),
-			`SELECT value FROM meta WHERE key=?`, tv.metaKey,
-		).Scan(&stored)
+		stored, err := readOptionalMeta(db, tv.metaKey)
+		if err != nil {
+			return err
+		}
 		if stored != tv.current {
 			if _, err := db.ExecContext(context.Background(), `DELETE FROM `+tv.table); err != nil {
 				return fmt.Errorf("analysis cache: wipe %s on version change: %w", tv.table, err)
 			}
 		}
 	}
+	return nil
+}
 
-	// Upsert all metadata.
-	upserts := []struct{ k, v string }{
-		{"project_root", projectRoot},
-		{"file_cache_version", fileCacheVersion},
-		{"function_index_version", functionIndexVersion},
-		{"pass4_version", pass4Version},
+// stampMeta refreshes every version stamp and the project root. The engine
+// version is only written when known, so an auxiliary command that does not
+// pass its version leaves another command's stamp intact.
+func stampMeta(db *sql.DB, opts CacheOptions) error {
+	stamps := map[string]string{
+		metaProjectRoot:          opts.ProjectRoot,
+		metaSchemaVersion:        currentSchemaVersion,
+		"file_cache_version":     fileCacheVersion,
+		"function_index_version": functionIndexVersion,
+		"pass4_version":          pass4Version,
+		"fqn_index_version":      fqnIndexVersion,
+		"call_sites_version":     callSitesVersion,
 	}
-	for _, kv := range upserts {
-		if _, err := db.ExecContext(context.Background(),
-			`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, kv.k, kv.v,
-		); err != nil {
-			return fmt.Errorf("analysis cache: upsert meta %q: %w", kv.k, err)
+	if opts.EngineVersion != "" {
+		stamps[metaEngineVersion] = opts.EngineVersion
+	}
+	for k, v := range stamps {
+		if err := setMetaValue(db, k, v); err != nil {
+			return err
 		}
 	}
 	return nil
