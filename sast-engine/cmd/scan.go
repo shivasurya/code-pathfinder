@@ -281,11 +281,19 @@ Examples:
 				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
 				var analysisCache *builder.AnalysisCache
 				if enableDBCache {
+					indexPath, _ := cmd.Flags().GetString("index-path")
+					rebuildIndex, _ := cmd.Flags().GetBool("rebuild-index")
 					var cacheErr error
-					analysisCache, cacheErr = builder.OpenAnalysisCache(projectPath)
+					analysisCache, cacheErr = builder.OpenAnalysisCacheWithOptions(builder.CacheOptions{
+						ProjectRoot:   projectPath,
+						IndexPath:     indexPath,
+						EngineVersion: Version,
+						ForceRebuild:  rebuildIndex,
+					})
 					if cacheErr != nil {
-						logger.Warning("Could not open analysis cache: %v — running full analysis", cacheErr)
+						logger.Warning("Could not open analysis cache: %v. Running full analysis instead.", cacheErr)
 					} else {
+						logger.Debug("Analysis index: %s", analysisCache.DBPath())
 						defer analysisCache.Close()
 					}
 				}
@@ -1180,5 +1188,7 @@ func init() {
 	scanCmd.Flags().String("base", "", "Base git ref for diff-aware scanning (required with --diff-aware)")
 	scanCmd.Flags().String("head", "HEAD", "Head git ref for diff-aware scanning")
 	scanCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
+	scanCmd.Flags().String("index-path", "", "Override the analysis index location (default $HOME/.codepathfinder/<project-hash>.sqlite; also reads CODEPATHFINDER_INDEX_PATH)")
+	scanCmd.Flags().Bool("rebuild-index", false, "Drop and rebuild the analysis index before scanning")
 	scanCmd.MarkFlagRequired("project")
 }
