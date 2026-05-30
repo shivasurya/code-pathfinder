@@ -246,9 +246,31 @@ Examples:
 			logger.Debug("Skipping test files (use --skip-tests=false to include)")
 		}
 
-		// Step 3: Build callgraph
+		// Step 3: Open the analysis index (shared by the Python and Go builders),
+		// then build the call graph. The index persists the Python FQN surface as
+		// a side effect; opening it is best-effort and never blocks the scan.
+		var analysisCache *builder.AnalysisCache
+		if enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache"); enableDBCache {
+			indexPath, _ := cmd.Flags().GetString("index-path")
+			rebuildIndex, _ := cmd.Flags().GetBool("rebuild-index")
+			var cacheErr error
+			analysisCache, cacheErr = builder.OpenAnalysisCacheWithOptions(builder.CacheOptions{
+				ProjectRoot:   projectPath,
+				IndexPath:     indexPath,
+				EngineVersion: Version,
+				ForceRebuild:  rebuildIndex,
+			})
+			if cacheErr != nil {
+				logger.Warning("Could not open analysis cache: %v. Running full analysis instead.", cacheErr)
+				analysisCache = nil
+			} else {
+				logger.Debug("Analysis index: %s", analysisCache.DBPath())
+				defer analysisCache.Close()
+			}
+		}
+
 		logger.StartProgress("Building callgraph", -1)
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
+		cg, err := builder.BuildCallGraphWithCache(codeGraph, moduleRegistry, projectPath, logger, analysisCache)
 		logger.FinishProgress()
 		if err != nil {
 			analytics.ReportEventWithProperties(analytics.ScanFailed, map[string]any{
@@ -278,26 +300,7 @@ Examples:
 
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
-				var analysisCache *builder.AnalysisCache
-				if enableDBCache {
-					indexPath, _ := cmd.Flags().GetString("index-path")
-					rebuildIndex, _ := cmd.Flags().GetBool("rebuild-index")
-					var cacheErr error
-					analysisCache, cacheErr = builder.OpenAnalysisCacheWithOptions(builder.CacheOptions{
-						ProjectRoot:   projectPath,
-						IndexPath:     indexPath,
-						EngineVersion: Version,
-						ForceRebuild:  rebuildIndex,
-					})
-					if cacheErr != nil {
-						logger.Warning("Could not open analysis cache: %v. Running full analysis instead.", cacheErr)
-					} else {
-						logger.Debug("Analysis index: %s", analysisCache.DBPath())
-						defer analysisCache.Close()
-					}
-				}
-
+				// Reuses the analysis cache opened above for the call-graph build.
 				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)

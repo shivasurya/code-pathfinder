@@ -97,7 +97,18 @@ func getOptimalWorkerCount() int {
 //	  edges: {"myapp.views.get_user": ["myapp.utils.sanitize"]}
 //	  reverseEdges: {"myapp.utils.sanitize": ["myapp.views.get_user"]}
 //	  callSites: {"myapp.views.get_user": [CallSite{Target: "sanitize", ...}]}
+// BuildCallGraph builds the call graph without persisting an FQN index. It is
+// the form callers that do not opt into the analysis cache use (serve, the
+// integration wrappers, tests).
 func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string, logger *output.Logger) (*core.CallGraph, error) {
+	return BuildCallGraphWithCache(codeGraph, registry, projectRoot, logger, nil)
+}
+
+// BuildCallGraphWithCache builds the call graph and, when cache is non-nil,
+// writes every discovered Python definition into the persisted fqn_index as a
+// side effect of the same analysis. The in-memory call graph it returns is
+// identical whether or not a cache is supplied.
+func BuildCallGraphWithCache(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, projectRoot string, logger *output.Logger, cache *AnalysisCache) (*core.CallGraph, error) {
 	callGraph := core.NewCallGraph()
 
 	// Initialize import map cache for performance
@@ -472,6 +483,18 @@ func BuildCallGraph(codeGraph *graph.CodeGraph, registry *core.ModuleRegistry, p
 	// Store registries for inheritance-aware matching in rule executors
 	callGraph.ThirdPartyRemote = typeEngine.ThirdPartyRemote
 	callGraph.StdlibRemote = typeEngine.StdlibRemote
+
+	// Persist the Python FQN index as a side effect of the same analysis. This
+	// is best-effort: a write failure is logged but never fails the scan, since
+	// the in-memory call graph is already complete and correct.
+	if cache != nil {
+		entries, files := collectPythonFqnEntries(callGraph, codeGraph, registry)
+		if err := cache.ReplacePythonFqnIndex(entries, files); err != nil {
+			logger.Warning("Failed to persist Python FQN index: %v", err)
+		} else {
+			logger.Debug("Persisted %d Python FQN entries across %d files", len(entries), len(files))
+		}
+	}
 
 	return callGraph, nil
 }

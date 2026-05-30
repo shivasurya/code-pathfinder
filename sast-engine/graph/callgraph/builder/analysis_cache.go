@@ -35,6 +35,7 @@ const (
 	pass4Version         = "1"
 	fqnIndexVersion      = "1"
 	callSitesVersion     = "1"
+	indexedFilesVersion  = "1"
 )
 
 // currentSchemaVersion is the global on-disk schema version. It is written into
@@ -219,6 +220,7 @@ var tableVersions = []tableVersion{
 	{"pass4_version", pass4Version, "pass4_results"},
 	{"fqn_index_version", fqnIndexVersion, "fqn_index"},
 	{"call_sites_version", callSitesVersion, "call_sites"},
+	{"indexed_files_version", indexedFilesVersion, "indexed_files"},
 }
 
 // reconcileVersions decides how much cached data to discard, assuming the
@@ -358,6 +360,7 @@ func stampMeta(db *sql.DB, opts CacheOptions) error {
 		"pass4_version":          pass4Version,
 		"fqn_index_version":      fqnIndexVersion,
 		"call_sites_version":     callSitesVersion,
+		"indexed_files_version":  indexedFilesVersion,
 	}
 	if opts.EngineVersion != "" {
 		stamps[metaEngineVersion] = opts.EngineVersion
