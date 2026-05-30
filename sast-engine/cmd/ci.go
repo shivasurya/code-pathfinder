@@ -267,9 +267,32 @@ Examples:
 			logger.Debug("Skipping test files (use --skip-tests=false to include)")
 		}
 
+		// Open the analysis index (shared by the Python and Go builders), then
+		// build the call graph. The index persists the Python FQN surface as a
+		// side effect; opening it is best-effort and never blocks the scan.
+		var analysisCache *builder.AnalysisCache
+		if enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache"); enableDBCache {
+			indexPath, _ := cmd.Flags().GetString("index-path")
+			rebuildIndex, _ := cmd.Flags().GetBool("rebuild-index")
+			var cacheErr error
+			analysisCache, cacheErr = builder.OpenAnalysisCacheWithOptions(builder.CacheOptions{
+				ProjectRoot:   projectPath,
+				IndexPath:     indexPath,
+				EngineVersion: Version,
+				ForceRebuild:  rebuildIndex,
+			})
+			if cacheErr != nil {
+				logger.Warning("Could not open analysis cache: %v. Running full analysis instead.", cacheErr)
+				analysisCache = nil
+			} else {
+				logger.Debug("Analysis index: %s", analysisCache.DBPath())
+				defer analysisCache.Close()
+			}
+		}
+
 		// Build callgraph
 		logger.StartProgress("Building callgraph", -1)
-		cg, err := builder.BuildCallGraph(codeGraph, moduleRegistry, projectPath, logger)
+		cg, err := builder.BuildCallGraphWithCache(codeGraph, moduleRegistry, projectPath, logger, analysisCache)
 		logger.FinishProgress()
 		if err != nil {
 			analytics.ReportEventWithProperties(analytics.CIFailed, map[string]any{
@@ -294,18 +317,7 @@ Examples:
 				builder.InitGoStdlibLoader(goRegistry, projectPath, logger)
 				goTypeEngine := resolution.NewGoTypeInferenceEngine(goRegistry)
 
-				enableDBCache, _ := cmd.Flags().GetBool("enable-db-cache")
-				var analysisCache *builder.AnalysisCache
-				if enableDBCache {
-					var cacheErr error
-					analysisCache, cacheErr = builder.OpenAnalysisCache(projectPath)
-					if cacheErr != nil {
-						logger.Warning("Could not open analysis cache: %v — running full analysis", cacheErr)
-					} else {
-						defer analysisCache.Close()
-					}
-				}
-
+				// Reuses the analysis cache opened above for the call-graph build.
 				goCG, err := builder.BuildGoCallGraph(codeGraph, goRegistry, goTypeEngine, logger, analysisCache)
 				if err != nil {
 					logger.Warning("Failed to build Go call graph: %v", err)
@@ -560,5 +572,7 @@ func init() {
 	ciCmd.Flags().Bool("pr-comment", false, "Post summary comment on the pull request")
 	ciCmd.Flags().Bool("pr-inline", false, "Post inline review comments for critical/high findings")
 	ciCmd.Flags().Bool("enable-db-cache", false, "Enable SQLite-backed incremental analysis cache (experimental)")
+	ciCmd.Flags().String("index-path", "", "Override the analysis index location (default $HOME/.codepathfinder/<project-hash>.sqlite; also reads CODEPATHFINDER_INDEX_PATH)")
+	ciCmd.Flags().Bool("rebuild-index", false, "Drop and rebuild the analysis index before scanning")
 	ciCmd.MarkFlagRequired("project")
 }

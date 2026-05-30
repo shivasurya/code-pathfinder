@@ -76,6 +76,16 @@ const (
 		diagnostics     TEXT,
 		schema_version  INTEGER NOT NULL
 	)`
+
+	// indexed_files: per-file mtime stamp recorded when a file's definitions were
+	// last written into fqn_index. A later query compares the file's current
+	// mtime against indexed_at_mtime to decide whether the file is stale and its
+	// rows must be refreshed before the query answers.
+	ddlIndexedFiles = `CREATE TABLE IF NOT EXISTS indexed_files (
+		file_path          TEXT    PRIMARY KEY,
+		indexed_at_mtime   INTEGER NOT NULL,
+		indexed_at         INTEGER NOT NULL
+	)`
 )
 
 // schemaStmts is the ordered list of DDL applied at open time. Tables first,
@@ -87,6 +97,7 @@ var schemaStmts = []string{
 	ddlPass4Results,
 	ddlFqnIndex,
 	ddlCallSites,
+	ddlIndexedFiles,
 	`CREATE INDEX IF NOT EXISTS idx_fqn_exact    ON fqn_index(fqn)`,
 	`CREATE INDEX IF NOT EXISTS idx_fqn_prefix   ON fqn_index(fqn COLLATE NOCASE)`,
 	`CREATE INDEX IF NOT EXISTS idx_location     ON fqn_index(file, start_line)`,
@@ -104,6 +115,7 @@ var dataTables = []string{
 	"pass4_results",
 	"fqn_index",
 	"call_sites",
+	"indexed_files",
 }
 
 // applySchema creates every table and index if absent. It is wrapped in a
